@@ -155,7 +155,7 @@ Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catc
 | Exception | Raised when |
 |-----------|-------------|
 | `Errors.TideDataModelErrors` | Malformed Tide object (bad structure) |
-| `Errors.TideMDRDataModelErrors` | Invalid MDR (rule) data structure |
+| `Errors.TideRuleDataModelErrors` | Invalid detection rule data structure. `Errors.TideMDRDataModelErrors` is the former name, kept as an alias |
 | `Errors.TideQueryValidationError` | A rule query fails validation |
 | `Errors.TideDeploymentErrors` | Any failure during deployment |
 | `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host` |

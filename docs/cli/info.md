@@ -56,6 +56,8 @@ With a section, the table for that section replaces the summary:
 
 An empty section prints `No rules found` (or threats, objectives).
 
+Every view ends with one line counting the catalogue: `✓ 1 rule · 1 threat · 1 objective · 0 load errors`. When object files failed to load, `status` is `issues`, the line starts with `!`, and the next step is `opentide validate`, which shows the file, line and column of each. With `--strict` the run fails instead: `✗ … · 1 load error` on stderr, exit `1`, and `failure.code` `issues_found`. `summary` carries the four counts (`rules`, `threats`, `objectives`, `load_errors`).
+
 ## JSON payload shape
 
 `info` emits the same envelope as every other command, so the payload carries the `ok` / `status` / `message` keys alongside its own fields. In the [tutorial](../usage/tutorial.md) repository, with the platform list filtered to Sentinel:
@@ -71,11 +73,18 @@ An empty section prints `No rules found` (or threats, objectives).
   ],
   "ok": true,
   "status": "completed",
-  "message": "Completed successfully"
+  "message": "Completed successfully",
+  "schema_version": 1,
+  "command": "info",
+  "duration_ms": "...",
+  "exit_code": 0,
+  "summary": {},
+  "next_actions": [],
+  "failure": null
 }
 ```
 
-Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
+The keys from `schema_version` on are the envelope every command adds; see [JSON output](./json-output.md). Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
 With coverage, the payload adds a `coverage` object:
 
@@ -87,4 +96,4 @@ With coverage, the payload adds a `coverage` object:
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/info.py`
+`src/opentide/cli/commands/info.py`, `src/opentide/cli/services/info.py`

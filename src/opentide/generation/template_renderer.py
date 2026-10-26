@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.logging import get_logger
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 from opentide.generation.pydantic_skeleton import write_model_template
 from opentide.generation.pydantic_templates import (
@@ -53,7 +53,7 @@ def _refresh_renderer_context() -> None:
 
 def run() -> None:
     _refresh_renderer_context()
-    emit_section("Generate Templates from Pydantic Models")
+    report_stage("templates from models")
     logger.info(
         "template_generation_started",
         detail="Core and platform templates are generated from Pydantic FieldInfo.",

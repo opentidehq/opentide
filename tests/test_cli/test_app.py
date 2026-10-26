@@ -62,8 +62,8 @@ def test_version_flag_prints_installed_version(args: list[str]) -> None:
 def test_version_flag_exits_before_the_command_runs() -> None:
     """A pipeline logs which version it installed without needing a workspace."""
     with (
-        patch("opentide.cli.run_validate") as mock_validate,
-        patch("opentide.cli.init_logging") as mock_logging,
+        patch("opentide.cli.services.validation.run_validate") as mock_validate,
+        patch("opentide.cli.root.init_logging") as mock_logging,
     ):
         result = runner.invoke(app, ["--version", "--repo", "/nonexistent", "validate"])
     assert result.exit_code == 0, result.output
@@ -75,8 +75,8 @@ def test_version_flag_exits_before_the_command_runs() -> None:
 @pytest.mark.parametrize(
     ("argv", "value", "debug"),
     [
-        ([], "*", True),
-        ([], "express:*", True),
+        ([], "*", False),
+        ([], "express:*", False),
         ([], "1", True),
         ([], "True", True),
         ([], "0", False),
@@ -88,13 +88,14 @@ def test_version_flag_exits_before_the_command_runs() -> None:
 )
 def test_debug_env_var_is_read_as_a_switch(argv: list[str], value: str, debug: bool) -> None:
     """``DEBUG`` was Click's envvar for ``--debug``, which refused anything but a
-    boolean word: ``DEBUG=*`` (the Node ``debug`` convention) failed every command."""
+    boolean word: ``DEBUG=*`` (the Node ``debug`` convention) failed every command.
+    A value that is not a boolean is now ignored (docs/cli/global-options.md)."""
     seen: list[bool] = []
     with (
-        patch("opentide.cli.run_generate", return_value={"status": "ok"}),
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.services.generation.run_generate", return_value={"status": "ok"}),
+        patch("opentide.cli.root.init_logging"),
         patch(
-            "opentide.cli.LoggingConfig.from_cli_context",
+            "opentide.cli.root.LoggingConfig.from_cli_context",
             side_effect=lambda cli: seen.append(cli.debug),
         ),
     ):
@@ -129,7 +130,7 @@ def test_info_strict_json_reports_parse_errors() -> None:
         "parse_error_count": 2,
         "platforms": [],
     }
-    with patch("opentide.cli.collect_info", return_value=payload):
+    with patch("opentide.cli.services.info.collect_info", return_value=payload):
         result = runner.invoke(app, ["--json", "info", "--strict"])
     assert result.exit_code == 1
     body = json.loads(result.stdout)
@@ -147,13 +148,15 @@ def test_info_strict_human_exits_when_objects_fail_to_load() -> None:
         "parse_error_count": 1,
         "platforms": [],
     }
-    with patch("opentide.cli.collect_info", return_value=payload):
+    with patch("opentide.cli.services.info.collect_info", return_value=payload):
         result = runner.invoke(app, ["info", "--strict"])
     assert result.exit_code == 1
 
 
 def test_generate_subcommands_invoke_services() -> None:
-    with patch("opentide.cli.run_generate", return_value={"status": "ok"}) as mock_run:
+    with patch(
+        "opentide.cli.services.generation.run_generate", return_value={"status": "ok"}
+    ) as mock_run:
         for phase in ("schemas", "templates", "vocabs", "snippets"):
             result = runner.invoke(app, ["--json", "generate", phase])
             assert result.exit_code == 0, result.stdout + result.stderr
@@ -164,7 +167,9 @@ def test_generate_subcommands_invoke_services() -> None:
 
 
 def test_generate_runs_several_phases_in_the_given_order() -> None:
-    with patch("opentide.cli.run_generate", return_value={"status": "ok"}) as mock_run:
+    with patch(
+        "opentide.cli.services.generation.run_generate", return_value={"status": "ok"}
+    ) as mock_run:
         result = runner.invoke(
             app,
             ["--json", "generate", "schemas", "templates", "vocabs", "snippets"],
@@ -191,14 +196,18 @@ def test_nested_generate_commands_stay_commands() -> None:
 
 
 def test_generate_docs_group_invokes_service() -> None:
-    with patch("opentide.cli.run_generate_docs", return_value={"status": "ok"}) as mock_docs:
+    with patch(
+        "opentide.cli.services.generation.run_generate_docs", return_value={"status": "ok"}
+    ) as mock_docs:
         result = runner.invoke(app, ["--json", "generate", "docs", "--rules"])
     assert result.exit_code == 0
     mock_docs.assert_called_once()
 
 
 def test_generate_all_runs_full_pipeline() -> None:
-    with patch("opentide.cli.run_generate", return_value={"status": "ok"}) as mock_run:
+    with patch(
+        "opentide.cli.services.generation.run_generate", return_value={"status": "ok"}
+    ) as mock_run:
         result = runner.invoke(app, ["--json", "generate"])
     assert result.exit_code == 0
     mock_run.assert_called_once()
@@ -206,8 +215,10 @@ def test_generate_all_runs_full_pipeline() -> None:
 
 def test_validate_group_default_check() -> None:
     with (
-        patch("opentide.cli.run_validate", return_value={"checks": {}}) as mock_validate,
-        patch("opentide.cli.init_logging"),
+        patch(
+            "opentide.cli.services.validation.run_validate", return_value={"checks": {}}
+        ) as mock_validate,
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "validate"])
@@ -220,20 +231,21 @@ def test_validate_failure_emits_json_before_exit() -> None:
         "report": {"ok": False, "issues": [{"code": "schema"}]},
         "_exit_code": 1,
     }
-    with patch("opentide.cli.run_validate", return_value=result_payload):
+    with patch("opentide.cli.services.validation.run_validate", return_value=result_payload):
         result = runner.invoke(app, ["--json", "validate"])
     assert result.exit_code == 1
-    assert '"ok": false' in result.stdout
-    assert '"report"' in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["exit_code"] == 1
+    assert payload["report"]["ok"] is False
 
 
 def test_validate_query_supported_platform() -> None:
     with (
         patch(
-            "opentide.cli.validate_query_platform",
+            "opentide.cli.services.validation.validate_query_platform",
             return_value={"platform": "sentinel", "status": "passed", "supported": True},
         ) as mock_query,
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "validate", "query", "--platform", "sentinel"])
@@ -243,8 +255,11 @@ def test_validate_query_supported_platform() -> None:
 
 def test_deploy_dry_run_json() -> None:
     with (
-        patch("opentide.cli.run_deploy", return_value={"status": "completed", "dry_run": True}),
-        patch("opentide.cli.init_logging"),
+        patch(
+            "opentide.cli.services.deploy.run_deploy",
+            return_value={"status": "completed", "dry_run": True},
+        ),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "deploy", "--dry-run"])
@@ -254,7 +269,7 @@ def test_deploy_dry_run_json() -> None:
 def test_export_playbook_map_legacy_shim() -> None:
     with (
         patch("opentide.cli.services.export.run_playbook_map_export") as mock_run,
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "export", "playbook-map"])
@@ -273,8 +288,8 @@ def test_run_playbook_map_export_delegates(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_generate_exports_navigator_json() -> None:
     with (
-        patch("opentide.cli.run_export", return_value={"target": "navigator"}),
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.services.export.run_export", return_value={"target": "navigator"}),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "generate", "exports", "navigator"])
@@ -283,8 +298,8 @@ def test_generate_exports_navigator_json() -> None:
 
 def test_document_rules_deprecated_shim() -> None:
     with (
-        patch("opentide.cli.run_document", return_value={"scope": "rules"}),
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.services.document.run_document", return_value={"scope": "rules"}),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "document", "rules"])
@@ -293,8 +308,8 @@ def test_document_rules_deprecated_shim() -> None:
 
 def test_generate_extract_sentinel_json() -> None:
     with (
-        patch("opentide.cli.run_extract", return_value={"import": "sentinel"}),
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.services.extraction.run_extract", return_value={"import": "sentinel"}),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "generate", "extract", "sentinel"])
@@ -303,8 +318,10 @@ def test_generate_extract_sentinel_json() -> None:
 
 def test_generate_docs_rules_subcommand() -> None:
     with (
-        patch("opentide.cli.run_document", return_value={"scope": "rules"}) as mock_docs,
-        patch("opentide.cli.init_logging"),
+        patch(
+            "opentide.cli.services.document.run_document", return_value={"scope": "rules"}
+        ) as mock_docs,
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "generate", "docs", "rules"])
@@ -315,10 +332,10 @@ def test_generate_docs_rules_subcommand() -> None:
 def test_info_rules_section_json() -> None:
     with (
         patch(
-            "opentide.cli.collect_info",
+            "opentide.cli.services.info.collect_info",
             return_value={"rules": ["r1"], "counts": {}, "platforms": []},
         ),
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "info", "rules"])
@@ -328,15 +345,19 @@ def test_info_rules_section_json() -> None:
 
 def test_info_rejects_unknown_section() -> None:
     result = runner.invoke(app, ["--json", "info", "mystery"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert "Unknown info section" in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["error"] == payload["message"]
+    assert payload["failure"]["code"] == "usage_invalid_choice"
+    assert payload["failure"]["argument"] == "section"
 
 
 def test_deploy_metadata_json(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEPLOYMENT_PLAN", "STAGING")
     with (
-        patch("opentide.cli.run_deploy", return_value={"status": "skipped"}),
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.services.deploy.run_deploy", return_value={"status": "skipped"}),
+        patch("opentide.cli.root.init_logging"),
         patch("opentide.cli.print_banner"),
     ):
         result = runner.invoke(app, ["--json", "deploy", "metadata", "--platform", "splunk"])

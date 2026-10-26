@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -76,6 +77,7 @@ def test_migrate_objects_dry_run_does_not_move(tmp_path: Path) -> None:
     result = run_migrate_objects(root, apply=False)
     assert result["dry_run"] is True
     assert result["planned"] == 6
+    assert result["message"] == "Would move 6 folders · pass --apply to migrate"
     assert result["applied"] is False
     assert (root / "Configurations" / "platforms" / "sentinel.toml").is_file()
     assert not (root / ".opentide" / "configurations").exists()
@@ -86,6 +88,7 @@ def test_migrate_objects_apply_moves_layout(tmp_path: Path) -> None:
     root = _legacy_repo(tmp_path)
     result = run_migrate_objects(root, apply=True)
     assert result["applied"] is True
+    assert result["message"] == "Moved 6 folders"
     assert result["dry_run"] is False
     assert (root / ".opentide" / "configurations" / "platforms" / "sentinel.toml").is_file()
     assert not (root / "Configurations").exists()
@@ -155,7 +158,7 @@ def test_migrate_objects_cli_warns_about_a_configurations_folder_it_left(tmp_pat
     assert "Left Configurations/ in place" in " ".join(dry.output.split())
     assert applied.exit_code == 1, applied.output
     output = " ".join(applied.output.split())
-    assert "ISSUES Migrated 1 legacy path(s); 1 legacy path(s) left in place" in output
+    assert "! Moved 1 folder; 1 legacy path(s) left in place" in output
     assert "Left Configurations/ in place: .opentide/configurations/ already exists" in output
     assert (root / "objects" / "rules" / "r.yaml").is_file()
     assert (root / "Configurations" / "systems" / "sentinel.toml").is_file()
@@ -497,14 +500,14 @@ def test_migrate_objects_repairs_a_layout_an_earlier_release_migrated(
     assert planned["planned"] == 0
     assert planned["case_renamed"] == [{"from": "Objects", "to": "objects"}]
     assert planned["message"] == (
-        "Planned 1 folder case rename(s) (dry-run; pass --apply to execute)"
+        "Would rename 1 folder to the exact case · pass --apply to rename"
     )
     assert planned["applied"] is False
     assert renames == []
 
     result = run_migrate_objects(root, apply=True)
     assert result["case_renamed"] == [{"from": "Objects", "to": "objects"}]
-    assert result["message"] == "Renamed 1 folder(s) to the exact case"
+    assert result["message"] == "Renamed 1 folder to the exact case"
     assert result["applied"] is True
     assert "git rm -r --cached -q Objects` then `git add objects`" in str(result["advice"])
     assert renames == [
@@ -530,7 +533,7 @@ def test_migrate_objects_cli_dry_run(tmp_path: Path) -> None:
         ["--json", "--repo", str(root), "migrate", "objects"],
     )
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert '"dry_run": true' in result.stdout
+    assert json.loads(result.stdout)["dry_run"] is True
     assert (root / "Configurations").is_dir()
 
 
@@ -541,7 +544,7 @@ def test_migrate_objects_cli_apply(tmp_path: Path) -> None:
         ["--json", "--repo", str(root), "migrate", "objects", "--apply"],
     )
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert '"applied": true' in result.stdout
+    assert json.loads(result.stdout)["applied"] is True
     assert (root / "objects" / "rules" / "rule.yaml").is_file()
 
 

@@ -30,7 +30,7 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
         config = data.platform_configs().carbon_black_cloud
         if not config or not config.query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
-            logger.critical("missing_query_in_mdr", mdr_name=data.name, uuid=data.metadata.uuid)
+            logger.critical("missing_query_in_rule", mdr_name=data.name, uuid=data.metadata.uuid)
             return
         self._validate_cbc_query(config.query, data.name, data.metadata.uuid, service)
 
@@ -87,7 +87,7 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
                         self.check_query(mdr, cbc_service.service)
                     else:
                         logger.info(
-                            "mdr_skipped",
+                            "rule_skipped",
                             mdr_name=mdr.name,
                             reason="no Carbon Black Cloud configuration section",
                         )

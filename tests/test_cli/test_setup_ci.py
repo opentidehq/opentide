@@ -215,10 +215,13 @@ def ci_log(monkeypatch: pytest.MonkeyPatch) -> CapturingLogger:
 
 
 def _warning_events(log: CapturingLogger) -> list[tuple[str, object]]:
+    """Branch events. The result returns the warning, so the log stays at DEBUG:
+    a person sees each fact once (``docs/internal/cli-experience.md``)."""
+    assert not [call for call in log.calls if call.method_name == "warning"]
     return [
         (call.args[0], call.kwargs.get("detail"))
         for call in log.calls
-        if call.method_name == "warning"
+        if call.method_name == "debug" and str(call.args[0]).startswith("ci_default_branch")
     ]
 
 

@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 import structlog
 
 from opentide.core.index_manager import IndexManager
-from opentide.core.logging.console import emit_section
 from opentide.core.registry import Opentide
 from opentide.core.root import get_repo_root
 from opentide.generation.errors import GenerationPhaseError, failing_phase
@@ -21,6 +20,7 @@ logger = structlog.get_logger("opentide.cli.services.generation")
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
+    from opentide.cli.ui.progress import Checklist, Step
 
 # User-visible outputs first, then framework internals. Extract is opt-in only.
 _PHASE_ORDER: tuple[str, ...] = (
@@ -38,13 +38,11 @@ def run_generate_phase(phase: str) -> None:
     if phase == "vocabs":
         from opentide.indexing.object_vocab import run as generate_object_vocab
 
-        emit_section("Object vocabulary generation")
         generate_object_vocab()
         return
     if phase == "templates":
         from opentide.generation.template import run as generate_templates
 
-        emit_section("Template generation")
         generate_templates()
         IndexManager.reload()
         Opentide.reload()
@@ -52,7 +50,6 @@ def run_generate_phase(phase: str) -> None:
     if phase == "schemas":
         from opentide.generation.schema import run as generate_schemas
 
-        emit_section("JSON schema generation")
         generate_schemas()
         IndexManager.reload()
         Opentide.reload()
@@ -60,7 +57,6 @@ def run_generate_phase(phase: str) -> None:
     if phase == "snippets":
         from opentide.generation.vscode_snippets import run as generate_snippets
 
-        emit_section("VS Code snippet generation")
         generate_snippets()
         return
     if phase == "exports":
@@ -68,7 +64,6 @@ def run_generate_phase(phase: str) -> None:
         from opentide.export.revisions_export import run as export_revisions
         from opentide.export.table_export import TableExporter
 
-        emit_section("Export generation")
         attack_navigator_layer.run()
         TableExporter().run()
         export_revisions()
@@ -76,25 +71,21 @@ def run_generate_phase(phase: str) -> None:
     if phase == "explorer":
         from opentide.export.explorer_export import run as export_explorer
 
-        emit_section("Explorer export generation")
         export_explorer()
         return
     if phase == "inflight":
         from opentide.indexing.inflight import run as generate_inflight
 
-        emit_section("Inflight preview shard generation")
         generate_inflight()
         return
     if phase == "inflight-prune":
         from opentide.indexing.inflight import run_prune as prune_inflight
 
-        emit_section("Inflight preview shard prune")
         prune_inflight()
         return
     if phase == "docs":
         from opentide.documentation.cli import run as run_docs
 
-        emit_section("Documentation generation")
         run_docs()
         return
     raise ValueError(f"Unknown generation phase: {phase}")
@@ -139,6 +130,143 @@ def run_generate_phases_for_workspace(target: Path, phases: Sequence[str]) -> li
     return ran
 
 
+#: Directories never scanned for written files: version control, environments, caches.
+_SKIPPED_DIRS = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".venv",
+        "venv",
+        "node_modules",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+    }
+)
+
+#: Step names as the checklist shows them.
+PHASE_LABELS: dict[str, str] = {
+    "vocabs": "vocabularies",
+    "inflight-prune": "inflight prune",
+}
+
+
+def _snapshot(roots: Sequence[Path]) -> dict[str, tuple[int, int]]:
+    """``path → (mtime_ns, size)`` for every file under *roots*."""
+    seen: dict[str, tuple[int, int]] = {}
+    pending = [root for root in roots if root.is_dir()]
+    while pending:
+        directory = pending.pop()
+        try:
+            entries = list(os.scandir(directory))
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    if entry.name not in _SKIPPED_DIRS:
+                        pending.append(Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    stat = entry.stat(follow_symlinks=False)
+                    seen[entry.path] = (stat.st_mtime_ns, stat.st_size)
+            except OSError:
+                continue
+    return seen
+
+
+class WrittenFiles:
+    """The files a step wrote and removed, found by comparing the tree before and after.
+
+    The generators write with plain ``Path.write_text``; comparing modification
+    times and sizes counts their output without touching every writer.
+    """
+
+    def __init__(self, *roots: Path) -> None:
+        self.roots = tuple(dict.fromkeys(root.resolve() for root in roots))
+        self.before = _snapshot(self.roots)
+
+    def changes(self) -> tuple[list[Path], list[Path]]:
+        after = _snapshot(self.roots)
+        # Compared with the snapshot alone: a file stamped in the future (clock
+        # skew, a checkout from another machine) is not written by every phase.
+        written = [Path(path) for path, stamp in after.items() if self.before.get(path) != stamp]
+        removed = [Path(path) for path in self.before if path not in after]
+        return sorted(written), sorted(removed)
+
+
+def _common_dir(paths: Sequence[Path], workspace: Path) -> str | None:
+    """The directory holding every path, as the reader sees it (``.opentide/schemas/``)."""
+    from opentide.cli.ui.paths import display_path
+
+    if not paths:
+        return None
+    common = Path(os.path.commonpath([str(path.parent) for path in paths]))
+    return display_path(common, workspace=workspace)
+
+
+def _scan_roots(workspace: Path, *extra: str | None) -> list[Path]:
+    roots = [workspace]
+    for item in extra:
+        if item:
+            path = Path(item)
+            roots.append(path if path.is_absolute() else workspace / path)
+    return roots
+
+
+@contextmanager
+def generation_step(
+    checklist: Checklist, phase: str, *, outputs: Sequence[str | None] = ()
+) -> Generator[Step, None, None]:
+    """Run one generation phase as a checklist step that counts the files it wrote."""
+    workspace = get_repo_root().resolve()
+    watch = WrittenFiles(*_scan_roots(workspace, *outputs))
+    with checklist.step(PHASE_LABELS.get(phase, phase)) as step:
+        yield step
+        written, removed = watch.changes()
+        if removed and not written:
+            step.done(len(removed), where=_common_dir(removed, workspace), detail="removed")
+            step.unit = "file removed"
+        else:
+            step.done(len(written), where=_common_dir(written, workspace))
+
+
+def generation_result(
+    checklist: Checklist, message: str | None = None, **data: object
+) -> dict[str, object]:
+    """``Generated 28 files in 4.8s · 6 phases``, with the counts and steps behind it."""
+    from opentide.cli.ui.progress import plural, seconds_text
+
+    steps = checklist.steps
+    written = sum(step.count or 0 for step in steps if step.unit == "file")
+    removed = sum(step.count or 0 for step in steps if step.unit == "file removed")
+    seconds = sum(step.seconds for step in steps)
+    if message is None:
+        subject = (
+            f"{plural(len(steps), 'phase')}"
+            if len(steps) != 1
+            else steps[0].name
+            if steps
+            else "nothing to run"
+        )
+        if removed and not written:
+            message = f"Removed {plural(removed, 'file')} in {seconds_text(seconds)} · {subject}"
+        else:
+            message = f"Generated {plural(written, 'file')} in {seconds_text(seconds)} · {subject}"
+    return {
+        "message": message,
+        **data,
+        "steps": [step.to_dict() for step in steps],
+        "_summary": {
+            "files": written,
+            "removed": removed,
+            "phases": len(steps),
+            "seconds": round(seconds, 3),
+        },
+    }
+
+
 def run_generate_docs(
     *,
     output: str | None = None,
@@ -149,10 +277,10 @@ def run_generate_docs(
     changed: bool = False,
     scope: str | None = None,
 ) -> dict[str, object]:
+    from opentide.cli.ui.progress import Checklist
     from opentide.documentation.cli import run as run_docs
     from opentide.documentation.types import DocumentScope
 
-    emit_section("Documentation generation")
     if changed and (scope is not None or rules or threats or objectives):
         raise ValueError("--changed cannot be combined with scoped docs generation")
     flagged = [
@@ -167,27 +295,49 @@ def run_generate_docs(
     if scope != DocumentScope.index.value and flagged:
         scope = flagged[0]
     try:
-        with failing_phase("docs"):
-            if scope == DocumentScope.index.value or len(flagged) < 2:
-                return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
-            # The first flag used to win: `--rules --threats` wrote rules only.
-            results = [run_docs(scope=name, output=output, flavor=flavor) for name in flagged]
+        with (
+            Checklist(total=1) as checklist,
+            generation_step(checklist, "docs", outputs=(output,)) as step,
+        ):
+            with failing_phase("docs"):
+                if scope == DocumentScope.index.value or len(flagged) < 2:
+                    result = dict(
+                        run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
+                    )
+                else:
+                    # The first flag used to win: `--rules --threats` wrote rules only.
+                    results = [
+                        run_docs(scope=name, output=output, flavor=flavor) for name in flagged
+                    ]
+                    counts: dict[str, int] = {}
+                    for scoped in results:
+                        scoped_counts = scoped.get("counts")
+                        if isinstance(scoped_counts, dict):
+                            for name, count in scoped_counts.items():
+                                counts[str(name)] = counts.get(str(name), 0) + int(count)
+                    result = {
+                        "message": f"Documentation scopes {', '.join(flagged)} completed",
+                        "scopes": flagged,
+                        "counts": counts,
+                    }
+            if result.get("status") == "failed":
+                step.status = "failed"
     except GenerationPhaseError as exc:
         return phase_failure(exc)
-    counts: dict[str, int] = {}
-    for result in results:
-        result_counts = result.get("counts")
-        if isinstance(result_counts, dict):
-            for name, count in result_counts.items():
-                counts[str(name)] = counts.get(str(name), 0) + int(count)
-    return {
-        "message": f"Documentation scopes {', '.join(flagged)} completed",
-        "scopes": flagged,
-        "counts": counts,
-    }
+    if result.get("status") == "failed":
+        return result
+    # A run that wrote nothing keeps the reason the docs pipeline gave
+    # ("No changed object documentation detected").
+    wrote = any(step.count for step in checklist.steps)
+    message = None if wrote else str(result.get("message") or "") or None
+    return {**result, **generation_result(checklist, message, **_without_message(result))}
 
 
-def run_generate_all() -> None:
+def _without_message(result: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in result.items() if key != "message"}
+
+
+def run_generate_all(checklist: Checklist | None = None) -> None:
     """Run the full generation pipeline, reporting what each phase costs.
 
     A run that overruns a CI job timeout is otherwise undiagnosable: the
@@ -195,22 +345,32 @@ def run_generate_all() -> None:
     tell from a killed job whether it was 10% or 90% through, or which
     phase consumed the budget.
     """
+    from opentide.cli.ui.progress import Checklist
+
+    owned = checklist is None
+    checklist = checklist or Checklist(total=len(_PHASE_ORDER))
     elapsed: dict[str, float] = {}
     started = time.monotonic()
-    for phase in _PHASE_ORDER:
-        phase_started = time.monotonic()
-        try:
-            with failing_phase(phase):
-                run_generate_phase(phase)
-        finally:
-            # Timed in `finally` so a phase that raises still reports its
-            # cost -- that reading is exactly what a killed job needs.
-            elapsed[phase] = time.monotonic() - phase_started
-            logger.info(
-                "generation_phase_complete",
-                phase=phase,
-                seconds=round(elapsed[phase], 1),
-            )
+    if owned:
+        checklist.__enter__()
+    try:
+        for phase in _PHASE_ORDER:
+            phase_started = time.monotonic()
+            try:
+                with generation_step(checklist, phase), failing_phase(phase):
+                    run_generate_phase(phase)
+            finally:
+                # Timed in `finally` so a phase that raises still reports its
+                # cost -- that reading is exactly what a killed job needs.
+                elapsed[phase] = time.monotonic() - phase_started
+                logger.info(
+                    "generation_phase_complete",
+                    phase=phase,
+                    seconds=round(elapsed[phase], 1),
+                )
+    finally:
+        if owned:
+            checklist.__exit__(None, None, None)
     total = time.monotonic() - started
     logger.info(
         "generation_complete",
@@ -226,22 +386,33 @@ def run_generate(
     phase: str | None = None,
     phases: Sequence[str] | None = None,
 ) -> dict[str, object]:
-    """Entry point for generate command."""
+    """Entry point for generate command.
+
+    The result's ``message`` is the outcome line (``Generated 28 files in 4.8s
+    · 6 phases``); ``steps`` and ``_summary`` carry the counts behind it.
+    """
+    from opentide.cli.ui.progress import Checklist
+
     ctx.apply_environment()
+    names = list(phases) if phases else list(_PHASE_ORDER) if phase is None else [phase]
     try:
-        if phases:
-            for name in phases:
-                with failing_phase(name):
-                    run_generate_phase(name)
-            return {"message": "Generation phases completed", "phases": list(phases)}
-        if phase is None:
-            run_generate_all()
-            return {"message": "Full generation pipeline completed", "phases": list(_PHASE_ORDER)}
-        with failing_phase(phase):
-            run_generate_phase(phase)
+        with Checklist(total=len(names)) as checklist:
+            if phases:
+                for name in phases:
+                    with generation_step(checklist, name), failing_phase(name):
+                        run_generate_phase(name)
+            elif phase is None:
+                run_generate_all(checklist)
+            else:
+                with generation_step(checklist, phase), failing_phase(phase):
+                    run_generate_phase(phase)
     except GenerationPhaseError as exc:
         return phase_failure(exc)
-    return {"message": f"Generation phase {phase} completed", "phase": phase}
+    if phases:
+        return generation_result(checklist, phases=list(phases))
+    if phase is None:
+        return generation_result(checklist, phases=list(_PHASE_ORDER))
+    return generation_result(checklist, phase=phase)
 
 
 def phase_failure(exc: GenerationPhaseError) -> dict[str, object]:
