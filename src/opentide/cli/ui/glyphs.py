@@ -28,7 +28,15 @@ GLYPHS: dict[str, Glyph] = {
     "delete": Glyph("×", "x"),
     "next": Glyph("→", "->"),
     "separator": Glyph("·", "-"),
+    "ellipsis": Glyph("…", "..."),
     "mark": Glyph("≋", "opentide"),
+}
+
+#: ``str.translate`` table from each glyph to its fallback, for :func:`encodable`.
+_FALLBACKS = {
+    ord(entry.symbol): entry.fallback
+    for entry in GLYPHS.values()
+    if len(entry.symbol) == 1 and not entry.symbol.isascii()
 }
 
 
@@ -53,3 +61,22 @@ def glyph(name: str, stream: TextIO | None = None, *, encoding: str | None = Non
     """
     entry = GLYPHS[name]
     return entry.symbol if can_encode(entry.symbol, stream, encoding=encoding) else entry.fallback
+
+
+def encodable(text: str, stream: TextIO | None = None) -> str:
+    """*text* as *stream* (stdout by default) can write it, instead of a ``UnicodeEncodeError``.
+
+    Text the stream can encode comes back unchanged. Otherwise each glyph
+    becomes its fallback (``·`` → ``-``, ``…`` → ``...``) and any other
+    character the encoding lacks becomes ``?``. The consoles call this on
+    everything they write, so a message that embeds a glyph literally is safe too.
+    """
+    if can_encode(text, stream):
+        return text
+    target = sys.stdout if stream is None else stream
+    encoding = getattr(target, "encoding", None) or "utf-8"
+    try:
+        codecs.lookup(encoding)
+    except LookupError:
+        encoding = "ascii"
+    return text.translate(_FALLBACKS).encode(encoding, "replace").decode(encoding)

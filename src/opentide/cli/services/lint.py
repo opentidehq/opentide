@@ -303,7 +303,10 @@ def run_lint(
     }
     if renamable:
         result["_next_actions"] = [
-            NextAction("opentide lint --fix", f"rename {renamable} file(s) to match their names")
+            NextAction(
+                "opentide lint --fix",
+                f"rename {renamable} {'file' if renamable == 1 else 'files'} to match their names",
+            )
         ]
     return result
 

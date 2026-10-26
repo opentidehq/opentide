@@ -262,13 +262,13 @@ Coverage counts rules only; the objective and threat your rule links to are not 
 
 ## 9. Validate the query and dry-run the deploy
 
-Sentinel supports query validation. A bare `validate query` does not scan the KQL. It exits `1` and names `--live`:
+Sentinel supports query validation. A bare `validate query` does not scan the KQL. It exits `2` and names `--live`:
 
 ```bash
 opentide validate query --platform sentinel
 ```
 
-```text output-of="opentide validate query --platform sentinel" exit=1
+```text output-of="opentide validate query --platform sentinel" exit=2
 error: Query validation checks the tenant. Re-run with --live.
 ```
 

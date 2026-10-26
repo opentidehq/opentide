@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.cli.ui.contract import USAGE_ERROR, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE
+from opentide.cli.ui.contract import (
+    USAGE_ERROR,
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+)
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.registry.discovery import discover_workspace
@@ -330,7 +335,9 @@ def _live_required_result(platform: str) -> dict[str, object]:
         "supported": True,
         "status": "failed",
         "message": "Query validation checks the tenant. Re-run with --live.",
-        "_exit_code": 1,
+        "_exit_code": 2,
+        "_failure_code": USAGE_MISSING_OPTION,
+        "_failure_argument": "--live",
     }
 
 

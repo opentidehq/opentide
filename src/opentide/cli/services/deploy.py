@@ -12,6 +12,7 @@ from opentide.cli.ui.contract import (
     USAGE_INVALID_CHOICE,
     USAGE_INVALID_VALUE,
     USAGE_MISSING_OPTION,
+    did_you_mean,
 )
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
@@ -98,6 +99,19 @@ def resolve_run_strategies(values: Any) -> Any:
     except Exception:  # noqa: BLE001 -- the hint is optional; the refusal is not
         statuses = {}
     return parse_strategies(values, statuses=statuses)
+
+
+def strategy_suggestion(values: Any) -> str | None:
+    """The deployable strategy closest to the first ``--strategy`` value that is not one."""
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+    names = [strategy.name for strategy in DEPLOYABLE_STRATEGIES]
+    for raw in values:
+        for part in str(raw).split(","):
+            value = part.strip()
+            if value and value.upper() not in names:
+                return did_you_mean(value, names)
+    return None
 
 
 def removed_plan_error() -> str | None:
@@ -202,6 +216,7 @@ def _deploy(
             "message": STRATEGY_REQUIRED,
             "_exit_code": 2,
             "_failure_code": USAGE_MISSING_OPTION,
+            "_failure_argument": "--strategy",
         }
     from opentide.core.registry import Opentide
     from opentide.deployment import CIEnvironment, make_deploy_plan, modified_mdr_files
@@ -220,6 +235,8 @@ def _deploy(
             "message": str(exc),
             "_exit_code": 2,
             "_failure_code": USAGE_INVALID_CHOICE,
+            "_failure_argument": "--strategy",
+            "_failure_suggestion": strategy_suggestion(strategies),
         }
     try:
         environment = CIEnvironment().environment

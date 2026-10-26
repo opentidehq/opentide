@@ -153,7 +153,8 @@ def test_no_color_holds_wherever_the_root_parser_stops(
     "colour_env",
     [
         pytest.param({"FORCE_COLOR": "1"}, id="FORCE_COLOR=1"),
-        pytest.param({"GITHUB_ACTIONS": "true"}, id="GITHUB_ACTIONS"),
+        # CI is plain mode, which colours only when FORCE_COLOR or PY_COLORS asks.
+        pytest.param({"GITHUB_ACTIONS": "true", "PY_COLORS": "1"}, id="GITHUB_ACTIONS+PY_COLORS"),
     ],
 )
 @pytest.mark.skipif(
@@ -168,6 +169,14 @@ def test_typer_help_still_colours_when_asked(
     result = script_runner.run(["opentide", "--help"], env=_terminal_env(colour_env))
     assert result.returncode == 0, result.stderr
     assert "\x1b[" in result.stdout
+
+
+def test_ci_help_has_no_colour_unless_forced(script_runner, tide_corpus_repo) -> None:
+    """CI is plain mode: Typer used to force a terminal for any ``GITHUB_ACTIONS``."""
+    env = _terminal_env({"GITHUB_ACTIONS": "true"})
+    result = script_runner.run(["opentide", "validate", "--help"], env=env)
+    assert result.returncode == 0, result.stderr
+    assert "\x1b[" not in result.stdout
 
 
 def test_opentide_console_script_validates_corpus(script_runner, tide_corpus_repo) -> None:

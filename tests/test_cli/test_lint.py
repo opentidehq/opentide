@@ -165,7 +165,7 @@ def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
     ) in result.output
     assert result.stdout.endswith(
         "! Catalogue lint found issues\n"
-        "→ opentide lint --fix · rename 1 file(s) to match their names\n"
+        "→ opentide lint --fix · rename 1 file to match their names\n"
     )
 
 
@@ -349,8 +349,8 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
         "summary": {},
         "next_actions": [
             {
-                "command": "opentide lint --fix",
-                "reason": "rename 1 file(s) to match their names",
+                "command": "opentide --json lint --fix",
+                "reason": "rename 1 file to match their names",
             }
         ],
         "failure": None,

@@ -143,7 +143,7 @@ def test_first_user_cli_workflow(
         "sentinel",
         repo=fresh,
     )
-    assert query.exit_code == 1, query.stdout + query.stderr
+    assert query.exit_code == 2, query.stdout + query.stderr
     query_payload = parse_cli_json(query)
     assert query_payload.get("supported") is True
     assert "--live" in query_payload["message"]

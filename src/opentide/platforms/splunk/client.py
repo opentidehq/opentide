@@ -139,8 +139,8 @@ def splunk_timerange(time: str, skewing: float | int = 1, offset: int = 0) -> st
     elif unit == "d":
         count = count * 1440
     elif unit != "m":
-        raise Exception(
-            "[FATAL] Time Unit not supported by splunk earliest at converter (expects m, h or d)"
+        raise ValueError(
+            "Time unit not supported by the Splunk earliest-time converter (expects m, h or d)"
         )
     converted = offset + round(count * skewing)
     return f"-{converted}m@m"
@@ -168,8 +168,8 @@ def cron_to_timeframe(
         hour = now.strftime("%H")
     if mode == "custom":
         if not custom_time:
-            raise Exception(
-                "[FATAL] When selecting a custom time, you need to input a time in the correct format : HHhmm."
+            raise ValueError(
+                "When selecting a custom time, you need to input a time in the correct format: HHhmm."
             )
         hour, min_val = custom_time.split("h")
     match unit:
@@ -180,9 +180,7 @@ def cron_to_timeframe(
         case "d":
             cron = f"{min_val} {hour} */{count} * *"
         case _:
-            raise Exception(
-                "[FATAL] Time Unit not supported by crontab converter (expects m, h or d)"
-            )
+            raise ValueError("Time unit not supported by the crontab converter (expects m, h or d)")
     return cron
 
 

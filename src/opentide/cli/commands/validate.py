@@ -85,7 +85,7 @@ def validate_query_cmd(
         None, "--uuid", help="Check only the rule with this UUID (repeatable)"
     ),
 ) -> None:
-    """Query validation checks the tenant. Pass --live."""
+    """Check rule queries against the platform's tenants (needs --live)."""
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
     result = validate_query_platform(

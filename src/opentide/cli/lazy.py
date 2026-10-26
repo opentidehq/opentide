@@ -101,12 +101,6 @@ class LazyTyperGroup(TyperGroup):
         # A first guess, for usage errors Click raises before the root callback
         # resolves the mode properly from the parsed flags.
         options = argv[: argv.index("--")] if "--" in argv else argv
-        if "--no-color" in options:
-            # A usage error is printed before the root callback configures the
-            # consoles; it has to honour --no-color too, FORCE_COLOR or not.
-            from opentide.core.logging import LoggingConfig, init_logging
-
-            init_logging(LoggingConfig(plain=True), force=True)
         start_clock()
         set_mode(
             resolve_mode(
@@ -115,6 +109,21 @@ class LazyTyperGroup(TyperGroup):
                 command=_leading_words(self, argv),
             )
         )
+        from opentide.core.logging.config import colourless_mode
+
+        colourless = colourless_mode()
+        if "--no-color" in options or colourless:
+            # A usage error is printed before the root callback configures the
+            # consoles; it has to honour --no-color, FORCE_COLOR or not, and
+            # the colourless plain and agent modes.
+            from opentide.cli.context import sync_typer_rendering
+            from opentide.core.logging import LoggingConfig, init_logging
+
+            init_logging(
+                LoggingConfig(plain="--no-color" in options, no_color=colourless), force=True
+            )
+            if colourless:
+                sync_typer_rendering(no_color=True)
         return super().main(
             args=args,
             prog_name=prog_name,
@@ -145,6 +154,34 @@ class LazyTyperGroup(TyperGroup):
             return super().invoke(ctx)
         except _click.exceptions.UsageError as error:
             _usage_error(error)
+
+    def resolve_command(
+        self, ctx: _click.Context, args: list[str]
+    ) -> tuple[str | None, _click.Command | None, list[str]]:
+        """Resolve as Click does; a group named alone is a usage error for a program.
+
+        A person who types ``opentide mcp`` gets its help (``no_args_is_help``).
+        In ``json`` and ``agent`` mode it is ``Missing command`` instead, raised
+        before Typer builds the ``NoArgsIsHelpError``, which prints the help as
+        it is created. Only the bare root still prints help in every mode.
+        """
+        from opentide.cli.ui.mode import OutputMode, get_mode
+
+        name, command, rest = super().resolve_command(ctx, args)
+        if (
+            not rest
+            and not ctx.resilient_parsing
+            and isinstance(command, TyperGroup)
+            and command.no_args_is_help
+            and get_mode() in (OutputMode.JSON, OutputMode.AGENT)
+        ):
+            sub = _click.Context(command, info_name=name, parent=ctx)
+            choices = ", ".join(command.list_commands(sub))
+            raise _click.exceptions.UsageError(
+                f"Missing command: choose from {choices}." if choices else "Missing command.",
+                ctx=sub,
+            )
+        return name, command, rest
 
     def get_command(self, ctx: _click.Context, cmd_name: str) -> _click.Command | None:
         if self._listing and cmd_name in self.specs and cmd_name not in self.commands.added:
