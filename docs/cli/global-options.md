@@ -90,6 +90,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_OUTPUT` | Output mode: `human`, `plain`, `agent` or `json`; see [Output modes](./json-output.md#output-modes) |
 | `OPENTIDE_DEBUG` | `1` for debug logging, like `--debug` |
 | `NO_COLOR` | Any value turns colour off, like `--no-color` |
+| `OPENTIDE_JSON_INDENT` | `0` prints every `--json` document on one line, `2` indents it; default: indented at a terminal, one line otherwise |
 | `OPENTIDE_REPO_ROOT` | Repository root, like `--repo` |
 | `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
 | `OPENTIDE_PROXY` | HTTP(S) proxy, like `--proxy` |
@@ -98,6 +99,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_LOG_JSON` | `1` for one JSON object per log line on stderr |
 | `OPENTIDE_VALIDATE_WORKERS` | Most threads `validate` uses: a number, or `auto` |
 | `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
+| `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar) |
 | `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
 
 ## Environment propagation

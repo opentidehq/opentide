@@ -84,6 +84,10 @@ def environment() -> list[dict[str, str]]:
             "name": "OPENTIDE_VALIDATE_PARALLEL_THRESHOLD",
             "meaning": "Fewest objects before validate runs in parallel",
         },
+        {
+            "name": "OPENTIDE_PROGRESS",
+            "meaning": "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal",
+        },
         *(
             {"name": name, "meaning": "Set by a coding agent: selects agent output mode"}
             for name in AGENT_VARIABLES

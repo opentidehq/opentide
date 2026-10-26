@@ -333,6 +333,18 @@ def test_environment_names_every_variable_the_code_reads() -> None:
     assert _UNDOCUMENTED_ENV.issubset(read), "drop a name the code no longer reads"
 
 
+def test_the_docs_table_lists_every_environment_variable() -> None:
+    """``docs/cli/global-options.md`` has a row for each ``OPENTIDE_*`` entry of ``environment()``."""
+    from opentide.cli.services.introspect import environment
+
+    docs = Path(__file__).resolve().parents[2] / "docs" / "cli" / "global-options.md"
+    text = docs.read_text(encoding="utf-8")
+    section = text.split("## Environment variables", 1)[1].split("\n## ", 1)[0]
+    rows = set(re.findall(r"^\| `(OPENTIDE_[A-Z0-9_]+)` \|", section, re.MULTILINE))
+    names = {entry["name"] for entry in environment() if entry["name"].startswith("OPENTIDE_")}
+    assert names <= rows, sorted(names - rows)
+
+
 @pytest.mark.parametrize(
     ("path", "name", "bad_argv"),
     [
