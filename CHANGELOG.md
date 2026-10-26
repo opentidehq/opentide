@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide new threat|objective|rule`** scaffolds an object from the generated template with a fresh UUID, today's date, the git author and the catalogue's organisation. Every value nobody chose ends in `# opentide:placeholder`; the file validates at once, and `opentide lint` reports each marker by key (`surface[0]` for a list item, with its column) until it is replaced. A rule keeps the commented blocks of its own platforms only, and holds what each platform's deploy needs (Sentinel's schedule and grouping), so after moving its status to a `PREVIEW` one, `deploy --dry-run` compiles it.
+- **`opentide doctor`** checks the installation, the workspace and its integrations in one checklist, with a code, a status and a fix per check, paths relative to the current directory, and `○` for a skipped check. It exits `1` when a check fails.
+
 ### Changed
 
 - **Usage errors a command detects exit `2`, not `1`.** An unknown `info` section, an unknown `generate` phase, an invalid `validate --type`, a `share --target` that names no configured block, `info coverage` without `--technique`, `generate docs --changed` combined with a scope, and a `setup` prompt with no terminal (or under `--json`) now exit `2`, as [exit codes](docs/cli/exit-codes.md) already promised. A pipeline that tested for `1` on these should test for non-zero, or read `failure.code` from `--json`. A `share --target` naming a block that exists but is disabled still exits `1`.

@@ -67,29 +67,29 @@ A check that raises an unexpected error fails under its own codes with `The chec
 
 ## Output
 
-One line per check, its fix under it, then the outcome line. A tutorial workspace with no tenant, editor settings or MCP configuration yet, outside git, prints (the workspace path is shortened):
+One line per check, its fix under it, then the outcome line. `✓` is a pass, `!` a warning, `✗` a failure and `○` a skip (`ok`, `!`, `x` and `o` on a stream that cannot encode them). Paths are relative to the current directory, `./` being the directory itself. A tutorial workspace with no tenant, editor settings or MCP configuration yet, outside git, run from inside the workspace, prints:
 
 ```text illustrative
 ✓ Python 3.13.16 · python_version
 ✓ opentide 0.17.2 · opentide_version
-- Not checked: --offline · opentide_latest
-✓ Workspace ~/tutorial-detections has .opentide/ (found from the current directory) · workspace
+○ Not checked: --offline · opentide_latest
+✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
 ✓ git 2.43.0 · git
-! ~/tutorial-detections is not in a git repository · git_repository
-  → git init ~/tutorial-detections
+! ./ is not in a git repository · git_repository
+  → git init ./
 ✓ 1 configuration file loads · configuration
 ✓ Templates match the installed version · templates_fresh
 ✓ Every schema this version generates is present (6) · schemas_fresh
 ✓ Enabled: sentinel · platforms_enabled
 ✓ sentinel: azure.identity, azure.monitor.query, requests import · platform_sdk
-- sentinel: no tenant configured · credentials
+○ sentinel: no tenant configured · credentials
   → add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
-- No proxy set (--proxy, HTTPS_PROXY) · proxy
-- No .vscode/settings.json: editors get no schema completion · vscode_settings
+○ No proxy set (--proxy, HTTPS_PROXY) · proxy
+○ No .vscode/settings.json: editors get no schema completion · vscode_settings
   → opentide setup vscode
-- No snippets at .vscode/model-templates.code-snippets · vscode_snippets
+○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets
   → opentide generate snippets
-- No MCP configuration: agents in editors cannot call opentide tools · mcp_config
+○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
   → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)
 ! 1 warning · 9 passed, 6 skipped
 ```

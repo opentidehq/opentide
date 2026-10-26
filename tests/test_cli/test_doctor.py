@@ -182,6 +182,28 @@ def test_git_outside_a_repository(workspace: Path, git_home: Path) -> None:
     assert checks["git_repository"].fix == f"git init {workspace}"
 
 
+def test_paths_are_relative_to_the_current_directory(
+    workspace: Path, git_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(workspace)
+    found = _only(doctor.check_workspace(_ctx(workspace)))
+    assert found.message.startswith("Workspace ./ has .opentide/"), found.message
+    outside = {check.code: check for check in doctor.check_git(_ctx(workspace))}
+    assert outside["git_repository"].message == "./ is not in a git repository"
+    assert outside["git_repository"].fix == "git init ./"
+
+    _git(workspace, "init", "-q", "-b", "trunk")
+    (workspace / "objects").mkdir(exist_ok=True)
+    monkeypatch.chdir(workspace / "objects")
+    inside = {check.code: check for check in doctor.check_git(_ctx(workspace))}
+    assert inside["git_repository"].message == "Repository .. has no origin remote; on trunk"
+
+    monkeypatch.chdir(workspace.parent)
+    below = _only(doctor.check_workspace(_ctx(workspace)))
+    assert below.message.startswith(f"Workspace {workspace.name} has"), below.message
+    assert str(workspace.parent) not in below.message
+
+
 def test_git_default_branch_states(workspace: Path, git_home: Path) -> None:
     _git(workspace, "init", "-q", "-b", "trunk")
     checks = {check.code: check for check in doctor.check_git(_ctx(workspace))}
@@ -652,7 +674,34 @@ def test_render_checks_prints_status_message_code_and_fix() -> None:
     text = console.export_text()
     assert "✓ fine · a" in text
     assert "✗ broken · b\n  → do this" in text
-    assert "- not set up · c\n  → opentide setup mcp" in text
+    # Skipped is ○, never the plan's "disable" glyph ``-``.
+    assert "○ not set up · c\n  → opentide setup mcp" in text
+
+
+def test_render_checks_falls_back_on_an_ascii_stream() -> None:
+    import io
+
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
+    console = Console(file=stream, width=200, color_system=None)
+    doctor.render_checks(
+        console,
+        [Check("a", "pass", "fine").to_dict(), Check("c", "skip", "not set up", "x").to_dict()],
+    )
+    stream.flush()
+    text = stream.buffer.getvalue().decode("ascii")  # ty: ignore[unresolved-attribute]
+    assert text == "ok fine - a\no not set up - c\n  -> x\n"
+
+
+def test_outcome_separator_follows_the_stream_encoding(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io
+    import sys
+
+    checks = (Check("a", "pass", "fine"), Check("b", "skip", "later"))
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="ascii"))
+    payload = doctor.run_doctor(_ctx(workspace), checks=_fixed(*checks))
+    assert payload["message"] == "1 check passed - 1 skipped"
 
 
 # --------------------------------------------------------------------------- the command

@@ -151,6 +151,28 @@ def redact_url(url: str) -> str:
     return f"{scheme}://{host}{f':{port}' if port else ''}"
 
 
+def shown_path(path: Path, base: Path | None = None) -> str:
+    """*path* relative to the current directory, as every path opentide prints.
+
+    ``./`` is the current directory itself, and ``../..`` a folder above it.
+    A path elsewhere is relative to *base* (the workspace) when inside it,
+    otherwise absolute.
+    """
+    resolved = path.resolve()
+    cwd = Path.cwd().resolve()
+    if resolved == cwd:
+        return "./"
+    try:
+        return resolved.relative_to(cwd).as_posix()
+    except ValueError:
+        pass
+    if cwd.is_relative_to(resolved):
+        return Path(os.path.relpath(resolved, cwd)).as_posix()
+    if base is not None and resolved.is_relative_to(base.resolve()):
+        return resolved.relative_to(base.resolve()).as_posix()
+    return str(resolved)
+
+
 def _version_key(text: str) -> Any:
     try:
         from packaging.version import Version
@@ -267,7 +289,7 @@ def check_workspace(ctx: DoctorContext) -> list[Check]:
     from opentide.core.root import OPENTIDE_DIR
 
     root = ctx.workspace
-    shown = str(root)
+    shown = shown_path(root)
     how = (
         "set by --repo or OPENTIDE_REPO_ROOT"
         if ctx.workspace_explicit
@@ -305,24 +327,24 @@ def check_git(ctx: DoctorContext) -> list[Check]:
             )
         ]
     version = (_run_git(ctx.workspace, "--version") or "git").removeprefix("git version ")
-    top = _run_git(ctx.workspace, "rev-parse", "--show-toplevel")
-    if top is None:
+    found = _run_git(ctx.workspace, "rev-parse", "--show-toplevel")
+    if found is None:
+        workspace = shown_path(ctx.workspace)
         return [
             Check("git", "pass", f"git {version}"),
             Check(
                 "git_repository",
                 "warn",
-                f"{ctx.workspace} is not in a git repository",
-                f"git init {ctx.workspace}",
+                f"{workspace} is not in a git repository",
+                f"git init {workspace}",
             ),
         ]
+    top = shown_path(Path(found))
     remote_head = _run_git(ctx.workspace, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
     checks = [Check("git", "pass", f"git {version}")]
     if remote_head:
         branch = remote_head.removeprefix("refs/remotes/origin/")
-        checks.append(
-            Check("git_repository", "pass", f"Repository {top} · default branch {branch}")
-        )
+        checks.append(Check("git_repository", "pass", f"Repository {top}, default branch {branch}"))
         return checks
     has_origin = _run_git(ctx.workspace, "remote", "get-url", "origin") is not None
     if has_origin:
@@ -330,7 +352,7 @@ def check_git(ctx: DoctorContext) -> list[Check]:
             Check(
                 "git_repository",
                 "warn",
-                f"Repository {top} · default branch unknown: origin/HEAD is not set",
+                f"Repository {top}: default branch unknown, origin/HEAD is not set",
                 "git remote set-head origin --auto",
             )
         )
@@ -340,7 +362,7 @@ def check_git(ctx: DoctorContext) -> list[Check]:
             Check(
                 "git_repository",
                 "pass",
-                f"Repository {top} · no origin remote; on {current}",
+                f"Repository {top} has no origin remote; on {current}",
             )
         )
     return checks
@@ -404,10 +426,7 @@ def check_configuration(ctx: DoctorContext) -> list[Check]:
             if problem is None:
                 continue
             line, reason = problem
-            try:
-                shown = path.relative_to(ctx.workspace).as_posix()
-            except ValueError:
-                shown = str(path)
+            shown = shown_path(path, ctx.workspace)
             where = f"{shown} line {line}" if line else shown
             return [
                 Check(
@@ -940,7 +959,8 @@ def run_doctor(
         rest = []
     if skipped:
         rest.append(f"{skipped} skipped")
-    message = " · ".join([headline, ", ".join(rest)]) if rest else headline
+    separator = f" {glyph('separator')} "
+    message = separator.join([headline, ", ".join(rest)]) if rest else headline
     payload: dict[str, Any] = {
         "message": message,
         "status": status,
@@ -963,7 +983,8 @@ _GLYPHS: dict[str, tuple[str, str]] = {
     "pass": ("ok", "green"),
     "warn": ("warning", "yellow"),
     "fail": ("failed", "red"),
-    "skip": ("disable", "dim"),
+    # Not the plan's "disable" glyph ``-``: a skipped check is not applicable.
+    "skip": ("skip", "dim"),
 }
 
 
