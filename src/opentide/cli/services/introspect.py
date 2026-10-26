@@ -41,7 +41,7 @@ def _app_choices() -> dict[tuple[str, str], tuple[str, ...]]:
     return {
         ("validate", "object_type"): ("rule", "threat", "objective"),
         ("deploy", "strategy"): tuple(strategy.name for strategy in DEPLOYABLE_STRATEGIES),
-        ("info", "section"): ("rules", "threats", "objectives", "coverage"),
+        ("info", "section"): ("rules", "threats", "objectives", "coverage", "vocab"),
     }
 
 

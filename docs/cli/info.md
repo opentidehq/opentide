@@ -1,6 +1,6 @@
 ---
 title: opentide info
-description: Repository statistics, platform capabilities, object listings, and ATT&CK coverage lookup.
+description: Repository statistics, platform capabilities, object listings, ATT&CK coverage lookup, and vocabulary contract revisions.
 ---
 
 # opentide info
@@ -18,7 +18,8 @@ opentide --json info --technique T1059 coverage
 
 | Input | Purpose |
 |-------|---------|
-| `[section]` | Optional section: `rules`, `threats`, `objectives`, or `coverage` (requires `--technique`) |
+| `[section]` | Optional section: `rules`, `threats`, `objectives`, `coverage` (requires `--technique`), or `vocab` |
+| `[name]` | With `vocab` only: the vocabulary to inspect (see [Vocabulary contract revisions](#vocabulary-contract-revisions)) |
 | `--platform` | Filter platform table to one platform |
 | `--technique` | ATT&CK technique ID — use with positional `coverage` |
 | `--strict` | Exit non-zero when any object file failed to load |
@@ -53,6 +54,7 @@ With a section, the table for that section replaces the summary:
 | `rules` | UUID, name, and the platforms each rule configures |
 | `threats`, `objectives` | UUID and name |
 | `coverage` | `Coverage for T1059: 1 rule`, then the matching rules as in `rules` |
+| `vocab` | The vocabularies table, or with a name, that vocabulary's summary, revisions and pins |
 
 An empty section prints `No rules found` (or threats, objectives).
 
@@ -93,6 +95,64 @@ With coverage, the payload adds a `coverage` object:
   "coverage": { "technique": "T1059", "rules": ["..."], "count": 1 }
 }
 ```
+
+## Vocabulary contract revisions
+
+A vocabulary file carries no top-level `version`. Each `[[keys]]` entry carries its own lifecycle (`version`, the revision that introduced it, and `removed`, the revision that retired it), and each object schema pins a field to one revision in `src/opentide/data/pins/`. The `vocab` section reads those back, so you can tell which revision a field validates against and how many keys it admits:
+
+```bash
+opentide info vocab
+opentide info vocab surface
+opentide --json info vocab surface
+```
+
+| Input | Reports |
+|-------|---------|
+| `info vocab` | One row per vocabulary: entries, keys carrying `removed`, the latest revision its lifecycle defines, and whether it is staged |
+| `info vocab <name>` | The vocabulary's title, key field, entry count, removed-key count, stage ids, then two tables: **Revisions** and **Pins** |
+
+The name is the vocabulary's `field`, which is also its file name without `.vocab.toml` (`surface`, `signal.entities`, `att&ck`). An unknown name is a [usage error](./exit-codes.md): it exits `2`, lists the available names and suggests the closest one. A name typed after any other section (`info rules surface`) also exits `2`. A key whose `version` or `removed` is not `M` or `M.m` (`1`, `1.2`) exits `1`, naming the vocabulary and the key. The vocabularies listed are the ones under the data root (bundled with the engine unless `--data` / `OPENTIDE_DATA_ROOT` points elsewhere); the object vocabularies (`rule`, `threat`, `objective`) built from your repository have no key lifecycle and are not listed.
+
+**Revisions** lists each revision the key lifecycle defines, oldest first: the keys it introduces, the keys it removes, and how many keys a pin to it admits (introduced at or before it, and not removed at or before it).
+
+**Pins** lists each object schema field pinned to this vocabulary:
+
+| Column | Meaning |
+|--------|---------|
+| Schema | The object schema the pin belongs to (`threat::1.0`) |
+| Field | The pinned field path (`threat.surface`) |
+| Revision | The pinned revision; `(undefined)` when no key's `version` or `removed` names it |
+| Admitted | How many keys validate in that field |
+| Scoped | `yes` when the field is authored `<stage>::<key>` (for example `OS::Windows`), `no` when the bare key is authored |
+
+A staged vocabulary whose field is not scoped takes the bare key name; only a scoped field needs the stage prefix. A schema revision that has no model of its own (`objective::1.1`) reads `Scoped` from the latest model of its family.
+
+```json output-of="opentide --json info vocab surface"
+{
+  "vocabulary": {
+    "name": "surface",
+    "title": "Threat Surface",
+    "entries": "...",
+    "removed": "...",
+    "latest_revision": "...",
+    "staged": true,
+    "key": "name",
+    "stages": ["OS", "Application", "Authentication", "Cloud", "Infrastructure", "Security", "IoT", "Protocol"],
+    "pins": [
+      {
+        "schema": "threat::1.0",
+        "field": "threat.surface",
+        "revision": "1.0",
+        "defined": true,
+        "admitted": "...",
+        "scoped": true
+      }
+    ]
+  }
+}
+```
+
+`revisions` is a list of `{ "revision", "introduced", "removed", "admitted" }` objects. A pin's `scoped` is `null` when no model declares its field.
 
 ## Source
 

@@ -153,6 +153,46 @@ class TechniqueCoverage(ResultModel):
     count: int
 
 
+class VocabularyOverview(ResultModel):
+    """One vocabulary in ``info vocab``: the counts that need no pin lookup."""
+
+    name: str = Field(description="The vocabulary's field, its file name without .vocab.toml")
+    title: str | None = None
+    entries: int = Field(description="Keys the vocabulary defines, removed ones included")
+    removed: int = Field(description="Keys with a removed revision")
+    latest_revision: str | None = Field(
+        None, description="Newest revision the key lifecycle defines (major.minor)"
+    )
+    staged: bool = Field(description="Whether keys are authored as <stage>::<key>")
+
+
+class VocabularyRevision(ResultModel):
+    revision: str = Field(description="major.minor")
+    introduced: int = Field(description="Keys whose version is this revision")
+    removed: int = Field(description="Keys whose removed is this revision")
+    admitted: int = Field(description="Keys a pin to this revision admits")
+
+
+class VocabularyPin(ResultModel):
+    schema_: str = Field(alias="schema", description="Object schema id, e.g. rule::1.0")
+    field: str = Field(description="Dotted path of the pinned field")
+    revision: str
+    defined: bool = Field(description="Whether the key lifecycle defines this revision")
+    admitted: int = Field(description="Keys the pin admits")
+    scoped: bool | None = Field(
+        None, description="Whether the field is authored <stage>::<key>; null when unknown"
+    )
+
+
+class VocabularyDetail(VocabularyOverview):
+    """``info vocab <name>``: one vocabulary's revisions and pins."""
+
+    key: str | None = None
+    stages: list[str] = Field(default_factory=list)
+    revisions: list[VocabularyRevision] = Field(default_factory=list)
+    pins: list[VocabularyPin] = Field(default_factory=list)
+
+
 class InfoSummary(ResultModel):
     rules: int = 0
     threats: int = 0
@@ -174,6 +214,12 @@ class InfoResult(CommandDocument):
         None, description="Objective UUIDs, for the objectives section"
     )
     coverage: TechniqueCoverage | None = Field(None, description="For the coverage section")
+    vocabularies: list[VocabularyOverview] | None = Field(
+        None, description="For the vocab section without a name"
+    )
+    vocabulary: VocabularyDetail | None = Field(
+        None, description="For the vocab section with a name"
+    )
     summary: InfoSummary
 
 
