@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 
 logger = structlog.get_logger("opentide.generation.vscode_snippets")
@@ -142,7 +142,7 @@ def _require_template(path: Path, *, kind: str) -> None:
 
 
 def run() -> None:
-    emit_section("Generate VSCode Snippets")
+    report_stage("VS Code snippets")
     logger.info("converts_the_templates_into_vscode_formatted_snippets_inproject")
     paths = Opentide.Configurations.Global.Paths
     snippets_path = _snippets_output_path(paths)
@@ -166,7 +166,10 @@ def run() -> None:
         snippets[title] = vs_code_snippet_generator(
             template_path,
             _CORE_PREFIXES.get(str(model), f"tide-{model}"),
-            description=title,
+            description=(
+                f"{full_name}: a new object from the generated template, "
+                "with a tabstop on every field to fill."
+            ),
         )
     for recomp, subschema_type_folder in recomposition.items():
         entries = config_index.get(recomp)
@@ -185,13 +188,18 @@ def run() -> None:
             subschema_template_path = (
                 subschemas_folder / subschema_type_folder / "Templates" / subchema_template_name
             )
-            title = f"{subschema_type_folder} : {subschema_name} Template".strip()
+            # The folder name ("MDR Systems Deployment") stays a package path;
+            # people see "Platform configuration".
+            title = f"Platform configuration : {subschema_name} Template".strip()
             _require_template(subschema_template_path, kind=f"platform {platform_id}")
             snippets[title] = vs_code_snippet_generator(
                 subschema_template_path,
                 f"tide-{platform_id}",
                 blanks=1,
-                description=title,
+                description=(
+                    f"{subschema_name}: the platform block for a detection rule's "
+                    "configurations, from the generated template."
+                ),
             )
     snippets_path.parent.mkdir(parents=True, exist_ok=True)
     snippets_path.write_text(

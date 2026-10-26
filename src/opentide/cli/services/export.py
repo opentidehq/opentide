@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from opentide.cli.enums import ExportTarget
-from opentide.cli.services.generation import phase_failure
-from opentide.core.logging.console import emit_section
+from opentide.cli.services.generation import generation_result, generation_step, phase_failure
 from opentide.generation.errors import GenerationPhaseError, failing_phase
 
 logger = structlog.get_logger("opentide.cli.services.export")
@@ -45,11 +44,16 @@ def run_playbook_map_export() -> None:
 
 def run_export(ctx: CliContext, *, target: ExportTarget) -> dict[str, object]:
     """Entry point for export command."""
+    from opentide.cli.ui.progress import Checklist
+
     ctx.apply_environment()
-    emit_section(f"Export — {target.value}")
     try:
-        with failing_phase("exports"):
+        with (
+            Checklist(total=1) as checklist,
+            generation_step(checklist, f"exports {target.value}"),
+            failing_phase("exports"),
+        ):
             run_export_target(target)
     except GenerationPhaseError as exc:
         return {**phase_failure(exc), "target": target.value}
-    return {"message": f"Export {target.value} completed", "target": target.value}
+    return generation_result(checklist, target=target.value)

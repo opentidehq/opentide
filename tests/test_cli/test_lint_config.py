@@ -50,7 +50,7 @@ def test_check_names_match_the_cli_enum() -> None:
 def test_bundled_defaults_reproduce_unconfigured_lint(tmp_path: Path) -> None:
     config = load_lint_config(tmp_path)
     assert config.required_metadata == DEFAULT_REQUIRED_METADATA == ("author", "organisation")
-    assert config.enabled_checks() == ["filenames", "metadata"]
+    assert config.enabled_checks() == ["filenames", "metadata", "placeholders"]
     assert all(config.check(name).severity is None for name in CHECK_NAMES)
 
 
@@ -70,7 +70,7 @@ def test_empty_required_silences_the_metadata_check(tmp_path: Path) -> None:
     _write_lint_toml(tmp_path, "[metadata]\nrequired = []\n")
     result = run_lint(tmp_path)
     assert result["count"] == 0
-    assert result["checks"] == ["filenames", "metadata"]
+    assert result["checks"] == ["filenames", "metadata", "placeholders"]
 
 
 def test_required_counts_empty_lists_and_strings_as_missing(tmp_path: Path) -> None:
@@ -85,7 +85,7 @@ def test_disabled_check_does_not_run(tmp_path: Path) -> None:
     _write_object(tmp_path, "Simulated Actor.yaml")
     _write_lint_toml(tmp_path, "[metadata]\nenabled = false\n")
     result = run_lint(tmp_path)
-    assert result["checks"] == ["filenames"]
+    assert result["checks"] == ["filenames", "placeholders"]
     assert [item["check"] for item in result["findings"]] == ["filenames"]
 
 
@@ -99,7 +99,11 @@ def test_check_flag_wins_over_a_disabled_check(tmp_path: Path) -> None:
 
 def test_every_check_disabled_passes(tmp_path: Path) -> None:
     _write_object(tmp_path, "Simulated Actor.yaml")
-    _write_lint_toml(tmp_path, "[metadata]\nenabled = false\n[filenames]\nenabled = false\n")
+    _write_lint_toml(
+        tmp_path,
+        "[metadata]\nenabled = false\n[filenames]\nenabled = false\n"
+        "[placeholders]\nenabled = false\n",
+    )
     result = run_lint(tmp_path, strict=True)
     assert result["checks"] == []
     assert result["status"] == "completed"
@@ -183,3 +187,11 @@ def test_required_skips_keys_the_object_schema_cannot_hold(tmp_path: Path) -> No
     assert [(item["path"], item["message"]) for item in findings] == [
         ("objects/rules/simulated-rule.yaml", "Recommended metadata missing: reviewed")
     ]
+
+
+def test_unparsable_lint_toml_is_framed_like_any_config_file(tmp_path: Path) -> None:
+    _write_lint_toml(tmp_path, "[metadata\n")
+    result = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint"])
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.stdout)
+    assert payload["failure"]["code"] == "config_parse"

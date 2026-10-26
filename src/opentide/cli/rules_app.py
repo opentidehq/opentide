@@ -5,8 +5,8 @@ from __future__ import annotations
 import typer
 
 from opentide.cli.context import get_context
-from opentide.cli.output import CommandResult, emit_error, emit_result
-from opentide.cli.services.rules import render_unreviewed, run_unreviewed
+from opentide.cli.output import CommandResult, emit_error, emit_result, emit_usage_error
+from opentide.cli.ui.contract import USAGE_INVALID_VALUE
 
 rules_app = typer.Typer(help="Detection rule maintenance")
 
@@ -26,8 +26,15 @@ def rules_unreviewed(
     is absent or strictly earlier than now minus the window. This command does not
     modify rules.
     """
+    from opentide.cli.services.rules import render_unreviewed, run_unreviewed
+    from opentide.models.review import parse_window
+
     cli = get_context(ctx)
     cli.apply_environment()
+    try:
+        parse_window(older_than)
+    except ValueError as exc:
+        emit_usage_error(cli, str(exc), argument="--older-than", code=USAGE_INVALID_VALUE)
     try:
         result = run_unreviewed(cli.repo, older_than=older_than)
     except ValueError as exc:

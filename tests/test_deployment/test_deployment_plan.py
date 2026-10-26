@@ -417,9 +417,10 @@ def test_make_deploy_plan_names_the_rule_files_in_subfolders(
         "files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): "
         + ", ".join(nested)
     ]
+    # Returned in `warnings`, so logged once more only at DEBUG.
     assert _skipped_subfolder_logs(plan_log) == [
         (
-            "info",
+            "debug",
             {
                 "count": 2,
                 "files": nested,
@@ -739,7 +740,7 @@ def test_make_deploy_plan_selects_by_the_strategy_a_status_maps_to(
     _write_gated_rule(local_workspace, status=status, splunk_enabled=True)
     planned = make_deploy_plan(strategies, all_files=True)
     assert planned == ({"splunk": [GATED_RULE_UUID]} if selected else {})
-    skipped = [fields for _, event, fields in plan_log if event == "mdr_skipped_for_strategy"]
+    skipped = [fields for _, event, fields in plan_log if event == "rule_skipped_for_strategy"]
     if selected:
         assert skipped == []
         return

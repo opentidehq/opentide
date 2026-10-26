@@ -19,7 +19,7 @@ Severity = Literal["error", "warning", "info"]
 SEVERITIES: tuple[Severity, ...] = ("error", "warning", "info")
 
 #: Check names, in the order ``opentide lint`` runs them by default.
-CHECK_NAMES: tuple[str, ...] = ("filenames", "metadata")
+CHECK_NAMES: tuple[str, ...] = ("filenames", "metadata", "placeholders")
 
 #: ``metadata.required`` when nothing configures it (the behaviour before #489).
 DEFAULT_REQUIRED_METADATA: tuple[str, ...] = ("author", "organisation")
@@ -28,6 +28,7 @@ _COMMON_KEYS = frozenset({"enabled", "severity"})
 _CHECK_KEYS: dict[str, frozenset[str]] = {
     "filenames": _COMMON_KEYS,
     "metadata": _COMMON_KEYS | {"required"},
+    "placeholders": _COMMON_KEYS,
 }
 
 _SOURCE = "lint.toml"

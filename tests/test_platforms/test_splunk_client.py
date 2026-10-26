@@ -152,3 +152,19 @@ def test_enabled_tenant_without_frequency_keeps_its_default_silently(
     expected = _UNSET_FREQUENCY[request.node.callspec.params["splunk_frequency"]]
     assert getattr(deployer, "TIMERANGE_MODE", None) == expected
     assert _warnings(splunk_log) == []
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: splunk_client.splunk_timerange("5x"),
+        lambda: splunk_client.cron_to_timeframe("5x"),
+        lambda: splunk_client.cron_to_timeframe("5m", mode="custom"),
+    ],
+    ids=["timerange-unit", "cron-unit", "custom-time"],
+)
+def test_converter_errors_carry_no_fatal_prefix(call: Callable[[], str]) -> None:
+    """FATAL is for crashes; a bad unit or time in a rule is the user's input."""
+    with pytest.raises(ValueError) as caught:
+        call()
+    assert "FATAL" not in str(caught.value)

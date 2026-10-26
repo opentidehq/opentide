@@ -3,7 +3,9 @@
 [![PyPI](https://img.shields.io/pypi/v/opentide.svg)](https://pypi.org/project/opentide/)
 [![Coverage](https://raw.githubusercontent.com/opentidehq/opentide/python-coverage-comment-action-data/badge.svg)](https://github.com/opentidehq/opentide/actions/workflows/ci.yml)
 
-**opentide** — the DetectionOps engine for detection-as-code: validate, generate schemas, deploy rules, and document content across eight security platforms.
+**opentide** — spec-driven development for agentic detection engineering.
+
+opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across eight security platforms.
 
 ## Install
 

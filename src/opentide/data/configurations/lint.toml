@@ -13,3 +13,7 @@ enabled = true
 # uncommented, so a scaffolded object shows each one lint asks for.
 required = ["author", "organisation"]
 # severity = "info"
+
+[placeholders]
+enabled = true
+# severity = "warning"

@@ -318,6 +318,10 @@ def _mappings_for(root: Path) -> list[LayoutMapping]:
     return ordered
 
 
+def _count(number: int, noun: str) -> str:
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
 def run_migrate_objects(
     root: Path,
     *,
@@ -351,22 +355,20 @@ def run_migrate_objects(
         copy=copy,
         planned=len(actionable),
     )
+    folders = _count(len(actionable), "folder")
     if not actionable and case_renamed:
+        renamed = _count(len(case_renamed), "folder")
         message = (
-            f"Renamed {len(case_renamed)} folder(s) to the exact case"
+            f"Renamed {renamed} to the exact case"
             if apply
-            else f"Planned {len(case_renamed)} folder case rename(s) "
-            "(dry-run; pass --apply to execute)"
+            else f"Would rename {renamed} to the exact case · pass --apply to rename"
         )
     elif not actionable:
         message = "No legacy layout paths to migrate"
     elif apply:
-        verb = "Copied" if copy else "Migrated"
-        message = f"{verb} {len(actionable)} legacy path(s)"
+        message = f"{'Copied' if copy else 'Moved'} {folders}"
     else:
-        message = (
-            f"Planned {len(actionable)} layout migration(s) (dry-run; pass --apply to execute)"
-        )
+        message = f"Would {'copy' if copy else 'move'} {folders} · pass --apply to migrate"
     result: dict[str, object] = {
         "message": message,
         "path": str(target),
@@ -376,7 +378,11 @@ def run_migrate_objects(
         "planned": len(actionable),
         "skipped": len(skipped),
         "applied": bool(apply and (actionable or case_renamed)),
+        "_summary": {"folders": len(actionable), "case_renamed": len(case_renamed)},
     }
+    if not apply and (actionable or case_renamed):
+        # "Would move …": a dry run moved nothing, so the line takes no ✓.
+        result["_outcome_kind"] = "plan"
     if case_renamed:
         result["case_renamed"] = case_renamed
         if apply:
