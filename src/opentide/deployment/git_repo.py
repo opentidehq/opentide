@@ -311,6 +311,33 @@ def _github_push_before(repo: DulwichRepo) -> str | None:
     return before
 
 
+def _github_event_request_shas(repo: DulwichRepo) -> tuple[str, str] | None:
+    """The pull request's base and head commits, from the event payload.
+
+    ``pull_request_target`` runs on the base branch, and a fork's head branch
+    is not on ``origin``, so neither ``GITHUB_SHA`` nor the branch names lead
+    to the request's commits. ``None`` when the payload lacks them or the
+    checkout does not hold both.
+    """
+    event_path = os.getenv("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    request = event.get("pull_request") if isinstance(event, dict) else None
+    if not isinstance(request, dict):
+        return None
+    base, head = ((request.get(side) or {}).get("sha") for side in ("base", "head"))
+    if not isinstance(base, str) or not isinstance(head, str):
+        return None
+    if not (_has_commit(repo, base) and _has_commit(repo, head)):
+        logger.info("pull_request_shas_not_in_checkout", base=base, head=head)
+        return None
+    return base, head
+
+
 def _origin_sha(repo: DulwichRepo, ref: str) -> str:
     """The commit *ref* (``origin/<branch>``) names."""
     return repo._resolve_sha(ref).decode("ascii")
@@ -389,12 +416,22 @@ def diff_calculation(source: DiffSource) -> list[str]:
 
                 # ``pull_request_target`` runs on the base branch: GITHUB_SHA is
                 # that branch's tip, which may be any merge, not this request's.
+                # The event payload names its commits, which a fork's branch
+                # on ``origin`` cannot.
                 merge_parent = None
+                request_shas = None
                 if os.getenv("GITHUB_EVENT_NAME") != "pull_request_target":
                     merge_parent = _merge_first_parent(repo, LATEST_COMMIT)
+                else:
+                    request_shas = _github_event_request_shas(repo)
+                request_base = repo.merge_base(*request_shas) if request_shas else []
 
                 if merge_parent is not None:
                     BASE_COMMIT = merge_parent
+                elif request_shas and request_base:
+                    BASE_COMMIT = request_base[0].hexsha
+                    LATEST_COMMIT = request_shas[1]
+                    logger.info("pull_request_diff_from_event", base=BASE_COMMIT)
                 else:
                     repo.remotes.origin.fetch()
 

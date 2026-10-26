@@ -160,6 +160,32 @@ def test_github_pull_request_target_diffs_the_request_head(
     assert diff_calculation(DiffSource.CHANGE_REQUEST) == ["objects/rules/b.yaml"]
 
 
+def test_github_pull_request_target_from_a_fork_diffs_the_event_commits(
+    request_checkout: Request, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A fork's head branch is not on ``origin``.
+
+    The run looked for ``origin/<head branch>`` and failed with "Could not find
+    git ref"; the event payload names the base and head commits instead.
+    """
+    ci = request_checkout.ci
+    _git(ci, "checkout", "-q", "--detach", request_checkout.feature)
+    _git(ci, "update-ref", "-d", "refs/remotes/origin/feature")
+    base_tip = _git(ci, "rev-parse", "origin/main")
+    event = tmp_path / "event.json"
+    event.write_text(
+        json.dumps(
+            {"pull_request": {"base": {"sha": base_tip}, "head": {"sha": request_checkout.feature}}}
+        ),
+        encoding="utf-8",
+    )
+    _github_request(monkeypatch, ci, base_tip, "pull_request_target")
+    monkeypatch.setenv("GITHUB_HEAD_REF", "fork-feature")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+
+    assert diff_calculation(DiffSource.CHANGE_REQUEST) == ["objects/rules/b.yaml"]
+
+
 @pytest.mark.parametrize("source_commit", [True, False], ids=["source-commit-id", "no-commit-id"])
 def test_azure_pull_request_diffs_the_merge_from_the_target_tip(
     request_checkout: Request, monkeypatch: pytest.MonkeyPatch, source_commit: bool

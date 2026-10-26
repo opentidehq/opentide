@@ -126,3 +126,37 @@ def test_validate_strict_checks_the_file_not_a_shard(repo: Path) -> None:
     issues = json.loads(result.stdout)["report"]["issues"]
     assert any(issue.get("object_uuid") == SENTINEL_UUID for issue in issues)
     assert all(issue.get("object_uuid") != NEW_RULE_UUID for issue in issues)
+
+
+def test_docs_preview_open_pull_requests(repo: Path, tmp_path: Path) -> None:
+    """Documentation is a preview producer: it must still see the shards."""
+    from opentide.documentation.cli import run
+
+    out = tmp_path / "docs"
+    run(output=str(out))
+
+    pages = "\n".join(p.read_text(encoding="utf-8") for p in out.rglob("*.md"))
+    assert "Rule from another pull request" in pages
+    assert "UNREVIEWED_QUERY" in pages
+    assert not inflight_preview_enabled()
+    assert "UNREVIEWED_QUERY" not in _sentinel_query()
+
+
+def test_the_docs_api_previews_open_pull_requests(repo: Path, tmp_path: Path) -> None:
+    from opentide.documentation.api import write_all
+
+    out = tmp_path / "docs"
+    write_all(output=str(out))
+
+    pages = "\n".join(p.read_text(encoding="utf-8") for p in out.rglob("*.md"))
+    assert "Rule from another pull request" in pages
+    assert not inflight_preview_enabled()
+
+
+def test_the_explorer_previews_open_pull_requests(repo: Path, tmp_path: Path) -> None:
+    from opentide.export.explorer_export import export_explorer_bundle
+
+    bundle_path, _ = export_explorer_bundle(tmp_path / "exports")
+
+    assert NEW_RULE_UUID in bundle_path.read_text(encoding="utf-8")
+    assert not inflight_preview_enabled()

@@ -160,7 +160,9 @@ class DetectionRule(TideModel):
         try:
             # The CLI default: without strategies no tenant is targeted and
             # nothing would be checked (and most validators required them).
-            validator.validate([self.metadata.uuid], DEPLOYABLE_STRATEGIES)
+            # Pass the rule itself: by UUID the validator re-read the registry
+            # copy, not this (possibly edited, possibly unregistered) object.
+            validator.validate([self], DEPLOYABLE_STRATEGIES)
             failed = bool(os.environ.get(_ERROR_FLAG))
             warned = bool(os.environ.get(_WARNING_FLAG))
         finally:

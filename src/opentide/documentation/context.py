@@ -68,7 +68,7 @@ def _url_host(url: str) -> str:
 
 
 def _flavor_for_host(host: str) -> DocumentFlavor | None:
-    if host == "dev.azure.com" or host.endswith(".visualstudio.com"):
+    if host in {"dev.azure.com", "ssh.dev.azure.com"} or host.endswith(".visualstudio.com"):
         return DocumentFlavor.azure_devops
     # Self-hosted forges usually keep the product name in the host
     # (github.example.com, gitlab.example.org).

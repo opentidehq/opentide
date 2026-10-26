@@ -147,8 +147,16 @@ def write_all(
     """Write all object pages and optionally index pages.
 
     Generated pages that no object writes any more, after a rename or a
-    deletion, are removed.
+    deletion, are removed. Open pull requests' inflight shards are previewed,
+    as ``opentide generate docs`` does.
     """
+    from opentide.indexing.inflight import inflight_preview
+
+    with inflight_preview():
+        return _write_all(include_index=include_index, output=output, flavor=flavor)
+
+
+def _write_all(*, include_index: bool, output: str | None, flavor: str | None) -> dict[str, int]:
     ctx = _context(output=output, flavor=flavor)
     cat = build_catalog()
     pub = targets(ctx)

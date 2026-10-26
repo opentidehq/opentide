@@ -56,6 +56,7 @@ def test_another_ci_is_not_read_as_gitlab(monkeypatch: pytest.MonkeyPatch, tmp_p
         ("ssh://git@gitlab.example.org:2222/org/detections.git", DocumentFlavor.gitlab),
         ("https://dev.azure.com/org/project/_git/detections", DocumentFlavor.azure_devops),
         ("org@vs-ssh.visualstudio.com:v3/org/project/detections", DocumentFlavor.azure_devops),
+        ("git@ssh.dev.azure.com:v3/org/project/detections", DocumentFlavor.azure_devops),
         ("https://git.example.com/detections.git", DocumentFlavor.generic),
     ],
 )

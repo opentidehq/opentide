@@ -118,10 +118,7 @@ def test_validate_query_checks_the_rule_for_every_deployable_strategy(
 
     bound.validate_query("sentinel")
 
-    assert validator.validate.call_args.args == (
-        [str(bound.metadata.uuid)],
-        DEPLOYABLE_STRATEGIES,
-    )
+    assert validator.validate.call_args.args == ([bound], DEPLOYABLE_STRATEGIES)
 
 
 def test_validate_query_reports_a_query_the_validator_refused(
