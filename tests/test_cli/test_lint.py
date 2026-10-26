@@ -31,6 +31,21 @@ def _write_object(root: Path, family: str, filename: str, body: str) -> Path:
     return dest
 
 
+def test_notes_alone_end_on_a_pass_not_a_warning(tmp_path: Path) -> None:
+    """Six recommended-metadata notes printed ``! 6 findings in 6 files``, the
+    glyph of a warning (post-merge end-to-end run)."""
+    _write_object(
+        tmp_path, "threats", "simulated-actor.yaml", _THREAT.replace("  author: SOC\n", "")
+    )
+    result = run_lint(tmp_path)
+    assert [item["severity"] for item in result["findings"]] == ["info"]
+    assert result["status"] == "issues"
+    assert result["_outcome_kind"] == "ok"
+    human = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
+    assert human.exit_code == 0
+    assert "✓ 1 note in 1 file" in human.stdout
+
+
 def test_lint_passes_matching_slug(tmp_path: Path) -> None:
     _write_object(tmp_path, "threats", "simulated-actor.yaml", _THREAT)
     result = run_lint(tmp_path)

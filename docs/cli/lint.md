@@ -68,7 +68,7 @@ note[metadata_recommended]: Recommended metadata missing: author, organisation
 → opentide lint --fix · rename 1 file to match their names
 ```
 
-When more than one severity is left, the count splits them. When a filename finding can be fixed by renaming, the count is followed by the command that does it. A file renamed by `--fix` gets `note: renamed from <old path>`; the count leaves it out and ends with `· 1 fixed`, so a run whose findings were all fixed prints `✓ 3 files clean · 1 fixed`. Under `--strict`, findings fail the run: the count prints as `✗ 2 findings in 1 file` and `failure.code` is `issues_found`. A workspace with no object files passes, and says where it looked.
+When more than one severity is left, the count splits them. Notes alone are no warning: the line counts them as notes and takes `✓` (`✓ 6 notes in 6 files`), while the JSON `status` stays `issues`. When a filename finding can be fixed by renaming, the count is followed by the command that does it. A file renamed by `--fix` gets `note: renamed from <old path>`; the count leaves it out and ends with `· 1 fixed`, so a run whose findings were all fixed prints `✓ 3 files clean · 1 fixed`. Under `--strict`, findings fail the run: the count prints as `✗ 2 findings in 1 file` and `failure.code` is `issues_found`. A workspace with no object files passes, and says where it looked.
 
 ### JSON findings
 

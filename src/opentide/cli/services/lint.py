@@ -490,6 +490,10 @@ def run_lint(
     }
     if status == "failed":
         result["_failure_code"] = ISSUES_FOUND
+    elif left and all(item.get("severity") == "info" for item in left):
+        # Notes only: nothing to warn about, so the line takes ✓, not the ``!``
+        # of a warning (post-merge end-to-end run). JSON status stays "issues".
+        result["_outcome_kind"] = "ok"
     if renamable:
         result["_next_actions"] = [
             NextAction(
@@ -529,7 +533,8 @@ def _outcome_line(left: list[dict[str, object]], *, files: int, fixed: int, root
             return f"Catalogue lint passed, but found no object files under {root}"
         return f"{_plural(files, 'file')} clean{done}"
     touched = len({str(item.get("path")) for item in left})
-    line = f"{_plural(len(left), 'finding')} in {_plural(touched, 'file')}"
+    noun = "note" if all(item.get("severity") == "info" for item in left) else "finding"
+    line = f"{_plural(len(left), noun)} in {_plural(touched, 'file')}"
     kinds = [
         _plural(count, noun)
         for severity, noun in _SEVERITY_NOUNS
