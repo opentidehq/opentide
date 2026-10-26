@@ -43,29 +43,33 @@ def test_run_deploy_skips_when_platform_has_no_rules() -> None:
     assert result["status"] == "skipped"
 
 
+@pytest.mark.parametrize(
+    ("provider", "expected"),
+    [
+        ("GITHUB_ACTIONS", f"::warning::{EMPTY_SELECTION}\n"),
+        ("TF_BUILD", f"##vso[task.logissue type=warning;]{EMPTY_SELECTION}\n"),
+        ("GITLAB_CI", ""),
+    ],
+)
 @pytest.mark.parametrize("json_output", [False, True])
-def test_run_deploy_empty_selection_github_actions_warning(
-    monkeypatch: pytest.MonkeyPatch, json_output: bool
+def test_run_deploy_empty_selection_ci_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    json_output: bool,
+    provider: str,
+    expected: str,
 ) -> None:
     ctx = CliContext(json_output=json_output)
-    monkeypatch.setattr(
-        CIEnvironment,
-        "_check_ci_environment",
-        lambda self: CIEnvironment.CIPlatforms.GitHubActions,
-    )
+    monkeypatch.setenv(provider, "true")
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={}),
-        patch.object(deploy_service.get_stdout_console(), "print") as mock_print,
     ):
         result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     assert result["status"] == "skipped"
     assert result["message"] == EMPTY_SELECTION
-    if json_output:
-        # The annotation would corrupt the single-document JSON contract.
-        mock_print.assert_not_called()
-    else:
-        assert mock_print.call_args.args[0] == f"::warning::{EMPTY_SELECTION}"
+    # Under --json the annotation would corrupt the single JSON document.
+    assert capsys.readouterr().out == ("" if json_output else expected)
 
 
 def test_run_deploy_empty_selection_gitlab_exits_cleanly(

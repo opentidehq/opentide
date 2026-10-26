@@ -13,6 +13,15 @@ import typer
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import DetectionPlatform, ValidateCheck
+from opentide.cli.findings import (
+    FORMAT_HELP,
+    OUTPUT_HELP,
+    check_report_options,
+    print_report,
+    publish_findings,
+    publish_summary,
+    write_report_file,
+)
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import (
     CommandResult,
@@ -39,6 +48,7 @@ from opentide.cli.ui.contract import (
 from opentide.cli.ui.diagnostics import Diagnostic
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
 from opentide.cli.ui.render import render_warnings
+from opentide.cli.ui.reports import ReportFormat
 from opentide.cli.ui.watch import LiveView, PlainView, Watcher, WatchRun
 from opentide.core.logging.config import get_console, get_stdout_console
 
@@ -72,12 +82,15 @@ def validate_group(
     watch: bool = typer.Option(
         False, "--watch", help="Validate again each time an object file changes; Ctrl-C stops"
     ),
+    report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
+    output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
         hand_down(ctx)
         return
     cli = get_context(ctx)
+    check_report_options(cli, report_format, output)
     valid_object_types = ("rule", "threat", "objective")
     unknown_types = sorted(set(object_type or []) - set(valid_object_types))
     if unknown_types:
@@ -109,6 +122,13 @@ def validate_group(
                 argument="--watch",
                 code=USAGE_ERROR,
             )
+        if report_format is not ReportFormat.text:
+            emit_usage_error(
+                cli,
+                "--watch cannot be combined with --format: a watch prints a view, not a report.",
+                argument="--watch",
+                code=USAGE_ERROR,
+            )
         _watch(cli, files=file, **scope)
         return
     if fix:
@@ -121,22 +141,27 @@ def validate_group(
     unwritten = cast(list[str], result.pop("_unwritten", []))
     unwritten_fixes = cast(int, result.pop("_unwritten_fixes", 0))
     outcome = CommandResult.from_payload(result, default_message="Validation passed")
+    write_report_file(report_format, output, diagnostics, command="validate")
     if cli.json_output:
         emit_result(cli, outcome)
         return
+    if report_format is not ReportFormat.text and output is None:
+        # The report is the whole of stdout: no diff, frames or outcome line.
+        print_report(report_format, diagnostics, outcome, command="validate")
     stdout = get_stdout_console()
     mode = text_mode(cli)
+    shown = diagnostics
     if fix and dry_run and plan:
         render_diff(stdout, plan.diff())
         # The diff shows the findings it fixes; the frames show the rest.
         planned = {(change.file_path, change.line, change.column) for change in plan.changes}
-        diagnostics = [
+        shown = [
             item for item in diagnostics if (item.file_path, item.line, item.column) not in planned
         ]
     if fixed and not cli.quiet:
         render_fixed(stdout, fixed.changes)
     render_warnings(get_console(), [f"Could not write the fix to {line}" for line in unwritten])
-    render_diagnostics(stdout, diagnostics, mode=mode, quiet=cli.quiet)
+    render_diagnostics(stdout, shown, mode=mode, quiet=cli.quiet)
     line = outcome.message
     if not line.startswith("Validation passed, but"):
         done = plan if dry_run else fixed
@@ -148,6 +173,7 @@ def validate_group(
         line = validate_outcome_line(
             outcome.summary, failed=not outcome.ok, seconds=elapsed_ms() / 1000, fix=phrase
         )
+    publish_findings(cli, diagnostics, outcome, command="validate", outcome=line)
     # The code frames above show every warning; a warning line would repeat it.
     emit_result(cli, replace(outcome, outcome=line, warnings=()))
 
@@ -280,4 +306,7 @@ def validate_query_cmd(
         files=file or (),
         uuids=uuid or (),
     )
+    from opentide.cli.ui.summary import query_summary
+
+    publish_summary(cli, query_summary(result), command="validate query", payload=result)
     emit_success(cli, result)

@@ -33,6 +33,8 @@ opentide validate --watch
 | `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
 | `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
 | `--watch` | Validate again each time an object file is saved, until Ctrl-C (see [Watching](#watching---watch)) |
+| `--format` | `text` (code frames, the default), `sarif` (SARIF 2.1.0 for code scanning) or `codequality` (GitLab Code Quality). See [Reports and CI annotations](#reports-and-ci-annotations) |
+| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
 
@@ -58,6 +60,17 @@ error[vocab_unknown]: 'clearr' is not a TLP value
 The sample is illustrative because the outcome line carries the run time. A failed run ends with what to run next, the page of the first finding's code and `validate` again; `--json` lists them under `next_actions`. A value that differs from an allowed one only in case or in its separators (`AMBER`, `localised_incident`) gets a `safe` fix. On a terminal, a long message wraps between words and a long path is shortened in the middle with `…`. Paths are relative to the current directory when you run inside it, otherwise to the workspace; in a terminal they are links your editor opens (`OPENTIDE_LINKS=file|vscode|cursor|none` picks the scheme). `opentide explain <code>` prints what a code means and how to fix it; [Diagnostic codes](./diagnostics.md) lists them all.
 
 One cause is one finding: a dangling reference such as `detection_model` is reported as `invalid_ref` only, not also as `vocab_unknown`.
+
+### Reports and CI annotations
+
+```bash
+opentide validate --strict --format sarif --output opentide-reports/validate.sarif
+opentide validate --format codequality > gl-code-quality-report.json
+```
+
+`--format sarif` writes SARIF 2.1.0: one run whose rules are the [diagnostic codes](./diagnostics.md), each with its `opentide explain` page as help, and one result per finding with its region (columns count Unicode code points), the object's UUID as its logical location and, for a vocabulary typo, its fix. `--format codequality` writes the Code Climate JSON GitLab reads from `artifacts:reports:codequality`. Paths are relative to the CI checkout when opentide runs in CI, else to the workspace. A finding that names no file is left out of both. The exit code is the same as without `--format`.
+
+In a GitHub Actions or Azure Pipelines job, each finding is also written to stdout as an annotation (`::error file=…,line=…,col=…,title=<code>::<message>`, or `##vso[task.logissue …]`), and the outcome line and a table of findings go to the job summary; GitLab gets the summary as `opentide-reports/summary.md`. `--json` turns these off. See [CI/CD](../usage/workflows/ci-cd.md#annotations-summaries-and-reports).
 
 ### Diagnostic fields
 
@@ -152,7 +165,7 @@ opentide validate --watch
 
 `--watch` validates once, then looks at the modification times of the object files every 0.5 seconds and validates again after a save. A save that keeps the UUIDs in the file re-checks that file alone. Every object is re-checked instead, since other objects' findings may change with it, when a file is added or removed, when a UUID or reference in it changes, and when its object enters or leaves the catalogue: the file stops or starts parsing, or loses its `uuid`. Each run reports the whole workspace, findings from files it did not re-check included.
 
-In a terminal the findings and the outcome line are redrawn in place, with a footer naming the file it re-checked and how to stop. In plain output (a pipe, `NO_COLOR`, `TERM=dumb`, CI) each run prints the findings it produced and one outcome line, and nothing is redrawn. Ctrl-C stops it with exit `0`. `--watch` honours `--file`, `--uuid`, `--type`, `--check` and `--strict`; with a narrowed scope every run re-checks that scope. It cannot be combined with `--fix` (exit `2`, `failure.code` `usage_error`).
+In a terminal the findings and the outcome line are redrawn in place, with a footer naming the file it re-checked and how to stop. In plain output (a pipe, `NO_COLOR`, `TERM=dumb`, CI) each run prints the findings it produced and one outcome line, and nothing is redrawn. Ctrl-C stops it with exit `0`. `--watch` honours `--file`, `--uuid`, `--type`, `--check` and `--strict`; with a narrowed scope every run re-checks that scope. It cannot be combined with `--fix` or `--format` (exit `2`, `failure.code` `usage_error`).
 
 `--watch` never ends, so it is refused where nobody watches: under `--json`, a coding agent or `OPENTIDE_OUTPUT=agent`. It exits `2` at once with `failure.code` `usage_watch_needs_tty`, and the next step is `opentide validate`.
 

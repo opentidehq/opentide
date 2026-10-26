@@ -186,6 +186,7 @@ allowed-confusables = ["–", "×"]
 [tool.ruff.lint.per-file-ignores]
 # Entry points whose job is to print: the CLI's JSON writer and small `main()`s.
 "src/opentide/cli/output.py" = ["T201"]
+"src/opentide/cli/findings.py" = ["T201"]
 "src/opentide/ci/state_replay.py" = ["T201"]
 "src/opentide/mcp_server/launcher.py" = ["T201"]
 "src/opentide/vocabulary/sync_upstream.py" = ["T201"]

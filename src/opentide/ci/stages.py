@@ -9,6 +9,7 @@ from pathlib import Path
 from opentide.ci.discovery import platforms_config_dir
 from opentide.ci.models import CiRenderOptions
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
+from opentide.cli.ui.ci import REPORTS_DIR
 
 _ENV_REF = re.compile(r"\$([A-Z][A-Z0-9_]*)")
 _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations" / "platforms"
@@ -185,9 +186,29 @@ def reviewed_query_validation_command(platform: str, *, repo: Path | None = None
     return f"if grep -qs '^[^#]*tenants' {config}; then {check}; else echo \"{note}\"; fi"
 
 
-def object_validate_commands() -> list[str]:
-    """The catalogue gate. Warnings fail, and a misnamed file fails too."""
-    return ["opentide validate --strict", "opentide lint --strict"]
+#: The commands of the catalogue gate, which write findings reports.
+GATE_COMMANDS = ("validate", "lint")
+
+
+def report_path(command: str, report_format: str) -> str:
+    """``opentide-reports/validate.sarif``: where a gate command writes its report."""
+    suffix = ".sarif" if report_format == "sarif" else f".{report_format}.json"
+    return f"{REPORTS_DIR}/{command}{suffix}"
+
+
+def object_validate_commands(report_format: str | None = None) -> list[str]:
+    """The catalogue gate. Warnings fail, and a misnamed file fails too.
+
+    With *report_format* (``sarif`` or ``codequality``) each command also
+    writes its findings to :func:`report_path`, and still prints them.
+    """
+    commands = [f"opentide {command} --strict" for command in GATE_COMMANDS]
+    if report_format is None:
+        return commands
+    return [
+        f"{line} --format {report_format} --output {report_path(command, report_format)}"
+        for line, command in zip(commands, GATE_COMMANDS, strict=True)
+    ]
 
 
 def validate_commands(options: CiRenderOptions) -> list[str]:

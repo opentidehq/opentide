@@ -8,6 +8,7 @@ from opentide.ci.gates import azure_premerge_condition
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    REPORTS_DIR,
     document_steps,
     header_comment,
     object_validate_commands,
@@ -129,6 +130,23 @@ def _writeback_step(options: CiRenderOptions) -> str:
     )
 
 
+#: The validate job publishes its SARIF reports under this artifact name, the
+#: one the SARIF SAST Scans Tab extension reads. Summaries need no step:
+#: opentide attaches them with ``##vso[task.uploadsummary]``.
+SARIF_ARTIFACT = "CodeAnalysisLogs"
+
+
+def _publish_reports_step() -> str:
+    return (
+        "- task: PublishBuildArtifacts@1\n"
+        "  displayName: Publish opentide reports\n"
+        "  condition: succeededOrFailed()\n"
+        "  inputs:\n"
+        f"    PathtoPublish: $(Build.SourcesDirectory)/{REPORTS_DIR}\n"
+        f"    ArtifactName: {SARIF_ARTIFACT}"
+    )
+
+
 def _azure_job(
     job_id: str,
     *,
@@ -180,7 +198,13 @@ def render_azure(options: CiRenderOptions) -> str:
         _azure_job(
             "validate",
             display_name="Validate objects",
-            steps=_job_steps(options, object_validate_commands()),
+            steps=_job_steps(
+                options,
+                # The publish step fails on a missing folder, even after a failed gate.
+                [f"mkdir -p {REPORTS_DIR}", *object_validate_commands("sarif")],
+            )
+            + "\n"
+            + _publish_reports_step(),
         ),
         *query_jobs,
     ]
