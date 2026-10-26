@@ -279,7 +279,7 @@ def test_deploy_dry_run_fails_when_a_sentinel_rule_does_not_compile(
     )
     assert human.exit_code == 1
     assert "error[compile_invalid_rule]: Duration 'hourly'" in human.stderr
-    assert f"  --> {diagnostic['path']}" in human.stderr
+    assert f"─▶ {diagnostic['path']}" in human.stderr  # #641's code frame
     (tally,) = [line for line in human.stdout.splitlines() if line.startswith("Plan: ")]
     assert len(tally) <= 100
     assert "error: Plan" not in human.stdout + human.stderr

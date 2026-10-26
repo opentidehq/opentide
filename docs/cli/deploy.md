@@ -106,12 +106,13 @@ opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
 }
 ```
 
-`plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, a missing `grouping` or `grouping.alert`, or an empty `response` block with no `alert.severity`) is listed with `"status": "failed"`, a `code`, an `error` naming the cause, a `help`, and a null `api_request`. `diagnostics` holds one entry per such rule (`code`, `severity`, `message`, `help`, a workspace-relative `path`, `platform`, `uuid`, `name`), and the dry-run reports `failed` and exits `1`. The plan prints each one above its tally, which keeps no glyph:
+`plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, a missing `grouping` or `grouping.alert`, or an empty `response` block with no `alert.severity`) is listed with `"status": "failed"`, a `code`, an `error` naming the cause, a `help`, and a null `api_request`. `diagnostics` holds one entry per such rule (`code`, `severity`, `message`, `help`, a workspace-relative `path`, `platform`, `uuid`, `name`), and the dry-run reports `failed` and exits `1`. The plan prints each one as a [code frame](./validate.md), like `validate` and `lint`, above its tally, which keeps no glyph:
 
 ```text
 error[compile_empty_block]: `response` is empty, so Sentinel cannot read `alert_severity`
-  --> objects/rules/sentinel-kql-rule.yaml
-  help: set response.alert_severity, or configurations.sentinel.alert.severity
+  ╭─▶ objects/rules/sentinel-kql-rule.yaml
+  ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
+
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
 ```
 

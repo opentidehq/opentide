@@ -16,7 +16,7 @@ module: the result's ``changes`` and ``diagnostics`` carry the same rows.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console, Group, RenderableType
 from rich.text import Text
@@ -24,6 +24,9 @@ from rich.text import Text
 from opentide.cli.ui.glyphs import can_encode, glyph
 from opentide.cli.ui.layout import columns
 from opentide.cli.ui.progress import plural
+
+if TYPE_CHECKING:
+    from opentide.cli.ui.diagnostics import Diagnostic
 
 #: Action → (glyph name, label, style).
 _ROWS: dict[str, tuple[str, str, str]] = {
@@ -122,39 +125,42 @@ def render_plan(console: Console, payload: Mapping[str, Any]) -> None:
     )
 
 
-def diagnostic_text(diagnostic: Mapping[str, Any], *, encoding: str = "utf-8") -> Text:
-    """``error[compile_missing_field]: message`` then ``  --> path``, one rule's failure.
+def plan_diagnostic(diagnostic: Mapping[str, Any]) -> Diagnostic:
+    """One rule a dry run could not compile, as the ``Diagnostic`` code frames print.
 
-    The path names the rule, so neither its name nor its UUID repeats.
+    The frame's location names the rule's file, so neither its name nor its
+    UUID repeats; a rule with no file is named in a note instead.
     """
-    line = Text()
-    line.append(f"error[{diagnostic.get('code') or 'compile_failed'}]:", style="bold red")
-    line.append(" ")
-    line.append(str(diagnostic.get("message") or ""))
-    source, where = diagnostic.get("file_path"), diagnostic.get("path")
-    if source or where:
-        from opentide.cli.ui.paths import display_path
-        from opentide.core.root import get_repo_root
+    from pathlib import Path
 
-        line.append("\n  --> ", style="bold blue")
-        # Relative to the current directory when inside it, else to the workspace.
-        line.append(display_path(str(source), workspace=get_repo_root()) if source else str(where))
-    else:
-        line.append(f" {glyph('separator', encoding=encoding)} ", style="dim")
-        line.append(str(diagnostic.get("name") or diagnostic.get("uuid") or ""))
-    if diagnostic.get("help"):
-        line.append("\n  help:", style="bold cyan")
-        line.append(f" {diagnostic['help']}")
-    return line
+    from opentide.cli.ui.diagnostics import Diagnostic
+
+    source, where = diagnostic.get("file_path"), diagnostic.get("path")
+    severity = str(diagnostic.get("severity") or "error")
+    notes: tuple[tuple[str, str], ...] = ()
+    if not source and not where:
+        notes = (("rule", str(diagnostic.get("name") or diagnostic.get("uuid") or "")),)
+    return Diagnostic(
+        code=str(diagnostic.get("code") or "compile_failed"),
+        severity="warning" if severity == "warning" else "error",
+        message=str(diagnostic.get("message") or ""),
+        path=str(where) if where else None,
+        file_path=Path(str(source)) if source else None,
+        help=str(diagnostic["help"]) if diagnostic.get("help") else None,
+        notes=notes,
+        object_uuid=str(diagnostic["uuid"]) if diagnostic.get("uuid") else None,
+    )
 
 
 def render_plan_diagnostics(console: Console, payload: Mapping[str, Any]) -> None:
-    """Print each rule a dry run could not compile; the plan's tally follows them."""
+    """Print each rule a dry run could not compile as a code frame; the tally follows them."""
     diagnostics = payload.get("diagnostics")
     if not isinstance(diagnostics, list):
         return
-    for diagnostic in diagnostics:
-        if isinstance(diagnostic, Mapping):
-            console.print(
-                diagnostic_text(diagnostic, encoding=console.encoding or "utf-8"), soft_wrap=True
-            )
+    framed = [plan_diagnostic(item) for item in diagnostics if isinstance(item, Mapping)]
+    if not framed:
+        return
+    from opentide.cli.ui.codeframe import render_diagnostics
+
+    # Errors print under --quiet too: the tally that follows counts them.
+    render_diagnostics(console, framed)

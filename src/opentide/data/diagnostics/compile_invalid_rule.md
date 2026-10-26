@@ -8,7 +8,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_invalid_rule]: …
-  --> objects/rules/lsass-access.yaml
+  ╰─▶ objects/rules/lsass-access.yaml
 ```
 
 ## How to fix

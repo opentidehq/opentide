@@ -228,8 +228,8 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_empty_block]: `response` is empty, so Sentinel cannot read `alert_severity`
-  --> objects/rules/sentinel-kql-rule.yaml
-  help: set response.alert_severity, or configurations.sentinel.alert.severity
+  ╭─▶ objects/rules/sentinel-kql-rule.yaml
+  ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
 ```
 
 ### How to fix
@@ -246,7 +246,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_failed]: Sentinel cannot compile this rule: …
-  --> objects/rules/lsass-access.yaml
+  ╰─▶ objects/rules/lsass-access.yaml
 ```
 
 ### How to fix
@@ -263,7 +263,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_invalid_rule]: …
-  --> objects/rules/lsass-access.yaml
+  ╰─▶ objects/rules/lsass-access.yaml
 ```
 
 ### How to fix
@@ -280,8 +280,8 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_invalid_value]: configurations.sentinel.alert.suppression is true
-  --> objects/rules/lsass-access.yaml
-  help: set it to false or a duration such as PT1H
+  ╭─▶ objects/rules/lsass-access.yaml
+  ╰─ help: set it to false or a duration such as PT1H
 ```
 
 ### How to fix
@@ -298,8 +298,8 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_missing_field]: configurations.sentinel.scheduling.frequency is missing
-  --> objects/rules/lsass-access.yaml
-  help: required unless scheduling.nrt is true
+  ╭─▶ objects/rules/lsass-access.yaml
+  ╰─ help: required unless scheduling.nrt is true
 ```
 
 ### How to fix

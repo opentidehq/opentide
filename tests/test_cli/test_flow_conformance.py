@@ -129,23 +129,42 @@ def test_compile_diagnostics_are_workspace_relative(tide_corpus_repo) -> None:
 
 
 def test_a_diagnostic_prints_its_code_file_and_help_once(tmp_path: Path, monkeypatch) -> None:
+    """A rule the dry run cannot compile prints as #641's code frame, not ``  --> path``."""
     monkeypatch.chdir(tmp_path)
-    line = _plan_ui.diagnostic_text(
+    console = Console(file=io.StringIO(), width=200, color_system=None, force_terminal=False)
+    _plan_ui.render_plan_diagnostics(
+        console,
         {
-            "code": "compile_missing_field",
-            "message": "configurations.sentinel.grouping is missing",
-            "help": "Sentinel needs grouping",
-            "file_path": str(tmp_path / "objects/rules/r.yaml"),
-            "name": "Rule",
-            "uuid": "00000000-0000-4000-8003-000000000001",
-        }
-    ).plain
-    assert line.splitlines() == [
+            "diagnostics": [
+                {
+                    "code": "compile_missing_field",
+                    "severity": "error",
+                    "message": "configurations.sentinel.grouping is missing",
+                    "help": "Sentinel needs grouping",
+                    "file_path": str(tmp_path / "objects/rules/r.yaml"),
+                    "name": "Rule",
+                    "uuid": "00000000-0000-4000-8003-000000000001",
+                }
+            ]
+        },
+    )
+    text = console.file.getvalue()
+    assert text.splitlines() == [
         "error[compile_missing_field]: configurations.sentinel.grouping is missing",
-        "  --> objects/rules/r.yaml",
-        "  help: Sentinel needs grouping",
+        "  ╭─▶ objects/rules/r.yaml",
+        "  ╰─ help: Sentinel needs grouping",
+        "",
     ]
-    assert "00000000" not in line and "Rule" not in line
+    assert "00000000" not in text and "Rule" not in text
+
+
+def test_a_diagnostic_without_a_file_names_its_rule(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    diagnostic = _plan_ui.plan_diagnostic(
+        {"code": "compile_failed", "message": "Sentinel cannot compile this rule", "name": "Rule"}
+    )
+    assert diagnostic.severity == "error"
+    assert diagnostic.path is None and diagnostic.notes == (("rule", "Rule"),)
 
 
 def test_a_failed_plan_prints_its_tally_without_error_and_exits_1(capsys) -> None:

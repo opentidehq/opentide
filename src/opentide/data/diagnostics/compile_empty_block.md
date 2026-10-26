@@ -8,8 +8,8 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_empty_block]: `response` is empty, so Sentinel cannot read `alert_severity`
-  --> objects/rules/sentinel-kql-rule.yaml
-  help: set response.alert_severity, or configurations.sentinel.alert.severity
+  ╭─▶ objects/rules/sentinel-kql-rule.yaml
+  ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
 ```
 
 ## How to fix

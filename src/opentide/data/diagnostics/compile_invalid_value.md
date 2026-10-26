@@ -8,8 +8,8 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_invalid_value]: configurations.sentinel.alert.suppression is true
-  --> objects/rules/lsass-access.yaml
-  help: set it to false or a duration such as PT1H
+  ╭─▶ objects/rules/lsass-access.yaml
+  ╰─ help: set it to false or a duration such as PT1H
 ```
 
 ## How to fix

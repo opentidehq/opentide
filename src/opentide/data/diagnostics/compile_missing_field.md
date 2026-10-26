@@ -8,8 +8,8 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ```text
 error[compile_missing_field]: configurations.sentinel.scheduling.frequency is missing
-  --> objects/rules/lsass-access.yaml
-  help: required unless scheduling.nrt is true
+  ╭─▶ objects/rules/lsass-access.yaml
+  ╰─ help: required unless scheduling.nrt is true
 ```
 
 ## How to fix
