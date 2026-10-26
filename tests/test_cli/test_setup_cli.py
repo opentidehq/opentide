@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -12,6 +13,11 @@ from opentide.cli import app
 from opentide.cli.services.setup.skills import SkillsDownloadError
 
 runner = CliRunner()
+
+
+def _plain(text: str) -> str:
+    """*text* without ANSI styles, which FORCE_COLOR or GITHUB_ACTIONS can add."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 
 def test_setup_help_lists_subcommands() -> None:
@@ -199,12 +205,17 @@ def test_setup_skills_discover_ends_with_a_counted_outcome(tmp_path, monkeypatch
 
     human = runner.invoke(app, ["setup", "skills", "discover", "--path", str(tmp_path)])
     assert human.exit_code == 0, human.output
-    last = human.stdout.rstrip().splitlines()[-1]
+    last = _plain(human.stdout).rstrip().splitlines()[-1]
     assert last == f"✓ {total} skills available · 1 installed · opentidehq/skills@main"
     assert "Source:" not in human.stdout
 
     found = runner.invoke(app, ["setup", "skills", "discover", "-C", str(tmp_path), "-q", "kql"])
-    assert found.stdout.rstrip().splitlines()[-1].startswith("✓ 1 skill match 'kql' · 1 installed")
+    assert (
+        _plain(found.stdout)
+        .rstrip()
+        .splitlines()[-1]
+        .startswith("✓ 1 skill match 'kql' · 1 installed")
+    )
 
     machine = runner.invoke(app, ["--json", "setup", "skills", "discover", "-C", str(tmp_path)])
     payload = json.loads(machine.stdout)
@@ -218,7 +229,7 @@ def test_setup_skills_discover_cuts_descriptions_at_a_word(tmp_path, monkeypatch
     assert result.exit_code == 0, result.output
     assert "KQL" not in result.stdout
     # The word before the ellipsis is whole: the old [:80] slice left "detection a".
-    last_word = result.stdout.split("…")[0].split()[-1]
+    last_word = _plain(result.stdout).split("…")[0].split()[-1]
     assert last_word in _LONG_DESCRIPTION.split()
 
 
@@ -249,15 +260,19 @@ def test_every_setup_skills_option_has_help() -> None:
 
 
 def test_json_setup_skills_refusal_names_flags_that_exist(tmp_path) -> None:
-    import re
 
     result = runner.invoke(app, ["--json", "setup", "skills", "--path", str(tmp_path)])
     assert result.exit_code == 2
     message = json.loads(result.stdout)["failure"]["message"]
     flags = set(re.findall(r"--[a-z][a-z-]+", message)) - {"--json", "--yes"}
-    help_text = runner.invoke(app, ["setup", "skills", "--help"], terminal_width=200).stdout
+    import typer.main
+
+    root = typer.main.get_command(app)
+    group = root.get_command(root.make_context("opentide", ["setup"]), "setup")
+    skills = group.get_command(group.make_context("setup", ["skills"]), "skills")
+    known = {opt for param in skills.params for opt in param.opts}
     assert flags == {"--claude-code", "--cursor", "--generic", "--github-copilot"}
-    assert all(flag in help_text for flag in flags)
+    assert flags <= known
 
 
 def test_setup_skills_discover_positional_path_is_deprecated(tmp_path, monkeypatch) -> None:
