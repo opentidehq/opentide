@@ -38,12 +38,8 @@ def _input_path(data: Any, loc: tuple[Any, ...], kind: str) -> tuple[tuple[str, 
     node: Any = data
     branch = False
     for position, part in enumerate(loc):
-        if (
-            isinstance(node, Mapping)
-            and part in node
-            or isinstance(node, list)
-            and isinstance(part, int)
-            and 0 <= part < len(node)
+        if (isinstance(node, Mapping) and part in node) or (
+            isinstance(node, list) and isinstance(part, int) and 0 <= part < len(node)
         ):
             node = node[part]
             path.append(str(part))

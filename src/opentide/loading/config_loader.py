@@ -124,15 +124,19 @@ class ConfigurationsLoader:
         if failure is not None:
             logger.critical("visibility_config_load_failed", detail=str(failure))
             raise ConfigurationError(
-                "visibility.toml", failure.errors, prefix="Failed to load visibility configuration: "
+                "visibility.toml",
+                failure.errors,
+                prefix="Failed to load visibility configuration: ",
             )
 
         from opentide.validation.configuration import visibility_cross_issues
 
+        events = {"logsource": "logsource_invalid_assets", "detector": "detector_invalid_assets"}
         for issue in visibility_cross_issues(visibility):
+            entry = issue.context["entry"]
             logger.error(
-                f"{issue.context['entry']}_invalid_assets",
-                **{issue.context["entry"]: issue.context["name"]},
+                events[entry],
+                **{entry: issue.context["name"]},
                 invalid_assets=issue.context["asset"],
             )
         return visibility

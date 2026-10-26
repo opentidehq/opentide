@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from typing import Any
 from unittest.mock import patch
@@ -71,7 +72,7 @@ def test_statuses_stay_dataclasses_with_enum_strategy() -> None:
     ],
 )
 def test_load_deployment_names_the_failing_key(document: dict[str, Any], where: str) -> None:
-    with pytest.raises(ConfigurationError, match="deployment.toml is invalid") as raised:
+    with pytest.raises(ConfigurationError, match=re.escape("deployment.toml is invalid")) as raised:
         ConfigurationsLoader.load_deployment(document)
     assert where in str(raised.value)
 
@@ -118,7 +119,9 @@ def test_platform_loader_rejects_an_unknown_tenant_key() -> None:
     from opentide.platforms.config import build_system_config
 
     raw = {"platform": {"enabled": True}, "tenants": [_sentinel_tenant(colour="red")]}
-    with pytest.raises(ConfigurationError, match="platforms/sentinel.toml is invalid") as raised:
+    with pytest.raises(
+        ConfigurationError, match=re.escape("platforms/sentinel.toml is invalid")
+    ) as raised:
         build_system_config("sentinel", raw)
     assert "tenants.0.setup.colour: unknown key" in str(raised.value)
 
@@ -136,7 +139,7 @@ def test_platform_loader_keeps_its_retired_key_messages() -> None:
     from opentide.platforms.config import build_system_config
 
     raw = {"tenants": [{**_sentinel_tenant(), "deployment": "STAGING"}]}
-    with pytest.raises(ValueError, match="was removed in 0.17.0"):
+    with pytest.raises(ValueError, match=re.escape("was removed in 0.17.0")):
         build_system_config("sentinel", raw)
 
 
@@ -172,7 +175,7 @@ def test_workspace_paths_reject_an_unknown_key(tmp_path) -> None:
     from opentide.registry.paths import resolve_workspace_paths
 
     configs = {"paths": {**_bundled("paths.toml"), "paths": {"objekts": {}}}}
-    with pytest.raises(ConfigurationError, match="paths.toml is invalid: paths.objekts"):
+    with pytest.raises(ConfigurationError, match=re.escape("paths.toml is invalid: paths.objekts")):
         resolve_workspace_paths(configs, workspace=tmp_path)
 
 
@@ -193,7 +196,7 @@ def test_documentation_settings_reject_an_unknown_direction() -> None:
             "diagrams": {"relations_direction": "sideways"}
         }
         mock_ot.Configurations.Global.Index = {"paths": {"core": {}}}
-        with pytest.raises(ConfigurationError, match="diagrams.relations_direction"):
+        with pytest.raises(ConfigurationError, match=re.escape("diagrams.relations_direction")):
             load_settings()
 
 
