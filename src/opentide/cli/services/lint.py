@@ -233,18 +233,50 @@ def _filename_findings(
             expected=dest.relative_to(root).as_posix(),
         )
         if fix:
-            if dest.exists():
+            if dest.exists() and not _case_only_rename(record.path, dest):
                 finding["fixed"] = False
                 finding["message"] = (
                     f"{finding['message']}; --fix skipped because {finding['expected']} exists"
                 )
             else:
-                record.path.rename(dest)
+                _rename(record.path, dest)
                 finding["fixed"] = True
                 finding["from"] = record.relative
                 finding["path"] = dest.relative_to(root).as_posix()
         findings.append(finding)
     return findings
+
+
+_CASE_RENAME_SUFFIX = ".opentide-case-rename"
+
+
+def _case_only_rename(src: Path, dest: Path) -> bool:
+    """Whether *dest* exists only because it is *src* under another case.
+
+    On a case-insensitive filesystem (macOS, Windows) ``Phishing.yaml`` and
+    ``phishing.yaml`` are one file, so the slug's name always "existed" and
+    ``--fix`` skipped the rename it was asked for.
+    """
+    return (
+        src.name != dest.name
+        and src.name.casefold() == dest.name.casefold()
+        and dest.exists()
+        and dest.samefile(src)
+        and not (src.parent / f"{src.name}{_CASE_RENAME_SUFFIX}").exists()
+    )
+
+
+def _rename(src: Path, dest: Path) -> None:
+    """Rename *src* to *dest*, through a temporary name when only the case changes.
+
+    A case-only rename is a no-op on some case-insensitive filesystems.
+    """
+    if not _case_only_rename(src, dest):
+        src.rename(dest)
+        return
+    staged = src.with_name(f"{src.name}{_CASE_RENAME_SUFFIX}")
+    src.rename(staged)
+    staged.rename(dest)
 
 
 def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
@@ -311,9 +343,11 @@ def run_lint(
         findings=len(findings),
         fix=fix,
     )
-    if findings and strict:
+    # What --fix just fixed is reported, but no longer counts against the run.
+    left = [item for item in findings if item.get("fixed") is not True]
+    if left and strict:
         status = "failed"
-    elif findings:
+    elif left:
         status = "issues"
     else:
         status = "completed"
@@ -332,14 +366,24 @@ def run_lint(
         "fixed": fixed,
         "status": status,
         "_exit_code": 1 if status == "failed" else 0,
-        "_summary": {"files": files, "findings": len(findings), "fixed": fixed},
-        "_outcome": _outcome_line(findings, files=files, fixed=fixed, root=target),
+        "_summary": {
+            "files": files,
+            "findings": len(left),
+            "errors": sum(1 for item in left if item.get("severity") == "error"),
+            "warnings": sum(1 for item in left if item.get("severity") == "warning"),
+            "notes": sum(1 for item in left if item.get("severity") == "info"),
+            "fixed": fixed,
+        },
+        "_outcome": _outcome_line(left, files=files, fixed=fixed, root=target),
     }
     if status == "failed":
         result["_failure_code"] = ISSUES_FOUND
     if renamable:
         result["_next_actions"] = [
-            NextAction("opentide lint --fix", f"rename {renamable} file(s) to match their names")
+            NextAction(
+                "opentide lint --fix",
+                f"rename {renamable} {'file' if renamable == 1 else 'files'} to match their names",
+            )
         ]
     return result
 
@@ -360,12 +404,29 @@ def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
-def _outcome_line(findings: list[dict[str, object]], *, files: int, fixed: int, root: Path) -> str:
-    """``3 files clean`` or ``3 findings in 2 files · 1 fixed``."""
-    if not findings:
+def _outcome_line(left: list[dict[str, object]], *, files: int, fixed: int, root: Path) -> str:
+    """``3 files clean`` or ``3 findings in 2 files · 1 warning, 2 notes · 1 fixed``.
+
+    *left* are the findings ``--fix`` did not fix; *fixed* counts the others.
+    The severities are split only when more than one kind is left.
+    """
+    sep = f" {glyph('separator')} "
+    done = f"{sep}{fixed} fixed" if fixed else ""
+    if not left:
         if not files:
             return f"Catalogue lint passed, but found no object files under {root}"
-        return f"{_plural(files, 'file')} clean"
-    touched = len({str(item.get("path")) for item in findings})
-    line = f"{_plural(len(findings), 'finding')} in {_plural(touched, 'file')}"
-    return f"{line} {glyph('separator')} {fixed} fixed" if fixed else line
+        return f"{_plural(files, 'file')} clean{done}"
+    touched = len({str(item.get("path")) for item in left})
+    line = f"{_plural(len(left), 'finding')} in {_plural(touched, 'file')}"
+    kinds = [
+        _plural(count, noun)
+        for severity, noun in _SEVERITY_NOUNS
+        if (count := sum(1 for item in left if item.get("severity") == severity))
+    ]
+    if len(kinds) > 1:
+        line += sep + ", ".join(kinds)
+    return line + done
+
+
+#: How the outcome line names each severity: lint's ``info`` prints as ``note``.
+_SEVERITY_NOUNS = (("error", "error"), ("warning", "warning"), ("info", "note"))

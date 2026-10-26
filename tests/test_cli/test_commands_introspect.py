@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import typer
@@ -271,6 +272,40 @@ def test_document_names_the_version_and_the_environment(tree: dict) -> None:
     assert names[:4] == ["OPENTIDE_OUTPUT", "OPENTIDE_DEBUG", "NO_COLOR", "OPENTIDE_JSON_INDENT"]
     assert set(AGENT_VARIABLES) <= set(names)
     assert all(entry["meaning"] for entry in tree["environment"])
+
+
+#: ``OPENTIDE_*`` names in ``src/`` that a user does not set for the CLI.
+_UNDOCUMENTED_ENV = {
+    # deploy --persist-state-externally sets it for its own run.
+    "OPENTIDE_PERSIST_STATE_EXTERNALLY",
+    # An Azure pipeline variable the generated pipeline sets and reads.
+    "OPENTIDE_DEPLOY_STARTED",
+    # Read by the maintainer scripts in scripts/vocabulary/, not by a command.
+    "OPENTIDE_ATTACK_STIX_DIR",
+    "OPENTIDE_SPECIFICATIONS_ROOT",
+}
+
+
+def test_environment_names_every_variable_the_code_reads() -> None:
+    """Each quoted ``OPENTIDE_*`` name in ``src/`` is in ``environment()`` or excused above.
+
+    A quoted name catches ``os.environ.get("…")``, ``envvar="…"`` and a
+    module constant such as ``PROGRESS_ENV = "…"`` alike.
+    """
+    from opentide.cli.services.introspect import environment
+
+    src = Path(__file__).resolve().parents[2] / "src"
+    pattern = re.compile(r"""["'](OPENTIDE_[A-Z][A-Z0-9_]*)["']""")
+    read = {
+        name
+        for path in src.rglob("*.py")
+        for name in pattern.findall(path.read_text(encoding="utf-8"))
+    }
+    documented = {entry["name"] for entry in environment()}
+    assert "OPENTIDE_OUTPUT" in read
+    assert read - _UNDOCUMENTED_ENV <= documented, sorted(read - _UNDOCUMENTED_ENV - documented)
+    assert not _UNDOCUMENTED_ENV & documented
+    assert _UNDOCUMENTED_ENV.issubset(read), "drop a name the code no longer reads"
 
 
 @pytest.mark.parametrize(

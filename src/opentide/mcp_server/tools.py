@@ -37,10 +37,6 @@ def tool_coverage(technique: str = "", tactic: str = "") -> dict[str, Any]:
     return coverage_analysis(technique=technique, tactic=tactic)
 
 
-#: Distinct issue codes a validation result points at with an ``explain`` next action.
-MAX_EXPLAIN_ACTIONS = 3
-
-
 def next_action(
     tool: str, arguments: dict[str, Any], *, command: str, reason: str
 ) -> dict[str, Any]:
@@ -63,26 +59,26 @@ def _annotate(payload: dict[str, Any], report: Any, buckets: tuple[str, ...]) ->
 def _validation_next_actions(
     diagnostics: list[Any], *, again: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """Explain each code found, then validate again once the fixes are written."""
-    actions: list[dict[str, Any]] = []
-    codes = list(dict.fromkeys(item.code for item in diagnostics if item.severity == "error"))
-    for code in codes[:MAX_EXPLAIN_ACTIONS]:
-        actions.append(
-            next_action(
-                "explain",
-                {"code": code},
-                command=f"opentide explain {code}",
-                reason=f"what {code} means and how to fix it",
-            )
-        )
-    if codes:
-        reason = (
-            "validate again after applying the fix edits"
-            if any(item.fix is not None for item in diagnostics)
-            else "validate again after fixing the issues"
-        )
-        actions.append({**again, "reason": reason})
-    return actions
+    """Explain the first error's code, then validate again once the fixes are written.
+
+    One ``explain`` (each issue's own ``explain`` field names the rest) and the
+    re-run: within the three next steps a CLI result prints.
+    """
+    first = next((item.code for item in diagnostics if item.severity == "error"), None)
+    if first is None:
+        return []
+    reason = (
+        "validate again after applying the fix edits"
+        if any(item.fix is not None for item in diagnostics)
+        else "validate again after fixing the issues"
+    )
+    explain = next_action(
+        "explain",
+        {"code": first},
+        command=f"opentide explain {first}",
+        reason=f"what {first} means and how to fix it",
+    )
+    return [explain, {**again, "reason": reason}]
 
 
 def _rule_platforms(uuid: str) -> list[str]:
@@ -119,13 +115,15 @@ def _run_strategies(rule: Any, platform: str) -> list[str]:
 
 
 def tool_validate_rule(uuid: str) -> dict[str, Any]:
-    ensure_initialised()
+    # The server outlives any edit an agent makes; validating the index built at
+    # start-up would report the content the author has already changed.
+    Opentide.reload()
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
-    _ = Opentide.Rules
-    rule = Opentide.Rules.get(uuid)
-    if rule is None:
+    # The raw index, not ``Opentide.Rules``: typed loading raises for the whole
+    # catalogue when one rule does not load, which is what validation reports.
+    if uuid not in Opentide.Models.rules:
         return {
             "valid": False,
             "errors": [f"Rule {uuid} not found"],
@@ -154,6 +152,12 @@ def tool_validate_rule(uuid: str) -> dict[str, Any]:
     )
     actions = _validation_next_actions(diagnostics, again=again)
     if report.ok:
+        try:
+            rule = Opentide.Rules.get(uuid)
+        except Exception:
+            # Typed loading fails for the whole catalogue when another rule
+            # does not load; the status then falls back to PREVIEW.
+            rule = None
         for platform in _rule_platforms(uuid):
             strategies = _run_strategies(rule, platform)
             if not strategies:
@@ -187,7 +191,8 @@ def tool_validation_report(
     object_type: str | None = None,
 ) -> dict[str, Any]:
     """Structured validation report for agents (headless API)."""
-    ensure_initialised()
+    # Re-read the workspace, as ``tool_validate_rule`` does.
+    Opentide.reload()
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 

@@ -89,6 +89,47 @@ def test_every_registered_code_has_a_page() -> None:
     assert not missing, f"add src/opentide/data/diagnostics/<code>.md for: {missing}"
 
 
+def failure_codes() -> set[str]:
+    """Every ``failure.code`` the CLI sets, read from where each one is defined or set."""
+    from opentide.cli.services import share
+    from opentide.cli.ui import contract
+    from opentide.core.errors import UserFileError
+
+    codes = {
+        value
+        for name, value in vars(contract).items()
+        if name.isupper() and isinstance(value, str) and name != "SCHEMA_VERSION"
+    }
+    codes |= set(share._RUN_FAILURE_CODES.values()) | set(share._PREFLIGHT)
+    codes |= {error.code for error in UserFileError.__subclasses__()}
+    for path in (SRC / "cli").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        codes.update(re.findall(r'"_failure_code"\]?\s*[:=]\s*"([a-z_]+)"', text))
+        codes.update(re.findall(r'\bcode="([a-z_]+)"', text))
+    return codes
+
+
+def test_the_failure_scan_finds_the_codes_it_protects() -> None:
+    assert {
+        "issues_found",
+        "usage_unknown_command",
+        "command_failed",
+        "no_tenant_reached",
+        "needs_human_decision",
+        "not_implemented",
+        "share_partial",
+        "api_key_unset",
+        "config_parse",
+        "yaml_parse",
+    } <= failure_codes()
+
+
+def test_every_failure_code_has_a_page() -> None:
+    """Principle 4: every failure has a code and an ``opentide explain`` page (D15)."""
+    missing = sorted(failure_codes() - set(diagnostic_codes()))
+    assert not missing, f"add src/opentide/data/diagnostics/<code>.md for: {missing}"
+
+
 def test_every_code_in_the_source_is_registered() -> None:
     """The scan is the safety net: a new code must be in the check table too."""
     unregistered = sorted(emitted_codes() - REGISTERED)

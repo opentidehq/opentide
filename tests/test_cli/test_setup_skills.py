@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,7 @@ _real_download_skill = skills_mod._download_skill
 def _mock_skill_download(monkeypatch: pytest.MonkeyPatch) -> None:
     stub_remote_skills_manifest(monkeypatch)
 
-    def _fake(slug: str, dest: Path, *, source: str, ref: str) -> list[str]:
+    def _fake(slug: str, dest: Path, *, source: str, ref: str, **_: object) -> list[str]:
         dest.mkdir(parents=True, exist_ok=True)
         (dest / "SKILL.md").write_text(f"# {slug} ({source}@{ref})\n", encoding="utf-8")
         return ["SKILL.md"]
@@ -214,7 +215,7 @@ def test_authoring_skills_install_from_the_package_when_github_is_down(
     rule = (tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md").read_text(
         encoding="utf-8"
     )
-    assert "rule::1.0" in engineering
+    assert "rule::1.1" in engineering
     assert "objects/rules/" in rule
     # The retired schema may appear only as a prohibition, not as the layout to author.
     assert "schema: mdr::" not in engineering
@@ -386,6 +387,45 @@ def test_download_skill_keeps_the_previous_tree_when_a_later_file_is_missing(
     assert not (tmp_path / ".downloaded.incoming").exists()
 
 
+def test_install_lists_the_github_tree_once_per_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Each skill fetched the full recursive tree again: 60 API calls an hour ran out.
+
+    ``setup skills --all`` installs the whole catalogue in one run.
+    """
+    slugs = ["kusto-query-language", "sigma-rules", "spl-searches"]
+    stub_remote_skills_manifest(
+        monkeypatch,
+        [registry.SkillEntry(slug=slug, name=slug, description="") for slug in slugs],
+    )
+    calls: list[str] = []
+
+    class _Response:
+        def read(self) -> bytes:
+            tree = [{"path": f"skills/{slug}/SKILL.md", "type": "blob"} for slug in slugs]
+            return json.dumps({"truncated": False, "tree": tree}).encode("utf-8")
+
+    def _urlopen(request: object, **_: object) -> _Response:
+        calls.append(str(getattr(request, "full_url", request)))
+        return _Response()
+
+    monkeypatch.setattr(registry.urllib.request, "urlopen", _urlopen)
+    monkeypatch.setattr(skills_mod, "_download_skill", _real_download_skill)
+    monkeypatch.setattr(skills_mod, "fetch_github_bytes", lambda path, **_: b"# skill\n")
+
+    result = run_skills_setup(
+        SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.generic], install_all=True, yes=True)
+    )
+
+    installed = result["skills"]
+    assert isinstance(installed, list)
+    assert set(slugs) <= set(installed)
+    assert len(calls) == 1
+    for slug in slugs:
+        assert (tmp_path / ".agents" / "skills" / slug / "SKILL.md").is_file()
+
+
 def test_bundled_reinstall_drops_stale_reference_files(tmp_path: Path) -> None:
     dest = tmp_path / "opentide-detection-rule"
     (dest / "references").mkdir(parents=True)
@@ -393,7 +433,7 @@ def test_bundled_reinstall_drops_stale_reference_files(tmp_path: Path) -> None:
     (dest / "references" / "Best-Practices.md").write_text("coretide\n", encoding="utf-8")
     written = skills_mod._install_bundled_skill("opentide-detection-rule", dest)
     text = (dest / "SKILL.md").read_text(encoding="utf-8")
-    assert "rule::1.0" in text
+    assert "rule::1.1" in text
     assert "SKILL.md" in written
     assert not (dest / "references").exists()
     assert not (tmp_path / ".opentide-detection-rule.incoming").exists()
@@ -463,3 +503,43 @@ def test_rendered_entrypoints_name_mcp_start_not_the_removed_script(tmp_path: Pa
     for entrypoint in ("AGENTS.md", "CLAUDE.md"):
         text = (tmp_path / entrypoint).read_text(encoding="utf-8")
         assert "`opentide mcp start`" in text, entrypoint
+
+
+@pytest.mark.parametrize(
+    ("targets", "entrypoint"),
+    [
+        ([SkillTarget.claude_code], "CLAUDE.md"),
+        ([SkillTarget.generic], "AGENTS.md"),
+        ([SkillTarget.github_copilot], "AGENTS.md"),
+        ([SkillTarget.github_copilot], ".github/copilot-instructions.md"),
+    ],
+)
+def test_setup_skills_keeps_an_existing_entrypoint(
+    tmp_path: Path, targets: list[SkillTarget], entrypoint: str
+) -> None:
+    """The repository's own agent instructions were replaced with the template."""
+    dest = tmp_path / entrypoint
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("# Our team's agent rules\n", encoding="utf-8")
+
+    result = run_skills_setup(SkillsSetupOptions(path=tmp_path, targets=targets, yes=True))
+
+    assert dest.read_text(encoding="utf-8") == "# Our team's agent rules\n"
+    files = result["files"]
+    assert isinstance(files, list)
+    assert entrypoint not in files
+    assert result["skipped"] == [entrypoint]
+    assert result["warnings"] == [
+        f"Left {entrypoint} unchanged because the file already exists; point it at "
+        ".agents/skills/ by hand, or delete it and re-run to write opentide's template."
+    ]
+
+
+def test_setup_skills_rerun_skips_its_own_entrypoints_quietly(tmp_path: Path) -> None:
+    options = SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.claude_code], yes=True)
+    run_skills_setup(options)
+
+    again = run_skills_setup(options)
+
+    assert again["skipped"] == ["CLAUDE.md"]
+    assert "warnings" not in again

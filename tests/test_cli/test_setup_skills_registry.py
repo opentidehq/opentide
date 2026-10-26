@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 from pathlib import Path
 
@@ -368,3 +369,29 @@ def test_bundled_entries_are_not_duplicated_when_upstream_lists_them(
     matching = [e for e in entries if e.slug == "opentide-detection-rule"]
     assert len(matching) == 1, "bundled merge duplicated a slug the catalogue already lists"
     assert matching[0].description == "upstream copy"
+
+
+@pytest.mark.parametrize(
+    ("family", "slug"),
+    [
+        ("rule", "opentide-detection-rule"),
+        ("threat", "opentide-threat-vector"),
+        ("objective", "opentide-detection-objective"),
+    ],
+)
+def test_bundled_skills_name_the_latest_schema(family: str, slug: str) -> None:
+    """``discover`` and the installed SKILL.md teach the schema ``opentide new`` writes."""
+    from opentide.models.object_types import latest_identifier
+
+    latest = latest_identifier(family)
+    entry = next(e for e in registry.BUNDLED_AUTHORING_ENTRIES if e.slug == slug)
+    skills = Path(registry.__file__).parents[3] / "data" / "setup" / "skills" / "authoring"
+    texts = {
+        "discover": entry.description,
+        slug: (skills / slug / "SKILL.md").read_text(encoding="utf-8"),
+        "detection-engineering": (skills / "detection-engineering" / "SKILL.md").read_text(
+            encoding="utf-8"
+        ),
+    }
+    for where, text in texts.items():
+        assert set(re.findall(rf"\b{family}::\d+\.\d+", text)) == {latest}, where

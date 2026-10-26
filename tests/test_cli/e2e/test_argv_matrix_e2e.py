@@ -388,7 +388,7 @@ def test_setup_positional_deprecation_keeps_json_parseable(
     monkeypatch.setattr(
         setup_module,
         "discover_skills",
-        lambda *_args, **_kwargs: {"message": "0 skills", "skills": []},
+        lambda *_args, **_kwargs: {"skills": [], "count": 0, "source": "opentidehq/skills@main"},
     )
     result = cli_runner.invoke(
         cli_module.app,

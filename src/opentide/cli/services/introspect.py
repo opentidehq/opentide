@@ -46,10 +46,16 @@ def _app_choices() -> dict[tuple[str, str], tuple[str, ...]]:
 
 
 def environment() -> list[dict[str, str]]:
-    """Environment variables that change every command but are not options."""
+    """Environment variables the CLI reads, the root options' own included.
+
+    Every ``OPENTIDE_*`` name the code under ``src/`` reads is here;
+    ``tests/test_cli/test_commands_introspect.py`` greps for them.
+    """
+    from opentide.cli.ui.codeframe import LINK_SCHEMES
     from opentide.cli.ui.mode import AGENT_VARIABLES, OUTPUT_ENV_VALUES
 
     modes = "|".join(sorted(OUTPUT_ENV_VALUES))
+    links = "|".join(LINK_SCHEMES)
     return [
         {"name": "OPENTIDE_OUTPUT", "meaning": f"Output mode: {modes}"},
         {"name": "OPENTIDE_DEBUG", "meaning": "1 for debug logging, like --debug"},
@@ -57,6 +63,26 @@ def environment() -> list[dict[str, str]]:
         {
             "name": "OPENTIDE_JSON_INDENT",
             "meaning": "0 for one-line JSON, 2 for indented; default: indented on a terminal",
+        },
+        {"name": "OPENTIDE_REPO_ROOT", "meaning": "Repository root, like --repo"},
+        {"name": "OPENTIDE_DATA_ROOT", "meaning": "Bundled data root, like --data"},
+        {"name": "OPENTIDE_PROXY", "meaning": "HTTP(S) proxy, like --proxy"},
+        {
+            "name": "OPENTIDE_TIDE_WORKSPACE",
+            "meaning": "Folder whose objects are read, when not the repository root",
+        },
+        {
+            "name": "OPENTIDE_LINKS",
+            "meaning": f"Link scheme in code frames: {links}; default vscode in VS Code, else file",
+        },
+        {"name": "OPENTIDE_LOG_JSON", "meaning": "1 for one JSON object per log line on stderr"},
+        {
+            "name": "OPENTIDE_VALIDATE_WORKERS",
+            "meaning": "Most threads validate uses: a number or auto",
+        },
+        {
+            "name": "OPENTIDE_VALIDATE_PARALLEL_THRESHOLD",
+            "meaning": "Fewest objects before validate runs in parallel",
         },
         *(
             {"name": name, "meaning": "Set by a coding agent: selects agent output mode"}
@@ -226,7 +252,7 @@ def _json_value(value: Any) -> Any:
 
 def _envvars(param: Any, *, root: bool) -> list[str]:
     envvar = getattr(param, "envvar", None)
-    found = [envvar] if isinstance(envvar, str) else list(envvar or ())
+    found: list[str] = [envvar] if isinstance(envvar, str) else list(envvar or ())
     if root:
         for flag in param.opts:
             found.extend(_CALLBACK_ENVVARS.get(flag, ()))

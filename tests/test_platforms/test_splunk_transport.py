@@ -148,6 +148,17 @@ def test_http_errors_are_reported_only_to_the_connection_that_asked(splunk: Splu
         deploying.parse("| makeresults |badcommand", output_mode="json")
 
 
+def test_a_redirect_urllib_does_not_follow_fails_a_deploying_connection(
+    splunk: SplunkStandIn,
+) -> None:
+    """splunklib raises only for 400 or more, so a gateway's 307 read as success."""
+    from splunklib.binding import HTTPError
+
+    deploying = _connect(splunk, ssl_enabled=False)
+    with pytest.raises(HTTPError, match="307 Temporary Redirect -- b'Network Error'"):
+        deploying.parse("| makeresults |unreachable", output_mode="json")
+
+
 def test_query_validator_reports_an_invalid_query(
     splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -178,6 +189,37 @@ def test_query_validator_assumes_valid_on_a_network_error_redirect(
     validator._validate_spl_query("| makeresults |unreachable", "slow", "uuid-3", service)
     assert os.environ.get("VALIDATION_WARNING_RAISED") == "True"
     assert "VALIDATION_ERROR_RAISED" not in os.environ
+
+
+def test_query_validator_reads_a_redirected_refusal_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A redirect that is not a network error is still a refusal, reported from its body.
+
+    The body is a stream; reading it once for the network-error check left
+    ``json.loads`` an empty one, and the check crashed instead of reporting.
+    """
+    from opentide.platforms.splunk.validator import SplunkQueryValidator
+
+    class Body:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+
+        def read(self) -> bytes:
+            data, self._data = self._data, b""
+            return data
+
+    class Service:
+        def parse(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {
+                "status": HTTP_ERROR_STATUS,
+                "reason": "Temporary Redirect",
+                "body": Body(b'{"messages": [{"type": "FATAL", "text": "Unknown command"}]}'),
+            }
+
+    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
+    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
+
+    validator._validate_spl_query("| makeresults |badcommand", "bad", "uuid-4", Service())  # type: ignore[arg-type]
+    assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
 
 
 # --- a proxy's HTML page is named, not parsed as XML ---------------------------
@@ -403,3 +445,89 @@ def test_redeploy_updates_the_existing_saved_search(
     creates = [r for r in splunk.requests if r[0] == "POST" and r[1] == SAVED_SEARCHES]
     assert len(creates) == 1
     assert splunk.saved_searches["Trigger Rule"]["alert_type"] == "number of events"
+
+
+@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
+def test_an_update_the_gateway_times_out_fails_the_deploy(
+    _techniques: object, splunk: SplunkStandIn, trigger_rule
+) -> None:
+    """The handler logged the 307 and returned it; splunklib treated it as success.
+
+    The rule was reported deployed while Splunk kept the old search.
+    """
+    from splunklib.binding import HTTPError
+
+    splunk.saved_searches["Trigger Rule"] = {"search": "index=old"}
+    splunk.gateway_timeout = True
+    service = _connect(splunk, ssl_enabled=False)
+    with pytest.raises(HTTPError, match="307"):
+        _deployer().deploy_mdr(data=trigger_rule, service=service, tenant_config=_tenant())
+
+    assert splunk.saved_searches["Trigger Rule"] == {"search": "index=old"}
+
+
+# --- retiring a rule removes its saved search ----------------------------------
+
+
+def test_delete_reaches_splunk_as_a_delete(splunk: SplunkStandIn) -> None:
+    """The handler named no method, so urllib sent every DELETE as a GET.
+
+    Splunk answered the GET with the saved search, splunklib reported success
+    and the retired rule kept running.
+    """
+    splunk.saved_searches["Retired Rule"] = {"search": "index=main"}
+    service = _connect(splunk, ssl_enabled=False)
+    service.saved_searches.delete("Retired Rule")
+
+    assert [method for method, _path, _args in splunk.requests] == ["DELETE"]
+    assert "Retired Rule" not in splunk.saved_searches
+
+
+@pytest.fixture
+def retiring(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every rule status carries the DELETION strategy."""
+    from opentide.models.deployment_enums import StatusStrategy
+
+    monkeypatch.setattr(
+        "opentide.platforms.splunk.deployer.check_status", lambda _status: StatusStrategy.DELETION
+    )
+
+
+def _retire(service: object, name: str) -> bool | None:
+    return _deployer()._apply_saved_search(
+        service=service,
+        name=name,
+        status="REMOVED",
+        query="index=main",
+        mdr_config={},
+        actions_config={},
+    )
+
+
+@pytest.mark.usefixtures("retiring")
+def test_a_retired_rule_deletes_its_saved_search(splunk: SplunkStandIn) -> None:
+    splunk.saved_searches["Retired Rule"] = {"search": "index=main"}
+    _retire(_connect(splunk, ssl_enabled=False), "Retired Rule")
+
+    assert "Retired Rule" not in splunk.saved_searches
+    assert [method for method, _path, _args in splunk.requests] == ["GET", "DELETE"]
+
+
+@pytest.mark.usefixtures("retiring")
+def test_retiring_an_absent_saved_search_succeeds(splunk: SplunkStandIn) -> None:
+    assert _retire(_connect(splunk, ssl_enabled=False), "Never Deployed") is None
+    assert [method for method, _path, _args in splunk.requests] == ["GET"]
+
+
+@pytest.mark.usefixtures("retiring")
+def test_retiring_on_an_unreachable_tenant_fails(splunk: SplunkStandIn) -> None:
+    """Any failure to look the saved search up used to read as "already absent".
+
+    A TLS failure, a refused token or a 5xx left the saved search running
+    while the run reported success.
+    """
+    splunk.saved_searches["Retired Rule"] = {"search": "index=main"}
+    with pytest.raises(URLError):
+        _retire(_connect(splunk, ssl_enabled=True), "Retired Rule")
+
+    assert "Retired Rule" in splunk.saved_searches

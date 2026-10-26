@@ -16,8 +16,15 @@ from opentide.cli.ui.contract import (
     USAGE_ERROR,
     USAGE_INVALID_CHOICE,
     USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+    NextAction,
 )
-from opentide.cli.ui.diagnostics import Diagnostic, annotate_report
+from opentide.cli.ui.diagnostics import (
+    Diagnostic,
+    annotate_report,
+    explain_command,
+    relative_path,
+)
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
@@ -30,6 +37,7 @@ logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
     from opentide.deployment.git_repo import RuleScope
+    from opentide.models.deployment_enums import RunStrategies
     from opentide.platforms.transport import TenantUnreachableError
 
 
@@ -135,6 +143,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
 _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
     ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
     ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_integration"}),
+    ValidateCheck.cve.value: frozenset({"cve_lookup_unavailable"}),
 }
 
 #: Every code a ``validate`` finding can carry. ``tests/test_cli/test_explain.py``
@@ -275,7 +284,8 @@ def run_validate(
         # Not a failure: an empty catalogue exits 0, even under --strict. The
         # path is what exposes a run that looked in the wrong directory.
         result["message"] = (
-            f"Validation passed, but no detection objects were found under {workspace}"
+            "Validation passed, but no detection objects were found under "
+            + _shown_directory(workspace)
         )
     else:
         result["message"] = "Validation passed"
@@ -286,9 +296,40 @@ def run_validate(
     result["_exit_code"] = outcome.exit_code
     if outcome.failed:
         result["_failure_code"] = ISSUES_FOUND
+        result["_next_actions"] = _failure_next_actions(ctx, diagnostics)
     result["_summary"] = _summary(report, diagnostics)
     result["_diagnostics"] = diagnostics
     return result
+
+
+def _shown_directory(path: Path) -> str:
+    """*path* as ``./sub`` (or ``./``) inside the current directory, ``../..`` above it.
+
+    Anywhere else it stays absolute.
+    """
+    cwd = Path.cwd()
+    shown = relative_path(path, cwd)
+    if not Path(shown).is_absolute():
+        return "./" if shown == "." else f"./{shown}"
+    if relative_path(cwd, path) != cwd.as_posix():
+        return os.path.relpath(path, cwd) + "/"
+    return shown
+
+
+def _failure_next_actions(ctx: CliContext, diagnostics: Sequence[Diagnostic]) -> list[NextAction]:
+    """What to run after a failed validation: the first finding's page, then validate again.
+
+    The same two steps MCP's ``validation_report`` gives. Errors come before
+    warnings, so a run that fails on errors points at an error.
+    """
+    ordered = sorted(diagnostics, key=lambda item: item.severity != "error")
+    actions: list[NextAction] = []
+    if ordered:
+        code = ordered[0].code
+        actions.append(NextAction(explain_command(code), "how to fix it"))
+    rerun = "opentide --json validate" if ctx.json_output else "opentide validate"
+    actions.append(NextAction(rerun, "check again"))
+    return actions
 
 
 def _annotate_report(
@@ -415,7 +456,9 @@ def _live_required_result(platform: str) -> dict[str, object]:
         "supported": True,
         "status": "failed",
         "message": "Query validation checks the tenant. Re-run with --live.",
-        "_exit_code": 1,
+        "_exit_code": 2,
+        "_failure_code": USAGE_MISSING_OPTION,
+        "_failure_argument": "--live",
     }
 
 
@@ -647,7 +690,10 @@ def validate_query_platform(
 _NO_RULES_MESSAGES: dict[str | None, str] = {
     None: "No rule for this platform has a status that maps to the run's strategies",
     "changed": "No changed rule for this platform has a status that maps to the run's strategies",
-    "selected": "None of the selected rules has a status for this platform that maps to the run's strategies",
+    "selected": (
+        "None of the selected rules has a status for this platform that maps to the run's "
+        "strategies"
+    ),
 }
 
 
@@ -658,7 +704,9 @@ def _scoped(result: dict[str, object], label: str | None) -> dict[str, object]:
     return result
 
 
-def queries_per_tenant(platform: str, rules: Sequence[Any], strategies: Any) -> dict[str, int]:
+def queries_per_tenant(
+    platform: str, rules: Sequence[str], strategies: RunStrategies
+) -> dict[str, int]:
     """How many rule queries a live check sends to each tenant.
 
     The same resolution the platform validator runs, so a tenant listed here
@@ -731,8 +779,8 @@ def _no_tenant_reached(platform: str, strategies: Sequence[Any], rules: int) -> 
 def _run_live_validator(
     ctx: CliContext,
     platform: str,
-    rules: Sequence[Any],
-    strategies: Any,
+    rules: Sequence[str],
+    strategies: RunStrategies,
     reach: dict[str, int],
 ) -> dict[str, object]:
     from opentide.core.registry import Opentide as LegacyOpentide
@@ -770,25 +818,35 @@ def _run_live_validator(
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
     emit_section(f"Query Validation - {system_name}")
     validator = cast(Any, query_validators[platform])
+    # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
+    # was retried exists on no engine, and its own TypeError hid the real one.
     try:
-        try:
-            validator.validate(mdr_deployment=rules, strategies=strategies)
-        except TypeError:
-            logger.warning("trying_mdrv3_style_method")
-            validator.validate(deployment=rules)
+        validator.validate(mdr_deployment=rules, strategies=strategies)
     except ModuleNotFoundError as exc:
         return _missing_sdk_result(platform, exc)
     except TenantUnreachableError as exc:
         return _unreachable_tenant_result(exc)
     except ValueError as exc:
         # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
-        # TypeError stays uncaught here so the legacy validator signature retry works.
         return {
             "platform": platform,
             "mode": "live",
             "status": "failed",
             "supported": True,
             "message": str(exc),
+            "_exit_code": 1,
+        }
+    except Exception as exc:
+        detail = str(exc).strip()
+        error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+        logger.error("query_validation_failed", system=platform, detail=error)
+        return {
+            "platform": platform,
+            "mode": "live",
+            "status": "failed",
+            "supported": True,
+            **counts,
+            "message": f"Query validation for {platform} failed: {error}",
             "_exit_code": 1,
         }
     from opentide.cli.exit_codes import validation_outcome

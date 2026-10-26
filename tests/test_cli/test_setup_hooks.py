@@ -121,6 +121,89 @@ def test_run_hooks_setup_merges_existing_pre_commit_config(tmp_path: Path) -> No
     assert ".pre-commit-config.yaml" in result["files"]
 
 
+_SAMPLE_CONFIG = """\
+# See https://pre-commit.com for more information
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.2.0
+    hooks:
+    -   id: trailing-whitespace
+"""
+
+_KEY_AFTER_REPOS = """\
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+    # trailing comment about ruff
+
+ci:
+  autoupdate_schedule: monthly
+exclude: ^vendor/
+"""
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        pytest.param(_SAMPLE_CONFIG, id="sample-config"),
+        pytest.param(_KEY_AFTER_REPOS, id="key-after-repos"),
+        pytest.param("ci:\n  skip: [ruff]\nrepos: []\nexclude: ^vendor/\n", id="empty-repos"),
+        pytest.param("default_language_version:\n  python: python3\nrepos:\n", id="null-repos"),
+        pytest.param("# no hooks yet\nfail_fast: true\n", id="no-repos"),
+        pytest.param("# no hooks yet\n", id="comments-only"),
+        pytest.param("repos:\n  - repo: meta\n    hooks:\n      - id: identity", id="no-final-eol"),
+    ],
+)
+def test_run_hooks_setup_adds_the_hook_and_keeps_the_rest_of_the_config(
+    tmp_path: Path, original: str
+) -> None:
+    """The hook block used to be appended to the end of the file.
+
+    With zero-indented entries (``pre-commit sample-config``) or a top-level
+    key after ``repos``, the result was invalid YAML, reported as success;
+    ``repos: []`` replaced the whole file and dropped its other keys.
+    """
+    config = tmp_path / ".pre-commit-config.yaml"
+    config.write_text(original, encoding="utf-8")
+    before = yaml.safe_load(original) or {}
+
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
+
+    text = config.read_text(encoding="utf-8")
+    after = yaml.safe_load(text)
+    assert {k: v for k, v in after.items() if k != "repos"} == {
+        k: v for k, v in before.items() if k != "repos"
+    }
+    assert after["repos"][:-1] == (before.get("repos") or [])
+    assert after["repos"][-1]["repo"] == "local"
+    assert after["repos"][-1]["hooks"][0]["entry"] == HOOK_ENTRY
+    assert all(line in text for line in original.splitlines() if line.startswith("#"))
+    assert ".pre-commit-config.yaml" in result["files"]
+    assert "warnings" not in result
+    second = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
+    assert config.read_text(encoding="utf-8") == text
+    assert ".pre-commit-config.yaml" in second["skipped"]
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        pytest.param("{repos: [{repo: meta, hooks: [{id: identity}]}]}\n", id="flow-mapping"),
+        pytest.param("repos: [{repo: meta, hooks: [{id: identity}]}]\n", id="flow-repos"),
+        pytest.param("repos:\n  repo: meta\n", id="repos-not-a-list"),
+    ],
+)
+def test_run_hooks_setup_leaves_a_config_it_cannot_extend(tmp_path: Path, original: str) -> None:
+    config = tmp_path / ".pre-commit-config.yaml"
+    config.write_text(original, encoding="utf-8")
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
+    assert config.read_text(encoding="utf-8") == original
+    assert ".pre-commit-config.yaml" in result["skipped"]
+    assert "left unchanged" in result["warnings"][0]
+
+
 def test_run_hooks_setup_leaves_unparseable_config(tmp_path: Path) -> None:
     (tmp_path / ".pre-commit-config.yaml").write_text("- just a list\n", encoding="utf-8")
     result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=False))
@@ -181,7 +264,8 @@ def test_nested_workspace_replaces_a_root_pinned_entry(tmp_path: Path) -> None:
     workspace.mkdir()
     config = workspace / ".pre-commit-config.yaml"
     config.write_text(
-        f"repos:\n  - repo: local\n    hooks:\n      - id: opentide-validate\n        entry: {HOOK_ENTRY}\n",
+        "repos:\n  - repo: local\n    hooks:\n"
+        f"      - id: opentide-validate\n        entry: {HOOK_ENTRY}\n",
         encoding="utf-8",
     )
 
@@ -606,3 +690,50 @@ def test_a_hooks_directory_on_another_drive_does_not_crash_setup(
     assert result["installed"] is True, result
     hook = (tmp_path / ".git" / "hooks" / "pre-commit").resolve().as_posix()
     assert hook in result["files"]
+
+
+def _windows_text_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``Path.write_text`` translate newlines the way it does on Windows."""
+    write_text = Path.write_text
+
+    def _crlf(
+        self: Path,
+        data: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        if newline is None:
+            data, newline = data.replace("\n", "\r\n"), ""
+        return write_text(self, data, encoding=encoding, errors=errors, newline=newline)
+
+    monkeypatch.setattr(Path, "write_text", _crlf)
+
+
+def test_hook_scripts_are_written_with_lf_on_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Text mode wrote CRLF on Windows, and Git Bash failed the hook on ``set -e\\r``."""
+    hooks_dir = _git_init(tmp_path)
+    _windows_text_mode(monkeypatch)
+
+    run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+
+    for hook in (tmp_path / ".opentide" / "hooks" / "pre-commit", hooks_dir / "pre-commit"):
+        assert b"\r" not in hook.read_bytes(), hook
+
+
+def test_setup_rewrites_a_hook_script_with_crlf_line_endings(tmp_path: Path) -> None:
+    """Re-running setup compared text, which reads CRLF as LF, so it kept the broken hook."""
+    hooks_dir = _git_init(tmp_path)
+    run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+    hooks = (tmp_path / ".opentide" / "hooks" / "pre-commit", hooks_dir / "pre-commit")
+    for hook in hooks:
+        hook.write_bytes(hook.read_bytes().replace(b"\n", b"\r\n"))
+
+    result = run_hooks_setup(HooksSetupOptions(path=tmp_path, yes=True, install=True))
+
+    assert ".opentide/hooks/pre-commit" in result["files"]
+    assert ".git/hooks/pre-commit" in result["files"]
+    for hook in hooks:
+        assert b"\r" not in hook.read_bytes(), hook

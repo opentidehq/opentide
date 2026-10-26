@@ -15,6 +15,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+from opentide.core.errors import ConfigFileError
 from opentide.core.root import get_data_root, get_repo_root
 from opentide.registry.discovery import client_configurations_dir, discover_workspace
 
@@ -32,7 +33,11 @@ def _deep_merge(source: dict, merge: dict) -> None:
 
 
 def _load_toml(path: Path) -> dict:
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        # A typo in the user's own file, not a bug: say where it is.
+        raise ConfigFileError.from_toml(path, exc) from exc
 
 
 # ``sharing.toml`` merges arrays of tables by block name. ``_deep_merge``
@@ -42,7 +47,7 @@ _SKIPPED_CONFIG_FILES = frozenset({"sharing.toml"})
 
 def _is_skipped_config_dir(name: str) -> bool:
     """Skip hidden and dunder names (``__pycache__``, ``.DS_Store``, …)."""
-    return name.startswith(".") or name.startswith("__")
+    return name.startswith((".", "__"))
 
 
 def _load_nested_configs(directory: Path) -> dict[str, dict]:

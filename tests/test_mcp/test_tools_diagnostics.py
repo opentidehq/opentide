@@ -110,6 +110,25 @@ def test_validation_report_next_actions_explain_then_validate_again(broken_rule:
     }
 
 
+def test_validation_next_actions_explain_only_the_first_error_code() -> None:
+    """One explain step, then the re-run: within the CLI's three next steps."""
+    from types import SimpleNamespace
+
+    diagnostics = [
+        SimpleNamespace(code="yaml_parse", severity="warning", fix=None),
+        SimpleNamespace(code="invalid_ref", severity="error", fix=None),
+        SimpleNamespace(code="vocab_unknown", severity="error", fix=None),
+        SimpleNamespace(code="invalid_uuid", severity="error", fix=None),
+    ]
+    again = tools.next_action(
+        "validation_report", {}, command="opentide --json validate", reason=""
+    )
+    actions = tools._validation_next_actions(diagnostics, again=again)
+    assert [action["tool"] for action in actions] == ["explain", "validation_report"]
+    assert actions[0]["arguments"] == {"code": "invalid_ref"}
+    assert actions[1]["reason"] == "validate again after fixing the issues"
+
+
 def test_clean_validation_report_has_no_next_actions(tide_corpus_repo: Path) -> None:
     payload = tools.tool_validation_report(file=str(_RULE))
 

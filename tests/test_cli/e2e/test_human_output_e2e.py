@@ -298,6 +298,9 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     # Where findings print as code frames, the outcome line counts them in
     # place of the message, and each warning is a frame, not a warning line.
     framed = payload.get("command") in {"validate", "lint"}
+    # A run that found issues repeats its message as `error`; a usage error
+    # has no findings, and prints its `error`.
+    counted = framed and ("report" in payload or "findings" in payload)
     expected: list[Expectation] = [
         value
         for key, value in payload.items()
@@ -306,6 +309,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
         and key not in _DATA_FIELDS
         and value not in _GENERIC_MESSAGES
         and not (framed and key == "message")
+        and not (counted and key == "error")
     ]
     if not framed:
         expected.extend(payload.get("warnings") or [])
@@ -321,7 +325,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     summary = payload.get("summary") or {}
     if framed and "findings" in summary:
         expected.append(f"{summary['findings']} finding" if summary["findings"] else "clean")
-    if framed and "errors" in summary:
+    if framed and "objects" in summary:
         expected.append(f"{summary['objects']} object")
     if "counts" in payload and "platforms" in payload:
         expected.extend(_info_expectations(payload))
@@ -331,7 +335,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
 #: Lint's JSON severity, and the word its code frame prints.
 _SEVERITY_WORD = {"error": "error", "warning": "warning", "info": "note"}
 
-_PANEL_CHROME = str.maketrans({char: " " for char in "│╭╮╰╯─"})
+_PANEL_CHROME = str.maketrans(dict.fromkeys("│╭╮╰╯─", " "))
 
 
 def _panel_text(text: str) -> str:

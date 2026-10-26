@@ -195,10 +195,10 @@ def _restore_logging() -> Iterator[None]:
         return [h for h in root.handlers if type(h).__module__ != "_pytest.logging"]
 
     root = logging.getLogger()
-    saved_state = (config._config, config._console, config._stdout_console)  # noqa: SLF001
+    saved_state = (config._config, config._console, config._stdout_console)
     saved_handlers, saved_level = installed(root), root.level
     yield
-    config._config, config._console, config._stdout_console = saved_state  # noqa: SLF001
+    config._config, config._console, config._stdout_console = saved_state
     for handler in installed(root):
         if handler not in saved_handlers:
             root.removeHandler(handler)
