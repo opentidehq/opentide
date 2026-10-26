@@ -12,6 +12,7 @@ import socket
 import ssl
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
@@ -32,6 +33,13 @@ _TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
 )
 
 
+#: Seconds a tenant has to accept a connection, and then to send each part of
+#: its answer, when a request names no timeout of its own. Without one, a
+#: tenant that accepts the connection and never answers held a deploy or a CI
+#: job forever. Generous, because a live query check runs the query first.
+DEFAULT_TIMEOUT = 120.0
+
+
 def tenant_tls_verify(ssl_setting: object, *, platform: str, tenant: str) -> bool:
     """A tenant's ``ssl`` as the ``verify`` flag for every call made to it.
 
@@ -49,6 +57,44 @@ def tenant_tls_verify(ssl_setting: object, *, platform: str, tenant: str) -> boo
     raise ValueError(
         f"{platform} tenant {tenant!r} setup: ssl must be true or false, got {ssl_setting!r}"
     )
+
+
+class TenantSession(requests.Session):
+    """A session whose every request verifies TLS as the tenant's ``ssl`` says.
+
+    ``requests`` lets ``REQUESTS_CA_BUNDLE`` or ``CURL_CA_BUNDLE`` replace a
+    session's ``verify`` for any request that does not pass its own
+    (psf/requests#3829), so with a corporate CA bundle exported, ``ssl =
+    false`` quietly verified again and a self-signed tenant failed. A request
+    that names no ``verify`` takes the session's here before the environment is
+    consulted; with ``verify`` true the exported bundle still applies, as it
+    should.
+
+    A request sent without a ``timeout`` gets :data:`DEFAULT_TIMEOUT`, where
+    ``requests`` itself would wait forever.
+    """
+
+    def __init__(self, verify: bool) -> None:
+        super().__init__()
+        self.verify = verify
+
+    def send(self, request: requests.PreparedRequest, **kwargs: Any) -> requests.Response:
+        # ``Session.request`` passes timeout=None for a call that names none.
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = DEFAULT_TIMEOUT
+        return super().send(request, **kwargs)
+
+    def merge_environment_settings(
+        self,
+        url: str,
+        proxies: dict[str, str] | None,
+        stream: bool | None,
+        verify: bool | str | None,
+        cert: str | tuple[str, str] | None,
+    ) -> dict[str, Any]:
+        if verify is None:
+            verify = self.verify
+        return super().merge_environment_settings(url, proxies, stream, verify, cert)
 
 
 class TenantUnreachableError(Errors.TenantConnectionError):

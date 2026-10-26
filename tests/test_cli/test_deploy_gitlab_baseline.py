@@ -73,7 +73,7 @@ def _init_repo(path: Path) -> str:
 
 
 def _gitlab_env(repo: Path, head: str, **overrides: str | None) -> dict[str, str | None]:
-    env: dict[str, str | None] = {key: None for key in _HIDDEN}
+    env: dict[str, str | None] = dict.fromkeys(_HIDDEN)
     env.update(
         {
             "CI": "true",

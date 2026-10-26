@@ -325,7 +325,7 @@ See [CLI → JSON output](../../cli/index.md) and [exit codes](../../cli/exit-co
 opentide generate docs --flavor github
 ```
 
-Flavor auto-detects from `GITHUB_ACTIONS`, GitLab `CI`, or Azure `TF_BUILD`; override with `--flavor`. See [`generate docs`](../../cli/generate.md).
+The flavor adapts to where the docs are read: `--flavor` if given, else the CI platform running the job (`GITHUB_ACTIONS` → `github`, `GITLAB_CI` → `gitlab`, `TF_BUILD` → `azure_devops`), else the host of the repository's `origin` remote (GitHub, GitLab or Azure DevOps, self-hosted included when the host name says so), else `[flavor] default` in `documentation.toml`, plain CommonMark (`generic`) out of the box. Another CI (Jenkins, CircleCI) no longer selects GitLab. See [`generate docs`](../../cli/generate.md).
 
 ## Migrating from submodule CI
 

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from opentide.cli.context import CliContext
 from opentide.core.logging import get_logger
@@ -39,6 +40,9 @@ _PREFLIGHT = {
 }
 
 _OBJECT_SUFFIXES = frozenset({".yaml", ".yml"})
+#: The ``share`` subcommands; ``targets`` lists destinations and calls no engine.
+ShareMode = Literal["push", "preview", "status", "retract", "targets"]
+
 _NO_ENABLED_TARGET = "No enabled sharing target"
 _NO_CHANGED_OBJECTS = "No changed objects to share"
 
@@ -46,7 +50,7 @@ _NO_CHANGED_OBJECTS = "No changed objects to share"
 def run_share(
     cli: CliContext,
     *,
-    mode: str,
+    mode: ShareMode,
     targets: list[str] | None = None,
     uuids: list[str] | None = None,
     types: list[str] | None = None,
@@ -116,7 +120,7 @@ def run_share(
     outcome = run_misp(
         documents,
         selected,
-        mode=effective,  # type: ignore[arg-type]
+        mode=effective,
         ledger=ShareLedger.load(ledger_path(cli.repo)),
         filters=filters,
         publish=publish,
@@ -371,7 +375,7 @@ def _filters(
     )
 
 
-def _validator(documents: list[TideDocument]):
+def _validator(documents: list[TideDocument]) -> Callable[[TideDocument], str | None] | None:
     uuids = frozenset(document.uuid for document in documents if document.uuid)
     if not uuids:
         return None

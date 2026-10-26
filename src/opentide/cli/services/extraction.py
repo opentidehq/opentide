@@ -62,7 +62,8 @@ def _run_engine_module(module_name: str, target: ExtractImport, **kwargs: object
         raise _dependency_error(target, exc) from exc
     except TypeError as exc:
         raise TypeError(
-            f"Extraction module runner in {module_name} failed with arguments {list(kwargs.keys())}: {exc}"
+            f"Extraction module runner in {module_name} failed with arguments "
+            f"{list(kwargs.keys())}: {exc}"
         ) from exc
 
 

@@ -62,3 +62,51 @@ def test_run_mcp_setup_multiple_hosts(tmp_path: Path) -> None:
 def test_run_mcp_setup_generic_advice(tmp_path: Path) -> None:
     result = run_mcp_setup(McpSetupOptions(path=tmp_path, hosts=[McpHost.generic], yes=True))
     assert "Copy opentide.mcp.json into your editor MCP settings" in str(result["advice"])
+
+
+@pytest.mark.parametrize(
+    ("host", "key"),
+    [
+        (McpHost.vscode, "servers"),
+        (McpHost.cursor, "mcpServers"),
+        (McpHost.claude_code, "mcpServers"),
+    ],
+)
+def test_write_mcp_config_keeps_the_users_other_servers(
+    tmp_path: Path, host: McpHost, key: str
+) -> None:
+    """The template was written over the file, dropping every other MCP server."""
+    dest = tmp_path / write_mcp_config(tmp_path, host)
+    dest.write_text(
+        "{\n  // JSONC, as VS Code writes it\n"
+        f'  "inputs": [{{"id": "token"}}],\n'
+        f'  "{key}": {{"other": {{"command": "other-mcp"}},}}\n}}\n',
+        encoding="utf-8",
+    )
+
+    write_mcp_config(tmp_path, host)
+
+    payload = json.loads(dest.read_text(encoding="utf-8"))
+    assert payload["inputs"] == [{"id": "token"}]
+    assert payload[key]["other"] == {"command": "other-mcp"}
+    assert payload[key]["opentide"]["args"] == ["mcp", "start"]
+
+
+@pytest.mark.parametrize(
+    "existing",
+    ["{not json", "[]", '{"mcpServers": ["opentide"]}'],
+    ids=["invalid", "not-an-object", "servers-not-an-object"],
+)
+def test_run_mcp_setup_leaves_a_config_it_cannot_merge(tmp_path: Path, existing: str) -> None:
+    (tmp_path / ".mcp.json").write_text(existing, encoding="utf-8")
+
+    result = run_mcp_setup(
+        McpSetupOptions(path=tmp_path, hosts=[McpHost.claude_code, McpHost.cursor], yes=True)
+    )
+
+    assert (tmp_path / ".mcp.json").read_text(encoding="utf-8") == existing
+    assert result["files"] == [".cursor/mcp.json"]
+    assert result["skipped"] == [".mcp.json"]
+    warnings = result["warnings"]
+    assert isinstance(warnings, list)
+    assert any(str(warning).startswith(".mcp.json ") for warning in warnings)

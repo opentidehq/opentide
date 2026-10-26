@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -6,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core import registry
-from opentide.deployment.git_backend import DulwichRepo, open_repo
+from opentide.core.logging import get_logger
+from opentide.deployment.ci import CIEnvironment
+from opentide.deployment.git_backend import CommitInfo, DulwichRepo, open_repo
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
@@ -19,9 +22,6 @@ def __getattr__(name: str) -> Any:
         return registry.Opentide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-
-from opentide.core.logging import get_logger
-from opentide.deployment.ci import CIEnvironment
 
 logger = get_logger(__name__)
 
@@ -46,8 +46,8 @@ def missing_checkout_message(searched: Path) -> str:
 class DiffSource(Enum):
     """Which commits a run's changed rule files come from. Set by the CI context."""
 
-    CHANGE_REQUEST = "the pull or merge request, from its merge base"
-    PUSH = "the pushed commit, against its first parent"
+    CHANGE_REQUEST = "the pull or merge request, against its target branch"
+    PUSH = "the pushed commits, against the branch's previous tip"
     LAST_COMMIT = "the last commit, against its first parent"
 
 
@@ -76,7 +76,7 @@ def _git_worktree(start: Path) -> Path | None:
 
 
 class GitRepository:
-    def __init__(self):
+    def __init__(self) -> None:
         self.repository = self._initialize_repository()
         self.last_commit_details = self._latest_commit_information()
 
@@ -99,7 +99,7 @@ class GitRepository:
                 logger.info("identified_azure_pipeline_as_the_ci_runtime_platform")
                 raw = os.getenv("BUILD_SOURCESDIRECTORY")
             case CIEnvironment.CIPlatforms.LocalDebug:
-                return None  # type: ignore
+                return None
             case _:
                 raw = None
         searched = Path(raw).expanduser() if raw else Path.cwd()
@@ -112,8 +112,8 @@ class GitRepository:
         return open_repo(searched)
 
     def _latest_commit_information(self) -> LatestCommit:
-
-        if CIEnvironment().environment is CIEnvironment.CIPlatforms.LocalDebug:
+        # Only a local run has no repository (see ``_initialize_repository``).
+        if self.repository is None:
             return self.LatestCommit(
                 message="Sample Commit Message",
                 author="Sample Commit Author",
@@ -246,13 +246,30 @@ def _production_base(repo: DulwichRepo) -> str | None:
     return parent
 
 
-def _merge_ref_base(repo: DulwichRepo, merge_sha: str | None) -> list | None:
-    """The merge base of a pull request merge commit's two parents.
+def _has_commit(repo: DulwichRepo, sha: str) -> bool:
+    """Whether the commit object *sha* is in the checkout (a shallow clone may lack it)."""
+    try:
+        repo.commit(sha)
+    except Exception:
+        return False
+    return True
 
-    ``refs/pull/<n>/merge`` has the base branch tip as first parent and the
-    pull request head as second, so it yields the request's base without the
-    head branch existing on origin, as for a pull request from a fork.
-    ``None`` when *merge_sha* is not a two-parent commit in the checkout.
+
+def _merge_first_parent(
+    repo: DulwichRepo, merge_sha: str | None, *, head: str | None = None
+) -> str | None:
+    """The first parent of the merge commit a pull or merge request run builds.
+
+    GitHub (``refs/pull/<n>/merge``), Azure Pipelines and GitLab merged
+    results pipelines build a commit that merges the request into the target
+    branch's tip, which is its first parent. Diffing from that parent yields
+    the request's own changes. Diffing from the merge base to the merge commit
+    also listed every rule the target branch changed since the request
+    branched off, and the run deployed, validated and attributed those to the
+    request.
+
+    ``None`` when *merge_sha* is not a two-parent commit whose first parent is
+    in the checkout, or when *head* is given and is not its second parent.
     """
     if not merge_sha:
         return None
@@ -262,7 +279,68 @@ def _merge_ref_base(repo: DulwichRepo, merge_sha: str | None) -> list | None:
         return None
     if len(parents) != 2:
         return None
-    return repo.merge_base(parents[0].hexsha, parents[1].hexsha)
+    first, second = parents
+    if head and second.hexsha != head:
+        return None
+    if not _has_commit(repo, first.hexsha):
+        return None
+    return first.hexsha
+
+
+def _github_push_before(repo: DulwichRepo) -> str | None:
+    """The branch tip before this push, from the push event's ``before``.
+
+    One push can land several commits (a rebase merge, a direct push of a
+    series), and ``HEAD^1`` covers only the last one. ``None`` when the event
+    has no usable ``before``: not a push, the branch's first push (all
+    zeros), or a commit the checkout does not have.
+    """
+    event_path = os.getenv("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    before = event.get("before") if isinstance(event, dict) else None
+    if not isinstance(before, str) or not before.strip("0"):
+        return None
+    if not _has_commit(repo, before):
+        logger.info("push_before_not_in_checkout", before=before)
+        return None
+    return before
+
+
+def _github_event_request_shas(repo: DulwichRepo) -> tuple[str, str] | None:
+    """The pull request's base and head commits, from the event payload.
+
+    ``pull_request_target`` runs on the base branch, and a fork's head branch
+    is not on ``origin``, so neither ``GITHUB_SHA`` nor the branch names lead
+    to the request's commits. ``None`` when the payload lacks them or the
+    checkout does not hold both.
+    """
+    event_path = os.getenv("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    request = event.get("pull_request") if isinstance(event, dict) else None
+    if not isinstance(request, dict):
+        return None
+    base, head = ((request.get(side) or {}).get("sha") for side in ("base", "head"))
+    if not isinstance(base, str) or not isinstance(head, str):
+        return None
+    if not (_has_commit(repo, base) and _has_commit(repo, head)):
+        logger.info("pull_request_shas_not_in_checkout", base=base, head=head)
+        return None
+    return base, head
+
+
+def _origin_sha(repo: DulwichRepo, ref: str) -> str:
+    """The commit *ref* (``origin/<branch>``) names."""
+    return repo._resolve_sha(ref).decode("ascii")
 
 
 def _not_a_ci_diff_source(source: DiffSource) -> Exception:
@@ -276,13 +354,17 @@ def _require_origin_ref(repo: DulwichRepo, ref: str) -> None:
         raise Exception(f"Could not find git ref {ref}") from None
 
 
-def diff_calculation(source: DiffSource) -> list:
+def diff_calculation(source: DiffSource) -> list[str]:
     """Repo-relative paths added, renamed or modified by the run's commits.
 
-    *source* is :class:`DiffSource`: a pull or merge request diffs from its
-    merge base to its tip, a push from HEAD's first parent (GitLab: the
-    previous tip), and a local run from the last commit's first parent.
-    Deleted files are left out: there is nothing left to deploy.
+    *source* is :class:`DiffSource`. A pull or merge request run that builds
+    the request merged into its target branch diffs that merge commit from
+    its first parent, the target's tip; one that builds the request's head
+    diffs it from the merge base. A push diffs from the branch's previous tip
+    (GitHub: the event's ``before``; GitLab: ``CI_COMMIT_BEFORE_SHA``), else
+    from HEAD's first parent, as on Azure. A local run diffs the last commit
+    from its first parent. Deleted files are left out: there is nothing left
+    to deploy.
     """
     TARGET_CI = CIEnvironment().environment
 
@@ -296,6 +378,9 @@ def diff_calculation(source: DiffSource) -> list:
         return _changed_paths(repo, repo.commit(base), repo.head)
 
     repo = TideRepo().repository
+    if repo is None:
+        # Only a local run has no repository, and it returned above.
+        raise MissingGitCheckout(discover_workspace())
 
     match TARGET_CI:
         case CIEnvironment.CIPlatforms.GitHubActions:
@@ -303,10 +388,16 @@ def diff_calculation(source: DiffSource) -> list:
             LATEST_COMMIT = os.getenv("GITHUB_SHA")
 
             if source is DiffSource.PUSH:
-                base = _production_base(repo)
-                if base is None:
-                    return []
-                BASE_COMMIT = base
+                before = _github_push_before(repo)
+                if before is not None:
+                    logger.info("push_diff_base", base=before, source="push event before")
+                    BASE_COMMIT = before
+                else:
+                    base = _production_base(repo)
+                    if base is None:
+                        return []
+                    logger.info("push_diff_base", base=base, source="first parent of HEAD")
+                    BASE_COMMIT = base
 
             elif source is DiffSource.CHANGE_REQUEST:
                 source_branch = os.getenv("GITHUB_HEAD_REF")
@@ -323,37 +414,51 @@ def diff_calculation(source: DiffSource) -> list:
                     )
                     raise Exception(message)
 
-                repo.remotes.origin.fetch()
-
-                source_branch = source_branch.replace("refs/heads/", "")
-                source_branch = "origin/" + source_branch
-                target_branch = "origin/" + target_branch
-                logger.info(
-                    "identified_source_and_target_branch_in_the_pull_request",
-                    detail=f"source: {source_branch} -> target: {target_branch}",
-                )
-                _require_origin_ref(repo, target_branch)
-                try:
-                    _require_origin_ref(repo, source_branch)
-                except Exception:
-                    # A fork's branch is not on origin. The pull request's merge
-                    # ref, which actions/checkout checks out, has both sides.
-                    base_commit = _merge_ref_base(repo, os.getenv("GITHUB_SHA"))
-                    if base_commit is None:
-                        raise
+                # ``pull_request_target`` runs on the base branch: GITHUB_SHA is
+                # that branch's tip, which may be any merge, not this request's.
+                # The event payload names its commits, which a fork's branch
+                # on ``origin`` cannot.
+                merge_parent = None
+                request_shas = None
+                if os.getenv("GITHUB_EVENT_NAME") != "pull_request_target":
+                    merge_parent = _merge_first_parent(repo, LATEST_COMMIT)
                 else:
+                    request_shas = _github_event_request_shas(repo)
+                request_base = repo.merge_base(*request_shas) if request_shas else []
+
+                if merge_parent is not None:
+                    BASE_COMMIT = merge_parent
+                elif request_shas and request_base:
+                    BASE_COMMIT = request_base[0].hexsha
+                    LATEST_COMMIT = request_shas[1]
+                    logger.info("pull_request_diff_from_event", base=BASE_COMMIT)
+                else:
+                    repo.remotes.origin.fetch()
+
+                    source_branch = source_branch.replace("refs/heads/", "")
+                    source_branch = "origin/" + source_branch
+                    target_branch = "origin/" + target_branch
+                    logger.info(
+                        "identified_source_and_target_branch_in_the_pull_request",
+                        detail=f"source: {source_branch} -> target: {target_branch}",
+                    )
+                    _require_origin_ref(repo, target_branch)
+                    _require_origin_ref(repo, source_branch)
                     base_commit = repo.merge_base(target_branch, source_branch)
 
-                if base_commit:
-                    BASE_COMMIT = base_commit[0].hexsha
-                else:
-                    message = (
-                        "You may not have a sufficient Checkout Depth configuration"
-                        " | "
-                        "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR"
-                    )
-                    logger.critical("could_not_identify_the_base_of_the_pull_request", detail=message)
-                    raise Exception(message)
+                    if base_commit:
+                        BASE_COMMIT = base_commit[0].hexsha
+                        LATEST_COMMIT = _origin_sha(repo, source_branch)
+                    else:
+                        message = (
+                            "You may not have a sufficient Checkout Depth configuration | "
+                            "If you run very old Pull Requests, this setting may need to be "
+                            "increased, or reopen a PR"
+                        )
+                        logger.critical(
+                            "could_not_identify_the_base_of_the_pull_request", detail=message
+                        )
+                        raise Exception(message)
             else:
                 raise _not_a_ci_diff_source(source)
 
@@ -373,21 +478,17 @@ def diff_calculation(source: DiffSource) -> list:
                     BASE_COMMIT = base
             elif source is DiffSource.CHANGE_REQUEST:
                 BASE_COMMIT = os.getenv("CI_MERGE_REQUEST_DIFF_BASE_SHA")
-                # Allows the proper base commit calculation for Merged Result pipelines
-                if os.getenv("CI_MERGE_REQUEST_EVENT_TYPE") == "merged_result":
+                # Merged results and merge train pipelines build a commit that
+                # merges the request into the target branch; diff it from the
+                # target side, as for GitHub and Azure.
+                if os.getenv("CI_MERGE_REQUEST_EVENT_TYPE") in ("merged_result", "merge_train"):
                     logger.info("currently_running_a_diff_calculation_for_merge_results")
-                    for commit in repo.iter_commits():
-                        if commit.hexsha == os.getenv("CI_COMMIT_BEFORE_SHA"):
-                            if len(commit.parents) > 1:
-                                mr_correct_parent = commit.parents[1]
-                                logger.info(
-                                    "current_evaluating_commit_and_found_parent",
-                                    detail=str(f"{commit.hexsha} | {commit.message}")
-                                    + " | "
-                                    + str(str(mr_correct_parent)),
-                                )
-                                LATEST_COMMIT = mr_correct_parent.hexsha
-                            break
+                    source_head = os.getenv("CI_MERGE_REQUEST_SOURCE_BRANCH_SHA") or None
+                    merge_parent = _merge_first_parent(repo, LATEST_COMMIT, head=source_head)
+                    if merge_parent is not None:
+                        BASE_COMMIT = merge_parent
+                    elif source_head:
+                        LATEST_COMMIT = source_head
             else:
                 logger.critical("illegal_diff_source")
                 raise _not_a_ci_diff_source(source)
@@ -418,28 +519,40 @@ def diff_calculation(source: DiffSource) -> list:
                     )
                     raise Exception(message)
 
-                repo.remotes.origin.fetch()
-                source_branch = source_branch.replace("refs/heads/", "")
-                source_branch = "origin/" + source_branch
-                target_branch = "origin/" + target_branch
-                logger.info(
-                    "identified_source_and_target_branch_in_the_pull_request",
-                    detail=f"source: {source_branch} -> target: {target_branch}",
+                merge_parent = _merge_first_parent(
+                    repo,
+                    LATEST_COMMIT,
+                    head=os.getenv("SYSTEM_PULLREQUEST_SOURCECOMMITID") or None,
                 )
-                _require_origin_ref(repo, target_branch)
-                _require_origin_ref(repo, source_branch)
-                base_commit = repo.merge_base(target_branch, source_branch)
-
-                if base_commit:
-                    BASE_COMMIT = base_commit[0].hexsha
+                if merge_parent is not None:
+                    BASE_COMMIT = merge_parent
                 else:
-                    message = (
-                        "You may not have a sufficient Opentide.Repo.Checkout.Depth configuration"
-                        " | "
-                        "If you run very old Pull Requests, this setting may need to be increased, or reopen a PR"
+                    repo.remotes.origin.fetch()
+                    source_branch = source_branch.replace("refs/heads/", "")
+                    source_branch = "origin/" + source_branch
+                    target_branch = "origin/" + target_branch
+                    logger.info(
+                        "identified_source_and_target_branch_in_the_pull_request",
+                        detail=f"source: {source_branch} -> target: {target_branch}",
                     )
-                    logger.critical("could_not_identify_the_base_of_the_pull_request", detail=message)
-                    raise Exception(message)
+                    _require_origin_ref(repo, target_branch)
+                    _require_origin_ref(repo, source_branch)
+                    base_commit = repo.merge_base(target_branch, source_branch)
+
+                    if base_commit:
+                        BASE_COMMIT = base_commit[0].hexsha
+                        LATEST_COMMIT = _origin_sha(repo, source_branch)
+                    else:
+                        message = (
+                            "You may not have a sufficient Opentide.Repo.Checkout.Depth"
+                            " configuration | "
+                            "If you run very old Pull Requests, this setting may need to be "
+                            "increased, or reopen a PR"
+                        )
+                        logger.critical(
+                            "could_not_identify_the_base_of_the_pull_request", detail=message
+                        )
+                        raise Exception(message)
 
             else:
                 logger.critical("illegal_diff_source")
@@ -454,9 +567,10 @@ def diff_calculation(source: DiffSource) -> list:
         detail=f"{BASE_COMMIT} | {LATEST_COMMIT}",
     )
 
-    source_commit = None
+    source_commit: CommitInfo | None = None
     try:
-        source_commit = repo.commit(BASE_COMMIT)
+        if BASE_COMMIT:
+            source_commit = repo.commit(BASE_COMMIT)
     except Exception:
         logger.info("could_not_find_source_commit_in_current_branch_trying_iter_commits_method")
         try:
@@ -497,7 +611,7 @@ TRIGGER_SHA_VARIABLES = {
 }
 
 
-def _resolve_commit(repo: DulwichRepo, rev: str) -> Any:
+def _resolve_commit(repo: DulwichRepo, rev: str) -> CommitInfo:
     """A full commit SHA, or a branch, ``origin/<branch>`` or ``refs/...`` name.
 
     An annotated tag's ref names a tag object, so it is peeled to its commit.
@@ -518,7 +632,7 @@ def _resolve_commit(repo: DulwichRepo, rev: str) -> Any:
     return repo.commit(target.id.decode("ascii"))
 
 
-def _push_baseline(repo: DulwichRepo, environment: Any) -> Any | None:
+def _push_baseline(repo: DulwichRepo, environment: object) -> CommitInfo | None:
     """Where the triggering push's diff starts, as the production deploy computes it.
 
     The deploy reads it from ``HEAD``, which is the triggering commit there. A
@@ -544,7 +658,7 @@ def _push_baseline(repo: DulwichRepo, environment: Any) -> Any | None:
     return repo.commit(commit.parents[0].hexsha)
 
 
-def changed_through_head(since: str | None = None) -> list:
+def changed_through_head(since: str | None = None) -> list[str]:
     """Paths the push changed, up to the checkout's ``HEAD`` rather than the pushed commit.
 
     For a job that runs after the production deploy and checks out the
@@ -565,31 +679,34 @@ def changed_through_head(since: str | None = None) -> list:
         repo = _local_repository()
     else:
         repo = TideRepo().repository
+        if repo is None:
+            # Only a local run has no repository, and it took the branch above.
+            raise MissingGitCheckout(discover_workspace())
     head = repo.head
-    if since is not None:
-        base = _resolve_commit(repo, since)
-    else:
-        base = _push_baseline(repo, environment)
+    base = _resolve_commit(repo, since) if since is not None else _push_baseline(repo, environment)
     if base is None:
         return []
     logger.info("changed_through_head_range", detail=f"{base.hexsha} | {head.hexsha}")
     return _changed_paths(repo, base, head)
 
 
-def _changed_paths(repo: DulwichRepo, source_commit: Any, latest_commit: Any) -> list:
+def _changed_paths(
+    repo: DulwichRepo, source_commit: CommitInfo, latest_commit: CommitInfo
+) -> list[str]:
     diff = source_commit.diff(latest_commit)
 
     logger.info(
         "preliminary_diff_calculation_completed_returned_with",
-        detail=", ".join([f.b_path for f in diff]),
+        detail=", ".join([f.b_path for f in diff if f.b_path]),
     )
 
     # Computing diff for added/renamed paths and modified files.
     # Deleted files are explicitely excluded to avoid attempting to deploy
-    # something that is not material anymore.
-    added_files = [f.b_path for f in diff.iter_change_type("A")]
-    renamed_files = [f.b_path for f in diff.iter_change_type("R")]
-    modified_files = [f.b_path for f in diff.iter_change_type("M")]
+    # something that is not material anymore. An added, renamed or modified
+    # entry always has a path.
+    added_files = [f.b_path for f in diff.iter_change_type("A") if f.b_path]
+    renamed_files = [f.b_path for f in diff.iter_change_type("R") if f.b_path]
+    modified_files = [f.b_path for f in diff.iter_change_type("M") if f.b_path]
 
     scope = added_files + renamed_files + modified_files
     scope = list(set(scope))  # De-duplicate - may happen if file modified and renamed, for example

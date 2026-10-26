@@ -105,3 +105,31 @@ def test_runtime_resolver_labels_object_levels_by_field() -> None:
     assert "**Priority**: Critical" in objective
     assert "**Severity**: Medium" in signal
     assert "Criticality" not in objective + signal
+
+
+def test_scoped_vocabulary_skips_an_entry_without_stages() -> None:
+    """An entry with no stages used to crash schema generation.
+
+    Its stages come back as an empty tuple, which was wrapped as ``[()]`` and
+    then joined to the key with ``() + "::"``.
+    """
+    surface = VocabularyDefinition(
+        metadata=VocabularyMetadata(
+            name="Surface", field="surface", key="name", stages=[{"id": "OS", "name": "OS"}]
+        ),
+        entries={
+            "Windows": VocabularyEntry.model_validate(
+                {"name": "Windows", "tide.vocab.stages": ["OS"]}
+            ),
+            "Unstaged": VocabularyEntry(name="Unstaged"),
+        },
+    )
+    with (
+        patch.object(sp, "_runtime_ready", True),
+        patch.object(sp, "VOCAB_INDEX", {"surface": surface}),
+        patch.object(sp, "OBJECT_TYPES", []),
+    ):
+        scoped, _ = sp.VocabularyResolver.Vocabulary("surface", scoped=True).resolve()
+        unscoped, _ = sp.VocabularyResolver.Vocabulary("surface").resolve()
+    assert scoped == ["OS::Windows"]
+    assert unscoped == ["Windows", "Unstaged"]

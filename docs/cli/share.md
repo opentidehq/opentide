@@ -24,7 +24,7 @@ opentide share targets
 | `push` | Create or update one MISP Event per selected object |
 | `preview` | Same decision as push, with no request and no ledger write. An unset API key does not block it. `push --dry-run` is the same command |
 | `status` | Compare the local ledger with the current object. No remote call |
-| `retract` | Unpublish the matched event. `--delete --yes` removes the event and the ledger line |
+| `retract` | Unpublish the matched event. `--delete --yes` removes the event and the ledger line. Objects deleted from the repository are found through the ledger: `--type` matches the schema the ledger recorded, and `--file` never matches them |
 | `targets` | List integration, name, enabled, `max_tlp`, and URL. The API key is never printed |
 
 ## Options
@@ -55,6 +55,8 @@ opentide share push --changed --since <commit-sha>   # from that commit to HEAD
 A rule passes a block's `rule_statuses` (default `["PRODUCTION"]`) when an enabled platform block (`configurations.<platform>` with `enabled: true`) has a status in that list. The root `status` counts only when no enabled platform block has one. A rule that does not pass is `skipped_status`.
 
 Block statuses are the ones deploy uses and promotion rewrites, so once promotion's write-back has landed, a rule whose enabled block reads `PRODUCTION` is shared even though its root `status` still reads `STAGING`. Every enabled block counts, including blocks for platforms the repository has not enabled, which deploy skips. The generated CI share job runs after the production deploy and reads the default branch's tip, which holds promotion's write-back, so a rule that deploy promoted is shared in the same run.
+
+`push --publish` (or a block with `publish = true`) publishes an event whose content is unchanged but which is still unpublished, and reports it as `updated`; `preview` predicts the same from the ledger.
 
 `push` and `preview` validate each object that passes the type, status, and TLP filters. `sharing-config` runs as part of loading `sharing.toml`. A literal API key is a warning and is replaced with `[REDACTED]` if it would otherwise appear.
 

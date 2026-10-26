@@ -85,7 +85,17 @@ def test_loader_routes_schema_identifier() -> None:
 
 def test_pins_match_rule_10() -> None:
     assert get_pins("rule::1.1") == get_pins("rule::1.0")
-    assert get_pins("rule::1.1")["severity"] == "severity::1.0"
+    assert get_pins("rule::1.1")["severity"] == "alert_severity::1.0"
+
+
+@pytest.mark.parametrize("schema_id", ["rule::1.0", "rule::1.1"])
+def test_rule_severity_uses_alert_labels_and_threats_the_incident_scale(schema_id: str) -> None:
+    """Rule severity was pinned to the threat incident scale, so its own default was invalid."""
+    assert get_pins(schema_id)["severity"] == "alert_severity::1.0"
+    assert get_pins("threat::1.0")["threat.severity"] == "severity::1.0"
+    enum = generate_schema_for_identifier(schema_id)["properties"]["severity"].get("enum", [])
+    assert DetectionRule.model_fields["severity"].default in enum
+    assert "Substantial incident" not in enum
 
 
 def test_generated_schema_keeps_reviewed_on_11_only() -> None:
