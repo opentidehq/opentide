@@ -25,7 +25,7 @@ from opentide.platforms.elastic.es_checks import (
 )
 from opentide.platforms.elastic.query_text import (
     eql_is_sequence,
-    eql_maxspans,
+    eql_maxspan,
     esql_aggregates,
     esql_has_metadata_id,
 )
@@ -141,11 +141,11 @@ def _emit_rule_advisories(
                 )
                 _flag_warning()
 
-    # 4. EQL sequence maxspan vs. scheduling window; the longest maxspan decides
+    # 4. EQL sequence maxspan vs. scheduling window
     if cfg.type == "eql" and cfg.query and eql_is_sequence(cfg.query):
-        maxspans = eql_maxspans(cfg.query)
-        if maxspans:
-            maxspan_str, maxspan_ms = max(maxspans, key=lambda span: span[1])
+        maxspan = eql_maxspan(cfg.query)
+        if maxspan:
+            maxspan_str, maxspan_ms = maxspan
             window_ms = (interval_secs + lookback_secs) * 1000
             if maxspan_ms > window_ms:
                 logger.warning(

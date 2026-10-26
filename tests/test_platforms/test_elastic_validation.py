@@ -598,7 +598,7 @@ def test_validator_eql_maxspan_vs_schedule_window(
         assert os.environ.get("VALIDATION_WARNING_RAISED") is None
 
 
-def _run_validator(rule) -> None:
+def _run_validator(rule: object) -> None:
     batch = MagicMock(tenant=_tenant(), rules=[rule])
     with (
         patch("opentide.platforms.elastic.validator.TideDeployment") as mock_deployment,
@@ -610,12 +610,14 @@ def _run_validator(rule) -> None:
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
-def test_validator_eql_checks_every_maxspan(_mock_checks, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validator_eql_reads_the_header_maxspan(
+    _mock_checks, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _clear_validation_flags(monkeypatch)
     query = (
-        "sequence by host.id with maxspan=30s\n"
-        '  [process where process.name : "a.exe"] // maxspan=1d in a comment\n'
-        "  [network where true] with maxspan=15m"
+        "sequence by host.id with maxspan=15m\n"
+        '  [process where process.name : "a.exe"] // maxspan=1s in a comment\n'
+        "  [network where true]"
     )
     _run_validator(
         _elastic_rule(

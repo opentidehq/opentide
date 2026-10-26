@@ -6,7 +6,7 @@ import pytest
 
 from opentide.platforms.elastic.query_text import (
     eql_is_sequence,
-    eql_maxspans,
+    eql_maxspan,
     esql_aggregates,
     esql_has_metadata_id,
     esql_sources,
@@ -15,34 +15,31 @@ from opentide.platforms.elastic.query_text import (
 
 
 @pytest.mark.parametrize(
-    ("text", "nested", "expected"),
+    ("text", "expected"),
     [
-        ("a // b\nc", True, "a     \nc"),
-        ("a /* b */ c", True, "a         c"),
-        ("/* a /* b */ c */ d", True, "                  d"),
-        ("/* a /* b */ c */ d", False, "             c */ d"),
-        ("/* a\nb */ c", True, "    \n     c"),
-        ('x "a|b" y', True, 'x "   " y'),
-        ('x "a\\"|b" y', True, 'x "     " y'),
-        ('x """a\\"|b""" y', True, 'x """     """ y'),
-        ('x "// not a comment" y', True, 'x "                " y'),
-        ('x """a"""" y', True, 'x """ """" y'),
-        ("x `a|``b` y", True, "x `     ` y"),
-        ("x /* unterminated", True, "x                "),
-        ('x "unterminated', True, 'x "            '),
+        ("a // b\nc", "a     \nc"),
+        ("a /* b */ c", "a         c"),
+        ("/* a /* b */ c */ d", "                  d"),
+        ("/* a\nb */ c", "    \n     c"),
+        ('x "a|b" y', 'x "   " y'),
+        ('x "a\\"|b" y', 'x "     " y'),
+        ('x """a\\"|b""" y', 'x """     """ y'),
+        ('x "// not a comment" y', 'x "                " y'),
+        ('x """a"""" y', 'x """ """" y'),
+        ("x `a|``b` y", "x `     ` y"),
+        ("x /* unterminated", "x                "),
+        ('x "unterminated', 'x "            '),
     ],
 )
-def test_mask_query_blanks_comments_and_literals(text: str, nested: bool, expected: str) -> None:
-    masked = mask_query(text, nested_comments=nested)
+def test_mask_query_blanks_comments_and_literals(text: str, expected: str) -> None:
+    masked = mask_query(text)
     assert masked == expected
     assert len(masked) == len(text)
 
 
 def test_mask_query_can_keep_string_contents() -> None:
     text = 'FROM "logs-*" // x\n| LIMIT 1'
-    assert mask_query(text, nested_comments=True, keep_strings=True) == (
-        'FROM "logs-*"     \n| LIMIT 1'
-    )
+    assert mask_query(text, keep_strings=True) == ('FROM "logs-*"     \n| LIMIT 1')
 
 
 @pytest.mark.parametrize(
@@ -52,6 +49,15 @@ def test_mask_query_can_keep_string_contents() -> None:
         ("FROM logs-* /* | METADATA */ METADATA _id", "logs-*"),
         ("  from\n  logs-a ,logs-b", "logs-a,logs-b"),
         ('FROM "logs|*"', "logs|*"),
+        # `metadata` inside an index pattern is not the METADATA keyword.
+        ("FROM logs-metadata-* | WHERE x", "logs-metadata-*"),
+        ("FROM .kibana-metadata, logs-* METADATA _id", ".kibana-metadata,logs-*"),
+        # Leading SET statements come before the source command.
+        ('SET time_zone = "UTC"; FROM logs-* | LIMIT 1', "logs-*"),
+        ('SET a = 1;\nSET b = "x;y";\nFROM logs-*', "logs-*"),
+        # A FROM subquery is not an index source, and its pipe is not the end.
+        ("FROM logs-*, (FROM other | WHERE x) | LIMIT 1", "logs-*"),
+        ("FROM (FROM a | WHERE x), logs-* METADATA _id | LIMIT 1", "logs-*"),
     ],
 )
 def test_esql_sources(query: str, expected: str) -> None:
@@ -109,19 +115,16 @@ def test_eql_is_sequence(query: str, expected: bool) -> None:
 @pytest.mark.parametrize(
     ("query", "expected"),
     [
-        ("sequence with maxspan=500ms [a where true] [b where true]", [("500ms", 500)]),
-        ("sequence with maxspan=30s [a where true]", [("30s", 30_000)]),
-        ("sequence with maxspan = 2h [a where true]", [("2h", 7_200_000)]),
-        ("sequence with maxspan=1d [a where true]", [("1d", 86_400_000)]),
-        ("sequence with maxspan=5m [a where true]", [("5m", 300_000)]),
-        (
-            "sequence with maxspan=1m [a where true] with maxspan=500ms",
-            [("1m", 60_000), ("500ms", 500)],
-        ),
-        ('sequence with maxspan=1m [a where x : "maxspan=1d"] // maxspan=2d', [("1m", 60_000)]),
-        ("sequence with maxspan=5min [a where true]", []),
-        ("/* x /* y */ maxspan=1d */ sequence with maxspan=1m [a where true]", [("1m", 60_000)]),
+        ("sequence with maxspan=500ms [a where true] [b where true]", ("500ms", 500)),
+        ("sequence with maxspan=30s [a where true]", ("30s", 30_000)),
+        ("sequence with maxspan = 2h [a where true]", ("2h", 7_200_000)),
+        ("sequence with maxspan=1d [a where true]", ("1d", 86_400_000)),
+        ("sequence with maxspan=5m [a where true]", ("5m", 300_000)),
+        ('sequence with maxspan=1m [a where x : "maxspan=1d"] // maxspan=2d', ("1m", 60_000)),
+        ("sequence with maxspan=5min [a where true]", None),
+        ("sequence [a where true] [b where true]", None),
+        ("/* x /* y */ maxspan=1d */ sequence with maxspan=1m [a where true]", ("1m", 60_000)),
     ],
 )
-def test_eql_maxspans(query: str, expected: list[tuple[str, int]]) -> None:
-    assert eql_maxspans(query) == expected
+def test_eql_maxspan(query: str, expected: tuple[str, int] | None) -> None:
+    assert eql_maxspan(query) == expected
