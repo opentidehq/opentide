@@ -21,7 +21,7 @@ Read-only JSON resources registered on the opentide MCP server.
 | `opentide://schemas/{object_type}` | JSON Schema for `rule`, `threat`, or `objective` |
 | `opentide://templates/{object_type}` | Template metadata for object type |
 | `opentide://vocabularies` | Vocabulary index: `{name: {metadata, entry_count, uri}}` — entries are **not** inlined |
-| `opentide://vocabularies/{name}` | Named vocabulary: `{metadata, entries}` |
+| `opentide://vocabularies/{+name}` | Named vocabulary: `{metadata, entries}`. `{+name}` keeps the `&` in `att&ck` literal |
 | `opentide://platforms` | Platform capability list |
 
 ## When to read which
