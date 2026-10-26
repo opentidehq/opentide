@@ -10,6 +10,7 @@ import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -391,10 +392,10 @@ def test_a_folder_it_cannot_write_is_a_failure_not_a_crash(
     # (post-merge end-to-end run). Patched, because root writes anyway.
     real_open = Path.open
 
-    def refuse(self: Path, mode: str = "r", *args: object, **kwargs: object) -> object:
+    def refuse(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
         if mode == "x":
             raise PermissionError(errno.EACCES, "Permission denied", str(self))
-        return real_open(self, mode, *args, **kwargs)  # ty: ignore[invalid-argument-type]
+        return real_open(self, mode, *args, **kwargs)
 
     monkeypatch.setattr(Path, "open", refuse)
     result = _new(workspace, "threat", "--name", "Read Only")
