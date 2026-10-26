@@ -321,15 +321,13 @@ def run_generate_docs(
                         "counts": counts,
                     }
                     # Each scoped run names the same nested files (#584): keep one copy.
-                    warnings = list(
-                        dict.fromkeys(
-                            str(warning)
-                            for scoped in results
-                            for warning in scoped.get("warnings") or []
-                        )
-                    )
+                    warnings: dict[str, None] = {}
+                    for scoped in results:
+                        listed = scoped.get("warnings")
+                        if isinstance(listed, list):
+                            warnings.update(dict.fromkeys(str(item) for item in listed))
                     if warnings:
-                        result["warnings"] = warnings
+                        result["warnings"] = list(warnings)
             if result.get("status") == "failed":
                 step.status = "failed"
     except GenerationPhaseError as exc:
