@@ -500,7 +500,8 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
         ),
         pytest.param(
             (),
-            {},
+            # The run's strategies, so the outcome can name the statuses they deploy.
+            {"strategies": ["PREVIEW", "RELEASE"]},
             "No rule this run read has a status that maps to its strategies",
             id="every-platform",
         ),

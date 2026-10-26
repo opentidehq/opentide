@@ -213,6 +213,8 @@ def run_deploy(
     from opentide.registry.builder import parse_errors_reported_by_caller
 
     plan_warnings: list[str] = []
+    # Blocks whose status no run strategy deploys: counted, not logged per rule.
+    plan_skipped: list[dict[str, str]] = []
     # Nothing live runs in a dry run: an unset credential is what a real deploy
     # would need, said once as a warning, not an error.
     unset: list[str]
@@ -227,6 +229,7 @@ def run_deploy(
             result = _deploy(
                 ctx,
                 plan_warnings,
+                plan_skipped,
                 strategies=strategies,
                 all_files=all_files,
                 platform=platform,
@@ -247,7 +250,55 @@ def run_deploy(
         plan_warnings.append(unset_variables_warning(unset))
     if plan_warnings:
         result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
+    if plan_skipped:
+        _report_skipped(result, plan_skipped)
     return result
+
+
+def _report_skipped(result: dict[str, object], skipped: list[dict[str, str]]) -> None:
+    """Count the blocks a status kept out of the plan, and say which statuses deploy.
+
+    They used to print as one ``warning: Rule skipped for strategy · system: …``
+    log line per block, and a run that skipped them all ended on
+    ``Skipped: No rule this run read has a status that maps to its strategies``.
+    """
+    from collections import Counter
+
+    from opentide.cli.ui.glyphs import glyph
+    from opentide.cli.ui.progress import plural
+    from opentide.deployment.utils import statuses_deployed_by
+    from opentide.models.deployment_enums import StatusStrategy
+
+    rules = len({entry["uuid"] for entry in skipped})
+    statuses = Counter(entry["status"] for entry in skipped)
+    if len(statuses) == 1:
+        in_status = f"{plural(rules, 'rule')} in {next(iter(statuses))}"
+    else:
+        listed = ", ".join(f"{count} in {status}" for status, count in statuses.most_common())
+        in_status = f"{plural(rules, 'rule')} left out: {listed}"
+    names = cast(list[str], result.get("strategies") or [])
+    run = tuple(StatusStrategy[name] for name in names if name in StatusStrategy.__members__)
+    run_names = " or ".join(strategy.name for strategy in run) or "this run"
+    result["skipped"] = skipped
+    summary = cast(dict[str, object], result.get("_summary") or {})
+    result["_summary"] = {**summary, "skipped": rules}
+    deployable = statuses_deployed_by(run) if run else []
+    if len(deployable) > 1:
+        listed = ", ".join(deployable[:-1]) + f" or {deployable[-1]}"
+    else:
+        listed = deployable[0] if deployable else ""
+    advice = (
+        f"set a platform block's status to {listed} for {run_names} to deploy it"
+        if listed
+        else f"no configured status deploys with {run_names}"
+    )
+    if result.get("status") == "skipped" and not result.get("plan"):
+        result["_outcome"] = (
+            f"no rule has a status {run_names} deploys {glyph('separator')} {in_status}"
+        )
+        result.setdefault("advice", advice)
+    else:
+        result.setdefault("detail", f"not in the plan: {in_status}; {advice}")
 
 
 def _unread_object_files(
@@ -303,6 +354,7 @@ STRATEGY_REQUIRED = (
 def _deploy(
     ctx: CliContext,
     plan_warnings: list[str],
+    plan_skipped: list[dict[str, str]],
     *,
     strategies: list[str] | tuple[str, ...],
     all_files: bool,
@@ -381,6 +433,7 @@ def _deploy(
             keep_deprecated=keeps_deprecated(all_files, keep_deprecated),
             warnings=plan_warnings,
             all_files=all_files,
+            skipped=plan_skipped,
         )
     except MissingGitCheckout as exc:
         return {
@@ -406,7 +459,9 @@ def _deploy(
 
             # A run-level annotation on GitHub and Azure; nothing elsewhere.
             emit_warning(_NO_RULES_MATCHED)
-        return _nothing_to_deploy(_NO_RULES_MATCHED, dry_run=dry_run)
+        return _nothing_to_deploy(
+            _NO_RULES_MATCHED, dry_run=dry_run, strategies=[strategy.name for strategy in run]
+        )
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
         system: list(uuids) for system, uuids in deployment_list.items()

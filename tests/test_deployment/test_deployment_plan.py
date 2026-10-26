@@ -757,6 +757,32 @@ def test_make_deploy_plan_selects_by_the_strategy_a_status_maps_to(
     ]
 
 
+def test_a_caller_that_collects_skips_gets_them_counted_not_warned(
+    local_workspace: Path, plan_log: list[LoggedEvent]
+) -> None:
+    """The CLI counts skipped blocks in one line; a warning per block was log noise."""
+    from opentide.deployment import make_deploy_plan
+    from opentide.deployment.utils import statuses_deployed_by
+
+    _write_gated_rule(local_workspace, status="DESIGN", splunk_enabled=True)
+    skipped: list[dict[str, str]] = []
+    assert make_deploy_plan((S.PREVIEW,), all_files=True, skipped=skipped) == {}
+    assert skipped == [
+        {
+            "rule": "Gated Rule",
+            "uuid": GATED_RULE_UUID,
+            "platform": "splunk",
+            "status": "DESIGN",
+            "strategy": "INERT",
+        }
+    ]
+    levels = [level for level, event, _ in plan_log if event == "rule_skipped_for_strategy"]
+    assert levels == ["debug"]
+    assert "DEVELOPMENT" in statuses_deployed_by((S.PREVIEW,))
+    assert "DESIGN" not in statuses_deployed_by((S.PREVIEW,))
+    assert "PRODUCTION" in statuses_deployed_by((S.RELEASE,))
+
+
 def test_make_deploy_plan_drops_retired_rules_only_when_asked(
     local_workspace: Path,
 ) -> None:
