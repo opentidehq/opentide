@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from opentide.documentation.cli import run, run_index, run_objects
+from opentide.documentation.publish.prune import OBJECT_SCOPES
 from opentide.documentation.types import DocumentScope
 
 
@@ -49,10 +50,14 @@ def test_run_full_pipeline() -> None:
             return_value={"rules": 1, "objectives": 0, "threats": 0},
         ),
         patch("opentide.documentation.cli.run_index") as mock_index,
+        patch("opentide.documentation.cli.build_catalog") as mock_catalog,
+        patch("opentide.documentation.cli.prune_stale_pages", return_value=[]) as mock_prune,
     ):
         result = run()
     mock_index.assert_called_once()
+    mock_prune.assert_called_once_with(ctx, mock_catalog.return_value, OBJECT_SCOPES)
     assert result["counts"]["rules"] == 1
+    assert result["removed"] == 0
 
 
 def test_run_index_scope_only() -> None:
@@ -74,16 +79,25 @@ def test_run_objects_single_scope() -> None:
             "opentide.documentation.cli.run_objects",
             return_value={"rules": 2, "objectives": 0, "threats": 0},
         ),
+        patch("opentide.documentation.cli.build_catalog") as mock_catalog,
+        patch(
+            "opentide.documentation.cli.prune_stale_pages", return_value=[Path("old.md")]
+        ) as mock_prune,
     ):
         result = run(scope=DocumentScope.rules.value)
+    mock_prune.assert_called_once_with(ctx, mock_catalog.return_value, (DocumentScope.rules,))
     assert result["counts"]["rules"] == 2
+    assert result["removed"] == 1
 
 
 def test_run_changed_pipeline_only_targets_selected_pages() -> None:
     ctx = MagicMock(output_dir="/tmp/docs")
     rule = MagicMock(uuid="rule-1", object_type=DocumentScope.rules)
+    rule.name = "Rule"
     objective = MagicMock(uuid="objective-1", object_type=DocumentScope.objectives)
+    objective.name = "Objective"
     threat = MagicMock(uuid="threat-1", object_type=DocumentScope.threats)
+    threat.name = "Threat"
     catalog = MagicMock(rules=[rule], objectives=[objective], threats=[threat])
     with (
         patch("opentide.documentation.cli._build_context", return_value=ctx),
@@ -94,19 +108,22 @@ def test_run_changed_pipeline_only_targets_selected_pages() -> None:
                 {Path("Models/rules/rule.yaml")},
                 {"rule-1"},
                 {"rule-1", "objective-1"},
-                [],
             ),
-        ),
+        ) as mock_resolve,
         patch(
             "opentide.documentation.cli.run_objects",
             return_value={"rules": 1, "objectives": 1, "threats": 0},
         ) as mock_objects,
-        patch("opentide.documentation.cli._remove_deleted_pages", return_value=0) as mock_remove,
+        patch("opentide.documentation.cli.prune_stale_pages", return_value=[]) as mock_prune,
         patch("opentide.documentation.cli.run_index") as mock_index,
+        patch("opentide.registry.discovery.discover_workspace", return_value=Path("/repo")),
     ):
         result = run(changed=True)
+    mock_resolve.assert_called_once_with(
+        {"rule-1": "Rule", "objective-1": "Objective", "threat-1": "Threat"}, Path("/repo")
+    )
     mock_objects.assert_called_once_with(ctx, target_uuids={"rule-1", "objective-1"})
-    mock_remove.assert_called_once_with(ctx, [])
+    mock_prune.assert_called_once_with(ctx, catalog)
     mock_index.assert_called_once_with(ctx)
     assert result["counts"] == {"rules": 1, "objectives": 1, "threats": 0}
     assert result["targets"] == ["objective-1", "rule-1"]
@@ -120,7 +137,7 @@ def test_run_changed_pipeline_noop_when_no_object_changes() -> None:
         patch("opentide.documentation.cli.build_catalog", return_value=catalog),
         patch(
             "opentide.documentation.cli._resolve_changed_targets",
-            return_value=(set(), set(), set(), []),
+            return_value=(set(), set(), set()),
         ),
         patch("opentide.documentation.cli.run_objects") as mock_objects,
         patch("opentide.documentation.cli.run_index") as mock_index,
@@ -144,28 +161,58 @@ def test_expand_referrer_closure_walks_upstream() -> None:
     assert closure == {"rule-1", "objective-1"}
 
 
-def test_remove_deleted_pages_unlinks_existing_markdown() -> None:
-    ctx = MagicMock()
-    path = MagicMock()
-    path.exists.return_value = True
-    pub = MagicMock(rules_dir=Path("/docs/Rules"))
-    with (
-        patch("opentide.documentation.cli.targets", return_value=pub),
-        patch("opentide.documentation.cli.page_path", return_value=path),
-    ):
-        from opentide.documentation.cli import _remove_deleted_pages
+def test_expand_referrer_closure_walks_downstream_of_renamed_objects() -> None:
+    """A renamed objective's rules link to its page, so they are rewritten too."""
 
-        removed = _remove_deleted_pages(ctx, [("rule", "rule-1", "Example Rule")])
-    path.unlink.assert_called_once_with()
-    assert removed == 1
+    def _relations(uuid: str, mode: str, direction: str) -> dict[str, list[str]]:
+        _ = mode
+        if (uuid, direction) == ("objective-1", "downstream"):
+            return {"rule": ["rule-1"]}
+        return {}
+
+    with (
+        patch("opentide.documentation.cli.fw.relations_list", side_effect=_relations),
+        patch("opentide.documentation.cli.fw.get_type", return_value="rule"),
+    ):
+        from opentide.documentation.cli import _expand_referrer_closure
+
+        unchanged = _expand_referrer_closure({"objective-1"})
+        renamed = _expand_referrer_closure({"objective-1"}, {"objective-1"})
+    assert unchanged == {"objective-1"}
+    assert renamed == {"objective-1", "rule-1"}
+
+
+def test_resolve_changed_targets_marks_objects_whose_name_changed() -> None:
+    with (
+        patch(
+            "opentide.documentation.cli._changed_object_paths_and_uuids",
+            return_value=(
+                {Path("objects/objectives/o.yaml"), Path("objects/rules/r.yaml")},
+                {"objective-1", "rule-1"},
+                {"objective-1": "Old name", "rule-1": "Rule", "gone-1": "Gone"},
+            ),
+        ),
+        patch(
+            "opentide.documentation.cli._expand_referrer_closure",
+            return_value={"objective-1", "rule-1", "outside"},
+        ) as mock_closure,
+    ):
+        from opentide.documentation.cli import _resolve_changed_targets
+
+        _paths, changed, targets = _resolve_changed_targets(
+            {"objective-1": "New name", "rule-1": "Rule"}, Path("/repo")
+        )
+    mock_closure.assert_called_once_with({"objective-1", "rule-1"}, {"objective-1"})
+    assert changed == {"objective-1", "rule-1"}
+    assert targets == {"objective-1", "rule-1"}
 
 
 def test_changed_targets_read_only_catalogue_files(tmp_path: Path) -> None:
     """``docs --changed`` follows the catalogue (#584): direct ``.yaml``/``.yml`` children only.
 
-    Moving ``objects/rules/team/moved.yaml`` up into ``objects/rules/`` (what the
-    ``nested_object_file`` warning asks for) must not report the old nested path
-    as a deleted object: that would unlink the page just written for the moved file.
+    A file in a subfolder never has a page, so a change to it (or moving it up
+    into ``objects/rules/``, as the ``nested_object_file`` warning asks) is no
+    changed object, and its baseline name never marks a catalogue object renamed.
     """
     from opentide.core.git_baseline import ChangedPath
     from opentide.documentation.cli import _changed_object_paths_and_uuids
@@ -190,10 +237,10 @@ def test_changed_targets_read_only_catalogue_files(tmp_path: Path) -> None:
         patch("opentide.core.registry.Opentide", registry),
         patch("opentide.core.git_baseline.resolve_baseline", return_value=MagicMock(commit="b")),
         patch("opentide.core.git_baseline.changed_paths", return_value=changes),
-        patch("opentide.documentation.cli._git_stdout", return_value=body),
+        patch("opentide.documentation.cli._git_stdout", side_effect=OSError("no baseline")),
     ):
-        paths, uuids, deleted = _changed_object_paths_and_uuids(tmp_path)
+        paths, uuids, previous = _changed_object_paths_and_uuids(tmp_path)
 
-    assert deleted == []
     assert uuids == {"rule-moved", "rule-yml"}
     assert paths == {Path("objects/rules/moved.yaml"), Path("objects/rules/other.yml")}
+    assert previous == {}

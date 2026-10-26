@@ -86,10 +86,9 @@ def run():
             continue
         logger.info("now_processing_all_files_under_model_type", detail=model_type)
         for file in sorted(os.listdir(folder)):
-            if not file.endswith(".yaml"):
-                if not file.endswith(".yml"):
-                    logger.info("the_file_doesn_t_end_with_yaml_or_yml_skipping", detail=file)
-                    continue
+            if not file.endswith(".yaml") and not file.endswith(".yml"):
+                logger.info("the_file_doesn_t_end_with_yaml_or_yml_skipping", detail=file)
+                continue
 
             with open(folder / file, encoding="utf-8") as handle:
                 raw_body = handle.read()
@@ -126,7 +125,6 @@ def run():
                 body = header + new_references + large_block
 
                 output_path = folder / file
-                # output_path = Path("./DEBUG") / file
                 with open(output_path, "w+", encoding="utf-8") as export:
                     export.write(body)
                     logger.info("migrated_reference_schema_correctly")

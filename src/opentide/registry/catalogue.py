@@ -21,10 +21,12 @@ from opentide.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-#: Suffixes an object file may carry.
+#: Suffixes an object file may carry. Deploy and lint read both spellings, so
+#: the registry indexes both: a rule it skipped was never validated, and deploy
+#: failed looking it up.
 OBJECT_SUFFIXES = (".yaml", ".yml")
 #: Scratch output some tools write next to objects; never an object instance.
-DEBUG_SUFFIX = ".debug.yaml"
+DEBUG_SUFFIXES = (".debug.yaml", ".debug.yml")
 #: Warning code shared by ``validate``, ``lint`` and the log event.
 NESTED_OBJECT_FILE = "nested_object_file"
 NESTED_OBJECTS_ISSUE = "https://github.com/opentidehq/opentide/issues/584"
@@ -41,14 +43,14 @@ class ObjectDirScan:
 
 
 def is_object_file_name(name: str, *, include_debug: bool = False) -> bool:
-    """True for a ``*.yaml``/``*.yml`` name (``*.debug.yaml`` only when asked).
+    """True for a ``*.yaml``/``*.yml`` name (``*.debug.yaml``/``*.debug.yml`` only when asked).
 
     Case-sensitive, like ``deploy``'s rule scan and inflight shards: ``r.YAML``
     is not an object, so no command reads a file ``deploy`` would skip.
     """
     if not name.endswith(OBJECT_SUFFIXES):
         return False
-    return include_debug or not name.endswith(DEBUG_SUFFIX)
+    return include_debug or not name.endswith(DEBUG_SUFFIXES)
 
 
 def scan_object_dir(object_dir: Path, *, include_debug: bool = False) -> ObjectDirScan:

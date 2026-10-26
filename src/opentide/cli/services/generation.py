@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -101,7 +101,7 @@ def run_generate_phase(phase: str) -> None:
 
 
 @contextmanager
-def workspace_repo_env(target: Path) -> Iterator[Path]:
+def workspace_repo_env(target: Path) -> Generator[Path, None, None]:
     """Bind generation/index lookup to ``target`` and restore process state."""
     resolved = target.resolve()
     resolved.mkdir(parents=True, exist_ok=True)
@@ -155,18 +155,36 @@ def run_generate_docs(
     emit_section("Documentation generation")
     if changed and (scope is not None or rules or threats or objectives):
         raise ValueError("--changed cannot be combined with scoped docs generation")
-    if scope != DocumentScope.index.value:
-        if rules:
-            scope = DocumentScope.rules.value
-        elif threats:
-            scope = DocumentScope.threats.value
-        elif objectives:
-            scope = DocumentScope.objectives.value
+    flagged = [
+        value.value
+        for value, given in (
+            (DocumentScope.rules, rules),
+            (DocumentScope.threats, threats),
+            (DocumentScope.objectives, objectives),
+        )
+        if given
+    ]
+    if scope != DocumentScope.index.value and flagged:
+        scope = flagged[0]
     try:
         with failing_phase("docs"):
-            return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
+            if scope == DocumentScope.index.value or len(flagged) < 2:
+                return run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
+            # The first flag used to win: `--rules --threats` wrote rules only.
+            results = [run_docs(scope=name, output=output, flavor=flavor) for name in flagged]
     except GenerationPhaseError as exc:
         return phase_failure(exc)
+    counts: dict[str, int] = {}
+    for result in results:
+        result_counts = result.get("counts")
+        if isinstance(result_counts, dict):
+            for name, count in result_counts.items():
+                counts[str(name)] = counts.get(str(name), 0) + int(count)
+    return {
+        "message": f"Documentation scopes {', '.join(flagged)} completed",
+        "scopes": flagged,
+        "counts": counts,
+    }
 
 
 def run_generate_all() -> None:

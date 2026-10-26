@@ -198,6 +198,71 @@ def test_run_validation_finds_a_duplicate_uuid_in_a_yml_file(
     assert [issue.file_path for issue in duplicates] == [rules_dir / "b.yml"]
 
 
+def test_run_validation_finds_a_signal_uuid_kept_by_a_copied_objective(
+    tide_corpus_repo: Path,
+) -> None:
+    """The ID scan read ``metadata.uuid`` only, never ``objective.signals[*].uuid``.
+
+    The registry indexes signals by their own UUID, so a copied objective that
+    kept its signals passed validation and silently took them over.
+    """
+    objectives = tide_corpus_repo / "Objects" / "Detection Objectives"
+    source = objectives / "objective-0001-credential-access.yaml"
+    copy = objectives / "objective-0002-copy.yaml"
+    copy.write_text(
+        source.read_text(encoding="utf-8")
+        .replace("00000000-0000-4000-8002-000000000001", "00000000-0000-4000-8002-000000000002")
+        .replace("Credential Access Objective", "Copied Objective"),
+        encoding="utf-8",
+    )
+
+    report = run_validation(checks=frozenset({ValidateCheck.id_uniqueness}), workers=0)
+
+    assert [(i.code, i.object_type, i.object_uuid) for i in report.errors] == [
+        ("duplicate_id", "signal", "00000000-0000-4000-8099-000000000001")
+    ]
+    assert [i.file_path.resolve() for i in report.errors if i.file_path] == [copy.resolve()]
+    assert_issues_point_at_their_objects(report)
+
+
+def test_run_validation_finds_a_signal_that_reuses_an_object_uuid(
+    tmp_path: Path,
+    validation_session_mocks: MagicMock,
+) -> None:
+    """A signal and an object sharing a UUID collide in the flat index."""
+    del validation_session_mocks
+    uuid = "00000000-0000-4000-8000-000000000001"
+    rules_dir = tmp_path / "rules"
+    objectives_dir = tmp_path / "objectives"
+    rules_dir.mkdir()
+    objectives_dir.mkdir()
+    (rules_dir / "a.yaml").write_text(f"name: A\nmetadata:\n  uuid: {uuid}\n", encoding="utf-8")
+    objective = objectives_dir / "o.yaml"
+    objective.write_text(
+        "name: O\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n"
+        f"objective:\n  signals:\n    - name: S\n      uuid: {uuid}\n",
+        encoding="utf-8",
+    )
+    index = {"objects": {}, "metaschemas": {}, "files": {}}
+    with (
+        patch(
+            "opentide.validation.session.resolve_paths",
+            return_value={"rule": rules_dir, "objective": objectives_dir},
+        ),
+        patch(
+            "opentide.validation.session.resolve_configurations",
+            return_value={"global": {"metaschemas": {"rule": {}, "objective": {}}}},
+        ),
+    ):
+        report = run_validation(
+            checks=frozenset({ValidateCheck.id_uniqueness}), index=index, workers=0
+        )
+    assert [(i.code, i.object_type, i.file_path) for i in report.errors] == [
+        ("duplicate_id", "signal", objective)
+    ]
+    assert_issues_point_at_their_objects(report)
+
+
 _TWIN_LAYOUT = {
     "objects/rules/twin.yaml": ("rule", "00000000-0000-4000-8003-0000000000b1"),
     "objects/rules/team-a/twin.yaml": ("rule", "00000000-0000-4000-8003-0000000000b2"),
@@ -236,11 +301,11 @@ def twin_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
             encoding="utf-8",
         )
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tmp_path.resolve()))
-    IndexManager._cache = None  # noqa: SLF001
+    IndexManager._cache = None
     try:
         return build_registry()
     finally:
-        IndexManager._cache = None  # noqa: SLF001
+        IndexManager._cache = None
 
 
 def _is_direct(relative: str) -> bool:

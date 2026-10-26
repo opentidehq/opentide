@@ -113,9 +113,13 @@ class RegistryBuilder:
         objects_index, files_index = self._load_objects(paths, metaschemas)
         index["parse_errors"] = self.parse_errors
         index[NESTED_INDEX_KEY] = self.nested_object_files
-        from opentide.indexing.inflight import apply_inflight_overlay
+        from opentide.indexing.inflight import apply_inflight_overlay, inflight_preview_enabled
 
-        apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
+        # Shards are other pull requests' unreviewed objects. Deploy and
+        # validate resolve rules from this index, so only preview output
+        # (``inflight_preview``) may read them.
+        if inflight_preview_enabled():
+            apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
         index["objects"] = objects_index
         index["files"] = files_index
         index["file_paths"] = self.file_paths

@@ -51,7 +51,7 @@ run(scope="rules", output="docs", flavor="github")
 run(output="docs", flavor="github", changed=True)
 ```
 
-With `changed=True`, `run()` computes changed object YAMLs from the git merge-base diff (plus untracked files), expands upstream referrer closure, removes pages for deleted objects, renders only targeted object pages, and rewrites indexes.
+With `changed=True`, `run()` computes changed object YAMLs from the git merge-base diff (plus untracked files), expands upstream referrer closure and the pages that link to a renamed object, removes generated pages no object writes any more, renders only targeted object pages, and rewrites indexes. Full and scoped runs, and `write_all`, prune stale generated pages too; `README.md` and hand-written pages are never removed.
 
 `changed=True` is only supported for full docs generation (`scope=None`) and cannot be combined with scoped CLI filters such as `--rules`, `--threats`, or `--objectives`.
 

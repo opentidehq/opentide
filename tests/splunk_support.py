@@ -5,7 +5,8 @@ answers the endpoints opentide calls the way Splunk does: ``server/info``,
 ``search/parser`` (``|badcommand`` is a parse error, ``|unreachable`` a 307
 "Network Error") and ``saved/searches``,
 where an argument the REST handler does not know is refused with HTTP 400
-``Argument "<name>" is not supported by this handler.``
+``Argument "<name>" is not supported by this handler.`` and a ``DELETE``
+removes the saved search.
 """
 
 from __future__ import annotations
@@ -35,6 +36,8 @@ class SplunkStandIn:
     port: int
     saved_searches: dict[str, dict[str, str]] = field(default_factory=dict)
     requests: list[tuple[str, str, dict[str, str]]] = field(default_factory=list)
+    #: Answer every saved search POST with the gateway's 307 "Network Error".
+    gateway_timeout: bool = False
 
     def posted(self, name: str) -> dict[str, str]:
         """Every argument POSTed to the saved search *name*, merged in order."""
@@ -103,6 +106,8 @@ def _handler(state: SplunkStandIn) -> type[http.server.BaseHTTPRequestHandler]:
                 return self._reply(404, b"")
             name = path.removeprefix(SAVED_SEARCHES)
             if self.command == "POST":
+                if state.gateway_timeout:
+                    return self._reply(307, b"Network Error", "text/plain")
                 refused = sorted(set(args) & CONF_ONLY_ARGUMENTS)
                 if refused:
                     message = f'Argument "{refused[0]}" is not supported by this handler.'
@@ -121,6 +126,10 @@ def _handler(state: SplunkStandIn) -> type[http.server.BaseHTTPRequestHandler]:
                     status = 200
                 state.saved_searches[name].update(args)
                 return self._reply(status, _feed(_entry(name, state.saved_searches[name])))
+            if self.command == "DELETE":
+                if state.saved_searches.pop(name, None) is None:
+                    return self._reply(404, b"")
+                return self._reply(200, _feed())
             if name in state.saved_searches:
                 return self._reply(200, _feed(_entry(name, state.saved_searches[name])))
             return self._reply(404, b"")

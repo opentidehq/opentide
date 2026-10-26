@@ -49,12 +49,12 @@ class TechniqueIndexEntry:
 
 
 class AttackNavigatorLayer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.EXPORT_PATH = Opentide.Configurations.Global.Paths.Tide.exports
         self.EXPORT_FILE_NAME = Opentide.Configurations.Global.exports.attack_layer
         self.EXPORT_FILE_PATH = self.EXPORT_PATH / self.EXPORT_FILE_NAME
 
-    def create_layer(self):
+    def create_layer(self) -> None:
         technique_layer = self.generate_technique_layer()
         full_layer = self.assemble_full_layer(technique_layer=technique_layer)
         self.export_layer(layer=full_layer)
@@ -71,7 +71,8 @@ class AttackNavigatorLayer:
         # Visit objects by name, not index order: the index follows file paths,
         # so a rename or move would otherwise reorder every comment.
         for object in sorted(
-            index, key=lambda object_id: (str(index[object_id].get("name") or "").casefold(), object_id)
+            index,
+            key=lambda object_id: (str(index[object_id].get("name") or "").casefold(), object_id),
         ):
             with rendering(object):
                 techniques = techniques_resolver(object)
@@ -154,7 +155,7 @@ class AttackNavigatorLayer:
             versions={"layer": "4.5"}, techniques=technique_layer, legendItems=legend
         )
 
-    def export_layer(self, layer: NavigatorLayer):
+    def export_layer(self, layer: NavigatorLayer) -> None:
         from pathlib import Path
 
         path = Path(self.EXPORT_FILE_PATH)
@@ -165,7 +166,7 @@ class AttackNavigatorLayer:
         )
 
 
-def run():
+def run() -> None:
     AttackNavigatorLayer().create_layer()
 
 

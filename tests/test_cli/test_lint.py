@@ -104,6 +104,39 @@ metadata:
     )
 
 
+def _case_insensitive_lookups(monkeypatch: pytest.MonkeyPatch, directory: Path) -> None:
+    """Resolve names in *directory* ignoring case, as macOS and Windows do."""
+    exists, samefile = Path.exists, Path.samefile
+
+    def _on_disk(path: Path) -> Path:
+        if path.parent != directory:
+            return path
+        for entry in directory.iterdir():
+            if entry.name.casefold() == path.name.casefold():
+                return entry
+        return path
+
+    monkeypatch.setattr(
+        Path, "exists", lambda self, *args, **kwargs: exists(_on_disk(self), *args, **kwargs)
+    )
+    monkeypatch.setattr(
+        Path, "samefile", lambda self, other: samefile(_on_disk(self), _on_disk(Path(other)))
+    )
+
+
+def test_lint_fix_renames_a_case_only_mismatch_on_a_case_insensitive_filesystem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``simulated-actor.yaml`` "existed" because it is the file itself, so --fix skipped it."""
+    src = _write_object(tmp_path, "threats", "Simulated-Actor.yaml", _THREAT)
+    _case_insensitive_lookups(monkeypatch, src.parent)
+
+    result = run_lint(tmp_path, checks=[LintCheck.filenames], fix=True)
+
+    assert result["fixed"] == 1
+    assert [entry.name for entry in src.parent.iterdir()] == ["simulated-actor.yaml"]
+
+
 def test_lint_fix_collision_uses_uuid_suffix(tmp_path: Path) -> None:
     _write_object(tmp_path, "threats", "simulated-actor.yaml", _THREAT)
     other = """\
