@@ -310,7 +310,7 @@ def test_validation_report_over_stdio_carries_diagnostic_fields(tmp_path: Path) 
         encoding="utf-8",
     )
     env = {**os.environ, **corpus_env(repo), "CI": "true"}
-    process = subprocess.Popen(  # noqa: S603
+    process = subprocess.Popen(
         _server_argv(),
         cwd=repo,
         env=env,

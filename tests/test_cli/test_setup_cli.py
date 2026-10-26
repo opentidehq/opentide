@@ -271,7 +271,14 @@ def test_json_setup_skills_refusal_names_flags_that_exist(tmp_path) -> None:
     group = root.get_command(root.make_context("opentide", ["setup"]), "setup")
     skills = group.get_command(group.make_context("setup", ["skills"]), "skills")
     known = {opt for param in skills.params for opt in param.opts}
-    assert flags == {"--claude-code", "--cursor", "--generic", "--github-copilot"}
+    assert flags == {
+        "--claude-code",
+        "--cursor",
+        "--generic",
+        "--github-copilot",
+        "--install",
+        "--all",
+    }
     assert flags <= known
 
 

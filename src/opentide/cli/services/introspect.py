@@ -232,7 +232,7 @@ def _json_value(value: Any) -> Any:
 
 def _envvars(param: Any, *, root: bool) -> list[str]:
     envvar = getattr(param, "envvar", None)
-    found = [envvar] if isinstance(envvar, str) else list(envvar or ())
+    found: list[str] = [envvar] if isinstance(envvar, str) else list(envvar or ())
     if root:
         for flag in param.opts:
             found.extend(_CALLBACK_ENVVARS.get(flag, ()))

@@ -21,13 +21,10 @@ from opentide.cli.ui.contract import (
 )
 from opentide.cli.ui.diagnostics import (
     Diagnostic,
-    SourceFiles,
-    annotate,
-    diagnostics_from_issues,
+    annotate_report,
     explain_command,
     relative_path,
 )
-from opentide.cli.ui.diagnostics import annotate_report
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
