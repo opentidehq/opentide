@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import structlog
-from rich.markup import escape
 
 from opentide.cli.context import CliContext
 from opentide.cli.ui.contract import (
@@ -480,4 +479,6 @@ def emit_deprecation(legacy: str, replacement: str) -> None:
     if is_json_output():
         logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
         return
-    get_console().print(f"[yellow]DEPRECATED[/] {escape(legacy)}; use {escape(replacement)}.")
+    # A severity word, like every other line: "DEPRECATED x; use y." was a
+    # label of its own (post-merge end-to-end run).
+    render_warnings(get_console(), [f"{legacy} is deprecated; use {replacement}"])

@@ -313,8 +313,8 @@ def test_setup_skills_discover_positional_path_is_deprecated(tmp_path, monkeypat
     stub_remote_skills_manifest(monkeypatch)
     human = runner.invoke(app, ["setup", "skills", "discover", str(tmp_path)])
     assert human.exit_code == 0, human.stdout + human.stderr
-    assert "DEPRECATED" in human.output
-    assert "--path/-C" in human.output
+    assert "warning: positional PATH (opentide setup skills discover " in human.output
+    assert "is deprecated; use --path/-C" in human.output
 
     machine = runner.invoke(
         app,
