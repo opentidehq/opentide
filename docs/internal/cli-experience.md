@@ -164,7 +164,7 @@ MCP tool payloads keep their shapes. MCP gains the same issue codes and diagnost
 
 | Input | Response |
 |-------|----------|
-| Typo in a command, option or choice | `did you mean …?` with the valid values, exit 2. App-level choices use `difflib.get_close_matches`. |
+| Typo in a command, option or choice | `did you mean …?` with the valid values, exit 2. A choice that differs only in case or `-`/`_` wins outright (`RULE` → `rule`); otherwise app-level choices use `difflib.get_close_matches` on the lower-cased spellings. |
 | `--json` after the subcommand | Accepted |
 | A prompt with no TTY or under an agent | Exit 2 at once, naming the flags that answer it |
 | `DEBUG='*'` in the environment | Ignored |
@@ -261,10 +261,6 @@ Tests assert the import graph (which modules a command imports), not wall-clock 
 
 Generated JSON schemas carry `title` and `description` for every field, `markdownDescription` where Markdown helps, and per-value descriptions for vocabulary enums (`enumDescriptions` for VS Code, `x-enumDescriptions` mirrored for other editors), taken from the vocabulary TOML. The schema `$comment` and title name the tagline. Snippets carry descriptions.
 
-## Docs
-
-`docs/tapes/*.tape` (VHS) record the tutorial path, a validation failure, the plan view and the home screen. The docs workflow renders them to GIF and SVG and fails when a tape no longer runs, so screenshots never drift from the product.
-
 ## Built so far, and deviations
 
 The output contract (#619) is in place. Where it differs from the sections above, the code is right and this list says how:
@@ -277,7 +273,10 @@ The output contract (#619) is in place. Where it differs from the sections above
 | Outcome lines | The glyph grammar is in place; each command keeps its current message (`✓ Validation passed`). The counted wordings in the table above come with diagnostics and progress (PRs C and E). A skipped result prints `Skipped: <message>`. |
 | Soft wrap | Outcome, warning, error and next-step lines are soft-wrapped in `human` mode too, not only `plain`: Rich would otherwise break a long path mid-word on a TTY. |
 | Unexpected exceptions (#625) | Handled in the console script, `opentide.cli.main()` (and `python -m opentide`). `app()` called directly, `CliRunner` and host apps still see the exception, so tests that check `result.exception` keep catching crashes. The traceback under `--debug` is redacted like the log. Ctrl-C exits 130 with `error: interrupted` on stderr in every mode, `json` included: no document, because the run did not finish. |
-| `opentide --json` with no command | Still prints help (`no_args_is_help`), not a JSON document. |
+| `opentide --json` with no command | The bare root still prints help (`no_args_is_help`), not a JSON document. A group named without its subcommand (`opentide --json mcp`) is a `usage_error` document in `json` mode and an `error:` line in `agent` mode; a person still gets the group's help. |
+| Narrow streams | Consoles write each glyph as its fallback (`·` → `-`, `…` → `...`) and any other character the stream cannot encode as `?`, so a message that embeds a glyph never raises `UnicodeEncodeError`. A JSON document on such a stdout escapes non-ASCII characters as `\uXXXX` instead: the same JSON, losslessly. |
+| Colour in `plain` and `agent` | Off on a terminal too, unless `FORCE_COLOR` or `PY_COLORS` forces it; bold stays, as with `NO_COLOR`. Help screens follow. |
+| Recorded CLI demos | Recorded CLI GIFs/tapes (#633) dropped; a web animation may follow. |
 
 ## Code references
 
@@ -286,11 +285,11 @@ What is built, and the APIs the next changes extend.
 | Module | What it holds |
 |--------|---------------|
 | `opentide.cli.ui.mode` | `OutputMode`; `resolve_mode(json_flag=, no_color=, command=, env=, stdout=)` applies the precedence table; `set_mode()` / `get_mode()` hold the mode of the current run (`get_mode()` resolves from the environment when nothing set it); `detect_agent()`, `detect_ci()`; `start_clock()` / `elapsed_ms()` time the run for `duration_ms`. Standard library only. |
-| `opentide.cli.ui.glyphs` | `GLYPHS` by name (`ok`, `failed`, `warning`, `create`, `update`, `disable`, `delete`, `next`, `separator`, `mark`) and `glyph(name, stream=None, encoding=None)`, which falls back by stream encoding. |
+| `opentide.cli.ui.glyphs` | `GLYPHS` by name (`ok`, `failed`, `warning`, `create`, `update`, `disable`, `delete`, `next`, `separator`, `ellipsis`, `mark`) and `glyph(name, stream=None, encoding=None)`, which falls back by stream encoding; `encodable(text, stream=None)` applies the fallbacks to whole text, and the shared consoles call it on everything they write. |
 | `opentide.cli.ui.contract` | `NextAction(command, reason)`, `Failure(code, message, argument, suggestion, crash_log)`, the `usage_*` codes, `COMMAND_FAILED` / `ISSUES_FOUND` / `NOT_RUN`, `did_you_mean()`. No Rich or Typer. |
 | `opentide.cli.ui.render` | `render_outcome(console, kind, message)` with `kind` in `ok`, `warning`, `skipped`, `failed`; `render_warnings`, `render_notes`, `render_next_actions` (three at most), `render_error(console, message, notes=, mode=)` (adds the agent tip). All print `Text`, never markup, with `soft_wrap`. |
 | `opentide.cli.ui.crash` | `handle_crash(error, argv=, command=)`, called by `opentide.cli.main()` for an exception no command handled: `error[internal]`, crash log path and issue link on stderr (traceback with `--debug`), the `internal` envelope on stdout in `json`, nothing on stdout in `mcp`; exit 1. `Redactor` / `workspace_redactor()` (URL credentials, `Authorization` values of any scheme, secret-named variables, options and keys, the tenant names, hosts, ids, resource groups and apps of `platforms/*.toml`, the destinations of `sharing.toml`), `crash_log_dir()`, `write_crash_log()` (0700 directory, last 10 kept), `issue_url()` (version, Python, OS, command path only), `report_interrupt()` (Ctrl-C: one line, exit 130). Standard library only. |
-| `opentide.cli.output` | `CommandResult` gains `summary`, `next_actions` and `failure`; `envelope()` adds the JSON keys to any payload; `emit_result()` renders warnings, the outcome, notes, then next steps; `emit_error(..., code=, argument=, suggestion=)`; `emit_usage_error()` exits 2 with a `did_you_mean` suggestion. A service payload may carry `_summary`, `_next_actions`, `_failure_code`, `_failure_argument` and `_failure_suggestion`; they move into the envelope. |
+| `opentide.cli.output` | `CommandResult` gains `summary`, `next_actions` and `failure`; `envelope()` adds the JSON keys to any payload; `emit_result()` renders warnings, the outcome, notes, then next steps; `emit_error(..., code=, argument=, suggestion=)`; `emit_usage_error()` exits 2 with a `did_you_mean` suggestion. `envelope()` sets `error` to the `message` on every non-zero exit that has none, and writes each next action as `opentide --json …`. A service payload may carry `_summary`, `_next_actions`, `_failure_code`, `_failure_argument` and `_failure_suggestion`; they move into the envelope. |
 | `opentide.cli.usage` | Click usage errors as a `Failure` (`describe()`), and their rendering (`render_usage_error()`). |
 | `opentide.cli.lazy` | `HOISTED_FLAGS` and `hoist_root_flags()`, called from `LazyTyperGroup.parse_args`; `command_words()`, the command path a command line names, never its argument values. `LazyTyperGroup.main` guesses the mode before parsing and starts the clock; `make_context` and `invoke` route usage errors through `opentide.cli.usage`, and `invoke` reports Ctrl-C in one line. |
 | `opentide.core.runtime` | `boolean_env()`, `debug_requested()` (`OPENTIDE_DEBUG`, then `DEBUG` when it is a boolean literal). |

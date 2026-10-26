@@ -21,7 +21,7 @@ opentide uses the same result semantics in human and JSON modes: presentation fo
 
 With `--json`, `failure.code` tells the cases of one exit code apart: `usage_unknown_command`, `usage_invalid_choice`, `no_tenant_reached`, `share_unreachable` and so on. `failure` is `null` exactly when the exit code is `0`. The codes are listed in [JSON output](./json-output.md#failure-codes).
 
-Usage errors the command itself detects (an unknown `info` section, `info coverage` without `--technique`, an unknown `generate` phase, `generate docs --changed` with a scope, an invalid `--type`, an unknown `share --target`, a `setup` prompt with no terminal) exited `1` before this release. They exit `2` now, like the usage errors Click detects.
+Usage errors the command itself detects (an unknown `info` section, `info coverage` without `--technique`, an unknown `generate` phase, `generate docs --changed` with a scope, an invalid `--type`, an unknown `share --target`, a `setup` prompt with no terminal, `validate query` without `--live`, a `rules unreviewed --older-than` that is not a window) exited `1` before this release. They exit `2` now, like the usage errors Click detects.
 
 There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set. Even then, [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) is reported without failing.
 

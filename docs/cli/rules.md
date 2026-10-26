@@ -25,7 +25,7 @@ A rule is listed when any of the following is true, evaluated at the current tim
 
 A review instant equal to `T − W` is not listed. Date-only values are `00:00:00Z` on that date. The default window is `90d`. `--older-than` also accepts `12h`, `30m`, or a bare positive day count.
 
-The command walks `objects/rules/**/*.{yaml,yml}`. Exit code is 0 when the window parses, including when rules are listed. A non-positive or unrecognised window exits non-zero.
+The command walks `objects/rules/**/*.{yaml,yml}`. Exit code is 0 when the window parses, including when rules are listed. A non-positive or unrecognised window is a usage error: it exits `2` with `failure.code` `usage_invalid_value`.
 
 JSON includes `evaluated_at`, `window`, `count`, and `rules` (`path`, `schema`, `reason`, `reviewed`).
 

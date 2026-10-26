@@ -14,7 +14,7 @@ from opentide.core.registry import DetectionPlatforms
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.elastic.attack import find_non_enterprise_techniques
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.compile import SEVERITY_TABLE, _alert_level, compile_rule
@@ -103,17 +103,20 @@ def _emit_rule_advisories(
         _flag_warning()
 
     # 2. Non-aggregating ES|QL METADATA _id advisory
-    if cfg.type == "esql" and cfg.query and not _STATS.search(cfg.query):
-        if not _METADATA_ID.search(cfg.query):
-            logger.warning(
-                "elastic_esql_metadata_id_warning",
-                rule=rule.name,
-                advice=(
-                    "Non-aggregating ES|QL query lacks METADATA _id; "
-                    "alerts will not be deduplicated"
-                ),
-            )
-            _flag_warning()
+    if (
+        cfg.type == "esql"
+        and cfg.query
+        and not _STATS.search(cfg.query)
+        and not _METADATA_ID.search(cfg.query)
+    ):
+        logger.warning(
+            "elastic_esql_metadata_id_warning",
+            rule=rule.name,
+            advice=(
+                "Non-aggregating ES|QL query lacks METADATA _id; alerts will not be deduplicated"
+            ),
+        )
+        _flag_warning()
 
     # 3. Explicit risk.score outside RFC 0007 §3 severity band
     if cfg.risk is not None:
@@ -197,12 +200,12 @@ class ElasticValidator(QueryValidator):
 
     def validate(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         deployment = TideDeployment(mdr_deployment, DetectionPlatforms.ELASTIC, strategies)
         for batch in deployment.rule_deployment:
-            tenant: ConfigurationModels.Systems.Elastic.Tenant = batch.tenant
+            tenant = batch_tenant(batch, ConfigurationModels.Systems.Elastic.Tenant)
             client = ElasticClient(
                 url=tenant.setup.url,
                 elasticsearch_url=tenant.setup.elasticsearch_url,

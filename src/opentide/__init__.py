@@ -9,7 +9,7 @@ from opentide._version import __version__
 if TYPE_CHECKING:
     from opentide.core.registry import Opentide
 
-__all__ = ["__version__", "Opentide"]
+__all__ = ["Opentide", "__version__"]
 
 
 def __getattr__(name: str) -> object:
