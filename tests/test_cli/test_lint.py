@@ -31,6 +31,21 @@ def _write_object(root: Path, family: str, filename: str, body: str) -> Path:
     return dest
 
 
+def test_an_empty_pass_outside_a_workspace_points_at_setup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Outside any workspace, lint passed with an absolute path and no next step
+    (post-merge end-to-end run)."""
+    from opentide.cli.ui.contract import NO_WORKSPACE_STEP
+
+    monkeypatch.chdir(tmp_path)
+    result = run_lint(tmp_path)
+    assert result["_outcome"] == "Catalogue lint passed, but found no object files under ./"
+    assert result["_next_actions"] == [NO_WORKSPACE_STEP]
+    (tmp_path / ".opentide").mkdir()
+    assert "_next_actions" not in run_lint(tmp_path)
+
+
 def test_notes_alone_end_on_a_pass_not_a_warning(tmp_path: Path) -> None:
     """Six recommended-metadata notes printed ``! 6 findings in 6 files``, the
     glyph of a warning (post-merge end-to-end run)."""

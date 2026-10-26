@@ -268,6 +268,12 @@ def run_deploy(
         result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
     if plan_skipped:
         _report_skipped(result, plan_skipped)
+    if result.get("status") == "skipped" and not result.get("_next_actions"):
+        from opentide.cli.ui.contract import NO_WORKSPACE_STEP
+        from opentide.core.root import get_repo_root, is_workspace_root
+
+        if not is_workspace_root(get_repo_root()):
+            result["_next_actions"] = [NO_WORKSPACE_STEP]
     return result
 
 

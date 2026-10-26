@@ -59,6 +59,11 @@ class NextAction:
         return {"command": self.command, "reason": self.reason}
 
 
+#: The next step of a command that found no workspace (no ``.opentide/`` or
+#: ``objects/`` here or above), whose empty pass says nothing about a catalogue.
+NO_WORKSPACE_STEP = NextAction("opentide setup", "no workspace here: create one")
+
+
 @dataclass(frozen=True)
 class Failure:
     """Why a command failed, for a program to branch on.

@@ -13,7 +13,7 @@ import structlog
 import yaml
 
 from opentide.cli.enums import LintCheck
-from opentide.cli.ui.contract import ISSUES_FOUND, NextAction
+from opentide.cli.ui.contract import ISSUES_FOUND, NO_WORKSPACE_STEP, NextAction
 from opentide.cli.ui.diagnostics import (
     LINT_CODES,
     SourceFiles,
@@ -494,6 +494,11 @@ def run_lint(
         # Notes only: nothing to warn about, so the line takes ✓, not the ``!``
         # of a warning (post-merge end-to-end run). JSON status stays "issues".
         result["_outcome_kind"] = "ok"
+    if not files:
+        from opentide.core.root import is_workspace_root
+
+        if not is_workspace_root(target):
+            result["_next_actions"] = [NO_WORKSPACE_STEP]
     if renamable:
         result["_next_actions"] = [
             NextAction(
@@ -520,6 +525,21 @@ def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+def _shown(root: Path) -> str:
+    """*root* as validate shows it: ``./`` or ``./sub`` from inside, ``..`` above, else absolute."""
+    import os
+
+    cwd = Path.cwd().resolve()
+    target = root.resolve()
+    if target == cwd:
+        return "./"
+    if target.is_relative_to(cwd):
+        return f"./{target.relative_to(cwd).as_posix()}"
+    if cwd.is_relative_to(target):
+        return os.path.relpath(target, cwd) + "/"
+    return target.as_posix()
+
+
 def _outcome_line(left: list[dict[str, object]], *, files: int, fixed: int, root: Path) -> str:
     """``3 files clean`` or ``3 findings in 2 files · 1 warning, 2 notes · 1 fixed``.
 
@@ -530,7 +550,7 @@ def _outcome_line(left: list[dict[str, object]], *, files: int, fixed: int, root
     done = f"{sep}{fixed} fixed" if fixed else ""
     if not left:
         if not files:
-            return f"Catalogue lint passed, but found no object files under {root}"
+            return f"Catalogue lint passed, but found no object files under {_shown(root)}"
         return f"{_plural(files, 'file')} clean{done}"
     touched = len({str(item.get("path")) for item in left})
     noun = "note" if all(item.get("severity") == "info" for item in left) else "finding"

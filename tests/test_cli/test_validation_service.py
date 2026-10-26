@@ -285,6 +285,16 @@ def test_an_empty_catalogue_names_the_workspace_and_still_passes(
     assert "warnings" not in result
 
 
+def test_an_empty_pass_outside_a_workspace_points_at_setup(tmp_path: Path) -> None:
+    """Outside any workspace, validate passed and suggested nothing (post-merge run)."""
+    from opentide.cli.ui.contract import NO_WORKSPACE_STEP
+
+    result = _validate_against(tmp_path, 0)
+    assert result["_next_actions"] == [NO_WORKSPACE_STEP]
+    (tmp_path / ".opentide").mkdir()
+    assert "_next_actions" not in _validate_against(tmp_path, 0)
+
+
 def test_a_single_non_object_check_keeps_the_plain_message(tmp_path: Path) -> None:
     """``id-uniqueness`` alone never counts objects, so zero says nothing."""
     result = _validate_against(tmp_path, 0, check=ValidateCheck.id_uniqueness)

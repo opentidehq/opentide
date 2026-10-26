@@ -14,6 +14,7 @@ import structlog
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
 from opentide.cli.ui.contract import (
     ISSUES_FOUND,
+    NO_WORKSPACE_STEP,
     USAGE_ERROR,
     USAGE_INVALID_CHOICE,
     USAGE_INVALID_VALUE,
@@ -288,6 +289,12 @@ def run_validate(
             "Validation passed, but no detection objects were found under "
             + _shown_directory(workspace)
         )
+        from opentide.core.root import is_workspace_root
+
+        if not is_workspace_root(workspace):
+            # Outside any workspace the pass says nothing about a catalogue
+            # (post-merge end-to-end run): point at the command that makes one.
+            result["_next_actions"] = [NO_WORKSPACE_STEP]
     else:
         result["message"] = "Validation passed"
     warnings = ["Validation reported warnings"] if outcome.warned else []
