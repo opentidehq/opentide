@@ -64,6 +64,13 @@ def configuration_file_key(path: str | PurePosixPath) -> str | None:
     parts = PurePosixPath(str(path).replace("\\", "/")).parts
     if not parts or not parts[-1].endswith(".toml"):
         return None
+    for position, part in enumerate(parts[:-1]):
+        # `.opentide/schemas/` holds generated artifacts, never configuration.
+        if part == ".opentide" and parts[position + 1] == "schemas":
+            return None
+    if len(parts) >= 2 and parts[-2] == "sharing":
+        # `configurations/sharing/` is not a configuration location.
+        return None
     name = parts[-1]
     if len(parts) >= 2 and parts[-2] in {"platforms", "systems"}:
         identifier = name.removesuffix(".toml")

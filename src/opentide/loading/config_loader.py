@@ -16,7 +16,11 @@ from opentide.models.configuration.deployment import (
     DeploymentResponder,
     DeploymentStatusEntry,
 )
-from opentide.models.configuration.loading import validate_configuration
+from opentide.models.configuration.loading import (
+    ConfigurationError,
+    error_locations,
+    validate_configuration,
+)
 from opentide.models.system_config import ConfigurationModels
 from opentide.models.visibility import VisibilityConfig
 
@@ -36,7 +40,7 @@ class ConfigurationsLoader:
         loaded = validate_configuration(
             DeploymentConfiguration, document, file_key="deployment.toml"
         )
-        if not raw_responders:
+        if raw_responders is None:
             return loaded
         responders = [
             DeploymentResponder(name=item.name, description=item.description)
@@ -68,19 +72,39 @@ class ConfigurationsLoader:
     ) -> Sequence[ConfigurationModels.Deployment.Responder]:
         """Convert responder configuration dicts into typed Responder objects.
 
-        Tolerates a malformed entry by skipping it rather than failing the
-        load: an unparseable team leaves the enum shorter, whereas raising
-        here would take down documentation generation for the whole
-        repository.
+        Tolerates a malformed entry rather than failing the load: an entry
+        without a name is skipped, and an entry with a name but a stray key
+        (a root-level key written below the last `[[responders]]` lands in
+        it) is kept with a warning. Raising here would take down
+        documentation generation for the whole repository. Only key names
+        are logged, never values.
         """
         Responder = ConfigurationModels.Deployment.Responder
+        if responders_configuration is None:
+            return []
+        if not isinstance(responders_configuration, list):
+            raise ConfigurationError(
+                "deployment.toml", [(("responders",), "must be [[responders]] tables")]
+            )
         loaded: list[ConfigurationModels.Deployment.Responder] = []
-        for entry in responders_configuration or []:
+        for index, entry in enumerate(responders_configuration):
+            name = entry.get("name") if isinstance(entry, dict) else None
+            if not isinstance(name, str) or not name:
+                logger.warning("skipping_responder_without_name", index=index)
+                continue
             try:
                 responder = DeploymentResponder.model_validate(entry)
-            except ValidationError:
-                logger.warning("skipping_responder_without_name", detail=str(entry)[:120])
-                continue
+            except ValidationError as exc:
+                logger.warning(
+                    "responder_has_invalid_keys",
+                    index=index,
+                    responder=name,
+                    keys=[".".join(loc) for loc, _message in error_locations(exc, entry)],
+                )
+                description = entry.get("description")
+                responder = DeploymentResponder(
+                    name=name, description=description if isinstance(description, str) else ""
+                )
             loaded.append(Responder(name=responder.name, description=responder.description))
         return loaded
 
@@ -90,14 +114,18 @@ class ConfigurationsLoader:
         if not config:
             return None
 
+        failure: ConfigurationError | None = None
         try:
-            visibility = VisibilityConfig.model_validate(config)
-        except (KeyError, TypeError, ValueError) as exc:
-            logger.critical(
-                "visibility_config_load_failed",
-                detail=str(exc),
+            visibility = validate_configuration(
+                VisibilityConfig, config, file_key="visibility.toml"
             )
-            raise ValueError(f"Failed to load visibility configuration: {str(exc)}") from exc
+        except ConfigurationError as exc:
+            failure = exc
+        if failure is not None:
+            logger.critical("visibility_config_load_failed", detail=str(failure))
+            raise ConfigurationError(
+                "visibility.toml", failure.errors, prefix="Failed to load visibility configuration: "
+            )
 
         from opentide.validation.configuration import visibility_cross_issues
 

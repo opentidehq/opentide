@@ -65,7 +65,7 @@ class CrowdstrikeService:
 
     def __init__(self, tenant_config: ConfigurationModels.Systems.Crowdstrike.Tenant) -> None:
         self.DEBUG = DebugEnvironment.ENABLED
-        self.DEPLOYER_IDENTIFIER = Opentide.Configurations.Systems.SentinelOne.platform.identifier
+        self.DEPLOYER_IDENTIFIER = "crowdstrike"
         self.tenant_config = tenant_config
         self.verify = tenant_tls_verify(tenant_config.setup.ssl, platform='crowdstrike', tenant=tenant_config.name)
         BASE_URL = self._get_base_api(self.tenant_config.setup.api)

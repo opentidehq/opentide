@@ -10,7 +10,10 @@ def test_schema_run_invokes_pipeline() -> None:
 
     with (
         patch("opentide.generation.schema.export_all_registered_schemas") as mock_export,
-        patch("opentide.generation.schema.generate_model_schema", return_value={"type": "object"}),
+        patch(
+            "opentide.generation.schema.generate_configuration_schema",
+            return_value={"type": "object"},
+        ),
         patch("opentide.generation.schema.export_opentide_router") as mock_router,
     ):
         schema.run()

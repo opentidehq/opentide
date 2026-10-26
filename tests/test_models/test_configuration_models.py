@@ -235,3 +235,75 @@ def test_misp_model_constants_match_the_sharing_package() -> None:
     assert set(MispIntegration.model_fields) == constants.MISP_BLOCK_KEYS
     required = {name for name, field in MispIntegration.model_fields.items() if field.is_required()}
     assert required == constants.REQUIRED_MISP_KEYS
+
+
+# --- Review follow-ups: tolerance where the loader was tolerant, no secret anywhere ----
+
+
+def test_responder_with_a_stray_key_is_kept() -> None:
+    # `default_responders` written below the last [[responders]] lands inside it.
+    with patch("opentide.loading.config_loader.logger") as logger:
+        loaded = ConfigurationsLoader.load_responders(
+            [{"name": "CSIRC"}, {"name": "CATCH", "default_responders": "CSIRC"}]
+        )
+    assert [responder.name for responder in loaded] == ["CSIRC", "CATCH"]
+    (call,) = logger.warning.call_args_list
+    assert call.args[0] == "responder_has_invalid_keys"
+    assert call.kwargs["keys"] == ["default_responders"]
+
+
+def test_responder_log_never_holds_values() -> None:
+    secret = "SEKRET_9f8e7d"
+    with patch("opentide.loading.config_loader.logger") as logger:
+        ConfigurationsLoader.load_responders([{"token": secret}, {"name": "x", "token": secret}])
+    assert secret not in repr(logger.mock_calls)
+
+
+def test_non_list_responders_is_a_configuration_error() -> None:
+    with pytest.raises(ConfigurationError, match="responders: must be"):
+        ConfigurationsLoader.load_deployment({"statuses": [_STATUS], "responders": 5})
+
+
+def test_plugin_platform_is_not_validated() -> None:
+    from opentide.platforms.config import build_system_config
+
+    raw = {
+        "platform": {"enabled": True},
+        "defaults": {"x": 1},
+        "tenants": [{"name": "T", "region": "eu-west-1", "parameters": {"retries": 3}}],
+    }
+    assert build_system_config("acme", raw).raw["defaults"] == {"x": 1}
+
+
+def test_coretide_global_toml_does_not_fail_the_paths(tmp_path) -> None:
+    from opentide.registry.paths import resolve_workspace_paths
+
+    legacy = {"paths": {"core": {"wiki_docs_folder": "wiki/"}}, "data_fields": {}}
+    resolve_workspace_paths({"paths": _bundled("paths.toml"), "global": legacy}, workspace=tmp_path)
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        {"ssl": "SECRET-VALUE-1"},
+        {"schedule_offset": "SECRET-VALUE-1"},
+        {"port": 1.5, "token": "SECRET-VALUE-1", "url": ["SECRET-VALUE-1"]},
+    ],
+)
+def test_a_failing_secret_value_is_never_repeated(setup: dict[str, Any]) -> None:
+    from opentide.models.configuration.loading import validate_configuration
+    from opentide.models.configuration.platforms import SplunkConfiguration
+
+    document = {"tenants": [{"name": "T", "setup": {"url": "u", "port": 1, "app": "a", **setup}}]}
+    with pytest.raises(ConfigurationError) as raised:
+        validate_configuration(SplunkConfiguration, document, file_key="platforms/splunk.toml")
+    error = raised.value
+    assert "SECRET-VALUE-1" not in f"{error} {error!r} {error.errors!r}"
+    assert error.__context__ is None and error.__cause__ is None
+
+
+def test_visibility_error_never_repeats_values() -> None:
+    with pytest.raises(ValueError, match="Failed to load visibility") as raised:
+        ConfigurationsLoader.load_visibility({"logsources": [{"name": "SEKRET", "x": ["SEKRET"]}]})
+    assert "SEKRET" not in str(raised.value)
+    assert raised.value.__context__ is None

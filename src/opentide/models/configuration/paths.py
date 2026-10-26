@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from opentide.models.configuration.base import ConfigurationModel
+from opentide.models.configuration.base import ConfigurationModel, ObjectFamily
 
 _PATH = "Path relative to the workspace root."
 
@@ -165,7 +165,7 @@ class LegacyTemplateNames(ConfigurationModel):
         default=None, description="Alias of artifacts.templates.objective."
     )
     rule: str | None = Field(default=None, description="Alias of artifacts.templates.rule.")
-    objects: list[str] | None = Field(
+    objects: list[ObjectFamily] | None = Field(
         default=None, description="Families a template is generated for."
     )
 
@@ -196,7 +196,7 @@ class Recomposition(ConfigurationModel):
 class PathsConfiguration(ConfigurationModel):
     """Merged `paths.toml` or legacy `global.toml`: workspace layout and artifact names."""
 
-    objects: list[str] | None = Field(
+    objects: list[ObjectFamily] | None = Field(
         default=None, description="Object families the workspace holds (legacy global.toml)."
     )
     paths: WorkspacePaths | None = Field(default=None, description="Workspace directories.")

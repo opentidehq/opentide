@@ -20,14 +20,19 @@ def workspace_config(configs: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_paths_configuration(configs: dict[str, Any]) -> None:
-    """Validate merged `paths.toml` and legacy `global.toml` against `PathsConfiguration`."""
+    """Validate the paths document `workspace_config` reads against `PathsConfiguration`.
+
+    That is merged `paths.toml`, which always ships; legacy `global.toml` only
+    when there is no `paths.toml`. A migrated CoreTIDE `global.toml` carries
+    keys no current code reads, and validating it would fail every command.
+    """
     from opentide.models.configuration.loading import validate_configuration
     from opentide.models.configuration.paths import PathsConfiguration
 
-    for key in ("paths", "global"):
-        document = configs.get(key)
-        if isinstance(document, dict):
-            validate_configuration(PathsConfiguration, document, file_key=f"{key}.toml")
+    key = "paths" if "paths" in configs else "global"
+    document = configs.get(key)
+    if isinstance(document, dict):
+        validate_configuration(PathsConfiguration, document, file_key=f"{key}.toml")
 
 
 def _rel(base: Path, value: str) -> Path:

@@ -53,25 +53,27 @@
       "title": "DiagramSettings",
       "type": "object"
     },
-    "DocumentFlavor": {
-      "description": "Supported markdown rendering flavors.",
-      "enum": [
-        "github",
-        "gitlab",
-        "azure_devops",
-        "generic"
-      ],
-      "title": "DocumentFlavor",
-      "type": "string"
-    },
     "FlavorSettings": {
       "additionalProperties": false,
       "description": "`[flavor]`: which markdown dialect the documentation is written for.",
       "properties": {
         "default": {
-          "$ref": "#/$defs/DocumentFlavor",
-          "default": "generic",
-          "description": "Markdown flavor used when opentide generate docs gets no --flavor."
+          "type": "string",
+          "anyOf": [
+            {
+              "enum": [
+                "github",
+                "gitlab",
+                "azure_devops",
+                "generic"
+              ]
+            },
+            {
+              "const": "azure-devops"
+            }
+          ],
+          "description": "Markdown flavor used when opentide generate docs gets no --flavor.",
+          "default": "generic"
         }
       },
       "title": "FlavorSettings",
@@ -223,7 +225,21 @@
     "flavor": {
       "anyOf": [
         {
-          "$ref": "#/$defs/DocumentFlavor"
+          "anyOf": [
+            {
+              "enum": [
+                "github",
+                "gitlab",
+                "azure_devops",
+                "generic"
+              ]
+            },
+            {
+              "const": "azure-devops"
+            }
+          ],
+          "description": "Markdown flavor: github, gitlab, azure_devops or generic.",
+          "type": "string"
         },
         {
           "$ref": "#/$defs/FlavorSettings"

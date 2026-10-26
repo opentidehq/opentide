@@ -10,11 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal
-from urllib.parse import urlparse
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
-from opentide.models.configuration.base import ConfigurationModel
+from opentide.models.configuration.base import ConfigurationModel, ObjectFamily
 
 # Kept equal to `opentide.sharing.constants` by a test. Importing that package
 # here would import the sharing loader, which imports this module.
@@ -24,12 +23,14 @@ DEFAULT_RULE_STATUSES = ("PRODUCTION",)
 
 #: `tlp` vocabulary names, in ceiling order.
 TlpName = Literal["clear", "green", "amber", "amber+strict", "red"]
-ObjectFamily = Literal["threat", "objective", "rule"]
 
 #: The `8-4-4-4-12` hex form, hyphens required, either case.
 ORGANISATION_UUID_PATTERN = (
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
+
+#: An http(s) URL with a host. Stated in the schema so the editor and the CLI agree.
+HTTP_URL_PATTERN = r"^[Hh][Tt][Tt][Pp][Ss]?://[^/?#\s]+"
 
 MISP_SCHEMA_ID = "sharing::misp::1.0"
 #: Annotation keyword carrying a schema identifier in exported JSON Schema.
@@ -54,6 +55,7 @@ class MispIntegration(ConfigurationModel):
     enabled: bool = Field(default=False, description="Share to this instance.")
     url: str = Field(
         min_length=1,
+        pattern=HTTP_URL_PATTERN,
         description="Base URL of the MISP instance (http or https).",
         json_schema_extra={"format": "uri"},
     )
@@ -89,14 +91,6 @@ class MispIntegration(ConfigurationModel):
     )
     publish: bool = Field(default=False, description="Publish events after writing them.")
     verify_ssl: bool = Field(default=True, description="Verify the instance's TLS certificate.")
-
-    @field_validator("url")
-    @classmethod
-    def _http_url(cls, value: str) -> str:
-        parsed = urlparse(value.strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("url must be an http(s) URL")
-        return value
 
 
 def _is_table_array(value: object) -> bool:

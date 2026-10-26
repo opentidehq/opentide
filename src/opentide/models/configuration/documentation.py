@@ -4,18 +4,27 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BeforeValidator, Field, Strict
+from pydantic import BeforeValidator, Field, Strict, WithJsonSchema
 
 from opentide.documentation.types import DocumentFlavor
-from opentide.models.configuration.base import ConfigurationModel
+from opentide.models.configuration.base import ConfigurationModel, ObjectFamily
 
-ObjectFamily = Literal["threat", "objective", "rule"]
-#: A flavor written by name (`default = "gitlab"`).
-#: `azure-devops` is read as `azure_devops`, as `--flavor` does.
+#: A flavor written by name (`default = "gitlab"`). `azure-devops` is read as
+#: `azure_devops`, as `--flavor` does, and the schema accepts it too.
 FlavorName = Annotated[
     DocumentFlavor,
     Strict(False),
     BeforeValidator(lambda value: value.replace("-", "_") if isinstance(value, str) else value),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "anyOf": [
+                {"enum": [flavor.value for flavor in DocumentFlavor]},
+                {"const": "azure-devops"},
+            ],
+            "description": "Markdown flavor: github, gitlab, azure_devops or generic.",
+        }
+    ),
 ]
 
 

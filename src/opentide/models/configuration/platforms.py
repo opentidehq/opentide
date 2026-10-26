@@ -8,7 +8,7 @@ tenant loads, not here.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import ConfigDict, Field
 
@@ -17,6 +17,7 @@ from opentide.models.configuration.base import (
     EnvPlaceholder,
     OpenConfigurationModel,
     RunStrategyName,
+    SslValue,
 )
 
 _SECRET = " Use a $NAME placeholder; do not commit the value."
@@ -79,9 +80,12 @@ class Modifier(ConfigurationModel):
 class TenantSetup(ConfigurationModel):
     """`[tenants.setup]`: connection settings shared by every platform."""
 
-    ssl: bool | str = Field(
+    ssl: SslValue = Field(
         default=True,
-        description="Verify the tenant's TLS certificate. A $NAME placeholder is allowed.",
+        description=(
+            "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, "
+            "1/0, or a $NAME placeholder."
+        ),
     )
 
 
@@ -90,9 +94,11 @@ class TenantBase(ConfigurationModel):
 
     name: str = Field(min_length=1, description="Tenant name a rule's platform block may list.")
     description: str = Field(default="", description="What the tenant is.")
-    strategies: list[RunStrategyName] | RunStrategyName | None = Field(
-        default=None,
-        description="Status strategies the tenant accepts (PREVIEW, RELEASE). Omit for both.",
+    strategies: Annotated[list[RunStrategyName], Field(min_length=1)] | RunStrategyName | None = (
+        Field(
+            default=None,
+            description="Status strategies the tenant accepts (PREVIEW, RELEASE). Omit for both.",
+        )
     )
     manual: bool = Field(
         default=False, description="Only rules whose platform block lists this tenant reach it."
@@ -153,7 +159,9 @@ class SplunkSetup(TenantSetup):
     correlation_searches: bool | EnvPlaceholder = Field(
         default=True, description="Save rules as Enterprise Security correlation searches."
     )
-    allow_skew: str | None = Field(default=None, description="Splunk allow_skew value.")
+    allow_skew: str | int | float | None = Field(
+        default=None, description="Splunk allow_skew value."
+    )
     schedule_offset: int | EnvPlaceholder = Field(
         default=0, description="Minutes added to the computed schedule."
     )
@@ -241,9 +249,13 @@ class SentinelOneSetup(TenantSetup):
     """`[tenants.setup]` for SentinelOne."""
 
     url: str = Field(description="SentinelOne console URL.")
-    account_id: int | EnvPlaceholder = Field(description="Account ID the rules belong to.")
+    account_id: int | str = Field(
+        description=(
+            "Account ID the rules belong to: a number, a quoted ID or a $NAME placeholder."
+        )
+    )
     api_token: str = Field(description="API token." + _SECRET)
-    site_id: int | EnvPlaceholder | None = Field(
+    site_id: int | str | None = Field(
         default=None, description="Site ID, when the rules are scoped to one site."
     )
 
@@ -356,7 +368,7 @@ class ElasticSetup(TenantSetup):
 
     url: str = Field(description="Kibana URL.")
     elasticsearch_url: str = Field(description="Elasticsearch URL.")
-    api_key: str = Field(description="API key. Must be a $NAME placeholder.")
+    api_key: EnvPlaceholder = Field(description="API key. Must be a $NAME placeholder.")
     space: str = Field(default="default", description="Kibana space the rules are saved in.")
     index: list[str] | None = Field(default=None, description="Index patterns rules search.")
     tags: list[str] | None = Field(default=None, description="Tags added to every rule.")
@@ -387,18 +399,25 @@ class GenericTenantSetup(TenantSetup):
 
 
 class GenericTenant(TenantBase):
-    """`[[tenants]]` of a platform opentide has no model for."""
+    """`[[tenants]]` of a platform opentide has no model for. Plugins define its keys."""
+
+    model_config = ConfigDict(extra="allow")
 
     setup: GenericTenantSetup = Field(
         default_factory=GenericTenantSetup, description="Connection settings."
     )
-    parameters: dict[str, list[str]] | None = Field(
+    parameters: dict[str, Any] | None = Field(
         default=None, description="Values rules can select from."
     )
 
 
 class PlatformConfiguration(PlatformConfigurationBase):
-    """Merged `platforms/<id>.toml` for a platform opentide has no model for."""
+    """Merged `platforms/<id>.toml` for a platform opentide has no model for.
+
+    A platform plugin owns its file, so tables beyond the shared ones are open.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     tenants: list[GenericTenant] = Field(default_factory=list, description="Tenants.")
 

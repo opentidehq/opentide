@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
     "GenericTenant": {
-      "additionalProperties": false,
-      "description": "`[[tenants]]` of a platform opentide has no model for.",
+      "additionalProperties": true,
+      "description": "`[[tenants]]` of a platform opentide has no model for. Plugins define its keys.",
       "properties": {
         "name": {
           "description": "Tenant name a rule's platform block may list.",
@@ -21,18 +21,33 @@
           "anyOf": [
             {
               "items": {
-                "enum": [
-                  "PREVIEW",
-                  "RELEASE"
+                "anyOf": [
+                  {
+                    "enum": [
+                      "PREVIEW",
+                      "RELEASE"
+                    ]
+                  },
+                  {
+                    "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                  }
                 ],
                 "type": "string"
               },
+              "minItems": 1,
               "type": "array"
             },
             {
-              "enum": [
-                "PREVIEW",
-                "RELEASE"
+              "anyOf": [
+                {
+                  "enum": [
+                    "PREVIEW",
+                    "RELEASE"
+                  ]
+                },
+                {
+                  "pattern": "^\\s*([pP][rR][eE][vV][iI][eE][wW]|[rR][eE][lL][eE][aA][sS][eE])\\s*$"
+                }
               ],
               "type": "string"
             },
@@ -57,12 +72,7 @@
         "parameters": {
           "anyOf": [
             {
-              "additionalProperties": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
+              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -90,11 +100,18 @@
               "type": "boolean"
             },
             {
+              "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
+              "pattern": "^\\$",
+              "type": "string"
+            },
+            {
+              "description": "A boolean written as a word: true/false, yes/no, on/off, 1/0.",
+              "pattern": "^([tT][rR][uU][eE]|[fF][aA][lL][sS][eE]|[yY][eE][sS]|[nN][oO]|[oO][nN]|[oO][fF][fF]|1|0)$",
               "type": "string"
             }
           ],
           "default": true,
-          "description": "Verify the tenant's TLS certificate. A $NAME placeholder is allowed.",
+          "description": "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, 1/0, or a $NAME placeholder.",
           "title": "Ssl"
         }
       },
@@ -307,8 +324,8 @@
       "type": "object"
     }
   },
-  "additionalProperties": false,
-  "description": "Merged `platforms/<id>.toml` for a platform opentide has no model for.",
+  "additionalProperties": true,
+  "description": "Merged `platforms/<id>.toml` for a platform opentide has no model for.\n\nA platform plugin owns its file, so tables beyond the shared ones are open.",
   "properties": {
     "platform": {
       "$ref": "#/$defs/PlatformIdentity",

@@ -70,18 +70,20 @@ issues = configuration_text_issues("sharing.toml", buffer_text, status_names={"P
 | `unknown_key` | error | A key the model does not declare |
 | `schema_validation` | error | A value of the wrong type or outside its enum |
 | `promotion_target_unknown` | error | `promotion.promotion_target` is not a `[[statuses]]` name |
-| `asset_unknown` | error | A visibility log source or detector names an undeclared asset |
+| `asset_unknown` | warning | A visibility log source or detector names an undeclared asset |
 | `identifier_mismatch` | error | `[platform] identifier` differs from the file name stem |
 | `config_parse` | error | The text is not valid TOML |
 | `not_a_configuration_file` | warning | The path is not a file opentide reads |
 
-`sharing.toml` returns the `sharing-config` codes of the [sharing spec](/docs/specifications/specs/sharing/): `missing_field`, `duplicate_name`, `name_invalid`, `unknown_key`, `max_tlp_unknown`, `organisation_uuid_invalid`, `object_type_unknown`, `sharing_directory`, `rule_status_unknown` (errors), and `api_key_literal`, `unknown_connector` (warnings). `api_key` must be `${NAME}` with an uppercase name; a literal key is a warning, and the warning names the block, never the key.
+A `[[responders]]` entry that does not match its model is a warning: the loader keeps an entry that has a name and skips one that has none. A platform file is checked with the model of the platform the loader files it under (`[platform] identifier`, then `[tide] identifier`, then the file name). A platform plugin's file is open: only `[platform]`, `[[modifiers]]` and the tenant `name`, `strategies`, `manual` and `ssl` are checked. A path under `configurations/sharing/` returns `sharing_directory`, and one under `.opentide/schemas/` is not a configuration file.
+
+`sharing.toml` field paths point into the checked file: `("misp", "<index>", "<key>")`, with the block name in `context.block`. A finding on a block the file does not hold (it comes from an earlier layer) has an empty path, and `context.layer` / `context.index` say where it is. `sharing.toml` returns the `sharing-config` codes of the [sharing spec](/docs/specifications/specs/sharing/): `missing_field`, `duplicate_name`, `name_invalid`, `unknown_key`, `max_tlp_unknown`, `organisation_uuid_invalid`, `object_type_unknown`, `sharing_directory`, `rule_status_unknown` (errors), and `api_key_literal`, `unknown_connector` (warnings). `api_key` must be `${NAME}` with an uppercase name; a literal key is a warning, and the warning names the block, never the key.
 
 | Argument | Default | Purpose |
 |----------|---------|---------|
 | `earlier_layers` | the bundled file | Layers the file overrides; pass the workspace file when checking a parent instance |
 | `later_layers` | none | Layers that override the file |
-| `status_names` | bundled statuses | Merged `deployment.toml` status names, for `sharing.toml` `rule_statuses` |
+| `status_names` | the workspace's statuses, read from an absolute path; else the bundled ones | Merged `deployment.toml` status names, for `sharing.toml` `rule_statuses` |
 | `sharing_directory` | `False` | Report `sharing_directory` when `configurations/sharing/` exists |
 | `partial` | `False` | Skip required-key checks, for a layer checked without the layers it overrides |
 

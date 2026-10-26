@@ -82,7 +82,7 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         ({"targets": {"misp": {"url": "https://example.org"}}}, "unknown_key"),
         ({"misp": [_block(), _block()]}, "duplicate_name"),
         ({"misp": [_block(name="Bad Name")]}, "name_invalid"),
-        ({"misp": [_block(name="")]}, "missing_field"),
+        ({"misp": [_block(name="")]}, "name_invalid"),
         ({"misp": [{"name": "misp-internal"}]}, "missing_field"),
         ({"misp": [_block(max_tlp="purple")]}, "max_tlp_unknown"),
         ({"misp": [_block(organisation_uuid="not-a-uuid")]}, "organisation_uuid_invalid"),

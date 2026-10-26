@@ -22,13 +22,15 @@ opentide validate --check schema
 
 | Flag | Purpose |
 |------|---------|
-| `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `cve`, `sharing-config` |
+| `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `configuration`, `cve`, `sharing-config` |
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
+
+`configuration` runs by default on a full run. It checks every merged configuration file the CLI reads (`paths.toml`, `deployment.toml`, `schema.toml`, `visibility.toml`, `documentation.toml`, and each built-in `platforms/<id>.toml`) against its [model](../sdk/configuration.md), so a misspelt key fails `validate` instead of the next `deploy` or `generate docs`. Each issue's `context.file` names the file and `field_path` the key, for example `unknown_key` at `promotion.enabeld` in `deployment.toml`. A malformed `[[responders]]` entry and an undeclared visibility asset are warnings, as the loaders skip them; a run narrowed with `--file`, `--uuid` or `--type` skips this check unless `--check configuration` asks for it. Values are never printed.
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 

@@ -73,8 +73,13 @@ def test_no_stale_fixture() -> None:
 
 @pytest.mark.parametrize("name", sorted(set(_DOCUMENTS) - {ROUTER_NAME}))
 def test_every_field_has_a_description(name: str) -> None:
+    document = _DOCUMENTS[name]
     found: list[str] = []
-    _undescribed(_DOCUMENTS[name], name, found)
+    _undescribed(document, name, found)
+    if not document.get("description"):
+        found.append(f"{name} (document)")
+    if not document.get("title"):
+        found.append(f"{name} (title)")
     assert found == []
 
 
@@ -206,17 +211,17 @@ def test_enums_for_completion() -> None:
         "UNIVERSAL",
     ]
     tenant = _def(_DOCUMENTS["platforms.sentinel.schema.json"], "SentinelTenant")
-    assert {"enum": ["PREVIEW", "RELEASE"], "type": "string"} in tenant["properties"]["strategies"][
-        "anyOf"
-    ]
+    single = tenant["properties"]["strategies"]["anyOf"][1]
+    assert {"enum": ["PREVIEW", "RELEASE"]} in single["anyOf"]
+    flavor = _def(_DOCUMENTS["documentation.schema.json"], "FlavorSettings")
+    assert {"enum": ["github", "gitlab", "azure_devops", "generic"]} in flavor["properties"][
+        "default"
+    ]["anyOf"]
     documentation = _DOCUMENTS["documentation.schema.json"]
-    assert _def(documentation, "DocumentFlavor")["enum"] == [
-        "github",
-        "gitlab",
-        "azure_devops",
-        "generic",
-    ]
     assert documentation["properties"]["scope"]["items"]["enum"] == ["threat", "objective", "rule"]
+    paths = _DOCUMENTS["paths.schema.json"]
+    objects = paths["properties"]["objects"]["anyOf"][0]["items"]
+    assert objects["enum"] == ["threat", "objective", "rule"]
 
 
 def test_tlp_enum_matches_the_bundled_vocabulary() -> None:
@@ -254,3 +259,67 @@ def test_main(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main([str(tmp_path)]) == 0
     assert ROUTER_NAME in capsys.readouterr().out
     assert main([]) == 2
+
+
+# --- The schema accepts exactly what the model accepts ---------------------------------
+
+_SENTINEL_SETUP = {
+    "resource_group": "rg",
+    "workspace_name": "ws",
+    "workspace_id": "$W",
+    "azure_tenant_id": "$T",
+    "azure_subscription_id": "$S",
+    "azure_client_id": "$C",
+    "azure_client_secret": "$X",
+}
+_ELASTIC_SETUP = {"url": "https://k.example", "elasticsearch_url": "https://e.example"}
+_MISP = {"name": "m", "url": "https://m.example", "api_key": "${K}", "max_tlp": "amber"}
+
+
+def _tenant(setup: dict[str, Any], **keys: Any) -> dict[str, Any]:
+    return {"tenants": [{"name": "T", "setup": setup, **keys}]}
+
+
+#: (file key, merged document). Each case once disagreed, or sits on a boundary.
+_PARITY_CASES: list[tuple[str, dict[str, Any]]] = [
+    ("platforms/sentinel.toml", _tenant(_SENTINEL_SETUP)),
+    ("platforms/sentinel.toml", _tenant(_SENTINEL_SETUP, strategies=["preview"])),
+    ("platforms/sentinel.toml", _tenant(_SENTINEL_SETUP, strategies=" RELEASE ")),
+    ("platforms/sentinel.toml", _tenant(_SENTINEL_SETUP, strategies=["DELETION"])),
+    ("platforms/sentinel.toml", _tenant(_SENTINEL_SETUP, strategies=[])),
+    ("platforms/sentinel.toml", _tenant({**_SENTINEL_SETUP, "ssl": "No"})),
+    ("platforms/sentinel.toml", _tenant({**_SENTINEL_SETUP, "ssl": "maybe"})),
+    ("platforms/sentinel.toml", _tenant({**_SENTINEL_SETUP, "ssl": "$SSL"})),
+    ("platforms/elastic.toml", _tenant({**_ELASTIC_SETUP, "api_key": "$ELASTIC_KEY"})),
+    ("platforms/elastic.toml", _tenant({**_ELASTIC_SETUP, "api_key": "literal-key"})),
+    ("platforms/sentinel_one.toml", _tenant({"url": "u", "api_token": "$T", "account_id": "12"})),
+    ("platforms/acme.toml", {"defaults": {"x": 1}, "tenants": [{"name": "T", "region": "eu"}]}),
+    ("documentation.toml", {"flavor": "azure-devops"}),
+    ("documentation.toml", {"flavor": {"default": "azure-devops"}}),
+    ("documentation.toml", {"flavor": "word"}),
+    ("sharing.toml", {"misp": [_MISP]}),
+    ("sharing.toml", {"misp": [{**_MISP, "url": "ftp://m.example"}]}),
+    ("sharing.toml", {"misp": [{**_MISP, "url": "m.example"}]}),
+    ("sharing.toml", {"misp": [{**_MISP, "url": "HTTPS://m.example/path"}]}),
+    (
+        "sharing.toml",
+        {"misp": [{**_MISP, "organisation_uuid": "ABCDEF01-2345-6789-ABCD-EF0123456789"}]},
+    ),
+    ("sharing.toml", {"opencti": [{"name": "x"}]}),
+    ("paths.toml", {"objects": ["threat", "tvm"]}),
+]
+
+
+@pytest.mark.parametrize(("key", "document"), _PARITY_CASES)
+def test_schema_and_model_agree(key: str, document: dict[str, Any]) -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    from pydantic import ValidationError
+
+    schema = _DOCUMENTS[configuration_schema_name(configuration_file_key(key) or key)]
+    schema_ok = not list(jsonschema.Draft202012Validator(schema).iter_errors(document))
+    try:
+        configuration_files()[configuration_file_key(key) or key].model_validate(document)
+        model_ok = True
+    except ValidationError:
+        model_ok = False
+    assert schema_ok == model_ok

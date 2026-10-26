@@ -87,12 +87,29 @@ def test_override_applied_to_sharing_equals_merged() -> None:
     )
     assert merged.ok
     assert [block.name for block in merged.blocks] == [block["name"] for block in expected["misp"]]
+    defaults = {
+        "enabled": False,
+        "object_types": ["threat", "objective", "rule"],
+        "rule_statuses": ["PRODUCTION"],
+        "organisation_uuid": None,
+        "publish": False,
+        "verify_ssl": True,
+    }
     for block, raw in zip(merged.blocks, expected["misp"], strict=True):
-        assert block.url == raw["url"]
-        assert block.max_tlp == raw["max_tlp"]
-        assert block.enabled is raw.get("enabled", False)
-        assert list(block.rule_statuses) == raw.get("rule_statuses", ["PRODUCTION"])
-        assert block.organisation_uuid == raw.get("organisation_uuid")
+        want = {**defaults, **raw}
+        got = {
+            "name": block.name,
+            "url": block.url,
+            "api_key": f"${{{block.api_key_env}}}",
+            "max_tlp": block.max_tlp,
+            "enabled": block.enabled,
+            "object_types": list(block.object_types),
+            "rule_statuses": list(block.rule_statuses),
+            "organisation_uuid": block.organisation_uuid,
+            "publish": block.publish,
+            "verify_ssl": block.verify_ssl,
+        }
+        assert got == want
 
 
 def test_override_is_checked_on_top_of_its_base_layer() -> None:
@@ -347,7 +364,8 @@ def test_schema_vocabulary_table_stays_open() -> None:
 def test_documentation_flavor_is_an_enum() -> None:
     assert configuration_file_issues("documentation.toml", {"flavor": "github"}) == []
     issues = configuration_file_issues("documentation.toml", {"flavor": {"default": "word"}})
-    assert issues and all(issue.field_path[0] == "flavor" for issue in issues)
+    assert [issue.field_path for issue in issues] == [("flavor", "default")]
+    assert configuration_file_issues("documentation.toml", {"flavor": "azure-devops"}) == []
 
 
 def test_paths_and_legacy_global() -> None:
@@ -370,3 +388,205 @@ def test_text_entry_point_reports_parse_errors() -> None:
 def test_merge_layers_replaces_arrays_and_merges_tables() -> None:
     merged = merge_layers([{"a": {"x": 1, "y": [1, 2]}}, {"a": {"y": [3]}, "b": 2}])
     assert merged == {"a": {"x": 1, "y": [3]}, "b": 2}
+
+
+# --- Sharing field paths point into the checked file ----------------------------------
+
+_B = {"name": "a", "url": "https://m.example.org", "api_key": "${K}", "max_tlp": "amber"}
+
+
+def test_sharing_paths_are_indexes_into_the_file() -> None:
+    issues = configuration_file_issues(
+        "sharing.toml", _load(SHARING / "invalid" / "bad-max-tlp.toml")
+    )
+    assert [(issue.code, issue.field_path) for issue in issues] == [
+        ("max_tlp_unknown", ("misp", "0", "max_tlp"))
+    ]
+    assert issues[0].context["block"] == "misp-internal"
+
+
+def test_every_duplicate_block_is_named() -> None:
+    issues = configuration_file_issues(
+        "sharing.toml", {"misp": [_B, {**_B, "url": "https://b.example"}, _B]}
+    )
+    duplicates = [issue.field_path for issue in issues if issue.code == "duplicate_name"]
+    assert duplicates == [("misp", "0", "name"), ("misp", "1", "name"), ("misp", "2", "name")]
+
+
+def test_same_name_in_another_layer_is_not_a_duplicate() -> None:
+    issues = configuration_file_issues(
+        "sharing.toml", {"misp": [_B]}, earlier_layers=[{"opencti": [{"name": "a"}]}]
+    )
+    assert "duplicate_name" not in _codes(issues)
+
+
+def test_finding_from_an_earlier_layer_points_at_the_block_in_this_file() -> None:
+    issues = configuration_file_issues(
+        "sharing.toml",
+        {"misp": [{"name": "a", "enabled": True}]},
+        earlier_layers=[{"misp": [{**_B, "max_tlp": "white"}]}],
+    )
+    assert [(issue.code, issue.field_path) for issue in issues] == [
+        ("max_tlp_unknown", ("misp", "0", "max_tlp"))
+    ]
+    assert issues[0].context["layer"] == 0
+
+
+@pytest.mark.parametrize(
+    ("overrides", "code"),
+    [
+        ({"name": ""}, "name_invalid"),
+        ({"organisation_uuid": 5}, "organisation_uuid_invalid"),
+        ({"object_types": "rule"}, "object_type_unknown"),
+        ({"rule_statuses": [""]}, "rule_status_unknown"),
+        ({"max_tlp": 3}, "max_tlp_unknown"),
+        ({"url": "ftp://m.example"}, "url_invalid"),
+    ],
+)
+def test_wrong_type_takes_the_spec_code(overrides: dict[str, Any], code: str) -> None:
+    issues = configuration_file_issues("sharing.toml", {"misp": [{**_B, **overrides}]})
+    assert _codes([issue for issue in issues if issue.severity == "error"]) == {code}
+
+
+def test_a_layer_error_does_not_hide_block_findings() -> None:
+    issues = configuration_file_issues(
+        "sharing.toml", {"foo": 1, "misp": [{**_B, "max_tlp": "white", "api_key": "literal"}]}
+    )
+    assert _codes(issues) == {"unknown_key", "max_tlp_unknown", "api_key_literal"}
+
+
+def test_api_key_with_whitespace_is_a_literal() -> None:
+    issues = configuration_file_issues("sharing.toml", {"misp": [{**_B, "api_key": " ${K} "}]})
+    assert _codes(issues) == {"api_key_literal"}
+
+
+def test_rule_statuses_use_the_workspace_statuses(tmp_path: Path) -> None:
+    configurations = tmp_path / ".opentide" / "configurations"
+    configurations.mkdir(parents=True)
+    (configurations / "deployment.toml").write_text(
+        '[[statuses]]\nname = "CUSTOM"\ndescription = "c"\nstrategy = "RELEASE"\n', encoding="utf-8"
+    )
+    document = {"misp": [{**_B, "rule_statuses": ["CUSTOM"]}]}
+    assert configuration_file_issues(configurations / "sharing.toml", document) == []
+    assert "rule_status_unknown" in _codes(configuration_file_issues("sharing.toml", document))
+
+
+# --- Routing ---------------------------------------------------------------------------
+
+
+def test_sharing_directory_file_is_reported() -> None:
+    for name in ("sharing.toml", "misp.toml"):
+        path = f"/w/.opentide/configurations/sharing/{name}"
+        assert _codes(configuration_file_issues(path, {"misp": [_B]})) == {"sharing_directory"}
+
+
+def test_generated_schemas_folder_is_not_configuration() -> None:
+    issues = configuration_file_issues("/w/.opentide/schemas/deployment.toml", {})
+    assert _codes(issues) == {"not_a_configuration_file"}
+
+
+def test_resources_toml_message_says_it_is_not_checked() -> None:
+    (issue,) = configuration_file_issues("resources.toml", {})
+    assert "not checked" in issue.message
+
+
+def test_platform_file_is_routed_the_way_the_loader_keys_it() -> None:
+    issues = configuration_file_issues(
+        "platforms/legacy.toml", {"tide": {"identifier": "sentinel"}, "tenants": [{"name": "T"}]}
+    )
+    assert ("tenants", "0", "setup") in {issue.field_path for issue in issues}
+
+
+def test_windows_path_stem_is_read() -> None:
+    path = "C:\\ws\\.opentide\\configurations\\platforms\\sentinel.toml"
+    assert configuration_file_issues(path, {"platform": {"identifier": "sentinel"}}) == []
+
+
+def test_plugin_platform_file_is_open() -> None:
+    document = {
+        "defaults": {"x": 1},
+        "tenants": [{"name": "T", "region": "eu", "parameters": {"n": 3}}],
+    }
+    assert configuration_file_issues("platforms/acme.toml", document) == []
+
+
+# --- Robustness ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "default_responders = " + "[" * 1200 + "]" * 1200,
+        "x = " + "{a = " * 450 + "1" + "}" * 450,
+        ".".join(["k"] * 1100) + " = 1",
+    ],
+)
+def test_deeply_nested_text_is_a_parse_issue(text: str) -> None:
+    issues = configuration_text_issues("deployment.toml", text)
+    # Whatever the parser's depth limit, the call returns findings instead of raising.
+    assert issues
+    assert _codes(issues) <= {"config_parse", "schema_validation", "unknown_key"}
+
+
+def test_bad_responder_is_a_warning_like_the_loader_treats_it() -> None:
+    issues = configuration_file_issues(
+        "deployment.toml", {"responders": [{"description": "no name"}, {"name": "SOC", "x": 1}]}
+    )
+    assert issues and {issue.severity for issue in issues} == {"warning"}
+
+
+# --- The helper reports what the CLI loader refuses ------------------------------------
+
+
+_SENTINEL_SETUP = {
+    "resource_group": "rg",
+    "workspace_name": "ws",
+    "workspace_id": "$W",
+    "azure_tenant_id": "$T",
+    "azure_subscription_id": "$S",
+    "azure_client_id": "$C",
+    "azure_client_secret": "$X",
+}
+
+
+@pytest.mark.parametrize(
+    ("system", "tenant"),
+    [
+        ("sentinel", {"name": "T", "setup": _SENTINEL_SETUP}),
+        ("sentinel", {"name": "T", "setup": {**_SENTINEL_SETUP, "ssl": "maybe"}}),
+        ("sentinel", {"name": "T", "setup": {**_SENTINEL_SETUP, "ssl": "off"}}),
+        ("sentinel", {"name": "T", "setup": _SENTINEL_SETUP, "strategies": []}),
+        ("sentinel", {"name": "T", "setup": _SENTINEL_SETUP, "strategies": ["release"]}),
+        ("sentinel", {"name": "T", "setup": {**_SENTINEL_SETUP, "colour": 1}}),
+        (
+            "elastic",
+            {"name": "T", "setup": {"url": "u", "elasticsearch_url": "e", "api_key": "literal"}},
+        ),
+        (
+            "elastic",
+            {"name": "T", "setup": {"url": "u", "elasticsearch_url": "e", "api_key": "$K"}},
+        ),
+    ],
+)
+def test_helper_and_loader_agree(system: str, tenant: dict[str, Any]) -> None:
+    from opentide.platforms.config import build_system_config
+
+    document = {"tenants": [tenant]}
+    helper_ok = not [
+        issue
+        for issue in configuration_file_issues(f"platforms/{system}.toml", document)
+        if issue.severity == "error"
+    ]
+    merged = merge_layers([_bundled_platform(system), document])
+    try:
+        build_system_config(system, merged)
+        loader_ok = True
+    except ValueError:
+        loader_ok = False
+    assert helper_ok == loader_ok
+
+
+def _bundled_platform(system: str) -> dict[str, Any]:
+    from opentide.core.root import get_data_root
+
+    return _load(get_data_root() / "configurations" / "platforms" / f"{system}.toml")

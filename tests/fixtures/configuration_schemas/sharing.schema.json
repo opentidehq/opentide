@@ -21,6 +21,7 @@
           "description": "Base URL of the MISP instance (http or https).",
           "format": "uri",
           "minLength": 1,
+          "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^/?#\\s]+",
           "title": "Url",
           "type": "string"
         },

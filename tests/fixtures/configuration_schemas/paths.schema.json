@@ -460,6 +460,11 @@
           "anyOf": [
             {
               "items": {
+                "enum": [
+                  "threat",
+                  "objective",
+                  "rule"
+                ],
                 "type": "string"
               },
               "type": "array"
@@ -962,6 +967,11 @@
       "anyOf": [
         {
           "items": {
+            "enum": [
+              "threat",
+              "objective",
+              "rule"
+            ],
             "type": "string"
           },
           "type": "array"

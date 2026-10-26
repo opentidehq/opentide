@@ -17,11 +17,13 @@ class ConfigurationError(ValueError):
     value: tenant `setup` tables hold credentials.
     """
 
-    def __init__(self, file_key: str, errors: list[tuple[tuple[str, ...], str]]) -> None:
+    def __init__(
+        self, file_key: str, errors: list[tuple[tuple[str, ...], str]], *, prefix: str = ""
+    ) -> None:
         self.file_key = file_key
         self.errors = errors
         lines = [f"{'.'.join(loc) or '(document)'}: {message}" for loc, message in errors]
-        super().__init__(f"{file_key} is invalid: " + "; ".join(lines))
+        super().__init__(f"{prefix}{file_key} is invalid: " + "; ".join(lines))
 
 
 def _input_path(data: Any, loc: tuple[Any, ...], kind: str) -> tuple[tuple[str, ...], bool]:
@@ -67,7 +69,7 @@ def model_errors(exc: ValidationError, data: Any) -> list[tuple[tuple[str, ...],
         located.append((path, kind, str(err.get("msg", "")), branch))
     kept: list[tuple[tuple[str, ...], str, str]] = []
     seen: set[tuple[str, ...]] = set()
-    for path, kind, message, branch in located:
+    for path, kind, message, branch in sorted(located, key=_branch_rank):
         if branch:
             deeper = any(
                 other[3] and len(other[0]) > len(path) and other[0][: len(path)] == path
@@ -77,7 +79,25 @@ def model_errors(exc: ValidationError, data: Any) -> list[tuple[tuple[str, ...],
                 continue
         seen.add(path)
         kept.append((path, kind, message))
-    return kept
+    order = {path: index for index, (path, *_rest) in enumerate(located)}
+    return sorted(kept, key=lambda item: order.get(item[0], 0))
+
+
+#: Error types that only say "not this union member's type".
+_TYPE_MISMATCH = ("_type", "is_instance_of", "model_attributes_type")
+
+
+def _branch_rank(item: tuple[tuple[str, ...], str, str, bool]) -> int:
+    """Among a union's errors on one key, report what was wrong before what was expected.
+
+    `strategies = "DELETION"` fails both the list member ("Input should be a
+    valid list") and the single-strategy member ("must be PREVIEW or
+    RELEASE"); the second is the one that helps.
+    """
+    _path, kind, _message, branch = item
+    if not branch:
+        return 0
+    return 2 if kind.endswith(_TYPE_MISMATCH) else 1
 
 
 def error_locations(exc: ValidationError, data: Any = None) -> list[tuple[tuple[str, ...], str]]:
@@ -97,4 +117,7 @@ def validate_configuration(model: type[M], data: Mapping[str, Any], *, file_key:
     try:
         return model.model_validate(dict(data))
     except ValidationError as exc:
-        raise ConfigurationError(file_key, error_locations(exc, data)) from None
+        errors = error_locations(exc, data)
+    # Raised outside the handler: the ValidationError holds the inputs, so it
+    # must not ride along as the new exception's `__context__`.
+    raise ConfigurationError(file_key, errors)

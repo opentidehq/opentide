@@ -433,14 +433,17 @@ def validate_platform_config(system: str, raw: dict[str, Any]) -> Any:
     """Validate a merged `platforms/<system>.toml` against its model.
 
     Values are checked as written: a `$NAME` placeholder is valid for any
-    setup key, so no secret is resolved or repeated here.
+    setup key, so no secret is resolved or repeated here. A platform plugin
+    (an `opentide.platforms` entry point) owns its file, so only the built-in
+    platforms are validated; the call returns `None` for any other.
     """
     from opentide.models.configuration.loading import validate_configuration
-    from opentide.models.configuration.platforms import platform_configuration_model
+    from opentide.models.configuration.platforms import PLATFORM_CONFIGURATION_MODELS
 
-    return validate_configuration(
-        platform_configuration_model(system), raw, file_key=f"platforms/{system}.toml"
-    )
+    model = PLATFORM_CONFIGURATION_MODELS.get(system)
+    if model is None:
+        return None
+    return validate_configuration(model, raw, file_key=f"platforms/{system}.toml")
 
 
 def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:

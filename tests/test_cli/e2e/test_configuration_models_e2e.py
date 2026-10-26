@@ -56,3 +56,24 @@ def test_unknown_tenant_key_does_not_echo_the_secret(invoke_cli, tide_corpus_rep
     assert "platforms/sentinel.toml is invalid" in output
     assert "tenants.0.setup.azure_clientsecret: unknown key" in output
     assert secret not in output
+
+
+def test_validate_reports_what_deploy_would_refuse(invoke_cli, tide_corpus_repo: Path) -> None:
+    _write(tide_corpus_repo, "deployment.toml", "[promotion]\nenabeld = false\n")
+    result = invoke_cli("validate")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["checks"]["configuration"]["status"] == "failed"
+    assert payload["checks"]["schema"]["status"] == "passed"
+    issues = [i for i in payload["report"]["issues"] if i["object_type"] == "configuration"]
+    assert [(i["code"], i["field_path"], i["context"]["file"]) for i in issues] == [
+        ("unknown_key", ["promotion", "enabeld"], "deployment.toml")
+    ]
+
+
+def test_validate_check_configuration_alone(invoke_cli) -> None:
+    result = invoke_cli("validate", "--check", "configuration")
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert parse_cli_json(result)["checks"] == {
+        "configuration": {"check": "configuration", "status": "passed"}
+    }
