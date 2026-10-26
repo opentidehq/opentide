@@ -105,7 +105,7 @@ def test_new_threat_json(workspace: Path) -> None:
     assert payload["summary"] == {"created": 1, "placeholders": len(payload["placeholders"])}
     assert "threat.mitre_attack" in payload["placeholders"]
     assert payload["next_actions"] == [
-        {"command": f"opentide validate --file {payload['path']}", "reason": "check the new threat"}
+        {"command": f"opentide validate --file {payload['path']}", "reason": "check it"}
     ]
     data = parse_yaml(path.read_text(encoding="utf-8"))
     assert data["name"] == "Credential Dumping"
@@ -123,9 +123,48 @@ def test_new_human_output(workspace: Path) -> None:
     assert result.exit_code == 0, result.stdout + result.stderr
     out = _SGR.sub("", result.stdout)
     assert "Created detections/objects/objectives/detect-it.yaml · " in out
-    assert "placeholder values to replace" in out
-    assert "note: replace the placeholder value of " in out
+    assert "placeholders to replace" in out
+    assert f"note: each ends in '{PLACEHOLDER_MARKER}'; opentide lint lists them" in out
+    # The note and the next step fit a 100-column terminal.
+    assert max(len(line) for line in out.splitlines()) <= 100, out
     assert "→ opentide validate --file detections/objects/objectives/detect-it.yaml" in out
+
+
+def test_outcome_separator_follows_the_stream_encoding(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import io
+    import sys
+
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="ascii"))
+    options = new_service.NewOptions(family="threat", name="Ascii Only")
+    payload = new_service.scaffold_object(workspace, options)
+    assert payload["message"].isascii(), payload["message"]
+    assert " - " in payload["message"]
+
+
+@pytest.mark.xfail(
+    reason="needs #638: lazy.py routes no_args_is_help to a usage_error document in JSON mode",
+    strict=False,
+)
+def test_json_new_without_a_kind_is_a_usage_error(workspace: Path) -> None:
+    clear_runtime_caches()
+    result = CliRunner().invoke(app, ["--json", "--repo", str(workspace), "new"])
+    assert result.exit_code == 2
+    payload = parse_cli_json(result)
+    assert payload["failure"]["code"] == "usage_error"
+    assert payload["command"] == "new"
+
+
+def test_bare_new_shows_its_help(workspace: Path) -> None:
+    """Human mode keeps ``no_args_is_help``: the group adds no callback that could bypass it."""
+    clear_runtime_caches()
+    result = CliRunner().invoke(app, ["--no-color", "--repo", str(workspace), "new"])
+    assert result.exit_code == 2
+    assert "threat" in result.stdout and "rule" in result.stdout
+    from opentide.cli.commands.new import new_app
+
+    assert new_app.registered_callback is None
 
 
 def test_new_objective_links_threats(workspace: Path) -> None:
@@ -149,8 +188,20 @@ def test_new_rule_with_platforms_warns_about_disabled_ones(workspace: Path) -> N
     sentinel = data["configurations"]["sentinel"]
     assert sentinel["enabled"] is True
     assert sentinel["status"] == "DESIGN"
-    assert sentinel["scheduling"] == {"nrt": False}
+    # What Sentinel's compile needs: a schedule and grouping.
+    assert sentinel["scheduling"] == {"frequency": "1h", "lookback": "1h"}
+    assert sentinel["grouping"] == {"event": "SingleAlert", "alert": {"enabled": False}}
+    assert "configurations.sentinel.scheduling.frequency" in payload["placeholders"]
+    assert "configurations.sentinel.grouping.event" not in payload["placeholders"]
+    # Live in the template, so not left null for a deploy to read.
+    assert data["response"] == {"alert_severity": "Informational"}
     assert data["configurations"]["splunk"]["status"] == "DESIGN"
+    # Only the chosen blocks are written; a comment points at the template.
+    text = Path(payload["file_path"]).read_text(encoding="utf-8")
+    assert "#elastic:" not in text
+    assert "#crowdstrike:" not in text
+    pointer = "  # Other platforms: copy a block from .opentide/templates/rule.1.1.template.yaml"
+    assert pointer in text.splitlines()
 
 
 def test_name_collision_appends_the_uuid(workspace: Path) -> None:
@@ -367,7 +418,8 @@ def test_missing_template_is_generated_first(
     (workspace / ".opentide" / "templates" / "threat.1.0.template.yaml").unlink()
     payload = parse_cli_json(_new(workspace, "threat", "--name", "Regenerated"))
     assert payload["generated"] == ["templates"]
-    assert payload["warnings"][0].startswith("Generated templates first")
+    # A step new took, not a warning: generate reports it as it runs.
+    assert not any("Generated" in warning for warning in payload.get("warnings", []))
 
 
 def test_generation_that_writes_nothing_is_an_error(

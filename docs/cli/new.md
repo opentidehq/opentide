@@ -31,7 +31,7 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 
 ## What the new file holds
 
-`new` starts from `.opentide/templates/<family>.<major>.<minor>.template.yaml` for the family's latest revision (`rule.1.1`), the template `opentide generate templates` writes, so the comments that list every optional key stay in the file. The editor's default revision in the workspace configuration can be older; a new object never starts on it, so `opentide rules unreviewed` does not list it for its schema. When the template or the family's JSON schema is missing, `new` runs `opentide generate templates schemas` first and says so in a warning.
+`new` starts from `.opentide/templates/<family>.<major>.<minor>.template.yaml` for the family's latest revision (`rule.1.1`), the template `opentide generate templates` writes, so the comments that list every optional key stay in the file. A rule keeps the commented blocks of the platforms it was given only; a comment under `configurations:` points at the template for the others. The editor's default revision in the workspace configuration can be older; a new object never starts on it, so `opentide rules unreviewed` does not list it for its schema. When the template or the family's JSON schema is missing, `new` runs `opentide generate templates schemas` first; its steps print, and `generated` in the JSON names them.
 
 | Key | Value |
 |-----|-------|
@@ -43,7 +43,9 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | `metadata.author` | `git config user.name`, read from the workspace. Left out, with a warning, when git has none |
 | `metadata.organisation` | The `{uuid, name}` most objects in the catalogue carry. Left out, with a warning, when none does |
 | Each `--platform` block | `enabled: true` and the first deployment status whose strategy is `INERT` (`DESIGN` by default), so the block deploys nothing until you move its status on. When no status has strategy `INERT`, the block is `enabled: false` and its status is a placeholder, with a warning |
-| Detection logic in each block | Placeholders for what the platform needs to deploy: the `query`, Defender's `scope`, SentinelOne's `condition.single_event.query`, HarfangLab's `sigma` block |
+| Detection logic in each block | Placeholders for what the platform needs to deploy: the `query`, Defender's `scope`, SentinelOne's `condition.single_event.query`, HarfangLab's `sigma` block, Sentinel's `scheduling.frequency` and `lookback` (`1h`) |
+| Sentinel grouping | `grouping.event: SingleAlert` and `grouping.alert.enabled: false`, Sentinel's own defaults, which its deploy requires |
+| `response` | The template's defaults (`alert_severity: Informational`), so a deploy never reads an empty block |
 | Any other required value | A placeholder: the first value the generated schema allows, or `...` for free text. A required block whose keys are all optional keeps the defaults the template shows, or else gets its first key as a placeholder, so uncommenting another key keeps the YAML valid |
 
 The filename follows the convention [`opentide lint`](./lint.md) checks: `slugify(name)`, with `-{uuid[:8]}` appended when that name is already taken in the folder. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`.
@@ -62,13 +64,12 @@ At an interactive terminal in `human` mode, `new` asks for a missing `--name`, a
 
 ## Output
 
-The outcome line names the file and how many placeholders it holds, a note lists them by key, and the next step validates the file. This is a tutorial workspace that had not generated its templates yet (the section headers `opentide generate` prints are left out):
+The outcome line names the file and how many placeholders it holds, a note says how to find them, and the next step validates the file. When the workspace has no template or schema for the family yet, `new` runs `opentide generate templates schemas` first, and its steps print above. This is a tutorial workspace:
 
 ```text illustrative
-warning: Generated templates and schemas first: this workspace had none for rule
-✓ Created objects/rules/suspicious-lsass-access.yaml · 2 placeholder values to replace
-  note: replace the placeholder value of description, configurations.sentinel.query
-→ opentide validate --file objects/rules/suspicious-lsass-access.yaml · check the new rule
+✓ Created objects/rules/suspicious-lsass-access.yaml · 4 placeholders to replace
+  note: each ends in '# opentide:placeholder'; opentide lint lists them
+→ opentide validate --file objects/rules/suspicious-lsass-access.yaml · check it
 ```
 
 A rule block for a platform the workspace has not enabled is written anyway, with a warning: [`validate`](./validate.md) reports it the same way, and deploy skips it.
@@ -85,7 +86,7 @@ A rule block for a platform the workspace has not enabled is written anyway, wit
 | `type`, `schema` | The family and its schema identifier (`rule`, `rule::1.1`) |
 | `name`, `author`, `organisation`, `platforms` | What was written; `author` and `organisation` are `null` when left out |
 | `placeholders` | Dotted keys whose value is a placeholder to replace |
-| `detail` | The note human output prints under the outcome line; absent when there is no placeholder |
+| `detail` | The note human output prints under the outcome line; absent when there is no placeholder. `placeholders` lists the keys |
 | `generated` | The generation phases that ran first; absent when none did |
 
 `summary` holds `created` and `placeholders`; `next_actions` holds the `opentide validate --file` command.

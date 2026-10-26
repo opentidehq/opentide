@@ -100,10 +100,13 @@ def test_every_family_and_platform_validates_after_new_and_generate(
     findings = parse_cli_json(marked)["findings"]
     assert findings
     assert {finding["code"] for finding in findings} == {"placeholder"}
-    assert any(
-        finding["path"] == created[0]["path"] and finding["message"].startswith("list item")
+    threat_findings = {
+        finding["message"].split(" ", 1)[0]
         for finding in findings
-    ), findings
+        if finding["path"] == created[0]["path"]
+    }
+    # Items of a list are named by their key and index.
+    assert {"surface[0]", "mitre_attack[0]"} <= threat_findings, threat_findings
     clean = assert_json_ok(
         invoke_cli("lint", "--strict", "--check", "filenames", "--check", "metadata", repo=tutorial)
     )
@@ -128,6 +131,54 @@ def test_rules_validate_when_every_platform_is_enabled(invoke_cli, tmp_path: Pat
     assert_json_ok(invoke_cli("generate", repo=fresh))
     report = assert_json_ok(invoke_cli("validate", "--strict", repo=fresh))["report"]
     assert report["ok"] is True, report
+
+
+#: Platforms whose dry run compiles the real request body offline. The others
+#: preview the block as written, so a compile cannot fail there.
+OFFLINE_COMPILE = ("sentinel", "elastic")
+
+
+@pytest.mark.parametrize("platform", OFFLINE_COMPILE)
+def test_scaffolded_rule_compiles_in_a_dry_run(
+    invoke_cli, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str
+) -> None:
+    """new → validate → deploy --dry-run compiles, with only the status moved on.
+
+    The block starts at the INERT status, which deploy skips; a person moves it
+    to a PREVIEW status to try it. Every other value, placeholders included,
+    must already compile.
+    """
+    for name in ("CI", "GITHUB_ACTIONS", "TF_BUILD"):
+        monkeypatch.delenv(name, raising=False)
+    # A failed compile sets this in os.environ; setenv first so teardown removes it.
+    monkeypatch.setenv("DEPLOYMENT_ERROR_RAISED", "")
+    monkeypatch.delenv("DEPLOYMENT_ERROR_RAISED")
+    fresh = tmp_path / platform
+    assert_json_ok(invoke_cli("setup", "--yes", "--platform", platform, "--path", str(fresh)))
+    payload = assert_json_ok(
+        invoke_cli("new", "rule", "--name", "Scaffolded", "--platform", platform, repo=fresh)
+    )
+    report = assert_json_ok(invoke_cli("validate", "--strict", repo=fresh))["report"]
+    assert report["ok"] is True, report
+
+    rule = fresh / payload["path"]
+    text = rule.read_text(encoding="utf-8")
+    assert "status: DESIGN" in text
+    rule.write_text(text.replace("status: DESIGN", "status: DEVELOPMENT"), encoding="utf-8")
+    result = invoke_cli(
+        "deploy", "--dry-run", "--strategy", "PREVIEW", "--all", "--platform", platform, repo=fresh
+    )
+    deploy = parse_cli_json(result)
+    assert deploy["plan"][platform] == [payload["uuid"]], deploy
+    [preview] = deploy["payloads"][platform]
+    assert preview.get("status") != "failed", preview
+    assert result.exit_code == 0, deploy
+    if platform == "elastic":
+        # Elastic falls back to the raw block when its compile fails; only the
+        # compiled body carries a risk score.
+        assert "risk_score" in preview["api_request"], preview
+    else:
+        assert preview["api_request"]["properties"]["displayName"] == "Scaffolded"
 
 
 def test_new_without_a_name_refuses_to_prompt(invoke_cli, tutorial: Path) -> None:

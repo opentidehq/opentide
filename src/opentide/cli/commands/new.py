@@ -156,10 +156,8 @@ def _run(
         )
     warnings: list[str] = list(payload.pop("warnings", []))
     if generated:
+        # Not a warning: it is a step new took, and generate printed it.
         payload["generated"] = generated
-        warnings.append(
-            f"Generated {' and '.join(generated)} first: this workspace had none for {family}"
-        )
     if options.platforms:
         from opentide.platforms.enabled import enable_platform_command, enabled_systems
 

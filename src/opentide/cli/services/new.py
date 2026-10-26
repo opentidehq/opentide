@@ -2,14 +2,15 @@
 
 The template (``.opentide/templates/<family>.<M>.<m>.template.yaml``) is the
 starting text, so the comments that list every optional key stay in the new
-file. Required keys are filled in place: the name, a fresh UUID v4, today's
-date, the git author, the catalogue's organisation, and for every other
-required value the first value its generated JSON schema allows (or ``...`` for
-free text). Those stand-ins are returned as ``placeholders`` so neither a
-person nor an agent mistakes them for decisions.
+file; a rule keeps the platform blocks it was given only. Required keys are
+filled in place: the name, a fresh UUID v4, today's date, the git author, the
+catalogue's organisation, and for every other required value the first value
+its generated JSON schema allows (or ``...`` for free text). Those stand-ins
+are returned as ``placeholders`` so neither a person nor an agent mistakes
+them for decisions.
 
-The result validates as soon as it is written; ``tests/test_cli/e2e`` checks
-every family and every platform block.
+The result validates as soon as it is written, and a rule's blocks compile for
+deploy once their status is moved on; ``tests/test_cli/e2e`` checks both.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ import yaml
 from pydantic import BaseModel
 
 from opentide.cli.ui.contract import NextAction
+from opentide.cli.ui.glyphs import glyph
 from opentide.core.io import parse_yaml
 from opentide.documentation.markdown.links import slugify
 
@@ -56,15 +58,33 @@ _TEXT_PLACEHOLDER = "..."
 PLACEHOLDER_MARKER = "# opentide:placeholder"
 
 #: Keys a platform block needs beyond its model's required fields, so it holds
-#: detection logic: Elastic's validator wants a ``query`` for ``type: query``,
-#: the Defender loader reads ``scope`` unconditionally, a SentinelOne
-#: ``Single Event`` condition needs its query, and HarfangLab needs a sigma
-#: (or yara) detection.
+#: detection logic and deploys: Elastic's validator wants a ``query`` for
+#: ``type: query``, the Defender loader reads ``scope`` unconditionally, a
+#: SentinelOne ``Single Event`` condition needs its query, HarfangLab needs a
+#: sigma (or yara) detection, and Sentinel's compile needs grouping and, unless
+#: ``nrt`` is true, a schedule.
 PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "defender_for_endpoint": (("scope",), ("scope", "selection")),
     "elastic": (("query",),),
+    "sentinel": (
+        ("scheduling", "frequency"),
+        ("scheduling", "lookback"),
+        ("grouping", "event"),
+        ("grouping", "alert", "enabled"),
+    ),
     "sentinel_one": (("condition", "single_event"), ("condition", "single_event", "query")),
     "harfanglab": (("sigma",),),
+}
+
+#: Values for those keys that compile, as ``(value, is_placeholder)``. A
+#: placeholder is a detection decision nobody has made yet; the rest are the
+#: platform's own defaults (Sentinel's ``SingleAlert`` grouping).
+PLATFORM_VALUES: dict[str, dict[tuple[str, ...], tuple[Any, bool]]] = {
+    "sentinel": {
+        ("scheduling", "frequency"): ("1h", True),
+        ("scheduling", "lookback"): ("1h", True),
+        ("grouping", "event"): ("SingleAlert", False),
+    },
 }
 
 _LINE = re.compile(r"^(?P<indent> *)(?P<hash>#?)(?P<dash>- ?)?(?P<rest>.*)$")
@@ -675,6 +695,39 @@ def fill_template(
     return ScaffoldResult("\n".join(output) + "\n", placeholders)
 
 
+def keep_platform_blocks(text: str, platforms: Iterable[str], pointer: str) -> str:
+    """Drop the commented ``configurations`` blocks of every platform not in *platforms*.
+
+    The template lists all eight platforms, about 400 commented lines; a new
+    rule keeps its own blocks and one comment that points at *pointer*, the
+    template, for the others.
+    """
+    keep = set(platforms)
+    lines = text.splitlines()
+    entries = index_template(lines)
+    dropped = {
+        entry.index
+        for entry in entries
+        if len(entry.path) >= 2 and entry.path[0] == "configurations" and entry.path[1] not in keep
+    }
+    if not dropped:
+        return text
+    header = next(
+        (entry for entry in entries if entry.role == "key" and entry.path == ("configurations",)),
+        None,
+    )
+    output: list[str] = []
+    for index, raw in enumerate(lines):
+        if index in dropped or (not raw.strip() and output and not output[-1].strip()):
+            continue
+        output.append(raw)
+        if header is not None and index == header.index:
+            output.append(
+                f"{' ' * (header.indent + 2)}# Other platforms: copy a block from {pointer}"
+            )
+    return "\n".join(output).rstrip("\n") + "\n"
+
+
 # --------------------------------------------------------------------------- command
 
 
@@ -696,6 +749,14 @@ def _relative(path: Path, workspace: Path) -> str:
         except ValueError:
             continue
     return resolved.as_posix()
+
+
+def _workspace_relative(path: Path, workspace: Path) -> str:
+    """*path* as the new file should name it: from the workspace root, wherever ``new`` ran."""
+    try:
+        return path.resolve().relative_to(workspace.resolve()).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
 
 
 def _check_references(options: NewOptions, workspace: Path) -> None:
@@ -773,7 +834,12 @@ def scaffold_object(
         values[("metadata", "organisation", "name")] = organisation.name
         wanted.append(("metadata", "organisation"))
     overrides: dict[Path_, type[BaseModel]] = {}
+    marked: list[Path_] = []
     if family == "rule":
+        # Optional in the model but live in the template: left empty it loads
+        # as None, and a deploy reads its alert_severity. It keeps the
+        # template's defaults instead.
+        wanted.append(("response",))
         if options.objective:
             values[("detection_model",)] = options.objective
             wanted.append(("detection_model",))
@@ -788,12 +854,21 @@ def scaffold_object(
                 values[(*block, "status")] = status
             wanted.extend([block, (*block, "enabled")])
             wanted.extend((*block, *extra) for extra in PLATFORM_EXTRA_KEYS.get(platform, ()))
+            for key, (value, invented) in PLATFORM_VALUES.get(platform, {}).items():
+                values[(*block, *key)] = value
+                if invented:
+                    marked.append((*block, *key))
     if family == "objective" and options.threats:
         values[("objective", "threats")] = list(options.threats)
         wanted.append(("objective", "threats"))
 
     fields = collect_fields(model, wanted=wanted, overrides=overrides)
-    filled = fill_template(template, fields, values=values, schema=schema)
+    filled = fill_template(template, fields, values=values, schema=schema, marked=marked)
+    if family == "rule":
+        # After filling: fill_template would uncomment the pointer comment.
+        filled.text = keep_platform_blocks(
+            filled.text, options.platforms, _workspace_relative(artifacts.template, workspace)
+        )
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         # "x": the file must not exist, even if one appeared since the check above.
@@ -810,7 +885,8 @@ def scaffold_object(
     count = len(filled.placeholders)
     message = f"Created {shown}"
     if count:
-        message += f" · {count} placeholder value{'s' if count != 1 else ''} to replace"
+        separator = glyph("separator")
+        message += f" {separator} {count} placeholder{'s' if count != 1 else ''} to replace"
     payload: dict[str, Any] = {
         "message": message,
         "path": shown,
@@ -826,9 +902,8 @@ def scaffold_object(
         "platforms": list(options.platforms),
         "placeholders": filled.placeholders,
         "_summary": {"created": 1, "placeholders": count},
-        "_next_actions": [
-            NextAction(f"opentide validate --file {shown}", f"check the new {family}"),
-        ],
+        # The reason stays short: the path can be long, and the line should fit.
+        "_next_actions": [NextAction(f"opentide validate --file {shown}", "check it")],
     }
     if family == "rule" and options.platforms and status is None:
         payload["warnings"] = [
@@ -836,8 +911,9 @@ def scaffold_object(
             "disabled (enabled: false) and their status is a placeholder"
         ]
     if count:
-        # Printed as a note under the outcome line in human output.
-        payload["detail"] = f"replace the placeholder value of {', '.join(filled.placeholders)}"
+        # Printed as a note under the outcome line in human output. The keys
+        # are in ``placeholders``; listing them here wrapped the line.
+        payload["detail"] = f"each ends in '{PLACEHOLDER_MARKER}'; opentide lint lists them"
     return payload
 
 
