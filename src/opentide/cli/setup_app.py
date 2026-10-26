@@ -26,7 +26,7 @@ from opentide.cli.output import (
     emit_success,
 )
 from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_MISSING_OPTION, USAGE_NEEDS_INPUT
-from opentide.core.logging.config import get_console, get_stdout_console
+from opentide.core.logging.config import get_stdout_console
 
 if TYPE_CHECKING:
     from opentide.cli.services.setup.interactive import InteractiveRequiredError
@@ -897,24 +897,32 @@ def _shorten(text: str, width: int, ellipsis: str) -> str:
 
 
 def _print_skills_table(skills: list[dict[str, object]]) -> None:
-    from rich.table import Table
+    """One row per skill: the slug to install it by, ``installed`` when it is, the description.
+
+    The heavy-box table this replaces named three bundled packs by title
+    ("Detection rules") instead of the slug ``--install`` takes, and wrapped
+    each description onto a second row (post-merge end-to-end run).
+    """
     from rich.text import Text
 
     from opentide.cli.ui.glyphs import glyph
+    from opentide.cli.ui.layout import columns
 
     console = get_stdout_console()
     ellipsis = glyph("ellipsis", console.file)
-    table = Table(title="opentide Skills")
-    table.add_column("Name")
-    table.add_column("Installed")
-    table.add_column("Description")
-    for item in skills:
-        table.add_row(
-            Text(str(item["name"])),
-            "yes" if item.get("installed") else "no",
-            Text(_shorten(str(item.get("description", "")), _DESCRIPTION_WIDTH, ellipsis)),
+    slug_width = max((len(str(item.get("slug") or item["name"])) for item in skills), default=0)
+    any_installed = any(item.get("installed") for item in skills)
+    room = console.width - slug_width - 2 - (len("installed") + 2 if any_installed else 0)
+    width = max(20, min(_DESCRIPTION_WIDTH, room))
+    rows = [
+        (
+            Text(str(item.get("slug") or item["name"]), style="bold"),
+            Text("installed", style="green") if item.get("installed") else Text(""),
+            Text(_shorten(str(item.get("description", "")), width, ellipsis), style="dim"),
         )
-    console.print(table)
+        for item in skills
+    ]
+    console.print(columns(rows), soft_wrap=True)
 
 
 def _discover_outcome(count: int, installed: int, *, source: str, query: str | None) -> str:
@@ -952,14 +960,26 @@ def setup_skills_show_cmd(
             emit_success(cli, payload)
         return
     if "error" in payload:
-        get_console().print(f"[red]{escape(payload['error'])}[/red]")
-        raise typer.Exit(1)
+        emit_error(cli, str(payload["error"]))
+    from rich.text import Text
+
+    from opentide.cli.ui.contract import NextAction
+    from opentide.cli.ui.render import render_next_actions
+
     skill = payload["skill"]
     console = get_stdout_console()
-    console.print(f"[bold]{escape(skill['name'])}[/bold] ({escape(skill['slug'])})")
-    console.print(skill.get("description", ""), markup=False)
-    console.print(f"Installed: {'yes' if skill.get('installed') else 'no'}")
-    console.print(payload.get("install_hint", ""), markup=False)
+    # The slug is what --install takes; the title follows only when it differs
+    # ("opentide-rule (opentide-rule)" said the same thing twice).
+    title = Text(str(skill["slug"]), style="bold")
+    if skill["name"] != skill["slug"]:
+        title.append(f"  {skill['name']}", style="dim")
+    console.print(title)
+    console.print(Text(" ".join(str(skill.get("description", "")).split())))
+    installed = bool(skill.get("installed"))
+    console.print(Text("installed" if installed else "not installed", style="dim"))
+    hint = payload.get("install_hint")
+    if hint and not installed:
+        render_next_actions(console, [NextAction(str(hint), "install it")])
 
 
 @setup_app.command("vscode")

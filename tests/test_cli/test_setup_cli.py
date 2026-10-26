@@ -230,7 +230,32 @@ def test_setup_skills_discover_cuts_descriptions_at_a_word(tmp_path, monkeypatch
     assert "KQL" not in result.stdout
     # The word before the ellipsis is whole: the old [:80] slice left "detection a".
     last_word = _plain(result.stdout).split("…")[0].split()[-1]
-    assert last_word in _LONG_DESCRIPTION.split()
+    assert last_word in [word.rstrip(",;:.") for word in _LONG_DESCRIPTION.split()]
+
+
+def test_discover_lists_the_slug_to_install_and_show_does_not_repeat_it(
+    tmp_path, monkeypatch
+) -> None:
+    """Bundled packs were listed by title ("Detection rules"), not the slug --install
+    takes; `show` printed "opentide-rule (opentide-rule)" and the install command as a
+    bare line (post-merge end-to-end run)."""
+    from opentide.cli.services.setup.skills_registry import BUNDLED_AUTHORING_ENTRIES
+
+    _stub_long_skill(monkeypatch)
+    listed = runner.invoke(app, ["setup", "skills", "discover", "--path", str(tmp_path)])
+    rows = _plain(listed.stdout).splitlines()
+    for entry in BUNDLED_AUTHORING_ENTRIES:
+        assert any(row.startswith(entry.slug + " ") for row in rows), entry.slug
+        assert not any(row.startswith(entry.name + " ") for row in rows), entry.name
+    assert "┏" not in listed.stdout
+
+    shown = _plain(
+        runner.invoke(app, ["setup", "skills", "show", "sentinel", "--path", str(tmp_path)]).stdout
+    ).splitlines()
+    assert shown[0] == "sentinel  microsoft-sentinel"
+    assert shown[-2] == "not installed"
+    assert shown[-1].startswith("→ opentide setup skills --install sentinel ")
+    assert shown[-1].endswith(" · install it")
 
 
 def test_shorten_cuts_at_a_word_with_the_given_ellipsis() -> None:
