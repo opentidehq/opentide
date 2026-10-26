@@ -46,7 +46,7 @@ def test_core_template_sources_cover_all_models() -> None:
 
 def test_generate_core_template_threat_expands_body(tmp_path: Path) -> None:
     path = tmp_path / "threat.1.0.template.yaml"
-    generate_core_template("threat", path)
+    generate_core_template("threat", path, required_metadata=())
     text = path.read_text(encoding="utf-8")
     assert "description:" in text
     assert "mitre_attack:" in text
@@ -105,8 +105,10 @@ def test_generate_core_templates_never_emit_yaml_null(tmp_path: Path) -> None:
         text = path.read_text(encoding="utf-8")
         assert "null" not in text, key
         assert "created: YYYY-MM-DD" in text
-        assert "#author:" in text
-        assert "#author: null" not in text
+        # lint's default ``metadata.required`` keys render live (#489).
+        assert re.search(r"(?m)^  author: $", text), key
+        assert re.search(r"(?m)^  organisation:\n    uuid: \n    name: $", text), key
+        assert "#author" not in text and "#organisation" not in text, key
         assert re.search(r"(?m)^[ ]*#[ ]*$", text) is None, key
         assert re.search(r"(?m)^[ ]*#[ ]+#", text) is None, key
 

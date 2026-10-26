@@ -26,7 +26,7 @@ def _infer_type(body: dict[str, Any]) -> str | None:
         return "objective"
     if body.get("threat"):
         return "threat"
-    if body.get("signal") or body.get("parent"):
+    if body.get("signal") or body.get("owner"):
         return "signal"
     return None
 
@@ -71,7 +71,7 @@ def _count_relations(uuid: str, flat_index: dict[str, dict[str, Any]]) -> int:
     if obj_type == "objective":
         count += len((body.get("objective") or {}).get("threats") or [])
     if obj_type in {"signal", "rule"}:
-        parent = body.get("parent") or body.get("detection_model")
+        parent = body.get("owner") or body.get("detection_model")
         if parent:
             count += 1
     for other in flat_index.values():
@@ -81,7 +81,7 @@ def _count_relations(uuid: str, flat_index: dict[str, dict[str, Any]]) -> int:
         ):
             count += 1
         if other_type in {"signal", "rule"} and uuid in {
-            other.get("parent"),
+            other.get("owner"),
             other.get("detection_model"),
         }:
             count += 1

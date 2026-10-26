@@ -63,6 +63,7 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 `opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
 
 - Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
+- Optional `metadata` keys that [`opentide lint`](./lint.md#configuration) requires are uncommented too: `author` and `organisation` by default, or the `[metadata].required` list in `lint.toml`.
 - Optional fields are the same YAML with `#` hugging each key (`#references:` / `  #public:`). Nested optionals inside that block are not commented again. Spacer blank lines stay blank (they are not turned into a lone `#`). Uncomment a block and it is valid YAML.
 - Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
 - Vocabulary fields are empty scalars (no enum dump).

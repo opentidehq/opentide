@@ -230,6 +230,55 @@ def test_elastic_config_accepts_alert_severity_vocabulary(severity: object) -> N
     ElasticConfig.model_validate({**_BASE, "severity": severity})
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"scheduling": {"interval": ""}},
+        {"scheduling": {"lookback": ""}},
+        {"suppression": {"group_by": ["host.name"], "duration": ""}},
+        {
+            "type": "threshold",
+            "threshold": {"field": ["host.name"], "value": 5},
+            "suppression": {"duration": ""},
+        },
+        {"type": "new_terms", "new_terms": {"fields": ["user.name"], "history_window_start": ""}},
+    ],
+)
+def test_elastic_config_empty_duration_reports_duration(overrides: dict) -> None:
+    # #589: "" used to skip the duration check, pass validate and crash compile.
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="duration"):
+        ElasticConfig.model_validate({**_BASE, **overrides})
+
+
+@pytest.mark.parametrize("scheduling", ["5m", ["5m"], 5])
+def test_elastic_config_non_object_scheduling_is_a_shape_error(scheduling: object) -> None:
+    # #589: a non-object scheduling block is a shape fault, not a `duration` one.
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as excinfo:
+        ElasticConfig.model_validate({**_BASE, "scheduling": scheduling})
+    message = str(excinfo.value)
+    assert "scheduling" in message
+    assert "duration" not in message
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"scheduling": {"interval": "\uff15m"}},  # fullwidth 5
+        {"scheduling": {"lookback": "\u0663h"}},  # Arabic-Indic 3
+        {"suppression": {"group_by": ["host.name"], "duration": "PT\u0661H"}},
+    ],
+)
+def test_elastic_config_non_ascii_digits_report_duration(overrides: dict) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="duration"):
+        ElasticConfig.model_validate({**_BASE, **overrides})
+
+
 def test_elastic_config_roundtrips_through_exclude_none_false_dump() -> None:
     """TideDeployment.modifiers_resolver re-validates model_dump(exclude_none=False)."""
     from pathlib import Path

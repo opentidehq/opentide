@@ -60,8 +60,8 @@ def test_object_link_resolves_signal_to_parent_heading() -> None:
             SignalRecord(
                 uuid="sig-1",
                 name="Exec signal",
-                parent_uuid="obj-1",
-                parent_name="Detect Stuff",
+                owner_uuid="obj-1",
+                owner_name="Detect Stuff",
             )
         ],
     )

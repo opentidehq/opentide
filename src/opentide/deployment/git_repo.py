@@ -603,6 +603,93 @@ def diff_calculation(source: DiffSource) -> list[str]:
     return _changed_paths(repo, source_commit, repo.commit(LATEST_COMMIT))
 
 
+#: The variable naming the commit that triggered the run, per CI platform.
+TRIGGER_SHA_VARIABLES = {
+    CIEnvironment.CIPlatforms.GitHubActions: "GITHUB_SHA",
+    CIEnvironment.CIPlatforms.GitlabCI: "CI_COMMIT_SHA",
+    CIEnvironment.CIPlatforms.AzurePipeline: "BUILD_SOURCEVERSION",
+}
+
+
+def _resolve_commit(repo: DulwichRepo, rev: str) -> CommitInfo:
+    """A full commit SHA, or a branch, ``origin/<branch>`` or ``refs/...`` name.
+
+    An annotated tag's ref names a tag object, so it is peeled to its commit.
+    """
+    from dulwich.objects import Tag
+
+    try:
+        return repo.commit(rev)
+    except Exception:
+        pass
+    try:
+        sha = repo._resolve_sha(rev)
+        target = repo._repo[sha]
+        while isinstance(target, Tag):
+            target = repo._repo[target.object[1]]
+    except KeyError:
+        raise Exception(f"Could not find git commit {rev}") from None
+    return repo.commit(target.id.decode("ascii"))
+
+
+def _push_baseline(repo: DulwichRepo, environment: object) -> CommitInfo | None:
+    """Where the triggering push's diff starts, as the production deploy computes it.
+
+    The deploy reads it from ``HEAD``, which is the triggering commit there. A
+    job that checked out a later tip names the triggering commit through the
+    CI variable instead: its first parent on GitHub and Azure, and on GitLab
+    ``CI_COMMIT_BEFORE_SHA`` unless that is unset or all zeros. ``None`` when
+    the triggering commit is the first one, so there is nothing to diff.
+    """
+    variable = TRIGGER_SHA_VARIABLES.get(environment)
+    if variable is None:
+        raise Exception(f"Unsupported CI environment {environment}")
+    trigger = os.getenv(variable)
+    if not trigger:
+        raise Exception(f"{variable} is required to compute the changed objects")
+    if environment is CIEnvironment.CIPlatforms.GitlabCI:
+        before = os.getenv("CI_COMMIT_BEFORE_SHA")
+        if before and before.strip("0"):
+            return repo.commit(before)
+    commit = repo.commit(trigger)
+    if not commit.parents:
+        return None
+    # A shallow clone names the parent without holding it: that fails here.
+    return repo.commit(commit.parents[0].hexsha)
+
+
+def changed_through_head(since: str | None = None) -> list[str]:
+    """Paths the push changed, up to the checkout's ``HEAD`` rather than the pushed commit.
+
+    For a job that runs after the production deploy and checks out the
+    default branch's tip (#590): the diff starts where the triggering push's
+    diff starts (:func:`_push_baseline`) and ends at ``HEAD``, so it holds
+    both the push's own changes and the deploy's ``[skip ci]`` write-back,
+    which rewrites promoted rules' statuses. In a job whose ``HEAD`` is the
+    triggering commit it is the push's diff, as before.
+
+    *since* replaces the baseline with a commit SHA or ref of the caller's
+    choosing, and also works outside CI. Deleted files are left out, as in
+    :func:`diff_calculation`.
+    """
+    environment = CIEnvironment().environment
+    if environment is CIEnvironment.CIPlatforms.LocalDebug:
+        if since is None:
+            raise Exception("Outside CI, --since must name the commit to diff from")
+        repo = _local_repository()
+    else:
+        repo = TideRepo().repository
+        if repo is None:
+            # Only a local run has no repository, and it took the branch above.
+            raise MissingGitCheckout(discover_workspace())
+    head = repo.head
+    base = _resolve_commit(repo, since) if since is not None else _push_baseline(repo, environment)
+    if base is None:
+        return []
+    logger.info("changed_through_head_range", detail=f"{base.hexsha} | {head.hexsha}")
+    return _changed_paths(repo, base, head)
+
+
 def _changed_paths(
     repo: DulwichRepo, source_commit: CommitInfo, latest_commit: CommitInfo
 ) -> list[str]:
