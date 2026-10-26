@@ -336,9 +336,9 @@ There is no offline syntax check for any of these languages, including Elastic. 
 
 - It emits configuration advisories as warnings:
   - `scheduling.lookback` is `0` (`0m`, `0s`, `PT0S`), exceeds `1h` (`scheduling.lookback` is additional overlap added to `interval`, not the total window), or exceeds `scheduling.interval` on a `threshold` rule.
-  - A non-aggregating ES|QL query has no `METADATA _id`.
+  - A non-aggregating ES|QL query (no `STATS` step; `INLINE STATS` keeps rows) has no `METADATA _id`. Comments and strings do not count.
   - An explicit `risk` score falls outside the RFC 0007 band for the rule's severity (`low` `0–21`, `medium` `22–47`, `high` `48–73`, `critical` `74–100`).
-  - An EQL `sequence` `maxspan` exceeds `scheduling.interval + scheduling.lookback` or `scheduling.lookback`.
+  - An EQL `sequence` `maxspan` (`ms`, `s`, `m`, `h` or `d`, read from the `sequence` header) exceeds `scheduling.interval + scheduling.lookback` or `scheduling.lookback`.
   - The target tenant has `setup.suppression = false` while the rule configures `suppression`, or the rule references a non-Enterprise (Mobile or ICS) ATT&CK technique.
 - It runs the Elasticsearch and Kibana checks below.
 - It posts the compiled rule to Kibana `rules/preview` with `invocationCount: 1` and a UTC `timeframeEnd`. Entries in `logs[].errors` fail the rule. `logs[].warnings`, including a missing index, are warnings. HTTP 400 is a schema error, and any other non-200 response fails that rule. HTTP 401 or 403, or a missing preview-index privilege, fails that tenant and the remaining rules on it are skipped.
