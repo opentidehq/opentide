@@ -327,6 +327,36 @@ def test_a_uuid_finding_closes_its_frame_with_a_step(workspace: Path, code: str)
     assert lines[-1].lstrip().startswith("╰─ help: ")
 
 
+def test_a_duplicate_uuid_names_the_other_object_and_both_places(workspace: Path) -> None:
+    """``Duplicated ID … on 'A' @ a.yaml; already used by 'B' @ b.yaml`` had no line, no
+    frame and no place for the other file (post-merge end-to-end run)."""
+    copy = _rule(workspace, "copy.yaml")
+    copy.write_text(RULE.replace("Sentinel KQL Rule", "Copied Rule"), encoding="utf-8")
+    issue = ValidationIssue(
+        code="duplicate_id",
+        severity="error",
+        object_uuid=UUID,
+        object_type="rule",
+        file_path=copy,
+        field_path=("metadata", "uuid"),
+        message=f"Duplicated ID {UUID} on 'Copied Rule' @ copy.yaml; already used by ...",
+        context={
+            "value": UUID,
+            "original": {
+                "name": "Sentinel KQL Rule",
+                "file_name": "sentinel-kql-rule.yaml",
+                "file_path": str(_rule(workspace)),
+                "field_path": ["metadata", "uuid"],
+            },
+        },
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    assert diagnostic.message == f"UUID {UUID} is also used by 'Sentinel KQL Rule'"
+    assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (3, 9, 45)
+    assert diagnostic.notes == (("also", "objects/rules/sentinel-kql-rule.yaml:3:9"),)
+    assert diagnostic.help and "one of them" in diagnostic.help
+
+
 def test_no_fix_when_the_file_says_something_else(workspace: Path) -> None:
     issue = _typo(workspace).model_copy(update={"context": {"value": "other"}})
     assert diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles()).fix is None

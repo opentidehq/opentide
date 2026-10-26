@@ -15,6 +15,8 @@ class IdScanRow:
     meta_name: str
     uuid: str
     name: str
+    #: Where the UUID is written, so a duplicate points at the value.
+    field_path: tuple[str, ...] = ("metadata", "uuid")
 
 
 def id_duplicate_in_scope(
@@ -53,15 +55,19 @@ def merge_id_duplicates(
                 object_uuid=row.uuid,
                 object_type=row.meta_name,
                 file_path=row.model_file,
+                field_path=row.field_path,
                 message=(
                     f"Duplicated ID {row.uuid} on {row.name!r} @ {row.model_file.name}; "
                     f"already used by {original.name!r} @ {original.model_file.name}"
                 ),
                 context={
+                    "value": row.uuid,
                     "original": {
                         "name": original.name,
                         "file_name": original.model_file.name,
-                    }
+                        "file_path": str(original.model_file),
+                        "field_path": list(original.field_path),
+                    },
                 },
             )
         )

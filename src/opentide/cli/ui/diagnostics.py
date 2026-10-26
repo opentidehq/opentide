@@ -64,7 +64,10 @@ LINT_CODES = {
 _DEFAULT_HELP = {
     "invalid_uuid": 'replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"',
     "missing_uuid": "add metadata.uuid with a fresh UUID v4",
-    "duplicate_id": "give the copy a fresh UUID v4; keep this one where it is deployed",
+    "duplicate_id": (
+        "give one of them a fresh UUID v4; keep the UUID on the object that is deployed "
+        "or referenced"
+    ),
 }
 
 
@@ -528,6 +531,37 @@ _VALUE_MESSAGES = {
 }
 
 
+def _duplicate_message(
+    issue: ValidationIssue,
+    value: str | None,
+    *,
+    workspace: Path | None,
+    sources: SourceFiles,
+) -> tuple[str, str | None]:
+    """``UUID … is also used by 'Name'``, and where that one is written.
+
+    The engine's sentence (``Duplicated ID … on 'A' @ a.yaml; already used by
+    'B' @ b.yaml``) stays in JSON; a person reads which object shares it, with
+    both places in the frame, since neither file is known to be the copy.
+    """
+    original = issue.context.get("original")
+    if not isinstance(original, Mapping) or value is None:
+        return issue.message, None
+    name = original.get("name")
+    other = f"{name!r}" if isinstance(name, str) and name else "another object"
+    message = f"UUID {value} is also used by {other}"
+    raw_path, raw_field = original.get("file_path"), original.get("field_path")
+    if not isinstance(raw_path, str):
+        return message, None
+    other_path = Path(raw_path)
+    where = relative_path(other_path, workspace) or raw_path
+    if isinstance(raw_field, list):
+        span = sources.span(other_path, tuple(str(part) for part in raw_field), value)
+        if span is not None and span.found:
+            where = f"{where}:{span.line}:{span.column}"
+    return message, where
+
+
 def _issue_label(issue: ValidationIssue) -> str | None:
     context = issue.context
     if issue.code == "vocab_unknown" and context.get("vocab"):
@@ -605,6 +639,10 @@ def diagnostic_from_issue(
             help_text = f"{listing} lists the ones that exist"
     if not help_text:
         help_text = _DEFAULT_HELP.get(issue.code)
+    if issue.code == "duplicate_id":
+        message, also = _duplicate_message(issue, value, workspace=workspace, sources=sources)
+        if also:
+            notes.append(("also", also))
     allowed = issue.context.get("allowed")
     if issue.code == "config_enum_unknown" and isinstance(allowed, list) and allowed:
         notes.append(("expected", "one of " + ", ".join(str(item) for item in allowed)))

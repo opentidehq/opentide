@@ -63,6 +63,8 @@ class _IdScanRow:
     meta_name: str
     uuid: str
     name: str
+    #: Where the UUID is written, so a duplicate points at the value.
+    field_path: tuple[str, ...] = ("metadata", "uuid")
 
 
 @dataclass(frozen=True)
@@ -661,8 +663,9 @@ def _signal_id_rows(model_file: Path, body: dict[str, Any]) -> list[_IdScanRow]:
             meta_name="signal",
             uuid=str(signal["uuid"]),
             name=str(signal.get("name", "")),
+            field_path=("objective", "signals", str(index), "uuid"),
         )
-        for signal in signals
+        for index, signal in enumerate(signals)
         if isinstance(signal, dict) and signal.get("uuid")
     ]
 
@@ -684,15 +687,20 @@ def _merge_id_duplicates(scans: list[_IdScanRow], scope: ValidationScope) -> lis
                 object_uuid=row.uuid,
                 object_type=row.meta_name,
                 file_path=row.model_file,
+                # The UUID's own position, so the frame underlines it.
+                field_path=row.field_path,
                 message=(
                     f"Duplicated ID {row.uuid} on {row.name!r} @ {row.model_file.name}; "
                     f"already used by {original.name!r} @ {original.model_file.name}"
                 ),
                 context={
+                    "value": row.uuid,
                     "original": {
                         "name": original.name,
                         "file_name": original.model_file.name,
-                    }
+                        "file_path": str(original.model_file),
+                        "field_path": list(original.field_path),
+                    },
                 },
             )
         )

@@ -86,3 +86,22 @@ def test_merge_id_duplicates_skips_out_of_scope_pairs() -> None:
         IdScanRow(Path("b.yaml"), "rule", "dup", "B"),
     ]
     assert merge_id_duplicates(scans, scope) == []
+
+
+def test_a_duplicate_points_at_both_uuids() -> None:
+    """The issue had no field path, so its frame had no line (post-merge end-to-end run)."""
+    scans = [
+        IdScanRow(Path("/repo/a.yaml"), "rule", "dup", "A"),
+        IdScanRow(Path("/repo/b.yaml"), "rule", "dup", "B"),
+    ]
+    (issue,) = merge_id_duplicates(scans, ValidationScope.full())
+    assert issue.field_path == ("metadata", "uuid")
+    assert issue.context == {
+        "value": "dup",
+        "original": {
+            "name": "A",
+            "file_name": "a.yaml",
+            "file_path": str(Path("/repo/a.yaml")),
+            "field_path": ["metadata", "uuid"],
+        },
+    }
