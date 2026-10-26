@@ -70,6 +70,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`usage_needs_input`](#usage_needs_input) | The command would ask a question, but nobody can answer it. |
 | [`usage_unknown_command`](#usage_unknown_command) | The command line names a command that does not exist. |
 | [`usage_unknown_option`](#usage_unknown_option) | The command line passes an option the command does not take. |
+| [`usage_watch_needs_tty`](#usage_watch_needs_tty) | `validate --watch` ran where nobody can watch it. |
 | [`vocab_unknown`](#vocab_unknown) | A value is not in the vocabulary its field uses. |
 | [`yaml_parse`](#yaml_parse) | An object file is not valid YAML, or not one mapping, so it could not be loaded. |
 
@@ -1037,6 +1038,22 @@ opentide validate --strictt
 ### How to fix
 
 Fix the spelling, or run `opentide <command> --help` to see the options the command takes.
+
+## usage_watch_needs_tty
+
+`validate --watch` ran where nobody can watch it.
+
+Exit 2, as `failure.code`. Raised under `--json`, when a coding agent runs the command, or with `OPENTIDE_OUTPUT=agent`: the watch redraws a terminal until Ctrl-C.
+
+### Example
+
+```text
+opentide --json validate --watch
+```
+
+### How to fix
+
+Run `opentide validate --watch` in a terminal, or run `opentide validate` once (with `--json` for a document).
 
 ## vocab_unknown
 

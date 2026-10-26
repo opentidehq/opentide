@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
 from pathlib import Path
@@ -27,6 +28,7 @@ from opentide.cli.ui.diagnostics import (
     explain_command,
     relative_path,
 )
+from opentide.cli.ui.fixes import FixPlan, plan_fixes
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
@@ -299,9 +301,110 @@ def run_validate(
     if outcome.failed:
         result["_failure_code"] = ISSUES_FOUND
         result["_next_actions"] = _failure_next_actions(ctx, diagnostics)
-    result["_summary"] = _summary(report, diagnostics)
+    plan = plan_fixes(diagnostics)
+    result["_summary"] = {**_summary(report, diagnostics), "fixable": len(plan.changes)}
     result["_diagnostics"] = diagnostics
+    result["_fix_plan"] = plan
+    if plan:
+        # Applying the safe fixes comes first; a failed run's explain and
+        # validate-again steps follow it.
+        result["_next_actions"] = [
+            NextAction(
+                fix_command(check=check, files=file_list, uuids=uuids, object_types=object_types),
+                _apply_reason(len(plan.changes)),
+            ),
+            *cast(list[NextAction], result.get("_next_actions", [])),
+        ]
     return result
+
+
+def run_validate_fix(
+    ctx: CliContext,
+    *,
+    dry_run: bool = False,
+    check: ValidateCheck | None = None,
+    strict: bool = False,
+    files: list[str] | None = None,
+    uuids: list[str] | None = None,
+    object_types: list[str] | None = None,
+) -> dict[str, object]:
+    """``validate --fix``: apply every safe fix, then validate again.
+
+    The result is the second run's, plus ``fixed`` (one entry per value
+    replaced) and ``summary.fixed``. With *dry_run* nothing is written: the
+    result is the first run's, plus ``would_fix`` and ``diff``.
+    """
+    scope: dict[str, Any] = {
+        "check": check,
+        "strict": strict,
+        "files": files,
+        "uuids": uuids,
+        "object_types": object_types,
+    }
+    result = run_validate(ctx, **scope)
+    plan = cast(FixPlan, result["_fix_plan"])
+    if dry_run:
+        result["would_fix"] = [change.to_dict() for change in plan.changes]
+        result["diff"] = plan.diff()
+        if plan:
+            # The same command without --dry-run applies them.
+            result["_next_actions"] = [
+                NextAction(
+                    fix_command(check=check, files=files, uuids=uuids, object_types=object_types),
+                    _apply_reason(len(plan.changes)),
+                )
+            ]
+        return result
+    unwritten: list[str] = []
+    planned = len(plan.changes)
+    if plan:
+        plan, unwritten = plan.write()
+        # run_validate rebuilds the registry, so it reads the files just written.
+        result = run_validate(ctx, **scope)
+        # A fix this run could not apply would not apply on the next one either.
+        remaining = [
+            action
+            for action in cast(list[Any], result.pop("_next_actions", []))
+            if not _is_fix_action(action)
+        ]
+        if remaining:
+            result["_next_actions"] = remaining
+    if unwritten:
+        warnings = cast(list[str], result.setdefault("warnings", []))
+        warnings.extend(f"Could not write the fix to {line}" for line in unwritten)
+        result["_unwritten"] = unwritten
+        result["_unwritten_fixes"] = planned - len(plan.changes)
+    summary = cast(dict[str, int], result["_summary"])
+    summary["fixed"] = len(plan.changes)
+    result["fixed"] = [change.to_dict() for change in plan.changes]
+    result["_fixed"] = plan
+    return result
+
+
+def _is_fix_action(action: NextAction | dict[str, object]) -> bool:
+    command = action.command if isinstance(action, NextAction) else action.get("command")
+    return str(command).startswith("opentide validate --fix")
+
+
+def _apply_reason(count: int) -> str:
+    return f"apply {count} safe fix" if count == 1 else f"apply {count} safe fixes"
+
+
+def fix_command(
+    *,
+    check: ValidateCheck | None = None,
+    files: Sequence[str] | None = None,
+    uuids: Sequence[str] | None = None,
+    object_types: Sequence[str] | None = None,
+) -> str:
+    """``opentide validate --fix`` with the scope of the run that found the fixes."""
+    words = ["opentide", "validate", "--fix"]
+    if check is not None:
+        words += ["--check", check.value]
+    for flag, values in (("--file", files), ("--uuid", uuids), ("--type", object_types)):
+        for value in values or ():
+            words += [flag, value]
+    return shlex.join(words)
 
 
 def _shown_directory(path: Path) -> str:
@@ -381,19 +484,35 @@ def plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
-def validate_outcome_line(summary: Mapping[str, int], *, failed: bool, seconds: float) -> str:
-    """``3 objects valid · 0.9s`` or ``2 errors in 1 file · 3 objects checked · 0.9s``."""
+def validate_outcome_line(
+    summary: Mapping[str, int],
+    *,
+    failed: bool,
+    seconds: float,
+    fix: str | None = None,
+) -> str:
+    """``3 objects valid · 0.9s`` or ``2 errors in 1 file · 3 objects checked · 0.9s``.
+
+    *fix* is what ``--fix`` did (``Fixed 3 values in 2 files``): it leads a
+    passing line and follows the count of a failing one. Without it, a run
+    with safe fixes says ``3 fixable with --fix``.
+    """
     sep = f" {glyph('separator')} "
     objects = plural(summary.get("objects", 0), "object")
     errors, warnings = summary.get("errors", 0), summary.get("warnings", 0)
+    fixable = summary.get("fixable", 0)
     took = f"{seconds:.1f}s"
     if not failed and not summary.get("objects"):
         # A check that reads no object (id-uniqueness, cve, sharing-config).
         return f"Validation passed{sep}{took}"
+    hint = f"{sep}{fixable} fixable with --fix" if fixable and fix is None else ""
     if not failed:
         line = f"{objects} valid"
         if warnings:
             line += f"{sep}{plural(warnings, 'warning')}"
+        line += hint
+        if fix:
+            line = f"{fix}{sep}{line}"
         return f"{line}{sep}{took}"
     # Under --strict a run can fail on warnings alone; count where they are.
     if errors:
@@ -401,8 +520,27 @@ def validate_outcome_line(summary: Mapping[str, int], *, failed: bool, seconds: 
     else:
         counted, files = plural(warnings, "warning"), summary.get("warning_files", 0)
     where = f" in {plural(files, 'file')}" if files else ""
+    done = f"{sep}{fix[0].lower()}{fix[1:]}" if fix else ""
     checked = f"{sep}{objects} checked" if summary.get("objects") else ""
-    return f"{counted}{where}{checked}{sep}{took}"
+    return f"{counted}{where}{done}{hint}{checked}{sep}{took}"
+
+
+def fix_phrase(count: int, files: int, *, dry_run: bool = False, unwritten: int = 0) -> str:
+    """``Fixed 3 values in 2 files``, ``Would fix 1 value in 1 file``, ``No safe fix to apply``.
+
+    *unwritten* counts the fixes whose file could not be written:
+    ``Could not write 1 fix``, or ``Fixed 1 value in 1 file · could not write 1 fix``.
+    """
+    failed = (
+        f"could not write {unwritten} fix"
+        if unwritten == 1
+        else f"could not write {unwritten} fixes"
+    )
+    if not count:
+        return failed.capitalize() if unwritten else "No safe fix to apply"
+    verb = "Would fix" if dry_run else "Fixed"
+    done = f"{verb} {plural(count, 'value')} in {plural(files, 'file')}"
+    return f"{done} {glyph('separator')} {failed}" if unwritten else done
 
 
 def _exempt_warning_lines(report: ValidationReport) -> list[str]:

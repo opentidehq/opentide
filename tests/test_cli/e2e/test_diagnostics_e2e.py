@@ -155,6 +155,7 @@ def test_a_dangling_reference_is_one_framed_finding(tutorial: Path) -> None:
         "warnings": 0,
         "files": 1,
         "warning_files": 0,
+        "fixable": 0,
     }
     assert payload["failure"]["code"] == "issues_found"
 
