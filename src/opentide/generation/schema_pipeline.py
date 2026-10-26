@@ -9,6 +9,7 @@ from opentide.core.logging import get_logger, is_debug_enabled
 from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 from opentide.generation.framework import get_type
+from opentide.generation.schema_annotations import first_sentence, plain_text
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
     VocabularyRevisionResolver,
@@ -129,6 +130,9 @@ class VocabularyResolver:
 
         Reads entries from the core vocabulary index, producing
         parallel lists of enum values and their markdown descriptions.
+        :attr:`plain_description` holds the same entries as plain text,
+        the entry's name and its vocabulary ``description``, for
+        ``enumDescriptions``.
 
         Vocabularies are canonical in the specifications repository and are
         NOT locally extensible: the CoreTIDE-era ``[vocabulary]`` block in
@@ -192,8 +196,10 @@ _Vocabulary_ : `{source_vocab}`
             self.filter_stages: list | None = [stages] if isinstance(stages, str) else stages
             self.enum: list[str] = []
             self.enum_description: list[str] = []
+            self.plain_description: list[str] = []
             self._hints: list[str] = []
             self._hint_descriptions: list[str] = []
+            self._hint_plain_descriptions: list[str] = []
             self._hints_enabled = False
 
         # --- Public API -----------------------------------------------
@@ -234,6 +240,7 @@ _Vocabulary_ : `{source_vocab}`
                     if self._emit(value, key, data) and self._hints_enabled:
                         self._hints.append(self._search_hint(value, data))
                         self._hint_descriptions.append(self.enum_description[-1])
+                        self._hint_plain_descriptions.append(self.plain_description[-1])
                 else:
                     matching = (
                         [s for s in stages if s in self.filter_stages]
@@ -258,6 +265,7 @@ _Vocabulary_ : `{source_vocab}`
                 return False
             self.enum.append(value)
             self.enum_description.append(self._dropdown(entry_key, data))
+            self.plain_description.append(self._plain(value, entry_key, data))
             return True
 
         def _finalise(self) -> tuple[list[str], list[str]]:
@@ -266,6 +274,7 @@ _Vocabulary_ : `{source_vocab}`
             if self._hints and self._hints_enabled:
                 self.enum.extend(self._hints)
                 self.enum_description.extend(self._hint_descriptions)
+                self.plain_description.extend(self._hint_plain_descriptions)
             return self.enum, self.enum_description
 
         # --- Formatting -----------------------------------------------
@@ -279,6 +288,17 @@ _Vocabulary_ : `{source_vocab}`
                 for old, new in self._HINT_ABBREVS:
                     hint = hint.replace(old, new)
             return hint
+
+        @staticmethod
+        def _plain(value: str, name: str, key: dict) -> str:
+            """Plain hover text: entry name (unless the value is the name), first sentence."""
+            display = str(key.get("name") or name).strip()
+            description = first_sentence(
+                plain_text(str(key.get("description") or ""), one_line=True)
+            )
+            if display and not value.endswith(display):
+                return f"{display}: {description}" if description else display
+            return description
 
         def _dropdown(self, name: str, key: dict) -> str:
             identifier = key.get("id") or name
@@ -717,6 +737,11 @@ def gen_json_schema(dictionary: dict[str, Any], *, schema_id: str | None = None)
 
                 metadef = dict_foo[field]["tide.meta.definition"]
                 temp = build_model_schema_source(resolve_definition_model(field, metadef))
+                # The definition replaces the property schema; keep the field's
+                # own title and description for editor hovers.
+                for annotation in ("title", "description"):
+                    if annotation in dict_foo[field]:
+                        temp.setdefault(annotation, dict_foo[field][annotation])
                 # The rebuilt definition has none of the pins set on this
                 # property (`metadata.tlp`), so apply them again.
                 if pins := dict_foo[field].get(DEFINITION_PINS):
@@ -880,17 +905,24 @@ def gen_json_schema(dictionary: dict[str, Any], *, schema_id: str | None = None)
                     temp = {}
                     enum = []
                     markdown_enum = []
+                    plain_enum = []
                     for vocab in vocabs:
-                        new_enum, new_markdown_enum = VocabularyResolver.Vocabulary(
+                        resolver = VocabularyResolver.Vocabulary(
                             vocab,
                             stages=stages,
                             no_wrap=hint_no_wrap,
                             scoped=scoped,
-                        ).resolve()
+                        )
+                        new_enum, new_markdown_enum = resolver.resolve()
                         enum.extend(new_enum)
                         markdown_enum.extend(new_markdown_enum)
+                        plain_enum.extend(resolver.plain_description)
                     temp["enum"] = enum
                     temp["markdownEnumDescriptions"] = markdown_enum
+                    # Plain per-value text for editors without Markdown hovers;
+                    # skipped when an empty vocabulary left a placeholder value.
+                    if len(plain_enum) == len(enum):
+                        temp["enumDescriptions"] = plain_enum
 
                     # Plain string and array fields keep a top-level enum. Unions
                     # (optional lists, string-or-list) stamp each alternative.
@@ -988,8 +1020,10 @@ def run() -> None:
 
             logger.info("generating_config_schema_for")
 
+            from opentide.generation.schema_annotations import annotate_editor_schema
+
             generated = gen_json_schema(parsing)
-            cleaned = strip_framework_keywords(generated)
+            cleaned = annotate_editor_schema(strip_framework_keywords(generated))
 
             logger.info("exporting_generated_schema_to_str_json_output")
             output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)

@@ -12,19 +12,31 @@ from opentide.models.review import parse_review_instant
 
 class Organisation(TideModel):
     uuid: str
+    """Organisation UUID. Sharing uses it as the default publishing organisation."""
     name: str
+    """Organisation display name."""
 
 
 class ObjectMetadata(TideModel):
     uuid: str
+    """Globally unique object identifier."""
     schema_id: str = Field(alias="schema")
+    """Schema identifier, for example `rule::1.0`. Selects the revision schema that validates this
+    object."""
     version: str | int
+    """Business version of this instance."""
     created: str = TideField(schema_extra={"format": "date"})
+    """Creation date."""
     modified: str = TideField(schema_extra={"format": "date"})
+    """Last modification date."""
     tlp: str = VocabField(True)
+    """Traffic Light Protocol classification."""
     author: str | None = None
+    """Primary author."""
     contributors: list[str] | None = None
+    """Additional contributors."""
     organisation: Organisation | None = None
+    """Owning organisation."""
 
     @property
     def schema(self) -> str:
@@ -67,6 +79,8 @@ class RuleMetadata(ObjectMetadata):
             ]
         },
     )
+    """Last human review of this rule, as an ISO 8601 date or datetime. Omitted means no recorded
+    review."""
 
     @field_validator("reviewed", mode="before")
     @classmethod
@@ -89,8 +103,11 @@ class RuleMetadata(ObjectMetadata):
 
 class ObjectReferences(TideModel):
     public: dict[int, str] | None = None
+    """Public reference IDs to URLs (YAML int keys coerced on load)."""
     internal: dict[str, str] | None = None
+    """Internal reference keys to URLs."""
     reports: list[str] | None = None
+    """Report links."""
 
     @classmethod
     def coerce_public_keys(cls, data: dict[str, Any]) -> dict[str, Any]:

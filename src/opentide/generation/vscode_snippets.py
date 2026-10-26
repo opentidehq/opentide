@@ -166,7 +166,10 @@ def run() -> None:
         snippets[title] = vs_code_snippet_generator(
             template_path,
             _CORE_PREFIXES.get(str(model), f"tide-{model}"),
-            description=title,
+            description=(
+                f"{full_name}: a new object from the generated template, "
+                "with a tabstop on every field to fill."
+            ),
         )
     for recomp, subschema_type_folder in recomposition.items():
         entries = config_index.get(recomp)
@@ -193,7 +196,10 @@ def run() -> None:
                 subschema_template_path,
                 f"tide-{platform_id}",
                 blanks=1,
-                description=title,
+                description=(
+                    f"{subschema_name}: the platform block for a detection rule's "
+                    "configurations, from the generated template."
+                ),
             )
     snippets_path.parent.mkdir(parents=True, exist_ok=True)
     snippets_path.write_text(
