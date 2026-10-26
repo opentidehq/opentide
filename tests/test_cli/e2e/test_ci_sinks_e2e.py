@@ -51,7 +51,7 @@ _SCHEMA = Path(__file__).resolve().parents[2] / "fixtures" / "sarif" / "sarif-sc
 _ANSI = re.compile(r"\x1b\[[0-9;]*m|\x1b\]8;[^\x1b]*\x1b\\")
 _ANNOTATION = (
     f"::error file={_RULE_FILE},line=8,endLine=8,col=8,endColumn=13,title=vocab_unknown::"
-    "Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry%0Ahelp: did you mean 'clear'?"
+    "'clearr' is not a TLP value%0Ahelp: did you mean 'clear'?"
 )
 
 
@@ -182,7 +182,7 @@ def test_azure_gets_logissue_and_an_uploaded_summary(tutorial: Path) -> None:
     lines = _lines(result)
     assert (
         f"##vso[task.logissue type=error;sourcepath={_RULE_FILE};linenumber=8;columnnumber=8;"
-        "code=vocab_unknown;]Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry"
+        "code=vocab_unknown;]'clearr' is not a TLP value"
         "%0Ahelp: did you mean 'clear'?"
     ) in lines
     assert f"##vso[task.uploadsummary]{agent / 'opentide-validate.md'}" in lines
