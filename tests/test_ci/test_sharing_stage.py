@@ -89,7 +89,9 @@ def test_gitlab_share_job_runs_after_production_on_the_branch_tip() -> None:
     # A failed deploy still shares, as on GitHub and Azure.
     assert rule["when"] == "always"
     assert text.count(_COMMAND) == 1
-    assert "when: always" not in yaml.safe_dump(parsed["deploy_production"])
+    # ``when: always`` is the share rule's own; the deploy rule keeps the default.
+    # (The deploy's ``artifacts: when: always`` is unrelated.)
+    assert all("when" not in rule for rule in parsed["deploy_production"]["rules"])
 
 
 def test_azure_share_stage_runs_after_deploy_on_the_branch_tip() -> None:
