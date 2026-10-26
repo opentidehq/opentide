@@ -477,8 +477,8 @@ def test_every_documented_command_resolves(command: DocCommand) -> None:
 @pytest.mark.parametrize(
     ("argv", "fragment"),
     [
-        # #202: emitted into CI templates, never registered as a command.
-        (("explorer", "build"), "no subcommand 'explorer'"),
+        # #202: once emitted into CI templates before it existed; `dev` still does not.
+        (("explorer", "dev"), "no subcommand 'dev'"),
         # #257: --json lives on the root callback only.
         (("validate", "--json"), "no option '--json'"),
         (("setup", "--json", "repo"), "no option '--json'"),
@@ -515,6 +515,8 @@ def test_resolution_rejects_commands_the_cli_does_not_have(
         ("setup", "ci", "github"),
         ("setup", "ci", "--help"),
         ("generate", "explorer"),
+        ("explorer", "build", "--base-path", "/repo"),
+        ("explorer", "serve", "--port", "8080"),
     ],
 )
 def test_resolution_accepts_the_forms_the_cli_supports(argv: tuple[str, ...]) -> None:

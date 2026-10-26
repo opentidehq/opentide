@@ -19,6 +19,7 @@ from opentide.cli.enums import (
     LintCheck,
     ValidateCheck,
 )
+from opentide.cli.explorer_app import explorer_app
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.mcp_app import mcp_app
 from opentide.cli.output import (
@@ -158,6 +159,7 @@ app.add_typer(mcp_app, name="mcp")
 app.add_typer(setup_app, name="setup")
 app.add_typer(share_app, name="share")
 app.add_typer(rules_app, name="rules")
+app.add_typer(explorer_app, name="explorer")
 
 
 class GeneratePhaseGroup(TyperGroup):

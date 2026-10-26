@@ -6,7 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide explorer build` and `opentide explorer serve`.** Both run `opentide generate explorer`, then build the corpus explorer with the [`@opentide/explorer`](https://github.com/opentidehq/explorer) npm package through `npx`, pinned to its `0.5` release line. `build` writes a static site (`--output`, default `out/explorer`; `--base-path` for a site under a URL prefix); `serve` builds and serves it on `127.0.0.1:4173` (`--port`, `--host`) until Ctrl-C. They need Node.js 20.19 or newer with `npx` on `PATH` and say so when either is missing or too old; `--json` keeps the package's log on stderr. `OPENTIDE_EXPLORER_PACKAGE` runs another build of the package, such as a local tarball. The explorer README's `opentide explorer build` and `serve` now exist; there is no `explorer dev`.
+
 ### Changed
+
+- **The GitHub Pages explorer job builds with the `@opentide/explorer` npm package.** `setup ci github --explorer-pages` used to check out `opentidehq/explorer` at `main` and run `npm ci && npm run build` in it, so every Pages build took whatever had just merged there. It now runs `npx --yes --package @opentide/explorer@0.5 opentide-explorer build --exports-dir .opentide/exports --output ./out/explorer --base-path "/$REPOSITORY_NAME"`, with the repository name passed through `env`. **Action:** re-run `opentide setup ci github --explorer-pages --yes` to pick up the new job.
 
 - **A rule's `severity` uses the alert labels, `Informational` to `Critical`.** Rule `severity` was pinned to `severity::1.0`, the Threat Severity incident scale (*Localised incident* … *National cyber emergency*). That contradicted the rule spec, its examples and opentide's own default, `Informational`, which therefore failed validation. Rules now use `alert_severity::1.0`, the same labels as `response.alert_severity`; threats keep the incident scale ([specifications#60](https://github.com/opentidehq/specifications/pull/60)). **Action:** a rule whose top-level `severity` is an incident-scale value now fails `validate`. Replace it with an alert label (for example `Substantial incident` → `High`), then run `opentide generate` to refresh schemas and templates.
 - **The docs flavor adapts to where the docs are read.** Without `--flavor`, `generate docs` uses the CI platform running the job (`GITHUB_ACTIONS`, `GITLAB_CI`, `TF_BUILD`), then the host of the repository's `origin` remote (Azure DevOps over HTTPS or SSH included), so a local run renders what CI would, then `[flavor] default` (CommonMark `generic`). Any CI that sets only `CI` (Jenkins, CircleCI) used to get the GitLab flavor; it now follows the remote or the default.

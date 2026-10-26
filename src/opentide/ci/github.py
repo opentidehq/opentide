@@ -26,6 +26,7 @@ from opentide.ci.writeback import (
     production_writeback,
     rules_folder,
 )
+from opentide.export.explorer_package import npx_explorer_args
 
 _SHARE_STEPS_NOTE = (
     "# API key environment variables named in sharing.toml come from the CI secret store."
@@ -145,6 +146,19 @@ def _writeback_step(options: CiRenderOptions) -> str:
 
 
 def _explorer_jobs(branch: str, python_version: str) -> list[str]:
+    # The repository name reaches the shell through env, never interpolated into run:.
+    build_explorer = shlex.join(
+        [
+            "npx",
+            *npx_explorer_args(),
+            "build",
+            "--exports-dir",
+            ".opentide/exports",
+            "--output",
+            "./out/explorer",
+        ]
+    )
+    build_explorer += ' --base-path "/$REPOSITORY_NAME"'
     explorer_job = textwrap.dedent(
         f"""\
         explorer:
@@ -175,13 +189,6 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
                 path: opentide
                 token: ${{{{ steps.generate_token.outputs.token || secrets.OPENTIDE_REPO_TOKEN }}}}
 
-            - name: Checkout explorer
-              uses: actions/checkout@v4
-              with:
-                repository: opentidehq/explorer
-                ref: main
-                path: explorer
-
             - uses: actions/setup-python@v5
               with:
                 python-version: "{python_version}"
@@ -199,18 +206,9 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
                 OPENTIDE_REPO_ROOT: ${{{{ github.workspace }}}}
 
             - name: Build explorer static site
-              working-directory: explorer
-              run: |
-                npm ci
-                npm run build
+              run: {build_explorer}
               env:
-                OPENTIDE_BUNDLE: ${{{{ github.workspace }}}}/.opentide/exports/explorer.bundle.json
-                NEXT_PUBLIC_BASE_PATH: /${{{{ github.event.repository.name }}}}
-
-            - name: Collect static site
-              run: |
-                mkdir -p ./out
-                mv explorer/out ./out/explorer
+                REPOSITORY_NAME: ${{{{ github.event.repository.name }}}}
 
             - name: Upload Pages artifact
               uses: actions/upload-pages-artifact@v3

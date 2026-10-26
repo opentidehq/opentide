@@ -319,6 +319,22 @@ opentide generate docs --flavor github
 
 The flavor adapts to where the docs are read: `--flavor` if given, else the CI platform running the job (`GITHUB_ACTIONS` → `github`, `GITLAB_CI` → `gitlab`, `TF_BUILD` → `azure_devops`), else the host of the repository's `origin` remote (GitHub, GitLab or Azure DevOps, self-hosted included when the host name says so), else `[flavor] default` in `documentation.toml`, plain CommonMark (`generic`) out of the box. Another CI (Jenkins, CircleCI) no longer selects GitLab. See [`generate docs`](../../cli/generate.md).
 
+## Corpus explorer on GitHub Pages
+
+`opentide setup ci github --explorer-pages --yes` adds two jobs to the GitHub workflow. `explorer` exports the corpus and builds the static site with the [`@opentide/explorer`](../../cli/explorer.md) npm package, pinned to its `0.5` release line; `deploy-explorer` publishes it to GitHub Pages on pushes to the default branch. The build step is the same command `opentide explorer build` runs, with the repository name as the base path:
+
+```yaml
+- name: Export explorer bundle
+  run: opentide --json generate explorer
+
+- name: Build explorer static site
+  run: npx --yes --package @opentide/explorer@0.5 opentide-explorer build --exports-dir .opentide/exports --output ./out/explorer --base-path "/$REPOSITORY_NAME"
+  env:
+    REPOSITORY_NAME: ${{ github.event.repository.name }}
+```
+
+The job no longer checks out `opentidehq/explorer` or runs `npm ci` in it. Workflows written by an earlier `setup ci` keep working; re-run `opentide setup ci github --explorer-pages --yes` to switch to the package. Enable Pages with **Settings → Pages → Source: GitHub Actions**. To preview the same site locally, run [`opentide explorer serve`](../../cli/explorer.md).
+
 ## Migrating from submodule CI
 
 Remove `submodules: recursive` from checkout and install from PyPI instead. Replace legacy Orchestration scripts:

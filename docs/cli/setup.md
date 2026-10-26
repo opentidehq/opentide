@@ -32,7 +32,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--inflight` / `--no-inflight` | Update pull-request preview shards (default: on) |
 | `--sharing` / `--no-sharing` | Share changed objects on the default branch (default: off) |
 | `--promotion` / `--no-promotion` | Status promotion in `opentide deploy`. Omit the flag to keep the repository's setting; `--no-promotion` writes `[promotion] enabled = false` (see [setup ci](#setup-ci)) |
-| `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs |
+| `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs (built with the `@opentide/explorer` npm package; see [`explorer`](./explorer.md)) |
 | `--promotion-target` | Status `deploy` promotes rules to. Omit the flag to keep the repository's setting; another status is written as `[promotion] promotion_target` |
 | `--python-version` | CI Python version (default `3.12`) |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |

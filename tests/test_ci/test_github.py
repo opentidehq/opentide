@@ -6,6 +6,7 @@ import yaml
 
 from opentide.ci.github import render_github
 from opentide.ci.models import CiRenderOptions
+from opentide.export.explorer_package import MIN_NODE_VERSION, explorer_package_spec
 
 
 def test_render_github_includes_core_jobs() -> None:
@@ -153,16 +154,36 @@ def test_render_github_explorer_pages_jobs() -> None:
     assert "pages: write" in workflow
     assert "explorer:" in workflow
     assert "deploy-explorer:" in workflow
-    # The bundle is exported by `opentide generate explorer` and handed to the
-    # checked-out explorer repo; there is no `opentide explorer build` (#202).
+    # The bundle is exported by `opentide generate explorer` and built by the
+    # pinned @opentide/explorer npm package; the explorer repo is not checked out.
     assert "opentide --json generate explorer" in workflow
-    assert "OPENTIDE_BUNDLE" in workflow
-    assert "opentide explorer build" not in workflow
+    assert "repository: opentidehq/explorer" not in workflow
+    assert "OPENTIDE_BUNDLE" not in workflow
+    assert "npm ci" not in workflow
     assert "actions/deploy-pages@v4" in workflow
     assert "concurrency:" in workflow
     assert "HAS_GITHUB_APP" in workflow
     assert "if: ${{ env.HAS_GITHUB_APP == 'true' }}" in workflow
     assert "secrets.GH_APP_ID && secrets.GH_APP_KEY" not in workflow.split("if:")[1:]
+
+
+def test_render_github_explorer_builds_with_the_pinned_npm_package() -> None:
+    options = CiRenderOptions(ci="github", explorer_pages=True, default_branch="main")
+    jobs = yaml.safe_load(render_github(options))["jobs"]
+    steps = {step.get("name"): step for step in jobs["explorer"]["steps"]}
+    build = steps["Build explorer static site"]
+    assert build["run"] == (
+        f"npx --yes --package {explorer_package_spec()} opentide-explorer build "
+        "--exports-dir .opentide/exports --output ./out/explorer "
+        '--base-path "/$REPOSITORY_NAME"'
+    )
+    # github.event.* reaches the shell through env, never interpolated into run:.
+    assert "${{" not in build["run"]
+    assert build["env"] == {"REPOSITORY_NAME": "${{ github.event.repository.name }}"}
+    assert "Checkout explorer" not in steps
+    assert steps["Upload Pages artifact"]["with"]["path"] == "./out/explorer"
+    node = next(step for step in steps.values() if step.get("uses") == "actions/setup-node@v4")
+    assert int(node["with"]["node-version"]) >= MIN_NODE_VERSION[0]
 
 
 def test_render_github_explorer_pages_concurrency_is_the_deploy_explorer_job_only() -> None:
