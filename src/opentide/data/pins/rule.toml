@@ -4,12 +4,12 @@
 
 ["rule::1.0"]
 "metadata.tlp" = "tlp::1.0"
-"severity" = "severity::1.0"
+"severity" = "alert_severity::1.0"
 "techniques" = "att&ck::1.2"
 "response.alert_severity" = "alert_severity::1.0"
 
 ["rule::1.1"]
 "metadata.tlp" = "tlp::1.0"
-"severity" = "severity::1.0"
+"severity" = "alert_severity::1.0"
 "techniques" = "att&ck::1.2"
 "response.alert_severity" = "alert_severity::1.0"

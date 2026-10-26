@@ -26,8 +26,13 @@ def page_path(
     folder: Path,
     name: str,
     uuid: str,
+    slug: str | None = None,
 ) -> Path:
-    """Resolve output path for a single object page."""
-    slug = slugify(name)
-    filename = ctx.formatter.page_filename(slug, uuid if ctx.uuid_permalinks else None)
+    """Resolve output path for a single object page.
+
+    *slug* is the record's unique page slug; without it the name is slugified.
+    """
+    filename = ctx.formatter.page_filename(
+        slug or slugify(name), uuid if ctx.uuid_permalinks else None
+    )
     return folder / filename

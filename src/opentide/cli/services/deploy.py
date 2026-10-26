@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -21,12 +22,15 @@ from opentide.core.logging.console import emit_section
 logger = structlog.get_logger("opentide.cli.services.deploy")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
+    from opentide.models.deployment_enums import RunStrategies
 
 
 _NO_RULES_MATCHED = "No rule this run read has a status that maps to its strategies"
 
 
-def _tenant_targets(system: str, uuids: list[str], run: Any, wide: bool) -> dict[str, list[str]]:
+def _tenant_targets(
+    system: str, uuids: list[str], run: RunStrategies, wide: bool
+) -> dict[str, list[str]]:
     """Which tenants a deploy would reach on *system*, and with which rules."""
     from opentide.deployment.planning import TideDeployment, wide_scope
     from opentide.models.deployment_enums import DetectionPlatforms
@@ -84,7 +88,7 @@ def keeps_deprecated(all_files: bool, requested: bool | None) -> bool:
     return not all_files
 
 
-def resolve_run_strategies(values: Any) -> Any:
+def resolve_run_strategies(values: Iterable[str]) -> RunStrategies:
     """Parse ``--strategy`` values, answering a status name with its strategy.
 
     Raises ``ValueError`` with the message the CLI prints.
@@ -96,7 +100,7 @@ def resolve_run_strategies(values: Any) -> Any:
     try:
         for status in Opentide.Configurations.Deployment.statuses:
             statuses[str(status.name).upper()] = status.strategy
-    except Exception:  # noqa: BLE001 -- the hint is optional; the refusal is not
+    except Exception:
         statuses = {}
     return parse_strategies(values, statuses=statuses)
 
@@ -352,7 +356,7 @@ def _deploy(
                 "plan": plan_payload,
                 "_exit_code": 1,
             }
-        except Exception as exc:  # noqa: BLE001 -- the deployer reports its own failure
+        except Exception as exc:
             logger.warning("tenant_targets_failed", system=system, detail=str(exc))
     for system, uuids in deployment_list.items():
         if system not in mdr_deployers:
@@ -380,9 +384,23 @@ def _deploy(
                     deployer.deploy(mdr_deployment=uuids, strategies=run)
             else:
                 deployer.deploy(mdr_deployment=uuids, strategies=run)
-        except TypeError:
-            logger.warning("switching_to_mdrv3_legacy_methods")
-            deployer.deploy(deployment=uuids)
+        except Exception as exc:
+            # A TypeError used to be retried as the pre-strategy signature
+            # `deploy(deployment=...)`, which no engine has: its own TypeError
+            # replaced the real one. Any other error escaped as a traceback,
+            # with no result and no record of the platforms already deployed.
+            detail = str(exc).strip()
+            error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+            logger.error("platform_deployment_failed", system=system, detail=error)
+            return {
+                "status": "failed",
+                "message": f"Deployment to {system} failed: {error}",
+                "deployed": deployed,
+                "dry_run": dry_run,
+                "plan": plan_payload,
+                "strategies": [strategy.name for strategy in run],
+                "_exit_code": 1,
+            }
         deployed.append(system)
     from opentide.cli.exit_codes import deployment_outcome
 

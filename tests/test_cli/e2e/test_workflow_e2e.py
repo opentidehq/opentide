@@ -12,8 +12,8 @@ This module uses in-process ``CliRunner``. The matching console-script chain
 lives in ``test_workflow_subprocess_e2e.py``.
 
 Does not inject CI=true on deploy/query steps (issue #164): the deploy runs
-``--strategy PREVIEW --all`` as the tutorial does. Populated generate must survive object ``threat.actors``
-(name / optional sighting / references).
+``--strategy PREVIEW --all`` as the tutorial does. Populated generate must survive object
+``threat.actors`` (name / optional sighting / references).
 """
 
 from __future__ import annotations

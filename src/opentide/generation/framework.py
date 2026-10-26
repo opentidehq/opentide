@@ -38,7 +38,8 @@ class _LazyMapping(Mapping[_KT, _VT]):
     def __contains__(self, key: object) -> bool:
         return key in self._data()
 
-    def get(self, key: _KT, default: Any = None) -> Any:
+    # `key: object` as on `Mapping.get`, whose last overload takes any key.
+    def get(self, key: object, default: Any = None) -> Any:
         return self._data().get(key, default)
 
 
@@ -90,13 +91,13 @@ def rename_param_nest(nest, schema, scope=None):
         temp = nest[item]
         nest.pop(item)
         nest[parameter_name] = temp
-        if type(nest_copy[item]) == list:
+        if type(nest_copy[item]) is list:
             if lookup_schema_extra(schema, item, "key_value_store"):
                 nest[parameter_name] = key_value_transform(nest_copy[item])
             else:
                 for elem in nest_copy[item]:
                     rename_param_nest(elem, schema, scope=item)
-        elif type(nest_copy[item]) == dict:
+        elif type(nest_copy[item]) is dict:
             rename_param_nest(nest[parameter_name], schema, scope=item)
     return nest
 
@@ -108,11 +109,11 @@ def deep_update(dictionary, key, new_value):
     will return None.
     """
     dict_copy = dictionary.copy()
-    if key in dict_copy.keys():
+    if key in dict_copy:
         dictionary[key] = new_value
     else:
         for k in dict_copy:
-            if type(dict_copy[k]) == dict:
+            if type(dict_copy[k]) is dict:
                 deep_update(dictionary[k], key, new_value)
     return dictionary
 
@@ -134,7 +135,7 @@ def vocab_metadata(vocab: str, field=None) -> str | dict:
     return metadata.to_dict()
 
 
-def get_vocab_stage_details(vocabulary: str, stage_identifier: str) -> None | tuple[str, str]:
+def get_vocab_stage_details(vocabulary: str, stage_identifier: str) -> tuple[str, str] | None:
     """
     Return a tuple of the name and description for a particular stage of a vocabulary.
     If no stage correspond, or the vocabulary has no stages, returns nothing.
@@ -242,7 +243,7 @@ def get_vocab_entry(vocab, identifier, field=None, newlines=False):
         if newlines is False and isinstance(value, str):
             return value.replace("\n", "")
         return value
-    for entry_key, entry in vocabulary.entries.items():
+    for entry in vocabulary.entries.values():
         if entry.get("legacy") == identifier:
             if field is None:
                 return entry.as_dict()
@@ -265,13 +266,14 @@ def get_key_in_model_body(model_body, key):
     Self-recursive function to return the value of a key nested within
     the body of a model data.
     """
-    if key in model_body.keys():
+    if key in model_body:
         return model_body[key]
     else:
-        for model_key in model_body.keys():
+        for model_key in model_body:
             if type(model_body[model_key]) is dict:
-                if get_key_in_model_body(model_body[model_key], key) is not None:
-                    return get_key_in_model_body(model_body[model_key], key)
+                found = get_key_in_model_body(model_body[model_key], key)
+                if found is not None:
+                    return found
     return None
 
 
@@ -561,7 +563,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
 
 def relations_downstream(id):
     tree = {}
-    if get_type(id) in ["signal"]:
+    if get_type(id) == "signal":
         tree = keep_active_rules(childs(id))
     elif get_type(id) == "objective":
         for child in childs(id):
@@ -585,22 +587,51 @@ def relations_upstream(id):
     return tree
 
 
+@overload
 def relations_list(
-    id,
+    id: str,
+    mode: Literal["flat"] = "flat",
+    direction: Literal["upstream", "downstream", "both"] = "downstream",
+) -> dict[str, list[str]]: ...
+
+
+@overload
+def relations_list(
+    id: str,
+    mode: Literal["count"],
+    direction: Literal["upstream", "downstream", "both"] = "downstream",
+) -> dict[str, int]: ...
+
+
+def relations_list(
+    id: str,
     mode: Literal["count", "flat"] = "flat",
     direction: Literal["upstream", "downstream", "both"] = "downstream",
-):
-    flat = {}
+) -> dict[str, list[str]] | dict[str, int]:
+    """Related object UUIDs by object type, or how many there are of each type.
+
+    ``both`` lets the upstream relations replace the downstream ones of a type.
+    """
+    if direction == "both":
+        flat = _flat_relations(id, "downstream")
+        flat.update(_flat_relations(id, "upstream"))
+    else:
+        flat = _flat_relations(id, direction)
+    if mode == "count":
+        return {k: len(v) for k, v in flat.items()}
+    return flat
+
+
+def _flat_relations(id: str, direction: Literal["upstream", "downstream"]) -> dict[str, list[str]]:
+    flat: dict[str, list[str]] = {}
     if direction == "upstream":
         relations = relations_upstream(id)
     elif direction == "downstream":
         relations = relations_downstream(id)
-    elif direction == "both":
-        merged = relations_list(id, mode, direction="downstream")
-        merged.update(relations_list(id, mode, "upstream"))
-        return merged
+    else:
+        raise ValueError(f"Unknown relations direction {direction!r}")
 
-    def recursive_items(dictionary):
+    def recursive_items(dictionary: Mapping[Any, Any]) -> Iterator[tuple[Any, Any]]:
         for key, value in dictionary.items():
             if type(value) is dict:
                 yield (key, value)
@@ -635,9 +666,6 @@ def relations_list(
     if rule_list := flat.get("rule"):
         active_rules = keep_active_rules(rule_list)
         flat["rule"] = active_rules
-    if mode == "count":
-        for k, v in flat.items():
-            flat[k] = len(v)
     return flat
 
 

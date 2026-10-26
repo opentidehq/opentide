@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import ssl
 import urllib.request
-from abc import ABC
 from collections.abc import Callable
 from io import BytesIO
 from random import randrange
@@ -21,14 +20,19 @@ if TYPE_CHECKING:
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, Opentide
 from opentide.models.rule import DetectionRule
+from opentide.models.system_config import ConfigurationModels
+from opentide.platforms.transport import DEFAULT_TIMEOUT
 
 logger = structlog.get_logger("opentide.platforms.splunk.client")
 
 
-class SplunkConnection(ABC):
+class SplunkConnection:
     """
     Utility class used to initialize all constant relevant to operations with Splunk
     """
+
+    #: The tenant whose setup the per-tenant settings were last taken from.
+    _tenant: ConfigurationModels.Systems.Splunk.Tenant | None = None
 
     def __init__(self):
         self.DEBUG = DebugEnvironment.ENABLED
@@ -54,22 +58,34 @@ class SplunkConnection(ABC):
         }
 
     def _init_from_tenants(self, splunk_config, first_tenant) -> None:
-        setup = DebugHelpers.fetch_config_envvar(
-            {
-                "url": first_tenant.setup.url,
-                "port": first_tenant.setup.port,
-                "app": first_tenant.setup.app,
-                "correlation_searches": first_tenant.setup.correlation_searches,
-                "frequency_scheduling": first_tenant.setup.frequency_scheduling,
-                "actions_enabled": first_tenant.setup.actions_enabled or [],
-                "default_actions": first_tenant.setup.default_actions or [],
-                "allow_skew": first_tenant.setup.allow_skew,
-                "schedule_offset": first_tenant.setup.schedule_offset,
-            }
-        )
         self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
         self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
-        self._apply_setup(setup, token=first_tenant.setup.token)
+        self.use_tenant(first_tenant)
+
+    def use_tenant(self, tenant: ConfigurationModels.Systems.Splunk.Tenant) -> None:
+        """Take the actions, scheduling, skew and offset of the rules built next from *tenant*.
+
+        A deploy calls this for every tenant it reaches; these used to come
+        from the first tenant only, whatever tenant a rule went to.
+        """
+        if tenant is self._tenant:
+            # Resolving the same tenant again would repeat its warnings.
+            return
+        setup = DebugHelpers.fetch_config_envvar(
+            {
+                "url": tenant.setup.url,
+                "port": tenant.setup.port,
+                "app": tenant.setup.app,
+                "correlation_searches": tenant.setup.correlation_searches,
+                "frequency_scheduling": tenant.setup.frequency_scheduling,
+                "actions_enabled": tenant.setup.actions_enabled or [],
+                "default_actions": tenant.setup.default_actions or [],
+                "allow_skew": tenant.setup.allow_skew,
+                "schedule_offset": tenant.setup.schedule_offset,
+            }
+        )
+        self._apply_setup(setup, token=tenant.setup.token)
+        self._tenant = tenant
 
     def _init_from_legacy(self, splunk_config) -> None:
         SPLUNK_SETUP = DebugHelpers.fetch_config_envvar(splunk_config.setup)
@@ -154,7 +170,7 @@ def cron_to_timeframe(
     unit = frequency[-1]
     count = int(frequency[:-1])
     min_val = hour = ""
-    if unit == "m" and count > 59 or (unit == "h" and count > 23) or (unit == "d" and count > 30):
+    if (unit == "m" and count > 59) or (unit == "h" and count > 23) or (unit == "d" and count > 30):
         logger.warning(
             "time_boundaries_were_bypassed_expected_usage_1_59m_1_23h_or_1_30",
             detail="Proceeding, but note that behaviour is not guaranteed",
@@ -169,7 +185,8 @@ def cron_to_timeframe(
     if mode == "custom":
         if not custom_time:
             raise ValueError(
-                "When selecting a custom time, you need to input a time in the correct format: HHhmm."
+                "When selecting a custom time, you need to input a time in the correct "
+                "format: HHhmm."
             )
         hour, min_val = custom_time.split("h")
     match unit:
@@ -204,7 +221,7 @@ class SplunkAnsweredHtmlError(ConnectionError):
 
 
 def splunk_route(url: str) -> str | None:
-    """The proxy ``urllib`` sends a request for *url* through, without credentials; ``None`` if direct."""
+    """The proxy ``urllib`` sends *url* through, without credentials; ``None`` if direct."""
     parts = urlsplit(url)
     proxy = urllib.request.getproxies().get(parts.scheme)
     if not proxy or urllib.request.proxy_bypass(parts.netloc):
@@ -260,13 +277,16 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
         context.verify_mode = ssl.CERT_NONE
 
     def handle(url: str, message: dict[str, Any]) -> dict[str, Any]:
-        method = message["method"].lower()
-        data = message.get("body", "") if method == "post" else None
+        # splunklib sends a body with POST, PUT and PATCH only. urllib picks
+        # GET for a request without a body unless told the method, which sent
+        # every DELETE as a GET and left retired saved searches in place.
+        method = message["method"].upper()
+        data = message.get("body")
         headers = dict(message.get("headers", []))
-        req = urllib.request.Request(url, data, headers)
+        req = urllib.request.Request(url, data, headers, method=method)
         failed = False
         try:
-            response = urllib.request.urlopen(req, context=context)
+            response = urllib.request.urlopen(req, context=context, timeout=DEFAULT_TIMEOUT)
             status = response.code
         except HTTPError as error:
             # Includes a 307 answering a POST, which urllib does not follow.
@@ -274,25 +294,28 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
             status = error.code
             failed = True
         body = response.read()
-        if _looks_like_html(response.info(), body):
+        if _looks_like_html(response.headers, body):
             raise _html_answer(url, body)
-        if failed:
-            if allow_http_errors:
-                status = HTTP_ERROR_STATUS
-            else:
-                # The body carries Splunk's reason; splunklib puts it in the
-                # HTTPError it raises, so it must still be returned.
-                logger.critical(
-                    "fatal_error",
-                    detail=f"Received HTTP Error Code {status} {response.msg}",
-                    context=str(body),
-                )
-        return {
-            "status": status,
+        answer = {
+            "status": HTTP_ERROR_STATUS if failed and allow_http_errors else status,
             "reason": response.msg,
-            "headers": dict(response.info()),
+            "headers": dict(response.headers),
             "body": BytesIO(body),
         }
+        if failed and not allow_http_errors:
+            from splunklib.binding import HTTPError as SplunkHTTPError
+            from splunklib.data import record
+
+            logger.critical(
+                "fatal_error",
+                detail=f"Received HTTP Error Code {status} {response.msg}",
+                context=str(body),
+            )
+            # splunklib raises only for a status of 400 or more, so a 307 a
+            # gateway answers for a timed-out search head read as a deployed
+            # rule. Raise splunklib's own error, which carries the body.
+            raise SplunkHTTPError(record(answer))
+        return answer
 
     return handle
 
@@ -303,7 +326,7 @@ def connect_splunk(
     token: str,
     app: str,
     allow_http_errors: bool = False,
-    ssl_enabled: bool = True,
+    ssl_enabled: bool | str = True,
 ) -> Service:
     from opentide.core.environment import reject_unsubstituted_placeholders
 
@@ -345,7 +368,7 @@ def connect_splunk(
 def create_query(data: DetectionRule) -> str:
     """Build the final SPL query from a typed DetectionRule."""
     uuid = data.metadata.uuid
-    splunk_config = data.configurations.splunk
+    splunk_config = data.platform_configs().splunk
     if not splunk_config or not splunk_config.query:
         raise ValueError("Missing Splunk query in typed MDR")
     status = splunk_config.status

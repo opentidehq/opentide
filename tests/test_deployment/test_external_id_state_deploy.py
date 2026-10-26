@@ -6,6 +6,7 @@ never instantiated": the services authenticate in their constructor.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 from collections.abc import Callable
@@ -19,6 +20,7 @@ from tests.corpus_support import CORPUS_RULE_UUIDS, clear_runtime_caches
 
 from opentide.deployment.external_ids import plan_external_id, record_created
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
+from opentide.models.system_config import ConfigurationModels
 from opentide.states.deployment import DeploymentStateError, record_external_id, shard_path
 
 PREVIEW = (StatusStrategy.PREVIEW,)
@@ -61,6 +63,12 @@ def _edit_block(
     return path
 
 
+def _tenant(kind: Any, name: str, **setup: Any) -> Any:
+    """A real tenant of the platform's class, which the deployers check."""
+    values = {field.name: None for field in dataclasses.fields(kind.Setup)} | {"ssl": True}
+    return kind(name=name, description="", setup=kind.Setup(**(values | setup)))
+
+
 def _route(module: Any, monkeypatch: pytest.MonkeyPatch, tenant: Any) -> None:
     """Send every rule to one tenant, without the platform toml."""
 
@@ -93,7 +101,11 @@ def _failed() -> bool:
 def defender(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[..., MagicMock]:
     from opentide.platforms.defender_for_endpoint import deployer as module
 
-    _route(module, monkeypatch, SimpleNamespace(name="contoso"))
+    _route(
+        module,
+        monkeypatch,
+        _tenant(ConfigurationModels.Systems.DefenderForEndpoint.Tenant, "contoso"),
+    )
     service_class = _service(module, monkeypatch, "DefenderForEndpointService")
     service_class.return_value.create_detection_rule.return_value = 12345
 
@@ -527,7 +539,9 @@ def sentinel_one(
 ) -> Callable[[], MagicMock]:
     from opentide.platforms.sentinel_one import deployer as module
 
-    _route(module, monkeypatch, SimpleNamespace(name=" s1-prod "))
+    _route(
+        module, monkeypatch, _tenant(ConfigurationModels.Systems.SentinelOne.Tenant, " s1-prod ")
+    )
     monkeypatch.setattr(module.SentinelOneDeploy, "compile_deployment", lambda *a, **k: "payload")
     service_class = _service(module, monkeypatch, "SentinelOneService")
     service_class.return_value.create_update_detection_rule.return_value = 4242
@@ -568,7 +582,9 @@ def test_sentinel_one_delete_passes_an_integer_and_drops_the_file(
 def crowdstrike(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[], MagicMock]:
     from opentide.platforms.crowdstrike import deployer as module
 
-    _route(module, monkeypatch, SimpleNamespace(name="falcon-prod"))
+    _route(
+        module, monkeypatch, _tenant(ConfigurationModels.Systems.Crowdstrike.Tenant, "falcon-prod")
+    )
     monkeypatch.setattr(module.CrowdstrikeDeploy, "compile_deployment", lambda *a, **k: "payload")
     service_class = _service(module, monkeypatch, "CrowdstrikeService")
     service_class.return_value.create_detection_rule.return_value = (
@@ -627,7 +643,9 @@ def test_harfanglab_legacy_bundle_is_refused_before_the_client(
         tide_corpus_repo, HARFANGLAB, "harfanglab", status=None, extra="rule_id::hl-prod: abc"
     )
     _route(
-        module, monkeypatch, SimpleNamespace(name="hl-prod", setup=SimpleNamespace(type="Sigma"))
+        module,
+        monkeypatch,
+        _tenant(ConfigurationModels.Systems.HarfangLab.Tenant, "hl-prod", type="Sigma"),
     )
     service_class = _service(module, monkeypatch, "HarfangLabService")
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import importlib
 import sys
-from collections.abc import Iterator, MutableMapping, Sequence
+from collections.abc import Generator, Iterator, MutableMapping, Sequence
 from contextlib import contextmanager
 from typing import Any, NoReturn
 
@@ -77,7 +77,7 @@ class LazyTyperGroup(TyperGroup):
         self._listing = 0
 
     @contextmanager
-    def _list_from_index(self) -> Iterator[None]:
+    def _list_from_index(self) -> Generator[None]:
         self._listing += 1
         try:
             yield

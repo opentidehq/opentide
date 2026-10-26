@@ -157,6 +157,40 @@ def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
     assert result["deployed"] == []
 
 
+def test_run_deploy_reports_a_platform_that_fails_and_what_was_deployed() -> None:
+    """A TypeError inside a deployer was retried as ``deploy(deployment=...)``.
+
+    That signature exists on no engine, so its own TypeError escaped as a
+    traceback in place of the real one; no result said which platforms had
+    already been deployed.
+    """
+    ctx = CliContext(json_output=True)
+    sentinel = MagicMock()
+    splunk = MagicMock()
+    splunk.deploy.side_effect = TypeError("'NoneType' object is not subscriptable")
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch(
+            "opentide.deployment.make_deploy_plan",
+            return_value={"sentinel": ["u1"], "splunk": ["u2"]},
+        ),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.cli.services.deploy._tenant_targets", return_value={}),
+    ):
+        mock_tide.return_value.mdr_for.return_value = {"sentinel": sentinel, "splunk": splunk}
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert result["message"] == (
+        "Deployment to splunk failed: TypeError: 'NoneType' object is not subscriptable"
+    )
+    assert result["deployed"] == ["sentinel"]
+    assert result["plan"] == {"sentinel": ["u1"], "splunk": ["u2"]}
+    splunk.deploy.assert_called_once()
+    assert "deployment" not in splunk.deploy.call_args.kwargs
+
+
 def test_run_deploy_warning_marks_result_with_warnings() -> None:
     ctx = CliContext(json_output=True)
     warned = CiOutcome(exit_code=0, failed=False, warned=True)

@@ -316,7 +316,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     return expected
 
 
-_PANEL_CHROME = str.maketrans({char: " " for char in "│╭╮╰╯─"})
+_PANEL_CHROME = str.maketrans(dict.fromkeys("│╭╮╰╯─", " "))
 
 
 def _panel_text(text: str) -> str:

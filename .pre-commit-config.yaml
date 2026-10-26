@@ -13,7 +13,7 @@ default_install_hook_types:
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         exclude: '\.ambr$'
@@ -24,15 +24,24 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.1
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
-
+  # ruff and ty run from the locked dev environment (uv.lock), so the hook and
+  # CI can never disagree on the version and Dependabot bumps them in one place.
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
       - id: ty
         name: ty type checker
         entry: uv run ty check src/opentide
