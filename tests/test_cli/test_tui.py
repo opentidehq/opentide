@@ -225,10 +225,17 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         assert app.selected == RULE
         log = await _results(app, pilot)
         assert "$ opentide validate" in log
-        assert (
-            "error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry" in log
-        )
-        assert "error: Validation failed" in log
+        # As `opentide validate` prints it: #641's code frame, with the source
+        # line underlined, and the counted outcome line.
+        assert "error[vocab_unknown]: 'clearr' is not a TLP value" in log
+        assert f"╭─▶ {RULE_FILE}:8:8" in log
+        assert "8 │   tlp: clearr" in log
+        assert "━━━━━━ not in tlp::1.0" in log
+        assert re.search(r"✗ 1 error in 1 file · 3 objects checked · \d+(\.\d+)?m?s", log)
+        assert "error: Validation failed" not in log
+        # The next steps a person would run, not the --json form.
+        assert "→ opentide validate · check again" in log
+        assert "--json" not in log
         await pilot.press("1", "up")
         assert "No diagnostics from the last validate run" in _text(app, "#diagnostics")
 
@@ -239,7 +246,8 @@ def test_a_clean_validate_reports_success(tutorial_repo: Path) -> None:
     async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
         app.action_run("validate")
         await _settle(app, pilot)
-        assert "✓ Validation passed" in await _results(app, pilot)
+        # The counted line `opentide validate` prints (#641).
+        assert re.search(r"✓ 3 objects valid · \d", await _results(app, pilot))
         assert app.validated
         assert app.diagnostics == ()
 
@@ -318,8 +326,11 @@ def test_deploy_dry_run_shows_the_plan(
         log = await _results(app, pilot)
         assert app.query_one(TabbedContent).active == "results"
         assert "$ opentide deploy --dry-run --strategy PREVIEW --all" in log
-        assert "  sentinel: 1 rule" in log
-        assert "✓ Deployment completed" in log
+        # #643's plan view and its tally, as `deploy --dry-run` prints them.
+        assert "Deploy plan · strategy PREVIEW · 1 platform, 0 tenants" in log
+        assert "+ create or update  Sentinel KQL Rule" in log
+        assert "Plan: 0 to create, 0 to update, 1 to create or update" in log
+        assert "  sentinel: 1 rule" not in log
         assert "warning: sentinel has no tenants configured" in log
 
     _drive(tutorial_repo, script)
@@ -405,7 +416,7 @@ def test_a_failed_reload_keeps_the_outcome(
         await _settle(app, pilot)
         assert app.validated
         log = await _results(app, pilot)
-        assert "✓ Validation passed" in log
+        assert "✓ 3 objects valid · " in log
         # RichLog wraps the line to the tab's width: compare it unwrapped.
         assert (
             "error[internal]: the catalogue could not be read again: RuntimeError: index unreadable"

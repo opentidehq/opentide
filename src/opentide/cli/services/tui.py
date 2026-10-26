@@ -342,6 +342,10 @@ class ActionOutcome:
     action: Action
     result: CommandResult
     diagnostics: tuple[Diagnostic, ...] = ()
+    #: The findings as ``validate`` prints them (#641's code frames).
+    frames: tuple[Any, ...] = ()
+    #: A dry run's payload, for #643's plan view and compile diagnostics.
+    plan: Mapping[str, Any] | None = None
 
 
 def run_action(ctx: CliContext, action: Action) -> ActionOutcome:
@@ -352,7 +356,10 @@ def run_action(ctx: CliContext, action: Action) -> ActionOutcome:
     result itself. An unexpected exception becomes an ``internal`` failure,
     as the CLI reports it.
     """
+    import time
+
     quiet = dataclasses.replace(ctx, json_output=True)
+    started = time.monotonic()
     try:
         payload = action.run(quiet)
     except Exception as exc:
@@ -366,9 +373,40 @@ def run_action(ctx: CliContext, action: Action) -> ActionOutcome:
             failure=Failure(code="internal", message=message),
         )
         return ActionOutcome(action=action, result=result)
+    frames = tuple(payload.pop("_diagnostics", None) or ())
+    plan = dict(payload) if action.name.startswith("deploy") else None
     result = CommandResult.from_payload(payload, default_message=action.default_message)
-    diagnostics = diagnostics_from(payload) if action.name == "validate" else ()
-    return ActionOutcome(action=action, result=result, diagnostics=diagnostics)
+    # The services ran with json_output set, so their next steps read
+    # ``opentide --json …``; a person at the UI is shown the human command.
+    result = dataclasses.replace(
+        result,
+        next_actions=tuple(
+            dataclasses.replace(item, command=_human_command(item.command))
+            for item in result.next_actions
+        ),
+    )
+    if action.name != "validate":
+        return ActionOutcome(action=action, result=result, plan=plan)
+    from opentide.cli.services.validation import validate_outcome_line
+
+    # As ``opentide validate`` prints it: the counted line, and the frames
+    # instead of a warning line per finding.
+    line = result.message
+    if not line.startswith("Validation passed, but"):
+        seconds = time.monotonic() - started
+        line = validate_outcome_line(result.summary, failed=not result.ok, seconds=seconds)
+    return ActionOutcome(
+        action=action,
+        result=dataclasses.replace(result, outcome=line, warnings=()),
+        diagnostics=diagnostics_from(payload),
+        frames=frames,
+    )
+
+
+def _human_command(command: str) -> str:
+    """``opentide --json validate`` → ``opentide validate``."""
+    prefix = "opentide --json "
+    return "opentide " + command[len(prefix) :] if command.startswith(prefix) else command
 
 
 def relative(path: Path | None, root: Path) -> str:

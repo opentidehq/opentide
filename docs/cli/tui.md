@@ -20,7 +20,7 @@ It reads the same registry as every other command and runs the same service func
 |-----|-----|---------------|
 | Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right shows the selected object's file with line numbers, and its diagnostics from the last validate run (`error[code]: message`, `╭─▶ path:line`, `╰─ help: …`), each line marked |
 | Coverage | `2` | One row per ATT&CK technique named by a threat, an objective or a rule: how many rules detect it, which rules, and which threats and objectives name it. A technique counts the rules on its sub-techniques, as `opentide info --technique T1059 coverage` does. A row with `0` rules is a gap. `Enter` opens the first rule |
-| Results | `3` | The output of each command run from the UI, as the command prints it: diagnostics, warnings, the outcome line and next steps |
+| Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
 
 The header carries the opentide pill, the tagline, the repository name and the catalogue counts. The tagline shows only where it fits whole: when the terminal is too narrow for it beside the counts, the header keeps the pill and the counts.
 

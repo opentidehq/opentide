@@ -227,12 +227,18 @@ def outcome_text(outcome: ActionOutcome, root: Any) -> Text:
         highlight=False,
     )
     console.print(Text(f"$ {outcome.action.command}", style="bold"), soft_wrap=True)
-    for diagnostic in outcome.diagnostics:
-        console.print(diagnostic_text(diagnostic, root), soft_wrap=True)
-    plan = outcome.result.data.get("plan")
-    if isinstance(plan, dict):
-        for platform, uuids in plan.items():
-            console.print(Text(f"  {platform}: {plural(len(uuids), 'rule')}"), soft_wrap=True)
+    if outcome.frames:
+        from opentide.cli.ui.codeframe import render_diagnostics
+
+        # The CLI's code frames (#641); PLAIN keeps them free of OSC 8 links.
+        render_diagnostics(console, outcome.frames, mode=OutputMode.PLAIN)
+    if outcome.plan is not None:
+        from opentide.cli.ui.plan import render_plan, render_plan_diagnostics
+
+        # The plan view and compile frames a dry run prints (#643).
+        plan = {**outcome.plan, "_summary": outcome.result.summary}
+        render_plan(console, plan)
+        render_plan_diagnostics(console, plan)
     render_result(outcome.result, stdout=console, stderr=console, mode=OutputMode.HUMAN)
     return Text.from_ansi(buffer.getvalue().rstrip("\n"))
 
