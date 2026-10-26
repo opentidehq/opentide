@@ -367,10 +367,31 @@ def test_home_next_steps_follow_the_workspace() -> None:
     fresh = HomeFacts("1", Path("."), schemas=False, platforms={})
     assert [step.command for step in next_steps(fresh)] == [
         "opentide generate",
-        "opentide validate",
+        "opentide new threat",
         "opentide setup platforms --sentinel",
     ]
     assert len(next_steps(_FACTS)) <= 3
+
+
+def test_an_empty_catalogue_suggests_its_first_object_not_a_deploy() -> None:
+    """After `setup`, the home screen suggested `validate` and a deploy dry run with
+    nothing to validate or deploy (post-merge end-to-end run)."""
+    empty = HomeFacts(
+        "1", Path("."), schemas=True, platforms={"sentinel": 0},
+        catalogue={"rules": 0, "threats": 0, "objectives": 0},
+    )  # fmt: skip
+    assert [step.command for step in next_steps(empty)] == [
+        "opentide new threat",
+        "opentide new rule",
+    ]
+    no_rules = HomeFacts(
+        "1", Path("."), schemas=True, platforms={"sentinel": 0},
+        catalogue={"rules": 0, "threats": 1, "objectives": 1},
+    )  # fmt: skip
+    assert [step.command for step in next_steps(no_rules)] == [
+        "opentide validate",
+        "opentide new rule",
+    ]
     assert all(isinstance(step, NextAction) for step in next_steps(_FACTS))
 
 
