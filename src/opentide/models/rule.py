@@ -55,7 +55,7 @@ class DetectionRule(TideModel):
     status: str = "STAGING"
     """Deployment lifecycle status."""
     severity: str = "Informational"
-    """Rule severity vocabulary."""
+    """`alert_severity::1.0`."""
     techniques: list[str] = TideField(default_factory=list, role=FieldRole.TECHNIQUES)
     """MITRE ATT&CK technique ids (`att&ck::1.2`)."""
     platforms: dict[str, dict[str, Any]] = TideField(
