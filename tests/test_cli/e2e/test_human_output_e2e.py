@@ -283,8 +283,7 @@ def _info_expectations(payload: dict[str, Any]) -> list[Expectation]:
         expected.append(
             (
                 platform_label(DetectionPlatform(plat["name"])),
-                f"enabled={plat['enabled']}",
-                f"[{', '.join(caps) or 'none'}]",
+                f"{'enabled' if plat['enabled'] else 'disabled'} · {', '.join(caps) or 'none'}",
             )
         )
     return expected
