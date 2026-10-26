@@ -128,6 +128,13 @@ def render_plan(console: Console, payload: Mapping[str, Any]) -> None:
     )
 
 
+def _quoted(text: str) -> str:
+    """Markdown code spans (`response`) as every other frame quotes a name ('response')."""
+    import re
+
+    return re.sub(r"`([^`]+)`", r"'\1'", text)
+
+
 def plan_diagnostic(diagnostic: Mapping[str, Any]) -> Diagnostic:
     """One rule a dry run could not compile, as the ``Diagnostic`` code frames print.
 
@@ -146,10 +153,10 @@ def plan_diagnostic(diagnostic: Mapping[str, Any]) -> Diagnostic:
     return Diagnostic(
         code=str(diagnostic.get("code") or "compile_failed"),
         severity="warning" if severity == "warning" else "error",
-        message=str(diagnostic.get("message") or ""),
+        message=_quoted(str(diagnostic.get("message") or "")),
         path=str(where) if where else None,
         file_path=Path(str(source)) if source else None,
-        help=str(diagnostic["help"]) if diagnostic.get("help") else None,
+        help=_quoted(str(diagnostic["help"])) if diagnostic.get("help") else None,
         notes=notes,
         object_uuid=str(diagnostic["uuid"]) if diagnostic.get("uuid") else None,
     )

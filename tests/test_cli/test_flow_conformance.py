@@ -158,6 +158,20 @@ def test_a_diagnostic_prints_its_code_file_and_help_once(tmp_path: Path, monkeyp
     assert "00000000" not in text and "Rule" not in text
 
 
+def test_a_compile_frame_quotes_names_like_every_other_frame() -> None:
+    """``error[compile_empty_block]: `response` is empty…`` printed Markdown code spans
+    where other frames quote 'names' (post-merge end-to-end run). JSON keeps them."""
+    diagnostic = _plan_ui.plan_diagnostic(
+        {
+            "code": "compile_empty_block",
+            "message": "`response` is empty, so Sentinel cannot read `alert_severity`",
+            "help": "set `response.alert_severity`",
+        }
+    )
+    assert diagnostic.message == "'response' is empty, so Sentinel cannot read 'alert_severity'"
+    assert diagnostic.help == "set 'response.alert_severity'"
+
+
 def test_a_diagnostic_without_a_file_names_its_rule(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     diagnostic = _plan_ui.plan_diagnostic(
