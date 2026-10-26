@@ -159,6 +159,23 @@ def test_did_you_mean_ignores_case_and_separators(
 
 
 @pytest.mark.parametrize(
+    ("value", "choices", "expected"),
+    [
+        ("defender", ["sentinel", "defender_for_endpoint", "splunk"], "defender_for_endpoint"),
+        ("carbon", ["carbon_black_cloud", "crowdstrike"], "carbon_black_cloud"),
+        ("gitlab", ["text", "sarif", "codequality"], "codequality"),
+        ("sen", ["sentinel", "sentinel_one"], None),
+        ("de", ["defender_for_endpoint"], None),
+    ],
+)
+def test_did_you_mean_takes_a_unique_prefix_or_a_known_alias(
+    value: str, choices: list[str], expected: str | None
+) -> None:
+    """``--platform defender`` and ``--format gitlab`` got no suggestion (post-merge run)."""
+    assert did_you_mean(value, choices) == expected
+
+
+@pytest.mark.parametrize(
     ("text", "expected"),
     [
         ("a · b", "a - b"),
