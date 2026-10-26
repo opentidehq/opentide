@@ -126,12 +126,23 @@ def render_error(
     *,
     notes: Sequence[tuple[str, str]] = (),
     mode: OutputMode | None = None,
+    tip: bool = True,
 ) -> None:
-    """``error: message`` and its notes, plus the ``--json`` tip in ``agent`` mode."""
+    """``error: message`` and its notes, plus the ``--json`` tip in ``agent`` mode.
+
+    *tip* ``False`` leaves the tip to the caller, which prints it after the
+    next steps, as the last line.
+    """
     mode = mode or get_mode()
     console.print(labelled_text("error", message), soft_wrap=True)
     render_notes(console, notes)
-    if mode is OutputMode.AGENT:
+    if tip:
+        render_agent_tip(console, mode)
+
+
+def render_agent_tip(console: Console, mode: OutputMode | None = None) -> None:
+    """``tip: add --json for machine-readable output``, in ``agent`` mode only."""
+    if (mode or get_mode()) is OutputMode.AGENT:
         console.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
 
 

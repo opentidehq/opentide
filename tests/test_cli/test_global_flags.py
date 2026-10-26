@@ -244,6 +244,33 @@ def test_agent_mode_adds_the_json_tip(tmp_path: Path) -> None:
     assert result.stderr.splitlines()[-1] == "tip: add --json for machine-readable output"
 
 
+@pytest.mark.parametrize("framed", [True, False])
+def test_the_agent_tip_comes_after_the_next_steps(framed: bool) -> None:
+    """It sat between the outcome line and its next steps (post-merge end-to-end run)."""
+    import io
+
+    from rich.console import Console
+
+    from opentide.cli.output import CommandResult, render_result
+    from opentide.cli.ui.contract import ISSUES_FOUND, Failure, NextAction
+    from opentide.cli.ui.mode import OutputMode
+
+    console = Console(file=io.StringIO(), width=200, color_system=None)
+    result = CommandResult(
+        message="Validation failed",
+        ok=False,
+        status="failed",
+        outcome="1 error in 1 file",
+        exit_code=1,
+        failure=Failure(code=ISSUES_FOUND if framed else "command_failed", message="x"),
+        next_actions=(NextAction("opentide validate", "check again"),),
+    )
+    render_result(result, stdout=console, stderr=console, mode=OutputMode.AGENT)
+    lines = console.file.getvalue().splitlines()
+    assert lines[-1] == "tip: add --json for machine-readable output"
+    assert lines[-2].startswith("→ opentide validate")
+
+
 def test_opentide_output_json_selects_json(tmp_path: Path) -> None:
     result = _invoke("--repo", str(tmp_path), "info", env={"OPENTIDE_OUTPUT": "json"})
     assert result.exit_code == 0, result.output

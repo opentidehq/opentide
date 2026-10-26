@@ -35,6 +35,7 @@ from opentide.cli.ui.render import (
     OutcomeKind,
     labelled_text,
     outcome_kind,
+    render_agent_tip,
     render_error,
     render_next_actions,
     render_notes,
@@ -352,17 +353,18 @@ def render_result(
         # The findings are the error report; the outcome line counts them.
         render_outcome(stderr, "failed", line)
         render_notes(stderr, notes)
-        if mode is OutputMode.AGENT:
-            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
         if not quiet:
             render_next_actions(stderr, result.next_actions)
+        # Last, not between the outcome and its next steps (post-merge run).
+        render_agent_tip(stderr, mode)
     elif kind == "failed":
         suggestion = result.failure.suggestion if result.failure else None
         if suggestion and repr(suggestion) not in result.message:
             notes.append(("help", f"did you mean {suggestion!r}?"))
-        render_error(stderr, result.message, notes=notes, mode=mode)
+        render_error(stderr, result.message, notes=notes, mode=mode, tip=False)
         if not quiet:
             render_next_actions(stderr, result.next_actions)
+        render_agent_tip(stderr, mode)
     else:
         render_outcome(stdout, kind, line)
         if not quiet:
