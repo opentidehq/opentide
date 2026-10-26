@@ -3,6 +3,7 @@
 //! Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}`
 //! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
+mod elastic;
 mod intel;
 mod vocabs;
 mod yaml_path;
@@ -20,6 +21,7 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 use uuid::Uuid;
 
+pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
 pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
 };
@@ -33,7 +35,9 @@ const THREAT_TEMPLATE: &str =
     include_str!("../../../catalogs/tide/templates/threat.1.0.template.yaml");
 
 /// Map a YAML field path to an injected query language.
-/// CrowdStrike is unsupported — never fake validation.
+/// CrowdStrike is unsupported — never fake validation. Elastic is not a
+/// path: its language comes from the block's `type` and `language`
+/// ([`elastic_query_language`]).
 pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
     match path {
         ["configurations", "sentinel", "query"] => Some(LanguageId::Kql),
@@ -41,6 +45,7 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
         ["configurations", "splunk", "query"] | ["configurations", "splunk", "search"] => {
             Some(LanguageId::Spl)
         }
+        ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
         ["configurations", "crowdstrike", ..] => None,
         _ => None,
     }
@@ -160,6 +165,8 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
         byte += line.len();
         i += 1;
     }
+    out.extend(elastic::elastic_injections(source));
+    out.sort_by_key(|inj| inj.host_span.start);
     out
 }
 
@@ -347,6 +354,9 @@ pub struct AnalyzeInput<'a> {
     pub path: &'a str,
     pub source: &'a str,
     pub workspace: &'a [IndexedObject],
+    /// Tenants from `.opentide/configurations/platforms/elastic.toml`, for
+    /// the stack version Elastic queries are checked against.
+    pub elastic_tenants: &'a [ElasticTenant],
 }
 
 pub struct TideAnalyzeResult {
@@ -718,6 +728,21 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
+    if object_type == "rule"
+        && object
+            .configurations
+            .as_ref()
+            .is_some_and(|c| c.get("elastic").is_some())
+    {
+        if let Ok(rule) = serde_yaml::from_str::<serde_yaml::Value>(input.source) {
+            diagnostics.extend(elastic::block_advisories(
+                input.source,
+                &rule,
+                input.workspace,
+            ));
+        }
+    }
+
     // Injected query analysis
     let injections = extract_injections(input.source);
     let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
@@ -751,6 +776,60 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                     }
                 }
             }
+            LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
+                let (found, query_tokens) = match inj.language {
+                    LanguageId::Esql => {
+                        // Hunts have no tenants; only the rule block is targeted.
+                        let target = (inj.field_path.first().map(String::as_str)
+                            == Some("configurations"))
+                        .then(|| {
+                            elastic::stack_target(
+                                object
+                                    .configurations
+                                    .as_ref()
+                                    .and_then(|c| c.get("elastic")),
+                                input.elastic_tenants,
+                            )
+                        })
+                        .flatten();
+                        let r = opentide_esql::analyze_for(&inj.inner, target);
+                        (r.diagnostics, r.tokens)
+                    }
+                    LanguageId::Eql => {
+                        let r = opentide_eql::analyze(&inj.inner);
+                        // Hunts have no schedule; only the rule query is compared.
+                        if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                            diagnostics.extend(elastic::maxspan_advisories(
+                                input.source,
+                                object.configurations.as_ref(),
+                                inj,
+                            ));
+                        }
+                        (r.diagnostics, r.tokens)
+                    }
+                    LanguageId::Kuery => {
+                        let r = opentide_kuery::analyze(&inj.inner);
+                        (r.diagnostics, r.tokens)
+                    }
+                    _ => {
+                        let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
+                            opentide_lucene::Dialect::CarbonBlack
+                        } else {
+                            opentide_lucene::Dialect::Elastic
+                        };
+                        let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
+                        (r.diagnostics, r.tokens)
+                    }
+                };
+                for d in found {
+                    diagnostics.push(remap_diagnostic(input.source, inj, d));
+                }
+                for t in query_tokens {
+                    if let Some(mapped) = remap_token(input.source, inj, &t) {
+                        tokens.push(mapped);
+                    }
+                }
+            }
             LanguageId::TideYaml => {}
         }
     }
@@ -765,25 +844,35 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 }
 
 fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
-    let inner_start = {
-        // approximate: use the diagnostic range's start character on line 0 of inner
-        let line = d.range.start.line as usize;
-        let mut offset = 0usize;
-        for (i, l) in inj.inner.split('\n').enumerate() {
-            if i == line {
-                offset += d.range.start.character as usize;
-                break;
-            }
-            offset += l.len() + 1;
-        }
-        offset
-    };
-    let span = remap_span(inj, ByteSpan::new(inner_start, inner_start + 1));
+    let start = inner_offset(&inj.inner, d.range.start);
+    let end = inner_offset(&inj.inner, d.range.end).max(start + 1);
+    let span = remap_span(inj, ByteSpan::new(start, end));
     d.range = span_to_range(source, span);
     if d.field_path.is_none() {
         d.field_path = Some(inj.field_path.clone());
     }
     d
+}
+
+/// Byte offset of an LSP position (UTF-16 columns) inside an injected query.
+fn inner_offset(inner: &str, position: opentide_core::Position) -> usize {
+    let mut line = 0u32;
+    let mut col = 0u32;
+    for (idx, ch) in inner.char_indices() {
+        if line == position.line && col >= position.character {
+            return idx;
+        }
+        if ch == '\n' {
+            if line == position.line {
+                return idx;
+            }
+            line += 1;
+            col = 0;
+        } else {
+            col += ch.len_utf16() as u32;
+        }
+    }
+    inner.len()
 }
 
 fn remap_token(
@@ -1481,6 +1570,7 @@ meta:
             path: "objects/rules/legacy.yaml",
             source: src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         let diag = r
             .diagnostics
@@ -1506,6 +1596,7 @@ meta:
             path: "objects/rules/overlay.yaml",
             source: src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         install_deprecation_overlay(Vec::new());
         assert!(
@@ -1540,6 +1631,7 @@ threat:
             path: "objects/threats/t.yaml",
             source: src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         let diag = r
             .diagnostics
@@ -1566,6 +1658,10 @@ threat:
         assert_eq!(
             language_for_field_path(&["configurations", "crowdstrike", "query"]),
             None
+        );
+        assert_eq!(
+            language_for_field_path(&["configurations", "carbon_black_cloud", "query"]),
+            Some(LanguageId::Lucene)
         );
     }
 
@@ -1604,6 +1700,7 @@ threat:
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: &src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(
             r.diagnostics.iter().any(|d| d.code == codes::VOCAB_UNKNOWN),
@@ -1619,6 +1716,7 @@ threat:
             path: "x.yaml",
             source: &src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(r.diagnostics.iter().any(|d| d.code == codes::INVALID_UUID));
     }
@@ -1633,6 +1731,7 @@ threat:
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: &src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(
             !r.diagnostics.iter().any(|d| {
@@ -1649,6 +1748,7 @@ threat:
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: RULE,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(
             r.diagnostics.iter().any(|d| d.code == codes::INVALID_REF),
@@ -1663,6 +1763,7 @@ threat:
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: RULE,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(
             r.tokens.iter().any(|t| t.capture == "tide.property"),
@@ -1699,6 +1800,7 @@ threat:
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: RULE,
             workspace: &[],
+            elastic_tenants: &[],
         });
         let uuid_vals = token_text(RULE, &r.tokens, "tide.uuid");
         assert!(
@@ -1716,6 +1818,56 @@ threat:
         let mut sorted = starts.clone();
         sorted.sort();
         assert_eq!(starts, sorted, "semantic tokens must be in document order");
+    }
+
+    #[test]
+    fn carbon_black_query_is_lucene_in_its_dialect() {
+        let src = r#"name: Carbon Black rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000019
+  schema: rule::1.0
+configurations:
+  carbon_black_cloud:
+    enabled: true
+    schema: platform::carbon_black_cloud::1.0
+    query: |
+      process_name:cmd.exe AND _exists_:parent_name
+      AND netconn_count:[1 TO
+      5]
+"#;
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/carbon-black-rule.yaml",
+            source: src,
+            workspace: &[],
+            elastic_tenants: &[],
+        });
+        let lucene: Vec<_> = r
+            .diagnostics
+            .iter()
+            .filter(|d| d.code.starts_with("lucene_"))
+            .collect();
+        // `_exists_` is Elasticsearch-only; the newline inside the range is
+        // fine because deploy joins lines with spaces.
+        assert!(
+            lucene
+                .iter()
+                .any(|d| d.code == codes::LUCENE_ELASTICSEARCH_ONLY
+                    && d.field_path.as_deref()
+                        == Some(
+                            &[
+                                "configurations".to_string(),
+                                "carbon_black_cloud".into(),
+                                "query".into()
+                            ][..]
+                        )),
+            "{lucene:?}"
+        );
+        assert!(
+            lucene
+                .iter()
+                .all(|d| d.severity != opentide_core::Severity::Error),
+            "{lucene:?}"
+        );
     }
 
     #[test]
@@ -1743,6 +1895,7 @@ configurations:
             path: "objects/rules/hunt.yaml",
             source: src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(
             r.tokens
@@ -1782,6 +1935,7 @@ configurations:
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: RULE,
             workspace: &[obj],
+            elastic_tenants: &[],
         });
         assert!(r.diagnostics.iter().any(|d| d.code == codes::DUPLICATE_ID));
     }
@@ -1802,6 +1956,7 @@ threat:
             path: "objects/threats/threat.yaml",
             source: src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(
             r.diagnostics
@@ -1819,6 +1974,7 @@ threat:
             path: "objects/rules/x.yaml",
             source: src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(
             r.diagnostics
@@ -1833,6 +1989,7 @@ threat:
             path: "objects/rules/not-the-slug.yaml",
             source: RULE,
             workspace: &[],
+            elastic_tenants: &[],
         });
         assert!(r.diagnostics.iter().any(|d| d.code == codes::FILENAME_SLUG));
     }
@@ -1868,6 +2025,7 @@ configurations:
             path: "objects/rules/markdown-rule.yaml",
             source: src,
             workspace: &[],
+            elastic_tenants: &[],
         });
         let pairs: Vec<(&str, &str)> = r
             .tokens

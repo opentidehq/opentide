@@ -1,0 +1,11 @@
+[package]
+name = "opentide-ecs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Elastic Common Schema field catalog for the Elastic query engines (I/O-free)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

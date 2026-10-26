@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createOpentideClient, createOtideClient } from "./index.ts";
+import { createOpentideClient, createOtideClient, DOCUMENT_SELECTOR, LANGUAGES } from "./index.ts";
+
+test("document selector covers every language", () => {
+  const ids = LANGUAGES.map((l) => l.id);
+  assert.deepEqual(ids, ["opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene"]);
+  for (const id of ids) {
+    assert.ok(DOCUMENT_SELECTOR.some((s) => "language" in s && s.language === id), id);
+  }
+  assert.ok(DOCUMENT_SELECTOR.some((s) => "pattern" in s && s.pattern === "**/*.esql"));
+  assert.ok(!DOCUMENT_SELECTOR.some((s) => "pattern" in s && s.pattern === "**/*.sql"), "no SQL");
+});
 
 test("createOpentideClient stdio", async () => {
   const client = createOpentideClient({ transport: "stdio" });

@@ -1,0 +1,1 @@
+any wehre (TargetFilename like~ ("/etc/sudoers", "/etc/sudoers.d/*")) and (not (Image:"*/usr/bin/dpkg" and TargetFilename:"/etc/sudoers.d/README.dpkg-new"))

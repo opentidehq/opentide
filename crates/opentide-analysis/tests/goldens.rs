@@ -77,3 +77,73 @@ configurations:
             .any(|t| t.capture == "keyword" || t.capture == "type" || t.capture == "operator.pipe")
     );
 }
+
+/// Elastic goldens compare every token (span and capture), not only the set
+/// of captures. `UPDATE_GOLDENS=1` rewrites them after an intended change.
+fn exact_golden(dir: &str, name: &str, language: LanguageId, src: &str) {
+    golden(dir, name, language, src);
+    let result = highlight(language, src);
+    let path = repo_root()
+        .join("testdata/highlight")
+        .join(dir)
+        .join(format!("{name}.json"));
+    let expected: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    let triples = |tokens: &[Value]| -> Vec<(u64, u64, String)> {
+        tokens
+            .iter()
+            .map(|t| {
+                (
+                    t["span"]["start"].as_u64().unwrap(),
+                    t["span"]["end"].as_u64().unwrap(),
+                    t["capture"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    };
+    let actual: Value = serde_json::to_value(&result).unwrap();
+    assert_eq!(
+        triples(actual["tokens"].as_array().unwrap()),
+        triples(expected["tokens"].as_array().unwrap()),
+        "{dir}/{name}: tokens differ from the golden (UPDATE_GOLDENS=1 to accept)"
+    );
+}
+
+#[test]
+fn esql_golden() {
+    exact_golden(
+        "esql",
+        "pipeline",
+        LanguageId::Esql,
+        "// rare parents\nFROM logs-endpoint.events.process-* METADATA _id\n| WHERE event.type == \"start\" AND process.name LIKE \"*.exe\"\n| STATS c = COUNT(*) BY process.parent.name\n| WHERE c < 5 | LIMIT 10",
+    );
+}
+
+#[test]
+fn eql_golden() {
+    exact_golden(
+        "eql",
+        "sequence",
+        LanguageId::Eql,
+        "sequence by host.id with maxspan=30s\n  [process where process.name : \"cmd.exe\" and startsWith~(process.args, \"/c\")]\n  [network where destination.port in (443, 8443)]\n| head 5",
+    );
+}
+
+#[test]
+fn kuery_golden() {
+    exact_golden(
+        "kuery",
+        "query",
+        LanguageId::Kuery,
+        "event.category:process and not process.name:(\"cmd.exe\" or powershell*) and source.port >= 1024",
+    );
+}
+
+#[test]
+fn lucene_golden() {
+    exact_golden(
+        "lucene",
+        "query",
+        LanguageId::Lucene,
+        "event.category:process AND NOT process.name:(cmd.exe OR /power.*/) AND source.port:[1024 TO *]^2",
+    );
+}

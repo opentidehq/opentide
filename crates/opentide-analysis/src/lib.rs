@@ -7,6 +7,8 @@ use opentide_highlight::{
 use opentide_kql::Profile;
 use opentide_tide::{IndexedObject, TideAnalyzeResult};
 
+mod ecs;
+
 /// Host-supplied workspace snapshot. The analysis crate never calls `std::fs`.
 pub trait WorkspaceHost {
     fn document(&self, uri: &str) -> Option<String>;
@@ -52,6 +54,21 @@ pub fn index_workspace(host: &dyn WorkspaceHost) -> Vec<IndexedObject> {
         .collect()
 }
 
+/// Workspace-relative path of the Elastic platform configuration (elastic-1.0
+/// Tenant setup). Hosts include it in [`WorkspaceHost::documents`] when it
+/// exists.
+pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elastic.toml";
+
+/// Elastic tenants declared in the workspace, if the host supplies the
+/// configuration file.
+pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<opentide_tide::ElasticTenant> {
+    host.documents()
+        .iter()
+        .find(|(path, _)| path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION))
+        .map(|(_, text)| opentide_tide::elastic_tenants(text))
+        .unwrap_or_default()
+}
+
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
     let workspace = if request.language == LanguageId::TideYaml {
         index_workspace(host)
@@ -75,11 +92,44 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 symbols: Vec::new(),
             }
         }
+        LanguageId::Esql => {
+            let r = opentide_esql::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Eql => {
+            let r = opentide_eql::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Kuery => {
+            let r = opentide_kuery::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Lucene => {
+            let r = opentide_lucene::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
         LanguageId::TideYaml => {
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
                 source: &request.text,
                 workspace: &workspace,
+                elastic_tenants: &elastic_tenants(host),
             });
             AnalyzeResponse {
                 diagnostics: r.diagnostics,
@@ -119,20 +169,7 @@ pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
 }
 
 fn offset_at_position(text: &str, position: Position) -> usize {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for (idx, ch) in text.char_indices() {
-        if line == position.line && col >= position.character {
-            return idx;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-    text.len()
+    opentide_core::position_to_offset(text, position)
 }
 
 fn position_at_offset(text: &str, offset: usize) -> Position {
@@ -154,25 +191,38 @@ pub fn hover(
     position: Position,
 ) -> Option<String> {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, position, Profile::Sentinel),
-        LanguageId::Spl => opentide_spl::hover(text, position),
         LanguageId::TideYaml => {
             let offset = offset_at_position(text, position);
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
                 let inner_pos = position_at_offset(&inj.inner, inner);
-                return match inj.language {
-                    LanguageId::Kql => opentide_kql::hover(
-                        &inj.inner,
-                        inner_pos,
-                        defender_profile(&inj.field_path),
-                    ),
-                    LanguageId::Spl => opentide_spl::hover(&inj.inner, inner_pos),
-                    LanguageId::TideYaml => None,
-                };
+                return query_hover(inj.language, &inj.inner, inner_pos, &inj.field_path);
             }
             let workspace = index_workspace(host);
             opentide_tide::hover_tide(text, offset, &workspace)
         }
+        query => query_hover(query, text, position, &[]),
+    }
+}
+
+/// Hover inside one query language. `field_path` selects the KQL profile.
+fn query_hover(
+    language: LanguageId,
+    text: &str,
+    position: Position,
+    field_path: &[String],
+) -> Option<String> {
+    match language {
+        LanguageId::Kql => opentide_kql::hover(text, position, defender_profile(field_path)),
+        LanguageId::Spl => opentide_spl::hover(text, position),
+        LanguageId::Esql => opentide_esql::hover(text, position)
+            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
+        LanguageId::Eql => opentide_eql::hover(text, position)
+            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
+        LanguageId::Kuery => opentide_kuery::hover(text, position)
+            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
+        LanguageId::Lucene => opentide_lucene::hover(text, position)
+            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
+        LanguageId::TideYaml => None,
     }
 }
 
@@ -183,23 +233,37 @@ pub fn completions(
     offset: usize,
 ) -> Vec<CompletionItem> {
     match language {
-        LanguageId::Kql => opentide_kql::completions(text, offset, Profile::Sentinel),
-        LanguageId::Spl => opentide_spl::completions(text, offset),
         LanguageId::TideYaml => {
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
-                return match inj.language {
-                    LanguageId::Kql => opentide_kql::completions(
-                        &inj.inner,
-                        inner,
-                        defender_profile(&inj.field_path),
-                    ),
-                    LanguageId::Spl => opentide_spl::completions(&inj.inner, inner),
-                    LanguageId::TideYaml => Vec::new(),
-                };
+                return query_completions(inj.language, &inj.inner, inner, &inj.field_path);
             }
             let workspace = index_workspace(host);
             opentide_tide::completions_tide(text, offset, &workspace)
         }
+        query => query_completions(query, text, offset, &[]),
+    }
+}
+
+fn query_completions(
+    language: LanguageId,
+    text: &str,
+    offset: usize,
+    field_path: &[String],
+) -> Vec<CompletionItem> {
+    match language {
+        LanguageId::Kql => opentide_kql::completions(text, offset, defender_profile(field_path)),
+        LanguageId::Spl => opentide_spl::completions(text, offset),
+        LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
+            let mut items = match language {
+                LanguageId::Esql => opentide_esql::completions(text, offset),
+                LanguageId::Eql => opentide_eql::completions(text, offset),
+                LanguageId::Kuery => opentide_kuery::completions(text, offset),
+                _ => opentide_lucene::completions(text, offset),
+            };
+            ecs::complete(language, text, offset, &mut items);
+            items
+        }
+        LanguageId::TideYaml => Vec::new(),
     }
 }
 
@@ -220,20 +284,26 @@ pub fn signature_help(
 ) -> Option<SignatureHelp> {
     let offset = offset_at_position(text, position);
     match language {
-        LanguageId::Kql => opentide_kql::signature_help(text, offset, Profile::Sentinel),
-        LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::TideYaml => {
             let (inj, inner) = opentide_tide::injection_at_offset(text, offset)?;
-            match inj.language {
-                LanguageId::Kql => opentide_kql::signature_help(
-                    &inj.inner,
-                    inner,
-                    defender_profile(&inj.field_path),
-                ),
-                LanguageId::Spl => opentide_spl::signature_help(&inj.inner, inner),
-                LanguageId::TideYaml => None,
-            }
+            query_signature_help(inj.language, &inj.inner, inner, &inj.field_path)
         }
+        query => query_signature_help(query, text, offset, &[]),
+    }
+}
+
+fn query_signature_help(
+    language: LanguageId,
+    text: &str,
+    offset: usize,
+    field_path: &[String],
+) -> Option<SignatureHelp> {
+    match language {
+        LanguageId::Kql => opentide_kql::signature_help(text, offset, defender_profile(field_path)),
+        LanguageId::Spl => opentide_spl::signature_help(text, offset),
+        LanguageId::Esql => opentide_esql::signature_help(text, offset),
+        LanguageId::Eql => opentide_eql::signature_help(text, offset),
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::TideYaml => None,
     }
 }
 

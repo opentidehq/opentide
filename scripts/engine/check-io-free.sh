@@ -3,7 +3,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 fail=0
-for crate in opentide-kql opentide-spl opentide-tide opentide-analysis opentide-core opentide-highlight opentide-syntax; do
+for crate in opentide-kql opentide-spl opentide-esql opentide-eql opentide-kuery opentide-lucene opentide-ecs opentide-tide opentide-analysis opentide-core opentide-highlight opentide-syntax; do
   matches="$(grep -R --include='*.rs' -nE 'use std::fs|std::fs::' "$root/crates/$crate/src" 2>/dev/null || true)"
   if [[ -n "$matches" ]]; then
     echo "std::fs found in $crate/src:"

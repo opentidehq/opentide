@@ -341,13 +341,19 @@ name = "opentide-analysis"
 version = "0.1.0"
 dependencies = [
  "opentide-core",
+ "opentide-ecs",
+ "opentide-eql",
+ "opentide-esql",
  "opentide-highlight",
  "opentide-kql",
+ "opentide-kuery",
+ "opentide-lucene",
  "opentide-spl",
  "opentide-tide",
  "regex",
  "serde",
  "serde_json",
+ "toml",
 ]
 
 [[package]]
@@ -356,6 +362,41 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "opentide-ecs"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "opentide-eql"
+version = "0.1.0"
+dependencies = [
+ "opentide-core",
+ "opentide-ecs",
+ "opentide-highlight",
+ "opentide-lucene",
+ "opentide-syntax",
+ "serde",
+ "toml",
+ "tree-sitter",
+]
+
+[[package]]
+name = "opentide-esql"
+version = "0.1.0"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-lucene",
+ "opentide-syntax",
+ "serde",
+ "toml",
+ "tree-sitter",
 ]
 
 [[package]]
@@ -387,6 +428,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentide-kuery"
+version = "0.1.0"
+dependencies = [
+ "opentide-core",
+ "opentide-ecs",
+ "opentide-highlight",
+ "opentide-syntax",
+ "regex",
+ "tree-sitter",
+]
+
+[[package]]
 name = "opentide-lsp"
 version = "0.1.0"
 dependencies = [
@@ -403,6 +456,16 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+]
+
+[[package]]
+name = "opentide-lucene"
+version = "0.1.0"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-syntax",
+ "tree-sitter",
 ]
 
 [[package]]
@@ -434,8 +497,12 @@ version = "0.1.0"
 dependencies = [
  "insta",
  "opentide-core",
+ "opentide-eql",
+ "opentide-esql",
  "opentide-highlight",
  "opentide-kql",
+ "opentide-kuery",
+ "opentide-lucene",
  "opentide-spl",
  "regex",
  "serde",
@@ -778,7 +845,6 @@ version = "1.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
 dependencies = [
- "getrandom",
  "js-sys",
  "wasm-bindgen",
 ]

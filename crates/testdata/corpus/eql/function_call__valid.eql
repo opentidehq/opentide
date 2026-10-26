@@ -1,0 +1,2 @@
+// prod:function_call valid
+process where endsWith~(process.name, ".EXE") and length(user.name) > 3

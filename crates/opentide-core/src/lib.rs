@@ -16,6 +16,18 @@ pub enum LanguageId {
     Spl,
     #[serde(rename = "opentide-yaml", alias = "yaml", alias = "tide")]
     TideYaml,
+    /// Elasticsearch ES|QL (Elastic Security `esql` rules).
+    #[serde(rename = "esql", alias = "opentide-esql")]
+    Esql,
+    /// Elasticsearch Event Query Language (Elastic Security `eql` rules).
+    #[serde(rename = "eql", alias = "opentide-eql")]
+    Eql,
+    /// Kibana Query Language. Kibana's API calls it `kuery`; `KQL` stays Kusto.
+    #[serde(rename = "kuery", alias = "opentide-kuery")]
+    Kuery,
+    /// Lucene query string syntax (Elastic `language: lucene`).
+    #[serde(rename = "lucene", alias = "opentide-lucene")]
+    Lucene,
 }
 
 impl LanguageId {
@@ -24,6 +36,10 @@ impl LanguageId {
             Self::Kql => "kql",
             Self::Spl => "spl",
             Self::TideYaml => "opentide-yaml",
+            Self::Esql => "esql",
+            Self::Eql => "eql",
+            Self::Kuery => "kuery",
+            Self::Lucene => "lucene",
         }
     }
 
@@ -32,9 +48,37 @@ impl LanguageId {
             "kql" | "opentide-kql" | "KQL" | "kusto" => Some(Self::Kql),
             "spl" | "opentide-spl" | "SPL" => Some(Self::Spl),
             "opentide-yaml" | "yaml" | "tide" | "tide-yaml" => Some(Self::TideYaml),
+            "esql" | "opentide-esql" | "ES|QL" | "es|ql" | "ESQL" => Some(Self::Esql),
+            "eql" | "opentide-eql" | "EQL" => Some(Self::Eql),
+            "kuery" | "opentide-kuery" | "kibana-kql" => Some(Self::Kuery),
+            "lucene" | "opentide-lucene" | "Lucene" => Some(Self::Lucene),
             _ => None,
         }
     }
+
+    /// Language of a raw query file, from its extension. Anything else is
+    /// Tide YAML or unknown, which the caller decides.
+    pub fn from_extension(extension: &str) -> Option<Self> {
+        match extension {
+            "kql" => Some(Self::Kql),
+            "spl" => Some(Self::Spl),
+            "esql" => Some(Self::Esql),
+            "eql" => Some(Self::Eql),
+            "kuery" => Some(Self::Kuery),
+            "lucene" => Some(Self::Lucene),
+            _ => None,
+        }
+    }
+
+    /// Query languages with a tree-sitter grammar and an engine.
+    pub const QUERY_LANGUAGES: [Self; 6] = [
+        Self::Kql,
+        Self::Spl,
+        Self::Esql,
+        Self::Eql,
+        Self::Kuery,
+        Self::Lucene,
+    ];
 }
 
 impl fmt::Display for LanguageId {
@@ -119,10 +163,82 @@ pub fn offset_to_position(source: &str, offset: usize) -> Position {
     }
 }
 
+/// Convert an LSP position (UTF-16 columns) to a UTF-8 byte offset, the
+/// inverse of [`offset_to_position`]. A column past the end of its line
+/// clamps to the line end; a line past the end of the text gives its length.
+pub fn position_to_offset(source: &str, position: Position) -> usize {
+    let mut line = 0u32;
+    let mut col = 0u32;
+    for (idx, ch) in source.char_indices() {
+        if line == position.line && (col >= position.character || ch == '\n') {
+            return idx;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 0;
+        } else {
+            col += ch.len_utf16() as u32;
+        }
+    }
+    source.len()
+}
+
 pub fn span_to_range(source: &str, span: ByteSpan) -> Range {
     Range {
         start: offset_to_position(source, span.start),
         end: offset_to_position(source, span.end),
+    }
+}
+
+/// Line starts of a text, for many offset-to-position conversions: each is a
+/// binary search instead of [`offset_to_position`]'s scan from the start, so
+/// converting every token of a large query stays linear.
+pub struct LineIndex<'a> {
+    source: &'a str,
+    starts: Vec<usize>,
+    /// Lines that are pure ASCII, where a column is a byte distance.
+    ascii: Vec<bool>,
+}
+
+impl<'a> LineIndex<'a> {
+    pub fn new(source: &'a str) -> Self {
+        let mut starts = vec![0];
+        starts.extend(source.match_indices('\n').map(|(i, _)| i + 1));
+        let ascii = (0..starts.len())
+            .map(|line| {
+                let end = starts.get(line + 1).copied().unwrap_or(source.len());
+                source[starts[line]..end].is_ascii()
+            })
+            .collect();
+        Self {
+            source,
+            starts,
+            ascii,
+        }
+    }
+
+    /// Same result as [`offset_to_position`].
+    pub fn position(&self, offset: usize) -> Position {
+        let offset = offset.min(self.source.len());
+        let line = self.starts.partition_point(|&start| start <= offset) - 1;
+        let start = self.starts[line];
+        let character = if self.ascii[line] {
+            (offset - start) as u32
+        } else {
+            utf16_len(&self.source[start..offset])
+        };
+        Position {
+            line: line as u32,
+            character,
+        }
+    }
+
+    /// Same result as [`span_to_range`].
+    pub fn range(&self, span: ByteSpan) -> Range {
+        Range {
+            start: self.position(span.start),
+            end: self.position(span.end),
+        }
     }
 }
 
@@ -284,11 +400,65 @@ pub mod codes {
     pub const SPL_WILDCARD: &str = "spl_wildcard";
     pub const SPL_LEADING_NOT: &str = "spl_leading_not";
     pub const SPL_SUBSEARCH_TRUNCATION: &str = "spl_subsearch_truncation";
+    pub const ESQL_PARSE_ERROR: &str = "esql_parse_error";
+    pub const ESQL_UNKNOWN_COMMAND: &str = "esql_unknown_command";
+    pub const ESQL_UNKNOWN_FUNCTION: &str = "esql_unknown_function";
+    pub const ESQL_UNAVAILABLE: &str = "esql_unavailable";
+    pub const ESQL_METADATA_ID: &str = "esql_metadata_id";
+    pub const EQL_PARSE_ERROR: &str = "eql_parse_error";
+    pub const EQL_UNKNOWN_FUNCTION: &str = "eql_unknown_function";
+    pub const EQL_UNSUPPORTED: &str = "eql_unsupported";
+    pub const EQL_MAXSPAN_UNIT: &str = "eql_maxspan_unit";
+    pub const EQL_MAXSPAN_WINDOW: &str = "eql_maxspan_window";
+    pub const EQL_MAXSPAN_LOOKBACK: &str = "eql_maxspan_lookback";
+    pub const EQL_FUNCTION_ARITY: &str = "eql_function_arity";
+    pub const EQL_CASE_SENSITIVE: &str = "eql_case_sensitive";
+    pub const EQL_LITERAL_WILDCARD: &str = "eql_literal_wildcard";
+    pub const EQL_NESTED_COMMENT: &str = "eql_nested_comment";
+    pub const EQL_EXPRESSION_DEPTH: &str = "eql_expression_depth";
+    pub const EQL_ARGUMENT_TYPE: &str = "eql_argument_type";
+    pub const EQL_FIELD_COMPARISON: &str = "eql_field_comparison";
+    pub const EQL_RUNS_IGNORED: &str = "eql_runs_ignored";
+    pub const EQL_UNTIL_TERM: &str = "eql_until_term";
+    pub const EQL_REGEX: &str = "eql_regex";
+    pub const EQL_MAXSPAN_MISSING: &str = "eql_maxspan_missing";
+    pub const KUERY_PARSE_ERROR: &str = "kuery_parse_error";
+    pub const KUERY_LUCENE_SYNTAX: &str = "kuery_lucene_syntax";
+    pub const KUERY_ESCAPE: &str = "kuery_escape";
+    pub const KUERY_QUOTED_WILDCARD: &str = "kuery_quoted_wildcard";
+    pub const LUCENE_PARSE_ERROR: &str = "lucene_parse_error";
+    pub const LUCENE_LOWERCASE_OPERATOR: &str = "lucene_lowercase_operator";
+    pub const LUCENE_MIXED_OPERATORS: &str = "lucene_mixed_operators";
+    pub const LUCENE_ESCAPE: &str = "lucene_escape";
+    pub const LUCENE_KUERY_SYNTAX: &str = "lucene_kuery_syntax";
+    pub const LUCENE_REGEXP: &str = "lucene_regexp";
+    pub const LUCENE_FUZZY: &str = "lucene_fuzzy";
+    pub const LUCENE_RANGE_OPERATOR: &str = "lucene_range_operator";
+    pub const LUCENE_UNESCAPED_SLASH: &str = "lucene_unescaped_slash";
+    pub const LUCENE_BARE_TERM: &str = "lucene_bare_term";
+    pub const LUCENE_LOOKS_LIKE_KUERY: &str = "lucene_looks_like_kuery";
+    pub const LUCENE_ELASTICSEARCH_ONLY: &str = "lucene_elasticsearch_only";
+    pub const KUERY_QUESTION_MARK: &str = "kuery_question_mark";
+    pub const KUERY_FREE_TEXT: &str = "kuery_free_text";
+    pub const KUERY_LOOKS_LIKE_LUCENE: &str = "kuery_looks_like_lucene";
+    pub const KUERY_RANGE_TYPE: &str = "kuery_range_type";
+    // elastic-1.0 Advisories on the block itself (specifications#57).
+    pub const LOOKBACK_ZERO: &str = "lookback_zero";
+    pub const LOOKBACK_LONG: &str = "lookback_long";
+    pub const THRESHOLD_LOOKBACK: &str = "threshold_lookback";
+    pub const RISK_BAND: &str = "risk_band";
+    pub const TECHNIQUE_NOT_ENTERPRISE: &str = "technique_not_enterprise";
     pub const CROWDSTRIKE_UNSUPPORTED: &str = "crowdstrike_unsupported";
     pub const FILENAME_SLUG: &str = "filename_slug";
     pub const MISSING_AUTHOR: &str = "missing_author";
     pub const MISSING_ORGANISATION: &str = "missing_organisation";
     pub const DEFENDER_OUTPUT_COLUMNS: &str = "defender_output_columns";
+    /// `::type` names no Elasticsearch release can cast to.
+    pub const ESQL_UNKNOWN_TYPE: &str = "esql_unknown_type";
+    pub const ESQL_GROUP_BY_COLUMN: &str = "esql_group_by_column";
+    pub const EQL_NOT_BOOLEAN: &str = "eql_not_boolean";
+    pub const ESQL_PATTERN: &str = "esql_pattern";
+    pub const ESQL_EXPRESSION_DEPTH: &str = "esql_expression_depth";
 }
 
 #[derive(Debug, Error)]
@@ -299,6 +469,22 @@ pub enum EngineError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn line_index_matches_offset_to_position() {
+        let text = "ab\n\u{1F600}c\r\n\nd é";
+        let index = LineIndex::new(text);
+        for (offset, _) in text
+            .char_indices()
+            .chain([(text.len(), ' '), (text.len() + 5, ' ')])
+        {
+            assert_eq!(
+                index.position(offset),
+                offset_to_position(text, offset),
+                "{offset}"
+            );
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -312,11 +498,20 @@ mod tests {
 
     #[test]
     fn language_id_roundtrip() {
-        for id in [LanguageId::Kql, LanguageId::Spl, LanguageId::TideYaml] {
+        for id in LanguageId::QUERY_LANGUAGES
+            .into_iter()
+            .chain([LanguageId::TideYaml])
+        {
             assert_eq!(LanguageId::parse(id.as_str()), Some(id));
         }
         assert_eq!(LanguageId::parse("kusto"), Some(LanguageId::Kql));
+        // `KQL` is Kusto. Kibana's language is `kuery`.
+        assert_eq!(LanguageId::parse("KQL"), Some(LanguageId::Kql));
+        assert_eq!(LanguageId::parse("kibana-kql"), Some(LanguageId::Kuery));
         assert_eq!(LanguageId::parse("sql"), None);
+        assert_eq!(LanguageId::parse("esql"), Some(LanguageId::Esql));
+        assert_eq!(LanguageId::from_extension("sql"), None);
+        assert_eq!(LanguageId::from_extension("eql"), Some(LanguageId::Eql));
     }
 
     #[test]

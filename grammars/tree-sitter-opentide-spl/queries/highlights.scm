@@ -27,6 +27,7 @@
 (term_clause "TERM" @function.builtin)
 (case_clause "CASE" @function.builtin)
 (in_clause "IN" @operator)
+(search_boolean) @operator
 
 "|" @operator.pipe
 
@@ -49,8 +50,19 @@
 "AS" @keyword
 "as" @keyword
 "by" @keyword
+"BY" @keyword
 "from" @keyword
+"FROM" @keyword
 "where" @keyword
+"WHERE" @keyword
+"sortby" @keyword
+"keepevents" @keyword
+"keepempty" @keyword
+"consecutive" @keyword
+"<" @operator
+">" @operator
+"<=" @operator
+">=" @operator
 "summariesonly" @keyword
 "prestats" @keyword
 "allow_old_summaries" @keyword

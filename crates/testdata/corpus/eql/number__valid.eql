@@ -1,0 +1,2 @@
+// prod:number valid
+process where a == 1 and b == 1.5 and c == .5

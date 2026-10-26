@@ -1,0 +1,4 @@
+// prod:comment valid
+// leading comment
+FROM logs-* METADATA _id /* inline */
+| LIMIT 1

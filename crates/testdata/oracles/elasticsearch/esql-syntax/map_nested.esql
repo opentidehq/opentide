@@ -1,0 +1,1 @@
+FROM logs-* | WHERE MATCH(process.name, "a", {"x": {"y": 1}})

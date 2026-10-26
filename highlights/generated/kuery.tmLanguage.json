@@ -1,0 +1,62 @@
+{
+  "name": "opentide kuery",
+  "opentideHighlightSpec": "0.2.0",
+  "patterns": [
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ":",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\(",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\)",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\{",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\}",
+      "name": "punctuation.bracket.opentide"
+    }
+  ],
+  "scopeName": "source.kuery"
+}

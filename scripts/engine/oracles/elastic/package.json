@@ -1,0 +1,12 @@
+{
+  "name": "opentide-elastic-oracles",
+  "private": true,
+  "description": "CI-only Elastic reference parsers (scripts/oracles/README.md). Never shipped.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@elastic/esql": "4.33.0",
+    "antlr-ng": "1.0.10",
+    "antlr4": "4.13.2",
+    "peggy": "5.1.1"
+  }
+}

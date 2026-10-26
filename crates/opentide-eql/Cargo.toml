@@ -1,0 +1,17 @@
+[package]
+name = "opentide-eql"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "I/O-free EQL engine (parse, builder checks, catalog) for Elastic Security eql rules"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-ecs.workspace = true
+opentide-lucene.workspace = true
+opentide-syntax.workspace = true
+opentide-highlight.workspace = true
+tree-sitter.workspace = true
+serde.workspace = true
+toml.workspace = true

@@ -1,0 +1,3 @@
+// prod:function_call invalid
+FROM logs-* METADATA _id
+| EVAL c = COALESCE(a, b

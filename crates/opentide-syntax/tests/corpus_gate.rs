@@ -239,3 +239,173 @@ fn spl_valid_bare_search_and_unknown_command_parse() {
     let tree = parse(LanguageId::Spl, "index=main | bogus foo=bar").unwrap();
     assert!(tree.root_node().to_sexp().contains("unknown_command"));
 }
+
+/// One Elastic language's corpus gate: every required production is tagged
+/// in a valid and an invalid fixture, every named grammar rule is either
+/// tagged or structural, and every valid fixture parses cleanly. Kibana KQL
+/// and Lucene have no comments, so the tag sits on a `#` first line that is
+/// not part of the query.
+struct ElasticGate {
+    language: LanguageId,
+    id: &'static str,
+    structural: &'static [&'static str],
+}
+
+fn fixture_body(text: &str) -> String {
+    text.lines().skip(1).collect::<Vec<_>>().join("\n")
+}
+
+fn check_gate(gate: &ElasticGate) {
+    let dir = format!("testdata/corpus/{}", gate.id);
+    let tags = tags_in(&dir);
+    let json = fs::read_to_string(repo_root().join(format!(
+        "grammars/tree-sitter-opentide-{}/src/grammar.json",
+        gate.id
+    )))
+    .unwrap();
+    let structural: BTreeSet<&str> = gate.structural.iter().copied().collect();
+    let mut required = Vec::new();
+    for rule in named_rules(&json) {
+        if rule.starts_with('_') || structural.contains(rule.as_str()) {
+            continue;
+        }
+        assert!(
+            tags.contains(&rule),
+            "named grammar rule `{rule}` is untagged in {dir}"
+        );
+        required.push(rule);
+    }
+    let mut kinds: BTreeSet<(String, String)> = BTreeSet::new();
+    for entry in fs::read_dir(repo_root().join(&dir)).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let Some((rule, rest)) = name.split_once("__") else {
+            continue;
+        };
+        let kind = rest.split('.').next().unwrap_or("").to_string();
+        kinds.insert((rule.to_string(), kind.clone()));
+        if kind == "valid" {
+            let body = fixture_body(&fs::read_to_string(&path).unwrap());
+            let tree = parse(gate.language, &body).expect("parser");
+            assert!(
+                !has_error(&tree),
+                "{dir}/{name} must parse; sexp={}",
+                tree.root_node().to_sexp()
+            );
+            assert!(
+                tree.root_node().to_sexp().contains(&format!("({rule}")),
+                "{dir}/{name} does not contain a `{rule}` node"
+            );
+        }
+    }
+    for rule in &required {
+        for kind in ["valid", "invalid"] {
+            assert!(
+                kinds.contains(&(rule.clone(), kind.to_string())),
+                "missing {dir}/{rule}__{kind} fixture"
+            );
+        }
+    }
+}
+
+#[test]
+fn esql_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Esql,
+        id: "esql",
+        structural: &[
+            "source_file",
+            "query",
+            "aggregate_field",
+            "field_assignment_or_expression",
+            "command_option",
+            "command_name",
+            "index_pattern",
+            "index_name",
+            "cluster",
+            "selector",
+            "enrich_policy",
+            "enrich_with_clause",
+            "rename_clause",
+            "order_expression",
+            "fork_branch",
+            "name_pattern",
+            "id_pattern",
+            "qualified_name",
+            "identifier",
+            "quoted_identifier",
+            "type_name",
+            "map_entry",
+            "array",
+            "boolean",
+            "null",
+            "and_expression",
+            "or_expression",
+            "not_expression",
+            "comparison",
+            "unary_expression",
+            "binary_expression",
+            "parenthesized_expression",
+        ],
+    });
+}
+
+#[test]
+fn eql_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Eql,
+        id: "eql",
+        structural: &[
+            "source_file",
+            "sequence_params",
+            "sequence_term",
+            "join_keys",
+            "join_term",
+            "event_category",
+            "case_insensitive_name",
+            "optional_marker",
+            "index",
+            "identifier",
+            "quoted_identifier",
+            "boolean",
+            "null",
+            "and_expression",
+            "or_expression",
+            "not_expression",
+            "unary_expression",
+            "binary_expression",
+            "parenthesized_expression",
+        ],
+    });
+}
+
+#[test]
+fn kuery_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Kuery,
+        id: "kuery",
+        structural: &["source_file", "word", "or", "and", "not"],
+    });
+}
+
+#[test]
+fn lucene_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Lucene,
+        id: "lucene",
+        structural: &[
+            "source_file",
+            "field_name",
+            "term",
+            "phrase",
+            "regexp",
+            "range_term",
+            "bare_operator",
+            "required",
+            "prohibited",
+            "or",
+            "and",
+            "not",
+        ],
+    });
+}

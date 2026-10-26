@@ -1,0 +1,2 @@
+// prod:time_unit invalid
+sequence with maxspan=5w [a where true] [b where true]

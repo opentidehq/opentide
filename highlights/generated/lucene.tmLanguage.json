@@ -1,0 +1,57 @@
+{
+  "name": "opentide lucene",
+  "opentideHighlightSpec": "0.2.0",
+  "patterns": [
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "capture:keyword",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:TO)(?![A-Za-z0-9_])",
+      "name": "keyword.control.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ":",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\(",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\)",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\[",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\]",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\{",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\}",
+      "name": "punctuation.bracket.opentide"
+    }
+  ],
+  "scopeName": "source.lucene"
+}

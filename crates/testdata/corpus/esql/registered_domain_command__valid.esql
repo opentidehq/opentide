@@ -1,0 +1,3 @@
+// prod:registered_domain_command valid
+FROM logs-* METADATA _id
+| REGISTERED_DOMAIN d = dns.question.name

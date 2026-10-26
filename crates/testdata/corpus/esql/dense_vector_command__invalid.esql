@@ -1,0 +1,3 @@
+// prod:dense_vector_command invalid
+FROM docs METADATA _id
+| DENSE_VECTOR embedding = WITH

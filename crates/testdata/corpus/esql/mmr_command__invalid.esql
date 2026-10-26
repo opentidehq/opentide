@@ -1,0 +1,3 @@
+// prod:mmr_command invalid
+FROM docs METADATA _id
+| MMR ON embedding LIMIT

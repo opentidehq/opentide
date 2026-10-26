@@ -5,7 +5,7 @@
 
 mod markdown;
 
-use opentide_core::{ByteSpan, LanguageId, Range, span_to_range};
+use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -21,6 +21,26 @@ pub const KQL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/k
 pub const SPL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/spl/highlights.scm");
 pub const TIDE_HIGHLIGHTS_SCM: &str =
     include_str!("../../../highlights/queries/tide/highlights.scm");
+pub const ESQL_HIGHLIGHTS_SCM: &str =
+    include_str!("../../../highlights/queries/esql/highlights.scm");
+pub const EQL_HIGHLIGHTS_SCM: &str = include_str!("../../../highlights/queries/eql/highlights.scm");
+pub const KUERY_HIGHLIGHTS_SCM: &str =
+    include_str!("../../../highlights/queries/kuery/highlights.scm");
+pub const LUCENE_HIGHLIGHTS_SCM: &str =
+    include_str!("../../../highlights/queries/lucene/highlights.scm");
+
+/// The tree-sitter highlight query for a language.
+pub fn highlights_scm(language: LanguageId) -> &'static str {
+    match language {
+        LanguageId::Kql => KQL_HIGHLIGHTS_SCM,
+        LanguageId::Spl => SPL_HIGHLIGHTS_SCM,
+        LanguageId::TideYaml => TIDE_HIGHLIGHTS_SCM,
+        LanguageId::Esql => ESQL_HIGHLIGHTS_SCM,
+        LanguageId::Eql => EQL_HIGHLIGHTS_SCM,
+        LanguageId::Kuery => KUERY_HIGHLIGHTS_SCM,
+        LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum HighlightError {
@@ -480,12 +500,13 @@ pub fn tokens_from_spans(
     source: &str,
     spans: &[(ByteSpan, &str)],
 ) -> Result<Vec<HighlightToken>, HighlightError> {
+    let lines = LineIndex::new(source);
     let mut out = Vec::with_capacity(spans.len());
     for (span, capture) in spans {
         let token_type = spec.token_index(capture)?;
         out.push(HighlightToken {
             span: *span,
-            range: span_to_range(source, *span),
+            range: lines.range(*span),
             capture: (*capture).to_string(),
             token_type,
         });
@@ -496,11 +517,7 @@ pub fn tokens_from_spans(
 
 /// Generate TextMate / Monaco / Helix maps from the frozen spec.
 pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde_json::Value {
-    let scm = match language {
-        LanguageId::Kql => KQL_HIGHLIGHTS_SCM,
-        LanguageId::Spl => SPL_HIGHLIGHTS_SCM,
-        LanguageId::TideYaml => TIDE_HIGHLIGHTS_SCM,
-    };
+    let scm = highlights_scm(language);
     let mut patterns: Vec<serde_json::Value> = Vec::new();
     let comment_tm = spec
         .captures
@@ -518,15 +535,19 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         .map(|m| m.tm.as_str())
         .unwrap_or("constant.numeric");
     let comment_match = match language {
-        LanguageId::TideYaml => "(?m)^\\s*#.*$",
-        LanguageId::Kql => "//.*$|/\\*[\\s\\S]*?\\*/",
-        LanguageId::Spl => "```[^`]*```",
+        LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
+        LanguageId::Kql | LanguageId::Esql | LanguageId::Eql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
+        LanguageId::Spl => Some("```[^`]*```"),
+        // Kibana KQL and Lucene have no comment syntax.
+        LanguageId::Kuery | LanguageId::Lucene => None,
     };
-    patterns.push(serde_json::json!({
-        "name": comment_tm,
-        "match": comment_match,
-        "comment": "capture:comment",
-    }));
+    if let Some(comment_match) = comment_match {
+        patterns.push(serde_json::json!({
+            "name": comment_tm,
+            "match": comment_match,
+            "comment": "capture:comment",
+        }));
+    }
     if language == LanguageId::Spl {
         if let Some(maps) = spec.captures.get("macro") {
             patterns.push(serde_json::json!({
@@ -761,9 +782,54 @@ mod tests {
     #[test]
     fn scm_captures_are_subset_of_spec() {
         let spec = HighlightSpec::load().unwrap();
-        assert_scm_subset_of_spec(&spec, KQL_HIGHLIGHTS_SCM).unwrap();
-        assert_scm_subset_of_spec(&spec, SPL_HIGHLIGHTS_SCM).unwrap();
-        assert_scm_subset_of_spec(&spec, TIDE_HIGHLIGHTS_SCM).unwrap();
+        for language in LanguageId::QUERY_LANGUAGES
+            .into_iter()
+            .chain([LanguageId::TideYaml])
+        {
+            assert_scm_subset_of_spec(&spec, highlights_scm(language))
+                .unwrap_or_else(|e| panic!("{language}: {e}"));
+        }
+    }
+
+    /// Each grammar ships a copy of its highlight query for tree-sitter
+    /// tooling; it must match the one the engine compiles.
+    #[test]
+    fn grammar_query_copies_match_highlight_queries() {
+        let copies = [
+            (
+                LanguageId::Kql,
+                include_str!("../../../grammars/tree-sitter-opentide-kql/queries/highlights.scm"),
+            ),
+            (
+                LanguageId::Spl,
+                include_str!("../../../grammars/tree-sitter-opentide-spl/queries/highlights.scm"),
+            ),
+            (
+                LanguageId::Esql,
+                include_str!("../../../grammars/tree-sitter-opentide-esql/queries/highlights.scm"),
+            ),
+            (
+                LanguageId::Eql,
+                include_str!("../../../grammars/tree-sitter-opentide-eql/queries/highlights.scm"),
+            ),
+            (
+                LanguageId::Kuery,
+                include_str!("../../../grammars/tree-sitter-opentide-kuery/queries/highlights.scm"),
+            ),
+            (
+                LanguageId::Lucene,
+                include_str!(
+                    "../../../grammars/tree-sitter-opentide-lucene/queries/highlights.scm"
+                ),
+            ),
+        ];
+        for (language, copy) in copies {
+            assert_eq!(
+                copy,
+                highlights_scm(language),
+                "grammars/tree-sitter-opentide-{language}/queries/highlights.scm is stale"
+            );
+        }
     }
 
     #[test]

@@ -1,0 +1,3 @@
+// prod:eval_command invalid
+FROM logs-* METADATA _id
+| EVAL x =

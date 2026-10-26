@@ -9,7 +9,7 @@ editors / @opentide/lsp-client / WASM worker
                 │
          opentide-analysis  (WorkspaceHost)
           /        |         \
-    opentide-kql  opentide-spl  opentide-tide
+    opentide-{kql,spl}  opentide-{esql,eql,kuery,lucene}  opentide-tide
           \        |         /
             opentide-syntax + opentide-highlight
                       |
@@ -18,7 +18,7 @@ editors / @opentide/lsp-client / WASM worker
 
 ## Layers
 
-- **Grammars** (`grammars/tree-sitter-opentide-{kql,spl}`) vendored `parser.c`. CI regenerates and fails on drift.
+- **Grammars** (`grammars/tree-sitter-opentide-{kql,spl,esql,eql,kuery,lucene}`) vendored `parser.c`. CI regenerates and fails on drift.
 - **Catalogs** (`catalogs/`) compiled into the engine with `include_str!`. Workspace override path: `.opentide/lsp/catalogs/`.
 - **HighlightSpec** (`highlights/spec.toml`) is frozen. Capture rename = major. Generated tmLanguage / Monaco / Helix maps are CI-checked.
 - **Injection**: block-scalar indent is stripped for analysis; tokens are remapped onto YAML coordinates.
@@ -31,12 +31,20 @@ editors / @opentide/lsp-client / WASM worker
 | `configurations.defender_for_endpoint.query` | KQL |
 | `configurations.splunk.query` | SPL |
 | `configurations.splunk.search` (legacy) | SPL |
+| `configurations.elastic.query` with `type: esql` | ES\|QL |
+| `configurations.elastic.query` with `type: eql` | EQL |
+| `configurations.elastic.query` with `type: query`, `threshold`, `new_terms`, or `threat_match` | `language: kuery` (default) → Kibana KQL; `language: lucene` → Lucene |
+| `configurations.elastic.threat.query` | `threat.language` (`kuery` default, or `lucene`) |
+| `configurations.elastic.query` with `type: machine_learning` | none |
+| `response.procedure.searches[].query` with `system: elastic` | `language` on the entry (`esql`, `eql`, `kuery`, `lucene`); none when omitted (specifications#58) |
 | `configurations.crowdstrike.*` | unsupported (`None`) |
 | `description` / `procedure.analysis` / `recommendation` / other `markdown = true` fields | Markdown (HighlightSpec `markdown.*`) |
 
 Tide object intelligence is generated from the installed opentide package (`opentide==0.16.1`) by [`scripts/sync_opentide_schemas.py`](../scripts/sync_opentide_schemas.py). The LSP loads [`catalogs/tide/generated/fields.json`](../catalogs/tide/generated/fields.json), keyed by schema family and YAML path. JSON Schema supplies titles, types, required, enums, and consts. Pydantic `tide.template.multiline` / `hide` supply markdown and hidden flags the schema emitter drops. Capture rename in HighlightSpec is a **major**; adding `markdown.*` / `macro` is a minor (`0.2.0`).
 
 ## Diagnostics
+
+**Elastic stack version.** ES|QL availability is checked against the lowest `setup.version` declared across a rule block's target tenants in `.opentide/configurations/platforms/elastic.toml` (the block's `tenants`, or every tenant). A target without a version, or no configuration, means the 8.19 floor (specifications#59). A declared 9.4+ or Serverless target also drops `esql_metadata_id`, because Kibana adds `METADATA _id` itself there.
 
 Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}` with real ranges. The engine may add **extra** query diagnostics inside `query: |`.
 

@@ -1,4 +1,10 @@
 //! wasm32-unknown-unknown highlight() — do not mix WASI in this artifact.
+//!
+//! Build it with `scripts/build-wasm.sh`, which links wasi-sdk's libc for the
+//! C parsers; [`libc_syscalls`] keeps that libc from importing anything.
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod libc_syscalls;
 
 use opentide_core::LanguageId;
 use wasm_bindgen::prelude::*;

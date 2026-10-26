@@ -6,6 +6,39 @@
 
 export type Transport = "stdio" | "worker" | "wasi";
 
+/** A language the server handles: its LSP language id and file globs. */
+export interface OpentideLanguage {
+  id: string;
+  name: string;
+  patterns: string[];
+}
+
+/**
+ * Every language the server handles. `kql` is Microsoft KQL; `kuery` is
+ * Kibana KQL (Elastic `language: kuery`). Tide YAML is scoped to `objects/`,
+ * where the server owns diagnostics (turn yamlls off there).
+ */
+export const LANGUAGES: readonly OpentideLanguage[] = [
+  { id: "opentide-yaml", name: "Tide YAML", patterns: ["**/objects/**/*.yaml", "**/objects/**/*.yml"] },
+  { id: "kql", name: "KQL (Microsoft)", patterns: ["**/*.kql"] },
+  { id: "spl", name: "SPL", patterns: ["**/*.spl"] },
+  { id: "esql", name: "ES|QL", patterns: ["**/*.esql"] },
+  { id: "eql", name: "EQL", patterns: ["**/*.eql"] },
+  { id: "kuery", name: "Kibana KQL", patterns: ["**/*.kuery"] },
+  { id: "lucene", name: "Lucene", patterns: ["**/*.lucene"] },
+];
+
+/**
+ * LSP document selector for every language, by language id and by file
+ * pattern, so a file is served even when no extension registered its id
+ * (for example `.esql` when Elastic's own extension owns the id).
+ */
+export const DOCUMENT_SELECTOR: ReadonlyArray<{ language: string } | { scheme: string; pattern: string }> =
+  LANGUAGES.flatMap((l) => [
+    { language: l.id },
+    ...l.patterns.map((pattern) => ({ scheme: "file", pattern })),
+  ]);
+
 export interface OpentideClientOptions {
   transport: Transport;
   command?: string;
@@ -43,6 +76,9 @@ function encodeMessage(body: unknown): Uint8Array {
   return out;
 }
 
+/** Language ids whose raw-file suffix is the id itself. */
+const QUERY_EXTENSIONS = new Set(LANGUAGES.map((l) => l.id).filter((id) => id !== "opentide-yaml"));
+
 export function createOpentideClient(options: OpentideClientOptions): OpentideClient {
   if (options.transport !== "stdio" && options.transport !== "worker" && options.transport !== "wasi") {
     throw new Error(`unsupported transport ${String(options.transport)}`);
@@ -60,7 +96,9 @@ export function createOpentideClient(options: OpentideClientOptions): OpentideCl
         const { tmpdir } = await import("node:os");
         const { join } = await import("node:path");
         const dir = mkdtempSync(join(tmpdir(), "opentide-hl-"));
-        const ext = languageId.includes("yaml") || languageId === "tide" ? "yaml" : languageId === "spl" ? "spl" : "kql";
+        const ext = languageId.includes("yaml") || languageId === "tide"
+          ? "yaml"
+          : QUERY_EXTENSIONS.has(languageId) ? languageId : "kql";
         const file = join(dir, `query.${ext}`);
         writeFileSync(file, text);
         try {

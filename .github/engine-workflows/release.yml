@@ -59,6 +59,33 @@ jobs:
           name: opentide-lsp-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/opentide-lsp*
 
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32-wasip1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cargo install --locked wasm-bindgen-cli --version 0.2.128
+      - run: bash scripts/build-wasm.sh
+      - name: package
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          cp target/wasm32-wasip1/release/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
+          wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/opentide_wasm.wasm
+          cp LICENSE NOTICE pkg/
+          cp -r licenses pkg/licenses
+          (cd pkg && zip -r "../dist/opentide-wasm-web-${VERSION}.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opentide-wasm
+          path: dist/*
+
   highlights:
     runs-on: ubuntu-latest
     steps:
@@ -71,6 +98,7 @@ jobs:
           mkdir -p dist
           cp highlights/spec.toml highlights/generated/* highlights/queries/kql/highlights.scm highlights/queries/spl/highlights.scm highlights/queries/tide/highlights.scm dist/ || true
           (cd highlights && zip -r "../highlights-${VERSION}.zip" spec.toml generated queries)
+          zip -j "highlights-${VERSION}.zip" LICENSE NOTICE
       - uses: actions/upload-artifact@v4
         with:
           name: highlights-zip
@@ -103,7 +131,7 @@ jobs:
           maturin publish -m crates/opentide-lsp/Cargo.toml
 
   release:
-    needs: [native, highlights, pypi]
+    needs: [native, wasm, highlights, pypi]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,12 +141,29 @@ jobs:
           merge-multiple: true
       - name: license scan (no oracle references)
         run: bash scripts/license-scan.sh dist
+      # The binaries embed third-party code and data: ship the notices with
+      # them. NOTICE covers ECS, Lucene, dk.brics, and the wasi-libc the WASM
+      # builds link (texts in licenses/wasi-libc, shipped as WASI-LIBC-LICENSES.txt); cargo-about lists every Rust
+      # crate in the workspace, the browser build's included, and fails on a
+      # licence about.toml does not accept.
+      - uses: dtolnay/rust-toolchain@stable
+      - name: licences and notices
+        run: |
+          set -euo pipefail
+          cargo install --locked cargo-about --version 0.8.4
+          cargo about generate --workspace about.hbs -o dist/THIRD-PARTY-LICENSES.html
+          cp LICENSE dist/LICENSE
+          cp NOTICE dist/NOTICE
+          for f in licenses/wasi-libc/*; do
+            printf '==> %s <==\n\n' "$f"; cat "$f"; printf '\n'
+          done > dist/WASI-LIBC-LICENSES.txt
       - name: attach GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test -n "$(find dist -name 'highlights-*.zip' -print -quit)"
+          test -s dist/THIRD-PARTY-LICENSES.html && test -s dist/NOTICE && test -s dist/WASI-LIBC-LICENSES.txt
           gh release create "${GITHUB_REF_NAME}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \

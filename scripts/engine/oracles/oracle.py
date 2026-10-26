@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Differential oracles: the opentide engine against the reference parser.
 
-    oracle.py kql   Microsoft Kusto.Language (scripts/oracles/kusto, needs dotnet)
-    oracle.py spl   Splunk's search/parser REST endpoint (needs SPLUNK_PASSWORD)
+    oracle.py kql     Microsoft Kusto.Language (scripts/oracles/kusto, needs dotnet)
+    oracle.py spl     Splunk's search/parser REST endpoint (needs SPLUNK_PASSWORD)
+    oracle.py esql    @elastic/esql's parser (scripts/oracles/elastic, needs node)
+    oracle.py eql     Elasticsearch's EqlBase.g4, generated with antlr-ng (needs node)
+    oracle.py kuery   Kibana's kuery grammar.peggy, compiled with peggy (needs node)
+    oracle.py lucene  Lucene's classic QueryParser, the jar Elasticsearch pins (needs java)
 
-Both run every query in the corpus through `opentide-lsp analyze` and through
+Each runs every query in the corpus through `opentide-lsp analyze` and through
 the reference, then compare two things:
 
 - Verdicts. A query is rejected when ours reports a syntax diagnostic, or when
@@ -43,18 +47,62 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EXCEPTIONS = ROOT / "testdata/oracles/exceptions.toml"
 KUSTO = ROOT / "scripts/oracles/kusto"
+ELASTIC = ROOT / "scripts/oracles/elastic"
+ELASTIC_CACHE = ELASTIC / ".cache"
 MACROS = ROOT / "scripts/oracles/splunk/macros.toml"
 
 # Diagnostics that mean ours rejects the query's syntax.
 REJECT = {
     "kql": {"kql_parse_error", "kql_unknown_operator"},
     "spl": {"spl_parse_error", "spl_unknown_command"},
+    # Elastic: error-severity syntax diagnostics only. Checks Elasticsearch
+    # makes after parsing (unknown functions, types, versions) are not in
+    # the parser references, so they are not compared here.
+    "esql": {"esql_parse_error", "esql_unknown_command"},
+    "eql": {"eql_parse_error"},
+    "kuery": {"kuery_parse_error"},
+    # Elasticsearch parses fuzziness itself and fails the query string on a
+    # value Lucene's plain parser would clamp (`~3`, `~0.5`).
+    "lucene": {"lucene_parse_error", "lucene_regexp", "lucene_escape", "lucene_fuzzy"},
 }
+ELASTIC_LANGUAGES = ("esql", "eql", "kuery", "lucene")
 UNKNOWN_NAME = {
     "kql": ("kql_unknown_function", re.compile(r"unknown function '([^']+)'")),
     "spl": ("spl_unknown_command", re.compile(r"unknown SPL command '([^']+)'")),
 }
-REFERENCE = {"kql": "Kusto.Language", "spl": "Splunk"}
+REFERENCE = {
+    "kql": "Kusto.Language",
+    "spl": "Splunk",
+    "esql": "@elastic/esql",
+    "eql": "EqlBase.g4",
+    "kuery": "Kibana grammar.peggy",
+    "lucene": "Lucene QueryParser",
+}
+
+# Pinned Elastic references, fetched at CI time and never committed: the
+# grammars are ELv2/AGPL/SSPL. Each download is checked against its SHA-256.
+ES_COMMIT = "2c85bbdf4cc32de876c2bb31f009caa3a184c329"
+KIBANA_COMMIT = "ea2712af211782c2dfd1bc8a81c5d68fec975284"
+LUCENE = "10.5.2"
+MAVEN = "https://repo1.maven.org/maven2/org/apache/lucene"
+FETCH = {
+    "EqlBase.g4": (
+        f"https://raw.githubusercontent.com/elastic/elasticsearch/{ES_COMMIT}/x-pack/plugin/eql/src/main/antlr/EqlBase.g4",
+        "489354eb66e70ee7eafa4c54a8bd67a917e66bd16f129838d258aa8924c60267",
+    ),
+    "grammar.peggy": (
+        f"https://raw.githubusercontent.com/elastic/kibana/{KIBANA_COMMIT}/src/platform/packages/shared/kbn-es-query/src/kuery/grammar/grammar.peggy",
+        "ab15ddc4cbd67e3d89215284a5bbc91019475489b75cc13418aa03c024ff328d",
+    ),
+    "lucene-core.jar": (
+        f"{MAVEN}/lucene-core/{LUCENE}/lucene-core-{LUCENE}.jar",
+        "39210e1024da5c31d1ad7571d622ebb122a8c4e23ff42e9bc380124973d8c635",
+    ),
+    "lucene-queryparser.jar": (
+        f"{MAVEN}/lucene-queryparser/{LUCENE}/lucene-queryparser-{LUCENE}.jar",
+        "ae7d20d735e61c2e0a9bd4b6893eb3d460dea58b0c4b73bafcf136da6f61f3ca",
+    ),
+}
 
 # Tide configuration fields the engine injects (opentide-tide language_for_field_path).
 PLATFORMS = {
@@ -64,7 +112,7 @@ PLATFORMS = {
 }
 # A corpus fixture's tag line. SPL comments need a closing ```, so the line is
 # not SPL; corpus_gate.rs strips it the same way.
-FIXTURE_TAG = re.compile(r"\A(//|```) prod:[^\n]*\n")
+FIXTURE_TAG = re.compile(r"\A(//|```|#) prod:[^\n]*\n")
 
 
 @dataclasses.dataclass
@@ -91,7 +139,111 @@ def corpus(language: str) -> list[Query]:
         Query(rel(p), FIXTURE_TAG.sub("", p.read_text(), count=1), ".broken." in p.name)
         for p in files
     ]
+    if language in ELASTIC_LANGUAGES:
+        return queries + verdict_tables(language) + elastic_embedded(language) + detection_rules(language)
     return queries + embedded(language)
+
+
+def verdict_tables(language: str) -> list[Query]:
+    """Queries from the upstream test suites kept as verdict tables."""
+    tables = {
+        "lucene": ("testdata/conformance/external/lucene-queryparser/cases.tsv", unescape_tsv),
+        "kuery": ("testdata/conformance/external/kuery-opensearch-dashboards/cases.tsv", json.loads),
+    }
+    if language not in tables:
+        return []
+    path, decode = tables[language]
+    queries = []
+    for n, line in enumerate((ROOT / path).read_text().splitlines(), 1):
+        if line.startswith("#") or not line.strip():
+            continue
+        query = decode(line.split("\t")[1])
+        queries.append(Query(f"{path}:{n}", query, False))
+    return queries
+
+
+def unescape_tsv(text: str) -> str:
+    return re.sub(r"\\([tnr\\])", lambda m: {"t": "\t", "n": "\n", "r": "\r", "\\": "\\"}[m.group(1)], text)
+
+
+def elastic_language(rule_type: object, language: object) -> str | None:
+    """Mirror of opentide_tide::elastic_query_language."""
+    if rule_type in ("esql", "eql"):
+        return str(rule_type)
+    if rule_type in ("query", "threshold", "new_terms", "threat_match"):
+        return {None: "kuery", "kuery": "kuery", "lucene": "lucene"}.get(language)  # type: ignore[arg-type]
+    return None
+
+
+def elastic_embedded(language: str) -> list[Query]:
+    """Elastic queries in Tide rules: the block query, `threat.query`, and
+    `response.procedure.searches[]` entries that declare their language."""
+    import yaml
+
+    queries = []
+    for path in sorted(ROOT.glob("testdata/**/*.yaml")):
+        try:
+            doc = yaml.safe_load(path.read_text())
+        except yaml.YAMLError:
+            continue
+        if not isinstance(doc, dict):
+            continue
+        block = (doc.get("configurations") or {}).get("elastic")
+        if isinstance(block, dict):
+            if elastic_language(block.get("type"), block.get("language")) == language and isinstance(block.get("query"), str):
+                queries.append(Query(f"{rel(path)}#configurations.elastic.query", block["query"], False))
+            threat = block.get("threat")
+            if (
+                block.get("type") == "threat_match"
+                and isinstance(threat, dict)
+                and elastic_language("threat_match", threat.get("language")) == language
+                and isinstance(threat.get("query"), str)
+            ):
+                queries.append(Query(f"{rel(path)}#configurations.elastic.threat.query", threat["query"], False))
+        searches = ((doc.get("response") or {}).get("procedure") or {}).get("searches") or []
+        for n, search in enumerate(searches if isinstance(searches, list) else []):
+            if (
+                isinstance(search, dict)
+                and search.get("system") == "elastic"
+                and search.get("language") == language
+                and isinstance(search.get("query"), str)
+            ):
+                queries.append(Query(f"{rel(path)}#response.procedure.searches.{n}.query", search["query"], False))
+    return queries
+
+
+def detection_rules(language: str) -> list[Query]:
+    """Elastic's public rules from an elastic/detection-rules checkout named
+    by OPENTIDE_DETECTION_RULES (ELv2: read at CI time, never vendored).
+    Elasticsearch accepts every one of them."""
+    root = os.environ.get("OPENTIDE_DETECTION_RULES")
+    if not root:
+        return []
+    base = pathlib.Path(root)
+    queries = []
+    files = sorted(p for d in ("rules", "rules_building_block", "hunting") for p in (base / d).rglob("*.toml"))
+    for path in files:
+        try:
+            doc = tomllib.loads(path.read_text())
+        except (tomllib.TOMLDecodeError, UnicodeDecodeError):
+            continue
+        ident = f"detection-rules:{path.relative_to(base).as_posix()}"
+        rule = doc.get("rule") or {}
+        if elastic_language(rule.get("type"), rule.get("language")) == language and isinstance(rule.get("query"), str):
+            queries.append(Query(f"{ident}#query", rule["query"].rstrip(), False))
+        if (
+            rule.get("type") == "threat_match"
+            and elastic_language("threat_match", rule.get("threat_language")) == language
+            and isinstance(rule.get("threat_query"), str)
+        ):
+            queries.append(Query(f"{ident}#threat_query", rule["threat_query"].rstrip(), False))
+        hunt = doc.get("hunt") or {}
+        hunt_language = {("ES|QL",): "esql", ("EQL",): "eql"}.get(tuple(hunt.get("language") or []))
+        if hunt_language == language:
+            for n, query in enumerate(hunt.get("query") or []):
+                if isinstance(query, str):
+                    queries.append(Query(f"{ident}#hunt.query.{n}", query.strip(), False))
+    return queries
 
 
 def embedded(language: str) -> list[Query]:
@@ -154,10 +306,17 @@ def ours(language: str, queries: list[Query], scratch: pathlib.Path) -> dict[str
 
 
 def rejected_by_ours(language: str, diagnostics: list[dict]) -> list[str]:
-    return [f"{d['code']}: {d['message']}" for d in diagnostics if d["code"] in REJECT[language]]
+    return [
+        f"{d['code']}: {d['message']}"
+        for d in diagnostics
+        if d["code"] in REJECT[language]
+        and (language not in ELASTIC_LANGUAGES or d["severity"] == "error")
+    ]
 
 
 def unknown_names(language: str, diagnostics: dict[str, list[dict]]) -> dict[str, str]:
+    if language not in UNKNOWN_NAME:
+        return {}
     code, pattern = UNKNOWN_NAME[language]
     names: dict[str, str] = {}
     for ident, diags in diagnostics.items():
@@ -423,6 +582,87 @@ def spl_names(splunk: Splunk, flagged: dict[str, str]) -> dict[str, str]:
     return disagree
 
 
+# --- Elastic -----------------------------------------------------------------
+
+
+def fetch(name: str) -> pathlib.Path:
+    """A pinned reference file, downloaded once and checked by SHA-256."""
+    import hashlib
+
+    url, digest = FETCH[name]
+    path = ELASTIC_CACHE / name
+    if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+        return path
+    ELASTIC_CACHE.mkdir(exist_ok=True)
+    with urllib.request.urlopen(url, timeout=120) as resp:
+        data = resp.read()
+    got = hashlib.sha256(data).hexdigest()
+    if got != digest:
+        sys.exit(f"{name}: {url} has SHA-256 {got}, expected {digest}")
+    path.write_bytes(data)
+    return path
+
+
+def node_sandbox() -> pathlib.Path:
+    """scripts/oracles/elastic/node_modules from its lock file, without install scripts."""
+    if not (ELASTIC / "node_modules/.package-lock.json").exists():
+        subprocess.run(
+            ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+            cwd=ELASTIC,
+            check=True,
+            stdout=sys.stderr,
+        )
+    return ELASTIC / "node_modules"
+
+
+def elastic_runner(language: str) -> list[str]:
+    """The command that prints `<file>\tOK|ERR\t<message>` for a directory."""
+    if language == "lucene":
+        jars = os.pathsep.join(str(fetch(j)) for j in ("lucene-core.jar", "lucene-queryparser.jar"))
+        return ["java", "-cp", jars, str(ELASTIC / "LuceneOracle.java")]
+    modules = node_sandbox()
+    if language == "esql":
+        return ["node", str(ELASTIC / "esql.cjs"), str(ELASTIC)]
+    if language == "eql":
+        gen = ELASTIC_CACHE / "eql"
+        if not (gen / "EqlBaseParser.js").exists():
+            subprocess.run(
+                [str(modules / ".bin/antlr-ng"), "-Dlanguage=JavaScript", "-o", str(gen), str(fetch("EqlBase.g4"))],
+                check=True,
+                stdout=sys.stderr,
+            )
+            (gen / "package.json").write_text('{"type": "module"}\n')
+        return ["node", str(ELASTIC / "eql.mjs"), str(gen), str(modules / "antlr4")]
+    parser = ELASTIC_CACHE / "kuery.cjs"
+    if not parser.exists():
+        subprocess.run(
+            [str(modules / ".bin/peggy"), "--format", "commonjs", "--allowed-start-rules", "start",
+             "-o", str(parser), str(fetch("grammar.peggy"))],
+            check=True,
+            stdout=sys.stderr,
+        )
+    return ["node", str(ELASTIC / "kuery.cjs"), str(parser)]
+
+
+def elastic_reference(language: str, queries: list[Query], scratch: pathlib.Path) -> dict[str, list[str]]:
+    folder = scratch / f"reference-{language}"
+    folder.mkdir()
+    files = {}
+    for n, query in enumerate(queries):
+        name = f"q{n:06}.{language}"
+        (folder / name).write_text(query.text)
+        files[name] = query.id
+    run = subprocess.run([*elastic_runner(language), str(folder)], capture_output=True, text=True)
+    if run.returncode != 0:
+        sys.exit(f"{REFERENCE[language]} runner failed: {run.stderr.strip()[-2000:]}")
+    verdicts = {}
+    for line in run.stdout.splitlines():
+        name, verdict, message = (line.split("\t", 2) + ["", ""])[:3]
+        if name in files:
+            verdicts[files[name]] = [message or "error"] if verdict == "ERR" else []
+    return verdicts
+
+
 # --- comparison -------------------------------------------------------------
 
 
@@ -547,6 +787,11 @@ def main() -> int:
         if language == "kql":
             reference = kql_reference(queries, scratch)
             names = kql_names(flagged)
+        elif language in ELASTIC_LANGUAGES:
+            # Catalog names come from the pinned Elasticsearch docs through
+            # the sync scripts; the parser references carry no catalog.
+            reference = elastic_reference(language, queries, scratch)
+            names = {}
         else:
             splunk = Splunk()
             info = splunk.wait(args.splunk_wait)

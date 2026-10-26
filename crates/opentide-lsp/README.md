@@ -1,12 +1,12 @@
 # opentide language server
 
-Native language server for **KQL**, **SPL**, and **Tide YAML** objects.
+Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, and **Tide YAML** objects.
 
-v1 languages: KQL + SPL + Tide YAML. SQL is out of scope. Names use `opentide`, never `otide`.
+v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules. SQL is out of scope. Names use `opentide`, never `otide`.
 
 ## Product hierarchy
 
-1. **KQL and SPL** — standalone files and YAML-injected `query: |` / `search` blocks.
+1. **Query languages** — standalone files and YAML-injected `query: |` / `search` blocks (KQL, SPL, and the Elastic languages selected by `type` and `language`).
 2. **Tide objects** — DetectionOps product (schema, vocabs, UUID graph, CLI-equivalent diagnostics).
 3. **Hosts** consume the engine plus frozen HighlightSpec artifacts.
 
@@ -24,7 +24,7 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 
 ## Hard rules
 
-- I/O-free engine crates (`opentide-kql`, `opentide-spl`, `opentide-tide`, `opentide-analysis`). No `std::fs`.
+- I/O-free engine crates (`opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`). No `std::fs`.
 - HighlightSpec capture rename is a **major**.
 - Never fake CrowdStrike validation.
 - Control commands (`.show` / `.create`) → `kql_control_command_unsupported`.
@@ -38,9 +38,14 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 | --- | --- |
 | `opentide-core` | Shared types, diagnostic codes |
 | `opentide-highlight` | Frozen HighlightSpec, semantic tokens, tm/monaco/helix maps |
-| `opentide-syntax` | Vendored tree-sitter KQL/SPL |
+| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene |
 | `opentide-kql` | Catalog, HIR, Sentinel/Defender profiles, `compile_kql_query` |
 | `opentide-spl` | searchbnf-informed catalog, `spl_unknown_command` |
+| `opentide-esql` | ES\|QL catalog with stack-version lifecycle, `esql_*` diagnostics |
+| `opentide-eql` | EQL catalog, sequence/sample/pipe rules, `eql_*` diagnostics |
+| `opentide-kuery` | Kibana KQL checks, Lucene-syntax-in-kuery warnings |
+| `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings |
+| `opentide-ecs` | Elastic Common Schema field catalog (completion, hover; never a closed list) |
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |
 | `opentide-lsp` | stdio LSP + CLI |

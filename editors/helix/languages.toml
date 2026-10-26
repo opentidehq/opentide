@@ -20,6 +20,30 @@ scope = "source.spl"
 file-types = ["spl"]
 language-servers = ["opentide-lsp"]
 
+[[language]]
+name = "esql"
+scope = "source.esql"
+file-types = ["esql"]
+language-servers = ["opentide-lsp"]
+
+[[language]]
+name = "eql"
+scope = "source.eql"
+file-types = ["eql"]
+language-servers = ["opentide-lsp"]
+
+[[language]]
+name = "kuery"
+scope = "source.kuery"
+file-types = ["kuery"]
+language-servers = ["opentide-lsp"]
+
+[[language]]
+name = "lucene"
+scope = "source.lucene"
+file-types = ["lucene"]
+language-servers = ["opentide-lsp"]
+
 [language-server.opentide-lsp]
 command = "opentide-lsp"
 args = ["--stdio"]

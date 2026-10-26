@@ -584,3 +584,116 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
         "{pull}"
     );
 }
+
+/// Open a document, return its published diagnostic codes.
+fn published_codes(lsp: &mut Lsp, uri: &str, language_id: &str, text: &str) -> Vec<String> {
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": language_id,
+                "version": 1,
+                "text": text
+            }
+        }),
+    );
+    let msg = lsp.read();
+    assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
+    msg["params"]["diagnostics"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|d| d["code"].as_str().map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn elastic_languages_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // The URI suffix selects the engine when the client reports no known id.
+    let cases = [
+        (
+            "file:///tmp/r.esql",
+            "plaintext",
+            "FROM logs-* METADATA _id | WEHRE x == 1",
+            "esql_unknown_command",
+        ),
+        (
+            "file:///tmp/r.eql",
+            "plaintext",
+            "sequence with maxspan=5w [a where true] [b where true]",
+            "eql_maxspan_unit",
+        ),
+        (
+            "file:///tmp/r.kuery",
+            "plaintext",
+            "message: cannot run",
+            "kuery_parse_error",
+        ),
+        (
+            "file:///tmp/r.lucene",
+            "plaintext",
+            "a:1 and b:2",
+            "lucene_lowercase_operator",
+        ),
+    ];
+    for (uri, language_id, text, code) in cases {
+        let codes = published_codes(&mut lsp, uri, language_id, text);
+        assert!(codes.iter().any(|c| c == code), "{uri}: {codes:?}");
+    }
+    let rule = "\
+name: Elastic rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000077
+  schema: rule::1.1
+configurations:
+  elastic:
+    status: STAGING
+    query: 'process.name:cmd.exe and _exists_:host.name'
+    type: query
+";
+    let codes = published_codes(
+        &mut lsp,
+        "file:///tmp/objects/rules/elastic-rule.yaml",
+        "yaml",
+        rule,
+    );
+    assert!(
+        codes.iter().any(|c| c == "kuery_lucene_syntax"),
+        "the Elastic block's kuery query is analysed: {codes:?}"
+    );
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": "file:///tmp/r.esql" } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(data.len() >= 10, "semantic tokens for .esql: {tokens}");
+
+    // ECS completion replaces the dotted prefix already typed.
+    let text = "host.name:x and process.pa";
+    published_codes(&mut lsp, "file:///tmp/c.kuery", "plaintext", text);
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": "file:///tmp/c.kuery" },
+            "position": { "line": 0, "character": text.len() }
+        }),
+    );
+    let item = items["result"]
+        .as_array()
+        .and_then(|a| a.iter().find(|i| i["label"] == "process.parent.name"))
+        .cloned()
+        .unwrap_or_else(|| panic!("ECS field completion: {items}"));
+    assert_eq!(
+        item["textEdit"]["range"]["start"]["character"], 16,
+        "{item}"
+    );
+    assert_eq!(item["textEdit"]["newText"], "process.parent.name");
+}

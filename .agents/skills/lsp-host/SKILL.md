@@ -26,11 +26,11 @@ Read `references/wire-format.md` before adding a method.
 
 ## Session
 
-`Session` maps URI → (`LanguageId`, text). `language_for` uses a reported language id when `LanguageId::parse` accepts it, otherwise the URI suffix (`.kql`, `.spl`, else Tide YAML). An unknown reported id is ignored. `.sql` is Tide YAML and is not validated as SQL.
+`Session` maps URI → (`LanguageId`, text). `language_for` uses a reported language id when `LanguageId::parse` accepts it, otherwise the URI suffix through `LanguageId::from_extension` (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, else Tide YAML). An unknown reported id is ignored. `.sql` is Tide YAML and is not validated as SQL.
 
 The analysis crate sees a `MemoryWorkspace` built from open documents plus YAML files under the workspace `objects/` directory. The engine still does not call `std::fs`. The host does.
 
-`initialize` reads `rootUri` and installs the Tide deprecation overlay from `.opentide/lsp/catalogs/generated/deprecations.json` when that file exists. Capabilities are the JSON object in the `initialize` arm. When you add a provider, advertise it there and handle the method in the same change. An unhandled request that still has an `id` hits the `_` arm and returns `-32601`, so the client unblocks with a failure instead of waiting.
+`initialize` reads `rootUri` and installs the Tide deprecation overlay from `.opentide/lsp/catalogs/generated/deprecations.json` when that file exists. `Session::host` also hands the analysis layer `.opentide/configurations/platforms/elastic.toml` (`opentide_analysis::ELASTIC_CONFIGURATION`) when it exists: its tenants' `setup.version` decides the stack Elastic queries are checked against. The CLI `analyze` does the same. This reads one key; it is not the configuration engine (#64). Capabilities are the JSON object in the `initialize` arm. When you add a provider, advertise it there and handle the method in the same change. An unhandled request that still has an `id` hits the `_` arm and returns `-32601`, so the client unblocks with a failure instead of waiting.
 
 Current providers: incremental sync (`textDocumentSync: 2`), hover, completion (resolve, trigger characters), signature help, definition, references, document symbol, workspace symbol, document highlight, code action, folding, selection range, inlay hints, pull diagnostics, semantic tokens (full).
 
@@ -64,7 +64,7 @@ CrowdStrike paths produce `crowdstrike_unsupported` or no fake success. Do not p
 
 `editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is `opentidehq/vscode-extension`, a different repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
-Language ids in editors: `opentide-yaml`, `kql`, `spl`. Not `sql`. Not `otide`.
+Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`. Not `sql`. Not `otide`.
 
 ## Tests
 

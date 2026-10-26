@@ -16,3 +16,5 @@ lcov.info
 scripts/oracles/kusto/bin
 scripts/oracles/kusto/obj
 __pycache__/
+scripts/oracles/elastic/node_modules
+scripts/oracles/elastic/.cache

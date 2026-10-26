@@ -1,0 +1,3 @@
+// prod:unknown_command invalid
+FROM logs-* METADATA _id
+| WEHRE x == 1

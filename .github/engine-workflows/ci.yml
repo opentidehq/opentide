@@ -61,3 +61,40 @@ jobs:
           node-version: "22"
       - run: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10
       - run: bash scripts/check-grammars.sh
+
+  # Both WASM artifacts: the browser highlight() module and the WASI CLI.
+  # scripts/build-wasm.sh pins wasi-sdk for the C parsers and smoke-tests each.
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, wasm32-wasip1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cargo install --locked wasm-bindgen-cli --version 0.2.128
+      - run: bash scripts/build-wasm.sh
+
+  # Every public Elastic rule passes Elasticsearch's parser, so any engine
+  # error on them is an engine bug (#82). The rules are ELv2: checked out
+  # here at a pinned commit, never vendored.
+  elastic-sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: elastic/detection-rules
+          ref: 2b30453d7dede69f980472cff51a2ae9a6917bae
+          path: detection-rules
+          sparse-checkout: |
+            rules
+            rules_building_block
+            hunting
+      - uses: dtolnay/rust-toolchain@stable
+      - name: detection-rules sweep
+        env:
+          OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
+        run: cargo test -p opentide-analysis --test elastic_detection_rules -- --nocapture

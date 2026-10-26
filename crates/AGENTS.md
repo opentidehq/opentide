@@ -11,17 +11,17 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | `crates/opentide-lsp`, `editors/`, stdio tests | `skills/lsp-host/SKILL.md` |
 | `crates/opentide-wasm`, `packages/`, `pyproject.toml` | `skills/wasm-hosts/SKILL.md` |
 | `catalogs/`, `highlights/spec.toml`, `testdata/conformance`, `testdata/oracles`, `scripts/oracles`, schema sync | `skills/catalogs/SKILL.md` |
-| A new query language (S1QL, Lucene, Sigma, YARA) | `skills/add-language/SKILL.md` (then the rows above) |
+| A new query language (S1QL, Sigma, YARA) | `skills/add-language/SKILL.md` (then the rows above) |
 
 ## Product
 
-Native language server for **KQL**, **SPL**, and **Tide YAML**. SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
+Native language server for **KQL**, **SPL**, **Tide YAML**, and the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**. SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
 
 Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript packages) own the filesystem and the editor protocol. The CLI (`analyze`, `highlight`, `generate-highlights`) prints plain JSON. Only `--stdio` and `--listen` speak JSON-RPC.
 
 ## Hard rules
 
-- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,tide,analysis}/src`. Tests may read the repo.
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,ecs,tide,analysis}/src`. Tests may read the repo.
 - Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
 - Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
 - Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.

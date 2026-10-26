@@ -79,12 +79,12 @@ fn detect_language(path: &Path, override_lang: Option<&str>) -> Result<LanguageI
     if let Some(l) = override_lang {
         return LanguageId::parse(l).context("unknown language id");
     }
-    match path.extension().and_then(|s| s.to_str()) {
-        Some("kql") => Ok(LanguageId::Kql),
-        Some("spl") => Ok(LanguageId::Spl),
-        Some("yaml" | "yml") => Ok(LanguageId::TideYaml),
-        other => anyhow::bail!("cannot detect language from extension {other:?}; pass --language"),
+    let ext = path.extension().and_then(|s| s.to_str());
+    if matches!(ext, Some("yaml" | "yml")) {
+        return Ok(LanguageId::TideYaml);
     }
+    ext.and_then(LanguageId::from_extension)
+        .with_context(|| format!("cannot detect language from extension {ext:?}; pass --language"))
 }
 
 fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
@@ -93,6 +93,12 @@ fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
     let mut files = vec![(file.display().to_string(), text.clone())];
     if let Some(root) = find_objects_root(file) {
         collect_yaml(&root, &mut files)?;
+        if let Some(workspace) = root.parent() {
+            let config = workspace.join(opentide_analysis::ELASTIC_CONFIGURATION);
+            if let Ok(text) = std::fs::read_to_string(&config) {
+                files.push((config.display().to_string(), text));
+            }
+        }
     }
     let host = MemoryWorkspace { files };
     let response = opentide_analysis::analyze(
@@ -135,6 +141,22 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
         (
             root.join("tide.tmLanguage.json"),
             serde_json::to_string_pretty(&generate_tm_language(LanguageId::TideYaml, &spec))?,
+        ),
+        (
+            root.join("esql.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Esql, &spec))?,
+        ),
+        (
+            root.join("eql.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Eql, &spec))?,
+        ),
+        (
+            root.join("kuery.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Kuery, &spec))?,
+        ),
+        (
+            root.join("lucene.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Lucene, &spec))?,
         ),
         (
             root.join("monaco.json"),

@@ -1,0 +1,14 @@
+[package]
+name = "opentide-lucene"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "I/O-free Lucene query syntax engine"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-syntax.workspace = true
+opentide-highlight.workspace = true
+tree-sitter.workspace = true
+

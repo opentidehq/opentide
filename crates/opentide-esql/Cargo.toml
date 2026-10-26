@@ -1,0 +1,16 @@
+[package]
+name = "opentide-esql"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "I/O-free ES|QL engine (parse, catalog, diagnostics) for Elastic Security esql rules"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-lucene.workspace = true
+opentide-syntax.workspace = true
+opentide-highlight.workspace = true
+serde.workspace = true
+toml.workspace = true
+tree-sitter.workspace = true

@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | where ends_with(Image, "/bin/bash") and not (DestinationIp in ("127.0.0.1", "0.0.0.0"))

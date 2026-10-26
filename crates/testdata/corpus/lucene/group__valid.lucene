@@ -1,0 +1,2 @@
+# prod:group valid
+(a OR b) AND c

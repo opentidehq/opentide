@@ -33,20 +33,25 @@ Unknown language ids become `Err(JsValue)`. Invalid UTF-8 becomes `Err`. Do not 
 
 `std::fs` is not available on `wasm32-unknown-unknown` (it returns an error). The wasm crate must not grow a filesystem API. Workspace text stays in the host.
 
-Native tests in this crate call `opentide_analysis::highlight` directly. They do not need a browser. `cargo test -p opentide-wasm` runs on the host. A wasm smoke test is a separate `cargo build -p opentide-wasm --target wasm32-unknown-unknown` once the target is installed. Do not add `wasm-bindgen-test` unless a browser harness exists.
+Native tests in this crate call `opentide_analysis::highlight` directly. They do not need a browser. `cargo test -p opentide-wasm` runs on the host. Do not add `wasm-bindgen-test` unless a browser harness exists.
 
-Build the browser artifact with the target explicitly:
+Build both artifacts with `scripts/build-wasm.sh` (CI job `wasm`, and the release). tree-sitter, the grammars, and the ES|QL comment scanner are C, so a plain `cargo build --target wasm32-unknown-unknown` fails on missing libc headers. The script pins wasi-sdk, compiles the C with its clang and wasi-libc headers, links wasi-libc's `libc.a`, and smoke-tests each artifact (`scripts/wasm-smoke.mjs`):
+
+- browser: the module imports nothing but wasm-bindgen glue, and `highlight()` works for every language through `wasm-bindgen --target nodejs`;
+- wasi: the CLI runs `analyze` under `node:wasi`.
+
+libc's stdio and clock code can reach seven WASI syscalls. `crates/opentide-wasm/src/libc_syscalls.rs` defines their import symbols inside the module (no files, clock 0), so the browser artifact still has no WASI imports. That is libc for the C parsers, not a WASI mix-in: the rule below stands.
 
 ```bash
-rustup target add wasm32-unknown-unknown
-cargo build -p opentide-wasm --target wasm32-unknown-unknown --release
+bash scripts/build-wasm.sh            # both; needs node, and wasm-bindgen-cli 0.2.128 for the highlight() check
+bash scripts/build-wasm.sh browser
 ```
 
 Do not `cargo build -p opentide-wasm --target wasm32-wasip1`. That target must not link this crate.
 
 ## WASI
 
-`wasm32-wasip1` (the renamed `wasm32-wasi`) is for vscode.dev running the CLI-style binary. Build `opentide-lsp`, not `opentide-wasm`. Do not cfg-gate `#[wasm_bindgen]` into the lsp crate "so one artifact does both". Two artifacts.
+`wasm32-wasip1` (the renamed `wasm32-wasi`) is for vscode.dev running the CLI-style binary. Build `opentide-lsp`, not `opentide-wasm` (`scripts/build-wasm.sh wasi`). Do not cfg-gate `#[wasm_bindgen]` into the lsp crate "so one artifact does both". Two artifacts.
 
 ## TypeScript client
 

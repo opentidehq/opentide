@@ -1,6 +1,6 @@
 ---
 name: catalogs
-description: Load opentide catalogs and conformance corpora. Covers include_str, OnceLock, toml 0.8, HighlightSpec capture freezes, Pydantic schema sync for opentide 0.16.1, and external KQL/SPL fault twins. Use when editing catalogs/, highlights/spec.toml, testdata/conformance, or scripts/sync_opentide_schemas.py.
+description: Load opentide catalogs and conformance corpora. Covers include_str, OnceLock, toml 0.8, HighlightSpec capture freezes, Pydantic schema sync for opentide 0.16.1, and external KQL/SPL/Elastic fault twins. Use when editing catalogs/, highlights/spec.toml, testdata/conformance, or scripts/sync_opentide_schemas.py.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -41,6 +41,18 @@ Unknown operators, functions, tables, and commands are diagnostics (`kql_unknown
 
 Slow-query warnings (`kql_where_not_first`, `kql_unscoped_search`, `spl_wildcard`, `spl_leading_not`, and the rest of `opentide_core::codes`) come from the `perf` modules. They are warnings about public query shapes, not style nits. Do not add a warning that contradicts `docs/kql/` or `docs/spl/`.
 
+## Elastic catalogs
+
+| Path | Contents |
+| --- | --- |
+| `catalogs/esql/` | commands, functions, operators, cast types with `applies_to` lifecycle and per-release `versions` |
+| `catalogs/eql/` | functions (arity, case-insensitive `~` support), pipes |
+| `catalogs/ecs/` | Elastic Common Schema fields: type, level, short description, allowed values (`scripts/sync_ecs_fields.py`, Apache-2.0, `NOTICE`) |
+
+`scripts/sync_esql_catalog.py` and `scripts/sync_eql_catalog.py` regenerate them from a pinned `elastic/elasticsearch` docs commit. Elastic's docs are not EUPL-compatible, so the catalogs keep facts only (names, signatures, arity, versions) and the summaries are written in the scripts. Do not paste Elastic prose into a catalog. The 9.x docs do not list 8.19 or 9.0, so `sync_esql_catalog.py --branches` also reads each release branch (8.19, 9.0 … 9.6) and writes `versions`, the lines that accept each command, function, and cast type (`types.toml`). `esql_unavailable` uses those lists: information when an older supported line lacks a name, a warning when the newest does too, an error only for snapshot-only names. `Lifecycle::after_floor` (first documented at 9.2 or later is missing on 8.19) is the fallback for a row without `versions`.
+
+ECS is never a closed list: elastic-1.0 says field names MUST NOT be checked against one. `opentide-ecs` feeds completion and hover (wired in `opentide-analysis/src/ecs.rs`), and a hint only where a known field's type makes the query suspicious. An unknown field is never a diagnostic.
+
 ## Tide objects
 
 `scripts/sync_opentide_schemas.py` pins `opentide==0.16.1` (`scripts/requirements-opentide.txt`) and writes `catalogs/tide/generated/`. Pydantic is the CLI authority. The LSP emits the same `{code, field_path, severity}` with ranges. `scripts/pydantic_object_issues.py` is the comparison source. Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.
@@ -54,6 +66,8 @@ Injection, from `language_for_field_path`:
 | `configurations.sentinel.query` | KQL |
 | `configurations.defender_for_endpoint.query` | KQL |
 | `configurations.splunk.query` and legacy `configurations.splunk.search` | SPL |
+| `configurations.elastic.query` and `threat.query` | ES\|QL, EQL, kuery, or Lucene from `type` and `language` (`elastic_query_language`) |
+| `response.procedure.searches[].query` with `system: elastic` | the entry's `language`; none when omitted |
 | `configurations.crowdstrike.*` | unsupported |
 | markdown fields | HighlightSpec `markdown.*`, not a query engine |
 
@@ -61,18 +75,18 @@ Block-scalar indent is stripped for analysis. Tokens are remapped onto the origi
 
 ## Conformance
 
-`testdata/conformance/external/<id>/` holds real public rules and a `.broken.` twin (`frobnicate` or `.show` for KQL, `notacommand` for SPL). `crates/opentide-analysis/tests/external_corpus.rs` does not require the full valid file to parse; the oracle does (see Oracles below), and every rule in the corpus parses today. The test keeps the full rule, finds the longest prefix that parses (at most 16 lines, and the prefix must contain `|`), injects the fault on that prefix, and requires `kql_unknown_operator` or `spl_unknown_command`. The broken full file must produce at least one diagnostic. A corpus that catches the fault on fewer than 5 KQL prefixes or 2 SPL prefixes fails. Sources and licenses are `testdata/conformance/external/SOURCES.md`. Do not add a rule whose license is unclear, and do not trim a public rule down to the prefix the grammar already accepts.
+`testdata/conformance/external/<id>/` holds real public rules and a `.broken.` twin (`frobnicate` or `.show` for KQL, `notacommand` for SPL). `crates/opentide-analysis/tests/external_corpus.rs` does not require the full valid file to parse; the oracle does (see Oracles below), and every rule in the corpus parses today. The test keeps the full rule, finds the longest prefix that parses (at most 16 lines, and the prefix must contain `|`), injects the fault on that prefix, and requires `kql_unknown_operator` or `spl_unknown_command`. The broken full file must produce at least one diagnostic. A corpus that catches the fault on fewer than 5 KQL prefixes or 2 SPL prefixes fails. The Elastic twins (`esql/`, `eql/`, `lucene/`, SigmaHQ conversions under DRL-1.1, listed in `sigma.tsv`) are checked by `crates/opentide-analysis/tests/external_elastic.rs`: every valid file is free of errors and every `.broken.` twin has one. Two verdict tables sit beside them: `lucene-queryparser/cases.tsv` (Apache Lucene's own parser tests, checked by `crates/opentide-lucene/tests/lucene_queryparser_cases.rs`) and `kuery-opensearch-dashboards/cases.tsv` (OpenSearch Dashboards' kuery tests, checked by `crates/opentide-kuery/tests/opensearch_dashboards_cases.rs`, with a `:` → `:)` fault twin per accepted query). Each line is `accept` or `reject`; a disagreement is either fixed or listed in the test's `EXCEPTIONS` with its reason. Sources and licenses are `testdata/conformance/external/SOURCES.md`. Do not add a rule whose license is unclear, and do not trim a public rule down to the prefix the grammar already accepts.
 
 `testdata/conformance/pydantic/` and `crates/opentide-analysis/tests/tide_corpus.rs` check object issues against the opentide CLI's Pydantic models.
 
 ## Oracles
 
-`.github/workflows/oracle.yml` compares the engine with Microsoft Kusto.Language and with Splunk's search parser (`scripts/oracles/README.md`). It runs every corpus query, external rule, perf sample, probe in `testdata/oracles/<lang>/`, and Tide rule query through both sides, and compares catalog names with `GlobalState.Default` and `searchbnf.conf`. `testdata/oracles/exceptions.toml` is the exact ledger of disagreements: an unlisted one fails, and so does a listed one that is gone.
+`.github/workflows/oracle.yml` compares the engine with Microsoft Kusto.Language, Splunk's search parser, and the Elastic and Lucene parsers (`@elastic/esql`, Elasticsearch's `EqlBase.g4`, Kibana's kuery `grammar.peggy`, Lucene's `QueryParser`; `scripts/oracles/README.md`). The Elastic job also runs every rule in a pinned `elastic/detection-rules` checkout. It runs every corpus query, external rule, perf sample, probe in `testdata/oracles/<lang>/`, and Tide rule query through both sides, and compares catalog names with `GlobalState.Default` and `searchbnf.conf`. `testdata/oracles/exceptions.toml` is the exact ledger of disagreements: an unlisted one fails, and so does a listed one that is gone.
 
 - A grammar or catalog fix that closes a gap deletes its path or name from the ledger in the same change. CI tells you which.
 - A new form from a real rule gets a one-line probe in `testdata/oracles/<lang>/`, not a trimmed copy of the rule.
 - A `.broken.` twin must break the query for the reference too. Inject the fault on a live line, never inside a comment or string.
-- The references are CI-only. Do not vendor Kusto.Language, Splunk, or a Splunk SDK; `scripts/license-scan.sh` checks release artifacts.
+- The references are CI-only. Do not vendor Kusto.Language, Splunk, a Splunk SDK, or an Elastic or Lucene parser; the Elastic grammars and jars are fetched by pinned SHA-256 into a git-ignored cache. `scripts/license-scan.sh` checks release artifacts.
 
 ## Configuration TOML is not a catalog yet
 

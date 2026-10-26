@@ -1,7 +1,9 @@
 name: Oracle
 
 # CI-only differential oracles (scripts/oracles/README.md). The engine is
-# compared with Microsoft Kusto.Language and with Splunk's search parser. A
+# compared with Microsoft Kusto.Language, Splunk's search parser, and the
+# Elastic and Lucene parsers (@elastic/esql, EqlBase.g4, Kibana's kuery
+# grammar, Lucene's QueryParser). A
 # disagreement not listed in testdata/oracles/exceptions.toml is a red build,
 # and so is a listed one that is gone. The references never ship; release.yml
 # runs scripts/license-scan.sh on every artifact.
@@ -15,6 +17,8 @@ on:
       - "grammars/**"
       - "catalogs/kql/**"
       - "catalogs/spl/**"
+      - "catalogs/esql/**"
+      - "catalogs/eql/**"
       - "testdata/**"
       - "scripts/oracles/**"
       - "scripts/ci-oracle.sh"
@@ -59,3 +63,63 @@ jobs:
         run: |
           eval "$(bash scripts/oracles/splunk/start.sh)"
           bash scripts/ci-oracle.sh spl
+
+  elastic:
+    name: Elastic and Lucene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Elastic's public rules (ELv2), read at CI time and never vendored.
+      # Elasticsearch accepts every one, so they are queries the engine must
+      # not reject. Same pin as the elastic-sweep job in ci.yml.
+      - uses: actions/checkout@v4
+        with:
+          repository: elastic/detection-rules
+          ref: 2b30453d7dede69f980472cff51a2ae9a6917bae
+          path: detection-rules
+          sparse-checkout: |
+            rules
+            rules_building_block
+            hunting
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - name: Elastic oracles
+        env:
+          OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
+        run: bash scripts/ci-oracle.sh esql eql kuery lucene
+
+  elasticsearch:
+    # The oldest and newest recorded release lines. probes.py fails when a
+    # verdict in testdata/oracles/elasticsearch/expected.tsv no longer holds;
+    # esql_catalog.py fails when a catalogs/esql `versions` list is wrong.
+    name: Live Elasticsearch ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["8.19.23", "9.5.5"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Start Elasticsearch
+        shell: bash  # with pipefail, so a failed start fails the step
+        run: bash scripts/oracles/elasticsearch/start.sh ${{ matrix.version }} | sed "s/^export //" >> "$GITHUB_ENV"
+      - name: Probes
+        run: python3 scripts/oracles/elasticsearch/probes.py
+      - name: ES|QL catalog versions
+        run: python3 scripts/oracles/elasticsearch/esql_catalog.py
+      - name: Stop Elasticsearch
+        if: always()
+        run: docker rm -f opentide-es-oracle-9200

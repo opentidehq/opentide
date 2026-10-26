@@ -246,6 +246,8 @@ fn complete_values(
             .with_detail(format!("{} {}", field.schema, field.path));
         if let Some(doc) = field.enum_docs.get(index).filter(|doc| !doc.is_empty()) {
             item = item.with_docs(doc.clone());
+        } else if let Some(doc) = crate::elastic::value_docs(&field.path, value) {
+            item = item.with_docs(doc);
         }
         items.push(item);
     }
@@ -392,6 +394,30 @@ description: |
   hello
 detection_model: 00000000-0000-4000-8002-000000000001
 "#;
+
+    #[test]
+    fn elastic_type_and_language_completions_name_the_query_language() {
+        let src = "name: r\nmetadata:\n  schema: rule::1.1\nconfigurations:\n  elastic:\n    type: \n    language: \n";
+        let off = src.find("type: ").unwrap() + "type: ".len();
+        let items = completions_tide(src, off, &[]);
+        let esql = items.iter().find(|i| i.label == "esql").expect("esql");
+        assert!(
+            esql.documentation
+                .as_deref()
+                .unwrap_or("")
+                .contains("ES|QL")
+        );
+        let off = src.find("language: ").unwrap() + "language: ".len();
+        let items = completions_tide(src, off, &[]);
+        let kuery = items.iter().find(|i| i.label == "kuery").expect("kuery");
+        assert!(
+            kuery
+                .documentation
+                .as_deref()
+                .unwrap_or("")
+                .contains("Kibana")
+        );
+    }
 
     #[test]
     fn hover_on_description_key() {

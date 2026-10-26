@@ -1,0 +1,35 @@
+file	sigma_rule	sigma_id	author
+esql/proc_creation_win_auditpol_nt_resource_kit_usage.esql	rules/windows/process_creation/proc_creation_win_auditpol_nt_resource_kit_usage.yml	c6c56ada-612b-42d1-9a29-adad3c5c2c1e	Nasreddine Bencherchali (Nextron Systems)
+esql/proc_creation_lnx_apt_shell_execution.esql	rules/linux/process_creation/proc_creation_lnx_apt_shell_execution.yml	bb382fd5-b454-47ea-a264-1828e4c766d6	Nasreddine Bencherchali (Nextron Systems)
+esql/proc_creation_macos_applescript.esql	rules/macos/process_creation/proc_creation_macos_applescript.yml	1bc2e6c5-0885-472b-bed6-be5ea8eace55	Alejandro Ortuno, oscd.community
+esql/net_connection_lnx_back_connect_shell_dev.esql	rules/linux/network_connection/net_connection_lnx_back_connect_shell_dev.yml	83dcd9f6-9ca8-4af7-a16e-a1c7a6b51871	Florian Roth (Nextron Systems)
+esql/file_event_lnx_persistence_sudoers_files.esql	rules/linux/file_event/file_event_lnx_persistence_sudoers_files.yml	ddb26b76-4447-4807-871f-1b035b2bfa5d	Nasreddine Bencherchali (Nextron Systems)
+esql/aws_cloudtrail_bucket_block_public_access_weakened.esql	rules/cloud/aws/cloudtrail/aws_cloudtrail_bucket_block_public_access_weakened.yml	ab18a523-e093-4ac6-8303-8c47431f4fca	Shoban Chiddarth
+esql/azure_aadhybridhealth_adfs_new_server.esql	rules/cloud/azure/activity_logs/azure_aadhybridhealth_adfs_new_server.yml	288a39fc-4914-4831-9ada-270e9dc12cb4	Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC
+esql/dns_query_win_cloudflared_communication.esql	rules/windows/dns_query/dns_query_win_cloudflared_communication.yml	a1d9eec5-33b2-4177-8d24-27fe754d0812	Nasreddine Bencherchali (Nextron Systems)
+esql/win_security_access_token_abuse.esql	rules/windows/builtin/security/account_management/win_security_access_token_abuse.yml	02f7c9c1-1ae8-4c6a-8add-04693807f92f	Michaela Adams, Zach Mathis
+esql/posh_ps_active_directory_module_dll_import.esql	rules/windows/powershell/powershell_script/posh_ps_active_directory_module_dll_import.yml	9e620995-f2d8-4630-8430-4afd89f77604	frack113, Nasreddine Bencherchali
+esql/lnx_auditd_audio_capture.esql	rules/linux/auditd/lnx_auditd_audio_capture.yml	a7af2487-9c2f-42e4-9bb9-ff961f0561d5	Pawel Mazur, Milad Cheraghi
+esql/okta_admin_activity_from_proxy_query.esql	rules/identity/okta/okta_admin_activity_from_proxy_query.yml	9058ca8b-f397-4fd1-a9fa-2b7aad4d6309	Muhammad Faisal @faisalusuf
+eql/proc_creation_win_auditpol_nt_resource_kit_usage.eql	rules/windows/process_creation/proc_creation_win_auditpol_nt_resource_kit_usage.yml	c6c56ada-612b-42d1-9a29-adad3c5c2c1e	Nasreddine Bencherchali (Nextron Systems)
+eql/proc_creation_lnx_awk_shell_spawn.eql	rules/linux/process_creation/proc_creation_lnx_awk_shell_spawn.yml	8c1a5675-cb85-452f-a298-b01b22a51856	Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)
+eql/proc_creation_macos_applescript.eql	rules/macos/process_creation/proc_creation_macos_applescript.yml	1bc2e6c5-0885-472b-bed6-be5ea8eace55	Alejandro Ortuno, oscd.community
+eql/net_connection_lnx_crypto_mining_indicators.eql	rules/linux/network_connection/net_connection_lnx_crypto_mining_indicators.yml	a46c93b7-55ed-4d27-a41b-c259456c4746	Florian Roth (Nextron Systems)
+eql/file_event_lnx_persistence_sudoers_files.eql	rules/linux/file_event/file_event_lnx_persistence_sudoers_files.yml	ddb26b76-4447-4807-871f-1b035b2bfa5d	Nasreddine Bencherchali (Nextron Systems)
+eql/aws_cloudtrail_bucket_block_public_access_weakened.eql	rules/cloud/aws/cloudtrail/aws_cloudtrail_bucket_block_public_access_weakened.yml	ab18a523-e093-4ac6-8303-8c47431f4fca	Shoban Chiddarth
+eql/azure_aadhybridhealth_adfs_new_server.eql	rules/cloud/azure/activity_logs/azure_aadhybridhealth_adfs_new_server.yml	288a39fc-4914-4831-9ada-270e9dc12cb4	Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC
+eql/dns_query_win_cloudflared_communication.eql	rules/windows/dns_query/dns_query_win_cloudflared_communication.yml	a1d9eec5-33b2-4177-8d24-27fe754d0812	Nasreddine Bencherchali (Nextron Systems)
+eql/win_security_access_token_abuse.eql	rules/windows/builtin/security/account_management/win_security_access_token_abuse.yml	02f7c9c1-1ae8-4c6a-8add-04693807f92f	Michaela Adams, Zach Mathis
+eql/posh_ps_aadinternals_cmdlets_execution.eql	rules/windows/powershell/powershell_script/posh_ps_aadinternals_cmdlets_execution.yml	91e69562-2426-42ce-a647-711b8152ced6	Austin Songer (@austinsonger), Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)
+eql/lnx_auditd_audio_capture.eql	rules/linux/auditd/lnx_auditd_audio_capture.yml	a7af2487-9c2f-42e4-9bb9-ff961f0561d5	Pawel Mazur, Milad Cheraghi
+eql/okta_fastpass_phishing_detection.eql	rules/identity/okta/okta_fastpass_phishing_detection.yml	ee39a9f7-5a79-4b0a-9815-d36b3cf28d3e	Austin Songer @austinsonger
+lucene/proc_creation_win_powershell_base64_encoded_obfusc.lucene	rules/windows/process_creation/proc_creation_win_powershell_base64_encoded_obfusc.yml	8d01b53f-456f-48ee-90f6-bc28e67d4e35	Florian Roth (Nextron Systems)
+lucene/net_connection_lnx_ngrok_tunnel.lucene	rules/linux/network_connection/net_connection_lnx_ngrok_tunnel.yml	19bf6fdb-7721-4f3d-867f-53467f6a5db6	Florian Roth (Nextron Systems)
+lucene/file_event_win_susp_dpapi_backup_and_cert_export_ioc.lucene	rules/windows/file/file_event/file_event_win_susp_dpapi_backup_and_cert_export_ioc.yml	7892ec59-c5bb-496d-8968-e5d210ca3ac4	Nounou Mbeiri, Nasreddine Bencherchali (Nextron Systems)
+lucene/aws_cloudtrail_bucket_block_public_access_weakened.lucene	rules/cloud/aws/cloudtrail/aws_cloudtrail_bucket_block_public_access_weakened.yml	ab18a523-e093-4ac6-8303-8c47431f4fca	Shoban Chiddarth
+lucene/azure_ad_certificate_based_authencation_enabled.lucene	rules/cloud/azure/audit_logs/azure_ad_certificate_based_authencation_enabled.yml	c2496b41-16a9-4016-a776-b23f8910dc58	Harjot Shah Singh, '@cyb3rjy0t'
+lucene/dns_query_win_common_malware_hosting_services.lucene	rules/windows/dns_query/dns_query_win_common_malware_hosting_services.yml	f8c1e80b-c73a-476a-ae24-6c72528b1521	Ahmed Nosir (@egycondor)
+lucene/win_security_access_token_abuse.lucene	rules/windows/builtin/security/account_management/win_security_access_token_abuse.yml	02f7c9c1-1ae8-4c6a-8add-04693807f92f	Michaela Adams, Zach Mathis
+lucene/posh_ps_invoke_obfuscation_via_rundll.lucene	rules/windows/powershell/powershell_script/posh_ps_invoke_obfuscation_via_rundll.yml	e6cb92b4-b470-4eb8-8a9d-d63e8583aae0	Timur Zinniatullin, oscd.community
+lucene/okta_fastpass_phishing_detection.lucene	rules/identity/okta/okta_fastpass_phishing_detection.yml	ee39a9f7-5a79-4b0a-9815-d36b3cf28d3e	Austin Songer @austinsonger
+lucene/gcp_access_policy_deleted.lucene	rules/cloud/gcp/audit/gcp_access_policy_deleted.yml	32438676-1dba-4ac7-bf69-b86cba995e05	Bryan Lim

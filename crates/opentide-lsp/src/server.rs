@@ -36,6 +36,14 @@ impl Session {
                     }
                 }
             }
+            // Tenants, for the stack version Elastic queries are checked against.
+            let config = root.join(opentide_analysis::ELASTIC_CONFIGURATION);
+            let path = config.display().to_string();
+            if !files.iter().any(|(e, _)| e == &path) {
+                if let Ok(text) = std::fs::read_to_string(&config) {
+                    files.push((path, text));
+                }
+            }
         }
         MemoryWorkspace { files }
     }
@@ -44,13 +52,9 @@ impl Session {
         if let Some(id) = reported.and_then(LanguageId::parse) {
             return id;
         }
-        if uri.ends_with(".kql") {
-            LanguageId::Kql
-        } else if uri.ends_with(".spl") {
-            LanguageId::Spl
-        } else {
-            LanguageId::TideYaml
-        }
+        uri.rsplit_once('.')
+            .and_then(|(_, ext)| LanguageId::from_extension(ext))
+            .unwrap_or(LanguageId::TideYaml)
     }
 }
 
@@ -448,10 +452,28 @@ fn handle_completion(session: &Session, params: &Value) -> Value {
     };
     let offset = position_to_offset(&text, pos);
     let host = session.host();
+    // A dotted field label (`process.parent.name`) replaces the whole dotted
+    // prefix already typed. Editors split words at `.`, so plain insertText
+    // would append after `process.`.
+    let before = &text[..offset.min(text.len())];
+    let dotted = &before[before
+        .rfind(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-')))
+        .map_or(0, |i| i + 1)..];
+    let start = json!({
+        "line": pos.line,
+        "character": pos.character.saturating_sub(dotted.encode_utf16().count() as u32),
+    });
     let items: Vec<Value> = completions(&host, language, &text, offset)
         .into_iter()
         .map(|c| {
-            json!({
+            let edit = (c.label.contains('.') && !dotted.is_empty() && c.label.starts_with(dotted))
+                .then(|| {
+                    json!({
+                        "range": { "start": start, "end": { "line": pos.line, "character": pos.character } },
+                        "newText": c.label,
+                    })
+                });
+            let mut item = json!({
                 "label": c.label,
                 "detail": c.detail,
                 "documentation": c.documentation.as_ref().map(|d| json!({ "kind": "markdown", "value": d })),
@@ -463,10 +485,16 @@ fn handle_completion(session: &Session, params: &Value) -> Value {
                     "macro" => 23,
                     "enum" => 13,
                     "reference" => 18,
+                    "module" => 9,
                     _ => 1,
                 },
                 "insertText": c.label,
-            })
+            });
+            if let Some(edit) = edit {
+                item["textEdit"] = edit;
+                item["filterText"] = json!(c.label);
+            }
+            item
         })
         .collect();
     json!(items)

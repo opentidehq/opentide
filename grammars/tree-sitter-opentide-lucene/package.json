@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-lucene",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for Lucene query string syntax (opentide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.lucene",
+      "file-types": ["lucene"]
+    }
+  ]
+}

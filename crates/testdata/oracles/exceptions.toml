@@ -135,3 +135,31 @@ names = [
   "mrollup", "nokv", "outputraw", "outputtelemetry", "prjob", "rawstats",
   "runshellscript", "showargs", "surrounding",
 ]
+
+# ---------------------------------------------------------------------------
+# Elastic: @elastic/esql, Elasticsearch EqlBase.g4, Kibana grammar.peggy,
+# Lucene QueryParser 10.5.2. Ours rejects on error-severity syntax codes only
+# (oracle.py REJECT); checks Elasticsearch makes after parsing are not compared.
+# ---------------------------------------------------------------------------
+
+[[esql]]
+id = "esql-8.19-only-forms"
+reason = "8.19-only forms. Ours accepts them with an esql_unavailable warning naming 8.19, because the supported floor is 8.19; @elastic/esql follows Elasticsearch main, which removed them (`FROM x [METADATA ...]`, `COMPLETION ... WITH endpoint`)."
+paths = [
+  "testdata/corpus/esql/completion_command__valid.endpoint.esql",
+  "testdata/corpus/esql/metadata__valid.bracketed.esql",
+]
+
+[[eql]]
+id = "eql-builder-parsing-exceptions"
+reason = "Elasticsearch's LogicalPlanBuilder raises a ParsingException after EqlBase.g4 accepts the text: a sample without join keys, missing events without maxspan, an unknown sequence term option. Ours reports them as eql_parse_error, as Elasticsearch does; the grammar alone cannot see them."
+paths = [
+  "testdata/corpus/eql/sample__invalid.eql",
+  "testdata/corpus/eql/subquery__invalid.eql",
+  "testdata/corpus/eql/term_option__invalid.eql",
+]
+
+[[lucene]]
+id = "lucene-elasticsearch-fuzziness"
+reason = "Lucene's QueryParser reads `~0.7` as a legacy similarity; Elasticsearch's query_string parses fuzziness with Fuzziness.fromString and fails on a fraction, so ours reports lucene_fuzzy."
+paths = ["testdata/conformance/external/lucene-queryparser/cases.tsv:61"]

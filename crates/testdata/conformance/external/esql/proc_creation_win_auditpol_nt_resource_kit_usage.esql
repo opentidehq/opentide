@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | where CommandLine like "*/logon:none*" or CommandLine like "*/system:none*" or CommandLine like "*/sam:none*" or CommandLine like "*/privilege:none*" or CommandLine like "*/object:none*" or CommandLine like "*/process:none*" or CommandLine like "*/policy:none*"
