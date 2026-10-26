@@ -321,7 +321,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     summary = payload.get("summary") or {}
     if framed and "findings" in summary:
         expected.append(f"{summary['findings']} finding" if summary["findings"] else "clean")
-    if framed and "errors" in summary:
+    if framed and "objects" in summary:
         expected.append(f"{summary['objects']} object")
     if "counts" in payload and "platforms" in payload:
         expected.extend(_info_expectations(payload))
