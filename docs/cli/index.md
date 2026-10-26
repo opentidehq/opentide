@@ -116,8 +116,8 @@ opentide --json commands
     {
       "path": "validate query",
       "name": "query",
-      "summary": "Query validation checks the tenant. Pass --live.",
-      "help": "Query validation checks the tenant. Pass --live. …",
+      "summary": "Check rule queries on the platform's tenants (needs --live).",
+      "help": "Check rule queries on the platform's tenants (needs --live). …",
       "group": false,
       "runs_alone": true,
       "subcommands": [],
@@ -133,7 +133,7 @@ opentide --json commands
           "…": "…"
         }
       ],
-      "example": "opentide validate query --platform sentinel",
+      "example": "opentide validate query --platform sentinel --live",
       "output_schema": {
         "anyOf": [
           { "$ref": "#/$defs/QueryValidationResult" },
@@ -145,8 +145,8 @@ opentide --json commands
   "$defs": { "QueryValidationResult": { "…": "…" }, "CommandError": { "…": "…" } },
   "ok": true,
   "status": "completed",
-  "message": "49 commands",
-  "summary": { "commands": 49, "groups": 13 },
+  "message": "55 commands",
+  "summary": { "commands": 55, "groups": 14 },
   "…": "envelope keys"
 }
 ```
@@ -164,7 +164,7 @@ opentide --json commands
 | `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error, such as an unknown subcommand, so its schema is `CommandError`. `null` for `mcp start`, which prints JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
 | `$defs` | The schemas each `output_schema` refers to. |
 
-Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 49 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
+Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 55 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
 
 ## Choosing between CLI, SDK, and MCP
 
