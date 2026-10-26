@@ -7,7 +7,7 @@ that field. Callers supply the evaluation instant and the window.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -26,8 +26,8 @@ def parse_review_instant(value: str) -> datetime:
     """
     text = value.strip()
     if _DATE.fullmatch(text):
-        parsed = datetime.strptime(text, "%Y-%m-%d")
-        return parsed.replace(tzinfo=timezone.utc)
+        day = date.fromisoformat(text)
+        return datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
     if not _DATETIME.fullmatch(text):
         raise ValueError("metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime")
     normalized = text.replace("Z", "+00:00").replace(" ", "T")

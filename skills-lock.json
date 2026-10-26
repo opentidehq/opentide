@@ -1,11 +1,35 @@
 {
   "version": 1,
   "skills": {
+    "cli-e2e-testing": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/cli-e2e-testing/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "codeql": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/codeql/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "docs-maintenance": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/docs-maintenance/SKILL.md",
+      "computedHash": "project-local"
+    },
     "github-actions-templates": {
       "source": "wshobson/agents",
       "sourceType": "github",
       "skillPath": "plugins/cicd-automation/skills/github-actions-templates/SKILL.md",
       "computedHash": "93e92fd674dea084628e95f9c48af806f9672ac08f815c84f85adedb55742c59"
+    },
+    "mcp-server": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/mcp-server/SKILL.md",
+      "computedHash": "project-local"
     },
     "pytest-coverage": {
       "source": "github/awesome-copilot",
@@ -19,17 +43,23 @@
       "skillPath": "plugins/python-development/skills/python-testing-patterns/SKILL.md",
       "computedHash": "1306eea409e7eff2288d7658806cb508f18339a0ee9a686d324a0fd2570eae55"
     },
-    "uv": {
+    "python-typing": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
-      "skillPath": ".agents/skills/uv/SKILL.md",
+      "skillPath": ".agents/skills/python-typing/SKILL.md",
       "computedHash": "project-local"
     },
-    "uv-package-manager": {
+    "release-management": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
-      "skillPath": ".agents/skills/uv-package-manager/SKILL.md",
-      "computedHash": "project-local-stub"
+      "skillPath": ".agents/skills/release-management/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "review-checklist": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/review-checklist/SKILL.md",
+      "computedHash": "project-local"
     },
     "ruff": {
       "source": "opentidehq/opentide",
@@ -37,22 +67,16 @@
       "skillPath": ".agents/skills/ruff/SKILL.md",
       "computedHash": "project-local"
     },
-    "ruff-recursive-fix": {
+    "steward": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
-      "skillPath": ".agents/skills/ruff-recursive-fix/SKILL.md",
-      "computedHash": "project-local-stub"
-    },
-    "python-typing": {
-      "source": "opentidehq/opentide",
-      "sourceType": "project",
-      "skillPath": ".agents/skills/python-typing/SKILL.md",
+      "skillPath": ".agents/skills/steward/SKILL.md",
       "computedHash": "project-local"
     },
-    "codeql": {
+    "uv": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
-      "skillPath": ".agents/skills/codeql/SKILL.md",
+      "skillPath": ".agents/skills/uv/SKILL.md",
       "computedHash": "project-local"
     }
   }

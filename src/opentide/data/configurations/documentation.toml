@@ -14,6 +14,8 @@ skip_model_keys = ["description",
 folder_index_pages = true
 
 [flavor]
+# Used when neither --flavor, the CI platform nor the origin remote's host
+# (GitHub, GitLab, Azure DevOps) decides. "generic" is plain CommonMark.
 default = "generic"
 
 [gitlab]

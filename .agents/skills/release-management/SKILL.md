@@ -1,6 +1,8 @@
 ---
 name: release-management
-description: Cut opentide PyPI releases: changelog, install pins, GitHub Release tag, OIDC publish. Use when releasing, tagging v*, publishing to PyPI, or preparing 0.x.y notes.
+description: >-
+  Cut opentide PyPI releases: changelog, install pins, GitHub Release tag, OIDC publish. Use
+  when releasing, tagging v*, publishing to PyPI, or preparing 0.x.y notes.
 ---
 
 # Release management — opentide

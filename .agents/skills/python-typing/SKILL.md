@@ -1,51 +1,78 @@
-# Python typing (ty) — opentide
+---
+name: python-typing
+description: Keep opentide typed — ty over the whole src/opentide package with no exclude list, annotation expectations, the shared typed helpers for optional rule blocks and platform tenants, and the policy for casts and ignores. Use when ty reports a diagnostic (CI, pre-commit, ci-local.sh), when adding or changing typed code, or after a ty version bump.
+---
 
-Static type checking with [ty](https://docs.astral.sh/ty/) on the in-scope `src/opentide` tree.
+# Python typing — opentide
 
-## When to use
+The package is type-checked by [ty](https://docs.astral.sh/ty/): `[tool.ty.src]` includes
+`src/opentide` and excludes nothing. Keep it that way: never add an exclusion. ty runs in
+`scripts/ci-local.sh --quick`, the pre-commit hooks and the CI lint job
+(`--output-format github` there).
 
-- `ty check` failures in CI, pre-commit, or `scripts/ci-local.sh`
-- Adding typed code under checked paths
-- Deciding whether a module is in or out of ty scope
+ty checks the annotations that exist; it does not require them. Until ruff `ANN` is enabled
+for `src/`, annotating new and touched functions is a review requirement.
 
-## Commands
+## Writing typed code
 
-```bash
-uv sync --group dev
-uv run ty check src/opentide
-uv run ty check src/opentide --output-format github   # CI format
-```
+- Annotate every parameter and return, including `-> None` and `__init__`.
+- Prefer precise types: `Path` over `str` for paths, `Sequence`/`Mapping` for read-only
+  inputs, `TypedDict` or a dataclass for structured dicts that cross module boundaries,
+  `Literal[...]` for closed string sets, `Protocol` for duck-typed collaborators (SDK
+  clients, fakes in tests).
+- `Any` is allowed (`ANN401` is off) where the value really is arbitrary: parsed YAML/JSON
+  payloads, vendor SDK objects without stubs. Narrow it at the boundary with `isinstance`
+  rather than passing `Any` deeper.
+- `from __future__ import annotations` is the norm, but pydantic models and Typer commands
+  evaluate annotations at runtime: names used there must be importable at runtime, not only
+  under `TYPE_CHECKING`.
+- Python 3.10 is the floor: no `Self` from `typing` (use `typing_extensions`), no PEP 695
+  `type X = ...` / `def f[T]()` syntax.
 
-Included in:
+## Typed helpers for recurring shapes
 
-- `scripts/ci-local.sh` (all modes except skipped in `--quick`… actually --quick includes ty)
-- `.github/workflows/ci.yml` lint job
-- pre-commit hook `ty` (files under `^src/opentide/`)
+- `rule.platform_configs()` — a rule's `configurations`, or a `ValueError` naming the rule
+  when it has none (instead of `'NoneType' object has no attribute 'sentinel'`).
+- `rule.alert_severity` — `response.alert_severity`, or its default without a response.
+- `batch_tenant(batch, ConfigurationModels.Systems.<Platform>.Tenant)` — a deployment
+  batch's tenant as the platform's own class (checked at runtime). Tests build real tenant
+  objects, not `SimpleNamespace`.
+- `ExternalIdAction.known_id()` — the recorded platform id an update or delete acts on.
+- `opentide.platforms.plugins.resolve_rules(...)` — rules given as objects or UUIDs.
 
-## Scope
+## Fixing a diagnostic
 
-`pyproject.toml` → `[tool.ty.src]`:
+1. Read it as a possible bug first. `possibly-missing-attribute` on `x.y` where `x` can be
+   `None` is often a real crash path (e.g. an optional YAML block that loads as `None`).
+2. Fix with narrowing (`if x is None: raise/return`, `isinstance`), a more precise
+   annotation, or a small typed helper.
+3. `cast()` only when it is provably true and ty cannot see why; say why in a comment.
+4. Suppress only when ty is wrong: `# ty: ignore[<rule>]` with the reason on the same line.
+   Never a bare `# type: ignore` (`PGH003` rejects it) and never a blanket rule disable to
+   silence one site.
+5. Refactors done for typing must not change behaviour: run the module's tests, and for
+   larger mechanical edits `uv run python scripts/ast_equivalence.py <base>`.
 
-- **include:** `src/opentide`
-- **exclude:** ported platforms, CLI, deployment/mutation, most generation/loading/models/validation, legacy core helpers (full list in `exclude`)
+## Project-wide rule settings
 
-Checked areas typically include: core registry/index paths, generation templates, schemas, and other actively maintained modules **not** in the exclude list.
+`[tool.ty.rules]` in `pyproject.toml`, each with its reason in a comment there:
 
-Rule overrides in `[tool.ty.rules]`:
+- `invalid-method-override = "warn"` — Tide domain models deliberately shadow pydantic's
+  `BaseModel.validate`.
+- `invalid-property-type-override`, `invalid-attribute-override`, `invalid-mutable-override`
+  = `"ignore"` — per-platform system configs narrow the nested `SystemConfig.Tenant` types;
+  ty reports the same sites under all three names.
+- `redundant-cast = "ignore"`.
 
-- `invalid-method-override = "warn"` — Tide models delegate to Pydantic
-- `redundant-cast = "ignore"`
+## After a ty upgrade
 
-Do **not** remove excludes to “fix” ty in unrelated PRs. Expand scope only when cleaning up that area.
-
-## Workflow
-
-1. Run `uv run ty check src/opentide`.
-2. Fix reported issues in included files.
-3. If touching an excluded module for other reasons, ty may still pass — run `scripts/ci-local.sh --quick` to confirm.
-4. Prefer proper types over `# type: ignore`; use ignores only with a brief reason.
+ty is pre-1.0 and renames rules between patch releases. When a bump reds the lint job, compare
+the reported sites with the ones above before changing code — a rename is fixed in
+`[tool.ty.rules]`, a genuinely new finding in code. `uvx ty@<version> check src/opentide`
+tries a version without touching the lockfile.
 
 ## Related
 
-- [`ruff`](../ruff/SKILL.md) — lint/format (paired in `--quick`)
-- [`uv`](../uv/SKILL.md) — installs `ty` via `--group dev`
+- [`ruff`](../ruff/SKILL.md) — `PGH` and the rest of the lint bar
+- [`review-checklist`](../review-checklist/SKILL.md) — the definition of done
+- [`uv`](../uv/SKILL.md) — upgrading ty through Dependabot

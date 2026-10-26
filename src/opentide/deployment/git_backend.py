@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
 from dulwich import porcelain
 from dulwich.diff_tree import CHANGE_ADD, CHANGE_MODIFY, CHANGE_RENAME, tree_changes
-from dulwich.objects import Commit
+from dulwich.objects import Commit, ObjectID
+from dulwich.refs import Ref
 from dulwich.repo import Repo
 from dulwich.walk import Walker
 
@@ -16,7 +18,8 @@ from dulwich.walk import Walker
 def rust_extensions_available() -> bool:
     """Return True when Dulwich Rust acceleration modules are importable."""
     try:
-        import dulwich._diff_tree  # noqa: F401
+        # The compiled module is optional and has no stub to resolve statically.
+        importlib.import_module("dulwich._diff_tree")
     except ImportError:
         return False
     return True
@@ -42,10 +45,10 @@ def _normalize_ref(ref: str) -> bytes:
     if ref.startswith("refs/"):
         return ref.encode("utf-8")
     if ref.startswith("origin/"):
-        return f"refs/remotes/{ref}".encode("utf-8")
+        return f"refs/remotes/{ref}".encode()
     if ref == "HEAD":
         return b"HEAD"
-    return f"refs/heads/{ref}".encode("utf-8")
+    return f"refs/heads/{ref}".encode()
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,7 @@ class CommitInfo:
     message: str
     author: Author
     parents: list[CommitInfo]
-    _tree: bytes
+    _tree: ObjectID
     _store: Repo
 
     @classmethod
@@ -81,7 +84,7 @@ class CommitInfo:
         )
 
     @classmethod
-    def _immediate_parent(cls, parent_id: bytes, store: Repo) -> CommitInfo:
+    def _immediate_parent(cls, parent_id: ObjectID, store: Repo) -> CommitInfo:
         """Parent id, message, and tree, without that parent's own parents.
 
         A shallow clone names the parent and does not contain its object.
@@ -101,7 +104,7 @@ class CommitInfo:
         else:
             text = ""
             author = ""
-            tree = b""
+            tree = ObjectID(b"")
         return cls(
             hexsha=_object_hex(parent_id),
             message=text,
@@ -161,8 +164,7 @@ class _RemoteCollection:
     @property
     def refs(self) -> list[_RemoteRef]:
         return [
-            _RemoteRef(name.decode("utf-8", errors="replace"))
-            for name in self._repo._repo.refs.keys()
+            _RemoteRef(name.decode("utf-8", errors="replace")) for name in self._repo._repo.refs
         ]
 
 
@@ -208,7 +210,7 @@ class DulwichRepo:
             raise TypeError(f"Object {sha} is not a commit")
         return CommitInfo.from_commit(commit, self._repo)
 
-    def _resolve_sha(self, ref: str) -> bytes:
+    def _resolve_sha(self, ref: str) -> ObjectID:
         ref_bytes = _normalize_ref(ref)
         if ref_bytes == b"HEAD":
             return self._repo.head()
@@ -218,20 +220,19 @@ class DulwichRepo:
             candidates.append(raw)
         for candidate in candidates:
             try:
-                return self._repo.refs[candidate]
+                return self._repo.refs[Ref(candidate)]
             except KeyError:
                 continue
         raise KeyError(ref)
 
-    def iter_commits(self, ref: str | None = None, max_count: int | None = None) -> Iterator[CommitInfo]:
+    def iter_commits(
+        self, ref: str | None = None, max_count: int | None = None
+    ) -> Iterator[CommitInfo]:
         start = [self._resolve_sha(ref)] if ref is not None else [self._repo.head()]
-        kwargs: dict[str, int] = {}
-        if max_count is not None:
-            kwargs["max_entries"] = max_count
-        walker = Walker(self._repo, start, **kwargs)
+        walker = Walker(self._repo.object_store, start, max_entries=max_count)
         try:
             for entry in walker:
-                yield CommitInfo.from_commit(self._repo[entry.commit.id], self._repo)
+                yield CommitInfo.from_commit(entry.commit, self._repo)
         except KeyError as exc:
             missing = exc.args[0] if exc.args else None
             if not isinstance(missing, bytes):

@@ -21,14 +21,21 @@ import pytest
 import requests
 from tests.splunk_support import SplunkStandIn, serve_splunk
 
-from opentide.platforms.transport import tenant_tls_verify
+from opentide.platforms.transport import TenantSession, tenant_tls_verify
 
 pytest.importorskip("cryptography")
+
+#: Read by ``requests`` in place of a session's ``verify`` (psf/requests#3829).
+_CA_BUNDLE_VARIABLES = ("REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE")
 
 
 @pytest.fixture
 def stand_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[SplunkStandIn]:
     for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    # A host that exports a CA bundle must not decide these tests; the case
+    # where one is exported is tested on its own below.
+    for name in _CA_BUNDLE_VARIABLES:
         monkeypatch.delenv(name, raising=False)
     with serve_splunk(tmp_path) as server:
         original = requests.Session.request
@@ -126,6 +133,47 @@ def test_ssl_false_reaches_a_self_signed_tenant(platform: str, stand_in: SplunkS
         # The token request carries the tenant's ssl too.
         assert stand_in.requests[0][1].endswith("token")
         assert len(stand_in.requests) >= 2
+
+
+@pytest.mark.usefixtures("tide_corpus_repo")
+@pytest.mark.parametrize("platform", list(_CLIENTS))
+def test_ssl_false_survives_an_exported_ca_bundle(
+    platform: str, stand_in: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A corporate CA bundle in the environment used to turn ``ssl = false`` back on."""
+    import certifi
+
+    for name in _CA_BUNDLE_VARIABLES:
+        monkeypatch.setenv(name, certifi.where())
+    _service, call = _CLIENTS[platform](False)
+    _reaches(call)
+
+    assert len(stand_in.requests) >= 1
+
+
+@pytest.mark.parametrize("variable", _CA_BUNDLE_VARIABLES)
+def test_tenant_session_keeps_its_verify_over_the_environment(
+    variable: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in _CA_BUNDLE_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(variable, "/etc/corporate-ca.pem")
+
+    def merged(session: requests.Session, verify: bool | str | None) -> object:
+        return session.merge_environment_settings("https://tenant.example", {}, None, verify, None)[
+            "verify"
+        ]
+
+    # The defect, in plain requests: the bundle replaces the session's False.
+    plain = requests.Session()
+    plain.verify = False
+    assert merged(plain, None) == "/etc/corporate-ca.pem"
+
+    assert merged(TenantSession(verify=False), None) is False
+    # Verifying sessions still honour the exported bundle, and a request's own
+    # verify still wins over the session's.
+    assert merged(TenantSession(verify=True), None) == "/etc/corporate-ca.pem"
+    assert merged(TenantSession(verify=False), "/other.pem") == "/other.pem"
 
 
 @pytest.mark.usefixtures("tide_corpus_repo")

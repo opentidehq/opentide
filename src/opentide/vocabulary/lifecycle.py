@@ -75,12 +75,17 @@ def _canonical(value: Any) -> Any:
 
 
 def _index(entries: Sequence[Mapping[str, Any]], key_field: str) -> dict[str, dict[str, Any]]:
+    """Index *entries* by identity, keeping the first entry for a repeated one.
+
+    Callers concatenate sources in priority order: a group that ATT&CK lists
+    in the Enterprise, ICS and Mobile bundles keeps its Enterprise entry.
+    """
     indexed: dict[str, dict[str, Any]] = {}
     for entry in entries:
         identity = entry_identity(entry, key_field)
         if identity is None:
             continue
-        indexed[identity] = dict(entry)
+        indexed.setdefault(identity, dict(entry))
     return indexed
 
 
@@ -96,6 +101,8 @@ def merge_vocab_keys(
     - Identities that disappear receive ``removed`` at the next major.
     - Description/name/link/alias edits keep the existing ``version``.
     - Missing ``version`` on existing keys is backfilled to ``1.0``.
+    - An identity repeated in *upstream* keeps its first entry, so list
+      sources in priority order.
     """
     existing_index = _index(existing, key_field)
     upstream_index = _index(upstream, key_field)

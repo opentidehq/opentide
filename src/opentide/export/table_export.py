@@ -76,9 +76,7 @@ class TableExporter:
         if isinstance(actors, str):
             return []
         return [
-            enriched
-            for actor in actors
-            if (enriched := _enrich_actor_name(_identifier(actor)))
+            enriched for actor in actors if (enriched := _enrich_actor_name(_identifier(actor)))
         ]
 
     def _flatten_chaining(self, chains: list[dict[str, Any]]) -> dict[str, list[str]]:

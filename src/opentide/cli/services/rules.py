@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from opentide.core.io import load_yaml
 from opentide.models.review import parse_window, reviewed_text, unreviewed_reason
 
@@ -17,8 +19,14 @@ def list_unreviewed_rules(
     *,
     window: timedelta,
     now: datetime | None = None,
+    unreadable: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """List rules that fail the RFC 0008 review predicate. Does not modify files."""
+    """List rules that fail the RFC 0008 review predicate. Does not modify files.
+
+    A file that cannot be read or parsed is skipped and recorded in
+    *unreadable* (path to reason): one malformed rule used to end the command
+    with a traceback and no output.
+    """
     evaluated_at = now or datetime.now(timezone.utc)
     if evaluated_at.tzinfo is None:
         evaluated_at = evaluated_at.replace(tzinfo=timezone.utc)
@@ -29,7 +37,12 @@ def list_unreviewed_rules(
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in _YAML_SUFFIXES:
             continue
-        document = load_yaml(path)
+        try:
+            document = load_yaml(path)
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            if unreadable is not None:
+                unreadable[path.relative_to(repo).as_posix()] = " ".join(str(exc).split())
+            continue
         if not isinstance(document, dict):
             continue
         metadata = document.get("metadata")
@@ -57,16 +70,24 @@ def run_unreviewed(repo: Path, *, older_than: str, now: datetime | None = None) 
     """Build the ``rules unreviewed`` payload. Raises ``ValueError`` on a bad window."""
     window = parse_window(older_than)
     evaluated_at = now or datetime.now(timezone.utc)
-    rules = list_unreviewed_rules(repo, window=window, now=evaluated_at)
+    unreadable: dict[str, str] = {}
+    rules = list_unreviewed_rules(repo, window=window, now=evaluated_at, unreadable=unreadable)
     count = len(rules)
     noun = "rule" if count == 1 else "rules"
-    return {
+    payload: dict[str, Any] = {
         "message": f"Listed {count} unreviewed {noun}",
         "evaluated_at": evaluated_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         "window": older_than.strip(),
         "count": count,
         "rules": rules,
     }
+    if unreadable:
+        payload["unreadable"] = unreadable
+        payload["warnings"] = [
+            f"Could not read {path}, so its review was not checked: {reason}"
+            for path, reason in unreadable.items()
+        ]
+    return payload
 
 
 def render_unreviewed(rules: list[dict[str, Any]]) -> None:

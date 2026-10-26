@@ -105,7 +105,7 @@ def uncomment_optional_blocks(text: str) -> str:
     out: list[str] = []
     for raw in text.splitlines(keepends=True):
         newline = "\n" if raw.endswith("\n") else ""
-        line = raw[:-1] if raw.endswith("\n") else raw
+        line = raw.removesuffix("\n")
         if not line.strip():
             out.append(raw)
             continue
@@ -209,7 +209,7 @@ def _render_value(
     nested = _tide_model_type(core)
     if nested is not None:
         child = _render_model(nested, indent=indent + 2, options=options, depth=depth + 1)
-        return [f"{pad}{key}:"] + child
+        return [f"{pad}{key}:", *child]
 
     if origin is list:
         item = get_args(core)[0] if get_args(core) else str
@@ -281,14 +281,14 @@ def _render_list(
             "value", val_type, {}, options, default=_concrete_default(field)
         )
         value = f" {sample_val}" if sample_val != "" else " "
-        return header + [f"{' ' * item_indent}- {sample_key}:{value}"]
+        return [*header, f"{' ' * item_indent}- {sample_key}:{value}"]
     placeholder = _scalar_placeholder(
         name, item_core, extras, options, default=_concrete_default(field)
     )
     dash = f"{' ' * item_indent}-"
     if placeholder == "":
-        return header + [f"{dash} "]
-    return header + [f"{dash} {placeholder}"]
+        return [*header, f"{dash} "]
+    return [*header, f"{dash} {placeholder}"]
 
 
 def _list_item_lines(body: list[str], item_indent: int) -> list[str]:
@@ -322,13 +322,13 @@ def _render_dict(
     child_indent = indent + 2
     if nested is not None:
         child = _render_model(nested, indent=child_indent + 2, options=options, depth=depth + 1)
-        return header + [f"{' ' * child_indent}{sample_key}:"] + child
+        return [*header, f"{' ' * child_indent}{sample_key}:", *child]
     val_core, _ = _unwrap_annotation(val_type)
     if get_origin(val_core) is list:
-        return header + [f"{' ' * child_indent}{sample_key}:", f"{' ' * (child_indent + 2)}- "]
+        return [*header, f"{' ' * child_indent}{sample_key}:", f"{' ' * (child_indent + 2)}- "]
     placeholder = _scalar_placeholder("value", val_core, {}, options)
     value = f" {placeholder}" if placeholder != "" else " "
-    return header + [f"{' ' * child_indent}{sample_key}:{value}"]
+    return [*header, f"{' ' * child_indent}{sample_key}:{value}"]
 
 
 def _scalar_placeholder(
