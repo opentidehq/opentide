@@ -9,6 +9,12 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
+from opentide.cli.ui.contract import (
+    USAGE_ERROR,
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+)
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.registry.discovery import discover_workspace
@@ -331,7 +337,9 @@ def _live_required_result(platform: str) -> dict[str, object]:
         "supported": True,
         "status": "failed",
         "message": "Query validation checks the tenant. Re-run with --live.",
-        "_exit_code": 1,
+        "_exit_code": 2,
+        "_failure_code": USAGE_MISSING_OPTION,
+        "_failure_argument": "--live",
     }
 
 
@@ -343,6 +351,7 @@ def _query_scope_refused(platform: str, message: str, *, exit_code: int) -> dict
         "supported": True,
         "message": message,
         "_exit_code": exit_code,
+        **({"_failure_code": USAGE_ERROR} if exit_code == 2 else {}),
     }
 
 
@@ -464,11 +473,21 @@ def validate_query_platform(
     failed = {"platform": platform, "mode": "live", "status": "failed", "supported": True}
     removed = removed_plan_error()
     if removed is not None:
-        return {**failed, "message": removed, "_exit_code": 2}
+        return {
+            **failed,
+            "message": removed,
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_VALUE,
+        }
     try:
         run = resolve_run_strategies(strategies) if strategies else DEPLOYABLE_STRATEGIES
     except ValueError as exc:
-        return {**failed, "message": str(exc), "_exit_code": 2}
+        return {
+            **failed,
+            "message": str(exc),
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_CHOICE,
+        }
     rule_scope, scope_label, refusal = _query_rule_scope(
         platform, changed=changed, files=files, uuids=uuids
     )
@@ -634,6 +653,7 @@ def _no_tenant_reached(platform: str, strategies: Sequence[Any], rules: int) -> 
             "tenants; and a rule's tenants list must name a tenant configured for this platform"
         ),
         "_exit_code": 2,
+        "_failure_code": "no_tenant_reached",
     }
 
 

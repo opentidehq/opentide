@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from opentide.cli.context import CliContext
+from opentide.cli.ui.contract import USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, did_you_mean
 from opentide.core.logging import get_logger
 from opentide.core.registry import Opentide
 from opentide.sharing.config import MispBlock, SharingConfig, load_sharing
@@ -39,6 +40,9 @@ _PREFLIGHT = {
     "changed_diff": "Could not calculate the changed objects",
 }
 
+#: ``failure.code`` for a run that reached the destination, by exit code.
+_RUN_FAILURE_CODES = {1: "share_failed", 2: "share_unreachable", 3: "share_partial"}
+
 _OBJECT_SUFFIXES = frozenset({".yaml", ".yml"})
 #: The ``share`` subcommands; ``targets`` lists destinations and calls no engine.
 ShareMode = Literal["push", "preview", "status", "retract", "targets"]
@@ -64,13 +68,20 @@ def run_share(
 ) -> dict[str, Any]:
     """Run one share command and return a CLI payload, including ``_exit_code``."""
     if workers < 1:
-        return _failed("workers must be at least 1", exit_code=2)
+        return _failed(
+            "workers must be at least 1",
+            exit_code=2,
+            code=USAGE_INVALID_VALUE,
+            argument="--workers",
+        )
     unknown = sorted(set(types or []) - set(OBJECT_FAMILIES))
     if unknown:
         listed = ", ".join(unknown)
         return _failed(
             f"Unknown object type(s): {listed}. Choose threat, objective, or rule.",
             exit_code=2,
+            code=USAGE_INVALID_CHOICE,
+            argument="--type",
         )
     config = load_sharing(cli.repo)
     secrets = _secrets(config.blocks)
@@ -98,6 +109,24 @@ def run_share(
             return _redact(_preflight(problem, config), secrets)
 
     effective = "preview" if dry_run and mode == "push" else mode
+    names = [block.name for block in config.blocks]
+    missing = [name for name in targets or () if name not in names]
+    if missing:
+        listed = ", ".join(names) or "none configured"
+        payload = _failed(
+            f"Unknown sharing target {missing[0]!r}. Configured targets: {listed}.",
+            exit_code=2,
+            code=USAGE_INVALID_CHOICE,
+            argument="--target",
+        )
+        # A usage error, but still the scope_no_match preflight scripts read.
+        payload["preflight"] = "scope_no_match"
+        payload["records"] = []
+        warnings = [issue.message for issue in config.issues if issue.severity == "warning"]
+        if warnings:
+            payload["warnings"] = warnings
+        payload["_failure_suggestion"] = did_you_mean(missing[0], names)
+        return _redact(payload, secrets)
     selected, problem = _select_blocks(config.blocks, targets)
     if problem is not None or selected is None:
         if changed and mode == "push" and not targets and problem == "scope_no_match":
@@ -423,13 +452,16 @@ def _from_run(outcome: ShareRun, config: SharingConfig) -> dict[str, Any]:
     created = sum(1 for record in outcome.records if record.action == "created")
     updated = sum(1 for record in outcome.records if record.action == "updated")
     message = f"Share finished: {len(records)} record(s), {created} created, {updated} updated"
-    return _result(
+    payload = _result(
         message,
         exit_code=code,
         status="failed" if failed else "completed",
         records=records,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    if failed:
+        payload["_failure_code"] = _RUN_FAILURE_CODES.get(code, "share_failed")
+    return payload
 
 
 def _preflight(
@@ -440,7 +472,7 @@ def _preflight(
     message: str | None = None,
 ) -> dict[str, Any]:
     records = [] if outcome is None else [record.as_dict() for record in outcome.records]
-    return _result(
+    payload = _result(
         message or _PREFLIGHT.get(code, code),
         exit_code=1,
         status="failed",
@@ -448,6 +480,8 @@ def _preflight(
         records=records,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    payload["_failure_code"] = code
+    return payload
 
 
 def _quiet(message: str, config: SharingConfig) -> dict[str, Any]:
@@ -495,8 +529,11 @@ def _result(
     return payload
 
 
-def _failed(message: str, *, exit_code: int) -> dict[str, Any]:
-    return _result(message, exit_code=exit_code, status="failed", error=message)
+def _failed(message: str, *, exit_code: int, code: str, argument: str) -> dict[str, Any]:
+    payload = _result(message, exit_code=exit_code, status="failed", error=message)
+    payload["_failure_code"] = code
+    payload["_failure_argument"] = argument
+    return payload
 
 
 def _secrets(blocks: tuple[MispBlock, ...]) -> tuple[str, ...]:

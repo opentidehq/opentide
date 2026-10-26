@@ -146,4 +146,5 @@ def deploy_metadata_cmd(
         cli,
         f"Metadata deployment is not implemented for {platform.value}",
         exit_code=2,
+        code="not_implemented",
     )

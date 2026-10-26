@@ -6,13 +6,21 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.text import Text
 
-from opentide.core.logging.config import get_console, get_logger, is_json_output, is_plain_output
+from opentide.core.logging.config import (
+    current_config,
+    get_console,
+    get_logger,
+    is_json_output,
+    is_plain_output,
+)
 
 
 def emit_section(title: str) -> None:
-    """Render a section header."""
+    """Render a section header (nothing under ``--quiet``)."""
     if is_json_output():
         get_logger("opentide").info("section_started", section=title)
+        return
+    if current_config().quiet:
         return
 
     console = get_console()
@@ -24,7 +32,11 @@ def emit_section(title: str) -> None:
 
 
 def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:
-    """Render a fatal error panel."""
+    """Render a fatal error panel.
+
+    The CLI no longer uses this for ordinary failures, which print an
+    ``error:`` line (:func:`opentide.cli.output.emit_result`).
+    """
     if is_json_output():
         logger = get_logger("opentide")
         payload: dict[str, str] = {}

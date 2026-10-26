@@ -196,7 +196,20 @@ def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
         "[filenames/warning] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml'"
         " does not match slugify(name)='simulated-actor'"
     ) in result.output
-    assert "ISSUES Catalogue lint found issues" in result.output
+    assert result.stdout.endswith(
+        "! Catalogue lint found issues\n"
+        "→ opentide lint --fix · rename 1 file to match their names\n"
+    )
+
+
+def test_lint_cli_suggests_fix_only_for_renamable_files(tmp_path: Path) -> None:
+    """Metadata findings have no automatic fix, so no ``--fix`` next step."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    result = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint"])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["count"] > 0
+    assert payload["next_actions"] == []
 
 
 def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
@@ -362,6 +375,18 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
         "ok": True,
         "status": "issues",
         "message": "Catalogue lint found issues",
+        "schema_version": 1,
+        "command": "lint",
+        "duration_ms": payload["duration_ms"],
+        "exit_code": 0,
+        "summary": {},
+        "next_actions": [
+            {
+                "command": "opentide --json lint --fix",
+                "reason": "rename 1 file to match their names",
+            }
+        ],
+        "failure": None,
     }
     assert list(payload["findings"][1]) == [
         "check",

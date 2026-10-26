@@ -28,7 +28,7 @@ _LAZY_EXPORTS = {
 # The root options, as `opentide.cli.root.main_callback` declares them.
 # tests/test_cli/test_lazy_commands.py checks the two still agree.
 _VERSION_FLAGS = frozenset({"--version", "-V"})
-_ROOT_FLAGS = frozenset({"--debug", "--no-color", "--json"})
+_ROOT_FLAGS = frozenset({"--debug", "--no-color", "--json", "--quiet"})
 _ROOT_VALUE_OPTIONS = frozenset({"--repo", "--data", "--proxy"})
 
 

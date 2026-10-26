@@ -10,11 +10,12 @@ from typer.core import TyperGroup
 from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
 from opentide.cli.group_options import hand_down, refuse_dropped
-from opentide.cli.output import emit_error, emit_success
+from opentide.cli.output import emit_error, emit_success, emit_usage_error
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
+from opentide.cli.ui.contract import USAGE_ERROR
 
 
 class GeneratePhaseGroup(TyperGroup):
@@ -88,10 +89,13 @@ def generate_all(ctx: typer.Context) -> None:
     unknown = [name for name in phases if name not in _NAMED_GENERATE_PHASES]
     if unknown:
         names = ", ".join(unknown)
-        known = ", ".join(sorted(_NAMED_GENERATE_PHASES))
-        emit_error(
+        known = sorted(_NAMED_GENERATE_PHASES)
+        emit_usage_error(
             cli,
-            f"Unknown generation phase {names}. Pass one or more of: {known}.",
+            f"Unknown generation phase {names}. Pass one or more of: {', '.join(known)}.",
+            argument="phase",
+            value=unknown[0],
+            choices=known,
         )
     emit_success(cli, run_generate(cli, phases=phases))
 
@@ -138,7 +142,12 @@ def _emit_docs(
     cli = get_context(ctx)
     cli.apply_environment()
     if changed and (scope is not None or rules or threats or objectives):
-        emit_error(cli, "--changed cannot be combined with scoped docs generation")
+        emit_usage_error(
+            cli,
+            "--changed cannot be combined with scoped docs generation",
+            argument="--changed",
+            code=USAGE_ERROR,
+        )
     if scope is not None:
         emit_success(cli, run_document(cli, scope=scope, output=output, flavor=flavor))
         return

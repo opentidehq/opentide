@@ -103,7 +103,10 @@ def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[s
     from opentide.cli.context import CliContext
     from opentide.cli.services.validation import validate_query_platform
 
-    return validate_query_platform(CliContext(), platform, live=True)
+    result = validate_query_platform(CliContext(), platform, live=True)
+    # The CLI envelope's failure code; the tool payload keeps its shape.
+    result.pop("_failure_code", None)
+    return result
 
 
 def tool_run_query(query: str, platform: str, tenant: str = "") -> dict[str, Any]:

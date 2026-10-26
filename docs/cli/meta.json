@@ -8,6 +8,7 @@
     "---Global---",
     "global-options",
     "exit-codes",
+    "json-output",
     "---Commands---",
     "setup",
     "migrate",

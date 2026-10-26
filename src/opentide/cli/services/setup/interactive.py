@@ -31,7 +31,20 @@ class InteractiveRequiredError(RuntimeError):
 
 
 def require_interactive() -> None:
-    """Fail fast instead of hanging when stdin is not interactive."""
+    """Fail fast instead of hanging when stdin is not interactive.
+
+    A coding agent never gets a prompt, even on a TTY: it cannot answer one,
+    and the flags it should pass instead are in the message.
+    """
+    from opentide.cli.ui.mode import OutputMode, detect_agent, get_mode
+
+    if get_mode() is OutputMode.AGENT:
+        agent = detect_agent()
+        reader = f"a coding agent ({agent})" if agent else "agent output mode"
+        raise InteractiveRequiredError(
+            f"Interactive setup does not prompt in {reader}. "
+            "Use explicit setup flags with --yes for non-interactive execution."
+        )
     if not sys.stdin.isatty():
         raise InteractiveRequiredError(
             "Interactive setup requires a terminal. "

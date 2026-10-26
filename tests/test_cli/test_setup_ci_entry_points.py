@@ -190,12 +190,16 @@ def test_both_entry_points_refuse_a_default_branch_they_cannot_render(
     result = _invoke(entry, "github", repo, "--default-branch", "main; id")
 
     assert result.exit_code == 2, result.stdout + result.stderr
-    assert "--default-branch" in re.sub(r"\x1b\[[0-9;]*m", "", result.stderr)
+    # --json: the usage error is the one JSON document on stdout.
+    failure = json.loads(result.stdout)["failure"]
+    assert failure["code"] == "usage_invalid_value"
+    assert failure["argument"] == "--default-branch"
     assert not (repo / _WORKFLOWS["github"]).exists()
 
 
-#: A ``WARNING <message>`` line of the human result, not a timestamped structlog record.
-_PRINTED_WARNING = re.compile(r"^WARNING (?!\s|\d{4}-\d\d-\d\d )(.+)$", re.MULTILINE)
+#: A ``warning: <message>`` line of the human result, not a structlog record
+#: (whose fields follow the event text after `` · ``).
+_PRINTED_WARNING = re.compile(r"^warning: ((?:(?! · ).)+)$", re.MULTILINE)
 
 
 def _printed_warnings(entry: str, ci: str, repo: Path, *extra: str) -> list[str]:

@@ -116,6 +116,16 @@ class StdioClient:
             if envelope.get("id") == request_id:
                 return envelope
 
+    def close_and_drain(self) -> list[str]:
+        """Close stdin, let the server exit, and return every stdout line it still wrote."""
+        assert self._process.stdin is not None
+        self._process.stdin.close()
+        self._process.wait(timeout=READ_TIMEOUT)
+        lines: list[str] = []
+        while (line := self._lines.get(timeout=READ_TIMEOUT)) is not None:
+            lines.append(line)
+        return lines
+
     def handshake(self) -> dict[str, Any]:
         response = self.request(
             "initialize",
@@ -242,6 +252,25 @@ def test_logs_never_bleed_onto_the_jsonrpc_stream(mcp_stdio: StdioClient) -> Non
     mcp_stdio.call_tool("validation_report", {})
     mcp_stdio.request("tools/list")
     mcp_stdio.read_resource("opentide://index")
+
+
+def test_stdout_holds_only_jsonrpc_while_tools_run(mcp_stdio: StdioClient) -> None:
+    """``mcp start`` runs in ``mcp`` mode: every byte on stdout is a JSON-RPC frame.
+
+    ``validate_query`` drives the CLI's query service with a non-JSON context,
+    the path most likely to print a human line. Everything the server writes
+    until it exits is read back, not only the frames a request waited for.
+    """
+    mcp_stdio.handshake()
+    payload = mcp_stdio.call_tool(
+        "validate_query", {"query": "SecurityEvent", "platform": "sentinel", "live": True}
+    )
+    assert isinstance(payload, dict)
+    assert "_failure_code" not in payload
+    mcp_stdio.call_tool("validation_report", {})
+    for line in mcp_stdio.close_and_drain():
+        if line.strip():
+            assert json.loads(line)["jsonrpc"] == "2.0", line
 
 
 def test_text_blocks_agree_with_structured_content(mcp_stdio: StdioClient) -> None:

@@ -32,7 +32,8 @@ EMPTY_CATALOGUE_COMMANDS: tuple[tuple[tuple[str, ...], int], ...] = (
     (("generate",), 0),
     (("generate", "docs"), 0),
     (("generate", "exports"), 0),
-    (("validate", "query", "--platform", "sentinel"), 1),
+    # Without --live: a usage error (usage_missing_option), exit 2.
+    (("validate", "query", "--platform", "sentinel"), 2),
     (("validate", "query", "--platform", "sentinel", "--live"), 0),
     *(
         (("deploy", "--dry-run", *EVERY_RULE, "--platform", platform), 0)

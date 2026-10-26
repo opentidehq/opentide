@@ -40,7 +40,7 @@ Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild t
 Human output prints one line per finding, then the summary. The [tutorial](../usage/tutorial.md) catalogue passes both checks:
 
 ```text output-of="opentide lint"
-OK Catalogue lint passed
+✓ Catalogue lint passed
 ```
 
 A file that fails them is printed as `[check/severity] path: message` before that summary, with `path:line` when the finding points at a key in the file (the line is one-based, as in `validate`). This is the shape, from a threat whose file was not renamed to its slug and whose recommended metadata is empty:
@@ -48,10 +48,11 @@ A file that fails them is printed as `[check/severity] path: message` before tha
 ```text illustrative
 [metadata/info] objects/threats/Simulated Actor.yaml:2: Recommended metadata missing: author, organisation
 [filenames/warning] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'
-ISSUES Catalogue lint found issues
+! Catalogue lint found issues
+→ opentide lint --fix · rename 1 file to match their names
 ```
 
-A file renamed by `--fix` gets `(renamed from <old path>)`.
+When a filename finding can be fixed by renaming, the summary is followed by the command that does it. A file renamed by `--fix` gets `(renamed from <old path>)`.
 
 ### JSON findings
 

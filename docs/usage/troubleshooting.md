@@ -209,9 +209,7 @@ opentide --json setup --yes --platform sentinel --ci github
 ### `opentide generate` warns `Vocab identifier not found` or `Vocab parameter not found` for `criticality`
 
 ```text illustrative
-WARNING   Vocab identifier not found
-          identifier: Critical
-          vocab: criticality
+warning: Vocab identifier not found · identifier: Critical · vocab: criticality
 ```
 
 The editor schemas describe each objective with its `priority`, and through 0.16.1 looked that value up in the `criticality` vocabulary for an icon. No vocabulary defines `icon` (`Vocab parameter not found` for `High`), and an objective's `priority` is free text, commonly an `alert_severity` value such as `Critical`, which `criticality` does not have (`Vocab identifier not found`). Nothing failed; the warnings repeated for every objective on every run. The sample above is illustrative: a current release no longer prints it. The description now prints the value as authored, labelled **Priority** (objectives), **Severity** (signals) or **Criticality** (threats), with no lookup. Upgrade and run `opentide generate`.
@@ -549,7 +547,7 @@ opentide deploy metadata --platform splunk
 ```
 
 ```text output-of="opentide deploy metadata --platform splunk" exit=2
-FATAL: Metadata deployment is not implemented for splunk
+error: Metadata deployment is not implemented for splunk
 ```
 
 With `--json` it prints one document with `"ok": false` and the same message. Remove the step from your pipeline; lookup tables are not deployed by opentide yet. See [`deploy metadata`](../cli/deploy.md#deploy-metadata).
@@ -638,7 +636,7 @@ Through **0.7.0** `get_chaining` returned an empty graph unless the threat itsel
 
 ### `lint` prints `OK` while findings are listed
 
-Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit code stayed 0. **0.8.0** prints `ISSUES` in that case. The exit code stays 0 unless you pass `--strict`. JSON keeps `"ok": true`.
+Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit code stayed 0. **0.8.0** prints `ISSUES` in that case; later releases print the `!` outcome glyph instead. The exit code stays 0 unless you pass `--strict`. JSON keeps `"ok": true`.
 
 ### Installation pages name 0.6.1 as the latest release
 
@@ -687,6 +685,6 @@ ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairm
 
 ## Still stuck?
 
-- Re-run with debug logging: `DEBUG=1 opentide validate --strict`.
+- Re-run with debug logging: `OPENTIDE_DEBUG=1 opentide validate --strict`.
 - Compare your object against a known-good [fixture](https://github.com/opentidehq/specifications/blob/main/fixtures/valid).
 - Check the [CLI reference](../cli/index.md) for the exact flags and [exit codes](../cli/exit-codes.md).

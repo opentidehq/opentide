@@ -8,7 +8,7 @@ from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
 from opentide.cli.enums import DetectionPlatform, ValidateCheck
 from opentide.cli.group_options import hand_down, refuse_dropped
-from opentide.cli.output import CommandResult, emit_error, emit_result, emit_success
+from opentide.cli.output import CommandResult, emit_result, emit_success, emit_usage_error
 from opentide.cli.services.validation import run_validate, validate_query_platform
 
 validate_app = typer.Typer(help="Object and query validation")
@@ -35,14 +35,17 @@ def validate_group(
         hand_down(ctx)
         return
     cli = get_context(ctx)
-    valid_object_types = {"rule", "threat", "objective"}
-    unknown_types = sorted(set(object_type or []) - valid_object_types)
+    valid_object_types = ("rule", "threat", "objective")
+    unknown_types = sorted(set(object_type or []) - set(valid_object_types))
     if unknown_types:
-        emit_error(
+        emit_usage_error(
             cli,
             "Unknown object type(s): "
             + ", ".join(unknown_types)
             + ". Choose rule, threat, or objective.",
+            argument="--type",
+            value=unknown_types[0],
+            choices=valid_object_types,
         )
     result = run_validate(
         cli,
@@ -84,7 +87,7 @@ def validate_query_cmd(
         None, "--uuid", help="Check only the rule with this UUID (repeatable)"
     ),
 ) -> None:
-    """Query validation checks the tenant. Pass --live."""
+    """Check rule queries against the platform's tenants (needs --live)."""
     refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)

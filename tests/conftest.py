@@ -110,6 +110,24 @@ def _isolate_ci_event_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
+#: Variables that pick the CLI output mode. A developer running the suite from a
+#: coding agent (``CLAUDECODE``, ``AI_AGENT``, ...) would otherwise get agent
+#: mode in every CLI test, and ``OPENTIDE_DEBUG`` would turn on debug logging.
+_OUTPUT_MODE_ENV = ("OPENTIDE_OUTPUT", "OPENTIDE_DEBUG")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Start every test outside an agent, with no output mode chosen yet."""
+    from opentide.cli.ui.mode import AGENT_VARIABLES, reset_mode
+
+    for name in (*AGENT_VARIABLES, *_OUTPUT_MODE_ENV):
+        monkeypatch.delenv(name, raising=False)
+    reset_mode()
+    yield
+    reset_mode()
+
+
 @pytest.fixture
 def metadata() -> dict[str, Any]:
     return {

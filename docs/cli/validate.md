@@ -87,7 +87,7 @@ Run from anywhere inside the detection workspace: the CLI walks up to it (see [R
 An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
 
 ```text illustrative
-OK Validation passed, but no detection objects were found under /home/you/monorepo
+✓ Validation passed, but no detection objects were found under /home/you/monorepo
 ```
 
 If that path is not your workspace, `cd` into it or pass `--repo`.
@@ -125,8 +125,8 @@ The `schema` check validates each object against the revision its `metadata.sche
 A rule may carry a block for a platform this workspace has not enabled, for example a rule imported from a repository that deploys to Splunk. The block is still validated against that platform's model: an empty `query`, an unknown key, or a missing required field fails, and so does a key that is not a platform (`configurations.splnk`). A well-formed block passes with one `platform_not_enabled` warning per disabled platform, at `configurations.<platform>`:
 
 ```text illustrative
-OK Validation passed
-WARNING /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+warning: /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+✓ Validation passed
 ```
 
 In `--json` mode the line is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
@@ -175,13 +175,13 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 
 ### The tenant check is `--live`
 
-Query validation is tenant-only. A bare `validate query` is not an offline check and does not scan query text. It exits `1` and names `--live`. `--live` fails when a credential is still an unsubstituted `$VARIABLE` placeholder:
+Query validation is tenant-only. A bare `validate query` is not an offline check and does not scan query text. It exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. `--live` fails when a credential is still an unsubstituted `$VARIABLE` placeholder:
 
 ```bash
 opentide --json validate query --platform sentinel
 ```
 
-```json output-of="opentide --json validate query --platform sentinel" exit=1
+```json output-of="opentide --json validate query --platform sentinel" exit=2
 {
   "platform": "sentinel",
   "supported": true,
@@ -197,8 +197,8 @@ opentide --json validate query --platform sentinel
 tenant credentials. The vendor SDKs ship with `pip install opentide`; there are no
 extras. If an SDK will not import, the environment is damaged and the command
 fails with the remedy rather than a `ModuleNotFoundError` traceback: the `advice`
-field in `--json`, an `advice: reinstall opentide: pip install --force-reinstall
-opentide` line under the `FATAL` line otherwise.
+field in `--json`, a `help: reinstall opentide: pip install --force-reinstall
+opentide` line under the `error:` line otherwise.
 Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules. A platform with no `[[tenants]]` entry fails the same way, before the
@@ -208,8 +208,8 @@ A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
 timeout, or a proxy that will not connect) fails the check with exit `1`, not a
 traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
 Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
-carries the network error; Sentinel reports it in its own failed result. The human output prints the same line under `FATAL`,
-with the `advice`. The platform's remaining tenants are not checked after the
+carries the network error; Sentinel reports it in its own failed result. The human output prints the same message as an `error:` line,
+with the `advice` as a `help:` line under it. The platform's remaining tenants are not checked after the
 first one that cannot be reached. The sample is illustrative, because it needs a
 configured tenant:
 

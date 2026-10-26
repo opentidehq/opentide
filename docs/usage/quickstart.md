@@ -41,7 +41,7 @@ This runs the full pipeline: docs → exports → vocabs → templates → schem
 == Template generation ==
 == JSON schema generation ==
 == VS Code snippet generation ==
-OK Full generation pipeline completed
+✓ Full generation pipeline completed
 ```
 
 Each phase announces itself on stderr; the closing status is the only line on stdout. This is the output with `--no-color` or `NO_COLOR` set; otherwise each `== … ==` header is drawn as a horizontal rule.
@@ -61,7 +61,7 @@ opentide validate --strict   # warnings also fail (exit 1), except platform_not_
 
 On success the process exits `0`. For structured detail add `--json`, which writes one result document to stdout (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).
 
-Check a platform's catalogue queries against the tenant. This needs tenant credentials; the vendor SDKs ship with the package. Without `--live` the command exits `1` and names the flag:
+Check a platform's catalogue queries against the tenant. This needs tenant credentials; the vendor SDKs ship with the package. Without `--live` the command exits `2` and names the flag:
 
 ```bash
 opentide validate query --platform sentinel --live

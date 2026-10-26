@@ -277,6 +277,8 @@ def test_run_deploy_requires_a_strategy() -> None:
         "status": "failed",
         "message": deploy_service.STRATEGY_REQUIRED,
         "_exit_code": 2,
+        "_failure_code": "usage_missing_option",
+        "_failure_argument": "--strategy",
     }
     assert deploy_service.STRATEGY_REQUIRED.startswith("Pass --strategy: PREVIEW deploys")
 

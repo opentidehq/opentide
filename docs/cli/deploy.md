@@ -64,10 +64,10 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ```text output-of="opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all"
 == MDR Deployment ==
-OK Deployment completed
+✓ Deployment completed
 ```
 
-A colour terminal draws the header as a rule. Human output does not list the rules; `DEBUG=1` logs each selected rule to stderr, and `--json` returns the selection:
+A colour terminal draws the header as a rule. Human output does not list the rules; `OPENTIDE_DEBUG=1` logs each selected rule to stderr, and `--json` returns the selection:
 
 ```bash
 opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -139,7 +139,7 @@ opentide --json deploy metadata --platform splunk
 ```
 
 ```text output-of="opentide deploy metadata --platform splunk" exit=2
-FATAL: Metadata deployment is not implemented for splunk
+error: Metadata deployment is not implemented for splunk
 ```
 
 ```json output-of="opentide --json deploy metadata --platform splunk" exit=2
@@ -165,7 +165,7 @@ FATAL: Metadata deployment is not implemented for splunk
 - **`the tenant key 'deployment' was removed in 0.17.0`** — replace the tenant's `deployment` line as the message says: `STAGING` becomes `strategies = ["PREVIEW"]`, `PRODUCTION` becomes `strategies = ["RELEASE"]`, `ALWAYS` is dropped, `MANUAL` becomes `manual = true`.
 - **`--plan was removed` / `DEPLOYMENT_PLAN was removed`** — use `--strategy`, and unset `DEPLOYMENT_PLAN` in your CI variables. Regenerate the pipeline with `opentide setup ci <github|gitlab|azure>`.
 - **`deploy reads the rule files the last commit, push or pull request changed, which needs a git checkout`** — run inside the repository, or pass `--all`.
-- **`WARNING … rule file(s) in subfolders of objects/rules are not deployed`** — a rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. Move it up into `objects/rules/` to deploy it. In CI, the warning names only the subdirectory files the change touched.
+- **`warning: … rule file(s) in subfolders of objects/rules are not deployed`** — a rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. Move it up into `objects/rules/` to deploy it. In CI, the warning names only the subdirectory files the change touched.
 - **Platform not found**, or **`system_disabled_for_deploy`** in the log — the platform is not enabled in your workspace config. A disabled platform is never selected and its engine never loads, for every `--strategy` and with `--wide`, even when the rule's own block says `enabled: true`. The log names the command that enables it, such as `opentide setup platforms --defender-for-endpoint`. `opentide validate` reports such a block as a `platform_not_enabled` warning.
 - **`external_id_in_rule`** — the rule still carries `rule_id`, `rule_id_bundle` or `rule_id::<tenant>` on some platform block. Deploy leaves it out for every platform, `--dry-run` included, before any HTTP call, and the run exits `1`; other rules still deploy. Run [`deploy migrate-state`](#deploy-migrate-state) and commit the result.
 - **`external_id_missing`** (warning) — a deletion or disablement found no id for that tenant in `.opentide/states/deployment/`, so nothing is known to exist there and nothing is called. The run does not fail on it: retiring a rule that never reached a tenant is normal. If a remote copy does exist, remove or disable it by hand.

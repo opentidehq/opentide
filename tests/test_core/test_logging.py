@@ -103,6 +103,55 @@ def test_plain_console_writes_no_escapes_under_force_color_zero(
     assert buffer.getvalue() == "OK done\n"
 
 
+@pytest.mark.parametrize(
+    ("mode", "env", "expected"),
+    [
+        ("plain", {}, True),
+        ("agent", {}, True),
+        ("human", {}, False),
+        ("json", {}, False),
+        ("plain", {"FORCE_COLOR": "1"}, False),
+        ("agent", {"PY_COLORS": "1"}, False),
+        ("plain", {"FORCE_COLOR": "0"}, True),
+    ],
+)
+def test_plain_and_agent_modes_have_no_colour_unless_forced(
+    monkeypatch: pytest.MonkeyPatch, mode: str, env: dict[str, str], expected: bool
+) -> None:
+    """Spec, Output modes: ``plain`` colours only when FORCE_COLOR/PY_COLORS force it."""
+    from opentide.cli.context import CliContext
+    from opentide.cli.ui.mode import OutputMode, reset_mode, set_mode
+    from opentide.core.logging.config import _make_console
+
+    for name in ("FORCE_COLOR", "PY_COLORS", "NO_COLOR"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    set_mode(OutputMode(mode))
+    try:
+        config = LoggingConfig.from_cli_context(CliContext())
+    finally:
+        reset_mode()
+    assert config.no_color is expected
+    assert _make_console(stderr=False, config=config).no_color is expected
+
+
+def test_console_falls_back_on_an_ascii_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A literal ``·`` or ``…`` in a message must not crash on ``PYTHONIOENCODING=ascii``."""
+    import io
+
+    from opentide.core.logging.config import _make_console
+
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="ascii")
+    monkeypatch.setattr("sys.stdout", stream)
+    _make_console(stderr=False, config=LoggingConfig(plain=True)).print(
+        "warning: Tenant skipped · system: sentinel · detail: cut…", markup=False
+    )
+    stream.flush()
+    assert raw.getvalue() == b"warning: Tenant skipped - system: sentinel - detail: cut...\n"
+
+
 def test_is_json_output() -> None:
     init_logging(LoggingConfig(json_output=True), force=True)
     assert is_json_output() is True
@@ -148,7 +197,7 @@ def test_debug_suppressed_without_debug_flag() -> None:
 
 def test_info_emits_structured_event() -> None:
     stream = StringIO()
-    init_logging(LoggingConfig(json_output=True), force=True)
+    init_logging(LoggingConfig(json_output=True, debug=True), force=True)
     handler = logging.StreamHandler(stream)
     handler.setFormatter(logging.getLogger().handlers[0].formatter)
     root = logging.getLogger()
@@ -175,7 +224,7 @@ def test_emit_section_uses_console_panel() -> None:
 
 def test_emit_section_json_mode() -> None:
     stream = StringIO()
-    init_logging(LoggingConfig(json_output=True), force=True)
+    init_logging(LoggingConfig(json_output=True, debug=True), force=True)
     handler = logging.StreamHandler(stream)
     handler.setFormatter(logging.getLogger().handlers[0].formatter)
     root = logging.getLogger()
@@ -249,3 +298,46 @@ def test_console_renderer_does_not_force_ansi_into_redirects() -> None:
         "info",
     )
     assert "\x1b[" not in rendered
+
+
+@pytest.mark.parametrize(
+    ("config", "level"),
+    [
+        pytest.param(LoggingConfig(), logging.WARNING, id="human"),
+        pytest.param(LoggingConfig(json_output=True), logging.WARNING, id="json"),
+        pytest.param(LoggingConfig(json_output=True, debug=True), logging.DEBUG, id="json-debug"),
+        pytest.param(LoggingConfig(debug=True), logging.DEBUG, id="debug"),
+        pytest.param(LoggingConfig(quiet=True), logging.ERROR, id="quiet"),
+    ],
+)
+def test_log_level_per_mode(config: LoggingConfig, level: int) -> None:
+    """JSON runs log WARNING and above on stderr unless --debug, like every other mode."""
+    init_logging(config, force=True)
+    assert logging.getLogger().level == level
+
+
+def test_json_mode_keeps_info_off_stderr(capsys: pytest.CaptureFixture[str]) -> None:
+    init_logging(LoggingConfig(json_output=True), force=True)
+    get_logger("tests.logging").info("indexing_objects")
+    assert capsys.readouterr().err == ""
+
+
+def test_console_log_line_has_one_level_label(capsys: pytest.CaptureFixture[str]) -> None:
+    """RichHandler and the renderer both printed the level: ``WARNING  ...  WARNING``."""
+    init_logging(LoggingConfig(plain=True, soft_wrap=True), force=True)
+    get_logger("tests.logging").warning("tenant_targets_failed", system="sentinel")
+    err = capsys.readouterr().err
+    assert err == "warning: Tenant targets failed · system: sentinel\n"
+
+
+def test_console_log_line_keeps_prose_events_as_written() -> None:
+    from opentide.core.logging.render import readable_event
+
+    assert readable_event("share.completed") == "Share completed"
+    assert readable_event("Could not read my_file.yaml") == "Could not read my_file.yaml"
+
+
+def test_quiet_suppresses_section_headers(capsys: pytest.CaptureFixture[str]) -> None:
+    init_logging(LoggingConfig(plain=True, quiet=True), force=True)
+    emit_section("Generate Schemas")
+    assert capsys.readouterr().err == ""

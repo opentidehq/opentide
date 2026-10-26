@@ -9,6 +9,12 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import DetectionPlatform
+from opentide.cli.ui.contract import (
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+    did_you_mean,
+)
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
@@ -97,6 +103,19 @@ def resolve_run_strategies(values: Iterable[str]) -> RunStrategies:
     except Exception:
         statuses = {}
     return parse_strategies(values, statuses=statuses)
+
+
+def strategy_suggestion(values: Any) -> str | None:
+    """The deployable strategy closest to the first ``--strategy`` value that is not one."""
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+    names = [strategy.name for strategy in DEPLOYABLE_STRATEGIES]
+    for raw in values:
+        for part in str(raw).split(","):
+            value = part.strip()
+            if value and value.upper() not in names:
+                return did_you_mean(value, names)
+    return None
 
 
 def removed_plan_error() -> str | None:
@@ -189,9 +208,20 @@ def _deploy(
         os.environ.pop(flag, None)
     removed = removed_plan_error()
     if removed is not None:
-        return {"status": "failed", "message": removed, "_exit_code": 2}
+        return {
+            "status": "failed",
+            "message": removed,
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_VALUE,
+        }
     if not strategies:
-        return {"status": "failed", "message": STRATEGY_REQUIRED, "_exit_code": 2}
+        return {
+            "status": "failed",
+            "message": STRATEGY_REQUIRED,
+            "_exit_code": 2,
+            "_failure_code": USAGE_MISSING_OPTION,
+            "_failure_argument": "--strategy",
+        }
     from opentide.core.registry import Opentide
     from opentide.deployment import CIEnvironment, make_deploy_plan, modified_mdr_files
     from opentide.deployment.ci import is_change_request
@@ -204,7 +234,14 @@ def _deploy(
     try:
         run = resolve_run_strategies(strategies)
     except ValueError as exc:
-        return {"status": "failed", "message": str(exc), "_exit_code": 2}
+        return {
+            "status": "failed",
+            "message": str(exc),
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_CHOICE,
+            "_failure_argument": "--strategy",
+            "_failure_suggestion": strategy_suggestion(strategies),
+        }
     try:
         environment = CIEnvironment().environment
         local_debug = environment is CIEnvironment.CIPlatforms.LocalDebug
