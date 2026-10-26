@@ -59,14 +59,14 @@ def test_require_interactive_rejects_redirected_stdin(monkeypatch) -> None:
 
 
 def _construct_and_stub_ask(monkeypatch, prompt_name: str, result):
-    """Build the real Questionary prompt, then stub ``.ask()`` (issue #177)."""
+    """Build the real Questionary prompt, then stub ``.unsafe_ask()`` (issue #177)."""
     real = getattr(interactive.questionary, prompt_name)
     mock_ask = MagicMock(return_value=result)
 
     def wrap(*args, **kwargs):
         assert kwargs.get("validate") is not None or "validate" not in kwargs
         built = real(*args, **kwargs)
-        built.ask = mock_ask
+        built.unsafe_ask = mock_ask
         return built
 
     monkeypatch.setattr(interactive.questionary, prompt_name, wrap)
@@ -80,7 +80,7 @@ def test_ask_select_preselects_the_choice_holding_the_default(monkeypatch) -> No
     def wrap(*args: object, **kwargs: object) -> object:
         captured.update(kwargs)
         built = real_select(*args, **kwargs)
-        built.ask = MagicMock(return_value="gitlab")
+        built.unsafe_ask = MagicMock(return_value="gitlab")
         return built
 
     monkeypatch.setattr(interactive.questionary, "select", wrap)
@@ -127,7 +127,7 @@ def test_ask_checkbox_required_constructs_with_callable_validator(monkeypatch) -
     def wrap(*args, **kwargs):
         captured.update(kwargs)
         built = real_checkbox(*args, **kwargs)
-        built.ask = mock_ask
+        built.unsafe_ask = mock_ask
         return built
 
     monkeypatch.setattr(interactive.questionary, "checkbox", wrap)
@@ -151,3 +151,27 @@ def test_prompt_cancel_raises_keyboard_interrupt(monkeypatch) -> None:
     _construct_and_stub_ask(monkeypatch, "text", None)
     with pytest.raises(KeyboardInterrupt):
         interactive.ask_text("Text")
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "answer",
+        "question",
+        "pointer",
+        "highlighted",
+        "selected",
+        "text",
+        "instruction",
+        "separator",
+    ],
+)
+def test_prompt_style_inherits_no_questionary_colour(token: str) -> None:
+    """questionary merges its own style under ours; its amber answer must not survive."""
+    from questionary.constants import DEFAULT_STYLE
+    from questionary.styles import merge_styles_default
+
+    merged = merge_styles_default([DEFAULT_STYLE, interactive.PROMPT_STYLE])
+    attrs = merged.get_attrs_for_style_str(f"class:{token}")
+    assert attrs.color.lower() not in {"ff9d00", "5f819d"}
+    assert attrs.color in ("", "8b949e"), (token, attrs.color)

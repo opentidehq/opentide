@@ -310,7 +310,7 @@ class ElasticDeploy:
                 loaded_mdr.append(mdr)
         loaded_mdr = without_legacy_external_ids(loaded_mdr, platform="elastic")
         if not loaded_mdr:
-            logger.info("no_mdrs_to_deploy_for_elastic")
+            logger.info("no_rules_to_deploy_for_elastic")
             return
         deployment = TideDeployment(loaded_mdr, DetectionPlatforms.ELASTIC, strategies)
         for batch in deployment.rule_deployment:

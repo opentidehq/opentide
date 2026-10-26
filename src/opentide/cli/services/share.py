@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from opentide.cli.context import CliContext
+from opentide.cli.ui.contract import (
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+    did_you_mean,
+)
 from opentide.core.logging import get_logger
 from opentide.core.registry import Opentide
 from opentide.sharing.config import MispBlock, SharingConfig, load_sharing
@@ -39,6 +45,9 @@ _PREFLIGHT = {
     "changed_diff": "Could not calculate the changed objects",
 }
 
+#: ``failure.code`` for a run that reached the destination, by exit code.
+_RUN_FAILURE_CODES = {1: "share_failed", 2: "share_unreachable", 3: "share_partial"}
+
 _OBJECT_SUFFIXES = frozenset({".yaml", ".yml"})
 #: The ``share`` subcommands; ``targets`` lists destinations and calls no engine.
 ShareMode = Literal["push", "preview", "status", "retract", "targets"]
@@ -65,17 +74,34 @@ def run_share(
 ) -> dict[str, Any]:
     """Run one share command and return a CLI payload, including ``_exit_code``."""
     if since is not None and not changed:
-        return _failed("--since needs --changed", exit_code=2)
+        return _failed(
+            "--since needs --changed",
+            exit_code=2,
+            code=USAGE_MISSING_OPTION,
+            argument="--changed",
+        )
     if since is not None and not since.strip():
-        return _failed("--since needs a commit SHA or ref", exit_code=2)
+        return _failed(
+            "--since needs a commit SHA or ref",
+            exit_code=2,
+            code=USAGE_INVALID_VALUE,
+            argument="--since",
+        )
     if workers < 1:
-        return _failed("workers must be at least 1", exit_code=2)
+        return _failed(
+            "workers must be at least 1",
+            exit_code=2,
+            code=USAGE_INVALID_VALUE,
+            argument="--workers",
+        )
     unknown = sorted(set(types or []) - set(OBJECT_FAMILIES))
     if unknown:
         listed = ", ".join(unknown)
         return _failed(
             f"Unknown object type(s): {listed}. Choose threat, objective, or rule.",
             exit_code=2,
+            code=USAGE_INVALID_CHOICE,
+            argument="--type",
         )
     config = load_sharing(cli.repo)
     secrets = _secrets(config.blocks)
@@ -103,6 +129,24 @@ def run_share(
             return _redact(_preflight(problem, config), secrets)
 
     effective = "preview" if dry_run and mode == "push" else mode
+    names = [block.name for block in config.blocks]
+    missing = [name for name in targets or () if name not in names]
+    if missing:
+        listed = ", ".join(names) or "none configured"
+        payload = _failed(
+            f"Unknown sharing target {missing[0]!r}. Configured targets: {listed}.",
+            exit_code=2,
+            code=USAGE_INVALID_CHOICE,
+            argument="--target",
+        )
+        # A usage error, but still the scope_no_match preflight scripts read.
+        payload["preflight"] = "scope_no_match"
+        payload["records"] = []
+        warnings = [issue.message for issue in config.issues if issue.severity == "warning"]
+        if warnings:
+            payload["warnings"] = warnings
+        payload["_failure_suggestion"] = did_you_mean(missing[0], names)
+        return _redact(payload, secrets)
     selected, problem = _select_blocks(config.blocks, targets)
     if problem is not None or selected is None:
         if changed and mode == "push" and not targets and problem == "scope_no_match":
@@ -132,7 +176,7 @@ def run_share(
     log.info(
         "share.completed", mode=effective, exit_code=outcome.exit_code, records=len(outcome.records)
     )
-    return _redact(_from_run(outcome, config), secrets)
+    return _redact(_from_run(outcome, config, mode=effective), secrets)
 
 
 def render_share(payload: dict[str, Any]) -> None:
@@ -425,22 +469,69 @@ def _restore_validation_env(previous: tuple[str | None, str | None]) -> None:
             os.environ[name] = value
 
 
-def _from_run(outcome: ShareRun, config: SharingConfig) -> dict[str, Any]:
+#: Record action → the word the outcome line counts it under.
+_ACTION_WORDS = {
+    "created": "new",
+    "updated": "updated",
+    "unchanged": "unchanged",
+    "retracted": "retracted",
+    "skipped_tlp": "skipped",
+    "skipped_status": "skipped",
+    "skipped_type": "skipped",
+    "failed": "failed",
+}
+
+
+#: Actions that send something to the destination.
+_SENT_ACTIONS = frozenset({"created", "updated", "retracted"})
+
+
+def share_outcome(mode: str, outcome: ShareRun) -> tuple[str, dict[str, int]]:
+    """``Shared 4 objects to misp-prod · 3 new, 1 updated``, and the counts behind it."""
+    from collections import Counter
+
+    from opentide.cli.ui.progress import plural
+
+    records = outcome.records
+    targets = ", ".join(sorted({record.target for record in records})) or "no target"
+    counts = Counter(_ACTION_WORDS.get(record.action, record.action) for record in records)
+    # "unchanged" succeeds but sends nothing, so it is not a shared object.
+    done = len({record.object_uuid for record in records if record.action in _SENT_ACTIONS})
+    objects = plural(done, "object")
+    lead = {
+        "push": f"Shared {objects} to {targets}",
+        "preview": f"Would share {objects} to {targets}",
+        "retract": f"Retracted {objects} from {targets}",
+    }.get(mode, f"{plural(len({r.object_uuid for r in records}), 'object')} on {targets}")
+    if not done and records and mode in ("push", "preview", "retract"):
+        lead = "Nothing to retract" if mode == "retract" else "Nothing to share"
+    order = ("new", "updated", "unchanged", "retracted", "skipped", "failed")
+    facts = ", ".join(f"{counts[word]} {word}" for word in order if counts.get(word))
+    summary = {"objects": done, **{word: counts.get(word, 0) for word in order}}
+    return (f"{lead} · {facts}" if facts else lead), summary
+
+
+def _from_run(outcome: ShareRun, config: SharingConfig, *, mode: str = "push") -> dict[str, Any]:
     if outcome.preflight:
         return _preflight(outcome.preflight, config, outcome)
     records = [record.as_dict() for record in outcome.records]
     code = outcome.exit_code
     failed = code != 0
-    created = sum(1 for record in outcome.records if record.action == "created")
-    updated = sum(1 for record in outcome.records if record.action == "updated")
-    message = f"Share finished: {len(records)} record(s), {created} created, {updated} updated"
-    return _result(
+    message, summary = share_outcome(mode, outcome)
+    payload = _result(
         message,
         exit_code=code,
         status="failed" if failed else "completed",
         records=records,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    payload["_summary"] = summary
+    if failed:
+        payload["_failure_code"] = _RUN_FAILURE_CODES.get(code, "share_failed")
+    elif mode == "preview":
+        # "Would share …": nothing was sent, so the line takes no ✓.
+        payload["_outcome_kind"] = "plan"
+    return payload
 
 
 def _preflight(
@@ -451,7 +542,7 @@ def _preflight(
     message: str | None = None,
 ) -> dict[str, Any]:
     records = [] if outcome is None else [record.as_dict() for record in outcome.records]
-    return _result(
+    payload = _result(
         message or _PREFLIGHT.get(code, code),
         exit_code=1,
         status="failed",
@@ -459,6 +550,8 @@ def _preflight(
         records=records,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    payload["_failure_code"] = code
+    return payload
 
 
 def _quiet(message: str, config: SharingConfig) -> dict[str, Any]:
@@ -483,7 +576,7 @@ def _targets_payload(config: SharingConfig) -> dict[str, Any]:
         for block in config.blocks
     ]
     return _result(
-        f"{len(rows)} sharing target(s)",
+        f"{len(rows)} sharing target{'' if len(rows) == 1 else 's'}",
         exit_code=0,
         status="completed",
         targets=rows,
@@ -506,8 +599,11 @@ def _result(
     return payload
 
 
-def _failed(message: str, *, exit_code: int) -> dict[str, Any]:
-    return _result(message, exit_code=exit_code, status="failed", error=message)
+def _failed(message: str, *, exit_code: int, code: str, argument: str) -> dict[str, Any]:
+    payload = _result(message, exit_code=exit_code, status="failed", error=message)
+    payload["_failure_code"] = code
+    payload["_failure_argument"] = argument
+    return payload
 
 
 def _secrets(blocks: tuple[MispBlock, ...]) -> tuple[str, ...]:

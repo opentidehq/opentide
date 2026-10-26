@@ -33,6 +33,16 @@ def test_run_extract_entrypoint() -> None:
         result = extraction_service.run_extract(ctx, import_target=ExtractImport.sentinel)
     mock_import.assert_called_once_with(ExtractImport.sentinel)
     assert result["import"] == "sentinel"
+    assert result["message"] == "Imported 0 rules from sentinel"
+
+
+def test_run_extract_counts_what_the_importer_reports() -> None:
+    ctx = CliContext(json_output=True)
+    report = {"extracted_count": 14, "skipped": [{"name": "a"}, {"name": "b"}]}
+    with patch.object(extraction_service, "run_extract_import", return_value=report):
+        result = extraction_service.run_extract(ctx, import_target=ExtractImport.elastic)
+    assert result["message"] == "Imported 14 rules from elastic · 2 skipped"
+    assert result["_summary"] == {"imported": 14, "skipped": 2}
 
 
 def test_run_engine_module_missing() -> None:

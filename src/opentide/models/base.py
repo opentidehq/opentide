@@ -75,8 +75,14 @@ def field_role(field: FieldInfo) -> FieldRole | None:
 class TideModel(BaseModel):
     """Base model for all code-first Tide object definitions."""
 
+    # ``use_attribute_docstrings``: the docstring under a field is its JSON Schema
+    # ``description``, which editors show on hover and in completions.
     model_config = ConfigDict(
-        frozen=True, extra="forbid", populate_by_name=True, validate_assignment=True
+        frozen=True,
+        extra="forbid",
+        populate_by_name=True,
+        validate_assignment=True,
+        use_attribute_docstrings=True,
     )
 
     @classmethod

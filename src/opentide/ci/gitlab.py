@@ -12,12 +12,15 @@ from opentide.ci.inflight import (
 )
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    GATE_COMMANDS,
+    REPORTS_DIR,
     SHARE_COMMAND,
     document_steps,
     header_comment,
     object_validate_commands,
     pip_install,
     production_deploy_steps,
+    report_path,
     reviewed_query_validation_command,
     staging_deploy_steps,
     trusted_platform_config_commands,
@@ -30,6 +33,7 @@ from opentide.ci.writeback import (
     writeback_after_cancel,
 )
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS
+from opentide.cli.ui.ci import GITLAB_SUMMARY
 
 #: The project's default branch as GitLab reports it, as in ``GITLAB_FETCH``.
 _DEFAULT_BRANCH = '"$CI_DEFAULT_BRANCH"'
@@ -79,6 +83,26 @@ def _gitlab_job(
         lines.extend(f"    - {cmd}" for cmd in after)
     lines.extend(_need_lines(needs))
     return "\n".join(lines)
+
+
+def _report_artifacts(*, expose_as: str | None = None, codequality: bool = False) -> list[str]:
+    """Keep what opentide wrote under ``opentide-reports/``, failed jobs included.
+
+    Every opentide command appends its summary to ``GITLAB_SUMMARY`` in a
+    GitLab job. The validate job also keeps its findings as Code Quality
+    reports, which GitLab shows in the merge request and its diff.
+    """
+    lines = ["  artifacts:", "    when: always"]
+    if expose_as:
+        lines.append(f"    expose_as: {expose_as}")
+    path = f"{REPORTS_DIR}/" if codequality else GITLAB_SUMMARY
+    lines.extend(["    paths:", f"      - {path}"])
+    if codequality:
+        lines.extend(["    reports:", "      codequality:"])
+        lines.extend(
+            f"        - {report_path(command, 'codequality')}" for command in GATE_COMMANDS
+        )
+    return lines
 
 
 def _production_script(options: CiRenderOptions) -> list[str]:
@@ -182,7 +206,10 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 ],
                 # ``--changed`` diffs from the merge request's base or the
                 # previous tip, which a shallow clone may not contain.
-                extra_lines=full_history,
+                extra_lines=[
+                    *full_history,
+                    *_report_artifacts(expose_as=f"opentide query {platform}"),
+                ],
                 # python slim has no git; without it the endpoint checkout cannot run.
                 before=[GITLAB_INSTALL_GIT],
             )
@@ -200,7 +227,7 @@ def render_gitlab(options: CiRenderOptions) -> str:
                 ],
                 needs="generate",
                 rules=gitlab_premerge_rule(),
-                extra_lines=full_history,
+                extra_lines=[*full_history, *_report_artifacts(expose_as="opentide staging plan")],
                 before=[GITLAB_INSTALL_GIT],
             )
         )
@@ -215,7 +242,11 @@ def render_gitlab(options: CiRenderOptions) -> str:
             rules="$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH",
             # One production deploy at a time, in pipeline order: two at once
             # would both create the same new rule.
-            extra_lines=[*full_history, "  resource_group: opentide-production"],
+            extra_lines=[
+                *full_history,
+                "  resource_group: opentide-production",
+                *_report_artifacts(),
+            ],
             # ``python:<ver>-slim`` ships without git; the write-back needs it.
             before=[GITLAB_INSTALL_GIT],
             after=_production_after_script(options),
@@ -270,7 +301,8 @@ def render_gitlab(options: CiRenderOptions) -> str:
             "validate",
             options=options,
             stage="validate",
-            script=object_validate_commands(),
+            script=object_validate_commands("codequality"),
+            extra_lines=_report_artifacts(expose_as="opentide reports", codequality=True),
         )
         + "\n\n"
         + _gitlab_job(

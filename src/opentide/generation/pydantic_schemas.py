@@ -10,6 +10,7 @@ from opentide.generation.model_json_schema import model_json_schema
 from opentide.generation.pydantic_metaschema import (
     build_model_schema_source,
 )
+from opentide.generation.schema_annotations import annotate_editor_schema
 from opentide.generation.schema_utils import strip_framework_keywords
 from opentide.models.base import TideModel
 from opentide.models.object_types import CORE_OBJECT_TYPES
@@ -28,7 +29,14 @@ def pin_schema_identifier(schema: dict[str, Any], identifier: str) -> dict[str, 
         return schema
     meta_props = metadata.setdefault("properties", {})
     if isinstance(meta_props, dict):
-        meta_props["schema"] = {"title": "Schema", "const": identifier, "type": "string"}
+        meta_props["schema"] = {
+            "title": "Schema",
+            "description": (
+                f"Schema identifier. This schema validates `{identifier}` objects only."
+            ),
+            "const": identifier,
+            "type": "string",
+        }
     return schema
 
 
@@ -49,7 +57,7 @@ def generate_schema_for_identifier(schema_id: str, *, enrich: bool = True) -> di
     else:
         raw = model_json_schema(model)
     cleaned = strip_framework_keywords(raw)
-    return pin_schema_identifier(cleaned, model.schema_identifier())
+    return annotate_editor_schema(pin_schema_identifier(cleaned, model.schema_identifier()))
 
 
 def generate_model_schema(model: type[TideModel], *, enrich: bool = True) -> dict[str, Any]:
@@ -62,7 +70,7 @@ def generate_model_schema(model: type[TideModel], *, enrich: bool = True) -> dic
     else:
         raw = model_json_schema(model)
     cleaned = strip_framework_keywords(raw)
-    return pin_schema_identifier(cleaned, model.schema_identifier())
+    return annotate_editor_schema(pin_schema_identifier(cleaned, model.schema_identifier()))
 
 
 def export_schema_for_identifier(schema_id: str, output_path: Path) -> None:

@@ -160,7 +160,7 @@ def test_deploy_without_tenants_fails_before_loading_an_engine(
         assert payload["deployed"] == []
         assert payload["dry_run"] is False
     else:
-        assert f"FATAL: {message}" in output
+        assert f"error: {message}" in output
     assert engine_imports == []
 
 
@@ -195,7 +195,7 @@ def test_skip_unconfigured_exits_zero_when_every_platform_lacks_tenants(
         )
         assert payload["missing_tenants"] == {"sentinel": config}
     else:
-        assert "SKIPPED Skipped deploy:" in output
+        assert "Skipped: Skipped deploy:" in output
     assert engine_imports == []
 
 
@@ -254,8 +254,14 @@ def test_deploy_dry_run_without_tenants_previews_but_does_not_claim_the_platform
         assert payload["strategies"] == ["PREVIEW", "RELEASE"]
         assert payload["tenants"] == {}
     else:
-        assert "OK Deployment completed" in output
-        assert f"WARNING {warning}" in output
+        assert (
+            "Deploy plan · strategy PREVIEW RELEASE · 1 platform, 0 tenants · "
+            "dry run, nothing is sent" in output
+        )
+        assert f"{platform.value} · 0 tenants" in output
+        assert "Plan: " in output and "error: Plan" not in output
+        assert "✓ " not in output  # a dry run claims nothing happened
+        assert f"warning: {warning}" in output
     mock_deployers.deploy.assert_not_called()
 
 
@@ -308,7 +314,7 @@ def test_live_query_validation_without_tenants_fails_before_loading_a_validator(
         assert payload["advice"] == f"add (or uncomment) a [[tenants]] entry in {config}"
         assert payload["missing_tenants"] == {platform.value: config}
     else:
-        assert f"FATAL: {message}" in output
+        assert f"error: {message}" in output
     assert engine_imports == []
 
 
@@ -345,7 +351,7 @@ def test_bare_query_validation_refuses_without_tenants(
 
     result, output = _run(invoke_cli, repo, True, "validate", "query", "--platform", platform.value)
 
-    assert result.exit_code == 1, output
+    assert result.exit_code == 2, output
     payload = parse_cli_json(result)
     assert payload["ok"] is False
     assert payload["status"] == "failed"

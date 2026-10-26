@@ -309,9 +309,42 @@ steps:
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 ```
 
+## Annotations, summaries and reports
+
+In a GitHub Actions, GitLab CI or Azure Pipelines job (`GITHUB_ACTIONS`, `GITLAB_CI` or `TF_BUILD` is set), opentide adds to its usual output. Nothing has to be configured; `--json` turns all of it off, because stdout then holds the JSON document.
+
+| Provider | Each finding of `validate` and `lint` | Job summary |
+|----------|----------------------------------------|-------------|
+| GitHub Actions | A workflow command on stdout, which GitHub shows on the line of the pull request's diff: `::error file=objects/rules/sentinel-kql-rule.yaml,line=8,endLine=8,col=8,endColumn=13,title=vocab_unknown::Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry%0Ahelp: did you mean 'clear'?` | Markdown appended to `$GITHUB_STEP_SUMMARY` |
+| GitLab CI | None inline: GitLab shows the Code Quality report in the merge request widget on every tier, and on the lines of the diff on GitLab Ultimate | Markdown appended to `opentide-reports/summary.md` in the checkout, kept as an artifact |
+| Azure Pipelines | `##vso[task.logissue type=error;sourcepath=…;linenumber=8;columnnumber=8;code=vocab_unknown;]…` (notes have no Azure level and are not sent) | A Markdown file attached with `##vso[task.uploadsummary]` |
+
+On GitHub, which shows 10 annotations of each level per step, opentide writes the errors first, then the warnings, then the notices, 10 of each, and one notice counting the rest; the job summary and code scanning have them all.
+
+The summary of `validate` and `lint` is the outcome line and a table of findings (severity, code linked to its [explanation](../../cli/diagnostics.md), location, message), at most 100 rows. `deploy` adds its plan: the strategies, the rules per platform and tenant, and the rule names. `validate query` adds the queries sent per tenant. A `deploy` that found no rule to deploy adds a run warning on GitHub and Azure. Paths are relative to the checkout (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`, `BUILD_SOURCESDIRECTORY`), so they stay right when the workspace is a folder of the repository.
+
+`validate` and `lint` also write their findings as a report file for the provider's code-quality view:
+
+```bash
+opentide validate --strict --format sarif --output opentide-reports/validate.sarif
+opentide lint --strict --format codequality --output opentide-reports/lint.codequality.json
+```
+
+`--format sarif` is SARIF 2.1.0 for GitHub code scanning; each code is a rule whose help is its `opentide explain` page, and a vocabulary typo carries its fix. `--format codequality` is the Code Climate JSON GitLab reads from `artifacts:reports:codequality`. The report is written whatever the outcome, an empty one included, so a fixed finding closes its alert. Findings that name no file (two objects with the same id, for example) are left out of both formats, which need one; the log and the summary still show them. Without `--output` the report is the whole of stdout, with no code frames or annotations. With `--json`, `--output` is required.
+
+`opentide setup ci` writes these into the validate job:
+
+| Provider | Validate job |
+|----------|--------------|
+| GitHub Actions | `--format sarif` reports, uploaded as the `opentide-reports` artifact, and on a public repository sent to code scanning by a `code_scanning` job that needs `validate`, downloads the artifact and runs `github/codeql-action/upload-sarif@v4`. That job holds only `security-events: write`, so the token that writes alerts never sits next to the platform secrets. The alerts are in the categories `opentide/validate/` and `opentide/lint/` (each SARIF run's `automationDetails.id`); a failed upload never fails the run. Code scanning on a private repository needs GitHub Advanced Security: once it is on, remove `!github.event.repository.private` from the job's `if` |
+| GitLab CI | `--format codequality` reports under `artifacts:reports:codequality`, and `opentide-reports/` exposed in the merge request as "opentide reports". The query, staging and production jobs keep `opentide-reports/summary.md` |
+| Azure Pipelines | `--format sarif` reports published as the `CodeAnalysisLogs` artifact, which the SARIF SAST Scans Tab extension reads |
+
+Regenerate an existing pipeline with `opentide setup ci <github|gitlab|azure> --yes` to get them.
+
 ## JSON output for gates
 
-Every command accepts `--json` and writes exactly one JSON document to stdout — successes carry `"ok": true`, failures carry `"ok": false` plus `status`, `message`, and the full report. Diagnostics go to stderr. Gate on the process exit code, the `ok`/`status` fields, or both.
+Every command accepts `--json` and writes exactly one JSON document to stdout — successes carry `"ok": true`, failures carry `"ok": false` plus `status`, `message`, and the full report. Diagnostics go to stderr. Gate on the process exit code, the `ok`/`status` fields, or both. Under `--json` opentide writes no annotation and no job summary.
 
 ```bash
 opentide --json validate --strict

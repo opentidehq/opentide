@@ -199,7 +199,7 @@ def modified_rule_scope(source: DiffSource | None = None) -> RuleScope:
     # The diff path is repo-relative. The file itself lives under the absolute
     # rules folder, and a top-level rule's name is its last path segment.
     mdr_files = [MDR_PATH / Path(path).name for path in top_level]
-    logger.info("computed_modified_mdr_files", detail=str(mdr_files))
+    logger.info("computed_modified_rule_files", detail=str(mdr_files))
     return RuleScope(tuple(mdr_files), tuple(nested_paths))
 
 

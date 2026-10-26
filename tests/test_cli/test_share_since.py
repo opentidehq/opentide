@@ -186,9 +186,11 @@ def test_since_needs_changed_and_a_value(invoke_cli, tide_corpus_repo: Path) -> 
     alone = invoke_cli("share", "push", "--since", "abc", repo=tide_corpus_repo)
     assert alone.exit_code == 2, alone.stdout
     assert "--since needs --changed" in alone.stdout
+    assert json.loads(alone.stdout)["failure"]["code"] == "usage_missing_option"
     blank = invoke_cli("share", "push", "--changed", "--since", " ", repo=tide_corpus_repo)
     assert blank.exit_code == 2, blank.stdout
     assert "--since needs a commit" in blank.stdout
+    assert json.loads(blank.stdout)["failure"]["code"] == "usage_invalid_value"
 
 
 def test_since_runs_outside_ci_and_reaches_the_diff(

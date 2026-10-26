@@ -36,7 +36,7 @@ def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo, monk
     assert "opentide Info" in plain
     assert "Rules" in plain and "9" in plain
     assert "Splunk Enterprise Security" in plain
-    assert "enabled=True" in plain
+    assert "enabled · deploy, validate" in plain
 
 
 def test_info_coverage_matches_top_level_techniques(invoke_cli, corpus_rule_uuids) -> None:

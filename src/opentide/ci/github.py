@@ -9,6 +9,8 @@ from opentide.ci.gates import github_premerge_if
 from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    GATE_COMMANDS,
+    REPORTS_DIR,
     SHARE_COMMAND,
     document_steps,
     github_deploy_env,
@@ -17,6 +19,7 @@ from opentide.ci.stages import (
     pip_install,
     production_deploy_steps,
     query_platforms,
+    report_path,
     reviewed_query_validation_command,
     staging_deploy_steps,
     trusted_platform_config_commands,
@@ -50,6 +53,55 @@ def _setup_steps(options: CiRenderOptions, *, full_history: bool = False) -> str
 
 def _run_steps(commands: list[str]) -> str:
     return "\n".join(f"- run: {cmd}" for cmd in commands)
+
+
+#: The validate job writes SARIF and keeps it as the ``opentide-reports``
+#: artifact. A separate job sends it to code scanning, so the one token that can
+#: write security alerts never shares a job with the platform secrets. Code
+#: scanning is free on public repositories and needs GitHub Advanced Security on
+#: private ones, so private repositories skip it: remove
+#: ``!github.event.repository.private`` once it is enabled. A failed upload
+#: never fails the run (a fork's pull request cannot write alerts). Each SARIF
+#: run carries ``automationDetails.id`` ``opentide/<command>/``, which
+#: upload-sarif uses as the category, so no ``category`` input is passed.
+CODE_SCANNING_PERMISSIONS = "security-events: write"
+CODE_SCANNING_IF = "${{ !cancelled() && !github.event.repository.private }}"
+
+
+def _report_artifact_step() -> str:
+    """Keep the reports as an artifact, for people and for the code scanning job."""
+    return (
+        "- name: Upload opentide reports\n"
+        "  if: ${{ !cancelled() }}\n"
+        "  uses: actions/upload-artifact@v4\n"
+        "  with:\n"
+        "    name: opentide-reports\n"
+        f"    path: {REPORTS_DIR}/\n"
+        "    if-no-files-found: ignore"
+    )
+
+
+def _code_scanning_steps() -> str:
+    """Download the validate job's reports and send each SARIF file to code scanning."""
+    steps = [
+        "- name: Download opentide reports\n"
+        "  uses: actions/download-artifact@v4\n"
+        "  continue-on-error: true\n"
+        "  with:\n"
+        "    name: opentide-reports\n"
+        f"    path: {REPORTS_DIR}/"
+    ]
+    for command in GATE_COMMANDS:
+        sarif = report_path(command, "sarif")
+        steps.append(
+            f"- name: Upload {command} findings to code scanning\n"
+            f"  if: ${{{{ hashFiles('{sarif}') != '' }}}}\n"
+            "  uses: github/codeql-action/upload-sarif@v4\n"
+            "  continue-on-error: true\n"
+            "  with:\n"
+            f"    sarif_file: {sarif}"
+        )
+    return "\n".join(steps)
 
 
 def _reviewed_tenants_step(name: str, default_branch: str, commands: list[str]) -> str:
@@ -295,14 +347,23 @@ def render_github(options: CiRenderOptions) -> str:
         # ``--changed`` diffs from the pull request's merge base, or from the
         # pushed commit's parent: neither is in a one-commit checkout.
         _setup_steps(options, full_history=bool(queries)),
-        _run_steps(object_validate_commands()),
+        _run_steps(object_validate_commands("sarif")),
         _reviewed_tenants_step("Validate queries on reviewed tenants", branch, queries),
+        _report_artifact_step(),
     )
     deploy_env = github_deploy_env()
     generate_steps = join_blocks(setup, _run_steps(["opentide generate"]))
 
     jobs: list[str] = [
         _github_job("validate", name="Validate", env=deploy_env, steps=validate_steps),
+        _github_job(
+            "code_scanning",
+            name="Code scanning",
+            needs="validate",
+            if_cond=CODE_SCANNING_IF,
+            permissions=CODE_SCANNING_PERMISSIONS,
+            steps=_code_scanning_steps(),
+        ),
         _github_job("generate", name="Generate", needs="validate", steps=generate_steps),
     ]
 

@@ -41,11 +41,11 @@ class SentinelQueryValidator(QueryValidator):
         mdr_uuid = mdr.metadata.uuid
         sentinel = mdr.platform_configs().sentinel
         if not sentinel:
-            raise Errors.TideMDRDataModelErrors("Missing Sentinel")
+            raise Errors.TideRuleDataModelErrors("Missing Sentinel")
         query: str = sentinel.query
         if not query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
-            logger.critical("missing_query_in_mdr", detail=f"{mdr.name} ({mdr_uuid})")
+            logger.critical("missing_query_in_rule", detail=f"{mdr.name} ({mdr_uuid})")
             return
         query += " | limit 1"
         try:

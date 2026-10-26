@@ -16,6 +16,9 @@ opentide validate --file objects/rules/example.yaml
 opentide validate --uuid <uuid> --uuid <uuid2>
 opentide validate --type rule
 opentide validate --check schema
+opentide validate --fix
+opentide validate --fix --dry-run
+opentide validate --watch
 ```
 
 ### Options
@@ -27,12 +30,144 @@ opentide validate --check schema
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
 | `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
+| `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
+| `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
+| `--watch` | Validate again each time an object file is saved, until Ctrl-C (see [Watching](#watching---watch)) |
+| `--format` | `text` (code frames, the default), `sarif` (SARIF 2.1.0 for code scanning) or `codequality` (GitLab Code Quality). See [Reports and CI annotations](#reports-and-ci-annotations) |
+| `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
 `--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, issues are listed in a **Validation issues** panel, grouped by file, one `[severity] field: message` line each — for example `[error] detection_model: Unknown objective or signal reference '…'`.
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A typo in a vocabulary value:
+
+```text illustrative
+error[vocab_unknown]: 'clearr' is not a TLP value
+  ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
+  │
+7 │   modified: 2026-01-02
+8 │   tlp: clearr
+  │        ━━━━━━ not in tlp::1.0
+  │
+  ╰─ help: did you mean 'clear'?
+
+✗ 1 error in 1 file · 3 objects checked · 0.9s
+→ opentide explain vocab_unknown · how to fix it
+→ opentide validate · check again
+```
+
+The sample is illustrative because the outcome line carries the run time. A failed run ends with what to run next, the page of the first finding's code and `validate` again; `--json` lists them under `next_actions`. A value that differs from an allowed one only in case or in its separators (`AMBER`, `localised_incident`) gets a `safe` fix. On a terminal, a long message wraps between words and a long path is shortened in the middle with `…`. Paths are relative to the current directory when you run inside it, otherwise to the workspace; in a terminal they are links your editor opens (`OPENTIDE_LINKS=file|vscode|cursor|none` picks the scheme). `opentide explain <code>` prints what a code means and how to fix it; [Diagnostic codes](./diagnostics.md) lists them all.
+
+One cause is one finding: a dangling reference such as `detection_model` is reported as `invalid_ref` only, not also as `vocab_unknown`.
+
+### Reports and CI annotations
+
+```bash
+opentide validate --strict --format sarif --output opentide-reports/validate.sarif
+opentide validate --format codequality > gl-code-quality-report.json
+```
+
+`--format sarif` writes SARIF 2.1.0: one run whose rules are the [diagnostic codes](./diagnostics.md), each with its `opentide explain` page as help, and one result per finding with its region (columns count Unicode code points), the object's UUID as its logical location and, for a vocabulary typo, its fix. `--format codequality` writes the Code Climate JSON GitLab reads from `artifacts:reports:codequality`. Paths are relative to the CI checkout when opentide runs in CI, else to the workspace. A finding that names no file is left out of both. The exit code is the same as without `--format`.
+
+In a GitHub Actions or Azure Pipelines job, each finding is also written to stdout as an annotation (`::error file=…,line=…,col=…,title=<code>::<message>`, or `##vso[task.logissue …]`), and the outcome line and a table of findings go to the job summary; GitLab gets the summary as `opentide-reports/summary.md`. `--json` turns these off. See [CI/CD](../usage/workflows/ci-cd.md#annotations-summaries-and-reports).
+
+### Diagnostic fields
+
+Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` stays zero-based, `file_path` stays absolute) and gains:
+
+| Key | Value |
+|-----|-------|
+| `path` | The file, relative to the workspace, with `/` separators. `null` when no file is at fault |
+| `line` | One-based line of what the frame points at. `null` when unknown. Not always `yaml_line + 1`: for a block value (a mapping or a list) it is the line of the key, where `yaml_line` is the block's first child; for a missing field it is the key of the mapping the field belongs in |
+| `column`, `end_column` | One-based columns of the value (of the key, for a block, a missing field or an unknown key); `end_column` is just past the last character. Columns count Unicode code points (`🔥` is one column), not UTF-16 code units. Best effort, `null` when unknown |
+| `help` | What to do, in prose (`did you mean 'clear'?`), or `null` |
+| `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_line", "end_column", "replacement" }] }`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`). Every suggested value gets a fix. `safe` is `true` only when the two values spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit, so an ATT&CK id, a UUID or `clearr` → `clear` is left for a person or an agent to confirm. A reference fix is never safe |
+| `explain` | `opentide explain <code>` |
+
+`summary` counts `objects`, `errors`, `warnings`, `files` (files with an error), `warning_files` (files with a warning) and `fixable` (the values `--fix` would replace). A run that fails on its findings has `failure.code` `issues_found`.
+
+### Fixing typos: `--fix`
+
+`--fix` applies the fixes whose `safe` is `true` (see [Diagnostic fields](#diagnostic-fields)), such as `clear` for `tlp: Clear` or `Data Breach` for `Data-Breach`, and never one whose `safe` is `false`: `clear` for `clearr`, an ATT&CK id, a reference (`invalid_ref`). A person or an agent decides those. When a run finds safe fixes, its outcome line counts them (`2 fixable with --fix`) and its next step is the same command with `--fix`, also in `next_actions`.
+
+```bash
+opentide validate --fix --dry-run
+opentide validate --fix
+```
+
+`--fix --dry-run` prints the edits as a unified diff, then the findings no safe fix resolves, and writes nothing. The files are unchanged, so the run exits `1` while they have errors. With `tlp: Clear` in the tutorial rule:
+
+```text output-of="opentide validate --fix --dry-run" exit=1 state=vocabulary-case
+--- a/objects/rules/sentinel-kql-rule.yaml
++++ b/objects/rules/sentinel-kql-rule.yaml
+@@ -5,7 +5,7 @@
+   version: 1
+   created: 2026-01-01
+   modified: 2026-01-02
+-  tlp: Clear
++  tlp: clear
+   author: Tutorial Author
+   organisation:
+     uuid: 00000000-0000-4000-8000-000000000099
+→ opentide validate --fix · apply 1 safe fix
+```
+
+`--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked against the file as it is now, not as validation read it. The text it replaces must still be one the fix is safe for, so a value you saved over the typo in the meantime is kept. The file must still parse and differ in that value alone. Otherwise the edit is left out and its finding stays. Each file is written to a temporary file beside it and moved into place, so a write that fails (a full disk, a quota) leaves the original whole. A file that changed between the check and the write is left alone, with a warning. A second run has nothing to apply. The outcome line says what it fixed and what is left:
+
+```text illustrative
+fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
+fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
+
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+   ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
+   │
+16 │ techniques: [T1059]
+17 │ detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info objectives lists the ones that exist
+
+✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · 1.8s
+```
+
+The sample is illustrative because it carries the run time. When nothing is left, the line is `✓ Fixed 2 values in 2 files · 3 objects valid · 1.8s` and the run exits `0`. When a file cannot be written, a `warning:` line names it and the outcome line says `could not write 1 fix`. `--fix` honours `--file`, `--uuid`, `--type` and `--check`: it fixes what that run found.
+
+With `--json` the document is the second run's, so `report` holds what is left, and it gains `fixed` and `summary.fixed`:
+
+```bash
+opentide --json validate --fix
+```
+
+```json output-of="opentide --json validate --fix" state=vocabulary-case
+{
+  "fixed": [
+    {
+      "path": "objects/rules/sentinel-kql-rule.yaml",
+      "line": 8,
+      "code": "vocab_unknown",
+      "before": "Clear",
+      "after": "clear"
+    }
+  ],
+  "ok": true,
+  "summary": { "objects": 3, "errors": 0, "fixable": 0, "fixed": 1 }
+}
+```
+
+Under `--dry-run` the document is the first run's, with `would_fix` (the same entries) and `diff` (the text above) instead of `fixed`.
+
+### Watching: `--watch`
+
+```bash
+opentide validate --watch
+```
+
+`--watch` validates once, then looks at the modification times of the object files every 0.5 seconds and validates again after a save. A save that keeps the UUIDs in the file re-checks that file alone. Every object is re-checked instead, since other objects' findings may change with it, when a file is added or removed, when a UUID or reference in it changes, and when its object enters or leaves the catalogue: the file stops or starts parsing, or loses its `uuid`. Each run reports the whole workspace, findings from files it did not re-check included.
+
+In a terminal the findings and the outcome line are redrawn in place, with a footer naming the file it re-checked and how to stop. In plain output (a pipe, `NO_COLOR`, `TERM=dumb`, CI) each run prints the findings it produced and one outcome line, and nothing is redrawn. Ctrl-C stops it with exit `0`. `--watch` honours `--file`, `--uuid`, `--type`, `--check` and `--strict`; with a narrowed scope every run re-checks that scope. It cannot be combined with `--fix` or `--format` (exit `2`, `failure.code` `usage_error`).
+
+`--watch` never ends, so it is refused where nobody watches: under `--json`, a coding agent or `OPENTIDE_OUTPUT=agent`. It exits `2` at once with `failure.code` `usage_watch_needs_tty`, and the next step is `opentide validate`.
 
 Filename conventions and recommended metadata are **not** schema errors — use [`opentide lint`](./lint.md).
 
@@ -87,8 +222,10 @@ Run from anywhere inside the detection workspace: the CLI walks up to it (see [R
 An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
 
 ```text illustrative
-OK Validation passed, but no detection objects were found under /home/you/monorepo
+✓ Validation passed, but no detection objects were found under ./
 ```
+
+The directory is relative to the one you run in (`./`, `./detections`, `../`), or absolute when it is elsewhere.
 
 If that path is not your workspace, `cd` into it or pass `--repo`.
 
@@ -110,7 +247,7 @@ Every issue reports the `file_path` of the object it concerns, so issues from tw
 
 ### Unparseable object files
 
-An object file that is not valid YAML is reported as a `yaml_parse` issue against that path (exit `1`, and a complete report in `--json` mode) instead of raising a parser traceback. The file is not indexed, so no other check can see it — the issue is emitted regardless of `--check`.
+An object file that is not valid YAML is reported as a `yaml_parse` issue against that path (exit `1`, and a complete report in `--json` mode) instead of raising a parser traceback. The message and the frame name the line and column where the parser stopped, and a note says what it was reading and where that started (`while parsing a flow sequence that starts at line 8, column 8`). It is reported once: `validate` does not also log it. The file is not indexed, so no other check can see it — the issue is emitted regardless of `--check`.
 
 ### Schema identifier
 
@@ -125,11 +262,18 @@ The `schema` check validates each object against the revision its `metadata.sche
 A rule may carry a block for a platform this workspace has not enabled, for example a rule imported from a repository that deploys to Splunk. The block is still validated against that platform's model: an empty `query`, an unknown key, or a missing required field fails, and so does a key that is not a platform (`configurations.splnk`). A well-formed block passes with one `platform_not_enabled` warning per disabled platform, at `configurations.<platform>`:
 
 ```text illustrative
-OK Validation passed
-WARNING /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+warning[platform_not_enabled]: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+   ╭─▶ objects/rules/imported.yaml:24:3
+   │
+23 │ configurations:
+24 │   splunk:
+   │   ━━━━━━
+   │
+
+✓ 3 objects valid · 1 warning · 0.9s
 ```
 
-In `--json` mode the line is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
+In `--json` mode a line naming it is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
 
 ### CVE check
 
@@ -175,13 +319,13 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 
 ### The tenant check is `--live`
 
-Query validation is tenant-only. A bare `validate query` is not an offline check and does not scan query text. It exits `1` and names `--live`. `--live` fails when a credential is still an unsubstituted `$VARIABLE` placeholder:
+Query validation is tenant-only. A bare `validate query` is not an offline check and does not scan query text. It exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. `--live` fails when a credential is still an unsubstituted `$VARIABLE` placeholder:
 
 ```bash
 opentide --json validate query --platform sentinel
 ```
 
-```json output-of="opentide --json validate query --platform sentinel" exit=1
+```json output-of="opentide --json validate query --platform sentinel" exit=2
 {
   "platform": "sentinel",
   "supported": true,
@@ -197,8 +341,8 @@ opentide --json validate query --platform sentinel
 tenant credentials. The vendor SDKs ship with `pip install opentide`; there are no
 extras. If an SDK will not import, the environment is damaged and the command
 fails with the remedy rather than a `ModuleNotFoundError` traceback: the `advice`
-field in `--json`, an `advice: reinstall opentide: pip install --force-reinstall
-opentide` line under the `FATAL` line otherwise.
+field in `--json`, a `help: reinstall opentide: pip install --force-reinstall
+opentide` line under the `error:` line otherwise.
 Only the requested platform's engine is
 loaded — validating Sentinel never imports the CrowdStrike or HarfangLab
 modules. A platform with no `[[tenants]]` entry fails the same way, before the
@@ -208,8 +352,8 @@ A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
 timeout, or a proxy that will not connect) fails the check with exit `1`, not a
 traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
 Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
-carries the network error; Sentinel reports it in its own failed result. The human output prints the same line under `FATAL`,
-with the `advice`. The platform's remaining tenants are not checked after the
+carries the network error; Sentinel reports it in its own failed result. The human output prints the same message as an `error:` line,
+with the `advice` as a `help:` line under it. The platform's remaining tenants are not checked after the
 first one that cannot be reached. The sample is illustrative, because it needs a
 configured tenant:
 
@@ -250,16 +394,18 @@ When an explicit `--strategy` leaves every rule without a tenant (for example, o
 
 Through 0.16.1 a live check without `--plan` reached every tenant a rule could reach, whatever the tenant's `deployment` class. Since 0.17.0 it follows deploy: a `PREVIEW` rule is not checked on a tenant that only accepts `RELEASE`. The pull request that moves the rule to a `RELEASE` status checks it there, before that change merges.
 
-`--json` reports the run's strategies and how many queries each tenant received. The sample is illustrative, because a live run needs tenant credentials:
+A passing run ends with `✓ 4 queries valid on 2 tenants`; a failing one with `error: Queries rejected on sentinel · 4 checked on 2 tenants`, below the rejections the validator logged. `--json` reports the run's strategies and how many queries each tenant received, and the totals in `summary`. The sample is illustrative, because a live run needs tenant credentials:
 
 ```json illustrative
 {
   "platform": "sentinel",
   "mode": "live",
   "status": "passed",
+  "message": "4 queries valid on 2 tenants",
   "strategies": ["PREVIEW", "RELEASE"],
   "queries_validated": 4,
-  "queries_per_tenant": { "Staging": 2, "Production": 2 }
+  "queries_per_tenant": { "Staging": 2, "Production": 2 },
+  "summary": { "queries": 4, "tenants": 2 }
 }
 ```
 
@@ -346,4 +492,4 @@ See [SDK validation](../sdk/validation.md).
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/validation.py`
+`src/opentide/cli/commands/validate.py`, `src/opentide/cli/services/validation.py`

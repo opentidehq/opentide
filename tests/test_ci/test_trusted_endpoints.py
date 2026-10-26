@@ -18,6 +18,7 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     NO_REVIEWED_CONFIG_NOTE,
     NO_REVIEWED_TENANT_NOTE,
+    object_validate_commands,
     reviewed_query_validation_command,
     trusted_platform_config_commands,
 )
@@ -64,7 +65,7 @@ def test_github_secret_jobs_pin_endpoints_and_production_does_not() -> None:
     validate = _runs(jobs["validate"]["steps"])
     # The catalogue gate reads the pull request's own configuration; only the
     # step that sends credentials restores the default branch's copy.
-    assert validate[-3:-1] == ["opentide validate --strict", "opentide lint --strict"]
+    assert validate[-3:-1] == object_validate_commands("sarif")
     restore = trusted_platform_config_commands("development")
     assert validate[-1].splitlines() == [
         *restore,
@@ -84,7 +85,7 @@ def test_github_secret_jobs_pin_endpoints_and_production_does_not() -> None:
 def test_github_validate_job_without_live_queries_restores_nothing() -> None:
     workflow = render_github(CiRenderOptions(ci="github", platforms=["crowdstrike"]))
     validate = _runs(yaml.safe_load(workflow)["jobs"]["validate"]["steps"])
-    assert validate[-2:] == ["opentide validate --strict", "opentide lint --strict"]
+    assert validate[-2:] == object_validate_commands("sarif")
     assert REMOVE not in "\n".join(validate)
 
 
