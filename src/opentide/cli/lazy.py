@@ -15,7 +15,7 @@ from typing import Any, NoReturn
 
 import typer
 from typer import _click
-from typer.core import TyperCommand, TyperGroup
+from typer.core import TyperCommand, TyperGroup, TyperOption
 
 from opentide.cli.commands import ROOT_COMMANDS, CommandSpec
 
@@ -225,7 +225,7 @@ class LazyTyperGroup(TyperGroup):
         with self._list_from_index():
             render_help(self, ctx, formatter, super().format_help)
 
-    def get_help_option(self, ctx: _click.Context) -> _click.Option | None:
+    def get_help_option(self, ctx: _click.Context) -> TyperOption | None:
         from opentide.cli.help import help_option
 
         return help_option(super().get_help_option(ctx))
@@ -251,7 +251,7 @@ def _show_home() -> bool:
 
     try:
         facts = gather(__version__)
-    except Exception:  # noqa: BLE001 -- the help is always a correct answer
+    except Exception:
         return False
     render_home(get_stdout_console(), facts)
     return True

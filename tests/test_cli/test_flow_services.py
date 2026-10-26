@@ -237,7 +237,7 @@ def test_a_path_with_a_space_is_quoted_in_the_cd_step(tmp_path: Path, monkeypatc
     assert message == "Created My Detections in ./My Detections"
     assert actions[0].command == "cd 'My Detections'"
     assert (
-        subprocess.run(  # noqa: S603 -- the command under test, on a POSIX shell
+        subprocess.run(
             ["sh", "-c", f"{actions[0].command} && pwd"], capture_output=True, text=True, check=True
         )
         .stdout.strip()

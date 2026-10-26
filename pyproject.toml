@@ -198,7 +198,7 @@ allowed-confusables = ["–", "×"]
 
 [tool.ruff.lint.flake8-bugbear]
 # Typer declares CLI parameters as call defaults; they are immutable markers.
-extend-immutable-calls = ["typer.Option", "typer.Argument"]
+extend-immutable-calls = ["typer.Option", "typer.Argument", "opentide.cli.enums.platform_help"]
 
 [tool.ty.src]
 include = ["src/opentide"]

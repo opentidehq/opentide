@@ -99,7 +99,7 @@ def _platforms(directory: Path) -> dict[str, int]:
     for path in sorted(directory.glob("*.toml")) if directory.is_dir() else ():
         try:
             document = load_toml(path)
-        except Exception:  # noqa: BLE001 -- a broken file is validate's to report
+        except Exception:
             continue
         platform = document.get("platform")
         if not isinstance(platform, dict) or platform.get("enabled") is not True:

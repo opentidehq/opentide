@@ -255,8 +255,8 @@ def test_deploy_dry_run_without_tenants_previews_but_does_not_claim_the_platform
         assert payload["tenants"] == {}
     else:
         assert (
-            "Deploy plan · strategy PREVIEW RELEASE · 1 platform, 0 tenants · dry run, nothing is sent"
-            in output
+            "Deploy plan · strategy PREVIEW RELEASE · 1 platform, 0 tenants · "
+            "dry run, nothing is sent" in output
         )
         assert f"{platform.value} · 0 tenants" in output
         assert "Plan: " in output and "error: Plan" not in output

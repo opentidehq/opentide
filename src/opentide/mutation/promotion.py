@@ -188,7 +188,8 @@ class PromoteMDR:
                     )
                 else:
                     logger.info(
-                        "detected_statuses_needing_promotion_for_the_following_rule", detail=mdr_name
+                        "detected_statuses_needing_promotion_for_the_following_rule",
+                        detail=mdr_name,
                     )
                     logger.info(
                         "promoting_the_following_systems_statuses",

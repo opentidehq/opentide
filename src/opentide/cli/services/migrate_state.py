@@ -375,7 +375,7 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
             }
         )
 
-    ids = sum(len(item["bindings"]) for item in migrated)  # type: ignore[arg-type]
+    ids = sum(len(item["bindings"]) for item in migrated)  # ty: ignore[invalid-argument-type]
     result: dict[str, object] = {
         "migrated": migrated,
         "unused": unused,

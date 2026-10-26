@@ -88,17 +88,19 @@ class SentinelCompileError(Errors.TideRuleDataModelErrors):
     the rule and its file, so it shows *reason* under *code* instead.
     """
 
-    def __init__(self, data: DetectionRule, code: str, reason: str, hint: str | None = None) -> None:
+    def __init__(
+        self, data: DetectionRule, code: str, reason: str, hint: str | None = None
+    ) -> None:
         self.code = code
         self.reason = reason
         self.hint = hint
-        detail = f'{reason}; {hint}' if hint else reason
-        super().__init__(f'Rule {data.metadata.uuid} ({data.name}): {detail}')
+        detail = f"{reason}; {hint}" if hint else reason
+        super().__init__(f"Rule {data.metadata.uuid} ({data.name}): {detail}")
 
 
 def _missing_field(data: DetectionRule, field: str, requirement: str) -> SentinelCompileError:
     return SentinelCompileError(
-        data, 'compile_missing_field', f'configurations.sentinel.{field} is missing', requirement
+        data, "compile_missing_field", f"configurations.sentinel.{field} is missing", requirement
     )
 
 
@@ -154,9 +156,9 @@ class SentinelDeploy(RuleDeployer):
         else:
             raise SentinelCompileError(
                 data,
-                'compile_invalid_value',
-                'configurations.sentinel.alert.suppression is true',
-                'set it to false or a duration such as PT1H',
+                "compile_invalid_value",
+                "configurations.sentinel.alert.suppression is true",
+                "set it to false or a duration such as PT1H",
             )
         if configuration.scheduling.nrt is True:
             rule["kind"] = "NRT"

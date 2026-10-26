@@ -55,7 +55,7 @@ def seconds_text(seconds: float) -> str:
     """``0.3s``, ``12.4s``, ``2m05s``."""
     if seconds < 60:
         return f"{seconds:.1f}s"
-    minutes, rest = divmod(int(round(seconds)), 60)
+    minutes, rest = divmod(round(seconds), 60)
     return f"{minutes}m{rest:02d}s"
 
 

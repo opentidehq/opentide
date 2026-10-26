@@ -48,9 +48,12 @@ def run_export(ctx: CliContext, *, target: ExportTarget) -> dict[str, object]:
 
     ctx.apply_environment()
     try:
-        with Checklist(total=1) as checklist:
-            with generation_step(checklist, f"exports {target.value}"), failing_phase("exports"):
-                run_export_target(target)
+        with (
+            Checklist(total=1) as checklist,
+            generation_step(checklist, f"exports {target.value}"),
+            failing_phase("exports"),
+        ):
+            run_export_target(target)
     except GenerationPhaseError as exc:
         return {**phase_failure(exc), "target": target.value}
     return generation_result(checklist, target=target.value)

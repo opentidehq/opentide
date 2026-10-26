@@ -83,7 +83,7 @@ def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action
         from opentide.deployment.utils import check_status
 
         strategy = check_status(status)
-    except Exception:  # noqa: BLE001 -- an unknown status fails the deploy, not the plan
+    except Exception:
         strategy = None
     if strategy is StatusStrategy.DELETION:
         return "delete"
@@ -95,7 +95,7 @@ def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action
         return "create"
     try:
         known = DeploymentState.load(uuid).get(platform, tenant)
-    except Exception:  # noqa: BLE001 -- the deployer reports a bad shard
+    except Exception:
         known = None
     return "update" if known else "create"
 
@@ -118,7 +118,7 @@ def plan_changes(
         for tenant, uuid in pairs:
             try:
                 rule = Opentide.Rules[uuid]
-            except Exception:  # noqa: BLE001 -- planning already refused a missing rule
+            except Exception:
                 rule = None
             name = str(getattr(rule, "name", "") or uuid)
             status = _rule_status(rule, platform)

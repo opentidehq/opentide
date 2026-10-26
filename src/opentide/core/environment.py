@@ -1,5 +1,5 @@
 import os
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from importlib import import_module
@@ -23,7 +23,7 @@ _deferred_missing_envvars: ContextVar[list[str] | None] = ContextVar(
 
 
 @contextmanager
-def defer_missing_envvars() -> Iterator[list[str]]:
+def defer_missing_envvars() -> Generator[list[str]]:
     """Collect the unset ``$VAR`` names a configuration reads, instead of logging them.
 
     A dry run never reaches a tenant, so a missing credential is not an error

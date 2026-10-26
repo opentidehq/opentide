@@ -1,4 +1,6 @@
-"""Spec conformance of the flow commands: what a dry run claims, how a plan fails, what help ends with.
+"""Spec conformance of the flow commands.
+
+What a dry run claims, how a plan fails, what help ends with.
 
 Each test pins one deviation the spec audit or the end-to-end run found, so it
 cannot come back unnoticed.
@@ -152,7 +154,9 @@ def test_a_failed_plan_prints_its_tally_without_error_and_exits_1(capsys) -> Non
     result = CommandResult.from_payload(
         {
             "status": "failed",
-            "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete",
+            "message": (
+                "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete"
+            ),
             "error": "1 rule would fail to deploy",
             "_outcome_kind": "plan",
             "_exit_code": 1,
@@ -280,7 +284,10 @@ _LOG_LEVELS = {"debug", "info", "warning", "error", "critical", "exception"}
 
 
 def test_no_log_event_says_mdr() -> None:
-    """Event slugs are rendered as text (``Mdr skipped for strategy``) and read in JSON logs (D5)."""
+    """Event slugs are rendered as text (``Mdr skipped for strategy``) and read in JSON logs.
+
+    (D5)
+    """
     found = []
     for path in SRC.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
