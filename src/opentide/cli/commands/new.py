@@ -73,7 +73,11 @@ def _ask_platforms(platforms: list[DetectionPlatform]) -> list[str]:
     if not enabled:
         return []
     choices = [(platform_label(DetectionPlatform(key)), key) for key in enabled]
-    return ask_checkbox("Platform blocks (space to select, enter for none)", choices)
+    return ask_checkbox(
+        "Platform blocks",
+        choices,
+        instruction="(space selects, enter for none, arrows move)",
+    )
 
 
 def _run(

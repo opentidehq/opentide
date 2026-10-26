@@ -466,13 +466,19 @@ def test_human_mode_prompts_for_name_and_platforms(
         "opentide.cli.services.setup.interactive.ask_text",
         lambda message, **_: asked.append(message) or "Prompted Rule",
     )
+    hints: list[object] = []
     monkeypatch.setattr(
         "opentide.cli.services.setup.interactive.ask_checkbox",
-        lambda message, choices, **_: asked.append(message) or [choices[0][1]],
+        lambda message, choices, **kwargs: (
+            asked.append(message) or hints.append(kwargs.get("instruction")) or [choices[0][1]]
+        ),
     )
     result = _new(workspace, "rule", json_output=False)
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert asked == ["Rule name", "Platform blocks (space to select, enter for none)"]
+    # One hint, as questionary's instruction: the message held a second one,
+    # printed beside questionary's own (post-merge end-to-end run).
+    assert asked == ["Rule name", "Platform blocks"]
+    assert hints == ["(space selects, enter for none, arrows move)"]
     data = parse_yaml((workspace / "objects" / "rules" / "prompted-rule.yaml").read_text())
     assert list(data["configurations"]) == ["sentinel"]
 

@@ -119,6 +119,24 @@ def test_ask_checkbox_optional_builds_questionary_prompt(monkeypatch) -> None:
     ) == ["staging"]
 
 
+def test_ask_checkbox_replaces_the_key_hint_when_given_one(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    real_checkbox = interactive.questionary.checkbox
+
+    def wrap(*args, **kwargs):
+        captured.update(kwargs)
+        built = real_checkbox(*args, **kwargs)
+        built.unsafe_ask = MagicMock(return_value=[])
+        return built
+
+    monkeypatch.setattr(interactive.questionary, "checkbox", wrap)
+    interactive.ask_checkbox("Blocks", [("One", "one")], instruction="(space selects)")
+    assert captured["instruction"] == "(space selects)"
+    captured.clear()
+    interactive.ask_checkbox("Blocks", [("One", "one")])
+    assert "instruction" not in captured
+
+
 def test_ask_checkbox_required_constructs_with_callable_validator(monkeypatch) -> None:
     captured: dict[str, object] = {}
     real_checkbox = interactive.questionary.checkbox
