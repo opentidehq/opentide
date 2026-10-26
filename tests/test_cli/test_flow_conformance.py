@@ -241,6 +241,11 @@ def test_a_dry_run_defers_unset_variables_to_one_warning(caplog, monkeypatch) ->
     assert _deploy_service.unset_variables_warning(["A", "B", "C"]) == (
         "a real deploy would need $A, $B and $C, which are unset"
     )
+    # 13 names in one sentence broke mid-name at 100 columns (post-merge run).
+    assert _deploy_service.unset_variables_warning([f"V{i}" for i in range(13)]) == (
+        "a real deploy would need 13 variables that are unset: $V0, $V1, $V2 and 10 more; "
+        "opentide doctor lists them by tenant"
+    )
 
 
 def test_a_checklist_without_steps_draws_nothing() -> None:

@@ -47,9 +47,25 @@ def _tenant_targets(
     }
 
 
+#: Beyond this many unset variables the warning names the first ones and counts the rest.
+UNSET_SHOWN = 3
+
+
 def unset_variables_warning(names: list[str]) -> str:
-    """``a real deploy would need $A and $B, which are unset``."""
+    """``a real deploy would need $A and $B, which are unset``.
+
+    Four platforms' tenants made it one sentence of 13 names that the terminal
+    broke mid-name (post-merge end-to-end run); past :data:`UNSET_SHOWN` it
+    counts the rest and points at ``opentide doctor``, which lists them by tenant.
+    """
     shown = [f"${name}" for name in names]
+    if len(shown) > UNSET_SHOWN:
+        rest = len(shown) - UNSET_SHOWN
+        return (
+            f"a real deploy would need {len(shown)} variables that are unset: "
+            f"{', '.join(shown[:UNSET_SHOWN])} and {rest} more; opentide doctor lists "
+            "them by tenant"
+        )
     listed = shown[0] if len(shown) == 1 else f"{', '.join(shown[:-1])} and {shown[-1]}"
     which = "which is unset" if len(shown) == 1 else "which are unset"
     return f"a real deploy would need {listed}, {which}"
