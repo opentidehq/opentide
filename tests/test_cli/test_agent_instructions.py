@@ -127,7 +127,7 @@ def test_the_parser_rejects_what_an_agent_would_trip_on(root: object) -> None:
     """The check is real: each of these is a usage error, and the fixed form is not."""
     for bad in (
         "opentide deploy --dry-run --strategy PREVIEW --all --platform nowhere",
-        "opentide info rules extra",
+        "opentide info vocab surface extra",
         "opentide validate --nope",
         "opentide validate query --live",
         "opentide setup skills discover --query",
