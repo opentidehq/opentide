@@ -234,3 +234,26 @@ def test_a_generate_failure_never_shows_a_raw_event_slug(repo: Path) -> None:
     message = json.loads(result.stdout)["message"]
     assert "00000000-0000-4000-8002-00000000dead does not exist in the catalogue" in message
     assert "uuid_does_not_exist" not in result.stdout + result.stderr
+
+
+def test_a_rule_deploy_frames_is_not_also_a_log_line(repo: Path) -> None:
+    """E2E 31c: deploy printed `error: Malformed object yaml` and then the frame."""
+    (repo / _RULE).write_text("- just\n- a list\n", encoding="utf-8")
+    result = _invoke(repo, *_DEPLOY, json_output=False)
+    assert result.exit_code == 1, result.stdout + result.stderr
+    assert "error[yaml_parse]: expected a mapping at the top of the file" in result.output
+    assert "Malformed object yaml" not in result.output
+    assert "malformed_object_yaml" not in result.output
+
+
+def test_deploy_warns_once_about_an_object_file_it_could_not_read(repo: Path) -> None:
+    """A malformed file deploy does not read is one warning, not a log line."""
+    threats = repo / "objects" / "threats"
+    threats.mkdir(parents=True, exist_ok=True)
+    (threats / "broken.yaml").write_text("- just\n- a list\n", encoding="utf-8")
+    result = _invoke(repo, *_DEPLOY, json_output=False)
+    assert "Malformed object yaml" not in result.output
+    assert (
+        "warning: 1 object file could not be read: objects/threats/broken.yaml; "
+        "opentide validate shows where"
+    ) in " ".join(result.output.split())

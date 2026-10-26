@@ -26,27 +26,36 @@ _missing_object_folders_logged: set[str] = set()
 
 
 #: Set while a caller reports unreadable object files itself (``validate`` turns
-#: each into a ``yaml_parse`` diagnostic), so the file is not also logged.
-_caller_reports_parse_errors: ContextVar[bool] = ContextVar(
-    "caller_reports_parse_errors", default=False
+#: each into a ``yaml_parse`` diagnostic), so the file is not also logged. It
+#: holds the files the registry could not read while it was set.
+_caller_reports_parse_errors: ContextVar[list[dict[str, str]] | None] = ContextVar(
+    "caller_reports_parse_errors", default=None
 )
 
 
 @contextmanager
-def parse_errors_reported_by_caller() -> Generator[None]:
-    """Log object files the registry cannot load at DEBUG: the caller reports them."""
-    token = _caller_reports_parse_errors.set(True)
+def parse_errors_reported_by_caller() -> Generator[list[dict[str, str]]]:
+    """Log object files the registry cannot load at DEBUG: the caller reports them.
+
+    Yields the list of ``{"path", "error"}`` the registry could not read while
+    the block ran, for a caller that reports them after the fact (``deploy``).
+    """
+    seen: list[dict[str, str]] = []
+    token = _caller_reports_parse_errors.set(seen)
     try:
-        yield
+        yield seen
     finally:
         _caller_reports_parse_errors.reset(token)
 
 
-def _log_parse_error(event: str, **fields: str) -> None:
-    if _caller_reports_parse_errors.get():
-        logger.debug(event, **fields)
-    else:
+def _log_parse_error(event: str, *, source: str, problem: str, **fields: str) -> None:
+    """Log one object file the registry cannot load, or hand it to the caller that reports it."""
+    seen = _caller_reports_parse_errors.get()
+    if seen is None:
         logger.error(event, **fields)
+        return
+    logger.debug(event, **fields)
+    seen.append({"path": source, "error": problem})
 
 
 def _shown_path(path_str: str) -> str:
@@ -345,7 +354,12 @@ class RegistryBuilder:
         meta_uuid = metadata.get("uuid") if isinstance(metadata, dict) else None
         identifier = body.get("uuid") or meta_uuid
         if not identifier:
-            _log_parse_error("missing_identifier_from_model", file=str(model_path))
+            _log_parse_error(
+                "missing_identifier_from_model",
+                source=str(model_path),
+                problem="object YAML has no uuid",
+                file=str(model_path),
+            )
             self.parse_errors.append(
                 {
                     "path": str(model_path),
@@ -400,7 +414,13 @@ class RegistryBuilder:
             _, body, error, kind = _parse_yaml_file(path_str)
             if error or body is None:
                 event = "unreadable_object_file" if kind == "oserror" else "malformed_object_yaml"
-                _log_parse_error(event, path=_shown_path(path_str), error=error or "")
+                _log_parse_error(
+                    event,
+                    source=path_str,
+                    problem=error or root_mapping_problem(body) or "",
+                    path=_shown_path(path_str),
+                    error=error or "",
+                )
                 self.parse_errors.append(
                     {
                         "path": path_str,

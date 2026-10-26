@@ -210,29 +210,85 @@ def run_deploy(
     from contextlib import nullcontext
 
     from opentide.core.environment import defer_missing_envvars
+    from opentide.registry.builder import parse_errors_reported_by_caller
 
     plan_warnings: list[str] = []
     # Nothing live runs in a dry run: an unset credential is what a real deploy
     # would need, said once as a warning, not an error.
     unset: list[str]
-    with defer_missing_envvars() if dry_run else nullcontext([]) as unset:
-        result = _deploy(
-            ctx,
-            plan_warnings,
-            strategies=strategies,
-            all_files=all_files,
-            platform=platform,
-            dry_run=dry_run,
-            skip_promotion=skip_promotion,
-            keep_deprecated=keep_deprecated,
-            wide=wide,
-            skip_unconfigured=skip_unconfigured,
-        )
+    # Deploy reports the object files the registry could not read: a rule it
+    # reads is one frame (ObjectFileError), any other file one warning, never
+    # also a log line for the same file.
+    with (
+        parse_errors_reported_by_caller() as unreadable,
+        defer_missing_envvars() if dry_run else nullcontext([]) as unset,
+    ):
+        try:
+            result = _deploy(
+                ctx,
+                plan_warnings,
+                strategies=strategies,
+                all_files=all_files,
+                platform=platform,
+                dry_run=dry_run,
+                skip_promotion=skip_promotion,
+                keep_deprecated=keep_deprecated,
+                wide=wide,
+                skip_unconfigured=skip_unconfigured,
+            )
+        except UserFileError as error:
+            for path, problem in _unread_object_files(unreadable, exclude=error.path):
+                logger.error("malformed_object_yaml", path=path, error=problem)
+            raise
+    unread = _unread_object_files(unreadable)
+    if unread:
+        plan_warnings.append(_unread_warning(unread))
     if unset:
         plan_warnings.append(unset_variables_warning(unset))
     if plan_warnings:
         result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
     return result
+
+
+def _unread_object_files(
+    entries: list[dict[str, str]], exclude: object = None
+) -> list[tuple[str, str]]:
+    """``(path, problem)`` for each object file the registry could not read this run.
+
+    *entries* come from ``parse_errors_reported_by_caller()``. Paths are shown
+    as :func:`_shown` gives them. *exclude* is a file already reported as a frame.
+    """
+    from pathlib import Path
+
+    skipped = None if exclude is None else Path(str(exclude)).resolve()
+    unread: list[tuple[str, str]] = []
+    for entry in entries:
+        path = Path(entry["path"])
+        if skipped is not None and path.resolve() == skipped:
+            continue
+        unread.append((_shown(path), entry["error"]))
+    return unread
+
+
+def _shown(path: object) -> str:
+    """Relative to the current directory when inside it, else to the workspace."""
+    from pathlib import Path
+
+    from opentide.core.root import get_repo_root
+
+    resolved = Path(str(path)).resolve()
+    for base in (Path.cwd(), get_repo_root()):
+        try:
+            return resolved.relative_to(Path(base).resolve()).as_posix()
+        except (OSError, ValueError):
+            continue
+    return str(path)
+
+
+def _unread_warning(unread: list[tuple[str, str]]) -> str:
+    files = ", ".join(path for path, _ in unread)
+    noun = "object file" if len(unread) == 1 else "object files"
+    return f"{len(unread)} {noun} could not be read: {files}; opentide validate shows where"
 
 
 #: The CLI's answer when ``--strategy`` is missing.
