@@ -50,7 +50,7 @@ def test_elastic_duration_seconds_parses_compound_shorthand() -> None:
             duration_seconds(malformed)
 
 
-@pytest.mark.parametrize("value", ["５m", "٣h", "1d٢h", "PT١H", "P٧D"])
+@pytest.mark.parametrize("value", ["\uff15m", "\u0663h", "1d\u0662h", "PT\u0661H", "P\u0667D"])
 def test_elastic_duration_seconds_rejects_non_ascii_digits(value: str) -> None:
     # #589: `\d` matched any Unicode digit, and int() parsed it.
     from opentide.platforms.elastic.durations import duration_seconds

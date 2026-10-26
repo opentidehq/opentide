@@ -267,9 +267,9 @@ def test_elastic_config_non_object_scheduling_is_a_shape_error(scheduling: objec
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"scheduling": {"interval": "５m"}},  # fullwidth 5
-        {"scheduling": {"lookback": "٣h"}},  # Arabic-Indic 3
-        {"suppression": {"group_by": ["host.name"], "duration": "PT١H"}},
+        {"scheduling": {"interval": "\uff15m"}},  # fullwidth 5
+        {"scheduling": {"lookback": "\u0663h"}},  # Arabic-Indic 3
+        {"suppression": {"group_by": ["host.name"], "duration": "PT\u0661H"}},
     ],
 )
 def test_elastic_config_non_ascii_digits_report_duration(overrides: dict) -> None:
