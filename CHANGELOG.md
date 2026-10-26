@@ -92,8 +92,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
-Found by an end-to-end run of the merged CLI rework (`development` at 7d48d7f):
-
 - **Object files a person can save by mistake no longer crash a command.** An empty or comment-only object file, a file saved as Latin-1, an impossible date (`created: 2026-13-45`) and a list where `detection_model` belongs ended in `error[internal]` from `validate`, `lint`, `info`, `deploy --dry-run`, `rules unreviewed` or `share preview`. They are `yaml_parse` (`found an empty file`, `the file is not UTF-8 text (byte 0xe9 at offset 9); save it as UTF-8`, `'2026-13-45' is not a valid date`) or `schema_validation` findings.
 - **A read-only workspace is a failure line, not a crash.** `validate --fix` lists the file it could not write; `opentide new` exits `1` with the new `failure.code` `path_not_writable`.
 - **A `--repo` that does not exist exits `2`** (`usage_invalid_value`) instead of passing as an empty catalogue, which turned a CI job with a typo green. `setup` may still name a folder it is about to create.
@@ -110,7 +108,6 @@ Found by an end-to-end run of the merged CLI rework (`development` at 7d48d7f):
 - **Outside a workspace**, `validate`, `lint` and `deploy --dry-run` end with `→ opentide setup`; a bare `opentide` prints the help and exits `0` in every mode; the home screen suggests `opentide new threat` for an empty catalogue instead of a deploy.
 - **Help screens**: `PLATFORM`, `PROVIDER` and `CHECK` metavars instead of choice lists broken mid-word, no reStructuredText backticks, and summaries without trailing periods. `--platform defender` suggests `defender_for_endpoint` and `--format gitlab` suggests `codequality`.
 - **Smaller wording fixes**: the setup warning outside a git repository says how to start one; `new` prints one line for the optional metadata it left out, and the wizard says the organisation goes in the README; deprecations are `warning:` lines; `info` prints label and value columns instead of a boxed Key/Value table; `lint` with notes alone ends on `✓ 6 notes in 6 files`; more than three unset variables are counted; the TUI's status line says the counted outcome; the agent `tip:` comes after the next steps; `setup skills discover` lists slugs and `show` prints a skill once with its install step; the `new rule` platform prompt has one key hint; an underline label that would pass the terminal edge moves below it, and the `--watch` view wraps frames as `validate` does.
-
 - **`invalid_uuid`, `missing_uuid` and `duplicate_id` frames end in a step to take** (`╰─ help: replace it with a UUID v4: …`); they had no help line.
 - **`opentide lint` prints a placeholder's help line** in its code frame, and `opentide explain placeholder` has a page.
 - **`opentide --json commands` lists `OPENTIDE_PROGRESS`** under `environment`.
