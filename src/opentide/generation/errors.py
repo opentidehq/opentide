@@ -39,9 +39,42 @@ def describe_exception(exc: BaseException) -> str:
     """Render *exc* as a traceback's last line: ``KeyError: 'tlp'``, not ``'tlp'``."""
     if isinstance(exc, ObjectGenerationError | GenerationPhaseError):
         return str(exc)
+    if _is_validation_error(exc):
+        return _describe_validation_error(exc)
     detail = str(exc).strip()
     name = type(exc).__name__
     return f"{name}: {detail}" if detail else name
+
+
+def _is_validation_error(exc: BaseException) -> bool:
+    from pydantic import ValidationError
+
+    return isinstance(exc, ValidationError)
+
+
+def _describe_validation_error(exc: BaseException) -> str:
+    """One line instead of Pydantic's report, which named the internal model
+    (``DetectionRule_v1_1``), dumped the input and linked errors.pydantic.dev
+    (post-merge end-to-end run of ``generate docs`` on an invalid rule).
+    """
+    from pydantic import ValidationError
+
+    assert isinstance(exc, ValidationError)
+    errors = exc.errors()
+    if not errors:
+        return "an object does not validate; opentide validate shows each finding"
+    first = errors[0]
+    location = ".".join(str(part) for part in first.get("loc", ())) or "the object"
+    message = str(first.get("msg", "is not valid"))
+    message = message[:1].lower() + message[1:]
+    data = first.get("input")
+    name = data.get("name") if isinstance(data, dict) else None
+    subject = f"{name!r}" if isinstance(name, str) and name else "an object"
+    more = f" (and {len(errors) - 1} more)" if len(errors) > 1 else ""
+    return (
+        f"{subject} does not validate: {location}: {message}{more}; "
+        "opentide validate shows each finding"
+    )
 
 
 @contextmanager

@@ -203,3 +203,24 @@ def test_failing_phase_counts_a_repeated_error_once() -> None:
     assert (
         str(caught.value) == "schemas: logged 2 errors, first: Malformed object yaml · path: a.yaml"
     )
+
+
+def test_a_model_that_does_not_validate_is_one_readable_line() -> None:
+    """generate docs printed Pydantic's report: the internal model name, the input dump
+    and an errors.pydantic.dev link (post-merge end-to-end run)."""
+    from pydantic import BaseModel, ValidationError
+
+    class DetectionRule_v1_1(BaseModel):
+        name: str
+        description: str
+        version: int
+
+    with pytest.raises(ValidationError) as caught:
+        DetectionRule_v1_1.model_validate({"name": "LSASS access", "version": "x"})
+    text = describe_exception(caught.value)
+    assert text == (
+        "'LSASS access' does not validate: description: field required (and 1 more); "
+        "opentide validate shows each finding"
+    )
+    assert "pydantic.dev" not in text
+    assert "DetectionRule_v1_1" not in text
