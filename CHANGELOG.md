@@ -92,6 +92,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
+- **An empty Elastic duration passed validate and crashed compile.** `""` for `scheduling.interval`, `suppression.duration` or `new_terms.history_window_start` skipped the duration check; it now reports `duration` at validate time, as `scheduling.lookback` already did. A threshold rule's empty `suppression.duration` reports `duration` too (a missing one is still `suppression_shape`). A `scheduling` that is not an object is reported as a `scheduling` shape error instead of `duration` ([#589](https://github.com/opentidehq/opentide/issues/589)).
+- **Elastic durations accepted non-ASCII digits.** `５m` or `PT١H` parsed as five minutes and one hour; Elastic durations now take ASCII digits `0-9` only and report `duration` otherwise ([#589](https://github.com/opentidehq/opentide/issues/589)).
+- **An Elastic tenant `api_key` only had to start with `$`.** `$`, `$1KEY` or `$ELASTIC KEY` loaded and never resolved. The key must be `$VAR` or `${VAR}`; anything else, a literal key included, fails the config load. `${VAR}` now resolves like `$VAR` ([#589](https://github.com/opentidehq/opentide/issues/589)).
 - **`invalid_uuid`, `missing_uuid` and `duplicate_id` frames end in a step to take** (`╰─ help: replace it with a UUID v4: …`); they had no help line.
 - **`opentide lint` prints a placeholder's help line** in its code frame, and `opentide explain placeholder` has a page.
 - **`opentide --json commands` lists `OPENTIDE_PROGRESS`** under `environment`.
