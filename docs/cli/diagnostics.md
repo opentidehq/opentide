@@ -21,6 +21,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`command_failed`](#command_failed) | The command failed for a reason no more specific code covers. |
 | [`config_enum_unknown`](#config_enum_unknown) | A value is not one of those your deployment configuration declares. |
 | [`config_parse`](#config_parse) | A configuration file could not be read as TOML. |
+| [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
 | [`deployment_state_platform`](#deployment_state_platform) | A deployment state shard names a platform that stores no external ids. |
 | [`deployment_state_shape`](#deployment_state_shape) | A deployment state shard is not the JSON shape opentide writes. |
 | [`deployment_state_uuid_mismatch`](#deployment_state_uuid_mismatch) | A deployment state shard's file name and contents name different rules. |
@@ -220,6 +221,23 @@ name = "prod"
 ### How to fix
 
 Open the file at the line and column the diagnostic names and fix the TOML syntax there: an unclosed `[[` header, a missing quote, or a key written twice. Then run the command again.
+
+## cve_lookup_unavailable
+
+A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them.
+
+Severity: warning. Reported by `opentide validate --check cve`; fails `--strict`.
+
+### Example
+
+```yaml
+threat:
+  cve: [CVE-2024-3094]   # checked while the lookup service is unreachable
+```
+
+### How to fix
+
+Check network access to https://vulnerability.circl.lu (or the configured lookup URL and any proxy), then run `opentide validate --check cve` again. The identifiers themselves were not judged: the check failed open.
 
 ## deployment_state_platform
 

@@ -468,7 +468,7 @@ def _root_shape_frame(
         return None
     try:
         message = root_mapping_problem(parse_yaml(text))
-    except Exception:  # noqa: BLE001 -- yaml_problem() already said it parses
+    except Exception:
         return None
     position = first_content_span(text)
     if message is None or position is None:

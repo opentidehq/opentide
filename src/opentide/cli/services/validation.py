@@ -28,7 +28,6 @@ from opentide.cli.ui.diagnostics import (
     relative_path,
 )
 from opentide.cli.ui.glyphs import glyph
-from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
@@ -146,6 +145,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
 _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
     ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
     ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_integration"}),
+    ValidateCheck.cve.value: frozenset({"cve_lookup_unavailable"}),
 }
 
 #: Every code a ``validate`` finding can carry. ``tests/test_cli/test_explain.py``

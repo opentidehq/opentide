@@ -32,7 +32,7 @@ def lint_cmd(
         from opentide.cli.ui.diagnostics import SourceFiles, diagnostic_from_lint_finding
         from opentide.core.logging.config import get_stdout_console
 
-        root, sources = Path(result["path"]), SourceFiles()
+        root, sources = Path(str(result["path"])), SourceFiles()
         render_diagnostics(
             get_stdout_console(),
             [

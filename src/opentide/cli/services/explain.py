@@ -1,8 +1,8 @@
 """The pages behind ``opentide explain <code>``.
 
-One Markdown page per diagnostic code and per ``failure.code`` lives in ``opentide/data/diagnostics/``:
-a ``# <code>`` heading, a one-sentence summary, then ``## Example`` and
-``## How to fix``. ``docs/cli/diagnostics.md`` is generated from them by
+One Markdown page per diagnostic code and per ``failure.code`` lives in
+``opentide/data/diagnostics/``: a ``# <code>`` heading, a one-sentence summary,
+then ``## Example`` and ``## How to fix``. ``docs/cli/diagnostics.md`` is generated from them by
 :func:`reference_markdown` (``scripts/build/render_diagnostics_docs.py``).
 """
 

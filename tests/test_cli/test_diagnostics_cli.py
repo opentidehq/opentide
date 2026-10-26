@@ -70,15 +70,15 @@ def _issues(result: Result) -> dict[str, dict]:
 
 
 def test_case_only_typos_get_a_safe_fix(repo: Path) -> None:
-    """D1 and E2E 15: ``AMBER``, ``substantial_incident`` and ``design`` are respellings."""
+    """D1 and E2E 15: ``AMBER``, ``high`` and ``design`` are respellings."""
     rule = repo / _RULE
     _edit(rule, "  tlp: clear\n", "  tlp: AMBER\n")
-    _edit(rule, "severity: Substantial incident", "severity: substantial_incident")
+    _edit(rule, "\nseverity: High\n", "\nseverity: high\n")
     _edit(rule, "    status: STAGING", "    status: staging")
     issues = _issues(_invoke(repo, "validate"))
     expected = {
         "metadata.tlp": ("vocab_unknown", "amber"),
-        "severity": ("vocab_unknown", "Substantial incident"),
+        "severity": ("vocab_unknown", "High"),
         "configurations.sentinel.status": ("config_enum_unknown", "STAGING"),
     }
     assert set(issues) == set(expected)
@@ -115,7 +115,7 @@ def test_a_failed_validate_says_what_to_run_next(repo: Path) -> None:
     _edit(repo / _RULE, "  tlp: clear\n", "  tlp: clearr\n")
     payload = json.loads(_invoke(repo, "validate").stdout)
     assert payload["next_actions"] == [
-        {"command": "opentide explain vocab_unknown", "reason": "how to fix it"},
+        {"command": "opentide --json explain vocab_unknown", "reason": "how to fix it"},
         {"command": "opentide --json validate", "reason": "check again"},
     ]
     human = _invoke(repo, "validate", json_output=False)
@@ -170,7 +170,7 @@ def test_a_toml_typo_is_a_config_diagnostic_not_a_crash(repo: Path, command: tup
     assert diagnostic["path"] == _PLATFORM.as_posix()
     assert (diagnostic["line"], diagnostic["column"]) == (4, 10)
     assert diagnostic["help"]
-    assert payload["next_actions"][0]["command"] == "opentide explain config_parse"
+    assert payload["next_actions"][0]["command"] == "opentide --json explain config_parse"
 
 
 def test_a_toml_typo_prints_a_frame_then_one_outcome_line(repo: Path) -> None:

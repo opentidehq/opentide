@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING, cast
 
 import typer
 
@@ -25,6 +26,9 @@ from opentide.cli.services.validation import (
 from opentide.cli.ui.codeframe import render_diagnostics
 from opentide.cli.ui.mode import elapsed_ms
 from opentide.core.logging.config import get_stdout_console
+
+if TYPE_CHECKING:
+    from opentide.cli.ui.diagnostics import Diagnostic
 
 validate_app = typer.Typer(help="Object and query validation")
 
@@ -70,7 +74,7 @@ def validate_group(
         uuids=uuid,
         object_types=object_type,
     )
-    diagnostics = result.pop("_diagnostics", [])
+    diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
     outcome = CommandResult.from_payload(result, default_message="Validation passed")
     if cli.json_output:
         emit_result(cli, outcome)

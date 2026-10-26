@@ -95,5 +95,5 @@ def test_a_configured_platform_status_passes() -> None:
 
 
 def test_no_configured_status_leaves_the_field_free(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(CONFIG_ENUM_RESOLVERS, "tide.config.statuses", lambda: [])
+    monkeypatch.setitem(CONFIG_ENUM_RESOLVERS, "tide.config.statuses", list)
     assert _check(_rule("anything")) == []
