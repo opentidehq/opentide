@@ -277,6 +277,9 @@ def _explorer_jobs(branch: str, python_version: str) -> list[str]:
           runs-on: ubuntu-latest
           needs: explorer
           if: github.event_name == 'push' && github.ref == 'refs/heads/{branch}'
+          concurrency:
+            group: pages
+            cancel-in-progress: false
           permissions:
             pages: write
             id-token: write
@@ -410,23 +413,16 @@ def render_github(options: CiRenderOptions) -> str:
     if options.explorer_pages:
         jobs.extend(_explorer_jobs(branch, options.python_version))
 
+    # The Pages permissions and the ``pages`` concurrency group belong to the
+    # deploy-explorer job alone. At workflow level the group held every run of
+    # the workflow: GitHub keeps one run pending per group and cancels the older
+    # pending one, so a burst of merges never deployed the middle merge's rules.
     permissions = ""
-    concurrency = ""
     if options.explorer_pages:
         permissions = textwrap.dedent(
             """\
             permissions:
               contents: read
-              pages: write
-              id-token: write
-
-            """
-        )
-        concurrency = textwrap.dedent(
-            """\
-            concurrency:
-              group: pages
-              cancel-in-progress: false
 
             """
         )
@@ -443,7 +439,7 @@ def render_github(options: CiRenderOptions) -> str:
         "env:\n"
         "  OPENTIDE_REPO_ROOT: ${{ github.workspace }}\n"
         "\n"
-        f"{permissions}{concurrency}jobs:\n"
+        f"{permissions}jobs:\n"
     )
     job_yaml = "\n".join(indent(job, 2) for job in jobs)
     return header_comment(options) + preamble + job_yaml.rstrip("\n") + "\n"

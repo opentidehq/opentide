@@ -77,6 +77,30 @@ def test_cli_unreviewed_prints_a_human_line(tmp_path: Path, invoke_cli) -> None:
     assert "rule::1.0" in result.stdout
 
 
+def test_cli_unreviewed_reports_a_malformed_rule_and_lists_the_rest(
+    tmp_path: Path, invoke_cli
+) -> None:
+    """One rule file that did not parse ended the command with a traceback, no JSON."""
+    rules = tmp_path / "objects" / "rules"
+    rules.mkdir(parents=True)
+    _write(rules / "legacy.yaml", "rule::1.0", None)
+    (rules / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+    (rules / "latin1.yaml").write_bytes("name: Règle\n".encode("latin-1"))
+
+    result = invoke_cli("rules", "unreviewed", repo=tmp_path)
+
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert [rule["path"] for rule in payload["rules"]] == ["objects/rules/legacy.yaml"]
+    assert sorted(payload["unreadable"]) == [
+        "objects/rules/broken.yaml",
+        "objects/rules/latin1.yaml",
+    ]
+    assert payload["warnings"][0].startswith(
+        "Could not read objects/rules/broken.yaml, so its review was not checked: "
+    )
+
+
 def test_cli_rejects_a_zero_window(tmp_path: Path, invoke_cli) -> None:
     result = invoke_cli("rules", "unreviewed", "--older-than", "0d", repo=tmp_path)
     assert result.exit_code != 0

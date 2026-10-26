@@ -7,6 +7,7 @@ import typer
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
 from opentide.cli.enums import DetectionPlatform
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_error, emit_result
 from opentide.cli.services.deploy import run_deploy
 
@@ -75,6 +76,7 @@ def deploy_cmd(
     --strategy PREVIEW; the default-branch job runs --strategy RELEASE.
     """
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
@@ -109,6 +111,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
     from opentide.core.index_manager import IndexManager
     from opentide.registry.discovery import discover_workspace
 
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     workspace = discover_workspace()
@@ -121,6 +124,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
 
 @deploy_app.command("replay-state", hidden=True)
 def deploy_replay_state_cmd(
+    ctx: typer.Context,
     state_commit: str = typer.Argument(..., help="Commit whose deployment-state changes to replay"),
 ) -> None:
     """Replay one commit's deployment-state changes onto the checkout (CI write-back).
@@ -131,6 +135,7 @@ def deploy_replay_state_cmd(
     """
     from opentide.ci.state_replay import main as replay_main
 
+    refuse_dropped(ctx)
     raise typer.Exit(replay_main([state_commit]))
 
 
@@ -139,6 +144,7 @@ def deploy_metadata_cmd(
     ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
 ) -> None:
     """Reserved for a future metadata deployment implementation."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     emit_error(
         cli,

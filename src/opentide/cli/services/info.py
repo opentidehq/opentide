@@ -11,6 +11,7 @@ from opentide.core.logging.config import get_stdout_console
 from opentide.core.object_fields import as_body, matches_technique, object_platforms
 from opentide.core.registry import Opentide
 from opentide.platforms.enabled import enabled_systems
+from opentide.registry.builder import parse_errors_reported_by_caller
 
 if TYPE_CHECKING:
     from rich.table import Table
@@ -30,7 +31,10 @@ def collect_info(
 ) -> dict[str, Any]:
     """Collect system information about the detection repository."""
     ctx.apply_environment()
-    Opentide.reload()
+    # Each unreadable file is counted in the table and the outcome line, and
+    # `opentide validate` says why; logging it as well would say it twice.
+    with parse_errors_reported_by_caller():
+        Opentide.reload()
     parse_errors = list(IndexManager.load().get("parse_errors") or [])
     enabled_platforms = set(enabled_systems())
     platforms_info = []

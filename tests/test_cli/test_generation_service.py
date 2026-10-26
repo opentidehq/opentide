@@ -138,3 +138,22 @@ def test_run_generate_docs_scoped(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("opentide.documentation.cli.run", run_docs)
     generation.run_generate_docs(rules=True)
     run_docs.assert_called_once()
+
+
+def test_run_generate_docs_writes_every_scope_flag_given(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``generate docs --rules --threats`` wrote rules only: the first flag won."""
+
+    def _run_docs(*, scope: str, **_: object) -> dict[str, object]:
+        counts = {"rules": 0, "objectives": 0, "threats": 0}
+        counts[scope] = 2
+        return {"message": f"Documentation scope {scope} completed", "counts": counts}
+
+    run_docs = MagicMock(side_effect=_run_docs)
+    monkeypatch.setattr("opentide.documentation.cli.run", run_docs)
+
+    result = generation.run_generate_docs(rules=True, threats=True, output="out")
+
+    assert [call.kwargs["scope"] for call in run_docs.call_args_list] == ["rules", "threats"]
+    assert all(call.kwargs["output"] == "out" for call in run_docs.call_args_list)
+    assert result["scopes"] == ["rules", "threats"]
+    assert result["counts"] == {"rules": 2, "objectives": 0, "threats": 2}

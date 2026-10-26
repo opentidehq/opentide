@@ -1,5 +1,3 @@
-from abc import ABC
-
 import structlog
 
 from opentide.core.debug import DebugEnvironment
@@ -10,7 +8,7 @@ from opentide.platforms.transport import tenant_tls_verify
 logger = structlog.get_logger("opentide.platforms.carbon_black.client")
 
 
-class CarbonBlackCloudConnection(ABC):
+class CarbonBlackCloudConnection:
     """Utility class used to initialize constants for Carbon Black Cloud operations."""
 
     def __init__(self):
@@ -71,14 +69,20 @@ class CarbonBlackCloudConnection(ABC):
                 logger.critical(
                     "could_not_fetch_organization_key_for_organization",
                     arg0=org,
-                    advice="Double check that there is a namespaced entry for this organization in the TOML config",
+                    advice=(
+                        "Double check that there is a namespaced entry for this organization in "
+                        "the TOML config"
+                    ),
                 )
                 cbc_secrets_error_flag = True
             if "token" not in tenant_secrets:
                 logger.critical(
                     "target_organization_is_not_present_in_secrets_configuration",
                     arg0=org,
-                    advice="Double check that there is a namespaced entry for this organization in the TOML config",
+                    advice=(
+                        "Double check that there is a namespaced entry for this organization in "
+                        "the TOML config"
+                    ),
                 )
                 cbc_secrets_error_flag = True
             if not cbc_secrets_error_flag:

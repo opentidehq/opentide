@@ -119,7 +119,7 @@ def test_the_release_log_leads_with_the_current_release() -> None:
     version, date = _current_release()
     page = DOCS / "usage" / "releases.md"
     headings = re.findall(
-        r"^##\s+(\d+\.\d+\.\d+)\s+[-\u2014]\s+(.+)$", page.read_text("utf-8"), re.M
+        r"^##\s+(\d+\.\d+\.\d+)\s+[-\u2014]\s+(.+)$", page.read_text("utf-8"), re.MULTILINE
     )
     assert headings, f"no version headings in {page}"
     assert headings[0][0] == version, (

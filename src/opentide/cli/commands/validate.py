@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import typer
 
@@ -19,6 +20,7 @@ from opentide.cli.findings import (
     publish_summary,
     write_report_file,
 )
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import (
     CommandResult,
     emit_result,
@@ -35,6 +37,9 @@ from opentide.cli.ui.codeframe import render_diagnostics
 from opentide.cli.ui.mode import elapsed_ms
 from opentide.cli.ui.reports import ReportFormat
 from opentide.core.logging.config import get_stdout_console
+
+if TYPE_CHECKING:
+    from opentide.cli.ui.diagnostics import Diagnostic
 
 validate_app = typer.Typer(help="Object and query validation")
 
@@ -59,6 +64,7 @@ def validate_group(
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     check_report_options(cli, report_format, output)
@@ -82,7 +88,7 @@ def validate_group(
         uuids=uuid,
         object_types=object_type,
     )
-    diagnostics = result.pop("_diagnostics", [])
+    diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
     outcome = CommandResult.from_payload(result, default_message="Validation passed")
     write_report_file(report_format, output, diagnostics, command="validate")
     if cli.json_output:
@@ -130,7 +136,8 @@ def validate_query_cmd(
         None, "--uuid", help="Check only the rule with this UUID (repeatable)"
     ),
 ) -> None:
-    """Query validation checks the tenant. Pass --live."""
+    """Check rule queries against the platform's tenants (needs --live)."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
     result = validate_query_platform(

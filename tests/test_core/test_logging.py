@@ -103,6 +103,55 @@ def test_plain_console_writes_no_escapes_under_force_color_zero(
     assert buffer.getvalue() == "OK done\n"
 
 
+@pytest.mark.parametrize(
+    ("mode", "env", "expected"),
+    [
+        ("plain", {}, True),
+        ("agent", {}, True),
+        ("human", {}, False),
+        ("json", {}, False),
+        ("plain", {"FORCE_COLOR": "1"}, False),
+        ("agent", {"PY_COLORS": "1"}, False),
+        ("plain", {"FORCE_COLOR": "0"}, True),
+    ],
+)
+def test_plain_and_agent_modes_have_no_colour_unless_forced(
+    monkeypatch: pytest.MonkeyPatch, mode: str, env: dict[str, str], expected: bool
+) -> None:
+    """Spec, Output modes: ``plain`` colours only when FORCE_COLOR/PY_COLORS force it."""
+    from opentide.cli.context import CliContext
+    from opentide.cli.ui.mode import OutputMode, reset_mode, set_mode
+    from opentide.core.logging.config import _make_console
+
+    for name in ("FORCE_COLOR", "PY_COLORS", "NO_COLOR"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    set_mode(OutputMode(mode))
+    try:
+        config = LoggingConfig.from_cli_context(CliContext())
+    finally:
+        reset_mode()
+    assert config.no_color is expected
+    assert _make_console(stderr=False, config=config).no_color is expected
+
+
+def test_console_falls_back_on_an_ascii_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A literal ``·`` or ``…`` in a message must not crash on ``PYTHONIOENCODING=ascii``."""
+    import io
+
+    from opentide.core.logging.config import _make_console
+
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="ascii")
+    monkeypatch.setattr("sys.stdout", stream)
+    _make_console(stderr=False, config=LoggingConfig(plain=True)).print(
+        "warning: Tenant skipped · system: sentinel · detail: cut…", markup=False
+    )
+    stream.flush()
+    assert raw.getvalue() == b"warning: Tenant skipped - system: sentinel - detail: cut...\n"
+
+
 def test_is_json_output() -> None:
     init_logging(LoggingConfig(json_output=True), force=True)
     assert is_json_output() is True

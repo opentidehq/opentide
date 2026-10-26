@@ -134,7 +134,8 @@ def test_a_phase_that_logs_an_error_fails_the_run(
     payload = _failure(_invoke(repo, *command))
     assert payload["phase"] == phase
     message = str(payload["message"])
-    assert message.startswith(f"{phase}: logged an error: malformed_object_yaml (path=")
+    # Readable, as a log line reads: never the raw event slug (D14).
+    assert message.startswith(f"{phase}: logged an error: Malformed object yaml · path: ")
     assert str(broken) in message
 
 
@@ -149,7 +150,7 @@ def test_a_raise_after_a_logged_error_reports_both(tmp_path: Path) -> None:
     assert message.startswith(
         "docs: Exception: detection_model 00000000-0000-4000-8002-000000000001 does not exist "
         f"in the catalogue while rendering {_RULE}; "
-        "logged an error: malformed_object_yaml (path="
+        "logged an error: Malformed object yaml · path: "
     )
     assert str(objective) in message
 
@@ -200,5 +201,5 @@ def test_failing_phase_counts_a_repeated_error_once() -> None:
         logger.error({"timestamp": "09:00:01", "path": "a.yaml", "event": "malformed_object_yaml"})
         logger.error({"event": "malformed_object_yaml", "path": "b.yaml"})
     assert (
-        str(caught.value) == "schemas: logged 2 errors, first: malformed_object_yaml (path=a.yaml)"
+        str(caught.value) == "schemas: logged 2 errors, first: Malformed object yaml · path: a.yaml"
     )

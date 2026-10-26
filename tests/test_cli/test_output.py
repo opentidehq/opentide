@@ -190,7 +190,10 @@ def test_from_payload_moves_private_keys_into_the_envelope(capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert not [key for key in payload if key.startswith("_")]
     assert payload["summary"] == {"files": 3}
-    assert payload["next_actions"] == [{"command": "opentide lint --fix", "reason": "rename"}]
+    # A JSON reader runs the next step as given, so it carries --json too.
+    assert payload["next_actions"] == [
+        {"command": "opentide --json lint --fix", "reason": "rename"}
+    ]
 
 
 def test_envelope_refuses_a_payload_that_shadows_its_keys() -> None:
@@ -210,3 +213,45 @@ def test_from_payload_marks_failed_status() -> None:
     assert failed_status.ok is False
     completed = CommandResult.from_payload({"status": "completed", "_exit_code": 0})
     assert completed.ok is True
+
+
+def test_envelope_sets_error_on_every_failure() -> None:
+    """``error`` is the documented string on a failure; scripts read it, not only ``failure``."""
+    document = envelope(
+        {"ok": False, "status": "issues", "message": "2 errors in 1 file"},
+        exit_code=1,
+        command="validate",
+    )
+    assert document["error"] == "2 errors in 1 file"
+    kept = envelope({"ok": False, "message": "m", "error": "own"}, exit_code=1, command="x")
+    assert kept["error"] == "own"
+    assert "error" not in envelope({"ok": True, "message": "fine"}, exit_code=0, command="x")
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("opentide validate --fix", "opentide --json validate --fix"),
+        ("opentide --json validate", "opentide --json validate"),
+        ("opentide validate --json", "opentide validate --json"),
+        ("pip install opentide", "pip install opentide"),
+    ],
+)
+def test_next_actions_in_a_document_run_as_json(command: str, expected: str) -> None:
+    document = envelope({"ok": True}, exit_code=0, command="x", next_actions=[NextAction(command)])
+    assert document["next_actions"] == [{"command": expected, "reason": ""}]
+
+
+def test_print_document_escapes_what_an_ascii_stdout_cannot_encode(monkeypatch) -> None:
+    import io
+
+    from opentide.cli.output import print_document
+
+    raw = io.BytesIO()
+    stdout = io.TextIOWrapper(raw, encoding="ascii")
+    monkeypatch.setattr("sys.stdout", stdout)
+    print_document({"message": "a · b…", "emoji": "😀"})
+    stdout.flush()
+    text = raw.getvalue().decode("ascii")
+    assert "\\u00b7" in text and "\\u2026" in text
+    assert json.loads(text) == {"message": "a · b…", "emoji": "😀"}

@@ -44,10 +44,11 @@ def lint_cmd(
     if cli.json_output and report_format is ReportFormat.text:
         emit_result(cli, outcome)
         return
-    root, sources = Path(result["path"]), SourceFiles()
+    root, sources = Path(str(result["path"])), SourceFiles()
+    findings = result["findings"]
     diagnostics = [
         diagnostic_from_lint_finding(finding, root=root, sources=sources)
-        for finding in result["findings"]
+        for finding in (findings if isinstance(findings, list) else [])
     ]
     write_report_file(report_format, output, diagnostics, command="lint")
     if not cli.json_output:

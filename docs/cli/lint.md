@@ -63,11 +63,11 @@ note[metadata_recommended]: Recommended metadata missing: author, organisation
   │
   ╰─ help: add the missing keys under metadata
 
-! 2 findings in 1 file
-→ opentide lint --fix · rename 1 file(s) to match their names
+! 2 findings in 1 file · 1 warning, 1 note
+→ opentide lint --fix · rename 1 file to match their names
 ```
 
-When a filename finding can be fixed by renaming, the count is followed by the command that does it. A file renamed by `--fix` gets `note: renamed from <old path>`, and the count ends with `· 1 fixed`. Under `--strict`, findings fail the run: the count prints as `✗ 2 findings in 1 file` and `failure.code` is `issues_found`. A workspace with no object files passes, and says where it looked.
+When more than one severity is left, the count splits them. When a filename finding can be fixed by renaming, the count is followed by the command that does it. A file renamed by `--fix` gets `note: renamed from <old path>`; the count leaves it out and ends with `· 1 fixed`, so a run whose findings were all fixed prints `✓ 3 files clean · 1 fixed`. Under `--strict`, findings fail the run: the count prints as `✗ 2 findings in 1 file` and `failure.code` is `issues_found`. A workspace with no object files passes, and says where it looked.
 
 ### JSON findings
 

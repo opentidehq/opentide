@@ -9,12 +9,14 @@ from typer.core import TyperGroup
 
 from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import emit_error, emit_success, emit_usage_error
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.ui.contract import USAGE_ERROR
+from opentide.core.errors import UserFileError
 
 
 class GeneratePhaseGroup(TyperGroup):
@@ -137,6 +139,7 @@ def _emit_docs(
     objectives: bool = False,
     changed: bool = False,
 ) -> None:
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     if changed and (scope is not None or rules or threats or objectives):
@@ -172,6 +175,7 @@ def generate_docs_all(
 ) -> None:
     """Generate documentation (all scopes, then index)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _emit_docs(
         ctx,
@@ -252,7 +256,9 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
     cli = get_context(ctx)
     try:
         result = run_extract(cli, import_target=target)
-    except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
+    except UserFileError:
+        raise  # the CLI points at the file
+    except Exception as exc:
         # Enumerating exception types is how #242 escaped: the importers reach
         # vendor SDKs and half-typed config, so anything they raise has to come
         # back as a result document rather than a Rich traceback. `str(exc)` is
@@ -301,6 +307,8 @@ def generate_extract_elastic(
             space=space,
             include_prebuilt=include_prebuilt,
         )
+    except UserFileError:
+        raise  # the CLI points at the file
     except Exception as exc:
         detail = str(exc).strip()
         message = (
