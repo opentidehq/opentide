@@ -48,7 +48,7 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | `response` | The template's defaults (`alert_severity: Informational`), so a deploy never reads an empty block |
 | Any other required value | A placeholder: the first value the generated schema allows, or `...` for free text. A required block whose keys are all optional keeps the defaults the template shows, or else gets its first key as a placeholder, so uncommenting another key keeps the YAML valid |
 
-The filename follows the convention [`opentide lint`](./lint.md) checks: `slugify(name)`, with `-{uuid[:8]}` appended when that name is already taken in the folder. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`. A folder or file it cannot write (a read-only checkout, another user's folder) exits `1` with `path_not_writable`, naming the file and the system's reason.
+The filename follows the convention [`opentide lint`](./lint.md) checks: `slugify(name)`, with `-{uuid[:8]}` appended when that name is already taken in the folder. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`. A folder or file it cannot write (a read-only checkout, another user's folder) exits `1` with `path_not_writable`, naming the file and the system's reason, then `→ opentide explain path_not_writable`.
 
 ### Placeholders
 

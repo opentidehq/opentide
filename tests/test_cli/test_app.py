@@ -84,6 +84,8 @@ def test_a_repo_that_does_not_exist_is_a_usage_error(tmp_path: Path, command: li
     assert payload["failure"]["code"] == "usage_invalid_value"
     assert payload["failure"]["argument"] == "--repo"
     assert payload["error"] == f"--repo {missing} does not exist"
+    # And a step to take, not the failure line alone (post-merge AFTER shots).
+    assert [action["command"] for action in payload["next_actions"]] == ["opentide --json --help"]
 
 
 @pytest.mark.parametrize("env", [{}, {"NO_COLOR": "1"}, {"OPENTIDE_OUTPUT": "json"}])

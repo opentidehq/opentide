@@ -151,12 +151,22 @@ def _run(
             organisation=catalogue_organisation(objects_root),
         )
     except NewError as error:
+        from opentide.cli.services.new import PATH_NOT_WRITABLE
+        from opentide.cli.ui.diagnostics import explain_command
+
+        # A folder it cannot write ended on the error line alone (post-merge AFTER shots).
+        steps = (
+            (NextAction(explain_command(error.code), "how to fix it"),)
+            if error.code == PATH_NOT_WRITABLE
+            else ()
+        )
         emit_error(
             cli,
             str(error),
             exit_code=error.exit_code,
             code=error.code,
             argument=error.argument,
+            next_actions=steps,
         )
     warnings: list[str] = list(payload.pop("warnings", []))
     if generated:

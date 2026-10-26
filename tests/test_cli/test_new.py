@@ -404,6 +404,10 @@ def test_a_folder_it_cannot_write_is_a_failure_not_a_crash(
     assert payload["error"].startswith("Could not write ")
     assert payload["error"].endswith("objects/threats/read-only.yaml: Permission denied")
     assert not (workspace / "objects" / "threats" / "read-only.yaml").exists()
+    # And a step to take, not the failure line alone (post-merge AFTER shots).
+    assert [action["command"] for action in payload["next_actions"]] == [
+        "opentide --json explain path_not_writable"
+    ]
 
 
 def test_path_folder_and_existing_file(workspace: Path, tmp_path: Path) -> None:

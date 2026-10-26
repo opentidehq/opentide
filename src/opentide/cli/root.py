@@ -134,12 +134,16 @@ def main_callback(
     # the one command that may name a folder it is about to create.
     if cli_ctx.repo_explicit and words[:1] != ("setup",) and not cli_ctx.repo.is_dir():
         from opentide.cli.output import emit_usage_error
-        from opentide.cli.ui.contract import USAGE_INVALID_VALUE
+        from opentide.cli.ui.contract import USAGE_INVALID_VALUE, NextAction
 
         problem = "is not a directory" if cli_ctx.repo.exists() else "does not exist"
+        # The failure line alone left no step (post-merge AFTER shots). Not a
+        # re-run without --repo: the words drop options such as --dry-run.
+        steps = (NextAction("opentide --help", "--repo takes the folder with .opentide/ in it"),)
         emit_usage_error(
             cli_ctx,
             f"--repo {repo} {problem}",
             argument="--repo",
             code=USAGE_INVALID_VALUE,
+            next_actions=steps,
         )

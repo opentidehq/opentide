@@ -60,7 +60,7 @@ A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_W
 
 Setup commands honour `--repo` when `--path` is `.` (default).
 
-A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`), so a typo cannot read as an empty catalogue that passes. `setup` is the exception, since it may name the folder it is about to create.
+A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `setup` is the exception, since it may name the folder it is about to create.
 
 ## Proxy
 

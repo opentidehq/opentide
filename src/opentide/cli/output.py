@@ -458,6 +458,7 @@ def emit_usage_error(
     value: str | None = None,
     choices: Iterable[str] = (),
     code: str = USAGE_INVALID_CHOICE,
+    next_actions: Sequence[NextAction] = (),
 ) -> NoReturn:
     """A usage error the command itself found: exit 2, with the closest valid choice."""
     suggestion = did_you_mean(value, choices) if value is not None else None
@@ -468,6 +469,7 @@ def emit_usage_error(
         code=code,
         argument=argument,
         suggestion=suggestion,
+        next_actions=next_actions,
     )
 
 
