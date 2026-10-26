@@ -206,7 +206,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Code-first visibility configuration schema.",
+  "description": "Merged `visibility.toml`: the assets, log sources and external detectors in use.",
   "properties": {
     "assets": {
       "anyOf": [

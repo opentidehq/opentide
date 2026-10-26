@@ -47,14 +47,12 @@ class VisibilityDetector(TideModel):
     )
 
 
+# ``logsources`` and ``detectors`` declare the objects themselves, so they
+# carry no ``tide.config.visibility.*`` marker: that marker fills a field with
+# the configured names, and on these lists it replaced the object schema of
+# every item with a string enum. The docstring below is the schema's hover text.
 class VisibilityConfig(TideModel):
-    """Code-first visibility configuration schema.
-
-    ``logsources`` and ``detectors`` declare the objects themselves, so they
-    carry no ``tide.config.visibility.*`` marker: that marker fills a field with
-    the configured names, and on these lists it replaced the object schema of
-    every item with a string enum.
-    """
+    """Merged `visibility.toml`: the assets, log sources and external detectors in use."""
 
     __schema_identifier__: ClassVar[str] = "visibility::1.0"
 
