@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -14,7 +13,7 @@ from opentide.core.registry import DetectionPlatforms
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.elastic.attack import find_non_enterprise_techniques
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.compile import SEVERITY_TABLE, _alert_level, compile_rule
@@ -24,15 +23,16 @@ from opentide.platforms.elastic.es_checks import (
     ElasticTenantError,
     run_elasticsearch_checks,
 )
+from opentide.platforms.elastic.query_text import (
+    eql_is_sequence,
+    eql_maxspan,
+    esql_aggregates,
+    esql_has_metadata_id,
+)
 from opentide.platforms.plugins import QueryValidator
 from opentide.platforms.transport import reaching_tenant, tenant_tls_verify
 
 logger = structlog.get_logger(__name__)
-
-_METADATA_ID = re.compile(r"(?i)\bMETADATA\b[^|]*\b_id\b")
-_STATS = re.compile(r"(?i)\bSTATS\b")
-_EQL_SEQUENCE = re.compile(r"(?i)\bsequence\b")
-_EQL_MAXSPAN = re.compile(r"(?i)\bmaxspan\s*=\s*(\d+[smhd])")
 
 _RISK_BANDS: dict[str, tuple[int, int]] = {
     "low": (0, 21),
@@ -103,17 +103,20 @@ def _emit_rule_advisories(
         _flag_warning()
 
     # 2. Non-aggregating ES|QL METADATA _id advisory
-    if cfg.type == "esql" and cfg.query and not _STATS.search(cfg.query):
-        if not _METADATA_ID.search(cfg.query):
-            logger.warning(
-                "elastic_esql_metadata_id_warning",
-                rule=rule.name,
-                advice=(
-                    "Non-aggregating ES|QL query lacks METADATA _id; "
-                    "alerts will not be deduplicated"
-                ),
-            )
-            _flag_warning()
+    if (
+        cfg.type == "esql"
+        and cfg.query
+        and not esql_aggregates(cfg.query)
+        and not esql_has_metadata_id(cfg.query)
+    ):
+        logger.warning(
+            "elastic_esql_metadata_id_warning",
+            rule=rule.name,
+            advice=(
+                "Non-aggregating ES|QL query lacks METADATA _id; alerts will not be deduplicated"
+            ),
+        )
+        _flag_warning()
 
     # 3. Explicit risk.score outside RFC 0007 §3 severity band
     if cfg.risk is not None:
@@ -139,16 +142,12 @@ def _emit_rule_advisories(
                 _flag_warning()
 
     # 4. EQL sequence maxspan vs. scheduling window
-    if cfg.type == "eql" and cfg.query and _EQL_SEQUENCE.search(cfg.query):
-        maxspan_match = _EQL_MAXSPAN.search(cfg.query)
-        if maxspan_match:
-            maxspan_str = maxspan_match.group(1)
-            try:
-                maxspan_secs = duration_seconds(maxspan_str)
-            except ValueError:
-                maxspan_secs = 0
-            window_secs = interval_secs + lookback_secs
-            if maxspan_secs > window_secs:
+    if cfg.type == "eql" and cfg.query and eql_is_sequence(cfg.query):
+        maxspan = eql_maxspan(cfg.query)
+        if maxspan:
+            maxspan_str, maxspan_ms = maxspan
+            window_ms = (interval_secs + lookback_secs) * 1000
+            if maxspan_ms > window_ms:
                 logger.warning(
                     "elastic_eql_maxspan_window_warning",
                     rule=rule.name,
@@ -162,7 +161,7 @@ def _emit_rule_advisories(
                     ),
                 )
                 _flag_warning()
-            elif maxspan_secs > lookback_secs:
+            elif maxspan_ms > lookback_secs * 1000:
                 logger.warning(
                     "elastic_eql_maxspan_window_warning",
                     rule=rule.name,
@@ -197,12 +196,12 @@ class ElasticValidator(QueryValidator):
 
     def validate(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         deployment = TideDeployment(mdr_deployment, DetectionPlatforms.ELASTIC, strategies)
         for batch in deployment.rule_deployment:
-            tenant: ConfigurationModels.Systems.Elastic.Tenant = batch.tenant
+            tenant = batch_tenant(batch, ConfigurationModels.Systems.Elastic.Tenant)
             client = ElasticClient(
                 url=tenant.setup.url,
                 elasticsearch_url=tenant.setup.elasticsearch_url,

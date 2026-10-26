@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from opentide.generation.pydantic_metaschema import build_platform_schema_source
 from opentide.generation.pydantic_skeleton import render_model_template
 from opentide.loading.platform_loader import load_splunk_config
 from opentide.models.platform import (
@@ -43,12 +44,23 @@ def test_query_is_required_on_every_platform_that_has_one(key: str) -> None:
     assert field.is_required(), f"{key} declares query optional"
 
 
-@pytest.mark.parametrize("key", QUERY_PLATFORMS)
+@pytest.mark.parametrize("key", sorted(PLATFORM_CONFIG_MODELS))
 def test_field_requiredness_agrees_with_the_schema_extras(key: str) -> None:
-    """Extras drive the published JSON Schema; the model drives loading."""
+    """Extras drive the published JSON Schema; the model drives loading.
+
+    The extras' ``required`` used to replace the model's outright. Splunk's
+    listed ``scheduling``, which the model leaves optional because a
+    correlation search has nothing to schedule, so a rule written from the
+    shipped template (which comments it out) was flagged. Elastic's left out
+    ``type``, which the model requires.
+    """
     model = PLATFORM_CONFIG_MODELS[key]
-    required = platform_root_extras(model).get("required", [])
-    assert ("query" in required) == model.model_fields["query"].is_required()
+    published = build_platform_schema_source(model)["required"]
+    for name, field in model.model_fields.items():
+        published_name = field.alias or name
+        assert (published_name in published) == field.is_required(), (
+            f"{key}.{published_name}: schema and model disagree on whether it is required"
+        )
 
 
 @pytest.mark.parametrize("key", QUERY_PLATFORMS)
@@ -77,23 +89,15 @@ def test_a_blank_query_is_rejected(key: str, blank: str) -> None:
     assert "query must not be empty" in query_errors[0]["msg"]
 
 
-#: Fields the JSON Schema extras call required while the model leaves them
-#: optional. Left alone here on purpose, each for its own reason:
-#:
-#: * a Splunk correlation search has nothing to schedule;
-#: * Sentinel entity mappings and alert grouping are genuinely optional on an
-#:   analytics rule.
-#:
-#: ``status`` used to sit here. It no longer does: the deploy planner selects
-#: on it and cannot proceed without it, so the model now requires it too and
-#: the gap is closed rather than tolerated.
-#:
-#: Recorded so that *new* drift fails while the accepted set stays visible.
-KNOWN_EXTRAS_ONLY_REQUIRED = frozenset({"scheduling", "entities", "grouping"})
-
-
 @pytest.mark.parametrize("key", sorted(PLATFORM_CONFIG_MODELS))
-def test_no_new_drift_between_schema_extras_and_models(key: str) -> None:
+def test_schema_extras_require_no_field_the_model_leaves_optional(key: str) -> None:
+    """The extras may repeat the model's required fields, never add to them.
+
+    ``status`` and Splunk's ``scheduling`` were the last two exceptions. The
+    deploy planner cannot proceed without a status, so the model now requires
+    it; a Splunk correlation search has nothing to schedule, so the extras no
+    longer require scheduling.
+    """
     model = PLATFORM_CONFIG_MODELS[key]
     required = set(platform_root_extras(model).get("required", []))
     optional_in_model = {
@@ -101,8 +105,7 @@ def test_no_new_drift_between_schema_extras_and_models(key: str) -> None:
         for name in required
         if name in model.model_fields and not model.model_fields[name].is_required()
     }
-    unexpected = optional_in_model - KNOWN_EXTRAS_ONLY_REQUIRED
-    assert not unexpected, f"{key}: schema extras require {sorted(unexpected)}, model does not"
+    assert not optional_in_model, f"{key}: extras require {sorted(optional_in_model)}"
 
 
 # --------------------------------------------------------------------------

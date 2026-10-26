@@ -1,3 +1,11 @@
+---
+name: codeql
+description: >-
+  Work with CodeQL in opentide: the codeql.yml workflow (Python + Actions), investigating or
+  fixing code-scanning alerts, and running scripts/codeql-local.sh. Use when a PR shows CodeQL
+  findings or when changing security-sensitive code or workflows.
+---
+
 # CodeQL — opentide
 
 Static analysis for Python and GitHub Actions workflows. One workflow, no duplicate scans.

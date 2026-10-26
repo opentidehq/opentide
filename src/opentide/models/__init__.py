@@ -26,6 +26,11 @@ from opentide.models.threat import ThreatActor, ThreatBody, ThreatVector
 from opentide.models.version import SchemaVersion, SchemaVersionChain
 
 __all__ = [
+    "CORE_OBJECT_TYPES",
+    "OBJECTIVE",
+    "RULE",
+    "SIGNAL",
+    "THREAT",
     "DeploymentResult",
     "DetectionExample",
     "DetectionObjective",
@@ -34,17 +39,11 @@ __all__ = [
     "EnumEntry",
     "EnumRegistry",
     "ExternalDetector",
-    "ObjectiveBody",
-    "ObjectiveComposition",
     "ObjectMetadata",
     "ObjectReferences",
+    "ObjectiveBody",
+    "ObjectiveComposition",
     "Organisation",
-    "CORE_OBJECT_TYPES",
-    "OBJECTIVE",
-    "RULE",
-    "SIGNAL",
-    "THREAT",
-    "latest_identifier",
     "SchemaVersion",
     "SchemaVersionChain",
     "SignalData",
@@ -56,4 +55,5 @@ __all__ = [
     "TideRegistry",
     "ValidationResult",
     "field_json_schema_extra",
+    "latest_identifier",
 ]

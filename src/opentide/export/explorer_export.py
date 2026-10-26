@@ -245,7 +245,11 @@ class ExplorerExport:
 
 
 def export_explorer_bundle(export_dir: Path | None = None) -> tuple[Path, Path]:
-    return ExplorerExport(export_dir=export_dir).export()
+    """Write the explorer bundle, previewing open pull requests' inflight shards."""
+    from opentide.indexing.inflight import inflight_preview
+
+    with inflight_preview():
+        return ExplorerExport(export_dir=export_dir).export()
 
 
 def run(export_dir: Path | None = None) -> tuple[Path, Path]:

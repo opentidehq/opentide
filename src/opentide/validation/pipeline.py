@@ -59,12 +59,21 @@ def validate_all_objects(
     *,
     scope: Any = None,
 ) -> dict[str, list[str]]:
-    """Validate every object in an index bucket; return errors keyed by UUID."""
+    """Validate the objects in *objects_index*; return errors keyed by UUID.
+
+    *objects_index* maps object type to ``{uuid: body}``, as
+    ``Opentide.Index["objects"]`` does, and replaces the registry's objects for
+    this run. Configuration and vocabularies come from the registry, and the
+    checks that read the workspace (ID uniqueness, unreadable files) still read
+    it.
+    """
     if not any(registry for registry in objects_index.values()):
         return {}
 
+    from opentide.core.registry import Opentide
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
-    report = run_validation(scope=scope or ValidationScope.full())
+    index = {**Opentide.Index, "objects": objects_index}
+    report = run_validation(scope=scope or ValidationScope.full(), index=index)
     return report.legacy_errors_by_uuid()

@@ -48,9 +48,33 @@ def test_validate_all_objects_empty_index() -> None:
 def test_validate_all_objects_delegates_to_session() -> None:
     report = MagicMock()
     report.legacy_errors_by_uuid.return_value = {"u1": ["err"]}
-    with patch("opentide.validation.session.run_validation", return_value=report):
-        errors = validate_all_objects({"rule": {"u1": {}}})
+    objects = {"rule": {"u1": {}}}
+    with (
+        patch.object(type(Opentide), "Index", {"objects": {}, "metaschemas": {}}),
+        patch("opentide.validation.session.run_validation", return_value=report) as run,
+    ):
+        errors = validate_all_objects(objects)
     assert errors == {"u1": ["err"]}
+    assert run.call_args.kwargs["index"] == {"objects": objects, "metaschemas": {}}
+
+
+def test_validate_all_objects_validates_the_objects_it_is_given(
+    tide_corpus_repo: Path, corpus_rule_uuids: dict[str, str]
+) -> None:
+    """``objects_index`` was ignored: the function validated the registry instead.
+
+    A caller checking an edited body before writing it got the registry's
+    verdict on the file still on disk.
+    """
+    uuid = corpus_rule_uuids["sentinel"]
+    objects = {kind: dict(bucket) for kind, bucket in Opentide.Index["objects"].items()}
+    assert validate_all_objects(objects) == {}
+
+    objects["rule"][uuid] = {**objects["rule"][uuid], "severity": None}
+    errors = validate_all_objects(objects)
+
+    assert list(errors) == [uuid]
+    assert any(error.startswith("severity:") for error in errors[uuid])
 
 
 @pytest.mark.parametrize("name", ["valid/rule-1.0.yaml", "valid/rule-1.1.yaml"])

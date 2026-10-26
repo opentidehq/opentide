@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from opentide.documentation.format.protocol import MarkdownFormatter
-from opentide.documentation.types import DocumentScope
+from opentide.documentation.types import DocumentRecord, DocumentScope
 
 if TYPE_CHECKING:
     from opentide.documentation.catalog import DocumentationCatalog
@@ -28,6 +29,39 @@ def slugify(name: str) -> str:
     """Create a filesystem-safe slug from an object name."""
     slug = re.sub(r"[^A-Za-z0-9]+", "-", name.strip()).strip("-").lower()
     return slug or "object"
+
+
+def page_slug(record: DocumentRecord) -> str:
+    """Filename stem of *record*'s page, before the flavor adds its suffix."""
+    return record.slug or slugify(record.name)
+
+
+def unique_slugs(records: list[DocumentRecord]) -> list[DocumentRecord]:
+    """Give each record in one folder a page slug no other record shares.
+
+    Two names can slugify alike (``Sentinel KQL Rule`` and ``Sentinel-KQL rule``),
+    and their pages overwrote each other. The record with the lowest UUID keeps
+    the plain slug, so a page is renamed only when its name collides; the others
+    get a UUID suffix, the same one ``opentide lint`` uses for colliding files.
+    """
+    groups: dict[str, list[int]] = {}
+    for position, record in enumerate(records):
+        groups.setdefault(slugify(record.name), []).append(position)
+    taken = set(groups)
+    slugs = [""] * len(records)
+    for slug, positions in groups.items():
+        first, *others = sorted(positions, key=lambda position: records[position].uuid)
+        slugs[first] = slug
+        for position in others:
+            suffix = (records[position].uuid or "object")[:8]
+            candidate = f"{slug}-{suffix}"
+            index = 1
+            while candidate in taken:
+                candidate = f"{slug}-{suffix}-{index}"
+                index += 1
+            taken.add(candidate)
+            slugs[position] = candidate
+    return [replace(record, slug=slug) for record, slug in zip(records, slugs, strict=True)]
 
 
 def heading_anchor(title: str) -> str:
@@ -85,14 +119,14 @@ def object_link(
         if parent is None:
             return f"{signal.name} (`{uuid}`)"
         filename = formatter.page_filename(
-            slugify(parent.name),
+            page_slug(parent),
             parent.uuid if uuid_permalinks else None,
         )
         href = page_href(
             from_folder=from_folder,
             to_folder=FOLDER_BY_SCOPE[DocumentScope.objectives],
             filename=filename,
-            anchor=heading_anchor(signal.name),
+            anchor=formatter.heading_anchor(signal.name),
         )
         link = render_link(formatter, signal.name, href, wiki=wiki)
         return f"{link} (`{uuid}`)"
@@ -109,7 +143,7 @@ def object_link(
         return f"`{uuid}`"
 
     filename = formatter.page_filename(
-        slugify(record.name),
+        page_slug(record),
         record.uuid if uuid_permalinks else None,
     )
     href = page_href(from_folder=from_folder, to_folder=folder, filename=filename)

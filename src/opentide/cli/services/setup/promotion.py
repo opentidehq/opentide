@@ -90,7 +90,7 @@ def promotion_defaults() -> dict[str, object]:
 
 
 def effective_promotion(target: Path) -> dict[str, object]:
-    """``[promotion]`` as ``deploy`` will read it: the repository table over the bundled defaults."""
+    """``[promotion]`` as ``deploy`` reads it: the repository table over the bundled defaults."""
     defaults = promotion_defaults()
     try:
         deployment = resolve_configurations(target).get("deployment", {})

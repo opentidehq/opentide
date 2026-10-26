@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from opentide.core.registry import Opentide
+from opentide.documentation.markdown.links import unique_slugs
 from opentide.documentation.types import DocumentRecord, DocumentScope
 from opentide.generation import framework as fw
 from opentide.models.objective import DetectionObjective
@@ -367,18 +368,24 @@ class DocumentationCatalog:
 
 def build_catalog() -> DocumentationCatalog:
     """Build a deterministic catalog for rule/objective/threat objects."""
-    rules = [
-        DocumentRecord(DocumentScope.rules, obj.metadata.uuid, obj.name, obj)
-        for obj in sorted(Opentide.Rules.values(), key=lambda item: item.name.lower())
-    ]
-    objectives = [
-        DocumentRecord(DocumentScope.objectives, obj.metadata.uuid, obj.name, obj)
-        for obj in sorted(Opentide.Objectives.values(), key=lambda item: item.name.lower())
-    ]
-    threats = [
-        DocumentRecord(DocumentScope.threats, obj.metadata.uuid, obj.name, obj)
-        for obj in sorted(Opentide.Threats.values(), key=lambda item: item.name.lower())
-    ]
+    rules = unique_slugs(
+        [
+            DocumentRecord(DocumentScope.rules, obj.metadata.uuid, obj.name, obj)
+            for obj in sorted(Opentide.Rules.values(), key=lambda item: item.name.lower())
+        ]
+    )
+    objectives = unique_slugs(
+        [
+            DocumentRecord(DocumentScope.objectives, obj.metadata.uuid, obj.name, obj)
+            for obj in sorted(Opentide.Objectives.values(), key=lambda item: item.name.lower())
+        ]
+    )
+    threats = unique_slugs(
+        [
+            DocumentRecord(DocumentScope.threats, obj.metadata.uuid, obj.name, obj)
+            for obj in sorted(Opentide.Threats.values(), key=lambda item: item.name.lower())
+        ]
+    )
     signals: list[SignalRecord] = []
     for record in objectives:
         objective = record.model
