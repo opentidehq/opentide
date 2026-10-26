@@ -92,7 +92,7 @@ def test_aggregation_fields_check_misspelt_field_fails() -> None:
                 },
             },
         )
-        with pytest.raises(ValueError, match="Field 'source.misspelt' not found in mappings"):
+        with pytest.raises(ValueError, match=r"Field 'source\.misspelt' not found in mappings"):
             run_aggregation_fields_check(client, block)
 
 
@@ -290,11 +290,13 @@ def test_esql_from_sources_stops_before_metadata() -> None:
     ("query", "expected"),
     [
         (
-            "// Detects logins from rare countries\nFROM logs-system.auth-* METADATA _id\n| WHERE x",
+            "// Detects logins from rare countries\n"
+            "FROM logs-system.auth-* METADATA _id\n| WHERE x",
             "logs-system.auth-*",
         ),
         (
-            "FROM logs-endpoint.events.process-*,\n  logs-windows.sysmon_operational-* METADATA _id\n| LIMIT 1",
+            "FROM logs-endpoint.events.process-*,\n"
+            "  logs-windows.sysmon_operational-* METADATA _id\n| LIMIT 1",
             "logs-endpoint.events.process-*,logs-windows.sysmon_operational-*",
         ),
         ("/* from x */ FROM logs-* | LIMIT 1", "logs-*"),

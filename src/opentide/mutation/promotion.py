@@ -11,6 +11,7 @@ import re
 from opentide.core.files import resolve_configurations
 from opentide.core.logging import get_logger
 from opentide.core.logging.console import emit_section
+from opentide.core.runtime import is_debug
 from opentide.deployment.git_repo import local_rule_files
 
 logger = get_logger(__name__)
@@ -22,10 +23,7 @@ DEPLOYMENT_CONFIG = CONFIGURATIONS["deployment"]
 PROMOTION_ENABLED = DEPLOYMENT_CONFIG["promotion"].get("enabled")
 PROMOTION_TARGET = DEPLOYMENT_CONFIG["promotion"].get("promotion_target")
 
-if os.environ.get("DEBUG") == True or os.environ.get("TERM_PROGRAM") == "vscode":
-    DEBUG = True
-else:
-    DEBUG = False
+DEBUG = is_debug()
 
 
 # TODO Rework Promotion to consume from opentide
@@ -57,7 +55,7 @@ def get_valid_statuses() -> list[str]:
     for status in statuses_config:
         name = status.get("name")
         if not name:
-            raise Exception(f"Missing name in status definition: {str(status)}")
+            raise Exception(f"Missing name in status definition: {status!s}")
         valid_statuses.append(name)
         logger.info("found_valid_status", detail=name)
 
@@ -134,11 +132,10 @@ class PromoteMDR:
                 if "configurations" in line:
                     crossed = True
 
-                if crossed:
-                    if re.search(r"status\s*:\s*", line):
-                        for word in status_to_promote:
-                            if word in line:
-                                line = line.replace(word, PROMOTION_TARGET)
+                if crossed and re.search(r"status\s*:\s*", line):
+                    for word in status_to_promote:
+                        if word in line:
+                            line = line.replace(word, PROMOTION_TARGET)
                 buffer.append(line)
 
         with open(mdr_path, "w", encoding="utf-8") as file:

@@ -1,3 +1,12 @@
+---
+name: cli-e2e-testing
+description: >-
+  Write and debug opentide CLI end-to-end tests: Typer CliRunner tests, console-script
+  subprocess smoke tests, the tide_corpus fixture workspace, deploy dry-run payloads, E2E
+  shards and .test_durations_e2e. Use when adding or changing a CLI command, flag or JSON
+  output, or when an E2E shard fails.
+---
+
 # CLI E2E Testing
 
 Typer-native end-to-end tests for the `opentide` CLI using `CliRunner` (in-process) plus a small subprocess smoke layer.

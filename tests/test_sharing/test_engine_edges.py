@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -554,7 +554,7 @@ def test_status_predictions(tmp_path: Path) -> None:
         [_block(max_tlp="red", api_key=None, api_key_unset=True)],
         mode="status",
         ledger=ledger,
-        clock=lambda: datetime(2026, 9, 28, 11, 0),
+        clock=lambda: datetime(2026, 9, 28, 11, 0, tzinfo=timezone.utc),
     )
     assert retracted.records[0].action == "updated"
     assert retracted.records[0].remote_event_uuid is None
@@ -688,7 +688,7 @@ def test_helpers_for_unreachable_ledger_shapes(tmp_path: Path) -> None:
                 {"integration": "misp", "target": "misp-internal", "object_uuid": "abc"},
             )
 
-    assert _ledger_uuids(Stub(), (block,), None) == ["abc"]  # type: ignore[arg-type]
+    assert _ledger_uuids(Stub(), (block,), None, ()) == ["abc"]  # type: ignore[arg-type]
 
     ledger = ShareLedger.load(tmp_path / "sharing.jsonl")
     ledger.put(

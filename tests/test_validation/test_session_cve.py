@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.issues import ValidationIssue
@@ -32,3 +35,31 @@ def test_run_validation_includes_cve_check() -> None:
         )
     assert not report.ok
     assert report.issues[0].code == "invalid_cve"
+
+
+def test_run_validation_reports_an_unreachable_cve_lookup_as_a_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The warning lands in ``warnings`` and raises the flag ``--strict`` fails on."""
+    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
+    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
+    index = {
+        "objects": {"rule": {}, "objective": {}, "threat": {}},
+        "metaschemas": {},
+        "files": {},
+        "vocabs": {},
+    }
+    warning = ValidationIssue(
+        code="cve_lookup_unavailable", severity="warning", message="offline", object_uuid="u1"
+    )
+    with (
+        patch("opentide.validation.session.Opentide.initialise"),
+        patch("opentide.validation.session.PreflightGraph.build", return_value=MagicMock()),
+        patch("opentide.validation.cve_check.check_cve_issues", return_value=[warning]),
+    ):
+        report = run_validation(checks=frozenset({ValidateCheck.cve}), index=index, workers=0)
+    assert report.ok
+    assert report.issues == []
+    assert [w.code for w in report.warnings] == ["cve_lookup_unavailable"]
+    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert not os.environ.get("VALIDATION_ERROR_RAISED")

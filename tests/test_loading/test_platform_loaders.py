@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+from tests.corpus_support import TIDE_CORPUS_ROOT
+
+from opentide.core.io import load_yaml
 from opentide.loading.platform_loader import (
     load_carbon_black_config,
     load_crowdstrike_config,
     load_defender_config,
     load_elastic_config,
+    load_platform_config,
     load_sentinel_config,
     load_sentinel_one_config,
     load_splunk_config,
 )
-from opentide.models.platform import CarbonBlackConfig, SentinelConfig, SplunkConfig
+from opentide.models.platform import (
+    PLATFORM_CONFIG_MODELS,
+    CarbonBlackConfig,
+    SentinelConfig,
+    SplunkConfig,
+)
 
 
 def test_sentinel_config_loader_parses_alert_and_scheduling() -> None:
@@ -205,3 +218,64 @@ def test_carbon_black_config_loader_parses_typed_fields() -> None:
     assert config.watchlist == "Default"
     assert config.report == "Report A"
     assert config.tags == ["tag-a"]
+
+
+def test_defender_config_loader_accepts_a_block_without_scope() -> None:
+    """``scope`` is optional, but the loader popped it with no default.
+
+    A rule without it validated, then ``Opentide.Rules`` raised
+    ``KeyError('scope')`` and every deploy, validator and MCP call failed.
+    """
+    config = load_defender_config(
+        {
+            "schema": "platform::defender_for_endpoint::1.0",
+            "status": "STAGING",
+            "query": "DeviceProcessEvents | take 1",
+            "scheduling": "1H",
+            "alert": {"category": "Execution"},
+            "impacted_entities": {"device": "device_id"},
+        }
+    )
+    assert config.scope is None
+
+
+def _corpus_platform_blocks() -> list[tuple[str, str, dict[str, Any]]]:
+    blocks: list[tuple[str, str, dict[str, Any]]] = []
+    for path in sorted((TIDE_CORPUS_ROOT / "Objects" / "Detection Rules").glob("*.yaml")):
+        configurations = load_yaml(path).get("configurations") or {}
+        for platform, block in configurations.items():
+            if platform in PLATFORM_CONFIG_MODELS and block:
+                blocks.append((path.name, platform, block))
+    return blocks
+
+
+@pytest.mark.parametrize(
+    ("file_name", "platform", "block"),
+    _corpus_platform_blocks(),
+    ids=lambda value: value if isinstance(value, str) else "",
+)
+def test_a_platform_block_that_validates_also_loads(
+    file_name: str, platform: str, block: dict[str, Any]
+) -> None:
+    """Validation calls ``model_validate``; the catalogue goes through the loaders.
+
+    A key the model treats as optional but a loader required let a rule pass
+    validation and then break typed loading for the whole catalogue. Drop each
+    key of every corpus block in turn: whenever the model still accepts the
+    block, the loader must too.
+    """
+    model = PLATFORM_CONFIG_MODELS[platform]
+    model.model_validate(block)
+    load_platform_config(platform, block)
+    unloadable: list[str] = []
+    for key in block:
+        variant = {k: v for k, v in block.items() if k != key}
+        try:
+            model.model_validate(variant)
+        except ValidationError:
+            continue
+        try:
+            load_platform_config(platform, variant)
+        except (KeyError, ValidationError) as exc:
+            unloadable.append(f"{key}: {type(exc).__name__} {exc}")
+    assert unloadable == [], f"{file_name} [{platform}]"

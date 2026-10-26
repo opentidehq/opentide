@@ -22,21 +22,21 @@ TideRepo = GitRepository
 DetectionSystems = DetectionPlatforms
 
 __all__ = [
-    "CIEnvironment",
-    "GitRepository",
-    "TideRepo",
-    "modified_mdr_files",
-    "diff_calculation",
-    "SYSTEMS_CONFIGS_INDEX",
     "DEPRECATED_STATUSES",
-    "check_status",
-    "make_deploy_plan",
-    "enabled_systems",
-    "Proxy",
-    "TideDeployment",
-    "StatusStrategy",
+    "SYSTEMS_CONFIGS_INDEX",
+    "CIEnvironment",
     "DetectionPlatforms",
     "DetectionSystems",
+    "GitRepository",
+    "Proxy",
+    "StatusStrategy",
+    "TideDeployment",
+    "TideRepo",
+    "check_status",
+    "diff_calculation",
+    "enabled_systems",
+    "make_deploy_plan",
+    "modified_mdr_files",
 ]
 
 

@@ -19,6 +19,11 @@ def _normalise_source_path(path: Path | str) -> str:
         return Path(path).as_posix()
 
 
+def _mapping(value: object) -> dict[str, Any]:
+    """*value* when the event payload holds an object there, else an empty one."""
+    return value if isinstance(value, dict) else {}
+
+
 def _github_metadata(source_path: str) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     event_path = os.getenv("GITHUB_EVENT_PATH")
@@ -27,9 +32,9 @@ def _github_metadata(source_path: str) -> dict[str, Any]:
             payload = json.loads(Path(event_path).read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             payload = {}
-    pr = payload.get("pull_request") if isinstance(payload.get("pull_request"), dict) else {}
-    head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
-    base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
+    pr = _mapping(payload.get("pull_request"))
+    head = _mapping(pr.get("head"))
+    base = _mapping(pr.get("base"))
     return {
         "platform": "github",
         "number": pr.get("number"),

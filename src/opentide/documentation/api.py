@@ -6,11 +6,13 @@ from opentide.documentation.catalog import DocumentationCatalog, build_catalog
 from opentide.documentation.config import load_settings
 from opentide.documentation.context import DocumentationContext
 from opentide.documentation.format.factory import formatter_for
+from opentide.documentation.markdown.links import page_slug
 from opentide.documentation.objects.objective import render_objective_page
 from opentide.documentation.objects.rule import render_rule_page
 from opentide.documentation.objects.threat import render_threat_page
 from opentide.documentation.publish.index import write_index
 from opentide.documentation.publish.paths import page_path, targets
+from opentide.documentation.publish.prune import prune_stale_pages
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentFlavor
 from opentide.models.objective import DetectionObjective
@@ -79,7 +81,13 @@ def write_rules(
     count = 0
     for record in cat.rules:
         content = render_rule_page(record.model, context, cat)
-        path = page_path(context, folder=pub.rules_dir, name=record.name, uuid=record.uuid)
+        path = page_path(
+            context,
+            folder=pub.rules_dir,
+            name=record.name,
+            uuid=record.uuid,
+            slug=page_slug(record),
+        )
         write_page(path, content)
         count += 1
     return count
@@ -95,7 +103,13 @@ def write_objectives(
     count = 0
     for record in cat.objectives:
         content = render_objective_page(record.model, context, cat)
-        path = page_path(context, folder=pub.objectives_dir, name=record.name, uuid=record.uuid)
+        path = page_path(
+            context,
+            folder=pub.objectives_dir,
+            name=record.name,
+            uuid=record.uuid,
+            slug=page_slug(record),
+        )
         write_page(path, content)
         count += 1
     return count
@@ -112,7 +126,13 @@ def write_threats(
     count = 0
     for record in cat.threats:
         content = render_threat_page(record.model, context, cat)
-        path = page_path(context, folder=pub.threats_dir, name=record.name, uuid=record.uuid)
+        path = page_path(
+            context,
+            folder=pub.threats_dir,
+            name=record.name,
+            uuid=record.uuid,
+            slug=page_slug(record),
+        )
         write_page(path, content)
         count += 1
     return count
@@ -124,7 +144,19 @@ def write_all(
     output: str | None = None,
     flavor: str | None = None,
 ) -> dict[str, int]:
-    """Write all object pages and optionally index pages."""
+    """Write all object pages and optionally index pages.
+
+    Generated pages that no object writes any more, after a rename or a
+    deletion, are removed. Open pull requests' inflight shards are previewed,
+    as ``opentide generate docs`` does.
+    """
+    from opentide.indexing.inflight import inflight_preview
+
+    with inflight_preview():
+        return _write_all(include_index=include_index, output=output, flavor=flavor)
+
+
+def _write_all(*, include_index: bool, output: str | None, flavor: str | None) -> dict[str, int]:
     ctx = _context(output=output, flavor=flavor)
     cat = build_catalog()
     pub = targets(ctx)
@@ -133,6 +165,7 @@ def write_all(
         "objectives": write_objectives(ctx, cat),
         "threats": write_threats(ctx, cat),
     }
+    prune_stale_pages(ctx, cat)
     if include_index:
         write_index(ctx, pub, rules=cat.rules, objectives=cat.objectives, threats=cat.threats)
     return counts

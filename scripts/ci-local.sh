@@ -83,10 +83,10 @@ if [[ "$mode" == "store-e2e-durations" ]]; then
 fi
 
 echo "==> Ruff check"
-uv run ruff check tests src/opentide
+uv run ruff check src/opentide tests scripts
 
 echo "==> Ruff format"
-uv run ruff format --check tests src/opentide
+uv run ruff format --check src/opentide tests scripts
 
 echo "==> Ty type check"
 uv run ty check src/opentide

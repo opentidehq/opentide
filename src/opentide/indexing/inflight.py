@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -16,16 +19,49 @@ from opentide.indexing.inflight_shard import (
     should_replace_object,
 )
 from opentide.registry.discovery import discover_workspace
-from opentide.registry.paths import resolve_workspace_paths
+from opentide.registry.paths import object_yaml_files, resolve_workspace_paths
 
 logger = get_logger(__name__)
+
+_PREVIEW: ContextVar[bool] = ContextVar("opentide_inflight_preview", default=False)
+
+
+def inflight_preview_enabled() -> bool:
+    """Whether registry builds in this context overlay the inflight shards."""
+    return _PREVIEW.get()
+
+
+@contextmanager
+def inflight_preview() -> Generator[None]:
+    """Overlay the inflight preview shards on the registry for the block.
+
+    Shards are open pull requests' objects, published to the default branch
+    so documentation and the explorer can preview them. Every other command
+    reads the object files on disk alone: deploy and ``validate --strict``
+    read rules from the registry, and with the shards applied they shipped or
+    passed another pull request's unreviewed object in place of the file.
+
+    The registry is rebuilt on entry, and again on exit so that nothing after
+    the block sees the shards.
+    """
+    from opentide.core.registry import Opentide
+
+    token = _PREVIEW.set(True)
+    try:
+        Opentide.reload()
+        yield
+    finally:
+        _PREVIEW.reset(token)
+        Opentide.reload()
+
 
 _OBJECT_YAML = re.compile(r"^objects/(threats|objectives|rules)/[^/]+\.(ya?ml)$")
 _OBJECT_FAMILIES = ("threat", "objective", "rule")
 
 
 def _object_version(body: dict[str, Any]) -> int:
-    raw = (body.get("metadata") or {}).get("version")
+    # A missing version reads as 0, as an unparsable one does.
+    raw = (body.get("metadata") or {}).get("version", 0)
     try:
         return int(raw)
     except (TypeError, ValueError):
@@ -147,9 +183,7 @@ def _iter_committed_object_yaml() -> list[tuple[str, Path]]:
         object_dir = paths.get(family)
         if object_dir is None or not object_dir.is_dir():
             continue
-        for model_path in sorted(object_dir.rglob("*.yaml")):
-            if model_path.name.endswith(".debug.yaml"):
-                continue
+        for model_path in object_yaml_files(object_dir):
             found.append((family, model_path))
     return found
 
@@ -247,7 +281,10 @@ def apply_inflight_overlay(
     *,
     inflight_dir: Path | None = None,
 ) -> dict[str, int]:
-    """Merge inflight shards into the registry objects index (version-gated)."""
+    """Merge inflight shards into the registry objects index (version-gated).
+
+    For preview output only; the registry applies it inside :func:`inflight_preview`.
+    """
     overlay = shards if shards is not None else load_inflight_shards(inflight_dir)
     added = 0
     updated = 0
