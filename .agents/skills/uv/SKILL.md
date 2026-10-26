@@ -70,7 +70,7 @@ scripts/ci-local.sh            # lint + unit tests at minimum
 ```
 
 Watch for resolver walk-backs: `boto3>=1.35` exists because python-dateutil 3.0 once sent
-the resolver back to boto3 0.0.3. `mcp<2` stays until the FastMCP import migration (#581).
+the resolver back to boto3 0.0.3. `mcp>=2.3,<3` since the MCPServer migration (#581).
 
 ## Conventions
 
