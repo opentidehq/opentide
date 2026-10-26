@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,6 +24,8 @@ class CliContext:
     json_output: bool = False
     debug: bool = False
     no_color: bool = False
+    #: ``--quiet``: print only the outcome line and errors.
+    quiet: bool = False
     show_banner: bool = True
     #: True when ``--repo`` was typed on the command line rather than inherited
     #: from ``OPENTIDE_REPO_ROOT``. An explicit path has to win over a stale
@@ -36,9 +39,11 @@ class CliContext:
         if self.repo_explicit or "OPENTIDE_TIDE_WORKSPACE" not in os.environ:
             os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(self.repo)
         get_repo_root.cache_clear()
-        from opentide.core.index_manager import IndexManager
-
-        IndexManager._cache = None
+        # Reset the index only when something loaded it: importing it here would
+        # load the engine for `--help` and completion, which never read it.
+        index_manager = sys.modules.get("opentide.core.index_manager")
+        if index_manager is not None:
+            index_manager.IndexManager._cache = None
         if self.data is not None:
             os.environ["OPENTIDE_DATA_ROOT"] = str(self.data)
         elif "OPENTIDE_DATA_ROOT" not in os.environ:
@@ -49,14 +54,19 @@ class CliContext:
             for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
                 os.environ[name] = self.proxy
         if self.debug:
-            os.environ["DEBUG"] = "True"
+            # opentide's own names only: a ``DEBUG`` export would switch on
+            # debug output in every child process that reads it (Node's debug
+            # package, for one).
+            os.environ["OPENTIDE_DEBUG"] = "1"
             os.environ["DEBUG_ENABLED"] = "1"
         if self.no_color:
             os.environ["NO_COLOR"] = "1"
             # Rich reads any non-empty FORCE_COLOR, "0" included, as "force a
             # terminal", which writes bold/italic escapes into redirected output.
             os.environ.pop("FORCE_COLOR", None)
-        sync_typer_rendering(no_color=bool(os.getenv("NO_COLOR")))
+        from opentide.core.logging.config import colourless_mode
+
+        sync_typer_rendering(no_color=bool(os.getenv("NO_COLOR")) or colourless_mode())
 
     def activate(self) -> None:
         """Register this context for nested Typer subcommand resolution."""

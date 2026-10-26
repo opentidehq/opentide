@@ -1,4 +1,7 @@
 import os
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from importlib import import_module
 from typing import Any
 
@@ -11,6 +14,27 @@ logger = get_logger(__name__)
 # load calls that helper once per object, and the same unset variable must not
 # be printed again for every rule.
 _reported_missing_envvars: set[str] = set()
+
+# Set while a run that sends nothing (a dry-run deploy) loads its configuration:
+# unset names are collected here for the run to report, not logged as errors.
+_deferred_missing_envvars: ContextVar[list[str] | None] = ContextVar(
+    "deferred_missing_envvars", default=None
+)
+
+
+@contextmanager
+def defer_missing_envvars() -> Generator[list[str]]:
+    """Collect the unset ``$VAR`` names a configuration reads, instead of logging them.
+
+    A dry run never reaches a tenant, so a missing credential is not an error
+    there; the caller says what a real run would need.
+    """
+    names: list[str] = []
+    token = _deferred_missing_envvars.set(names)
+    try:
+        yield names
+    finally:
+        _deferred_missing_envvars.reset(token)
 
 
 class DebugHelpers:
@@ -90,6 +114,9 @@ class DebugHelpers:
                             "break some deployments"
                         ),
                     )
+                elif (deferred := _deferred_missing_envvars.get()) is not None:
+                    if env_name not in deferred:
+                        deferred.append(env_name)
                 else:
                     if env_name not in _reported_missing_envvars:
                         _reported_missing_envvars.add(env_name)

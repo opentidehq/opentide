@@ -87,6 +87,7 @@ def issues_from_pydantic(
                     suggestion = graph.enum_resolver.suggest(str(err["input"]), last)
                     if suggestion:
                         code = "vocab_unknown"
+        value = err.get("input")
         issues.append(
             ValidationIssue(
                 code=code,
@@ -97,13 +98,54 @@ def issues_from_pydantic(
                 field_path=field_path,
                 message=message,
                 suggestion=suggestion,
+                context={"value": value} if code == "invalid_ref" else {},
             )
         )
     return issues
 
 
+def merge_reference_findings(issues: list[ValidationIssue]) -> list[ValidationIssue]:
+    """One finding per cause: drop a ``vocab_unknown`` an ``invalid_ref`` already reports.
+
+    A reference field such as ``detection_model`` is also a vocabulary field
+    whose values are the known object UUIDs, so one dangling UUID failed both
+    checks. Every ``invalid_ref`` stays, one per occurrence of the value, and
+    takes the vocabulary suggestion when it has none of its own.
+    """
+    refs = {
+        key for issue in issues if issue.code == "invalid_ref" and (key := _reference_key(issue))
+    }
+    if not refs:
+        return issues
+    suggestions: dict[tuple[str, tuple[str, ...], str], str] = {}
+    kept: list[ValidationIssue] = []
+    for issue in issues:
+        key = _reference_key(issue)
+        if issue.code == "vocab_unknown" and key in refs:
+            if issue.suggestion is not None and key is not None:
+                suggestions.setdefault(key, issue.suggestion)
+            continue
+        kept.append(issue)
+    return [
+        issue.model_copy(update={"suggestion": suggestions[key]})
+        if issue.code == "invalid_ref"
+        and issue.suggestion is None
+        and (key := _reference_key(issue)) in suggestions
+        else issue
+        for issue in kept
+    ]
+
+
+def _reference_key(issue: ValidationIssue) -> tuple[str, tuple[str, ...], str] | None:
+    """``(object, field without list indexes, value)`` of a finding about one value."""
+    value = issue.context.get("value")
+    if not isinstance(value, str):
+        return None
+    return (issue.object_uuid, _without_indexes(issue.field_path), value)
+
+
 def format_issues_for_console(issues: list[ValidationIssue]) -> str:
-    """Headless grouping key for Rich renderer in CLI."""
+    """Plain grouped text for the legacy ``tide_schema`` pipeline. The CLI renders code frames."""
     lines: list[str] = []
     by_file: dict[str, list[ValidationIssue]] = {}
     for issue in issues:

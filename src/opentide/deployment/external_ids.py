@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from opentide.core.logging import get_logger
+from opentide.core.logging import get_logger, is_json_output
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.states.deployment import (
     DeploymentState,
@@ -278,12 +278,19 @@ WARNING_CODES: frozenset[str] = frozenset({"external_id_missing"})
 
 
 def report_failure(
-    error: DeploymentStateError, *, object_uuid: str, platform: str, tenant_name: str = ""
+    error: DeploymentStateError,
+    *,
+    object_uuid: str,
+    platform: str,
+    tenant_name: str = "",
+    reported: bool = False,
 ) -> None:
     """Log a coded per-rule refusal. Other rules continue.
 
     An error marks the run as failed. A code in :data:`WARNING_CODES` marks
-    it as warned instead.
+    it as warned instead. ``reported`` means the caller returns the refusal in
+    the result's ``warnings``: human output then logs it at DEBUG, so it is
+    printed once.
     """
     fields: dict[str, Any] = {
         "uuid": object_uuid,
@@ -295,7 +302,8 @@ def report_failure(
         _warn(error.code, error.message, **fields)
         return
     os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
-    logger.error(error.code, detail=error.message, code=error.code, **fields)
+    log = logger.debug if reported and not is_json_output() else logger.error
+    log(error.code, detail=error.message, code=error.code, **fields)
 
 
 def _warn(code: str, message: str, **fields: Any) -> None:

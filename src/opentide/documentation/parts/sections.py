@@ -253,8 +253,8 @@ def render_signal_mdr_coverage(
         ]
         rows.append([signal.name, "<br>".join(display)])
 
-    return formatter.heading(2, "Signal MDR coverage") + formatter.table(
-        headers=["Signal", "Downstream MDR rules"], rows=rows
+    return formatter.heading(2, "Signal rule coverage") + formatter.table(
+        headers=["Signal", "Downstream rules"], rows=rows
     )
 
 

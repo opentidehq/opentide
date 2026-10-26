@@ -2,17 +2,37 @@
 
 from __future__ import annotations
 
+import warnings
+
 from rich.markup import escape
 from rich.panel import Panel
 from rich.text import Text
 
-from opentide.core.logging.config import get_console, get_logger, is_json_output, is_plain_output
+from opentide.core.logging.config import (
+    current_config,
+    get_console,
+    get_logger,
+    is_json_output,
+    is_plain_output,
+)
 
 
 def emit_section(title: str) -> None:
-    """Render a section header."""
+    """Render a section header (nothing under ``--quiet``).
+
+    While a CLI checklist is showing progress the title becomes the stage of
+    its running step instead (:func:`opentide.core.progress.report_stage`).
+    Engine modules report stages directly and no longer call this.
+    """
+    from opentide.core import progress
+
+    if progress.is_listening():
+        progress.report_stage(title)
+        return
     if is_json_output():
         get_logger("opentide").info("section_started", section=title)
+        return
+    if current_config().quiet:
         return
 
     console = get_console()
@@ -24,7 +44,11 @@ def emit_section(title: str) -> None:
 
 
 def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:
-    """Render a fatal error panel."""
+    """Render a fatal error panel.
+
+    The CLI no longer uses this for ordinary failures, which print an
+    ``error:`` line (:func:`opentide.cli.output.emit_result`).
+    """
     if is_json_output():
         logger = get_logger("opentide")
         payload: dict[str, str] = {}
@@ -61,30 +85,27 @@ def emit_fatal(message: str, *, detail: str = "", advice: str = "") -> None:
 
 
 def print_banner() -> str:
-    """Return the opentide ASCII banner, rendering it when appropriate."""
-    banner = """\
-            :--==-:.
-         -+*###*####*+:
-       -=:   .:  =-*##*.
-     -=.  .:.     .+.*=:+
-  .-+:  .-:  :  .-- :  .
-+*#+   -=.  -:  : :=              The engine powering opentide Instances
-#*-  .==.  :=  .-  +            Part of the OpenThreat Informed Detection Engineering Initiative
-:   :==:   =-  .=. .+
-   :==-   :=-   --  .+:
-  :===.   ==-   :=-   :=-
- .====    ===.   -=-."""
+    """Draw the opentide icon and tagline, and return them as plain text.
 
-    if is_json_output() or is_plain_output():
+    .. deprecated:: 0.18
+        The CLI draws its own marks (``opentide.cli.ui.brand``). This function
+        is removed in a later release.
+    """
+    from opentide.cli.ui import brand
+
+    warnings.warn(
+        "print_banner() is deprecated and will be removed in a later release; "
+        "the opentide CLI draws its own marks.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    banner = f"{brand.icon(mono=True).plain}\nopentide · {brand.TAGLINE}"
+    console = get_console()
+    if is_json_output() or is_plain_output() or not brand.can_draw(console):
         return banner
-
-    get_console().print(
-        Panel(
-            Text(banner, style="bold blue"),
-            title="[bold yellow]Open[/][bold blue]Tide[/]",
-            subtitle="[italic]DetectionOps Engine[/]",
-            border_style="blue",
-            padding=(0, 1),
-        )
+    mark = brand.icon(mono=brand.is_mono(console))
+    console.print(mark)
+    console.print(
+        Text.assemble(brand.pill(mono=brand.is_mono(console)), " ", (brand.TAGLINE, "italic"))
     )
     return banner
