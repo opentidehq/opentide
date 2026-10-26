@@ -68,6 +68,12 @@ _DEFAULT_HELP = {
         "give one of them a fresh UUID v4; keep the UUID on the object that is deployed "
         "or referenced"
     ),
+    # These frames ended on the underline, with no step (post-merge end-to-end run).
+    "yaml_parse": (
+        "look at the indentation, a missing ':' or an unclosed quote at or just before "
+        "this position"
+    ),
+    "schema_validation": "the template in .opentide/templates/ shows the field and its values",
 }
 
 
@@ -626,6 +632,9 @@ def diagnostic_from_issue(
     if span is not None:
         line = span.line
     help_text = issue.suggestion
+    if issue.code == "platform_not_enabled" and "; " in message and not help_text:
+        # The engine's sentence ends in the step to take; the frame shows it as help.
+        message, help_text = message.rsplit("; ", 1)
     fix = None
     if issue.code in VALUE_SUGGESTION_CODES and issue.suggestion:
         help_text = f"did you mean {issue.suggestion!r}?"

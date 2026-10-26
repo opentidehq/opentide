@@ -327,6 +327,47 @@ def test_a_uuid_finding_closes_its_frame_with_a_step(workspace: Path, code: str)
     assert lines[-1].lstrip().startswith("╰─ help: ")
 
 
+@pytest.mark.parametrize(
+    ("code", "field_path", "message", "message_shown", "help_shown"),
+    [
+        (
+            "schema_validation",
+            ("description",),
+            "Field required",
+            "missing required field 'description'",
+            "the template in .opentide/templates/ shows the field and its values",
+        ),
+        (
+            "platform_not_enabled",
+            ("configurations", "sentinel"),
+            "this block will not deploy while sentinel is disabled in this workspace; "
+            "enable sentinel with 'opentide setup platforms --sentinel'",
+            "this block will not deploy while sentinel is disabled in this workspace",
+            "enable sentinel with 'opentide setup platforms --sentinel'",
+        ),
+    ],
+)
+def test_every_frame_ends_in_a_step_to_take(
+    workspace: Path,
+    code: str,
+    field_path: tuple[str, ...],
+    message: str,
+    message_shown: str,
+    help_shown: str,
+) -> None:
+    """A missing field, a YAML error and a disabled platform's frames ended on the
+    underline, the last with its step inside the message (post-merge end-to-end run)."""
+    issue = ValidationIssue(
+        code=code,
+        severity="warning" if code == "platform_not_enabled" else "error",
+        file_path=_rule(workspace),
+        field_path=field_path,
+        message=message,
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    assert (diagnostic.message, diagnostic.help) == (message_shown, help_shown)
+
+
 def test_a_duplicate_uuid_names_the_other_object_and_both_places(workspace: Path) -> None:
     """``Duplicated ID … on 'A' @ a.yaml; already used by 'B' @ b.yaml`` had no line, no
     frame and no place for the other file (post-merge end-to-end run)."""

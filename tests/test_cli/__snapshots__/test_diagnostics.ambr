@@ -39,7 +39,9 @@
   [34m8 [0m[34m│[0m   author: Tutorial Author
   [34m  [0m[34m│[0m         [1;31m━[0m
   [34m  [0m[34m│[0m
-    [34m╰─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 7, column 8
+    [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 7, column 8
+    [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote
+    [34m [0m        at or just before this position
   
   
   '''
@@ -81,7 +83,8 @@
   8 │   author: Tutorial Author
     │         ━
     │
-    ╰─ note: while parsing a flow sequence that starts at line 7, column 8
+    ├─ note: while parsing a flow sequence that starts at line 7, column 8
+    ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
   
   
   '''

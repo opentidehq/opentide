@@ -194,7 +194,9 @@ def test_a_yaml_error_is_reported_once_with_its_position(tutorial: Path) -> None
         "error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'\n"
         "  ╭─▶ objects/rules/sentinel-kql-rule.yaml:9:9\n"
     ) in text
-    assert "╰─ note: while parsing a flow sequence that starts at line 8, column 8\n" in text
+    assert "├─ note: while parsing a flow sequence that starts at line 8, column 8\n" in text
+    # The frame ends in a step to take, like every other (post-merge end-to-end run).
+    assert "╰─ help: look at the indentation" in text
 
     (issue,) = _issues(_run(tutorial, "validate", json_output=True))
     assert issue["message"] == (
