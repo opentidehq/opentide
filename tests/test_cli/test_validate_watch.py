@@ -327,6 +327,25 @@ def test_the_live_view_keeps_the_outcome_line_on_a_short_terminal() -> None:
     )
 
 
+def test_the_live_view_wraps_a_long_header_with_its_indent() -> None:
+    """The Live view left wrapping to the terminal, which broke a long header with no
+    continuation indent, unlike validate's own frames (post-merge end-to-end run)."""
+    console, _out = _console()
+    view = LiveView(console, _describe)
+    long = Diagnostic(
+        code="duplicate_id",
+        severity="error",
+        message="UUID 962056a0-3bf6-433c-89cd-26cbf1497c1a is also used by "
+        "'LSASS access on defender_for_endpoint', a rule in another file of this catalogue",
+        path="objects/rules/rule.yaml",
+        file_path=_RULE,
+    )
+    group = view.renderable(_run([long]))
+    lines = [_ANSI.sub("", str(line)) for line in group.renderables]
+    assert len(lines[0]) <= 100
+    assert lines[1].startswith("  ") and "another file" in lines[0] + lines[1]
+
+
 def test_the_live_view_redraws_in_place(capsys: pytest.CaptureFixture[str]) -> None:
     console, out = _console()
     with LiveView(console, _describe, quiet=True) as view:
