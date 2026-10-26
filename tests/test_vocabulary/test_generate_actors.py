@@ -213,3 +213,35 @@ def test_generate_actors_vocabs_uses_explicit_vocab_dir(
     generate_actors.generate_actors_vocabs(vocab_dir=output_dir)
 
     assert written_paths == [output_dir / "actors.vocab.toml"]
+
+
+def test_a_group_in_several_domains_keeps_its_enterprise_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Mobile entry, read last, used to replace the Enterprise one."""
+    vocab_dir = tmp_path / "vocabs"
+    stix_dir = tmp_path / "attack" / "stix"
+    vocab_dir.mkdir()
+    stix_dir.mkdir(parents=True)
+    (vocab_dir / "actors.vocab.toml").write_text(
+        'name = "Actors"\nfield = "actors"\nkey = "id"\nkeys = []\n', encoding="utf-8"
+    )
+    for domain in ("enterprise", "ics", "mobile"):
+        apt28 = {
+            "type": "intrusion-set",
+            "name": "APT28",
+            "description": domain,
+            "external_references": [{"source_name": "mitre-attack", "external_id": "G0007"}],
+        }
+        (stix_dir / f"{domain}-attack.json").write_text(
+            json.dumps({"type": "bundle", "objects": [apt28]}), encoding="utf-8"
+        )
+    monkeypatch.setattr(generate_actors, "_stix_dir", lambda: stix_dir)
+    monkeypatch.setattr(generate_actors, "_default_misp_url", lambda: None)
+
+    generate_actors.generate_actors_vocabs(vocab_dir=vocab_dir)
+
+    actors = read_vocab_document(vocab_dir / "actors.vocab.toml")["keys"]
+    assert [(actor["id"], actor["name"], actor["description"]) for actor in actors] == [
+        ("G0007", "[Enterprise] APT28", "enterprise")
+    ]

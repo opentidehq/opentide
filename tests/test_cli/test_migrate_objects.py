@@ -14,6 +14,9 @@ from opentide.cli.services import migrate_objects
 from opentide.cli.services.migrate_objects import _fix_destination_case, run_migrate_objects
 
 runner = CliRunner()
+#: The assertions read the human output; keep it on one line and uncoloured
+#: whatever the host terminal is (CI runners report 80 columns).
+_PLAIN_TERMINAL = {"COLUMNS": "1000", "NO_COLOR": "1", "FORCE_COLOR": None}
 
 
 def _case_insensitive(directory: Path) -> bool:
@@ -125,6 +128,65 @@ def test_migrate_objects_skips_existing_destination(tmp_path: Path) -> None:
     assert skipped[0]["reason"] == "destination already exists"
     assert (root / "Configurations" / "platforms" / "sentinel.toml").is_file()
     assert (dest / "existing.toml").is_file()
+
+
+def test_migrate_objects_cli_warns_about_a_configurations_folder_it_left(tmp_path: Path) -> None:
+    """``setup platforms`` before the migration created ``.opentide/configurations``.
+
+    The migration then skipped ``Configurations/`` and printed only
+    ``OK Migrated 1 legacy path(s)``: the skip was visible in ``--json`` alone.
+    """
+    root = tmp_path / "legacy"
+    (root / "Configurations" / "systems").mkdir(parents=True)
+    (root / "Configurations" / "systems" / "sentinel.toml").write_text("x = 1\n", encoding="utf-8")
+    (root / "Objects" / "Detection Rules").mkdir(parents=True)
+    (root / "Objects" / "Detection Rules" / "r.yaml").write_text("name: r\n", encoding="utf-8")
+    (root / ".opentide" / "configurations" / "platforms").mkdir(parents=True)
+    (root / ".opentide" / "configurations" / "platforms" / "sentinel.toml").write_text(
+        "enabled = true\n", encoding="utf-8"
+    )
+
+    dry = runner.invoke(app, ["--repo", str(root), "migrate", "objects"], env=_PLAIN_TERMINAL)
+    applied = runner.invoke(
+        app, ["--repo", str(root), "migrate", "objects", "--apply"], env=_PLAIN_TERMINAL
+    )
+
+    assert dry.exit_code == 0, dry.output
+    assert "Left Configurations/ in place" in " ".join(dry.output.split())
+    assert applied.exit_code == 1, applied.output
+    output = " ".join(applied.output.split())
+    assert "! Migrated 1 legacy path(s); 1 legacy path(s) left in place" in output
+    assert "Left Configurations/ in place: .opentide/configurations/ already exists" in output
+    assert (root / "objects" / "rules" / "r.yaml").is_file()
+    assert (root / "Configurations" / "systems" / "sentinel.toml").is_file()
+
+
+def test_migrate_objects_warns_about_files_a_merge_left_behind(tmp_path: Path) -> None:
+    root = tmp_path / "legacy"
+    (root / "Objects" / "Threat Vectors").mkdir(parents=True)
+    (root / "Objects" / "Threat Vectors" / "threat.yaml").write_text("client\n", encoding="utf-8")
+    library = root / "Models Library" / "Threat Vector Models"
+    library.mkdir(parents=True)
+    (library / "threat.yaml").write_text("library\n", encoding="utf-8")
+    (root / "objects" / "threats").mkdir(parents=True)
+    (root / "objects" / "threats" / "threat.yaml").write_text("current\n", encoding="utf-8")
+    expected = [
+        f"{source}/threat.yaml was not moved: its destination already has a file or "
+        "folder of that name."
+        for source in ("Objects/Threat Vectors", "Models Library/Threat Vector Models")
+    ]
+
+    planned = run_migrate_objects(root)
+    result = run_migrate_objects(root, apply=True)
+
+    assert planned["warnings"] == expected
+    assert "_exit_code" not in planned
+    assert result["warnings"] == expected
+    assert result["status"] == "issues"
+    assert result["_exit_code"] == 1
+    assert (root / "objects" / "threats" / "threat.yaml").read_text(encoding="utf-8") == (
+        "current\n"
+    )
 
 
 def test_migrate_objects_idempotent_after_apply(tmp_path: Path) -> None:
@@ -308,7 +370,8 @@ def test_case_fix_renames_through_a_temporary_name(
 ) -> None:
     if _case_insensitive(tmp_path):
         pytest.skip(
-            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+            "simulates case-insensitivity with a symlink, "
+            "which a real case-insensitive filesystem cannot host"
         )
     root = tmp_path / "repo"
     (root / "Objects" / "threats").mkdir(parents=True)
@@ -371,7 +434,8 @@ def test_migrate_objects_warns_once_when_the_case_rename_is_blocked(
     """A leftover temporary name keeps ``Objects``; ``--json`` readers see why."""
     if _case_insensitive(tmp_path):
         pytest.skip(
-            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+            "simulates case-insensitivity with a symlink, "
+            "which a real case-insensitive filesystem cannot host"
         )
     root = _legacy_repo(tmp_path)
     _alias_objects(root, monkeypatch)
@@ -416,7 +480,8 @@ def test_migrate_objects_repairs_a_layout_an_earlier_release_migrated(
     """No legacy source is left, but the migrated folders still sit in ``Objects``."""
     if _case_insensitive(tmp_path):
         pytest.skip(
-            "simulates case-insensitivity with a symlink, which a real case-insensitive filesystem cannot host"
+            "simulates case-insensitivity with a symlink, "
+            "which a real case-insensitive filesystem cannot host"
         )
     root = tmp_path / "repo"
     (root / "Objects" / "threats").mkdir(parents=True)

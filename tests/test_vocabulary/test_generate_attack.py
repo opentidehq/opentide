@@ -310,3 +310,47 @@ def test_generate_attack_header_stages_follow_the_enterprise_matrix(
 
     written = read_vocab_document(vocab_dir / "att&ck.vocab.toml")
     assert written["stages"] == expected
+
+
+def _apt28_bundle(domain: str) -> dict[str, object]:
+    """A STIX bundle holding APT28, which ATT&CK lists in every domain."""
+    return {
+        "type": "bundle",
+        "objects": [
+            {
+                "type": "intrusion-set",
+                "name": "APT28",
+                "description": domain,
+                "external_references": [
+                    {"source_name": "mitre-attack", "external_id": "G0007"},
+                ],
+            }
+        ],
+    }
+
+
+def test_a_group_in_several_domains_keeps_its_enterprise_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Mobile entry, read last, used to replace the Enterprise one."""
+    stix_dir = tmp_path / "attack" / "stix"
+    vocab_dir = tmp_path / "vocabs"
+    stix_dir.mkdir(parents=True)
+    vocab_dir.mkdir()
+    for domain in ("enterprise", "ics", "mobile"):
+        (stix_dir / f"{domain}-attack.json").write_text(
+            json.dumps(_apt28_bundle(domain)), encoding="utf-8"
+        )
+    for field in ("att&ck", "att&ck.groups", "mitigations", "datasources"):
+        (vocab_dir / f"{field}.vocab.toml").write_text(
+            f'name = "{field}"\nfield = "{field}"\nkeys = []\n',
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(generate_attack, "_stix_dir", lambda: stix_dir)
+
+    generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir)
+
+    groups = read_vocab_document(vocab_dir / "att&ck.groups.vocab.toml")["keys"]
+    assert [(group["id"], group["name"], group["description"]) for group in groups] == [
+        ("G0007", "APT28", "enterprise")
+    ]

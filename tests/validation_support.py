@@ -23,6 +23,16 @@ def declared_uuid(path: Path) -> str | None:
     return str(raw) if raw else None
 
 
+def declared_signal_uuids(path: Path) -> set[str]:
+    """Return the ``objective.signals[*].uuid`` values an objective file declares."""
+    body = yaml.safe_load(path.read_text(encoding="utf-8"))
+    objective = body.get("objective") if isinstance(body, dict) else None
+    signals = objective.get("signals") if isinstance(objective, dict) else None
+    if not isinstance(signals, list):
+        return set()
+    return {str(s["uuid"]) for s in signals if isinstance(s, dict) and s.get("uuid")}
+
+
 def _as_dicts(report: ValidationReport | Mapping[str, Any] | Iterable[IssueLike]) -> list[dict]:
     if isinstance(report, ValidationReport):
         items: Iterable[IssueLike] = [*report.issues, *report.warnings]
@@ -62,6 +72,12 @@ def assert_issues_point_at_their_objects(
         if not path.is_absolute() and root is not None:
             path = root / path
         assert path.is_file(), f"{issue['code']} for {uuid} names missing file {path}"
+        if issue.get("object_type") == "signal":
+            # A signal is declared inside its objective's file.
+            assert uuid in declared_signal_uuids(path), (
+                f"{issue['code']} for signal {uuid} is attributed to {path}, which lacks it"
+            )
+            continue
         owner = declared_uuid(path)
         assert owner == uuid, (
             f"{issue['code']} for {uuid} is attributed to {path}, which declares {owner}"

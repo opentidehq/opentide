@@ -40,14 +40,54 @@ class McpSetupOptions:
     yes: bool = False
 
 
+class McpConfigError(ValueError):
+    """An existing MCP config that opentide's server cannot be merged into."""
+
+
+def _merge_servers(dest: Path, template: dict[str, object]) -> dict[str, object]:
+    """*dest*'s config with the template's server entries added or refreshed.
+
+    Writing the template over the file dropped every other MCP server the
+    user had configured there.
+    """
+    from opentide.cli.services.setup.vscode import _load_jsonc
+
+    try:
+        existing = _load_jsonc(dest)
+    except ValueError as exc:
+        raise McpConfigError(f"is not valid JSON ({exc})") from exc
+    if not isinstance(existing, dict):
+        raise McpConfigError("is not a JSON object")
+    for key, servers in template.items():
+        current = existing.get(key)
+        if current is None:
+            existing[key] = servers
+        elif isinstance(current, dict) and isinstance(servers, dict):
+            existing[key] = {**current, **servers}
+        else:
+            raise McpConfigError(f"has a {key!r} that is not a JSON object")
+    return existing
+
+
 def write_mcp_config(target: Path, host: McpHost) -> str:
-    """Write MCP config for a host; returns relative path written."""
+    """Write or merge MCP config for a host; returns the relative path written.
+
+    Raises :class:`McpConfigError` when an existing file cannot be merged; it
+    is left unchanged.
+    """
     rel = MCP_OUTPUT_PATHS[host]
     dest = target / rel
-    dest.parent.mkdir(parents=True, exist_ok=True)
     payload = load_mcp_template(host.value)
+    if dest.is_file():
+        payload = _merge_servers(dest, payload)
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return rel
+
+
+def mcp_config_warning(host: McpHost, exc: McpConfigError) -> str:
+    rel = MCP_OUTPUT_PATHS[host]
+    return f"{rel} {exc}; left unchanged. Add the opentide server to it by hand."
 
 
 def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
@@ -58,14 +98,22 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
         )
     target = options.path.resolve()
     written: list[str] = []
+    skipped: list[str] = []
+    warnings: list[str] = []
     for host in options.hosts:
-        written.append(write_mcp_config(target, host))
+        try:
+            written.append(write_mcp_config(target, host))
+        except McpConfigError as exc:
+            skipped.append(MCP_OUTPUT_PATHS[host])
+            warnings.append(mcp_config_warning(host, exc))
     logger.debug("mcp_config_created", detail=str(target), files=written)
     result: dict[str, object] = {
         "message": "MCP configuration generated",
         "path": str(target),
         "files": written,
     }
+    if skipped:
+        result["skipped"] = skipped
     if McpHost.generic in options.hosts:
         result["advice"] = (
             "Copy opentide.mcp.json into your editor MCP settings or run "
@@ -78,12 +126,10 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
     missing = missing_requirements()
     if missing:
         result["mcp_available"] = False
-        warnings = list(result.get("warnings") or [])
         warnings.append(
             f"These configs launch opentide mcp start, which cannot import "
             f"{', '.join(missing)} in this environment. Repair it with: {MCP_INSTALL_HINT}"
         )
-        result["warnings"] = warnings
         logger.warning(
             "mcp_server_unavailable",
             detail=", ".join(missing),
@@ -91,6 +137,8 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
         )
     else:
         result["mcp_available"] = True
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 

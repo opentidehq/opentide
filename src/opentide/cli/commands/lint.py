@@ -24,6 +24,7 @@ def lint_cmd(
     cli = get_context(ctx)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
-    if not cli.json_output:
-        render_findings(result["findings"])
+    findings = result["findings"]
+    if not cli.json_output and isinstance(findings, list):
+        render_findings(findings)
     emit_result(cli, CommandResult.from_payload(result, default_message="Catalogue lint passed"))

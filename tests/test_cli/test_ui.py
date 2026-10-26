@@ -8,7 +8,7 @@ import pytest
 from rich.console import Console
 
 from opentide.cli.ui.contract import Failure, NextAction, did_you_mean
-from opentide.cli.ui.glyphs import GLYPHS, glyph
+from opentide.cli.ui.glyphs import GLYPHS, encodable, glyph
 from opentide.cli.ui.mode import (
     OutputMode,
     detect_agent,
@@ -137,6 +137,40 @@ def test_unknown_glyph_name_fails_loudly() -> None:
 def test_did_you_mean() -> None:
     assert did_you_mean("valdate", ["validate", "deploy"]) == "validate"
     assert did_you_mean("zzz", ["validate", "deploy"]) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "choices", "expected"),
+    [
+        ("RULE", ["rule", "threat", "objective"], "rule"),
+        ("RULES", ["rules", "threats", "objectives", "coverage"], "rules"),
+        ("VALIDATE", ["validate", "deploy"], "validate"),
+        ("Attack_Pattern", ["attack-pattern", "malware"], "attack-pattern"),
+        ("PREVEW", ["PREVIEW", "RELEASE"], "PREVIEW"),
+        ("Valdate", ["validate", "deploy"], "validate"),
+        ("_", ["-"], None),
+    ],
+)
+def test_did_you_mean_ignores_case_and_separators(
+    value: str, choices: list[str], expected: str | None
+) -> None:
+    """A case-only typo is the likeliest one; difflib alone scores ``RULE`` against ``rule`` 0."""
+    assert did_you_mean(value, choices) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("a · b", "a - b"),
+        ("cut…", "cut..."),
+        ("✓ done → next", "ok done -> next"),
+        ("café", "caf?"),
+        ("plain", "plain"),
+    ],
+)
+def test_encodable_falls_back_on_an_ascii_stream(text: str, expected: str) -> None:
+    assert encodable(text, _Stream(tty=False, encoding="ascii")) == expected
+    assert encodable(text, _Stream(tty=False, encoding="utf-8")) == text
 
 
 def test_failure_dict_has_every_key() -> None:

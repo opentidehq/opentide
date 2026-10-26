@@ -7,6 +7,7 @@ these without loading a terminal stack.
 from __future__ import annotations
 
 import difflib
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -74,7 +75,27 @@ class Failure:
         }
 
 
+#: Separators a typo may add, drop or swap: ``attack-pattern``, ``attack_pattern``.
+_SEPARATORS = re.compile(r"[\s_-]+")
+
+
+def _fold(text: str) -> str:
+    """*text* without case or separators, so ``RULE`` and ``rule`` compare equal."""
+    return _SEPARATORS.sub("", text).casefold()
+
+
 def did_you_mean(value: str, choices: Iterable[str]) -> str | None:
-    """The valid choice closest to *value*, or ``None`` when nothing is close."""
-    matches = difflib.get_close_matches(value, list(choices), n=1, cutoff=0.6)
-    return matches[0] if matches else None
+    """The valid choice closest to *value*, or ``None`` when nothing is close.
+
+    A choice that differs only in case or separators wins outright (``RULE`` →
+    ``rule``); otherwise difflib compares the lower-cased spellings and the
+    original spelling of the closest one is returned.
+    """
+    options = list(dict.fromkeys(choices))
+    folded = _fold(value)
+    for choice in options:
+        if folded and _fold(choice) == folded:
+            return choice
+    lowered = {choice.casefold(): choice for choice in reversed(options)}
+    matches = difflib.get_close_matches(value.casefold(), list(lowered), n=1, cutoff=0.6)
+    return lowered[matches[0]] if matches else None

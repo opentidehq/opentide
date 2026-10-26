@@ -106,6 +106,7 @@ def platform_label(platform: DetectionPlatform) -> str:
 
 
 __all__ = [
+    "QUERY_VALIDATION_PLATFORMS",
     "CiPlatform",
     "DetectionPlatform",
     "DocumentScope",
@@ -114,7 +115,6 @@ __all__ = [
     "GeneratePhase",
     "LintCheck",
     "McpHost",
-    "QUERY_VALIDATION_PLATFORMS",
     "SkillTarget",
     "ValidateCheck",
     "platform_label",

@@ -50,7 +50,7 @@ A file that fails them is printed as `[check/severity] path: message` before tha
 [metadata/info] objects/threats/Simulated Actor.yaml:2: Recommended metadata missing: author, organisation
 [filenames/warning] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'
 ! Catalogue lint found issues
-→ opentide lint --fix · rename 1 file(s) to match their names
+→ opentide lint --fix · rename 1 file to match their names
 ```
 
 When a filename finding can be fixed by renaming, the summary is followed by the command that does it. A file renamed by `--fix` gets `(renamed from <old path>)`.
