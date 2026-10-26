@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -24,15 +23,16 @@ from opentide.platforms.elastic.es_checks import (
     ElasticTenantError,
     run_elasticsearch_checks,
 )
+from opentide.platforms.elastic.query_text import (
+    eql_is_sequence,
+    eql_maxspan,
+    esql_aggregates,
+    esql_has_metadata_id,
+)
 from opentide.platforms.plugins import QueryValidator
 from opentide.platforms.transport import reaching_tenant, tenant_tls_verify
 
 logger = structlog.get_logger(__name__)
-
-_METADATA_ID = re.compile(r"(?i)\bMETADATA\b[^|]*\b_id\b")
-_STATS = re.compile(r"(?i)\bSTATS\b")
-_EQL_SEQUENCE = re.compile(r"(?i)\bsequence\b")
-_EQL_MAXSPAN = re.compile(r"(?i)\bmaxspan\s*=\s*(\d+[smhd])")
 
 _RISK_BANDS: dict[str, tuple[int, int]] = {
     "low": (0, 21),
@@ -106,8 +106,8 @@ def _emit_rule_advisories(
     if (
         cfg.type == "esql"
         and cfg.query
-        and not _STATS.search(cfg.query)
-        and not _METADATA_ID.search(cfg.query)
+        and not esql_aggregates(cfg.query)
+        and not esql_has_metadata_id(cfg.query)
     ):
         logger.warning(
             "elastic_esql_metadata_id_warning",
@@ -142,16 +142,12 @@ def _emit_rule_advisories(
                 _flag_warning()
 
     # 4. EQL sequence maxspan vs. scheduling window
-    if cfg.type == "eql" and cfg.query and _EQL_SEQUENCE.search(cfg.query):
-        maxspan_match = _EQL_MAXSPAN.search(cfg.query)
-        if maxspan_match:
-            maxspan_str = maxspan_match.group(1)
-            try:
-                maxspan_secs = duration_seconds(maxspan_str)
-            except ValueError:
-                maxspan_secs = 0
-            window_secs = interval_secs + lookback_secs
-            if maxspan_secs > window_secs:
+    if cfg.type == "eql" and cfg.query and eql_is_sequence(cfg.query):
+        maxspan = eql_maxspan(cfg.query)
+        if maxspan:
+            maxspan_str, maxspan_ms = maxspan
+            window_ms = (interval_secs + lookback_secs) * 1000
+            if maxspan_ms > window_ms:
                 logger.warning(
                     "elastic_eql_maxspan_window_warning",
                     rule=rule.name,
@@ -165,7 +161,7 @@ def _emit_rule_advisories(
                     ),
                 )
                 _flag_warning()
-            elif maxspan_secs > lookback_secs:
+            elif maxspan_ms > lookback_secs * 1000:
                 logger.warning(
                     "elastic_eql_maxspan_window_warning",
                     rule=rule.name,
