@@ -115,7 +115,7 @@ def _default_branch_warnings(path: Path, branch: str, source: str) -> list[str]:
     if source == "fallback" and not _git_stdout(_repository_dir(path), "rev-parse", "--git-dir"):
         # A new folder: there is no repository to have a branch yet, and the
         # wizard has no --default-branch to re-run with.
-        logger.debug("ci_default_branch_no_repository", detail=branch)
+        logger.debug("ci_default_branch_missing", detail=branch)
         return [
             f"This folder is not a git repository yet, so the pipeline targets {branch!r}; "
             f"create it on that branch with 'git init -b {branch}', or write the pipeline "
