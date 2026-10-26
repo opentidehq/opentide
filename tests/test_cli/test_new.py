@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import re
 import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -46,25 +49,59 @@ GIT_AUTHOR = {
 }
 
 
+#: What ``CliContext.apply_environment()`` writes for the engine modules.
+#: ``CliRunner`` restores only the variables passed in ``env=``.
+_CLI_EXPORTS = ("OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE", "OPENTIDE_DATA_ROOT", "NO_COLOR")
+
+
+@contextmanager
+def cli_state_restored() -> Iterator[None]:
+    """Undo what a CLI run leaves in the process: its exports and the cached registry.
+
+    A run given ``--repo`` but no ``env=`` left ``OPENTIDE_TIDE_WORKSPACE``
+    set and the registry built from it. A later test in the same worker then
+    generated schemas from configurations merged with
+    ``tests/fixtures/generation`` and failed with ``KeyError: 'name'``.
+    """
+    saved = {name: os.environ.get(name) for name in _CLI_EXPORTS}
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        clear_runtime_caches()
+
+
+@pytest.fixture(autouse=True)
+def _restore_cli_state() -> Iterator[None]:
+    with cli_state_restored():
+        yield
+
+
 @pytest.fixture(scope="module")
 def prepared(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A sentinel workspace with generated templates and schemas, built once."""
     root = tmp_path_factory.mktemp("new") / "detections"
     runner = CliRunner()
-    clear_runtime_caches()
-    setup = runner.invoke(
-        app,
-        ["--json", "setup", "--yes", "--platform", "sentinel", "--path", str(root)],
-        env={"OPENTIDE_REPO_ROOT": str(root.parent)},
-    )
-    assert setup.exit_code == 0, setup.stdout + setup.stderr
-    clear_runtime_caches()
-    env = {"OPENTIDE_REPO_ROOT": str(root), "OPENTIDE_TIDE_WORKSPACE": str(root)}
-    generate = runner.invoke(
-        app, ["--json", "--repo", str(root), "generate", "templates", "schemas"], env=env
-    )
-    assert generate.exit_code == 0, generate.stdout + generate.stderr
-    clear_runtime_caches()
+    # Module-scoped, so it runs before any test's own restore: undo setup's
+    # OPENTIDE_TIDE_WORKSPACE export here, or it outlives the module.
+    with cli_state_restored():
+        clear_runtime_caches()
+        setup = runner.invoke(
+            app,
+            ["--json", "setup", "--yes", "--platform", "sentinel", "--path", str(root)],
+            env={"OPENTIDE_REPO_ROOT": str(root.parent)},
+        )
+        assert setup.exit_code == 0, setup.stdout + setup.stderr
+        clear_runtime_caches()
+        env = {"OPENTIDE_REPO_ROOT": str(root), "OPENTIDE_TIDE_WORKSPACE": str(root)}
+        generate = runner.invoke(
+            app, ["--json", "--repo", str(root), "generate", "templates", "schemas"], env=env
+        )
+        assert generate.exit_code == 0, generate.stdout + generate.stderr
     return root
 
 
@@ -165,6 +202,28 @@ def test_bare_new_shows_its_help(workspace: Path) -> None:
     from opentide.cli.commands.new import new_app
 
     assert new_app.registered_callback is None
+
+
+def test_a_run_without_env_leaves_no_workspace_export_behind(
+    prepared: Path, workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--repo`` exports OPENTIDE_TIDE_WORKSPACE, which CliRunner does not undo.
+
+    Left set (by ``prepared``'s setup run, or a test's own), it made a later
+    test's schema generation merge ``tests/fixtures/generation`` and fail with
+    ``KeyError: 'name'``.
+    """
+    from opentide.generation.pydantic_schemas import generate_schema_for_identifier
+
+    assert os.environ.get("OPENTIDE_TIDE_WORKSPACE") != str(prepared.parent)
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    with cli_state_restored():
+        clear_runtime_caches()
+        CliRunner().invoke(app, ["--no-color", "--repo", str(workspace), "new"])
+        assert os.environ["OPENTIDE_TIDE_WORKSPACE"] == str(workspace)
+    assert "OPENTIDE_TIDE_WORKSPACE" not in os.environ
+    schema = generate_schema_for_identifier("rule::1.1")
+    assert "severity" in schema["properties"]
 
 
 def test_new_objective_links_threats(workspace: Path) -> None:
