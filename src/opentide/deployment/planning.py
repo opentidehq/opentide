@@ -1,10 +1,10 @@
-from collections.abc import Iterator, MutableMapping, Sequence
+from collections.abc import Generator, Mapping, MutableMapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, Protocol, TypeVar
 
-from opentide.core.logging import get_logger
 from opentide.core import registry
+from opentide.core.logging import get_logger
 from opentide.generation.framework import unroll_dot_dict
 from opentide.models.deployment_enums import (
     DetectionPlatforms,
@@ -13,11 +13,7 @@ from opentide.models.deployment_enums import (
 )
 from opentide.models.platform import PLATFORM_CONFIG_MODELS, PlatformConfigBase
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import (
-    DeploymentBatch,
-    SystemConfig,
-    TenantDeployment,
-)
+from opentide.models.system_config import DeploymentBatch, SystemConfig
 from opentide.platforms.enabled import MissingTenantsError
 
 DEPRECATED_STATUSES = (StatusStrategy.DELETION, StatusStrategy.DISABLEMENT)
@@ -36,7 +32,7 @@ _WIDE_SCOPE: ContextVar[bool] = ContextVar("opentide_wide_scope", default=False)
 
 
 @contextmanager
-def wide_scope() -> Iterator[None]:
+def wide_scope() -> Generator[None]:
     """Resolve tenants for ``--wide``, which deploys rules whatever their status.
 
     A rule's status strategy normally decides which tenants take it. Under
@@ -48,6 +44,33 @@ def wide_scope() -> Iterator[None]:
         yield
     finally:
         _WIDE_SCOPE.reset(token)
+
+
+def modifier_applies(
+    conditions: SystemConfig.Modifiers.Conditions,
+    *,
+    status: str,
+    tenant: str,
+    flags: Sequence[str] | None,
+) -> bool:
+    """Whether a platform modifier applies to a rule deployed to *tenant*.
+
+    Every condition the modifier sets must hold: ``status`` lists the rule's
+    status, ``tenants`` lists the tenant, and ``flags`` shares a flag with the
+    rule, so a rule without flags never meets a ``flags`` condition.
+    ``default = true`` holds for every rule. A modifier that sets no
+    condition applies to none.
+    """
+    checks: list[bool] = []
+    if conditions.status:
+        checks.append(status in conditions.status)
+    if conditions.tenants:
+        checks.append(tenant in conditions.tenants)
+    if conditions.flags:
+        checks.append(any(flag in conditions.flags for flag in flags or ()))
+    if checks:
+        return all(checks)
+    return conditions.default is True
 
 
 def _json_normalize(data: Any) -> Any:
@@ -70,45 +93,38 @@ def _typed_platform_config_roots(system_identifier: str) -> set[str]:
     return roots
 
 
-class TideDeployment:
-    def __init__(self, deployment, system: DetectionPlatforms, strategies: RunStrategies | None):
-        match system:
-            case DetectionPlatforms.SPLUNK:
-                self.rule_deployment: Sequence[TenantDeployment.Splunk] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategies)
-                )
-            case DetectionPlatforms.SENTINEL:
-                self.rule_deployment: Sequence[TenantDeployment.Sentinel] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategies)
-                )
-            case DetectionPlatforms.CARBON_BLACK_CLOUD:
-                self.rule_deployment: Sequence[TenantDeployment.CarbonBlackCloud] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategies)
-                )
-            case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
-                self.rule_deployment: Sequence[TenantDeployment.DefenderForEndpoint] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategies)
-                )
-            case DetectionPlatforms.SENTINEL_ONE:
-                self.rule_deployment: Sequence[TenantDeployment.SentinelOne] = (  # type:ignore
-                    self.deployment_resolver(deployment, system, strategies)
-                )
-            case DetectionPlatforms.CROWDSTRIKE:
-                self.rule_deployment: Sequence[TenantDeployment.Crowdstrike] = (
-                    self.deployment_resolver(deployment, system, strategies)  # type:ignore
-                )
-            case DetectionPlatforms.HARFANGLAB:
-                self.rule_deployment: Sequence[TenantDeployment.HarfangLab] = (
-                    self.deployment_resolver(deployment, system, strategies)  # type:ignore
-                )
-            case DetectionPlatforms.ELASTIC:
-                self.rule_deployment: Sequence[TenantDeployment.Elastic] = (
-                    self.deployment_resolver(deployment, system, strategies)  # type:ignore
-                )
-            case _:
-                raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
+_Mapping = TypeVar("_Mapping", bound=MutableMapping[str, Any])
 
-    def system_configuration_resolver(self, system: DetectionPlatforms):  # type:ignore
+
+class _PlatformConfiguration(Protocol):
+    """The parts of a platform's ``.opentide/configurations`` file that planning reads."""
+
+    @property
+    def platform(self) -> SystemConfig.Platform: ...
+
+    @property
+    def tenants(self) -> Sequence[SystemConfig.Tenant] | None: ...
+
+    @property
+    def modifiers(self) -> Sequence[SystemConfig.Modifiers] | None: ...
+
+
+class TideDeployment:
+    def __init__(
+        self,
+        deployment: Sequence[DetectionRule | str],
+        system: DetectionPlatforms,
+        strategies: RunStrategies | None,
+    ) -> None:
+        if not isinstance(system, DetectionPlatforms):
+            raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
+        # Each batch's tenant is the platform's own tenant type; the batches
+        # themselves are built as plain ``DeploymentBatch`` objects.
+        self.rule_deployment: Sequence[DeploymentBatch] = self.deployment_resolver(
+            deployment, system, strategies
+        )
+
+    def system_configuration_resolver(self, system: DetectionPlatforms) -> _PlatformConfiguration:
         match system:
             case DetectionPlatforms.SPLUNK:
                 return registry.Opentide.Configurations.Systems.Splunk
@@ -126,40 +142,44 @@ class TideDeployment:
                 return registry.Opentide.Configurations.Systems.HarfangLab
             case DetectionPlatforms.ELASTIC:
                 return registry.Opentide.Configurations.Systems.Elastic
-            # case _:
-            # raise NotImplementedError
-        return None
+        raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
 
     def mdr_configuration_resolver(
         self, data: DetectionRule, system: DetectionPlatforms
     ) -> PlatformConfigBase:
-        match system:
-            case DetectionPlatforms.SENTINEL:
-                mdr_config = data.configurations.sentinel
-            case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
-                mdr_config = data.configurations.defender_for_endpoint
-            case DetectionPlatforms.SENTINEL_ONE:
-                mdr_config = data.configurations.sentinel_one
-            case DetectionPlatforms.CROWDSTRIKE:
-                mdr_config = data.configurations.crowdstrike
-            case DetectionPlatforms.HARFANGLAB:
-                mdr_config = data.configurations.harfanglab
-            case DetectionPlatforms.SPLUNK:
-                mdr_config = data.configurations.splunk
-            case DetectionPlatforms.CARBON_BLACK_CLOUD:
-                mdr_config = data.configurations.carbon_black_cloud
-            case DetectionPlatforms.ELASTIC:
-                mdr_config = data.configurations.elastic
-            case _:
-                logger.critical(
-                    "could_not_resolve_rule_configuration_for_system", detail=str(system)
-                )
-                raise Exception(NotImplemented)
+        configurations = data.configurations
+        mdr_config: PlatformConfigBase | None = None
+        if configurations is not None:
+            match system:
+                case DetectionPlatforms.SENTINEL:
+                    mdr_config = configurations.sentinel
+                case DetectionPlatforms.DEFENDER_FOR_ENDPOINT:
+                    mdr_config = configurations.defender_for_endpoint
+                case DetectionPlatforms.SENTINEL_ONE:
+                    mdr_config = configurations.sentinel_one
+                case DetectionPlatforms.CROWDSTRIKE:
+                    mdr_config = configurations.crowdstrike
+                case DetectionPlatforms.HARFANGLAB:
+                    mdr_config = configurations.harfanglab
+                case DetectionPlatforms.SPLUNK:
+                    mdr_config = configurations.splunk
+                case DetectionPlatforms.CARBON_BLACK_CLOUD:
+                    mdr_config = configurations.carbon_black_cloud
+                case DetectionPlatforms.ELASTIC:
+                    mdr_config = configurations.elastic
+                case _:
+                    logger.critical(
+                        "could_not_resolve_rule_configuration_for_system", detail=str(system)
+                    )
+                    raise Exception(NotImplemented)
 
         if not mdr_config:
             logger.error(
                 "was_not_able_to_retrieve_rule_configuration_for_targeted_system",
-                detail=f"[{data.metadata.uuid}] {data.name} - Available configurations : [{data.configurations!s}]",
+                detail=(
+                    f"[{data.metadata.uuid}] {data.name} - Available configurations : "
+                    f"[{data.configurations!s}]"
+                ),
             )
             raise Exception(NotImplemented)
 
@@ -183,13 +203,13 @@ class TideDeployment:
         """
         from opentide.deployment.utils import check_status
 
-        tenants = self.system_configuration_resolver(system).tenants  # type: ignore
+        tenants = self.system_configuration_resolver(system).tenants
         mdr_config = self.mdr_configuration_resolver(data, system)
         mdr_tenants = mdr_config.tenants
         run = tuple(strategies or ())
         rule_strategy = check_status(str(mdr_config.status))
         wide = _WIDE_SCOPE.get()
-        target_tenants = list()
+        target_tenants: list[SystemConfig.Tenant] = []
 
         if not tenants:
             logger.critical(
@@ -237,8 +257,8 @@ class TideDeployment:
         return target_tenants
 
     def _deep_update(
-        self, base_dictionary: MutableMapping, updating_dictionary: MutableMapping
-    ) -> MutableMapping:
+        self, base_dictionary: _Mapping, updating_dictionary: Mapping[str, Any]
+    ) -> _Mapping:
         """
         Performs a deep nested mapping, so can combine dictionaries
         without overriding them
@@ -258,9 +278,9 @@ class TideDeployment:
         """
 
         system_configuration = self.system_configuration_resolver(system)
-        modifiers = system_configuration.modifiers  # type: ignore
+        modifiers = system_configuration.modifiers
         mdr_config = self.mdr_configuration_resolver(data, system)
-        system_identifier = system_configuration.platform.identifier  # type: ignore
+        system_identifier = system_configuration.platform.identifier
 
         if not mdr_config:
             raise NotImplementedError
@@ -277,31 +297,20 @@ class TideDeployment:
             for mod in modifiers:
                 logger.info("evaluating_modifier", detail=str(mod.conditions))
 
-                match = False
-
-                if mod.conditions.default and mod.conditions.default is True:
-                    match = True
-
-                if mod.conditions.status:
-                    if mdr_config.status in mod.conditions.status:
-                        match = True
-                if mod.conditions.tenants:
-                    match = target_tenant in mod.conditions.tenants
-                if mod.conditions.flags and mdr_config.flags:
-                    if [tag for tag in mdr_config.flags if tag in mod.conditions.flags]:
-                        match = True
-                    else:
-                        match = False
-
-                if match is True:
+                if modifier_applies(
+                    mod.conditions,
+                    status=mdr_config.status,
+                    tenant=target_tenant,
+                    flags=mdr_config.flags,
+                ):
                     logger.info(
                         "condition_matching",
                         detail=str(str(mod.name or "")) + " | " + str(str(mod.description or "")),
                     )
                     typed_roots = _typed_platform_config_roots(system_identifier)
-                    flatten_modifications = _json_normalize(
-                        mod.modifications  # type: ignore
-                    ).to_dict(orient="records")[0]
+                    flatten_modifications = _json_normalize(mod.modifications).to_dict(
+                        orient="records"
+                    )[0]
                     for modification in flatten_modifications:
                         new_value = flatten_modifications[modification]
                         new_value = None if new_value in ["NONE", "NULL"] else new_value
@@ -309,9 +318,9 @@ class TideDeployment:
                             if type(new_value) is not str:
                                 pass
                             elif "::" in new_value:
-                                raw_mdr_config_flatten = _json_normalize(
-                                    raw_mdr_config  # type: ignore
-                                ).to_dict(orient="records")[0]
+                                raw_mdr_config_flatten = _json_normalize(raw_mdr_config).to_dict(
+                                    orient="records"
+                                )[0]
                                 operator = new_value.split("::")[0]
                                 value = new_value.split("::")[1]
                                 logger.debug("found_mod")
@@ -350,7 +359,7 @@ class TideDeployment:
                             continue
                         raw_mdr_config = self._deep_update(
                             raw_mdr_config.copy(),
-                            updated_config,  # type: ignore
+                            updated_config,
                         )
 
         raw_data["configurations"].update({system_identifier: raw_mdr_config})
@@ -362,17 +371,16 @@ class TideDeployment:
 
     def deployment_resolver(
         self,
-        mdr_deployment: Sequence[DetectionRule],
+        mdr_deployment: Sequence[DetectionRule | str],
         system: DetectionPlatforms,
         strategies: RunStrategies | None,
     ) -> Sequence[DeploymentBatch]:
-        deployment = list()
-        tenants_data = dict()
-        tenants_mapping = dict()
+        deployment: list[DeploymentBatch] = []
+        tenants_data: dict[str, SystemConfig.Tenant] = {}
+        tenants_mapping: dict[str, list[DetectionRule]] = {}
 
-        for mdr in mdr_deployment:
-            if type(mdr) is str:
-                mdr = registry.Opentide.Rules[mdr]
+        for entry in mdr_deployment:
+            mdr = registry.Opentide.Rules[entry] if isinstance(entry, str) else entry
 
             tenants = self.tenants_resolver(mdr, system, strategies)
 

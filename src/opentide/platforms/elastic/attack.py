@@ -150,8 +150,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
                         continue
                     sub_name = sub_entry.get("name", sub_id)
                     prefix = f"{parent_name}: "
-                    if sub_name.startswith(prefix):
-                        sub_name = sub_name[len(prefix) :]
+                    sub_name = sub_name.removeprefix(prefix)
                     sub_link = sub_entry.get(
                         "link", f"https://attack.mitre.org/techniques/{sub_id.replace('.', '/')}"
                     )

@@ -87,8 +87,8 @@ opentide generate docs index
 | Flag | Purpose |
 |------|---------|
 | `--output` | Docs output directory |
-| `--flavor` | Renderer flavour (for example `github`) |
-| `--changed` | Generate only docs for changed object YAMLs (from git merge-base diff + untracked files), expanded with upstream referrer closure, remove pages for deleted objects, then rewrite affected indexes |
+| `--flavor` | `github`, `gitlab`, `azure_devops` or `generic` (CommonMark). Omitted: the CI platform running the job, else the `origin` remote's host, else `[flavor] default` |
+| `--changed` | Generate only docs for changed object YAMLs (from git merge-base diff + untracked files), expanded with upstream referrer closure and with the pages that link to a renamed object, remove generated pages no object writes any more, then rewrite affected indexes |
 | `--rules` / `--threats` / `--objectives` | Limit scopes on the default callback |
 
 `--changed` is only supported on full `opentide generate docs` runs and cannot be combined with `--rules`, `--threats`, or `--objectives`.
@@ -117,7 +117,11 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
 
 Metadata is a Field/Value table. Folder index tables add Status/Severity (rules), Priority (objectives), or Criticality (threats).
 
-Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading.
+Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes). Signals are not separate pages — they link to the parent objective heading; on the `github` flavor the link uses GitHub's own heading anchor.
+
+A page is named after its object's slugified name. When two objects in one folder slugify alike, the one with the lowest UUID keeps the plain name and the others get a `-<uuid[:8]>` suffix, so existing page names change only on a collision.
+
+Every run (full, scoped and `--changed`) removes generated pages that no object writes any more, such as the old page of a renamed object, and lists them under `removed` in the result. Only files directly inside an object folder that carry the generator's metadata table are removed; `README.md` and hand-written pages are never touched.
 
 ### Mermaid behavior and relations direction
 
@@ -203,6 +207,11 @@ opentide generate extract elastic --space staging --include-prebuilt
 
 Configure tenant credentials under `.opentide/configurations/platforms/` before running.
 
+- Sentinel and Defender imports never overwrite one another: when two rules share a display name, the second file name gets the first eight characters of its UUID.
+- A Defender detection found in several tenants (one `detectorId`) is imported once, with every one of those tenants under `tenants`; each tenant's Graph id is recorded as deployment state. When the tenants' copies differ, the first tenant's is imported and `defender_import_tenants_differ` names the others.
+- Every Sentinel file is parsed before it is written; one that would not parse is skipped with `sentinel_import_rule_skipped`.
+- The Defender listing follows `@odata.nextLink`, times out after 60 s per page and reports an HTTP error with the tenant and status.
+
 ### generate extract elastic
 
 Exports the detection rules of one Kibana space and writes each one to `Imported/` as a `rule::1.0` file with a `platform::elastic::1.0` block.
@@ -214,6 +223,7 @@ Exports the detection rules of one Kibana space and writes each one to `Imported
 
 - A rule's Kibana `rule_id` becomes `metadata.uuid`. A custom rule whose `rule_id` is not a UUID is skipped, because deploying it under a new id would create a duplicate.
 - An enabled rule gets `status: PRODUCTION`, a disabled one `status: DISABLED`, so a deploy keeps it disabled.
+- Imported rules are `tlp: amber`, as Sentinel's are. Review the TLP before a `share push`: PRODUCTION rules are shared by default.
 - The rule's `note` becomes `guide.investigation`.
 - Every file is loaded as an opentide rule before it is written. A rule that would not load (for example a `saved_query` rule) is skipped with `elastic_import_rule_skipped` and listed under `skipped` in the JSON result, with the reason.
 - Two rules with the same name do not overwrite each other: the second file name gets the first eight characters of its UUID.

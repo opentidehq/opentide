@@ -370,7 +370,9 @@ def setup_cmd(
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
-        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+        help=(
+            "Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting."
+        ),
     ),
     promotion_target: str | None = typer.Option(
         None,
@@ -515,7 +517,7 @@ def setup_platforms_cmd(
     elastic: bool = typer.Option(False, "--elastic", help="Enable Elastic Security"),
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
-    """Create and enable platform configuration files under ``.opentide/configurations/platforms/``."""
+    """Create and enable platform configuration files in ``.opentide/configurations/platforms/``."""
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
@@ -571,7 +573,9 @@ def setup_ci_cmd(
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
-        help="Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
+        help=(
+            "Write \\[promotion] enabled in deployment.toml. Omit to keep the repository's setting."
+        ),
     ),
     promotion_target: str | None = typer.Option(
         None,
@@ -783,9 +787,19 @@ def setup_skills_install_cmd(
         except (SkillsDownloadError, SkillsManifestError) as exc:
             emit_error(cli, str(exc))
     else:
-        _require_scripted_for_json(cli, "opentide setup skills", "--skill, --all")
+        _require_scripted_for_json(
+            cli, "opentide setup skills", "--generic or another target, --install, --all"
+        )
+        given = SkillsSetupOptions(
+            path=base,
+            skill_slugs=list(install),
+            install_all=all_skills,
+            name=name,
+            org=org,
+            description=description,
+        )
         try:
-            result = run_interactive_skills_setup(base)
+            result = run_interactive_skills_setup(base, given)
         except InteractiveRequiredError as exc:
             _refuse_wizard(cli, exc, "opentide setup skills", "--skill, --all")
         except (RuntimeError, SkillsManifestError) as exc:

@@ -60,7 +60,8 @@ def test_vs_code_snippet_generator_reads_template(tmp_path: Path) -> None:
 def test_vs_code_snippet_generator_tabstops_empty_values(tmp_path: Path) -> None:
     template = tmp_path / "rule.yaml"
     template.write_text(
-        "name: \nmetadata:\n  uuid: \n  created: YYYY-MM-DD\n  #author: \n  description: |\n    ...\n",
+        "name: \nmetadata:\n  uuid: \n  created: YYYY-MM-DD\n"
+        "  #author: \n  description: |\n    ...\n",
         encoding="utf-8",
     )
     snippet = vscode_snippets.vs_code_snippet_generator(

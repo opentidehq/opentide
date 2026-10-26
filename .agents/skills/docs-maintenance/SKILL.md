@@ -1,5 +1,5 @@
 ---
-name: opentide-docs-maintenance
+name: docs-maintenance
 description: >-
   Maintain opentide documentation in docs/ — Fumadocs structure, frontmatter,
   meta.json navigation, and keeping CLI/MCP/SDK pages in sync with code.

@@ -96,4 +96,92 @@ def test_id_scan_skips_a_non_mapping_metadata(tmp_path: Path) -> None:
     rule.write_text(
         "name: Scalar\nuuid: 00000000-0000-4000-8003-000000000001\nmetadata: rule::1.0\n"
     )
-    assert _scan_id_file((rule, "rule")) is None
+    assert _scan_id_file((rule, "rule")) == []
+
+
+@pytest.mark.parametrize(
+    ("relative", "block"),
+    [
+        ("Objects/Threat Vectors/threat-0001-simulated-actor.yaml", "threat"),
+        ("Objects/Detection Objectives/objective-0001-credential-access.yaml", "objective"),
+    ],
+)
+def test_run_validation_reports_an_empty_body_block(
+    tide_corpus_repo: Path, relative: str, block: str
+) -> None:
+    """A block whose keys are all commented out used to crash the whole run.
+
+    It loads as ``None`` and the reference checks called ``.get`` on it, so
+    ``opentide --json validate`` printed a traceback instead of a report.
+    """
+    path = tide_corpus_repo / relative
+    head, _sep, _tail = path.read_text(encoding="utf-8").partition(f"{block}:\n")
+    path.write_text(f"{head}{block}:\n  # description: TODO\n", encoding="utf-8")
+
+    report = run_validation(workers=0)
+
+    assert [(i.code, i.field_path[:1]) for i in report.errors] == [("schema_validation", (block,))]
+
+
+def test_run_validation_reports_a_recursive_alias_as_a_parse_error(
+    tide_corpus_repo: Path,
+) -> None:
+    """``a: &x [1, *x]`` raised RecursionError out of the ID scan.
+
+    ``opentide validate`` crashed with a traceback instead of naming the file.
+    """
+    rule = tide_corpus_repo / "Objects" / "Detection Rules" / "rule-0001-sentinel-kql.yaml"
+    rule.write_text(rule.read_text(encoding="utf-8") + "loop: &x [1, *x]\n", encoding="utf-8")
+
+    report = run_validation(workers=0)
+
+    assert [(i.code, Path(str(i.file_path)).name) for i in report.errors] == [
+        ("yaml_parse", rule.name)
+    ]
+    assert "recursive alias" in report.errors[0].message
+
+
+def _run_uuid_check(raw_uuid: str) -> ValidationReport:
+    index = {
+        "objects": {"rule": {raw_uuid: {"name": "Rule", "metadata": {"uuid": raw_uuid}}}},
+        "metaschemas": {},
+        "files": {raw_uuid: "rule.yaml"},
+    }
+    graph = MagicMock()
+    graph.resolve.return_value = MagicMock(file_path=None)
+    with (
+        patch("opentide.validation.session.Opentide.initialise"),
+        patch("opentide.validation.session.PreflightGraph.build", return_value=graph),
+    ):
+        return run_validation(checks=frozenset({ValidateCheck.uuid_format}), index=index, workers=0)
+
+
+@pytest.mark.parametrize(
+    "raw_uuid",
+    [
+        pytest.param("6ba7b810-9dad-11d1-80b4-00c04fd430c8", id="version-1"),
+        pytest.param("886313e1-3b8a-5372-9b90-0c9aee199e5d", id="version-5"),
+        pytest.param("00000000-0000-0000-0000-000000000000", id="nil"),
+        pytest.param("00000000-0000-4000-0000-000000000001", id="ncs-variant"),
+        pytest.param("{00000000-0000-4000-8003-000000000001}", id="braced"),
+        pytest.param("urn:uuid:00000000-0000-4000-8003-000000000001", id="urn"),
+        pytest.param("00000000000040008003000000000001", id="unhyphenated"),
+        pytest.param("not-a-uuid", id="garbage"),
+    ],
+)
+def test_uuid_format_rejects_anything_but_a_hyphenated_v4(raw_uuid: str) -> None:
+    """``UUID(raw, version=4)`` overwrote the version bits instead of checking them.
+
+    Every one of these passed ``uuid-format``.
+    """
+    report = _run_uuid_check(raw_uuid)
+    assert [(i.code, i.object_uuid) for i in report.errors] == [("invalid_uuid", raw_uuid)]
+
+
+@pytest.mark.parametrize(
+    "raw_uuid",
+    ["00000000-0000-4000-8003-000000000001", "0000ABCD-0000-4000-B003-0000000000EF"],
+    ids=["lowercase", "uppercase"],
+)
+def test_uuid_format_accepts_a_v4_in_either_case(raw_uuid: str) -> None:
+    assert _run_uuid_check(raw_uuid).errors == []

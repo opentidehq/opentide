@@ -11,6 +11,7 @@ from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.carbon_black.client import (
     CarbonBlackCloudConnection,
     CarbonBlackCloudService,
@@ -26,7 +27,7 @@ logger = structlog.get_logger(__name__)
 
 class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator):
     def check_query(self, data: DetectionRule, service: CBCloudAPI) -> None:
-        config = data.configurations.carbon_black_cloud
+        config = data.platform_configs().carbon_black_cloud
         if not config or not config.query:
             os.environ["VALIDATION_ERROR_RAISED"] = "True"
             logger.critical("missing_query_in_rule", mdr_name=data.name, uuid=data.metadata.uuid)
@@ -54,7 +55,7 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
 
     def validate(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         if not strategies:
@@ -73,11 +74,13 @@ class CarbonBlackCloudQueryValidator(CarbonBlackCloudConnection, QueryValidator)
             strategies=strategies,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
-            tenant = tenant_deployment.tenant
+            tenant = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.CarbonBlackCloud.Tenant
+            )
             with reaching_tenant("carbon_black_cloud", tenant.name, tenant.setup.url):
                 cbc_service = CarbonBlackCloudService(tenant)
                 for mdr in tenant_deployment.rules:
-                    if mdr.configurations.carbon_black_cloud:
+                    if mdr.platform_configs().carbon_black_cloud:
                         logger.info(
                             "validating_cbc_query", mdr_name=mdr.name, uuid=mdr.metadata.uuid
                         )

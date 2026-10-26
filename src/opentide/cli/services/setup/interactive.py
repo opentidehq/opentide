@@ -113,11 +113,16 @@ def ask_select(
 ) -> T:
     """Select one value with arrow keys."""
     entries = [Choice(label, value=value) for label, value in choices]
+    # questionary types `default` as a str or a Choice; the entry holding the
+    # value selects the same item.
+    preselected = next((entry for entry in entries if entry.value == default), None)
+    if default is not None and preselected is None:
+        raise ValueError(f"Default {default!r} is not one of the choices")
     return _ask(
         questionary.select(
             message,
             choices=entries,
-            default=default,
+            default=preselected,
             style=PROMPT_STYLE,
             qmark=QMARK,
             use_shortcuts=True,

@@ -19,7 +19,7 @@ from opentide.models.deployment_enums import (
     StatusStrategy,
 )
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.elastic.attack import find_non_enterprise_techniques
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.compile import compile_rule
@@ -128,9 +128,7 @@ def _is_prebuilt_rule(remote: dict[str, Any]) -> bool:
     if remote.get("immutable") is True:
         return True
     rule_source = remote.get("rule_source")
-    if isinstance(rule_source, dict) and rule_source.get("type") == "external":
-        return True
-    return False
+    return isinstance(rule_source, dict) and rule_source.get("type") == "external"
 
 
 class ElasticDeploy:
@@ -187,15 +185,18 @@ class ElasticDeploy:
                 continue
 
             # Active deployment: PREVIEW, RELEASE, or DISABLEMENT
-            if setup.suppression is False and cfg.suppression is not None:
-                if rule_id not in suppression_warned:
-                    _deployment_warning(
-                        "suppression_omitted_basic_license",
-                        rule=rule.name,
-                        rule_id=rule_id,
-                        tenant=tenant_config.name,
-                    )
-                    suppression_warned.add(rule_id)
+            if (
+                setup.suppression is False
+                and cfg.suppression is not None
+                and rule_id not in suppression_warned
+            ):
+                _deployment_warning(
+                    "suppression_omitted_basic_license",
+                    rule=rule.name,
+                    rule_id=rule_id,
+                    tenant=tenant_config.name,
+                )
+                suppression_warned.add(rule_id)
 
             block_dict = cfg.model_dump(by_alias=True, exclude_none=False)
             if not _check_rule(
@@ -297,7 +298,7 @@ class ElasticDeploy:
 
     def deploy(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         """Deploy detection rules using TideDeployment tenant batches."""
@@ -313,7 +314,7 @@ class ElasticDeploy:
             return
         deployment = TideDeployment(loaded_mdr, DetectionPlatforms.ELASTIC, strategies)
         for batch in deployment.rule_deployment:
-            tenant: ConfigurationModels.Systems.Elastic.Tenant = batch.tenant
+            tenant = batch_tenant(batch, ConfigurationModels.Systems.Elastic.Tenant)
             client = ElasticClient(
                 url=tenant.setup.url,
                 elasticsearch_url=tenant.setup.elasticsearch_url,

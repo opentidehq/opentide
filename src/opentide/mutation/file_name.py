@@ -28,9 +28,7 @@ def run():
     MODELS_TYPES.remove("rule")
     for model in MODELS_TYPES:
         model_files = [
-            file
-            for file in sorted(os.listdir(PATHS[model]))
-            if file.endswith(".yaml") or file.endswith(".yml")
+            file for file in sorted(os.listdir(PATHS[model])) if file.endswith((".yaml", ".yml"))
         ]
         if not model_files:
             logger.info("no_files_to_align", model_type=model)

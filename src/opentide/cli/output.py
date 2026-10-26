@@ -7,6 +7,7 @@ one JSON document (``--json``) or as warnings, one outcome line and next steps
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -27,6 +28,7 @@ from opentide.cli.ui.contract import (
     NextAction,
     did_you_mean,
 )
+from opentide.cli.ui.glyphs import can_encode
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
 from opentide.cli.ui.render import (
     AGENT_TIP,
@@ -172,6 +174,14 @@ def command_path(ctx: Any) -> str:
     return " ".join(reversed(names))
 
 
+def json_command(command: str) -> str:
+    """*command* as a JSON reader runs it: ``opentide validate`` → ``opentide --json validate``."""
+    words = command.split()
+    if words[:1] != ["opentide"] or "--json" in words:
+        return command
+    return " ".join(["opentide", "--json", *words[1:]])
+
+
 def envelope(
     payload: Mapping[str, Any],
     *,
@@ -187,7 +197,9 @@ def envelope(
     key silently shadowing the envelope would change what scripts read.
     ``failure`` is null exactly when the exit code is 0. A payload that failed
     or exits non-zero without an explicit *failure* gets one built from its
-    ``error`` or ``message``.
+    ``error`` or ``message``, and a non-zero exit always carries an ``error``
+    string, the ``message`` unless the payload set its own. Each next action
+    reads ``opentide --json ...``, so a JSON reader can run it as given.
     """
     document = dict(payload)
     clashes = sorted(ENVELOPE_KEYS & document.keys())
@@ -198,27 +210,51 @@ def envelope(
             code=default_failure_code(str(document.get("status", "failed"))),
             message=str(document.get("error") or document.get("message") or ""),
         )
+    if exit_code and not document.get("error"):
+        document["error"] = str(
+            document.get("message") or (failure.message if failure is not None else "")
+        )
     additions: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "command": current_command() if command is None else command,
         "duration_ms": elapsed_ms(),
         "exit_code": exit_code,
         "summary": dict(summary or {}),
-        "next_actions": [action.to_dict() for action in next_actions],
+        "next_actions": [
+            NextAction(json_command(action.command), action.reason).to_dict()
+            for action in next_actions
+        ],
         "failure": None if failure is None else failure.to_dict(),
     }
     document.update(additions)
     return document
 
 
+_NON_ASCII = re.compile(r"[^\x00-\x7f]")
+
+
 def print_document(document: Mapping[str, Any]) -> None:
     """Write one finished JSON document to stdout, ending in exactly one newline.
 
     ``dump_json_text`` already appends the newline; ``print`` would add a
-    second, which a JSON-lines reader sees as an empty record.
+    second, which a JSON-lines reader sees as an empty record. A stdout that
+    cannot encode the text (``PYTHONIOENCODING=ascii``) gets every non-ASCII
+    character as a ``\\uXXXX`` escape: the same JSON, without a ``UnicodeEncodeError``.
     """
-    sys.stdout.write(dump_json_text(document, indent=True, default=str))
+    text = dump_json_text(document, indent=True, default=str)
+    if not can_encode(text, sys.stdout):
+        text = _NON_ASCII.sub(_json_escape, text)
+    sys.stdout.write(text)
     sys.stdout.flush()
+
+
+def _json_escape(match: re.Match[str]) -> str:
+    """``\\uXXXX`` for one character, as a surrogate pair beyond the BMP."""
+    code = ord(match.group())
+    if code > 0xFFFF:
+        code -= 0x10000
+        return f"\\u{0xD800 + (code >> 10):04x}\\u{0xDC00 + (code & 0x3FF):04x}"
+    return f"\\u{code:04x}"
 
 
 def emit(ctx: CliContext, payload: dict[str, Any], *, exit_code: int = 0) -> None:
