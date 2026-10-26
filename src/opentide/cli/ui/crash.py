@@ -35,7 +35,7 @@ from typing import Any, TextIO
 from urllib.parse import urlencode, urlsplit
 
 from opentide.cli.ui.contract import INTERNAL, INTERRUPTED_EXIT_CODE, SCHEMA_VERSION, Failure
-from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
+from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -646,12 +646,14 @@ def handle_crash(
 
 
 def _json_text(document: Mapping[str, Any]) -> str:
-    """*document* as the output stack serialises it (orjson, UTF-8), one newline after it."""
+    """*document* as every other ``--json`` run prints it: compact in a pipe, one newline."""
     try:
-        from opentide.core.io import dump_json_text
+        from opentide.cli.output import document_text
     except Exception:
-        return json.dumps(document, indent=2, ensure_ascii=False, default=str) + "\n"
-    return dump_json_text(document, indent=True, default=str)
+        # The output stack itself may be what failed to import.
+        indent = 2 if json_indent() else None
+        return json.dumps(document, indent=indent, ensure_ascii=False, default=str) + "\n"
+    return document_text(document)
 
 
 def _document(summary: str, failure: Failure, command: str) -> dict[str, Any]:

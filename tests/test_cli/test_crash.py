@@ -882,6 +882,30 @@ def test_json_document_is_utf8_with_one_trailing_newline(
     assert json.loads(out)["error"] == "RuntimeError: boom été"
 
 
+@pytest.mark.parametrize(("indent", "lines"), [(None, 1), ("0", 1), ("2", None)])
+def test_json_document_is_indented_like_every_other_document(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    state_dirs: Path,
+    indent: str | None,
+    lines: int | None,
+) -> None:
+    """A crash document follows ``OPENTIDE_JSON_INDENT`` and is one line in a pipe (#629)."""
+    if indent is None:
+        monkeypatch.delenv("OPENTIDE_JSON_INDENT", raising=False)
+    else:
+        monkeypatch.setenv("OPENTIDE_JSON_INDENT", indent)
+    _crash_in_info(monkeypatch, RuntimeError("index exploded"))
+    assert _run_main(monkeypatch, "--json", "info") == 1
+    out = capsys.readouterr().out
+    assert json.loads(out)["failure"]["code"] == INTERNAL
+    if lines is None:
+        assert out.count("\n") > 1
+        assert out.startswith('{\n  "')
+    else:
+        assert out.count("\n") == lines
+
+
 def test_python_dash_m_opentide_reports_a_crash(tmp_path: Path) -> None:
     """``python -m opentide`` goes through ``main()`` too: one internal envelope, exit 1."""
     script = textwrap.dedent(
