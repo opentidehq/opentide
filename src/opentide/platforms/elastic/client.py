@@ -10,6 +10,8 @@ import structlog
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
+from opentide.platforms.transport import TenantSession
+
 logger = structlog.get_logger(__name__)
 
 
@@ -37,8 +39,7 @@ class ElasticClient:
         else:
             self.kibana_base = self.kibana_url
 
-        self.session = requests.Session()
-        self.session.verify = self.verify_ssl
+        self.session = TenantSession(verify=self.verify_ssl)
 
         # Retries with exponential backoff for 429, 500, 502, 503, 504
         retries = Retry(

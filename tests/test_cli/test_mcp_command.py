@@ -164,7 +164,7 @@ print("after the server")
 
 def test_reserve_stdout_sends_every_other_writer_to_stderr() -> None:
     """A print, a Rich console or a child process must not corrupt a JSON-RPC frame."""
-    done = subprocess.run(  # noqa: S603
+    done = subprocess.run(
         [sys.executable, "-c", _STRAY_WRITERS],
         capture_output=True,
         text=True,

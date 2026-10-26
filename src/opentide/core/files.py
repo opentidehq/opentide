@@ -47,7 +47,7 @@ _SKIPPED_CONFIG_FILES = frozenset({"sharing.toml"})
 
 def _is_skipped_config_dir(name: str) -> bool:
     """Skip hidden and dunder names (``__pycache__``, ``.DS_Store``, …)."""
-    return name.startswith(".") or name.startswith("__")
+    return name.startswith((".", "__"))
 
 
 def _load_nested_configs(directory: Path) -> dict[str, dict]:

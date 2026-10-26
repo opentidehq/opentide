@@ -80,3 +80,22 @@ def test_should_replace_object_version_and_wrap_rules() -> None:
         {"metadata": {"version": 2}},
         {"schema": "inflight.shard::1.0", "object": {"metadata": {"version": 1}}},
     )
+
+
+def test_shard_precedence_keys_compare_whatever_the_stamp_looks_like() -> None:
+    """A stamp without an offset, or no stamp, used to make a naive key that
+    raised TypeError against an aware one on a version tie."""
+    bodies = [
+        {
+            "schema": "inflight.shard::1.0",
+            "written_at": stamp,
+            "object": {"metadata": {"version": 2}},
+        }
+        for stamp in ("2026-06-26T10:00:00+00:00", "2026-06-26T11:00:00", "not a date")
+    ]
+    ordered = sorted(bodies, key=shard_precedence_key)
+    assert [body["written_at"] for body in ordered] == [
+        "not a date",
+        "2026-06-26T10:00:00+00:00",
+        "2026-06-26T11:00:00",
+    ]

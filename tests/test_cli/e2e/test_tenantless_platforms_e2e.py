@@ -345,7 +345,7 @@ def test_bare_query_validation_refuses_without_tenants(
 
     result, output = _run(invoke_cli, repo, True, "validate", "query", "--platform", platform.value)
 
-    assert result.exit_code == 1, output
+    assert result.exit_code == 2, output
     payload = parse_cli_json(result)
     assert payload["ok"] is False
     assert payload["status"] == "failed"

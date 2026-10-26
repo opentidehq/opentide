@@ -331,7 +331,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
 #: Lint's JSON severity, and the word its code frame prints.
 _SEVERITY_WORD = {"error": "error", "warning": "warning", "info": "note"}
 
-_PANEL_CHROME = str.maketrans({char: " " for char in "│╭╮╰╯─"})
+_PANEL_CHROME = str.maketrans(dict.fromkeys("│╭╮╰╯─", " "))
 
 
 def _panel_text(text: str) -> str:

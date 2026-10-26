@@ -37,9 +37,10 @@ def __getattr__(name: str) -> Any:
         return registry.Opentide.Configurations.Systems.Index
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 __all__ = [
     "DEPRECATED_STATUSES",
-    "SYSTEMS_CONFIGS_INDEX",
+    "SYSTEMS_CONFIGS_INDEX",  # noqa: F822 -- served lazily by __getattr__ above
     "ExternalIdInRuleError",
     "Proxy",
     "check_status",
@@ -220,7 +221,9 @@ def make_deploy_plan(
         selected: list[str] = []
 
         for system in conf_data:
-            platform_status = _platform_status(conf_data[system], system=system, rule=name, uuid=mdr_uuid)
+            platform_status = _platform_status(
+                conf_data[system], system=system, rule=name, uuid=mdr_uuid
+            )
 
             if system not in systems_deployment:
                 # Not a failure: a catalogue may carry rules for platforms this

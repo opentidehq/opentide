@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections.abc import MutableMapping
 from typing import Any
 
 from rich.console import Console
@@ -53,10 +54,10 @@ class OpentideConsoleRenderer:
         # string is plain so it never forces ANSI escapes into a redirect.
         self._use_color = use_color
 
-    def __call__(self, _logger: Any, method_name: str, event_dict: dict[str, Any]) -> str:
+    def __call__(self, _logger: Any, method_name: str, event_dict: MutableMapping[str, Any]) -> str:
         return self.render(event_dict, method_name)
 
-    def render(self, event_dict: dict[str, Any], method_name: str) -> str:
+    def render(self, event_dict: MutableMapping[str, Any], method_name: str) -> str:
         event = event_dict.pop("event", "")
         level = str(event_dict.pop("level", method_name)).upper()
         exception = event_dict.pop("exception", None)
@@ -94,5 +95,5 @@ class ConsoleLogHandler(logging.Handler):
             else:
                 line.append(message)
             self.console.print(line, soft_wrap=self.soft_wrap, highlight=False)
-        except Exception:  # noqa: BLE001 - logging must never raise into the caller
+        except Exception:
             self.handleError(record)

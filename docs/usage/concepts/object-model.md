@@ -120,7 +120,7 @@ metadata:
   tlp: clear
 description: Detects credential access via suspicious process creation
 status: STAGING
-severity: Substantial incident
+severity: High
 techniques: [T1059]
 detection_model: 00000000-0000-4000-8002-000000000001   # ← the objective above
 response:

@@ -153,7 +153,7 @@ metadata:
     name: Example Corp
 description: Detects credential access via suspicious process creation
 status: STAGING
-severity: Substantial incident
+severity: High
 techniques: [T1059]
 detection_model: 00000000-0000-4000-8002-000000000001   # the objective from step 4
 response:
@@ -268,13 +268,13 @@ Coverage counts rules only; the objective and threat your rule links to are not 
 
 ## 9. Validate the query and dry-run the deploy
 
-Sentinel supports query validation. A bare `validate query` does not scan the KQL. It exits `1` and names `--live`:
+Sentinel supports query validation. A bare `validate query` does not scan the KQL. It exits `2` and names `--live`:
 
 ```bash
 opentide validate query --platform sentinel
 ```
 
-```text output-of="opentide validate query --platform sentinel" exit=1
+```text output-of="opentide validate query --platform sentinel" exit=2
 error: Query validation checks the tenant. Re-run with --live.
 ```
 

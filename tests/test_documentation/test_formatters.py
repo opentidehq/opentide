@@ -32,3 +32,20 @@ def test_azure_flowchart_downgrade_and_toc() -> None:
 
 def test_generic_mermaid_fence() -> None:
     assert "```mermaid" in GenericFormatter().mermaid_fence("flowchart TD")
+
+
+def test_table_escapes_pipes_and_newlines_in_cells() -> None:
+    """A ``|`` or a newline in a record name or author shifted the table's columns."""
+    formatter = GitHubFormatter()
+    table = formatter.table(
+        ["Name", "Author", "Description"],
+        [["[LSASS read | procdump](lsass.md)", "Jane\nDoe", "already \\| escaped"]],
+    )
+    row = table.splitlines()[2]
+    assert row == "| [LSASS read \\| procdump](lsass.md) | Jane Doe | already \\| escaped |"
+    assert len(row.replace("\\|", "").split("|")) == 5
+
+
+def test_gitlab_index_table_keeps_cells_verbatim() -> None:
+    table = GitLabFormatter().index_table(["Name"], [["a | b"]])
+    assert '"a | b"' in table

@@ -41,7 +41,7 @@ def check_references_for_object(
                 )
             )
     if object_type == "objective":
-        for threat_id in body.get("objective", {}).get("threats") or []:
+        for threat_id in _block(body, "objective").get("threats") or []:
             if threat_id not in graph.enum_values("threat"):
                 issues.append(
                     ValidationIssue(
@@ -57,7 +57,7 @@ def check_references_for_object(
                     )
                 )
     if object_type == "threat":
-        chaining = body.get("threat", {}).get("chaining") or []
+        chaining = _block(body, "threat").get("chaining") or []
         for index, link in enumerate(chaining):
             if not isinstance(link, dict):
                 continue
@@ -77,6 +77,16 @@ def check_references_for_object(
                     )
                 )
     return issues
+
+
+def _block(body: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return the ``objective:`` or ``threat:`` block, or ``{}`` when it is not a mapping.
+
+    A block whose keys are all commented out loads as ``None``; the schema
+    check reports that, so the reference checks must not crash on it.
+    """
+    block = body.get(key)
+    return block if isinstance(block, dict) else {}
 
 
 def _invalid_detection_model(graph: PreflightGraph, parent: str) -> tuple[str, str | None]:
@@ -100,7 +110,7 @@ def check_chaining_for_object(
 
     ref = graph.resolve(uuid)
     file_path = ref.file_path if ref else None
-    chaining = body.get("threat", {}).get("chaining") or []
+    chaining = _block(body, "threat").get("chaining") or []
     for index, link in enumerate(chaining):
         if not isinstance(link, dict):
             continue

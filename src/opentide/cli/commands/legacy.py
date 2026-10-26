@@ -7,6 +7,7 @@ import typer
 from opentide.cli.commands.generate import _emit_docs
 from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
+from opentide.cli.group_options import hand_down
 from opentide.cli.output import emit_deprecation, emit_error, emit_success
 from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
@@ -29,6 +30,7 @@ def document_cmd(
     # Each `document <scope>` subcommand names its own replacement; warning here
     # too would print two DEPRECATED lines for one invocation.
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _deprecate("opentide document", "opentide generate docs")
     _emit_docs(ctx, output=output, flavor=flavor)

@@ -23,14 +23,14 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `ok` | bool | `false` when the command failed |
 | `status` | str | `completed`, `passed`, `issues`, `skipped` or `failed` |
 | `message` | str | The outcome in one sentence |
-| `error` | str | On a failure: the error message, as a string |
+| `error` | str | On every non-zero exit: the error message, as a string (the `message` unless the command names a more specific error) |
 | `warnings` | list[str] | Present when the command has warnings |
 | `schema_version` | int | `1`. It changes only if an existing key ever changes meaning |
 | `command` | str | The command that ran: `validate`, `validate query`, `generate docs rules`. Empty when no command was recognised |
 | `duration_ms` | int | Wall time of the command |
 | `exit_code` | int | The process exit code, the same as `$?` |
 | `summary` | object | Counts behind the outcome, such as `files` or `errors`. Empty when the command reports none yet |
-| `next_actions` | list | Commands worth running next: `[{ "command": "opentide lint --fix", "reason": "…" }]` |
+| `next_actions` | list | Commands worth running next, as a JSON reader runs them: `[{ "command": "opentide --json lint --fix", "reason": "…" }]` |
 | `failure` | object or null | Why the command did not exit `0`. `null` exactly when `exit_code` is `0` |
 
 `failure` has five keys:
@@ -50,10 +50,10 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `usage_unknown_command` | 2 | No such command. `suggestion` names the closest one |
 | `usage_unknown_option` | 2 | No such option for that command |
 | `usage_invalid_choice` | 2 | A value outside the accepted ones: `--platform`, `--type`, `--target`, an `info` section, a `generate` phase, a `--strategy` |
-| `usage_invalid_value` | 2 | A value that cannot be used, such as the removed `--plan` |
-| `usage_missing_option` | 2 | A required option or argument is missing (`--platform`, `--strategy`, `--technique`) |
+| `usage_invalid_value` | 2 | A value that cannot be used, such as the removed `--plan` or a `rules unreviewed --older-than` that is not a window |
+| `usage_missing_option` | 2 | A required option or argument is missing (`--platform`, `--strategy`, `--technique`, `validate query` without `--live`) |
 | `usage_needs_input` | 2 | The command would prompt, but nobody can answer: `--json`, no terminal, or a coding agent. The message names the flags that answer the prompt |
-| `usage_error` | 2 | Another usage error, such as options that cannot be combined |
+| `usage_error` | 2 | Another usage error, such as options that cannot be combined, or a command group named without its subcommand (`opentide --json mcp`) |
 | `no_tenant_reached` | 2 | `validate query --live` sent no query because no configured tenant takes the rules |
 | `needs_human_decision` | 2 | `migrate vocab-scope` left values only a person can place |
 | `not_implemented` | 2 | A reserved command, such as `deploy metadata` |
@@ -71,7 +71,7 @@ Exit codes are in [Exit codes](./exit-codes.md). `opentide explain <code>` print
 
 ## A usage error
 
-A typo in a command, an option or a value exits `2` with the same document. Under `--json` nothing goes to stderr. In this tutorial repository, `opentide --json info rulez` exits `2`:
+A typo in a command, an option or a value exits `2` with the same document. Case and `-`/`_` do not count against a suggestion: `--type RULE` suggests `rule`. Under `--json` nothing goes to stderr. In this tutorial repository, `opentide --json info rulez` exits `2`:
 
 ```bash
 opentide --json info rulez

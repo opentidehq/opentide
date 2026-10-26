@@ -177,3 +177,31 @@ def test_generate_schema_for_identifier_uses_registered_revision() -> None:
         assert schema["properties"]["metadata"]["properties"]["schema"]["const"] == "threat::2.1"
     finally:
         unregister_model("threat::2.1")
+
+
+def test_metadata_tlp_honours_its_pin() -> None:
+    """``metadata.tlp`` used to resolve against every key of the vocabulary.
+
+    The ``tlp::1.0`` pin landed on ``$defs/ObjectMetadata``, but the pipeline
+    rebuilds the ``metadata`` property from its model, so the schema an editor
+    reads offered keys introduced after the pin.
+    """
+    from unittest.mock import patch
+
+    from opentide.generation import schema_pipeline as sp
+
+    tlp = VocabularyDefinition(
+        metadata=VocabularyMetadata(name="TLP", field="tlp", key="name"),
+        entries={
+            "clear": VocabularyEntry(name="clear", version="1.0"),
+            "future": VocabularyEntry(name="future", version="1.1"),
+        },
+    )
+    assert get_pins("threat::1.0")["metadata.tlp"] == "tlp::1.0"
+    with (
+        patch.object(sp, "VOCAB_INDEX", {"tlp": tlp}),
+        patch.object(sp, "OBJECT_TYPES", []),
+        patch.object(sp, "_runtime_ready", True),
+    ):
+        schema = generate_schema_for_identifier("threat::1.0")
+    assert _union_string_enum(schema["properties"]["metadata"]["properties"]["tlp"]) == ["clear"]
