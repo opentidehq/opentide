@@ -6,7 +6,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, Any, cast
 
 import typer
 
@@ -41,6 +41,9 @@ from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
 from opentide.cli.ui.render import render_warnings
 from opentide.cli.ui.watch import LiveView, PlainView, Watcher, WatchRun
 from opentide.core.logging.config import get_console, get_stdout_console
+
+if TYPE_CHECKING:
+    from opentide.cli.ui.fixes import FixPlan
 
 validate_app = typer.Typer(help="Object and query validation")
 
@@ -91,12 +94,18 @@ def validate_group(
         emit_usage_error(
             cli, "--dry-run previews --fix. Pass both.", argument="--dry-run", code=USAGE_ERROR
         )
-    scope = {"check": check, "strict": strict, "uuids": uuid, "object_types": object_type}
+    scope: dict[str, Any] = {
+        "check": check,
+        "strict": strict,
+        "uuids": uuid,
+        "object_types": object_type,
+    }
     if watch:
         if fix:
             emit_usage_error(
                 cli,
-                "--watch cannot be combined with --fix: it would rewrite files while you edit them.",
+                "--watch cannot be combined with --fix: "
+                "it would rewrite files while you edit them.",
                 argument="--watch",
                 code=USAGE_ERROR,
             )
@@ -107,10 +116,10 @@ def validate_group(
     else:
         result = run_validate(cli, files=file, **scope)
     diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
-    plan = result.pop("_fix_plan", None)
-    fixed = result.pop("_fixed", None)
-    unwritten = result.pop("_unwritten", [])
-    unwritten_fixes = int(result.pop("_unwritten_fixes", 0))
+    plan = cast("FixPlan | None", result.pop("_fix_plan", None))
+    fixed = cast("FixPlan | None", result.pop("_fixed", None))
+    unwritten = cast(list[str], result.pop("_unwritten", []))
+    unwritten_fixes = cast(int, result.pop("_unwritten_fixes", 0))
     outcome = CommandResult.from_payload(result, default_message="Validation passed")
     if cli.json_output:
         emit_result(cli, outcome)
@@ -177,7 +186,8 @@ def _watch(
             object_types=object_types if changed is None else None,
         )
         summary = cast(dict[str, int], result.get("_summary") or {})
-        return list(result.get("_diagnostics") or []), int(summary.get("objects", 0))
+        diagnostics = cast("list[Diagnostic]", result.get("_diagnostics") or [])
+        return list(diagnostics), int(summary.get("objects", 0))
 
     cli.apply_environment()
     roots = watched_folders()

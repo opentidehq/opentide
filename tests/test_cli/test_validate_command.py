@@ -129,7 +129,7 @@ def test_a_narrowed_watch_passes_its_filters_to_every_full_run(
         "uuids": None,
         "object_types": None,
     }
-    assert re.search(r"^✓ 3 objects valid · 0\.4s$", _text(result), re.M), result.output
+    assert re.search(r"^✓ 3 objects valid · 0\.4s$", _text(result), re.MULTILINE), result.output
 
 
 def test_a_whole_workspace_watch_may_validate_changed_files_alone(
@@ -159,7 +159,7 @@ def test_shown_names_the_folder_that_holds_every_watched_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    shown = validate_command._shown  # noqa: SLF001
+    shown = validate_command._shown
     assert shown([]) == "nothing: no object folder exists"
     assert shown([tmp_path / "objects" / "rules", tmp_path / "objects" / "threats"]) == "objects"
     assert shown([tmp_path]) == "."

@@ -138,7 +138,9 @@ def test_validate_points_at_fix_when_safe_fixes_exist(tutorial: Path) -> None:
         "fixable": 2,
     }
     assert payload["next_actions"] == [
-        {"command": "opentide validate --fix", "reason": "apply 2 safe fixes"}
+        {"command": "opentide --json validate --fix", "reason": "apply 2 safe fixes"},
+        {"command": "opentide --json explain vocab_unknown", "reason": "how to fix it"},
+        {"command": "opentide --json validate", "reason": "check again"},
     ]
     assert "fixed" not in payload
 
@@ -214,7 +216,12 @@ def test_fix_reports_each_value_in_json(tutorial: Path) -> None:
     (remaining,) = payload["report"]["issues"]
     assert remaining["code"] == "invalid_ref"
     assert remaining["fix"] is None or remaining["fix"]["safe"] is False
-    assert payload["next_actions"] == []
+    # No --fix step: what is left has no safe fix. A failed run still says
+    # how to fix it and to check again.
+    assert payload["next_actions"] == [
+        {"command": "opentide --json explain invalid_ref", "reason": "how to fix it"},
+        {"command": "opentide --json validate", "reason": "check again"},
+    ]
     assert payload["exit_code"] == 1
     assert payload["failure"]["code"] == "issues_found"
 
@@ -224,7 +231,7 @@ def test_fix_with_nothing_left_passes(tutorial: Path) -> None:
     result = _run(tutorial, "validate", "--fix")
     assert result.exit_code == 0, result.output
     assert re.search(
-        rf"^✓ Fixed 1 value in 1 file · 3 objects valid · {_TIME}$", _text(result), re.M
+        rf"^✓ Fixed 1 value in 1 file · 3 objects valid · {_TIME}$", _text(result), re.MULTILINE
     )
     clean = _run(tutorial, "validate", "--fix")
     assert re.fullmatch(rf"✓ 3 objects valid · {_TIME}\n", _text(clean))
@@ -288,7 +295,9 @@ def test_watch_is_refused_where_no_terminal_shows_it(tutorial: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["failure"]["code"] == "usage_watch_needs_tty"
     assert payload["failure"]["argument"] == "--watch"
-    assert payload["next_actions"] == [{"command": "opentide validate", "reason": "validate once"}]
+    assert payload["next_actions"] == [
+        {"command": "opentide --json validate", "reason": "validate once"}
+    ]
 
     agent = _run(tutorial, "validate", "--watch", OPENTIDE_OUTPUT="agent")
     assert agent.exit_code == 2

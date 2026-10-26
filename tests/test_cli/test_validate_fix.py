@@ -161,12 +161,12 @@ def test_a_diff_marks_a_file_without_a_final_newline(tmp_path: Path) -> None:
 @pytest.mark.skipif(shutil.which("patch") is None, reason="needs the patch tool")
 def test_the_diff_applies_with_patch_beside_a_unicode_line_separator(tmp_path: Path) -> None:
     """U+2028 does not end a YAML line, so it must not split a diff line either."""
-    text = 'name: x\nmetadata:\n  author: "Tutorial Author"\n  tlp: Clear\n  version: 1\n'
+    text = 'name: x\nmetadata:\n  author: "Tutorial Author"\n  tlp: Clear\n  version: 1\n'  # noqa: RUF001
     path = _write(tmp_path, text, "rule.yaml")
     crlf = _write(tmp_path, "metadata:\r\n  tlp: Clear\r\n", "crlf.yaml")
     plan = plan_fixes([_diagnostic(path, 4, 8, 13, "clear"), _diagnostic(crlf, 2, 8, 13, "clear")])
     diff = plan.diff()
-    assert '   author: "Tutorial Author"\n' in diff
+    assert '   author: "Tutorial Author"\n' in diff  # noqa: RUF001
     result = subprocess.run(
         ["patch", "--dry-run", "-p1", "-d", str(tmp_path)],
         input=diff.encode("utf-8"),
@@ -210,7 +210,7 @@ def test_a_safe_edit_that_breaks_the_document_is_left_out(tmp_path: Path) -> Non
 
 
 def test_only_change_requires_exactly_one_value_to_change() -> None:
-    only_change = fixes._only_change  # noqa: SLF001
+    only_change = fixes._only_change
     assert only_change({"a": ["Clear", "x"]}, {"a": ["clear", "x"]}, "Clear", "clear")
     assert not only_change({"a": ["Clear", "Clear"]}, {"a": ["clear", "clear"]}, "Clear", "clear")
     assert not only_change({"a": {"b": 1}}, {"a": [1]}, "Clear", "clear"), "mapping to list"
@@ -337,7 +337,7 @@ def test_a_write_that_fails_partway_leaves_the_original_whole(
     class FullDisk:
         """Writes half of what it is given, then runs out of space."""
 
-        def __init__(self, stream) -> None:  # noqa: ANN001
+        def __init__(self, stream) -> None:
             self.stream = stream
 
         def __enter__(self) -> FullDisk:
