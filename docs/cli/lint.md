@@ -82,10 +82,10 @@ Severity is for sorting and triage only. `--strict` exits `1` on any finding, wh
 
 ### Placeholders
 
-`opentide new` writes a valid object at once, so a required value nobody has chosen yet gets a stand-in: the first value the schema allows (an ATT&CK technique, a category) or `...` for free text. Each such line ends in `# opentide:placeholder`, and `lint` reports it as a `placeholder` warning, with its key, or `list item` for an item of a list:
+`opentide new` writes a valid object at once, so a required value nobody has chosen yet gets a stand-in: the first value the schema allows (an ATT&CK technique, a category) or `...` for free text. Each such line ends in `# opentide:placeholder`, and `lint` reports it as a `placeholder` warning. The message names the key, or the key and index for an item of a list (`mitre_attack[0]`), and the finding carries `line`, `column` and `end_column` (1-based, end exclusive) around the value, or around the key of a block scalar:
 
 ```text illustrative
-[placeholders/warning] objects/threats/credential-dumping.yaml:12: list item holds a placeholder value written by opentide new
+[placeholders/warning] objects/threats/credential-dumping.yaml:12:7: mitre_attack[0] holds a placeholder value written by opentide new
   help: replace the value, then delete the '# opentide:placeholder' comment
 ```
 

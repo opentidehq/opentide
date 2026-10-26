@@ -417,6 +417,10 @@ threat:
   description: |  # opentide:placeholder
     ...
   note: "# opentide:placeholder is quoted, not a marker"
+  surface:
+    - OS::Linux
+    - OS::Windows  # opentide:placeholder
+  severity: Localised incident  # opentide:placeholder
 """
 
 
@@ -425,6 +429,7 @@ def test_lint_placeholders_reports_each_marked_line(tmp_path: Path) -> None:
     result = run_lint(tmp_path, checks=[LintCheck.placeholders])
     assert result["checks"] == ["placeholders"]
     # ``yaml_line`` is zero-based, as for the other checks; human output adds one.
+    # A list item is named by its key and index; ``OS::Windows`` is a value, not a key.
     assert [
         (finding["code"], finding["severity"], finding["yaml_line"], finding["message"])
         for finding in result["findings"]
@@ -433,7 +438,7 @@ def test_lint_placeholders_reports_each_marked_line(tmp_path: Path) -> None:
             "placeholder",
             "warning",
             8,
-            "list item holds a placeholder value written by opentide new",
+            "mitre_attack[0] holds a placeholder value written by opentide new",
         ),
         (
             "placeholder",
@@ -441,7 +446,25 @@ def test_lint_placeholders_reports_each_marked_line(tmp_path: Path) -> None:
             9,
             "description holds a placeholder value written by opentide new",
         ),
+        (
+            "placeholder",
+            "warning",
+            14,
+            "surface[1] holds a placeholder value written by opentide new",
+        ),
+        (
+            "placeholder",
+            "warning",
+            15,
+            "severity holds a placeholder value written by opentide new",
+        ),
     ]
+    # ``line`` is 1-based and the columns span the value (the key of a block
+    # scalar), so a frame can underline it.
+    assert [
+        (finding["line"], finding["column"], finding["end_column"])
+        for finding in result["findings"]
+    ] == [(9, 7, 12), (10, 3, 14), (15, 7, 18), (16, 13, 31)]
     assert all("opentide:placeholder" in str(finding["help"]) for finding in result["findings"])
 
 
@@ -450,7 +473,7 @@ def test_lint_placeholders_fail_strict_only(tmp_path: Path) -> None:
     plain = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
     assert plain.exit_code == 0, plain.stdout + plain.stderr
     assert (
-        "objects/threats/simulated-actor.yaml:10: description holds a placeholder" in plain.stdout
+        "objects/threats/simulated-actor.yaml:10:3: description holds a placeholder" in plain.stdout
     )
     assert (
         "help: replace the value, then delete the '# opentide:placeholder' comment" in plain.stdout
