@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from opentide.core.lint_config import parse_lint_config
 from opentide.core.logging import get_logger
 from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
@@ -61,6 +62,8 @@ def run() -> None:
 
     templates = Opentide.Configurations.Global.templates
     templates_dir = Path(PATHS["templates"])
+    # Keys ``opentide lint`` requires render live, so scaffolds pass the metadata check.
+    required_metadata = parse_lint_config(CONFIG_INDEX.get("lint")).required_metadata
     for meta in Opentide.Configurations.Global.metaschemas:
         if meta not in templates or meta not in core_template_model_keys():
             continue
@@ -69,7 +72,9 @@ def run() -> None:
             model = resolve_model(schema_id)
             versioned = templates_dir / template_artifact_name(schema_id)
             logger.info("generating_template", detail=schema_id)
-            write_model_template(versioned, model, schema_id=schema_id)
+            write_model_template(
+                versioned, model, schema_id=schema_id, required_metadata=required_metadata
+            )
             written.add(versioned.resolve())
         configured = templates_dir / templates[meta]
         if configured.resolve() in written:
@@ -77,9 +82,14 @@ def run() -> None:
         pinned = _schema_id_from_template_filename(str(templates[meta]))
         logger.info("generating_template", detail=str(meta))
         if pinned and is_registered(pinned):
-            write_model_template(configured, resolve_model(pinned), schema_id=pinned)
+            write_model_template(
+                configured,
+                resolve_model(pinned),
+                schema_id=pinned,
+                required_metadata=required_metadata,
+            )
         else:
-            generate_core_template(meta, configured)
+            generate_core_template(meta, configured, required_metadata=required_metadata)
 
     for recomp in RECOMPOSITION:
         subschema_type_folder = RECOMPOSITION[recomp]

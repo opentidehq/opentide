@@ -7,12 +7,12 @@ metadata:
   created: YYYY-MM-DD
   modified: YYYY-MM-DD
   tlp: 
-  #author: 
+  author: 
   #contributors:
     #- 
-  #organisation:
-    #uuid: 
-    #name: 
+  organisation:
+    uuid: 
+    name: 
 
 description: |
   ...
