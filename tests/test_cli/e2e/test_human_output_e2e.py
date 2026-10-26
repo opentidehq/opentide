@@ -227,7 +227,8 @@ class Case:
     context: Callable[[], AbstractContextManager[None]] = nullcontext
     marks: tuple[pytest.MarkDecorator, ...] = ()
     #: Run the human form on a copy. A second ``setup platforms`` reports files
-    #: already present (#350), so the two forms must start from the same tree.
+    #: already present (#350), and a second ``setup skills`` keeps the agent
+    #: entrypoint the first wrote, so the two forms must start from the same tree.
     separate_trees: bool = False
 
 
@@ -262,7 +263,7 @@ _CASES = {
     "lint-findings-strict": Case(("lint", "--strict"), _drop_author),
     "setup-mcp-generic": Case(("setup", "mcp", "--generic", "--yes")),
     "setup-mcp-no-host": Case(("setup", "mcp", "--yes")),
-    "setup-skills": Case(("setup", "skills", "--generic", "--yes")),
+    "setup-skills": Case(("setup", "skills", "--generic", "--yes"), separate_trees=True),
     "setup-platforms": Case(("setup", "platforms", "--splunk", "--yes"), separate_trees=True),
 }
 

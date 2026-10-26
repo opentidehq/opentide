@@ -80,7 +80,7 @@ def test_ask_select_preselects_the_choice_holding_the_default(monkeypatch) -> No
     def wrap(*args: object, **kwargs: object) -> object:
         captured.update(kwargs)
         built = real_select(*args, **kwargs)
-        built.ask = MagicMock(return_value="gitlab")
+        built.unsafe_ask = MagicMock(return_value="gitlab")
         return built
 
     monkeypatch.setattr(interactive.questionary, "select", wrap)

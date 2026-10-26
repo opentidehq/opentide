@@ -157,7 +157,7 @@ def test_migrate_objects_cli_warns_about_a_configurations_folder_it_left(tmp_pat
     assert "Left Configurations/ in place" in " ".join(dry.output.split())
     assert applied.exit_code == 1, applied.output
     output = " ".join(applied.output.split())
-    assert "! Migrated 1 legacy path(s); 1 legacy path(s) left in place" in output
+    assert "! Moved 1 folder; 1 legacy path(s) left in place" in output
     assert "Left Configurations/ in place: .opentide/configurations/ already exists" in output
     assert (root / "objects" / "rules" / "r.yaml").is_file()
     assert (root / "Configurations" / "systems" / "sentinel.toml").is_file()
