@@ -45,7 +45,16 @@ class OpentideRegistry:
 
     def initialise(self) -> None:
         """Load index into memory (typed objects load on first access)."""
-        self._index = IndexManager.load()
+        index = IndexManager.load()
+        if self._index is not None and index is not self._index:
+            # Callers drop the snapshot with ``IndexManager._cache = None``; the
+            # typed objects loaded from the previous one must go with it, or
+            # ``Rules`` and ``Index`` describe different catalogues.
+            self._rules = {}
+            self._threats = {}
+            self._objectives = {}
+            self._objects_loaded = False
+        self._index = index
         self._initialised = True
 
     def reload(self) -> None:

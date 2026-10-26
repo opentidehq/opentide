@@ -156,7 +156,7 @@ class StdioClient:
 def mcp_stdio(tmp_path: Path) -> Iterator[StdioClient]:
     repo = materialise_corpus(tmp_path / "corpus")
     env = {**os.environ, **corpus_env(repo), "CI": "true"}
-    process = subprocess.Popen(  # noqa: S603
+    process = subprocess.Popen(
         _server_argv(),
         cwd=repo,
         env=env,
@@ -304,7 +304,7 @@ def test_content_length_headers_are_skipped_and_the_body_is_answered(tmp_path: P
         }
     )
     framed = f"Content-Length: {len(body)}\r\n\r\n{body}"
-    process = subprocess.run(  # noqa: S603
+    process = subprocess.run(
         _server_argv(),
         cwd=repo,
         env=env,

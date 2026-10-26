@@ -1,11 +1,45 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Dependabot version updates. Every PR runs the full CI matrix; merge green
+# ones after reading the release notes of anything that touches ruff or ty
+# (see .agents/skills/python-typing/SKILL.md: ty renames rules between
+# patch releases).
+#
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "uv" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Runtime and dev dependencies in pyproject.toml / uv.lock.
+  - package-ecosystem: "uv"
+    directory: "/"
     schedule:
       interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      # The test toolchain moves together and never changes shipped behaviour.
+      # ruff and ty stay out of it: either can red the lint job on its own and
+      # deserves its own PR.
+      test-toolchain:
+        dependency-type: "development"
+        patterns: ["pytest*", "coverage", "syrupy", "pexpect", "pre-commit"]
+
+  # Actions in .github/workflows are pinned by commit SHA with a version
+  # comment; Dependabot updates both.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Remote hooks in .pre-commit-config.yaml. ruff and ty run as local hooks
+  # from the locked dev environment, so the uv entry above covers them.
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps-dev)"

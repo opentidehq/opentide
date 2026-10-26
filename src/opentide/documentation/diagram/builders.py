@@ -141,9 +141,7 @@ def _render_typed_graph(
     diagram_type: str,
     group_by: Literal["object_type", "killchain"],
 ) -> str:
-    nodes = [
-        Node(node.uuid, node.name, shape=_shape_for(node.object_type)) for node in graph.nodes
-    ]
+    nodes = [Node(node.uuid, node.name, shape=_shape_for(node.object_type)) for node in graph.nodes]
     edges = [
         Edge(
             edge.source,
