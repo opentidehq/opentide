@@ -107,11 +107,66 @@ def failure_codes() -> set[str]:
     }
     codes |= set(share._RUN_FAILURE_CODES.values()) | set(share._PREFLIGHT)
     codes |= {error.code for error in UserFileError.__subclasses__()}
-    for path in (SRC / "cli").rglob("*.py"):
-        text = path.read_text(encoding="utf-8")
+    texts = [path.read_text(encoding="utf-8") for path in (SRC / "cli").rglob("*.py")]
+    # ``PATH_EXISTS = "path_exists"`` … ``code=PATH_EXISTS``: a code set through a
+    # module constant, wherever the constant is defined.
+    constants = {
+        name: value
+        for text in texts
+        for name, value in re.findall(r'^([A-Z][A-Z0-9_]*)\s*=\s*"([a-z_]+)"$', text, re.MULTILINE)
+    }
+    for text in texts:
         codes.update(re.findall(r'"_failure_code"\]?\s*[:=]\s*"([a-z_]+)"', text))
         codes.update(re.findall(r'\bcode="([a-z_]+)"', text))
+        for name in re.findall(
+            r'(?:\bcode=|"_failure_code"\]?\s*[:=]\s*)([A-Z][A-Z0-9_]*)\b', text
+        ):
+            if name in constants:
+                codes.add(constants[name])
     return codes
+
+
+def doctor_check_codes() -> set[str]:
+    """The ``code`` of every ``opentide doctor`` check (``Check("python_version", …)``)."""
+    text = (SRC / "cli" / "services" / "doctor.py").read_text(encoding="utf-8")
+    return set(re.findall(r'\bCheck\(\s*"([a-z_]+)"', text))
+
+
+def compile_codes() -> set[str]:
+    """The ``error[compile_*]`` codes a deploy dry run prints for a rule it cannot compile."""
+    return {
+        code
+        for path in SRC.rglob("*.py")
+        for code in re.findall(r'"(compile_[a-z_]+)"', path.read_text(encoding="utf-8"))
+    }
+
+
+def test_the_doctor_and_compile_scans_find_the_codes_they_protect() -> None:
+    assert {
+        "python_version",
+        "opentide_version",
+        "opentide_latest",
+        "workspace",
+        "git",
+        "git_repository",
+        "configuration",
+        "templates_fresh",
+        "schemas_fresh",
+        "platforms_enabled",
+        "platform_sdk",
+        "credentials",
+        "proxy",
+        "vscode_settings",
+        "vscode_snippets",
+        "mcp_config",
+    } <= doctor_check_codes()
+    assert {"compile_empty_block", "compile_missing_field", "compile_failed"} <= compile_codes()
+
+
+def test_every_doctor_check_and_compile_code_has_a_page() -> None:
+    """``opentide explain`` covers what doctor and a deploy dry run print, too."""
+    missing = sorted((doctor_check_codes() | compile_codes()) - set(diagnostic_codes()))
+    assert not missing, f"add src/opentide/data/diagnostics/<code>.md for: {missing}"
 
 
 def test_the_failure_scan_finds_the_codes_it_protects() -> None:
@@ -126,6 +181,13 @@ def test_the_failure_scan_finds_the_codes_it_protects() -> None:
         "api_key_unset",
         "config_parse",
         "yaml_parse",
+        "internal",
+        "path_exists",
+        "reference_not_found",
+        "template_missing",
+        "workspace_not_found",
+        "doctor_checks_failed",
+        "usage_tui_needs_tty",
     } <= failure_codes()
 
 
