@@ -250,4 +250,4 @@ Schema and template phases reload `IndexManager` and `Opentide` registry caches.
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`
+`src/opentide/cli/commands/generate.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`

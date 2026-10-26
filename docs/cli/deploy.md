@@ -194,4 +194,4 @@ Without `strategies`, the rule is deployed by the run strategies that deploy the
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/deploy.py`, `src/opentide/cli/services/migrate_state.py`
+`src/opentide/cli/commands/deploy.py`, `src/opentide/cli/services/deploy.py`, `src/opentide/cli/services/migrate_state.py`
