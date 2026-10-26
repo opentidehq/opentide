@@ -128,6 +128,56 @@ def _notes(diagnostic: Diagnostic) -> list[tuple[str, str]]:
     return notes
 
 
+def wrap_text(text: Text, width: int, indent: Text) -> list[Text]:
+    """*text* in lines of at most *width* cells, each after the first led by *indent*.
+
+    Breaks at a space, or after a ``/`` inside a word too long for the line (a
+    path), and mid-word only when neither is there. Styles carry over.
+    """
+    lines: list[Text] = []
+    plain = text.plain
+    start, room = 0, width
+    while cell_len(plain[start:]) > room > 0:
+        window = plain[start : start + room + 1]
+        space = window.rfind(" ")
+        slash = window[:room].rfind("/")
+        if space > 0:
+            end, resume = start + space, start + space + 1
+        elif slash > 0:
+            end = resume = start + slash + 1
+        else:
+            end = resume = start + room
+        lines.append(text[start:end])
+        start, room = resume, width - indent.cell_len
+    lines.append(text[start:])
+    return [line if index == 0 else indent + line for index, line in enumerate(lines)]
+
+
+def shorten_path(location: str, room: int) -> str:
+    """*location* in at most *room* cells, its middle folders replaced by ``…``.
+
+    Keeps the first folder, the file name and the ``:line:col``; cuts the
+    middle of what is left only when even that is too long.
+    """
+    if cell_len(location) <= room or room < 1:
+        return location
+    parts = location.split("/")
+    if len(parts) > 2:
+        kept = parts[-1:]
+        # Put folders back from the file outwards while they fit.
+        for part in reversed(parts[1:-1]):
+            candidate = "/".join([parts[0], "…", part, *kept])
+            if cell_len(candidate) > room:
+                break
+            kept.insert(0, part)
+        shortened = "/".join([parts[0], "…", *kept])
+        if cell_len(shortened) <= room:
+            return shortened
+    head = max(1, (room - 1) // 3)
+    tail = max(1, room - 1 - head)
+    return f"{location[:head]}…{location[-tail:]}"
+
+
 def diagnostic_lines(
     diagnostic: Diagnostic,
     *,
@@ -135,8 +185,15 @@ def diagnostic_lines(
     encoding: str = "utf-8",
     cwd: Path | None = None,
     links: bool = False,
+    columns: int | None = None,
 ) -> list[Text]:
-    """The lines of one diagnostic's frame."""
+    """The lines of one diagnostic's frame.
+
+    With *columns* (the terminal's width), the message and notes wrap at word or
+    path-segment boundaries and the location is shortened in the middle, so
+    the terminal never breaks a word. Without one (a pipe, a file), lines are
+    whole, for a reader that wraps them itself.
+    """
     style = _SEVERITY_STYLE.get(diagnostic.severity, "bold")
 
     def safe(text: str) -> str:
@@ -146,7 +203,7 @@ def diagnostic_lines(
     header.append(f"{diagnostic.severity}[{diagnostic.code}]", style=style)
     header.append(": ", style="bold")
     header.append(safe(diagnostic.message), style="bold")
-    lines = [header]
+    lines = wrap_text(header, columns, Text("  ")) if columns else [header]
 
     source: str | None = None
     if diagnostic.file_path is not None and diagnostic.line is not None:
@@ -173,7 +230,10 @@ def diagnostic_lines(
             if (links and diagnostic.file_path is not None)
             else None
         )
-        line.append(safe(location), style=Style(link=url) if url else "")
+        shown = safe(location)
+        if columns:
+            shown = shorten_path(shown, columns - line.cell_len)
+        line.append(shown, style=Style(link=url) if url else "")
         lines.append(line)
 
     if source is not None and diagnostic.line is not None:
@@ -213,8 +273,16 @@ def diagnostic_lines(
         )
         row.append(" ")
         row.append(f"{label}:", style=_NOTE_STYLE.get(label, "bold"))
+        lead = row.cell_len + 1
         row.append(" " + safe(text))
-        lines.append(row)
+        if not columns:
+            lines.append(row)
+            continue
+        # Continuation lines keep the frame's bar and start under the text.
+        indent = Text(pad)
+        indent.append(" " if last else bar, style=_GUTTER_STYLE)
+        indent.append(" " * (lead - indent.cell_len))
+        lines.extend(wrap_text(row, columns, indent))
     return lines
 
 
@@ -243,6 +311,8 @@ def render_diagnostics(
     sources = sources or SourceFiles()
     encoding = console.encoding or "utf-8"
     shown = [item for item in diagnostics if not quiet or item.severity == "error"]
+    # Only a terminal wraps a long line, and it breaks wherever the edge falls.
+    columns = console.width if console.is_terminal else None
     for diagnostic in sort_diagnostics(shown):
         for line in diagnostic_lines(
             diagnostic,
@@ -250,6 +320,7 @@ def render_diagnostics(
             encoding=encoding,
             cwd=cwd,
             links=mode is OutputMode.HUMAN,
+            columns=columns,
         ):
             console.print(line, soft_wrap=True)
         console.print()

@@ -1,13 +1,18 @@
 from collections.abc import Iterable, Mapping
 from enum import Enum, auto
 
+
 class StatusStrategy(Enum):
-    INERT = 'Does not interact with deployment'
-    RELEASE = 'Deployment from the default branch (also called trunk, or main branch)'
-    PREVIEW = 'Deployment from Pull/Merge Requests'
-    DISABLEMENT = 'Deployment from the default branch, but only to disable an existing rule. If the target system does not have a concept of disabling rules, then defaults to deleting them.'
-    DELETION = 'Deployment from the default branch, but removes the rule from the target system.'
-    UNIVERSAL = 'Deployment from both Pull/Merge Requests, and default branch pipelines.'
+    INERT = "Does not interact with deployment"
+    RELEASE = "Deployment from the default branch (also called trunk, or main branch)"
+    PREVIEW = "Deployment from Pull/Merge Requests"
+    DISABLEMENT = (
+        "Deployment from the default branch, but only to disable an existing rule. If the target "
+        "system does not have a concept of disabling rules, then defaults to deleting them."
+    )
+    DELETION = "Deployment from the default branch, but removes the rule from the target system."
+    UNIVERSAL = "Deployment from both Pull/Merge Requests, and default branch pipelines."
+
 
 class DetectionPlatforms(Enum):
     DEFENDER_FOR_ENDPOINT = auto()
@@ -18,6 +23,8 @@ class DetectionPlatforms(Enum):
     CROWDSTRIKE = auto()
     HARFANGLAB = auto()
     ELASTIC = auto()
+
+
 DetectionSystems = DetectionPlatforms
 
 #: What a run deploys, and what a tenant accepts: ``--strategy`` and a tenant's
@@ -52,13 +59,29 @@ def deployed_by(rule_strategy: StatusStrategy) -> RunStrategies:
 
 #: Why a name is not a strategy a run or a tenant can take, and what to pass.
 _NOT_A_RUN_STRATEGY = {
-    "UNIVERSAL": "UNIVERSAL is a status strategy that both PREVIEW and RELEASE runs deploy; pass PREVIEW or RELEASE",
-    "DISABLEMENT": "a RELEASE run disables the changed rules whose status maps to DISABLEMENT; pass RELEASE",
-    "DELETION": "a RELEASE run deletes the changed rules whose status maps to DELETION; pass RELEASE",
+    "UNIVERSAL": (
+        "UNIVERSAL is a status strategy that both PREVIEW and RELEASE runs deploy; "
+        "pass PREVIEW or RELEASE"
+    ),
+    "DISABLEMENT": (
+        "a RELEASE run disables the changed rules whose status maps to DISABLEMENT; pass RELEASE"
+    ),
+    "DELETION": (
+        "a RELEASE run deletes the changed rules whose status maps to DELETION; pass RELEASE"
+    ),
     "INERT": "rules whose status maps to INERT are never deployed",
-    "FULL": "deployment plans were removed in 0.17.0; pass --strategy PREVIEW --strategy RELEASE --all to deploy every rule",
-    "ALWAYS": "deployment plans were removed in 0.17.0; a tenant lists the strategies it accepts in 'strategies'",
-    "MANUAL": "deployment plans were removed in 0.17.0; a tenant that only takes the rules naming it sets 'manual = true'",
+    "FULL": (
+        "deployment plans were removed in 0.17.0; "
+        "pass --strategy PREVIEW --strategy RELEASE --all to deploy every rule"
+    ),
+    "ALWAYS": (
+        "deployment plans were removed in 0.17.0; "
+        "a tenant lists the strategies it accepts in 'strategies'"
+    ),
+    "MANUAL": (
+        "deployment plans were removed in 0.17.0; "
+        "a tenant that only takes the rules naming it sets 'manual = true'"
+    ),
     "DEBUG": "deployment plans were removed in 0.17.0; pass PREVIEW or RELEASE",
 }
 

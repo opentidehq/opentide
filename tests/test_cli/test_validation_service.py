@@ -147,6 +147,26 @@ def test_run_validate_all_counts_schema_missing_against_schema() -> None:
     assert [issue["code"] for issue in results["schema"]["issues"]] == ["schema_missing"]
 
 
+def test_run_validate_all_counts_config_enum_unknown_against_schema() -> None:
+    """A value missing from a configured enum failed validation but no check.
+
+    ``checks.schema.status`` read ``passed`` while the top-level status was
+    ``failed``, and the issue was missing from every check's list.
+    """
+    issue = ValidationIssue(
+        code="config_enum_unknown",
+        message="Value 'Tier 9' is not a configured responders value.",
+        field_path=("rule", "response", "responders"),
+    )
+    report = ValidationReport(ok=False, issues=[issue])
+    with patch.object(validation_service, "run_validation", return_value=report):
+        results = validation_service.run_validate_all()
+        payload = validation_service.run_validate_check(ValidateCheck.schema)
+    assert results["schema"]["status"] == "failed"
+    assert [item["code"] for item in results["schema"]["issues"]] == ["config_enum_unknown"]
+    assert payload["checks"]["schema"]["status"] == "failed"
+
+
 def test_run_validate_check_id_uniqueness() -> None:
     report = ValidationReport(ok=True)
     with patch.object(validation_service, "run_validation", return_value=report):
@@ -451,6 +471,32 @@ def test_validate_query_platform_fails_on_unsubstituted_credentials() -> None:
     assert validator.validate.call_count == 1
 
 
+def test_validate_query_platform_reports_a_validator_type_error() -> None:
+    """A TypeError inside a validator was retried as ``validate(deployment=...)``.
+
+    That signature exists on no engine, so its own TypeError escaped as a
+    traceback in place of the real one, and no result was emitted.
+    """
+    ctx = CliContext(json_output=True)
+    validator = MagicMock()
+    validator.validate.side_effect = TypeError("'NoneType' object is not subscriptable")
+    with (
+        patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
+        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.core.registry.Opentide") as mock_ot,
+    ):
+        mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
+        mock_ot.Configurations.Systems.Index = {"sentinel": {"tide": {"name": "Sentinel"}}}
+        result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert result["message"] == (
+        "Query validation for sentinel failed: TypeError: 'NoneType' object is not subscriptable"
+    )
+    assert validator.validate.call_count == 1
+    assert "deployment" not in validator.validate.call_args.kwargs
+
+
 def test_validate_query_platform_surfaces_retired_tenant_proxy() -> None:
     """A config ValueError from engine load is the check result, not a traceback."""
     ctx = CliContext(json_output=True)
@@ -506,7 +552,9 @@ def test_validate_query_live_without_tenants_fails_before_loading_a_validator(
         "mode": "live",
         "status": "failed",
         "supported": True,
-        "message": f"Cannot run live query validation: splunk has no tenants configured in {config}",
+        "message": (
+            f"Cannot run live query validation: splunk has no tenants configured in {config}"
+        ),
         "advice": f"add (or uncomment) a [[tenants]] entry in {config}",
         "missing_tenants": {"splunk": config},
         "_exit_code": 1,
@@ -715,10 +763,9 @@ def test_the_fix_command_keeps_the_scope_of_the_run() -> None:
     )
 
 
-def test_validate_query_platform_legacy_validator_signature() -> None:
+def test_validate_query_platform_names_a_system_without_a_tide_block() -> None:
     ctx = CliContext(json_output=True)
     validator = MagicMock()
-    validator.validate.side_effect = [TypeError("legacy"), None]
     with (
         patch(
             "opentide.deployment.make_deploy_plan",
@@ -734,7 +781,7 @@ def test_validate_query_platform_legacy_validator_signature() -> None:
         }
         result = validation_service.validate_query_platform(ctx, "sentinel", live=True)
     assert result["status"] == "passed"
-    assert validator.validate.call_count == 2
+    validator.validate.assert_called_once()
 
 
 def test_validate_query_platform_warnings_are_not_fatal() -> None:

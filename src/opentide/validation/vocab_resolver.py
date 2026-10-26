@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import re
+from collections.abc import Iterable
 from typing import Any
 
 from opentide.core.logging import get_logger
@@ -307,8 +308,35 @@ class RuntimeEnumResolver:
         stripped = strip_vocab_stage_prefix(vocab, value)
         if stripped in allowed:
             return stripped
-        matches = difflib.get_close_matches(value, allowed, n=1, cutoff=cutoff)
-        return matches[0] if matches else None
+        return closest_value(value, allowed, cutoff=cutoff)
+
+
+#: What a spelling may differ in and still be the same word: case aside.
+_IGNORABLE = re.compile(r"[\s_\-]+")
+
+
+def _folded(value: str) -> str:
+    return _IGNORABLE.sub("", value).casefold()
+
+
+def closest_value(value: str, allowed: Iterable[str], *, cutoff: float = 0.5) -> str | None:
+    """The allowed value *value* most likely means, or ``None``.
+
+    The same word written in another case or with other separators wins
+    outright (``AMBER`` → ``amber``, ``localised_incident`` → ``Localised
+    incident``). Otherwise the closest by ``difflib``, compared without case so
+    ``AMBR`` still finds ``amber``.
+    """
+    candidates = sorted(set(allowed))
+    folded = _folded(value)
+    for candidate in candidates:
+        if _folded(candidate) == folded:
+            return candidate
+    by_lower: dict[str, str] = {}
+    for candidate in candidates:
+        by_lower.setdefault(candidate.casefold(), candidate)
+    matches = difflib.get_close_matches(value.casefold(), list(by_lower), n=1, cutoff=cutoff)
+    return by_lower[matches[0]] if matches else None
 
 
 def _stages_key(stages: str | list | None) -> tuple[str, ...]:

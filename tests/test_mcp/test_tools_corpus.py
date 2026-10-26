@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from tests.corpus_support import CORPUS_RULE_UUIDS, CORPUS_TECHNIQUE, CORPUS_THREAT_UUID
+from tests.corpus_support import (
+    CORPUS_OBJECTIVE_UUID,
+    CORPUS_RULE_UUIDS,
+    CORPUS_TECHNIQUE,
+    CORPUS_THREAT_UUID,
+)
 
 from opentide.mcp_server import tools
 
@@ -207,3 +212,62 @@ def test_tool_validation_report_full_registry(tide_corpus_repo: Path) -> None:
     payload = tools.tool_validation_report()
     assert "issues" in payload
     assert payload["ok"] is True
+
+
+def _dangle_sentinel_rule(repo: Path) -> None:
+    """Point the Sentinel rule at an objective that does not exist."""
+    rule = repo / "Objects" / "Detection Rules" / "rule-0001-sentinel-kql.yaml"
+    text = rule.read_text(encoding="utf-8")
+    rule.write_text(
+        text.replace(
+            f"detection_model: {CORPUS_OBJECTIVE_UUID}", f"detection_model: {MISSING_UUID}"
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_tool_validation_report_sees_an_edit_made_after_start_up(tide_corpus_repo: Path) -> None:
+    """The long-lived server validated the index it built at start-up.
+
+    An agent that fixed or broke a rule kept getting the first report back
+    until the server was restarted.
+    """
+    assert tools.tool_validation_report()["ok"] is True
+    _dangle_sentinel_rule(tide_corpus_repo)
+
+    payload = tools.tool_validation_report()
+
+    assert payload["ok"] is False
+    assert ("invalid_ref", CORPUS_RULE_UUIDS["sentinel"]) in [
+        (i["code"], i["object_uuid"]) for i in payload["issues"]
+    ]
+
+
+def test_tool_validate_rule_sees_an_edit_made_after_start_up(tide_corpus_repo: Path) -> None:
+    """``validate_rule`` answered from the start-up index too."""
+    uuid = CORPUS_RULE_UUIDS["sentinel"]
+    assert tools.tool_validate_rule(uuid)["valid"] is True
+    _dangle_sentinel_rule(tide_corpus_repo)
+
+    payload = tools.tool_validate_rule(uuid)
+
+    assert payload["valid"] is False
+    assert "invalid_ref" in [issue["code"] for issue in payload["issues"]]
+
+
+def test_tool_validate_rule_reports_a_rule_that_does_not_load(tide_corpus_repo: Path) -> None:
+    """``validate_rule`` loaded every typed rule just to see whether *uuid* existed.
+
+    One rule with an unknown schema identifier made ``Opentide.Rules`` raise,
+    so the tool failed for every rule instead of reporting the broken one.
+    """
+    rule = tide_corpus_repo / "Objects" / "Detection Rules" / "rule-0001-sentinel-kql.yaml"
+    text = rule.read_text(encoding="utf-8")
+    rule.write_text(text.replace("schema: rule::1.0", "schema: rule::9.9", 1), encoding="utf-8")
+
+    broken = tools.tool_validate_rule(CORPUS_RULE_UUIDS["sentinel"])
+    other = tools.tool_validate_rule(CORPUS_RULE_UUIDS["defender_for_endpoint"])
+
+    assert broken["valid"] is False
+    assert [issue["code"] for issue in broken["issues"]] == ["schema_validation"]
+    assert other["valid"] is True

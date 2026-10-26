@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from opentide.validation.checks.cross_object import (
     check_chaining_for_object,
     check_references_for_object,
@@ -105,3 +107,28 @@ def test_check_chaining_for_threat_invalid_relation() -> None:
     )
     assert len(issues) == 1
     assert issues[0].code == "chaining_relation_unknown"
+
+
+@pytest.mark.parametrize(
+    ("object_type", "body"),
+    [
+        ("objective", {"objective": None}),
+        ("threat", {"threat": None}),
+        ("threat", {"threat": "TODO"}),
+    ],
+)
+def test_reference_checks_skip_a_block_that_is_not_a_mapping(
+    object_type: str, body: dict[str, object]
+) -> None:
+    """A block whose keys are all commented out loads as ``None``.
+
+    ``body.get("threat", {}).get("chaining")`` then raised AttributeError and
+    took the whole validation run down; the schema check reports the block.
+    """
+    graph = MagicMock()
+    graph.resolve.return_value = MagicMock(file_path=Path("x.yaml"))
+    graph.enum_values.return_value = frozenset()
+
+    assert check_references_for_object("x", object_type, body, graph) == []
+    if object_type == "threat":
+        assert check_chaining_for_object("x", body, graph) == []

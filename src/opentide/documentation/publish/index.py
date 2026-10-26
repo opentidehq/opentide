@@ -7,8 +7,8 @@ from opentide.documentation.format.protocol import MarkdownFormatter
 from opentide.documentation.markdown.links import (
     FOLDER_BY_SCOPE,
     page_href,
+    page_slug,
     render_link,
-    slugify,
 )
 from opentide.documentation.publish.writer import write_page
 from opentide.documentation.types import DocumentRecord, DocumentScope, PublishTarget
@@ -72,9 +72,9 @@ def _extra_cells(record: DocumentRecord) -> list[str]:
 
 
 def _page_filename(ctx: DocumentationContext, record: DocumentRecord) -> str:
-    """Match ``page_path``: slugify the name; pass UUID only for GitLab permalinks."""
+    """Match ``page_path``: the record's page slug; pass UUID only for GitLab permalinks."""
     return ctx.formatter.page_filename(
-        slugify(record.name),
+        page_slug(record),
         record.uuid if ctx.uuid_permalinks else None,
     )
 

@@ -250,7 +250,7 @@ def test_both_entry_points_print_the_same_warnings(
             _git(repo, "checkout", "-q", "--detach")
         printed[entry] = _printed_warnings(entry, ci, repo, *extra)
 
-    assert printed == dict.fromkeys(ENTRY_POINTS, [expected])
+    assert printed == {entry: [expected] for entry in ENTRY_POINTS}
 
 
 def _command(*names: str) -> click.Command:

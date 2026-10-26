@@ -290,9 +290,11 @@ def run_migrate_vocab_scope(
     for path in paths:
         relative = str(path.relative_to(repo))
         try:
-            text = path.read_text(encoding="utf-8")
+            # Decoded from bytes so CRLF survives: text mode turns it into LF,
+            # and the rewrite then changed every line of a Windows-edited file.
+            text = path.read_bytes().decode("utf-8")
             yaml.compose(text)
-        except (OSError, yaml.YAMLError) as exc:
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
             report.failed_files[relative] = f"unreadable: {exc}"
             continue
         sources[path] = text
@@ -330,7 +332,7 @@ def run_migrate_vocab_scope(
             continue
         report.changed_files.append(relative)
         if apply:
-            path.write_text(updated, encoding="utf-8")
+            path.write_bytes(updated.encode("utf-8"))
 
     if report.changed_files:
         logger.info(

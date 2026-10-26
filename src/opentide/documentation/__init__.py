@@ -29,8 +29,8 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
-    "DocumentationContext",
     "DocumentFlavor",
+    "DocumentationContext",
     "EnrichedEntry",
     "chaining_relation_label",
     "enrich",

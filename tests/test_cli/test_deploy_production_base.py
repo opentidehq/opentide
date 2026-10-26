@@ -120,7 +120,7 @@ def _merged_catalogue(tmp_path: Path, *, detached: bool) -> tuple[Path, str]:
 
 
 def _env(repo: Path, head: str, ci: str = "github") -> dict[str, str | None]:
-    env: dict[str, str | None] = {name: None for name in _HIDDEN}
+    env: dict[str, str | None] = dict.fromkeys(_HIDDEN)
     env.update({"OPENTIDE_REPO_ROOT": str(repo), "OPENTIDE_TIDE_WORKSPACE": str(repo)})
     if ci == "azure":
         env.update(
