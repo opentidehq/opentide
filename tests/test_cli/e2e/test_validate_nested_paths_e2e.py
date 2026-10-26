@@ -190,8 +190,18 @@ def test_issue_297_commands_on_console_script(script_runner: ScriptRunner, tmp_p
     repo = tmp_path / "repo"
     env = {k: v for k, v in os.environ.items() if not k.startswith("OPENTIDE_")}
     setup = script_runner.run(
-        ["opentide", "--json", "setup", "--yes", "--name", "Scope", "--platform", "sentinel"]
-        + ["--path", str(repo)],
+        [
+            "opentide",
+            "--json",
+            "setup",
+            "--yes",
+            "--name",
+            "Scope",
+            "--platform",
+            "sentinel",
+            "--path",
+            str(repo),
+        ],
         env=env,
         cwd=str(tmp_path),
         print_result=False,

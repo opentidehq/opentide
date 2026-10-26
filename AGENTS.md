@@ -10,18 +10,22 @@
 
 | Task | Skill |
 |------|-------|
-| Dependencies, `uv run`, pre-commit, local CI | [`.agents/skills/uv/SKILL.md`](.agents/skills/uv/SKILL.md) |
+| Writing or reviewing any change; definition of done | [`.agents/skills/review-checklist/SKILL.md`](.agents/skills/review-checklist/SKILL.md) |
+| Driving a PR to green: CI failures, review threads, merge state | [`.agents/skills/steward/SKILL.md`](.agents/skills/steward/SKILL.md) |
+| Dependencies, Dependabot, `uv run`, pre-commit, local CI | [`.agents/skills/uv/SKILL.md`](.agents/skills/uv/SKILL.md) |
 | Ruff lint / format failures | [`.agents/skills/ruff/SKILL.md`](.agents/skills/ruff/SKILL.md) |
-| ty type-check failures | [`.agents/skills/python-typing/SKILL.md`](.agents/skills/python-typing/SKILL.md) |
+| ty type-check failures, annotations | [`.agents/skills/python-typing/SKILL.md`](.agents/skills/python-typing/SKILL.md) |
 | CodeQL alerts or security workflows | [`.agents/skills/codeql/SKILL.md`](.agents/skills/codeql/SKILL.md) |
 | pytest fixtures, mocks, test design | [`.agents/skills/python-testing-patterns/SKILL.md`](.agents/skills/python-testing-patterns/SKILL.md) |
 | Coverage gaps, `--cov-fail-under` | [`.agents/skills/pytest-coverage/SKILL.md`](.agents/skills/pytest-coverage/SKILL.md) |
 | GitHub Actions workflows | [`.agents/skills/github-actions-templates/SKILL.md`](.agents/skills/github-actions-templates/SKILL.md) |
 | CLI E2E tests, tide_corpus, deploy payloads | [`.agents/skills/cli-e2e-testing/SKILL.md`](.agents/skills/cli-e2e-testing/SKILL.md) |
+| MCP server tools, resources, stdio | [`.agents/skills/mcp-server/SKILL.md`](.agents/skills/mcp-server/SKILL.md) |
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
 | PyPI release, changelog, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 
-Stub pointers (content merged above): `uv-package-manager`, `ruff-recursive-fix`.
+Claude Code discovers these through `.claude/skills` (a symlink to `.agents/skills`); cloud
+sessions run `.claude/hooks/session-start.sh`, which syncs the dev environment.
 
 ## Ground rules
 
@@ -78,6 +82,8 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 **CodeQL:** Python and Actions via [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) (`/language:python` + `/language:actions`); Code Quality may also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`.
 
+**Dependabot:** weekly PRs for `uv` (test toolchain grouped), `github-actions` (SHA pins) and `pre-commit`. Merge procedure: [uv skill](.agents/skills/uv/SKILL.md#dependency-upgrades-and-dependabot).
+
 **Stack comments:** [`.github/workflows/stack-comment.yml`](.github/workflows/stack-comment.yml) posts merge order **only** on stacked PRs (non-trunk base or child PR exists). Standalone PRs to `development` are skipped.
 
 ## Platform capability matrix
@@ -95,11 +101,28 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False`, never fake validation.
 
-## Code quality scope
+## Code quality bar
 
-Ruff and ty **exclude** large ported platform/deployer modules until those areas are actively cleaned up. Do not expand lint scope in unrelated PRs. When touching excluded paths, still run `scripts/ci-local.sh` — tests cover behaviour.
+- **One bar for the whole package.** ruff covers every module under `src/opentide`, `tests`
+  and `scripts`, and ty covers all of `src/opentide`; neither has an exclude list. Never add
+  one: fix the code or, where a tool is wrong, suppress the single site with a reason
+  (`# noqa: RULE -- why`, `# ty: ignore[rule]  # why`).
+- **Typed.** New and touched functions are fully annotated and ty-clean.
+- **Correctness over style.** [`review-checklist`](.agents/skills/review-checklist/SKILL.md)
+  lists the defect classes that have shipped here before; check every diff against it.
 
-Paths and excludes: `pyproject.toml` → `[tool.ruff]`, `[tool.ty.src]`. Skills: [ruff](.agents/skills/ruff/SKILL.md), [python-typing](.agents/skills/python-typing/SKILL.md).
+Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`. Skills:
+[ruff](.agents/skills/ruff/SKILL.md), [python-typing](.agents/skills/python-typing/SKILL.md).
+
+## Definition of done
+
+1. Each fix has a regression test that fails without it; each feature has tests at the
+   level it is used (unit, CLI E2E, MCP).
+2. `scripts/ci-local.sh --full` passes.
+3. User-visible change → `## [Unreleased]` in `CHANGELOG.md`; CLI/MCP/SDK surface change →
+   `docs/` ([docs-maintenance](.agents/skills/docs-maintenance/SKILL.md)).
+4. Mechanical refactors are proven behaviour-preserving with
+   `uv run python scripts/ast_equivalence.py <base-rev>`.
 
 ## Repository layout
 

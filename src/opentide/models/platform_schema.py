@@ -38,7 +38,9 @@ _COMMON_PLATFORM_EXTRAS: dict[str, Any] = {
 
 _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
     SplunkConfig: {
-        "required": ["status", "query", "scheduling"],
+        # Not `scheduling`: a correlation search has nothing to schedule, so
+        # the model, the deployer and the template all leave it optional.
+        "required": ["status", "query"],
         "property_extras": {
             **_COMMON_PLATFORM_EXTRAS["property_extras"],
             "platform_schema": {

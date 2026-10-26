@@ -19,6 +19,7 @@ from opentide.cli.enums import (
     LintCheck,
     ValidateCheck,
 )
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.mcp_app import mcp_app
 from opentide.cli.output import (
     CommandResult,
@@ -44,7 +45,7 @@ from opentide.cli.services.validation import run_validate, validate_query_platfo
 from opentide.cli.setup_app import setup_app
 from opentide.cli.share_app import share_app
 from opentide.core.logging import LoggingConfig, init_logging
-from opentide.core.logging import print_banner as print_banner  # noqa: F401
+from opentide.core.logging import print_banner as print_banner
 from opentide.core.root import get_repo_root
 
 logger = structlog.get_logger("opentide.cli.__init__")
@@ -86,6 +87,19 @@ def _came_from_command_line(ctx: typer.Context, name: str) -> bool:
 
 _deprecate = emit_deprecation
 
+#: Click's words for false; any other ``DEBUG`` value turns debug logging on.
+_DEBUG_OFF = frozenset({"", "0", "f", "false", "n", "no", "off"})
+
+
+def _debug_from_environment() -> bool:
+    """Read ``DEBUG`` as a switch rather than a strict boolean.
+
+    As the option's envvar, Click refused anything but a boolean word, so
+    ``DEBUG=*`` or ``DEBUG=express:*`` (the Node ``debug`` package's
+    convention, often exported shell-wide) failed every command with exit 2.
+    """
+    return os.environ.get("DEBUG", "").strip().lower() not in _DEBUG_OFF
+
 
 @app.callback()
 def main_callback(
@@ -96,7 +110,11 @@ def main_callback(
     data: str | None = typer.Option(
         None, "--data", envvar="OPENTIDE_DATA_ROOT", help="Bundled data root"
     ),
-    debug: bool = typer.Option(False, "--debug", envvar="DEBUG", help="Enable debug logging"),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Enable debug logging. DEBUG set to anything but 0, false, no or off does too",
+    ),
     no_color: bool = typer.Option(
         False,
         "--no-color",
@@ -130,7 +148,7 @@ def main_callback(
         repo=Path(repo) if repo else get_repo_root(),
         data=Path(data) if data else None,
         json_output=json_output,
-        debug=debug,
+        debug=debug or _debug_from_environment(),
         no_color=no_color,
         repo_explicit=_came_from_command_line(ctx, "repo"),
         proxy=proxy,
@@ -265,6 +283,7 @@ def _emit_docs(
     objectives: bool = False,
     changed: bool = False,
 ) -> None:
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     if changed and (scope is not None or rules or threats or objectives):
@@ -295,6 +314,7 @@ def generate_docs_all(
 ) -> None:
     """Generate documentation (all scopes, then index)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _emit_docs(
         ctx,
@@ -375,7 +395,7 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
     cli = get_context(ctx)
     try:
         result = run_extract(cli, import_target=target)
-    except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
+    except Exception as exc:
         # Enumerating exception types is how #242 escaped: the importers reach
         # vendor SDKs and half-typed config, so anything they raise has to come
         # back as a result document rather than a Rich traceback. `str(exc)` is
@@ -455,7 +475,7 @@ QUERY_STRATEGY_HELP = (
 REMOVED_PLAN_HELP = "Removed in 0.17.0; use --strategy"
 
 
-def _refuse_removed_plan(cli: Any, plan: str | None) -> None:
+def _refuse_removed_plan(cli: CliContext, plan: str | None) -> None:
     if plan is not None:
         from opentide.models.deployment_enums import removed_plan_message
 
@@ -475,6 +495,7 @@ def validate_group(
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     valid_object_types = {"rule", "threat", "objective"}
@@ -512,8 +533,9 @@ def lint_cmd(
     cli = get_context(ctx)
     cli.apply_environment()
     result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
-    if not cli.json_output:
-        render_findings(result["findings"])
+    findings = result["findings"]
+    if not cli.json_output and isinstance(findings, list):
+        render_findings(findings)
     emit_result(cli, CommandResult.from_payload(result, default_message="Catalogue lint passed"))
 
 
@@ -547,6 +569,7 @@ def validate_query_cmd(
     ),
 ) -> None:
     """Query validation checks the tenant. Pass --live."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     _refuse_removed_plan(cli, plan)
     result = validate_query_platform(
@@ -618,6 +641,7 @@ def deploy_cmd(
     --strategy PREVIEW; the default-branch job runs --strategy RELEASE.
     """
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     _refuse_removed_plan(cli, plan)
@@ -648,6 +672,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
     from opentide.core.index_manager import IndexManager
     from opentide.registry.discovery import discover_workspace
 
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     workspace = discover_workspace()
@@ -660,6 +685,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
 
 @deploy_app.command("replay-state", hidden=True)
 def deploy_replay_state_cmd(
+    ctx: typer.Context,
     state_commit: str = typer.Argument(..., help="Commit whose deployment-state changes to replay"),
 ) -> None:
     """Replay one commit's deployment-state changes onto the checkout (CI write-back).
@@ -670,6 +696,7 @@ def deploy_replay_state_cmd(
     """
     from opentide.ci.state_replay import main as replay_main
 
+    refuse_dropped(ctx)
     raise typer.Exit(replay_main([state_commit]))
 
 
@@ -678,6 +705,7 @@ def deploy_metadata_cmd(
     ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
 ) -> None:
     """Reserved for a future metadata deployment implementation."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     emit_error(
         cli,
@@ -706,6 +734,7 @@ def document_cmd(
     # Each `document <scope>` subcommand names its own replacement; warning here
     # too would print two DEPRECATED lines for one invocation.
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _deprecate("opentide document", "opentide generate docs")
     _emit_docs(ctx, output=output, flavor=flavor)

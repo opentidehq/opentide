@@ -748,3 +748,167 @@ def test_unscoped_actor_is_a_note(tmp_path: Path) -> None:
     )
     assert result.records[0].action == "created"
     assert any(note.startswith("actor_unscoped:") for note in result.records[0].notes)
+
+
+def _push_all(documents: list[TideDocument], ledger: ShareLedger, fake: FakeMisp) -> None:
+    pushed = run_misp(
+        documents,
+        [_block(max_tlp="red", rule_statuses=("STAGING",))],
+        mode="push",
+        ledger=ledger,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert [record.action for record in pushed.records] == ["created"] * len(documents)
+
+
+def test_retract_type_and_file_filters_leave_other_shared_objects(tmp_path: Path) -> None:
+    """``retract --type rule --delete`` used to delete every event in the ledger.
+
+    The ledger UUIDs were added to the candidates whether or not their document
+    was selected, so only ``--uuid`` narrowed a retract.
+    """
+    fake = FakeMisp()
+    ledger = ShareLedger.load(tmp_path / "sharing.jsonl")
+    paths: dict[str, Path] = {}
+    for name in ("threat.yaml", "objective.yaml", "rule.yaml"):
+        paths[name] = tmp_path / name
+        paths[name].write_text((FIXTURES / name).read_text(encoding="utf-8"), encoding="utf-8")
+    documents = [load_document(path.read_bytes(), path=path) for path in paths.values()]
+    threat, objective, rule = (document.uuid for document in documents)
+    assert threat and objective and rule
+    _push_all(documents, ledger, fake)
+
+    by_type = run_misp(
+        documents,
+        [_block(max_tlp="red", rule_statuses=("STAGING",))],
+        mode="retract",
+        ledger=ledger,
+        filters=ShareFilters(types=frozenset({"rule"})),
+        delete=True,
+        confirmed=True,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert [(record.object_uuid, record.action) for record in by_type.records] == [
+        (rule, "retracted")
+    ]
+    remaining = sorted(uuid for event in fake.events for uuid in event.opentide_uuids)
+    assert remaining == sorted([threat, objective])
+    assert ledger.get(rule, "misp", "misp-internal") is None
+    assert ledger.get(threat, "misp", "misp-internal") is not None
+
+    by_file = run_misp(
+        documents,
+        [_block(max_tlp="red")],
+        mode="retract",
+        ledger=ledger,
+        filters=ShareFilters(files=frozenset({paths["objective.yaml"].resolve()})),
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert [(record.object_uuid, record.action) for record in by_file.records] == [
+        (objective, "retracted")
+    ]
+    line = ledger.get(threat, "misp", "misp-internal")
+    assert line is not None
+    assert line["state"] == "synced"
+
+
+def test_retract_type_filter_matches_deleted_objects_by_ledger_schema(tmp_path: Path) -> None:
+    """A deleted object is retracted by ``--type`` only when its ledger line has that type.
+
+    ``--file`` names files in the catalogue, so it never reaches a deleted object.
+    """
+    fake = FakeMisp()
+    ledger = ShareLedger.load(tmp_path / "sharing.jsonl")
+    threat, rule = _load("threat.yaml"), _load("rule.yaml")
+    assert threat.uuid and rule.uuid
+    _push_all([threat, rule], ledger, fake)
+
+    by_file = run_misp(
+        [],
+        [_block(max_tlp="red")],
+        mode="retract",
+        ledger=ledger,
+        filters=ShareFilters(files=frozenset({tmp_path / "rule.yaml"})),
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert by_file.preflight == "scope_no_match"
+
+    by_type = run_misp(
+        [],
+        [_block(max_tlp="red")],
+        mode="retract",
+        ledger=ledger,
+        filters=ShareFilters(types=frozenset({"rule"})),
+        delete=True,
+        confirmed=True,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert [(record.object_uuid, record.action) for record in by_type.records] == [
+        (rule.uuid, "retracted")
+    ]
+    assert [event.opentide_uuids for event in fake.events] == [(threat.uuid,)]
+
+
+def test_push_publish_publishes_an_unchanged_unpublished_event(tmp_path: Path) -> None:
+    """``share push --publish`` after a push without publish used to report ``unchanged``.
+
+    The same content hash short-circuited the push before the publish step, so
+    the event stayed unpublished while the run exited ``0``.
+    """
+    fake = FakeMisp()
+    ledger = ShareLedger.load(tmp_path / "sharing.jsonl")
+    document = _load("objective.yaml")
+    assert document.uuid is not None
+    block = _block(max_tlp="red", publish=False)
+    created = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert created.records[0].action == "created"
+    assert fake.events[0].published is False
+    preview = run_misp(
+        [document], [block], mode="preview", ledger=ledger, publish=True, clock=lambda: CLOCK
+    )
+    assert preview.records[0].action == "updated"
+    fake.calls.clear()
+    published = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        publish=True,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert published.records[0].action == "updated"
+    assert any(call.startswith("publish:") for call in fake.calls)
+    assert "add" not in fake.calls
+    assert fake.events[0].published is True
+    line = ledger.get(document.uuid, "misp", "misp-internal")
+    assert line is not None
+    assert line["published"] is True
+    fake.calls.clear()
+    again = run_misp(
+        [document],
+        [block],
+        mode="push",
+        ledger=ledger,
+        publish=True,
+        client_for=lambda _block: fake,
+        clock=lambda: CLOCK,
+    )
+    assert again.records[0].action == "unchanged"
+    assert not any(call.startswith(("publish:", "edit:")) for call in fake.calls)
+    still = run_misp(
+        [document], [block], mode="preview", ledger=ledger, publish=True, clock=lambda: CLOCK
+    )
+    assert still.records[0].action == "unchanged"
