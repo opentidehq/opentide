@@ -75,8 +75,8 @@ def test_version_flag_exits_before_the_command_runs() -> None:
 @pytest.mark.parametrize(
     ("argv", "value", "debug"),
     [
-        ([], "*", True),
-        ([], "express:*", True),
+        ([], "*", False),
+        ([], "express:*", False),
         ([], "1", True),
         ([], "True", True),
         ([], "0", False),
@@ -88,7 +88,8 @@ def test_version_flag_exits_before_the_command_runs() -> None:
 )
 def test_debug_env_var_is_read_as_a_switch(argv: list[str], value: str, debug: bool) -> None:
     """``DEBUG`` was Click's envvar for ``--debug``, which refused anything but a
-    boolean word: ``DEBUG=*`` (the Node ``debug`` convention) failed every command."""
+    boolean word: ``DEBUG=*`` (the Node ``debug`` convention) failed every command.
+    A value that is not a boolean is now ignored (docs/cli/global-options.md)."""
     seen: list[bool] = []
     with (
         patch("opentide.cli.commands.generate.run_generate", return_value={"status": "ok"}),

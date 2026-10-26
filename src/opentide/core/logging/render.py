@@ -95,5 +95,5 @@ class ConsoleLogHandler(logging.Handler):
             else:
                 line.append(message)
             self.console.print(line, soft_wrap=self.soft_wrap, highlight=False)
-        except Exception:  # noqa: BLE001 - logging must never raise into the caller
+        except Exception:
             self.handleError(record)

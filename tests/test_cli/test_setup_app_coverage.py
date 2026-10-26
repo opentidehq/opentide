@@ -327,7 +327,7 @@ def test_setup_skills_wizard_receives_the_flags_typed_with_it(tmp_path: Path, mo
 
 def test_setup_skills_json_refusal_names_flags_that_exist(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--json", "setup", "skills", "--path", str(tmp_path)])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     message = json.loads(result.stdout)["message"]
     assert "--install" in message
     assert "--skill," not in message

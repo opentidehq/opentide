@@ -93,6 +93,7 @@ class LazyTyperGroup(TyperGroup):
         prog_name: str | None = None,
         complete_var: str | None = None,
         standalone_mode: bool = True,
+        windows_expand_args: bool = True,
         **extra: Any,
     ) -> Any:
         from opentide.cli.ui.mode import resolve_mode, set_mode, start_clock
@@ -129,6 +130,7 @@ class LazyTyperGroup(TyperGroup):
             prog_name=prog_name,
             complete_var=complete_var,
             standalone_mode=standalone_mode,
+            windows_expand_args=windows_expand_args,
             **extra,
         )
 
