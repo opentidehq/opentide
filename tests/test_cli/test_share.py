@@ -429,13 +429,13 @@ _OBJECTIVE_UUID = "00000000-0000-4000-8002-000000000001"
 
 
 def _forbid_diff(_plan: object) -> list[str]:
-    raise AssertionError("diff_calculation must not run")
+    raise AssertionError("changed_through_head must not run")
 
 
 def test_changed_stops_before_git_or_http(
     invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _forbid_diff)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _forbid_diff)
     monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
     _write_sharing(tide_corpus_repo)
     monkeypatch.setenv("MISP_LAB_KEY", KEY)
@@ -520,7 +520,7 @@ def test_changed_uses_the_production_diff(
             "objects/objectives/notes.txt",
         ]
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _diff)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _diff)
     pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
     assert pushed.exit_code == 0, pushed.stdout
     records = json.loads(pushed.stdout)["records"]
@@ -534,7 +534,7 @@ def test_changed_uses_the_production_diff(
     def _empty(_plan: object) -> list[str]:
         return []
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _empty)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _empty)
     empty = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
     assert empty.exit_code == 0, empty.stdout
     assert "No changed objects to share" in empty.stdout
@@ -558,7 +558,7 @@ def test_changed_uses_the_production_diff(
     assert gitlab.exit_code == 0, gitlab.stdout
     assert "No changed objects to share" in gitlab.stdout
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _diff)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _diff)
     narrowed = invoke_cli(
         "share",
         "push",
@@ -575,7 +575,7 @@ def test_changed_uses_the_production_diff(
     def _boom(_plan: object) -> list[str]:
         raise Exception("Could not find git commit abc")
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _boom)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _boom)
     missing = invoke_cli(
         "share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH
     )
@@ -651,7 +651,7 @@ def test_changed_path_filter_keeps_direct_yaml_children(
     def _blank(_plan: object) -> list[str]:
         raise Exception("   ")
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _blank)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _blank)
     narrowed, stop = _changed_files(tmp_path, None)
     assert narrowed is None
     assert stop == _PREFLIGHT["changed_diff"]
@@ -709,7 +709,7 @@ def test_changed_push_never_publishes_a_nested_object_file(
     def _both(_plan: object) -> list[str]:
         return [_OBJECTIVE, _NESTED_OBJECTIVE]
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _both)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _both)
     pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
     assert pushed.exit_code == 0, pushed.stdout
     body = json.loads(pushed.stdout)
@@ -722,7 +722,7 @@ def test_changed_push_never_publishes_a_nested_object_file(
     def _nested_only(_plan: object) -> list[str]:
         return [_NESTED_OBJECTIVE]
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _nested_only)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _nested_only)
     only = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
     assert only.exit_code == 0, only.stdout
     assert "No changed objects to share" in only.stdout
@@ -748,7 +748,7 @@ def test_changed_push_skips_a_changed_file_outside_the_catalogue(
     def _diff(_plan: object) -> list[str]:
         return [f"objects/objectives/{name}"]
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _diff)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _diff)
     pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
     assert pushed.exit_code == 0, pushed.stdout
     assert "No changed objects to share" in pushed.stdout

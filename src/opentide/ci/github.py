@@ -11,6 +11,7 @@ from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     GATE_COMMANDS,
     REPORTS_DIR,
+    SHARE_COMMAND,
     document_steps,
     github_deploy_env,
     header_comment,
@@ -196,6 +197,45 @@ def _writeback_step(options: CiRenderOptions) -> str:
     )
 
 
+#: Share once the production job has finished, whether it deployed, failed or
+#: had nothing to do: a share it skipped would never come back, because the
+#: next push diffs only its own commits. Generate must have passed.
+SHARE_IF_PREFIX = "!cancelled() && needs.generate.result == 'success' && "
+
+
+def _share_job(options: CiRenderOptions, prod_if: str) -> str:
+    """Share what the push changed, read from the default branch after the write-back (#590).
+
+    The production job promotes rules and pushes the new statuses to the
+    default branch in a ``[skip ci]`` commit. The share job checks out the
+    branch tip after that, and ``--changed`` diffs from the triggering push's
+    baseline to the tip, so a rule this run promoted is shared in this run.
+    """
+    checkout = (
+        "- uses: actions/checkout@v4\n"
+        "  with:\n"
+        f"    ref: {options.default_branch}\n"
+        "    fetch-depth: 0"
+    )
+    setup = (
+        f"{checkout}\n"
+        "- uses: actions/setup-python@v5\n"
+        "  with:\n"
+        f'    python-version: "{options.python_version}"\n'
+        f"- run: {pip_install(options)}"
+    )
+    return _github_job(
+        "share",
+        name="Share",
+        needs="[generate, deploy_production]",
+        if_cond="${{ " + SHARE_IF_PREFIX + prod_if + " }}",
+        steps=join_blocks(
+            setup,
+            "\n".join([_SHARE_STEPS_NOTE, _run_steps([SHARE_COMMAND])]),
+        ),
+    )
+
+
 def _explorer_jobs(branch: str, python_version: str) -> list[str]:
     explorer_job = textwrap.dedent(
         f"""\
@@ -328,24 +368,6 @@ def render_github(options: CiRenderOptions) -> str:
     ]
 
     prod_if = f"github.event_name == 'push' && github.ref == 'refs/heads/{branch}'"
-    if options.sharing:
-        jobs.append(
-            _github_job(
-                "share",
-                name="Share",
-                needs="generate",
-                if_cond=prod_if,
-                steps=join_blocks(
-                    _setup_steps(options, full_history=True),
-                    "\n".join(
-                        [
-                            _SHARE_STEPS_NOTE,
-                            _run_steps(["opentide share push --changed"]),
-                        ]
-                    ),
-                ),
-            )
-        )
 
     if options.staging:
         jobs.append(
@@ -382,7 +404,6 @@ def render_github(options: CiRenderOptions) -> str:
 
     # Staging runs only on pull requests. Production runs on push to the default
     # branch, so it cannot ``needs`` the staging job: a skipped need skips it too.
-    # Share uses the same push condition and also needs only generate.
     jobs.append(
         _github_job(
             "deploy_production",
@@ -399,6 +420,9 @@ def render_github(options: CiRenderOptions) -> str:
             ),
         )
     )
+
+    if options.sharing:
+        jobs.append(_share_job(options, prod_if))
 
     jobs.append(
         _github_job(

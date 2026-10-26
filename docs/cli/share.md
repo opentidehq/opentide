@@ -39,6 +39,7 @@ opentide share targets
 | `--publish` / `--no-publish` | push | Override the block `publish` flag for this run |
 | `--workers` | push, preview, retract | Parallel workers for one destination. Default `1` |
 | `--changed` | push | Share only objects the default-branch CI diff changed. `opentide share --changed` is the same flag |
+| `--since COMMIT` | push | With `--changed`: diff from this full commit SHA, branch, `origin/<branch>` or `refs/...` name (a tag is `refs/tags/<tag>`) instead of the push's baseline. Also runs outside CI |
 | `--delete` | retract | Delete the remote event |
 | `--yes` | retract | Required with `--delete` |
 
@@ -46,15 +47,16 @@ Only files placed directly in the configured threat, objective, and rule directo
 
 Filters only narrow the selection. A disabled block named by `--target`, or no enabled block, is a preflight failure (exit `1`). An unknown `--target` is a usage error: it exits `2` with `failure.code` `usage_invalid_choice` and the closest configured name in `failure.suggestion`, and the document keeps `preflight: "scope_no_match"` and `records: []`. `max_tlp` is the ceiling: `red` shares TLP:RED, and there is no `--allow-tlp-red`.
 
-`--changed` uses the same commit range as the default-branch `opentide deploy --strategy RELEASE`. It keeps `.yaml` and `.yml` files that sit directly in the configured threat, objective, and rule directories. Added and modified files are included. Deletions are ignored, and a deletion does not retract. It runs on a push to the default branch in GitHub Actions, GitLab CI, or Azure Pipelines. On a pull request, or outside those three, it is a preflight failure and makes no request. An empty diff exits `0`. With no `--target` and no enabled block, `--changed` also exits `0`. A disabled `--target` is still `scope_no_match` (exit `1`); an unknown one exits `2` with `preflight: "scope_no_match"` kept.
+`--changed` starts where the default-branch `opentide deploy --strategy RELEASE` diff starts: the first parent of the commit that triggered the run (`GITHUB_SHA`, `BUILD_SOURCEVERSION`), or on GitLab `CI_COMMIT_BEFORE_SHA` when it is set and not all zeros, else `CI_COMMIT_SHA`'s first parent. It ends at the checkout's `HEAD`, not at the triggering commit. The [generated share job](../usage/workflows/ci-cd.md) checks out the default branch's tip after the production deploy, so the range also holds that deploy's write-back. In a checkout of the triggering commit the range is the deploy's. `--since COMMIT` replaces the start; the range still ends at `HEAD`. It keeps `.yaml` and `.yml` files that sit directly in the configured threat, objective, and rule directories. Added and modified files are included. Deletions are ignored, and a deletion does not retract. It runs on a push to the default branch in GitHub Actions, GitLab CI, or Azure Pipelines. On a pull request it is a preflight failure and makes no request; outside those three it is one too, unless `--since` names the start. `--since` without `--changed` is a usage error (exit `2`). An empty diff exits `0`. With no `--target` and no enabled block, `--changed` also exits `0`. A disabled `--target` is still `scope_no_match` (exit `1`); an unknown one exits `2` with `preflight: "scope_no_match"` kept.
 
 ```bash
 opentide share push --changed
+opentide share push --changed --since <commit-sha>   # from that commit to HEAD
 ```
 
 A rule passes a block's `rule_statuses` (default `["PRODUCTION"]`) when an enabled platform block (`configurations.<platform>` with `enabled: true`) has a status in that list. The root `status` counts only when no enabled platform block has one. A rule that does not pass is `skipped_status`.
 
-Block statuses are the ones deploy uses and promotion rewrites, so once promotion's write-back has landed, a rule whose enabled block reads `PRODUCTION` is shared even though its root `status` still reads `STAGING`. Every enabled block counts, including blocks for platforms the repository has not enabled, which deploy skips. The CI share job reads the commit that triggered it, before the production deploy promotes, so a rule promoted by that deploy is shared the next time a push changes it, or by a `share push` run without `--changed`.
+Block statuses are the ones deploy uses and promotion rewrites, so once promotion's write-back has landed, a rule whose enabled block reads `PRODUCTION` is shared even though its root `status` still reads `STAGING`. Every enabled block counts, including blocks for platforms the repository has not enabled, which deploy skips. The generated CI share job runs after the production deploy and reads the default branch's tip, which holds promotion's write-back, so a rule that deploy promoted is shared in the same run.
 
 `push --publish` (or a block with `publish = true`) publishes an event whose content is unchanged but which is still unpublished, and reports it as `updated`; `preview` predicts the same from the ledger.
 
