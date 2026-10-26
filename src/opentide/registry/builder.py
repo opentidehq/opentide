@@ -9,7 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.files import resolve_configurations
-from opentide.core.io import describe_yaml_error, parse_json, root_mapping_problem
+from opentide.core.io import (
+    describe_yaml_error,
+    not_utf8_problem,
+    parse_json,
+    root_mapping_problem,
+)
 from opentide.core.logging import get_logger
 from opentide.registry.paths import (
     legacy_path_aliases,
@@ -103,6 +108,8 @@ def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | N
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         return path_str, None, str(exc), "oserror"
+    except UnicodeDecodeError as exc:
+        return path_str, None, not_utf8_problem(exc), "yaml"
     try:
         from opentide.core.io import parse_yaml
 

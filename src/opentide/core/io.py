@@ -194,7 +194,18 @@ def _reject_duplicate_keys(root: yaml.Node) -> None:
 
 
 def _construct_timestamp_text(loader: SafeConstructor, node: yaml.ScalarNode) -> Any:
-    return stringify_yaml_temporals(loader.construct_yaml_timestamp(node))
+    try:
+        return stringify_yaml_temporals(loader.construct_yaml_timestamp(node))
+    except ValueError as exc:
+        # ``2026-13-45`` matches YAML's timestamp pattern, and ``datetime``
+        # refuses it with a bare ValueError. Report it like any other parse
+        # problem, at the value, instead of letting it escape as a crash.
+        error = yaml.constructor.ConstructorError(
+            problem=f"{node.value!r} is not a valid date ({exc})",
+            problem_mark=node.start_mark,
+        )
+        error.end_mark = node.end_mark
+        raise error from exc
 
 
 class _TideYamlLoader(YamlLoader):  # ty: ignore[unsupported-base]  # libyaml or pure-Python safe loader
@@ -217,8 +228,10 @@ def parse_yaml(text: str) -> Any:
     loader = _TideYamlLoader(text)
     try:
         node = loader.get_single_node()
-        if node is not None:
-            _reject_duplicate_keys(node)
+        if node is None:
+            # An empty file, or one holding only comments, is no document.
+            return None
+        _reject_duplicate_keys(node)
         return loader.construct_document(node)
     finally:
         loader.dispose()
@@ -227,6 +240,13 @@ def parse_yaml(text: str) -> Any:
 def load_yaml(path: Path) -> Any:
     """Load YAML from *path*."""
     return parse_yaml(path.read_text(encoding="utf-8"))
+
+
+def not_utf8_problem(exc: UnicodeDecodeError) -> str:
+    """Why a file that is not UTF-8 text cannot be read, in words, with the byte at fault."""
+    byte = exc.object[exc.start : exc.start + 1].hex() if exc.object else ""
+    where = f" (byte 0x{byte} at offset {exc.start})" if byte else ""
+    return f"the file is not UTF-8 text{where}; save it as UTF-8"
 
 
 def root_mapping_problem(document: Any) -> str | None:

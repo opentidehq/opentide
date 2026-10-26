@@ -21,7 +21,12 @@ from opentide.cli.ui.diagnostics import (
     diagnostic_from_lint_finding,
 )
 from opentide.cli.ui.glyphs import glyph
-from opentide.core.io import describe_yaml_error, parse_yaml
+from opentide.core.io import (
+    describe_yaml_error,
+    not_utf8_problem,
+    parse_yaml,
+    root_mapping_problem,
+)
 from opentide.documentation.markdown.links import slugify
 
 logger = structlog.get_logger("opentide.cli.services.lint")
@@ -181,13 +186,18 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
         if problem.line is not None and problem.column is not None:
             record.parse_position = (problem.line, problem.column)
         return record
-    except (UnicodeDecodeError, OSError) as exc:
+    except UnicodeDecodeError as exc:
+        record.parse_error = not_utf8_problem(exc)
+        return record
+    except OSError as exc:
         record.parse_error = str(exc)
         return record
     record.key_lines = _top_level_key_lines(text)
     record.placeholder_lines = _placeholder_lines(text)
-    if not isinstance(data, dict):
-        record.parse_error = "object YAML is not a mapping"
+    if (problem := root_mapping_problem(data)) is not None:
+        # The same words validate uses: "expected a mapping at the top of the
+        # file, found an empty file".
+        record.parse_error = problem
         return record
     record.name = _as_str(data.get("name"))
     metadata = data.get("metadata")
