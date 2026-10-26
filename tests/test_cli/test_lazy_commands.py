@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import typer.main
@@ -17,6 +18,7 @@ from typer.testing import CliRunner
 import opentide.cli as cli_package
 from opentide import __version__
 from opentide.cli.commands import ROOT_COMMANDS
+from opentide.cli.completion import INDEXED_OPTIONS
 from opentide.cli.lazy import LazyTyperGroup
 
 runner = CliRunner()
@@ -177,6 +179,97 @@ def test_top_level_completion_imports_no_engine_module(words: str) -> None:
     )
     assert done.stdout.strip() and "Usage" not in done.stdout, done.stdout + done.stderr
     assert _engine_modules(modules) == []
+
+
+def _workspace(root: Path) -> Path:
+    rules = root / "objects" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "rule.yaml").write_text(
+        "name: A rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n",
+        encoding="utf-8",
+    )
+    platforms = root / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True)
+    (platforms / "splunk.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
+    return root
+
+
+_COMPLETE_AND_REPORT = """
+import json
+import sys
+
+from opentide.cli import main
+
+sys.argv[0] = "opentide"
+try:
+    main()
+except SystemExit:
+    pass
+sys.stdout.flush()
+registry = sys.modules.get("opentide.core.registry")
+built = bool(registry and registry.Opentide.is_initialised)
+print("\\n" + json.dumps({"modules": sorted(sys.modules), "built": built}), file=sys.stderr)
+"""
+
+
+def _complete_bash(words: str, **env: str) -> tuple[str, set, bool]:
+    """Complete *words* as bash would.
+
+    Returns the output, the modules loaded, and whether the registry was built.
+    """
+    done = subprocess.run(
+        [sys.executable, "-c", _COMPLETE_AND_REPORT],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "NO_COLOR": "1",
+            "_OPENTIDE_COMPLETE": "complete_bash",
+            "COMP_WORDS": words,
+            "COMP_CWORD": str(len(words.split()) - (0 if words.endswith(" ") else 1)),
+            **env,
+        },
+    )
+    report = json.loads(done.stderr.strip().splitlines()[-1])
+    return done.stdout, set(report["modules"]), report["built"]
+
+
+_INDEXED = sorted(
+    (" ".join(path), option) for path, options in INDEXED_OPTIONS.items() for option in options
+)
+
+
+@pytest.mark.parametrize(("command", "option"), _INDEXED, ids=[f"{c} {o}" for c, o in _INDEXED])
+def test_completing_a_value_imports_no_engine_module(
+    tmp_path: Path, command: str, option: str
+) -> None:
+    """Each completer answers from the index: not the command's module, not the engine.
+
+    Completing a value costs what completing a command name does.
+    """
+    env = {"OPENTIDE_REPO_ROOT": str(_workspace(tmp_path))}
+    _, baseline, _ = _complete_bash("opentide va", **env)
+    output, modules, built = _complete_bash(f"opentide {command} {option} ", **env)
+    assert output.strip()
+    assert _engine_modules(modules) == []
+    assert not any(name == "pydantic" or name.startswith("pydantic.") for name in modules)
+    added = sorted(
+        name
+        for name in modules - baseline - {"opentide.data"}
+        if name.split(".")[0] not in sys.stdlib_module_names
+    )
+    assert added == []
+    assert built is False
+
+
+def test_completing_after_an_unindexed_option_still_answers(tmp_path: Path) -> None:
+    """A command line the index cannot read falls back to Click, which loads the command."""
+    env = {"OPENTIDE_REPO_ROOT": str(_workspace(tmp_path))}
+    output, modules, built = _complete_bash("opentide validate --check schema --uuid ", **env)
+    assert output.split() == ["00000000-0000-4000-8003-000000000001"]
+    assert "opentide.cli.commands.validate" in modules
+    assert built is False
 
 
 def test_completion_lists_the_visible_commands_in_order() -> None:

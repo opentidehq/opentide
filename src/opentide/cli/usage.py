@@ -50,6 +50,22 @@ def one_line(message: str) -> str:
     return _LINE_BREAK.sub(" ", message).strip()
 
 
+#: Commands people type that are root options: the option, and the ``help:`` line.
+_ROOT_OPTION_COMMANDS: dict[str, tuple[str, str]] = dict.fromkeys(
+    ("completion", "completions", "install-completion"),
+    (
+        "--install-completion",
+        "did you mean 'opentide --install-completion'? "
+        "'opentide --show-completion' prints the script instead",
+    ),
+) | {
+    "show-completion": (
+        "--show-completion",
+        "did you mean 'opentide --show-completion'?",
+    ),
+}
+
+
 def _param_label(param: Any) -> str | None:
     if param is None:
         return None
@@ -102,11 +118,12 @@ def describe(error: _click.exceptions.UsageError) -> Failure:
         )
     if match := _NO_SUCH_COMMAND.match(error.message):
         name = match["name"]
+        option = _ROOT_OPTION_COMMANDS.get(name.lower())
         return Failure(
             code=USAGE_UNKNOWN_COMMAND,
             message=_TYPER_SUGGESTION.sub(".", error.message),
             argument=name,
-            suggestion=did_you_mean(name, _commands(error.ctx)),
+            suggestion=option[0] if option else did_you_mean(name, _commands(error.ctx)),
         )
     return Failure(
         code=USAGE_ERROR,
@@ -142,7 +159,10 @@ def render_usage_error(
     from opentide.core.logging.config import get_console
 
     notes: list[tuple[str, str]] = []
-    if failure.suggestion:
+    option = _ROOT_OPTION_COMMANDS.get(str(failure.argument).lower())
+    if failure.code == USAGE_UNKNOWN_COMMAND and option:
+        notes.append(("help", option[1]))
+    elif failure.suggestion:
         notes.append(("help", f"did you mean {failure.suggestion!r}?"))
     ctx = error.ctx
     if ctx is not None:

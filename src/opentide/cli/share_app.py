@@ -30,22 +30,28 @@ def _dispatch(
     yes: bool,
     changed: bool = False,
 ) -> None:
+    from contextlib import nullcontext
+
+    from opentide.cli.ui.terminal_progress import TerminalProgress
+
     refuse_dropped(ctx)
     cli = get_context(ctx)
-    payload = run_share(
-        cli,
-        mode=mode,
-        targets=target,
-        uuids=uuid,
-        types=object_type,
-        files=file,
-        dry_run=dry_run,
-        publish=publish,
-        workers=workers,
-        delete=delete,
-        confirmed=yes,
-        changed=changed,
-    )
+    # Listing targets reads one file; every other mode reads the catalogue.
+    with nullcontext() if mode == "targets" else TerminalProgress():
+        payload = run_share(
+            cli,
+            mode=mode,
+            targets=target,
+            uuids=uuid,
+            types=object_type,
+            files=file,
+            dry_run=dry_run,
+            publish=publish,
+            workers=workers,
+            delete=delete,
+            confirmed=yes,
+            changed=changed,
+        )
     if not cli.json_output:
         render_share(payload)
     emit_result(cli, CommandResult.from_payload(payload, default_message="Share finished"))

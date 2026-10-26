@@ -26,6 +26,9 @@ HOISTED_FLAGS = frozenset({"--json", "--no-color", "--debug", "--quiet"})
 #: ``ctx.meta`` key for the leading words of the command line, ``("mcp", "start")``.
 COMMAND_WORDS_KEY = "opentide.command_words"
 
+#: ``ctx.meta`` key for the root's arguments, after hoisting.
+ROOT_ARGS_KEY = "opentide.root_args"
+
 
 class _Commands(MutableMapping[str, Any]):
     """``TyperGroup.commands`` whose indexed values load on first access.
@@ -98,6 +101,7 @@ class LazyTyperGroup(TyperGroup):
     ) -> Any:
         from opentide.cli.ui.mode import resolve_mode, set_mode, start_clock
 
+        _adopt_completion_options(self)
         argv = list(sys.argv[1:] if args is None else args)
         # A first guess, for usage errors Click raises before the root callback
         # resolves the mode properly from the parsed flags.
@@ -139,7 +143,21 @@ class LazyTyperGroup(TyperGroup):
             ctx.exit(0)
         args = hoist_root_flags(self, ctx, args)
         ctx.meta[COMMAND_WORDS_KEY] = _leading_words(self, args)
+        ctx.meta[ROOT_ARGS_KEY] = tuple(args)
         return super().parse_args(ctx, args)
+
+    def _main_shell_completion(
+        self,
+        ctx_args: MutableMapping[str, Any],
+        prog_name: str,
+        complete_var: str | None = None,
+    ) -> None:
+        # An option's value completes from the index, without loading the
+        # command's module (and the engine it imports).
+        from opentide.cli.completion import complete_from_index, complete_var_for
+
+        complete_from_index(self, prog_name, complete_var or complete_var_for(prog_name))
+        super()._main_shell_completion(ctx_args, prog_name, complete_var)
 
     def make_context(
         self,
@@ -223,9 +241,11 @@ class LazyTyperGroup(TyperGroup):
         else:
             holder.command(spec.name, **panel)(target)
         command = typer.main.get_group(holder).commands[spec.name]
+        from opentide.cli.completion import attach
         from opentide.cli.help import decorate
 
         decorate(command, spec.name)
+        attach(command, spec.name)
         self._loaded[spec.name] = command
         return command
 
@@ -244,6 +264,26 @@ class LazyTyperGroup(TyperGroup):
     def shell_complete(self, ctx: _click.Context, incomplete: str) -> list[Any]:
         with self._list_from_index():
             return super().shell_complete(ctx, incomplete)
+
+
+def _adopt_completion_options(group: LazyTyperGroup) -> None:
+    """Route ``--install-completion`` and ``--show-completion`` to opentide's callbacks.
+
+    Typer appends both options after building the group. Its own callbacks
+    ignore a shell named after the flag and print plain lines with an
+    absolute path.
+    """
+    from opentide.cli.completion import install_completion, show_completion
+
+    for param in group.params:
+        if not isinstance(param, TyperOption):
+            continue
+        if param.name == "install_completion":
+            param.callback = install_completion
+            param.help = "Install completion; name a shell after it to pick one"
+        elif param.name == "show_completion":
+            param.callback = show_completion
+            param.help = "Print the script instead; name a shell after it to pick one"
 
 
 def _show_home() -> bool:
@@ -330,6 +370,27 @@ def _root_options_end(group: Any, args: Sequence[str]) -> int:
         param = lookup.get(name)
         index += 2 if param is not None and _takes_value(param) and not separator else 1
     return index
+
+
+def split_root_options(group: Any, args: Sequence[str]) -> tuple[dict[str, str], list[str]]:
+    """The root's value options in *args*, by parameter name, and the words after them."""
+    lookup = _option_lookup(group)
+    end = _root_options_end(group, args)
+    values: dict[str, str] = {}
+    index = 0
+    while index < end:
+        name, separator, value = args[index].partition("=")
+        param = lookup.get(name)
+        index += 1
+        if param is None or not _takes_value(param):
+            continue
+        if not separator:
+            if index >= len(args):
+                break
+            value = args[index]
+            index += 1
+        values[str(param.name)] = value
+    return values, list(args[end:])
 
 
 def _leading_words(group: Any, args: Sequence[str]) -> tuple[str, ...]:

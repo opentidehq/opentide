@@ -21,7 +21,7 @@ import sys
 import time
 from collections.abc import Mapping, Sequence
 from enum import Enum
-from typing import TextIO
+from typing import IO, TextIO
 
 
 class OutputMode(str, Enum):
@@ -95,7 +95,7 @@ def detect_ci(env: Mapping[str, str] | None = None) -> str | None:
     return "ci" if _is_set(env, "CI") else None
 
 
-def _is_tty(stream: TextIO | None) -> bool:
+def _is_tty(stream: IO[str] | None) -> bool:
     try:
         return stream is not None and stream.isatty()
     except (AttributeError, ValueError):
