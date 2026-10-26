@@ -128,3 +128,18 @@ def main_callback(
     cli_ctx.activate()
     cli_ctx.apply_environment()
     init_logging(LoggingConfig.from_cli_context(cli_ctx), force=True)
+    words = tuple(ctx.meta.get(COMMAND_WORDS_KEY, ()))
+    # A mistyped --repo used to read as an empty workspace: validate passed
+    # ("no detection objects were found") and a CI job went green. setup is
+    # the one command that may name a folder it is about to create.
+    if cli_ctx.repo_explicit and words[:1] != ("setup",) and not cli_ctx.repo.is_dir():
+        from opentide.cli.output import emit_usage_error
+        from opentide.cli.ui.contract import USAGE_INVALID_VALUE
+
+        problem = "is not a directory" if cli_ctx.repo.exists() else "does not exist"
+        emit_usage_error(
+            cli_ctx,
+            f"--repo {repo} {problem}",
+            argument="--repo",
+            code=USAGE_INVALID_VALUE,
+        )
