@@ -70,7 +70,7 @@ BUNDLED_AUTHORING_ENTRIES: tuple[SkillEntry, ...] = (
     SkillEntry(
         name="Detection rules",
         slug="opentide-detection-rule",
-        description="Author rules as rule::1.0 YAML under objects/rules/.",
+        description="Author rules as rule::1.1 YAML under objects/rules/.",
     ),
     SkillEntry(
         name="Threats",

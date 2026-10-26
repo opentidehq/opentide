@@ -214,7 +214,7 @@ def test_authoring_skills_install_from_the_package_when_github_is_down(
     rule = (tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md").read_text(
         encoding="utf-8"
     )
-    assert "rule::1.0" in engineering
+    assert "rule::1.1" in engineering
     assert "objects/rules/" in rule
     # The retired schema may appear only as a prohibition, not as the layout to author.
     assert "schema: mdr::" not in engineering
@@ -393,7 +393,7 @@ def test_bundled_reinstall_drops_stale_reference_files(tmp_path: Path) -> None:
     (dest / "references" / "Best-Practices.md").write_text("coretide\n", encoding="utf-8")
     written = skills_mod._install_bundled_skill("opentide-detection-rule", dest)
     text = (dest / "SKILL.md").read_text(encoding="utf-8")
-    assert "rule::1.0" in text
+    assert "rule::1.1" in text
     assert "SKILL.md" in written
     assert not (dest / "references").exists()
     assert not (tmp_path / ".opentide-detection-rule.incoming").exists()

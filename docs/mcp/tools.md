@@ -181,7 +181,7 @@ Validate a single rule against its schema and cross-object checks.
 }
 ```
 
-`errors` and `warnings` are strings. `issues` are the report's issues with the [diagnostic fields](#diagnostic-fields), as `validation_report` returns them. A rule that fails points `next_actions` at `explain` for each error code (three at most) and then at `validate_rule` again; a valid rule points at a dry-run `deploy_rule` for each platform it has a configuration block for, unless its status there maps to `INERT`. The `command` passes the `--strategy` values that deploy the rule's status (`PREVIEW` for a `STAGING` rule, `RELEASE` for a `PRODUCTION` one) and `--all`, because the CLI has no `--uuid`: it previews every rule those strategies deploy, this one among them. An unknown UUID points at `search` with an empty query, which lists every rule with its title (the `command`, `opentide --json info rules`, lists UUIDs only).
+`errors` and `warnings` are strings. `issues` are the report's issues with the [diagnostic fields](#diagnostic-fields), as `validation_report` returns them. A rule that fails points `next_actions` at `explain` for its first error code (each issue's `explain` field names its own code), and then at `validate_rule` again; a valid rule points at a dry-run `deploy_rule` for each platform it has a configuration block for, unless its status there maps to `INERT`. The `command` passes the `--strategy` values that deploy the rule's status (`PREVIEW` for a `STAGING` rule, `RELEASE` for a `PRODUCTION` one) and `--all`, because the CLI has no `--uuid`: it previews every rule those strategies deploy, this one among them. An unknown UUID points at `search` with an empty query, which lists every rule with its title (the `command`, `opentide --json info rules`, lists UUIDs only).
 
 ## validation_report
 
@@ -247,7 +247,7 @@ Returns the validation report (`ok`, `issues`, `warnings`, `stats`) plus `next_a
 }
 ```
 
-A clean report has `ok: true` and an empty `next_actions`.
+A report with errors points at `explain` for the first error code, then at `validation_report` again. A clean report has `ok: true` and an empty `next_actions`.
 
 ### Diagnostic fields
 

@@ -28,6 +28,7 @@ GLYPHS: dict[str, Glyph] = {
     "delete": Glyph("×", "x"),
     "next": Glyph("→", "->"),
     "separator": Glyph("·", "-"),
+    "ellipsis": Glyph("…", "..."),
     "mark": Glyph("≋", "opentide"),
     # Code frames around a diagnostic (``opentide.cli.ui.codeframe``).
     "frame_open": Glyph("╭─▶", "-->"),

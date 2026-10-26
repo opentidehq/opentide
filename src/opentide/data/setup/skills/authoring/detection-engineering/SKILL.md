@@ -6,7 +6,7 @@ opentide content is three object families:
 |--------|--------|-----------|
 | Threat | `threat::1.0` | `objects/threats/` |
 | Objective | `objective::1.0` | `objects/objectives/` |
-| Rule | `rule::1.0` | `objects/rules/` |
+| Rule | `rule::1.1` | `objects/rules/` |
 
 A rule's `detection_model` points at an objective. An objective lists threat UUIDs under `objective.threats`. A threat chains to another threat with `threat.chaining` entries of `relation` and `vector`.
 

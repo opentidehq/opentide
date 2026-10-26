@@ -191,7 +191,13 @@ opentide setup skills show opentide-detection-rule
 opentide setup skills show opentide-detection-rule --path /path/to/repo
 ```
 
-JSON output includes `manifest_source` (`remote`) and `manifest_refreshed` when using `--refresh`. Discovery always fetches the live `manifest.json`; there is no packaged catalogue snapshot.
+`discover` prints a table of the skills, each description cut at a word boundary to about 80 characters (`setup skills show <slug>` prints all of it), then one outcome line. The sample is illustrative because the counts come from the live catalogue:
+
+```text illustrative
+✓ 31 skills available · 2 installed · opentidehq/skills@main
+```
+
+With `--query`, the line counts the matches (`3 skills match 'kql'`); `--installed` keeps the skills under `.agents/skills/`. JSON output has `skills`, `count`, `source`, `manifest_source` (`remote`) and `manifest_refreshed`, and `summary` gives `skills` and `installed`. Discovery always fetches the live `manifest.json`; there is no packaged catalogue snapshot.
 
 </Step>
 
@@ -217,11 +223,17 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository path (install, discover, show) |
-| `--cursor` / `--claude-code` / `--generic` / `--github-copilot` | Target harness layouts |
-| `--install` | Skill slug (repeatable) |
-| `--all` | Install full catalogue |
-| `--name`, `--org`, `--description` | Entrypoint metadata |
-| `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
+| `--cursor` | Copy the skills to `.cursor/skills/` |
+| `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/` |
+| `--generic` | Write `AGENTS.md` for any agent that reads `.agents/skills/` |
+| `--github-copilot` | Write `.github/copilot-instructions.md`, and `AGENTS.md` as `--generic` does |
+| `--install` | Skill slug to install (repeatable); default: `opentide-detection-rule` and `detection-engineering` |
+| `--all` | Install every skill in the catalogue |
+| `--name`, `--org`, `--description` | Heading (default: the folder name), organisation and opening paragraph of the agent files |
+| `--yes` / `-y` | Install without asking |
+| `--query` / `-q` | `discover`: keep skills whose name, slug or description holds the text |
+| `--installed` | `discover`: keep only the skills installed in `.agents/skills/` |
+| `--refresh` | `discover` / `show`: fetch `manifest.json` again rather than reuse the in-process copy from the last 30 seconds; each CLI run fetches it once anyway |
 
 Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 

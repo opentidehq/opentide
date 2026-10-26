@@ -145,7 +145,7 @@ opentide --json commands
 |-----|---------|
 | `version` | The installed opentide version: key a cached copy of the tree on it. |
 | `global_options` | The root options (`--repo`, `--json`, …). `--json`, `--no-color`, `--debug` and `--quiet` may also follow the command. |
-| `environment` | `[{name, meaning}]`: variables that change every command but are not options: `OPENTIDE_OUTPUT`, `OPENTIDE_DEBUG`, `NO_COLOR` and the agent-detection variables (`AI_AGENT`, `CLAUDECODE`, …). |
+| `environment` | `[{name, meaning}]`: every `OPENTIDE_*` variable opentide reads, those behind `--repo`, `--data` and `--proxy` included, plus `NO_COLOR` and the agent-detection variables (`AI_AGENT`, `CLAUDECODE`, …). [Global options](./global-options.md#environment-variables) lists them. |
 | `commands` | Flat and depth-first, in `--help` order. `path` is the words to type; a group's `subcommands` are the entries whose path extends it. Hidden commands and options are left out. |
 | `runs_alone` | `false` for a group that only prints its help (`opentide mcp`): run one of its subcommands. |
 | `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … A `string` the command checks itself lists its values in `choices` too: `validate --type`, `deploy --strategy`, `info`'s section. `share --target` takes the configured targets, so it has none. |
