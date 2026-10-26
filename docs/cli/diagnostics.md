@@ -1033,6 +1033,8 @@ configurations:
 
 Enable the platform with the command the message names (`opentide setup platforms --<platform>`) when this workspace should deploy there. Otherwise leave the block: it is still validated and travels with the rule.
 
+When the platform file sets a misspelling of `enabled` (`enabeld = true`, `Enabled = true`), the platform reads as disabled and the message names the file and the key instead: rename the key to `enabled`.
+
 ## platform_sdk
 
 Each enabled platform's SDK imports.
