@@ -16,6 +16,7 @@ from opentide.registry.paths import (
     object_yaml_files,
     resolve_workspace_paths,
 )
+from opentide.registry.signals import index_objective_signals
 
 logger = get_logger(__name__)
 
@@ -375,25 +376,9 @@ class RegistryBuilder:
         files_index[identifier] = model_path.name
         self.file_paths[identifier] = str(model_path)
         if meta_name == "objective":
-            objective = body.get("objective")
-            if not isinstance(objective, dict):
-                return
-            signals = objective.get("signals") or []
-            if not isinstance(signals, list):
-                return
-            for signal in signals:
-                if not isinstance(signal, dict):
-                    continue
-                signal_uuid = signal.get("uuid")
-                if not signal_uuid:
-                    logger.error(
-                        "signal_missing_uuid_in_objective",
-                        objective=model_path.name,
-                    )
-                    continue
-                signal_copy = signal.copy()
-                signal_copy["parent"] = identifier
-                objects_index["signal"][str(signal_uuid)] = signal_copy
+            index_objective_signals(
+                objects_index["signal"], identifier, body, source=model_path.name
+            )
 
     def _load_object_files(
         self,
