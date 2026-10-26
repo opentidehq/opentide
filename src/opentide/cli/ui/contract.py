@@ -35,6 +35,10 @@ NOT_RUN = "not_run"
 #: ``failure.crash_log`` names the redacted log written for it.
 INTERNAL = "internal"
 
+#: ``failure.code`` when a workspace configuration file does not parse. It is
+#: also the code of the diagnostic that points at the file.
+CONFIG_PARSE = "config_parse"
+
 #: Exit code of every usage error.
 USAGE_EXIT_CODE = 2
 

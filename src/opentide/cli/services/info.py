@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from opentide.cli.enums import DetectionPlatform, platform_label
+from opentide.cli.ui.glyphs import glyph
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.object_fields import as_body, matches_technique, object_platforms
 from opentide.core.registry import Opentide
 from opentide.platforms.enabled import enabled_systems
+from opentide.registry.builder import parse_errors_reported_by_caller
 
 if TYPE_CHECKING:
     from rich.table import Table
@@ -29,7 +31,10 @@ def collect_info(
 ) -> dict[str, Any]:
     """Collect system information about the detection repository."""
     ctx.apply_environment()
-    Opentide.reload()
+    # Each unreadable file is counted in the table and the outcome line, and
+    # `opentide validate` says why; logging it as well would say it twice.
+    with parse_errors_reported_by_caller():
+        Opentide.reload()
     parse_errors = list(IndexManager.load().get("parse_errors") or [])
     enabled_platforms = set(enabled_systems())
     platforms_info = []
@@ -64,6 +69,29 @@ def collect_info(
     elif section == "coverage" and technique:
         payload["coverage"] = _technique_coverage(technique)
     return payload
+
+
+#: Singular nouns of the counts on the outcome line, in order.
+_COUNT_NOUNS = (("rules", "rule"), ("threats", "threat"), ("objectives", "objective"))
+
+
+def info_summary(payload: dict[str, Any]) -> dict[str, int]:
+    """Counts behind the outcome line: objects by family, and files that failed to load."""
+    counts = payload.get("counts") or {}
+    summary = {family: int(counts.get(family) or 0) for family, _ in _COUNT_NOUNS}
+    summary["load_errors"] = int(payload.get("parse_error_count") or 0)
+    return summary
+
+
+def info_outcome(summary: dict[str, int]) -> str:
+    """``1 rule · 1 threat · 1 objective · 0 load errors``."""
+
+    def counted(count: int, noun: str) -> str:
+        return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+    parts = [counted(summary.get(family, 0), noun) for family, noun in _COUNT_NOUNS]
+    parts.append(counted(summary.get("load_errors", 0), "load error"))
+    return f" {glyph('separator')} ".join(parts)
 
 
 def render_info(payload: dict[str, Any], *, section: str | None = None) -> None:

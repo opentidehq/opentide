@@ -6,9 +6,9 @@ import typer
 
 from opentide.cli.context import get_context
 from opentide.cli.enums import DetectionPlatform
-from opentide.cli.output import emit_success, emit_usage_error
-from opentide.cli.services.info import collect_info, render_info
-from opentide.cli.ui.contract import USAGE_MISSING_OPTION
+from opentide.cli.output import CommandResult, emit_result, emit_usage_error
+from opentide.cli.services.info import collect_info, info_outcome, info_summary, render_info
+from opentide.cli.ui.contract import ISSUES_FOUND, USAGE_MISSING_OPTION, NextAction
 
 
 # ``info`` has no subcommands: the command index mounts it as a plain command,
@@ -42,14 +42,20 @@ def info_cmd(
             code=USAGE_MISSING_OPTION,
         )
     result = collect_info(cli, platform=platform, section=section, technique=technique)
-    strict_failure = strict and int(result.get("parse_error_count") or 0) > 0
-    if strict_failure:
+    summary = info_summary(result)
+    result["_summary"] = summary
+    result["_outcome"] = info_outcome(summary)
+    if summary["load_errors"]:
+        # The table counts the unreadable files; validate says why.
+        result["_next_actions"] = [
+            NextAction("opentide validate", "show where each object failed to load")
+        ]
+        result["status"] = "issues"
+    if strict and summary["load_errors"]:
         result["status"] = "failed"
         result["message"] = "Repository has objects that failed to load"
         result["_exit_code"] = 1
-    if cli.json_output:
-        emit_success(cli, result)
-    else:
+        result["_failure_code"] = ISSUES_FOUND
+    if not cli.json_output:
         render_info(result, section=section)
-        if strict_failure:
-            raise typer.Exit(1)
+    emit_result(cli, CommandResult.from_payload(result))

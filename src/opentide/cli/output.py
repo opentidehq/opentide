@@ -19,6 +19,7 @@ from rich.markup import escape
 from opentide.cli.context import CliContext
 from opentide.cli.ui.contract import (
     COMMAND_FAILED,
+    CONFIG_PARSE,
     ISSUES_FOUND,
     NOT_RUN,
     SCHEMA_VERSION,
@@ -31,6 +32,8 @@ from opentide.cli.ui.contract import (
 from opentide.cli.ui.glyphs import can_encode
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode
 from opentide.cli.ui.render import (
+    AGENT_TIP,
+    labelled_text,
     outcome_kind,
     render_error,
     render_next_actions,
@@ -38,6 +41,7 @@ from opentide.cli.ui.render import (
     render_outcome,
     render_warnings,
 )
+from opentide.core.errors import ObjectFileError, UserFileError
 from opentide.core.io import dump_json_text
 from opentide.core.logging.config import get_console, get_stdout_console, is_json_output
 
@@ -45,6 +49,10 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 logger = structlog.get_logger("opentide.cli.output")
+
+#: Failures whose code frames are the error report: the outcome line counts
+#: them, ``✗ …``, instead of repeating the message as ``error: …``.
+FRAMED_FAILURES = frozenset({ISSUES_FOUND, CONFIG_PARSE, ObjectFileError.code})
 
 #: Keys :func:`envelope` adds to every ``--json`` document.
 ENVELOPE_KEYS = frozenset(
@@ -71,6 +79,11 @@ class CommandResult:
     summary: dict[str, Any] = field(default_factory=dict)
     next_actions: tuple[NextAction, ...] = ()
     failure: Failure | None = None
+    #: The outcome line, when it says more than ``message`` (``✓ 3 objects valid · 0.9s``).
+    #: ``message`` keeps its JSON meaning; this one is only printed.
+    outcome: str | None = None
+    #: The JSON ``command``, when the Click context that ran it is gone.
+    command: str | None = None
 
     @classmethod
     def from_payload(
@@ -80,8 +93,9 @@ class CommandResult:
 
         Services may also return ``_summary``, ``_next_actions`` (``NextAction``
         or ``{"command", "reason"}`` items), ``_failure_code``,
-        ``_failure_argument`` and ``_failure_suggestion``; they are moved into
-        the envelope rather than left in the payload.
+        ``_failure_argument``, ``_failure_suggestion`` and ``_outcome`` (the
+        printed outcome line); they are moved into the envelope, or into the
+        human view, rather than left in the payload.
         """
         data = dict(payload)
         exit_code = int(data.pop("_exit_code", 0))
@@ -93,6 +107,7 @@ class CommandResult:
         failure_code = data.pop("_failure_code", None)
         failure_argument = data.pop("_failure_argument", None)
         failure_suggestion = data.pop("_failure_suggestion", None)
+        outcome = data.pop("_outcome", None)
         ok = status != "failed"
         failure = None
         if not ok or exit_code:
@@ -113,6 +128,7 @@ class CommandResult:
             summary=summary,
             next_actions=next_actions,
             failure=failure,
+            outcome=None if outcome is None else str(outcome),
         )
 
     def payload(self) -> dict[str, Any]:
@@ -130,6 +146,7 @@ class CommandResult:
             summary=self.summary,
             next_actions=self.next_actions,
             failure=self.failure,
+            command=self.command,
         )
 
 
@@ -267,7 +284,8 @@ def emit_result(ctx: CliContext, result: CommandResult) -> None:
     """Render a normalized command result and honor its exit code.
 
     Human order: warnings, then exactly one outcome line (an ``error:`` line
-    for a failure), then its notes and at most three next steps.
+    for a failure, a ``✗`` line when the command failed because of findings it
+    printed), then its notes and at most three next steps.
     """
     if ctx.json_output:
         print_document(result.payload())
@@ -307,7 +325,16 @@ def render_result(
     if not quiet:
         render_warnings(stderr, result.warnings)
     kind = outcome_kind(result.status, ok=result.ok)
-    if kind == "failed":
+    line = result.outcome or result.message
+    if kind == "failed" and result.failure is not None and result.failure.code in FRAMED_FAILURES:
+        # The findings are the error report; the outcome line counts them.
+        render_outcome(stderr, "failed", line)
+        render_notes(stderr, notes)
+        if mode is OutputMode.AGENT:
+            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
+        if not quiet:
+            render_next_actions(stderr, result.next_actions)
+    elif kind == "failed":
         suggestion = result.failure.suggestion if result.failure else None
         if suggestion and repr(suggestion) not in result.message:
             notes.append(("help", f"did you mean {suggestion!r}?"))
@@ -315,7 +342,7 @@ def render_result(
         if not quiet:
             render_next_actions(stderr, result.next_actions)
     else:
-        render_outcome(stdout, kind, result.message)
+        render_outcome(stdout, kind, line)
         if not quiet:
             render_notes(stdout, notes)
             render_next_actions(stdout, result.next_actions)
@@ -342,6 +369,56 @@ def emit_error(
             exit_code=exit_code,
             next_actions=tuple(next_actions),
             failure=Failure(code=code, message=message, argument=argument, suggestion=suggestion),
+        ),
+    )
+    raise AssertionError("error result did not exit")
+
+
+def emit_file_error(
+    ctx: CliContext, error: UserFileError, *, command: str | None = None
+) -> NoReturn:
+    """A file of the user's that cannot be read: a frame with the error's code, then exit 1.
+
+    A configuration TOML typo is ``config_parse``; an object file that is
+    not one mapping is ``yaml_parse``. The frame is the error report, as
+    findings are for ``issues_found``; JSON carries the same diagnostic under
+    ``diagnostics``.
+    """
+    from pathlib import Path
+
+    from opentide.cli.ui.diagnostics import Diagnostic, relative_path
+
+    diagnostic = Diagnostic(
+        code=error.code,
+        severity="error",
+        message=f"{error.title}: {error.problem}" if error.title else error.problem,
+        path=relative_path(error.path, ctx.repo),
+        file_path=error.path,
+        line=error.line,
+        column=error.column,
+        end_column=error.end_column or (None if error.column is None else error.column + 1),
+        help=error.help,
+    )
+    if not ctx.json_output:
+        from opentide.cli.ui.codeframe import render_diagnostics
+
+        render_diagnostics(get_console(), [diagnostic], mode=text_mode(ctx), cwd=Path.cwd())
+    where = "" if error.line is None else f":{error.line}"
+    if error.line is not None and error.column is not None:
+        where += f":{error.column}"
+    detail = f"{diagnostic.path}{where}: {error.problem}"
+    emit_result(
+        ctx,
+        CommandResult(
+            message=f"{error.title or 'Could not load'}: {diagnostic.path}",
+            ok=False,
+            status="failed",
+            data={"error": detail, "diagnostics": [diagnostic.to_dict()]},
+            exit_code=1,
+            next_actions=(NextAction(diagnostic.explain, "how to fix it"),),
+            failure=Failure(code=error.code, message=detail),
+            outcome=error.outcome,
+            command=command,
         ),
     )
     raise AssertionError("error result did not exit")

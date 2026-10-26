@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
 from opentide.core.files import resolve_configurations
-from opentide.core.io import parse_json
+from opentide.core.io import describe_yaml_error, parse_json, root_mapping_problem
 from opentide.core.logging import get_logger
 from opentide.registry.paths import (
     legacy_path_aliases,
@@ -20,6 +23,39 @@ logger = get_logger(__name__)
 # Log each absent path once per process so generate-first ``setup vscode``
 # does not spam error lines per phase × object type (issue #212).
 _missing_object_folders_logged: set[str] = set()
+
+
+#: Set while a caller reports unreadable object files itself (``validate`` turns
+#: each into a ``yaml_parse`` diagnostic), so the file is not also logged.
+_caller_reports_parse_errors: ContextVar[bool] = ContextVar(
+    "caller_reports_parse_errors", default=False
+)
+
+
+@contextmanager
+def parse_errors_reported_by_caller() -> Generator[None]:
+    """Log object files the registry cannot load at DEBUG: the caller reports them."""
+    token = _caller_reports_parse_errors.set(True)
+    try:
+        yield
+    finally:
+        _caller_reports_parse_errors.reset(token)
+
+
+def _log_parse_error(event: str, **fields: str) -> None:
+    if _caller_reports_parse_errors.get():
+        logger.debug(event, **fields)
+    else:
+        logger.error(event, **fields)
+
+
+def _shown_path(path_str: str) -> str:
+    """*path_str* relative to the current directory when inside it, for a log line."""
+    path = Path(path_str)
+    try:
+        return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except (OSError, ValueError):
+        return path_str
 
 
 def reset_missing_object_folder_log_cache() -> None:
@@ -63,9 +99,9 @@ def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | N
 
         body = parse_yaml(text)
     except Exception as exc:
-        return path_str, None, str(exc), "yaml"
-    if not isinstance(body, dict):
-        return path_str, None, "YAML root must be a mapping", "yaml"
+        return path_str, None, describe_yaml_error(exc).message, "yaml"
+    if (problem := root_mapping_problem(body)) is not None:
+        return path_str, None, problem, "yaml"
     return path_str, body, None, "ok"
 
 
@@ -309,7 +345,7 @@ class RegistryBuilder:
         meta_uuid = metadata.get("uuid") if isinstance(metadata, dict) else None
         identifier = body.get("uuid") or meta_uuid
         if not identifier:
-            logger.error("missing_identifier_from_model", file=str(model_path))
+            _log_parse_error("missing_identifier_from_model", file=str(model_path))
             self.parse_errors.append(
                 {
                     "path": str(model_path),
@@ -364,12 +400,12 @@ class RegistryBuilder:
             _, body, error, kind = _parse_yaml_file(path_str)
             if error or body is None:
                 event = "unreadable_object_file" if kind == "oserror" else "malformed_object_yaml"
-                logger.error(event, path=path_str, error=error or "")
+                _log_parse_error(event, path=_shown_path(path_str), error=error or "")
                 self.parse_errors.append(
                     {
                         "path": path_str,
                         "object_type": meta_name,
-                        "error": error or "YAML root must be a mapping",
+                        "error": error or root_mapping_problem(body) or "",
                     }
                 )
                 continue

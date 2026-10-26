@@ -146,16 +146,15 @@ def test_info_summary_lists_each_platform_capability(tutorial: Path) -> None:
     assert any("CrowdStrike" in line and "enabled=False [deploy]" in line for line in lines)
 
 
-def test_failing_validate_keeps_the_severity_tag(tutorial: Path) -> None:
-    """#292: the panel printed ` detection_model: …` with the `[error]` tag gone.
-
-    A recorded ``yaml_line`` inserts ``file:line`` after the severity tag, and a
-    narrow console wraps the message. The tag and the field message still show.
-    """
+def test_failing_validate_prints_a_code_frame(tutorial: Path) -> None:
+    """#292: the severity and the field message must survive; now as a code frame."""
     _break_objective_reference(tutorial)
-    collapsed = _panel_text(_human(tutorial, "validate", "--strict"))
-    assert "[error]" in collapsed
-    assert "detection_model: Unknown objective or signal reference" in collapsed
+    output = _human(tutorial, "validate", "--strict")
+    assert "error[invalid_ref]: Unknown objective or signal reference" in output
+    assert "╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18" in output
+    assert "17 │ detection_model: " in output
+    assert "error[vocab_unknown]" not in output, "one finding per cause"
+    assert "✗ 1 error in 1 file · 3 objects checked · " in output
 
 
 def test_extract_with_a_broken_sdk_prints_the_reinstall_advice(tutorial: Path) -> None:
@@ -296,6 +295,12 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     Any top-level prose string counts, not only the fields named here, so a new
     field a renderer does not know about (``setup mcp`` once had ``note``) fails.
     """
+    # Where findings print as code frames, the outcome line counts them in
+    # place of the message, and each warning is a frame, not a warning line.
+    framed = payload.get("command") in {"validate", "lint"}
+    # A run that found issues repeats its message as `error`; a usage error
+    # has no findings, and prints its `error`.
+    counted = framed and ("report" in payload or "findings" in payload)
     expected: list[Expectation] = [
         value
         for key, value in payload.items()
@@ -303,18 +308,32 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
         and " " in value.strip()
         and key not in _DATA_FIELDS
         and value not in _GENERIC_MESSAGES
+        and not (framed and key == "message")
+        and not (counted and key == "error")
     ]
-    expected.extend(payload.get("warnings") or [])
-    for issue in (payload.get("report") or {}).get("issues", []):
-        expected.append((f"[{issue['severity']}]", issue["message"]))
+    if not framed:
+        expected.extend(payload.get("warnings") or [])
+    report = payload.get("report") or {}
+    for issue in [*report.get("issues", []), *report.get("warnings", [])]:
+        expected.append((f"{issue['severity']}[{issue['code']}]: {issue['message']}",))
+        if issue.get("line") is not None:
+            expected.append((f"{issue['path']}:{issue['line']}",))
     expected.extend(
-        (f"[{finding['check']}/{finding['severity']}]", finding["message"])
+        (f"{_SEVERITY_WORD[finding['severity']]}[{finding['code']}]: {finding['message']}",)
         for finding in payload.get("findings") or []
     )
+    summary = payload.get("summary") or {}
+    if framed and "findings" in summary:
+        expected.append(f"{summary['findings']} finding" if summary["findings"] else "clean")
+    if framed and "objects" in summary:
+        expected.append(f"{summary['objects']} object")
     if "counts" in payload and "platforms" in payload:
         expected.extend(_info_expectations(payload))
     return expected
 
+
+#: Lint's JSON severity, and the word its code frame prints.
+_SEVERITY_WORD = {"error": "error", "warning": "warning", "info": "note"}
 
 _PANEL_CHROME = str.maketrans(dict.fromkeys("│╭╮╰╯─", " "))
 

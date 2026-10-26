@@ -31,6 +31,13 @@ GLYPHS: dict[str, Glyph] = {
     "separator": Glyph("·", "-"),
     "ellipsis": Glyph("…", "..."),
     "mark": Glyph("≋", "opentide"),
+    # Code frames around a diagnostic (``opentide.cli.ui.codeframe``).
+    "frame_open": Glyph("╭─▶", "-->"),
+    "frame_only": Glyph("╰─▶", "-->"),
+    "frame_bar": Glyph("│", "|"),
+    "frame_note": Glyph("├─", "="),
+    "frame_close": Glyph("╰─", "="),
+    "underline": Glyph("━", "^"),
 }
 
 #: ``str.translate`` table from each glyph to its fallback, for :func:`encodable`.

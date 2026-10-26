@@ -66,12 +66,14 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `path_exists` | 1 | `new`: the file it would write already exists; it never overwrites |
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
 | `doctor_checks_failed` | 1 | `doctor`: at least one check failed. Read `checks` for which |
-| `issues_found` | 1 | The command found issues it was asked to fail on (`--strict`) |
+| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
+| `config_parse` | 1 | A configuration TOML file does not parse. `diagnostics` holds the file, line and column |
+| `yaml_parse` | 1 | `deploy` read a rule file whose YAML is not one mapping. `diagnostics` holds the file and line |
 | `not_run` | non-zero | The command was skipped and says why in `message` |
 | `command_failed` | 1 | Any other failure |
 | `internal` | 1 | An unexpected error: a bug in opentide. See [An unexpected error](#an-unexpected-error) |
 
-Exit codes are in [Exit codes](./exit-codes.md).
+Exit codes are in [Exit codes](./exit-codes.md). `opentide explain <code>` prints the page for each failure code, as it does for findings ([Diagnostic codes](./diagnostics.md)).
 
 ## A usage error
 
@@ -159,9 +161,11 @@ opentide decides once per command who is reading. The first rule that matches wi
 Without `--json`, a command prints its warnings first (`warning: …` on stderr), then exactly one outcome line, then at most three next steps:
 
 ```text illustrative
-warning: /repo/objects/rules/imported.yaml:24: configurations.splunk: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
-✓ Validation passed
+warning: Query validation reported warnings for sentinel
+✓ Query validation passed for sentinel
 ```
+
+`validate` and `lint` print each finding as a code frame before the outcome line, and their outcome line counts them (`✗ 2 errors in 1 file · 3 objects checked · 0.9s`). See [Diagnostic codes](./diagnostics.md).
 
 | Line | Meaning |
 |------|---------|

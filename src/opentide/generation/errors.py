@@ -11,6 +11,9 @@ import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 
+from opentide.core.errors import UserFileError
+from opentide.core.logging.render import readable_event
+
 #: Keys structlog adds to every event; they say nothing about the failure.
 _LOG_BOILERPLATE = frozenset({"event", "logger", "level", "timestamp"})
 
@@ -46,7 +49,7 @@ def rendering(uuid: str) -> Generator[None, None, None]:
     """Name the object *uuid* on anything that escapes the block."""
     try:
         yield
-    except ObjectGenerationError:
+    except (ObjectGenerationError, UserFileError):
         raise
     except Exception as exc:
         raise ObjectGenerationError(uuid, exc) from exc
@@ -83,14 +86,13 @@ def _record_key(record: logging.LogRecord) -> object:
 
 
 def _describe_record(record: logging.LogRecord) -> str:
+    """The record as a log line reads: readable text, then ``key: value`` fields."""
     event = record.msg
     if not isinstance(event, dict):
         return " ".join(record.getMessage().split())
-    fields = ", ".join(
-        f"{key}={value}" for key, value in event.items() if key not in _LOG_BOILERPLATE
-    )
-    name = str(event.get("event", "error"))
-    return " ".join((f"{name} ({fields})" if fields else name).split())
+    parts = [readable_event(event.get("event", "error"))]
+    parts.extend(f"{key}: {value}" for key, value in event.items() if key not in _LOG_BOILERPLATE)
+    return " ".join(" · ".join(parts).split())
 
 
 @contextmanager
@@ -105,7 +107,8 @@ def failing_phase(phase: str) -> Generator[None, None, None]:
     root.addHandler(errors)
     try:
         yield
-    except GenerationPhaseError:
+    except (GenerationPhaseError, UserFileError):
+        # A file the user must fix is reported by the CLI where it is.
         raise
     except Exception as exc:
         detail = describe_exception(exc)
