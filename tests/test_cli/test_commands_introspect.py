@@ -222,7 +222,10 @@ def test_human_mode_prints_a_compact_tree_and_one_outcome_line() -> None:
     result = runner.invoke(app, ["commands"], env=_ENV)
     assert result.exit_code == 0, result.output
     lines = _ANSI.sub("", result.stdout).splitlines()
-    assert lines[0].startswith("lint ")
+    # The tree follows ROOT_COMMANDS, which #643 orders panel by panel.
+    first = next(spec.name for spec in ROOT_COMMANDS if not spec.hidden)
+    assert first == "validate"
+    assert lines[0].startswith(f"{first} ")
     assert any(line.startswith("  query ") for line in lines)
     assert re.fullmatch(r"\S+ \d+ commands", lines[-1])
 
