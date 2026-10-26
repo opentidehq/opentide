@@ -26,11 +26,11 @@ from opentide.core.errors import UserFileError
 from opentide.core.io import describe_yaml_error, parse_yaml
 from opentide.core.lint_config import LintConfig, Severity, load_lint_config
 from opentide.documentation.markdown.links import slugify
+from opentide.registry.catalogue import NESTED_OBJECT_FILE, nested_file_message, scan_object_dir
 
 logger = structlog.get_logger("opentide.cli.services.lint")
 
 _OBJECT_FAMILIES = ("threats", "objectives", "rules")
-_YAML_SUFFIXES = {".yaml", ".yml"}
 
 
 @dataclass
@@ -49,19 +49,38 @@ class _ObjectRecord:
     placeholder_lines: list[_Marked] = field(default_factory=list)
 
 
-def _object_files(root: Path) -> list[Path]:
+def _object_files(root: Path) -> tuple[list[Path], list[Path]]:
+    """Catalogue files, and the YAML files in subfolders that are not objects (#584)."""
     objects = root / "objects"
     if not objects.is_dir():
-        return []
+        return [], []
     files: list[Path] = []
+    nested: list[Path] = []
     for family in _OBJECT_FAMILIES:
-        folder = objects / family
-        if not folder.is_dir():
-            continue
-        for path in sorted(folder.rglob("*")):
-            if path.is_file() and path.suffix.lower() in _YAML_SUFFIXES:
-                files.append(path)
-    return files
+        scan = scan_object_dir(objects / family, include_debug=True)
+        files.extend(scan.files)
+        nested.extend(scan.nested)
+    return files, nested
+
+
+def _nested_findings(root: Path, nested: list[Path]) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for path in nested:
+        relative = path.relative_to(root).as_posix()
+        folder = path.relative_to(root).parts[:2]
+        findings.append(
+            {
+                "check": LintCheck.filenames.value,
+                "severity": "warning",
+                "path": relative,
+                "yaml_line": None,
+                "uuid": None,
+                "message": nested_file_message(relative, "/".join(folder)),
+                "_code": NESTED_OBJECT_FILE,
+                "_field_path": [],
+            }
+        )
+    return findings
 
 
 def _as_str(value: object) -> str | None:
@@ -493,7 +512,8 @@ def run_lint(
                 "_exit_code": 2,
             }
     selected = list(checks) if checks else [LintCheck(name) for name in config.enabled_checks()]
-    records = [_load_record(target, path) for path in _object_files(target)]
+    object_files, nested = _object_files(target)
+    records = [_load_record(target, path) for path in object_files]
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
         findings.extend(_metadata_findings(records, config.required_metadata))
@@ -502,6 +522,7 @@ def run_lint(
     if LintCheck.filenames in selected:
         findings.extend(_filename_findings(target, records, fix=fix))
         _rewrite_renamed_paths(findings)
+        findings.extend(_nested_findings(target, nested))
     _apply_severity(findings, config)
     logger.debug(
         "lint_complete",

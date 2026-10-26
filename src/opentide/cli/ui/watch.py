@@ -55,15 +55,13 @@ _UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}
 
 
 def object_files(roots: Iterable[Path]) -> list[Path]:
-    """The files the registry reads: ``*.yaml`` under each folder, ``*.debug.yaml`` left out."""
+    """The files the registry reads: the catalogue of each folder (#584)."""
+    from opentide.registry.catalogue import catalogue_files
+
     found: set[Path] = set()
     for root in roots:
         try:
-            found.update(
-                path
-                for path in root.rglob("*.yaml")
-                if not path.name.endswith(".debug.yaml") and path.is_file()
-            )
+            found.update(catalogue_files(root))
         except OSError:
             continue
     return sorted(found)

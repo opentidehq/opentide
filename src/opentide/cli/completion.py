@@ -176,8 +176,14 @@ def iter_object_paths(
     for kind in OBJECT_FOLDERS:
         if kind not in kinds or not folders[kind].is_dir():
             continue
+        # Only files directly in the folder are objects (#584), as
+        # ``opentide.registry.catalogue`` reads them; not imported, to keep
+        # completion free of engine modules.
         paths = sorted(
-            path for pattern in ("*.yaml", "*.yml") for path in folders[kind].rglob(pattern)
+            path
+            for pattern in ("*.yaml", "*.yml")
+            for path in folders[kind].glob(pattern)
+            if not path.name.endswith((".debug.yaml", ".debug.yml"))
         )
         # A folder named like a YAML file is not an object.
         for path in paths:

@@ -125,6 +125,7 @@ def _changed_object_paths_and_uuids(
     """
     from opentide.core.git_baseline import changed_paths, resolve_baseline
     from opentide.core.registry import Opentide
+    from opentide.registry.catalogue import is_object_file_name
 
     baseline = resolve_baseline(repo_root)
     merge_base = baseline.commit
@@ -138,14 +139,12 @@ def _changed_object_paths_and_uuids(
     for change in changed_paths(repo_root, baseline):
         relative_path = change.relative
         absolute_path = change.absolute.resolve()
-        if absolute_path.suffix.lower() != ".yaml":
+        # The catalogue's rule (#584): a file directly in an object folder. A
+        # nested file never had a page, so its deletion must not remove one.
+        if not is_object_file_name(absolute_path.name):
             continue
         kind = next(
-            (
-                candidate
-                for candidate, root in object_roots.items()
-                if root in absolute_path.parents
-            ),
+            (candidate for candidate, root in object_roots.items() if absolute_path.parent == root),
             None,
         )
         if kind is None:
@@ -278,12 +277,16 @@ def run(
     """Run documentation generation for a scope or full pipeline.
 
     Documentation previews open pull requests: the inflight shards are
-    overlaid on the registry for the run.
+    overlaid on the registry for the run. Files in subfolders of an object
+    folder are not objects (#584): they get no page, and the payload names
+    them once in ``warnings``.
     """
     from opentide.indexing.inflight import inflight_preview
+    from opentide.registry.catalogue import with_nested_object_warning
 
     with inflight_preview():
-        return _run(scope=scope, output=output, flavor=flavor, changed=changed)
+        result = _run(scope=scope, output=output, flavor=flavor, changed=changed)
+        return with_nested_object_warning(dict(result))
 
 
 def _run(

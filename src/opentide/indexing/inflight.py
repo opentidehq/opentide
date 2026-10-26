@@ -18,8 +18,9 @@ from opentide.indexing.inflight_shard import (
     shard_object,
     should_replace_object,
 )
+from opentide.registry.catalogue import catalogue_files
 from opentide.registry.discovery import discover_workspace
-from opentide.registry.paths import object_yaml_files, resolve_workspace_paths
+from opentide.registry.paths import resolve_workspace_paths
 from opentide.registry.signals import drop_objective_signals, index_objective_signals
 
 logger = get_logger(__name__)
@@ -184,7 +185,7 @@ def _iter_committed_object_yaml() -> list[tuple[str, Path]]:
         object_dir = paths.get(family)
         if object_dir is None or not object_dir.is_dir():
             continue
-        for model_path in object_yaml_files(object_dir):
+        for model_path in catalogue_files(object_dir):
             found.append((family, model_path))
     return found
 
