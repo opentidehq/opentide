@@ -86,6 +86,20 @@ def test_a_repo_that_does_not_exist_is_a_usage_error(tmp_path: Path, command: li
     assert payload["error"] == f"--repo {missing} does not exist"
 
 
+@pytest.mark.parametrize("env", [{}, {"NO_COLOR": "1"}, {"OPENTIDE_OUTPUT": "json"}])
+def test_a_bare_opentide_prints_the_help_and_exits_0(env: dict[str, str]) -> None:
+    """A person at a terminal gets the home screen and 0; a pipe or NO_COLOR got the
+    same request's help with 2, a usage error (post-merge end-to-end run)."""
+    result = runner.invoke(app, [], env=env)
+    assert result.exit_code == 0, result.output
+    assert "Usage: opentide [OPTIONS] COMMAND [ARGS]..." in result.stdout
+    assert " Examples" in result.stdout
+
+
+def test_a_group_named_alone_is_still_a_usage_error() -> None:
+    assert runner.invoke(app, ["mcp"]).exit_code == 2
+
+
 def test_a_repo_that_is_a_file_is_a_usage_error(tmp_path: Path) -> None:
     afile = tmp_path / "notes.txt"
     afile.write_text("x\n")
