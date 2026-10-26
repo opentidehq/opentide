@@ -49,6 +49,7 @@ from opentide.cli.ui.results.setup import (
     SkillsShowResult,
 )
 from opentide.cli.ui.results.share import ShareResult, ShareTargetsResult
+from opentide.cli.ui.results.workspace import DoctorResult, NewResult
 
 __all__ = [
     "NO_DOCUMENT",
@@ -104,6 +105,12 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "share status": ShareResult,
     "share retract": ShareResult,
     "share targets": ShareTargetsResult,
+    "new threat": NewResult,
+    "new objective": NewResult,
+    "new rule": NewResult,
+    "doctor": DoctorResult,
+    # Refuses outside an interactive terminal, so --json only ever prints a usage error.
+    "tui": CommandError,
     "migrate objects": MigrateObjectsResult,
     "migrate vocab-scope": MigrateVocabScopeResult,
     # Deprecated spellings of generate subcommands.
@@ -120,11 +127,7 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
 #: New keys on commands that already have a model go in that model. The keys
 #: #643 (flow: deploy plan, generate steps, progress) and #646 (validate --fix
 #: and --watch) add are declared already, so either order of merge stays green.
-PENDING_MODELS: dict[str, str] = {
-    "new": "#642",
-    "doctor": "#642",
-    "tui": "#639",
-}
+PENDING_MODELS: dict[str, str] = {}
 
 #: Commands that never print a JSON document, not even for a usage error:
 #: stdout is JSON-RPC.

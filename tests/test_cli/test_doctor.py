@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from rich.console import Console
+from tests.result_models_support import assert_matches_model
 from tests.test_cli.conftest import clear_runtime_caches, parse_cli_json
 from typer.testing import CliRunner
 
@@ -762,6 +763,8 @@ def test_doctor_real_checks_offline_never_print_secrets(
     result = CliRunner().invoke(app, ["--json", "--repo", str(workspace), "doctor", "--offline"])
     assert SECRET not in result.stdout + result.stderr
     payload = parse_cli_json(result)
+    # The document matches DoctorResult and the schema `opentide commands` publishes.
+    assert_matches_model(payload)
     codes = {check["code"] for check in payload["checks"]}
     assert {
         "python_version",

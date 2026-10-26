@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
+from tests.result_models_support import assert_matches_model
 from tests.test_cli.conftest import clear_runtime_caches, parse_cli_json
 from typer.testing import CliRunner, Result
 
@@ -137,6 +138,8 @@ def test_new_threat_json(workspace: Path) -> None:
     assert payload["file_path"] == str(path)
     assert payload["path"] == "detections/objects/threats/credential-dumping.yaml"
     assert payload["command"] == "new threat"
+    # The document matches NewResult and the schema `opentide commands` publishes.
+    assert_matches_model(payload)
     assert payload["author"] == "Jane Analyst"
     assert payload["organisation"] == ORG
     assert payload["summary"] == {"created": 1, "placeholders": len(payload["placeholders"])}

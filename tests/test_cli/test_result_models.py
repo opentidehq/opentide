@@ -185,8 +185,10 @@ def test_a_command_with_no_model_is_reported() -> None:
     ]
 
 
-def test_a_pending_command_needs_only_the_envelope() -> None:
-    assert document_problems(_envelope(command="doctor", checks=[{"code": "x"}])) == []
+def test_a_pending_command_needs_only_the_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every command has its model once the stack is merged; a future one may not yet.
+    monkeypatch.setitem(PENDING_MODELS, "upcoming", "#000")
+    assert document_problems(_envelope(command="upcoming", checks=[{"code": "x"}])) == []
 
 
 def test_an_error_document_matches_command_error() -> None:

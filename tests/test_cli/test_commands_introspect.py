@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 from opentide.cli import app
 from opentide.cli.commands import ROOT_COMMANDS
 from opentide.cli.services.introspect import example
+from opentide.cli.ui.results import CommandError, result_model
 
 runner = CliRunner()
 
@@ -116,7 +117,9 @@ def test_each_command_that_runs_names_its_output_schema(tree: dict) -> None:
         if entry["path"] == "mcp start":
             assert schema is None
             continue
-        if not entry["runs_alone"]:
+        if not entry["runs_alone"] or result_model(entry["path"]) is CommandError:
+            # A group that only prints help, or a command that only ever prints a
+            # usage error (tui refuses --json).
             assert schema == {"$ref": "#/$defs/CommandError"}, entry["path"]
             continue
         refs = [option["$ref"] for option in schema["anyOf"]]
