@@ -254,6 +254,32 @@ def test_plan_and_deploy_tallies() -> None:
     )
 
 
+def test_a_rule_that_would_fail_is_marked_and_counted_apart() -> None:
+    """A rule whose compile failed still read ``+ create or update`` and was counted
+    there (post-merge end-to-end run)."""
+    from opentide.cli.services.deploy_plan import (
+        PlannedChange,
+        mark_failures,
+        plan_message,
+        plan_summary,
+    )
+
+    changes = [PlannedChange(**change) for change in _CHANGES]  # type: ignore[arg-type]
+    failing = {(changes[0].platform, changes[0].uuid)}
+    marked = mark_failures(changes, failing)
+    assert [change.fails for change in marked] == [True, False, False]
+    assert plan_message(marked) == (
+        "Plan: 0 to create, 1 to update, 0 to disable, 1 to delete, 1 would fail"
+    )
+    assert plan_summary(marked, ["sentinel"], 1)["fail"] == 1
+    assert marked[0].to_dict()["fails"] is True
+    assert "fails" not in marked[1].to_dict()
+    console = _console(OutputMode.PLAIN)
+    console.print(plan_view([change.to_dict() for change in marked]))
+    row = next(line for line in console.export_text().splitlines() if "would fail" in line)
+    assert row.lstrip().startswith("✗ would fail")
+
+
 def test_plan_outcome_line_has_no_glyph() -> None:
     from opentide.cli.ui.render import outcome_text
 

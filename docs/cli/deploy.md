@@ -113,8 +113,10 @@ error[compile_empty_block]: `response` is empty, so Sentinel cannot read `alert_
   ╭─▶ objects/rules/sentinel-kql-rule.yaml
   ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
 
-Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+Plan: 0 to create, 0 to update, 0 to disable, 0 to delete, 1 would fail
 ```
+
+The rule's row in the plan reads `✗ would fail` instead of its action, and the tally counts it apart (`N would fail`, `summary.fail`; each such entry of `changes` has `"fails": true`), since a rule that cannot compile is created or updated nowhere.
 
 The codes are `compile_missing_field`, `compile_empty_block`, `compile_invalid_value`, `compile_invalid_rule` and `compile_failed`. A dry run sends nothing, so an unset `$VARIABLE` in a tenant's setup is a warning there (`a real deploy would need $AZURE_CLIENT_SECRET, which is unset`), not an error. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 

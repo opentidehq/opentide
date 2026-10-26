@@ -532,6 +532,7 @@ def _deploy(
             logger.warning("tenant_targets_failed", system=system, detail=str(exc))
     from opentide.cli.services.deploy_plan import (
         deployed_message,
+        mark_failures,
         plan_changes,
         plan_message,
         plan_summary,
@@ -601,6 +602,11 @@ def _deploy(
 
     outcome = deployment_outcome()
     tenant_count = sum(len(tenants) for tenants in targets.values())
+    diagnostics = compile_diagnostics(payloads) if dry_run else []
+    if diagnostics:
+        # A rule that would fail is not a "create or update" (post-merge run).
+        failing = {(str(item["platform"]), str(item["uuid"])) for item in diagnostics}
+        changes = mark_failures(changes, failing)
     if dry_run:
         message = plan_message(changes)
     elif outcome.failed:
@@ -622,7 +628,6 @@ def _deploy(
         # The tally is a plan even when a rule would fail: the diagnostics say
         # so above it, and the exit code carries the failure.
         result["_outcome_kind"] = "plan"
-        diagnostics = compile_diagnostics(payloads)
         if diagnostics:
             result["diagnostics"] = diagnostics
             result["error"] = f"{plural(len(diagnostics), 'rule')} would fail to deploy"

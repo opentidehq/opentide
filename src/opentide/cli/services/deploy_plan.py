@@ -58,9 +58,12 @@ class PlannedChange:
     name: str
     status: str
     action: Action
+    #: A dry run could not compile the rule for this platform: a real deploy
+    #: would fail it, so it is not counted under its action.
+    fails: bool = False
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        row: dict[str, object] = {
             "platform": self.platform,
             "tenant": self.tenant,
             "uuid": self.uuid,
@@ -68,6 +71,9 @@ class PlannedChange:
             "status": self.status,
             "action": self.action,
         }
+        if self.fails:
+            row["fails"] = True
+        return row
 
 
 def _rule_status(rule: Any, platform: str) -> str:
@@ -136,16 +142,35 @@ def plan_changes(
 
 
 def tally(changes: Sequence[PlannedChange]) -> dict[str, int]:
-    """Changes per action, every action present."""
-    counts = Counter(change.action for change in changes)
+    """Changes per action, every action present; a change that would fail counts under none."""
+    counts = Counter(change.action for change in changes if not change.fails)
     return {action: counts.get(action, 0) for action in ACTIONS}
+
+
+def mark_failures(
+    changes: Sequence[PlannedChange], failing: set[tuple[str, str]]
+) -> list[PlannedChange]:
+    """*changes*, with the rules a dry run could not compile (``(platform, uuid)``) marked."""
+    from dataclasses import replace
+
+    return [
+        replace(change, fails=True) if (change.platform, change.uuid) in failing else change
+        for change in changes
+    ]
 
 
 def plan_summary(
     changes: Sequence[PlannedChange], platforms: Sequence[str], tenants: int
 ) -> dict[str, int]:
-    """The JSON ``summary`` of a plan: one count per action, platforms and tenants."""
-    return {**tally(changes), "platforms": len(platforms), "tenants": tenants}
+    """The JSON ``summary`` of a plan: one count per action, platforms and tenants.
+
+    ``fail`` counts the changes a dry run could not compile, when there are any.
+    """
+    summary = {**tally(changes), "platforms": len(platforms), "tenants": tenants}
+    failing = sum(1 for change in changes if change.fails)
+    if failing:
+        summary["fail"] = failing
+    return summary
 
 
 def plan_scope(platforms: int, tenants: int) -> str:
@@ -165,6 +190,10 @@ def plan_message(changes: Sequence[PlannedChange]) -> str:
         for action in ACTIONS
         if action != "upsert" or counts[action]
     ]
+    failing = sum(1 for change in changes if change.fails)
+    if failing:
+        # Counted apart: a rule that cannot compile is created or updated nowhere.
+        parts.append(f"{failing} would fail")
     return f"Plan: {', '.join(parts)}"
 
 

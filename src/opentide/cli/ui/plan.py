@@ -89,6 +89,9 @@ def plan_view(
             rows = []
             for row in members:
                 name, label, style = _ROWS.get(str(row["action"]), _ROWS["upsert"])
+                if row.get("fails"):
+                    # Its frame prints below; the row must not promise a create.
+                    name, label, style = "failed", "would fail", "bold red"
                 rows.append(
                     (
                         Text(f"{glyph(name, encoding=encoding)} {label}", style=style),

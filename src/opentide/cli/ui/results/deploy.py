@@ -48,6 +48,9 @@ class PlannedChange(ResultModel):
     name: str
     status: str
     action: Literal["create", "update", "upsert", "disable", "delete"]
+    fails: bool | None = Field(
+        None, description="Dry run: true when the rule could not compile, so it is not counted"
+    )
 
 
 class SkippedBlock(ResultModel):
