@@ -73,6 +73,30 @@ def _construct_and_stub_ask(monkeypatch, prompt_name: str, result):
     return mock_ask
 
 
+def test_ask_select_preselects_the_choice_holding_the_default(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    real_select = interactive.questionary.select
+
+    def wrap(*args: object, **kwargs: object) -> object:
+        captured.update(kwargs)
+        built = real_select(*args, **kwargs)
+        built.ask = MagicMock(return_value="gitlab")
+        return built
+
+    monkeypatch.setattr(interactive.questionary, "select", wrap)
+    choices = [("GitHub Actions", "github"), ("GitLab CI", "gitlab")]
+
+    assert interactive.ask_select("CI/CD platform", choices, default="gitlab") == "gitlab"
+    default = captured["default"]
+    assert isinstance(default, interactive.Choice)
+    assert default.value == "gitlab"
+
+
+def test_ask_select_refuses_a_default_that_is_not_a_choice() -> None:
+    with pytest.raises(ValueError, match="not one of the choices"):
+        interactive.ask_select("CI/CD platform", [("GitHub Actions", "github")], default="azure")
+
+
 def test_questionary_prompt_helpers_construct_real_prompts(monkeypatch) -> None:
     _construct_and_stub_ask(monkeypatch, "text", "text")
     _construct_and_stub_ask(monkeypatch, "confirm", True)

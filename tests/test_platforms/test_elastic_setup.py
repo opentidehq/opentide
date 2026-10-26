@@ -43,7 +43,7 @@ def test_tenant_missing_elasticsearch_url_fails() -> None:
             }
         ],
     }
-    with pytest.raises(ValueError, match="missing required key.*elasticsearch_url"):
+    with pytest.raises(ValueError, match=r"missing required key.*elasticsearch_url"):
         build_system_config("elastic", raw)
 
 

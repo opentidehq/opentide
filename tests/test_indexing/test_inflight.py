@@ -174,6 +174,34 @@ def test_prune_inflight_shard_when_committed_version_catches_up(
     assert not shard_path.exists()
 
 
+@pytest.mark.parametrize("filename", ["example.yaml", "example.yml"])
+def test_prune_sees_a_committed_object_of_either_spelling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sample_threat_body: dict, filename: str
+) -> None:
+    """A committed ``.yml`` object never superseded its shard: prune listed only ``*.yaml``."""
+    objects_dir = tmp_path / "objects" / "threats"
+    objects_dir.mkdir(parents=True)
+    (objects_dir / filename).write_text(yaml.dump(sample_threat_body), encoding="utf-8")
+    inflight_dir = tmp_path / ".opentide" / "inflight"
+    inflight_dir.mkdir(parents=True)
+    shard_path = inflight_dir / "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.json"
+    shard_path.write_text(json.dumps(_wrap_shard(sample_threat_body)), encoding="utf-8")
+    monkeypatch.setattr(
+        "opentide.indexing.inflight.resolve_workspace_paths",
+        lambda: {
+            "threat": objects_dir,
+            "objective": tmp_path / "objects" / "objectives",
+            "rule": tmp_path / "objects" / "rules",
+            "inflight": inflight_dir,
+        },
+    )
+
+    result = prune_inflight_shards(inflight_dir=inflight_dir)
+
+    assert result["pruned"] == ["aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"]
+    assert not shard_path.exists()
+
+
 def test_legacy_raw_shard_still_overlays(sample_threat_body: dict) -> None:
     objects_index: dict = {"threat": {}, "objective": {}, "rule": {}, "signal": {}}
     uuid = sample_threat_body["metadata"]["uuid"]

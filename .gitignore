@@ -92,3 +92,6 @@ src/opentide/_version.py
 
 # workshop
 workshop/
+# Agent tooling: per-user settings and harness worktrees stay local
+.claude/settings.local.json
+.claude/worktrees/

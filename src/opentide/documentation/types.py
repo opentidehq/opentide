@@ -34,6 +34,9 @@ class DocumentRecord:
     uuid: str
     name: str
     model: Any
+    #: Page filename stem, unique within the object's folder. Empty means
+    #: ``slugify(name)``; read it through ``markdown.links.page_slug``.
+    slug: str = ""
 
 
 @dataclass(frozen=True)

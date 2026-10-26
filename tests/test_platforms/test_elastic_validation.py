@@ -92,7 +92,7 @@ def test_aggregation_fields_check_misspelt_field_fails() -> None:
                 },
             },
         )
-        with pytest.raises(ValueError, match="Field 'source.misspelt' not found in mappings"):
+        with pytest.raises(ValueError, match=r"Field 'source\.misspelt' not found in mappings"):
             run_aggregation_fields_check(client, block)
 
 
@@ -284,6 +284,33 @@ def _tenant() -> ConfigurationModels.Systems.Elastic.Tenant:
 def test_esql_from_sources_stops_before_metadata() -> None:
     query = 'FROM logs-* METADATA _id, _version | WHER process.name == "test"'
     assert esql_from_sources(query) == "logs-*"
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        (
+            "// Detects logins from rare countries\n"
+            "FROM logs-system.auth-* METADATA _id\n| WHERE x",
+            "logs-system.auth-*",
+        ),
+        (
+            "FROM logs-endpoint.events.process-*,\n"
+            "  logs-windows.sysmon_operational-* METADATA _id\n| LIMIT 1",
+            "logs-endpoint.events.process-*,logs-windows.sysmon_operational-*",
+        ),
+        ("/* from x */ FROM logs-* | LIMIT 1", "logs-*"),
+        ("/* a /* FROM b */ c */ FROM logs-* | LIMIT 1", "logs-*"),
+        ("TS metrics-* | STATS max(x)", "metrics-*"),
+        ("from logs-a, // logs-b\n  logs-c\n| LIMIT 1", "logs-a,logs-c"),
+        ('FROM "logs-*", remote:logs-*::failures | LIMIT 1', "logs-*,remote:logs-*::failures"),
+        ('FROM """logs-*""" METADATA _id', "logs-*"),
+        ("ROW x = 1 | EVAL y = 2", ""),
+        ("// FROM logs-*\nROW x = 1", ""),
+    ],
+)
+def test_esql_from_sources_reads_the_source_command(query: str, expected: str) -> None:
+    assert esql_from_sources(query) == expected
 
 
 def test_esql_preflight_metadata_query_parsing_exception_fails() -> None:
@@ -529,6 +556,9 @@ def test_validator_warns_when_risk_score_outside_severity_band(
         ("15m", "5m", "1m", True),  # maxspan > interval + lookback
         ("3m", "5m", "1m", True),  # maxspan > lookback
         ("2m", "5m", "5m", False),  # maxspan <= lookback
+        ("500ms", "5m", "1m", False),  # milliseconds, not minutes
+        ("90000ms", "5m", "1m", True),  # 90s > lookback
+        ("2 m", "5m", "5m", False),  # space between number and unit
     ],
 )
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
@@ -562,6 +592,87 @@ def test_validator_eql_maxspan_vs_schedule_window(
         mock_deployment.return_value.rule_deployment = [batch]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([rule])
+    if should_warn:
+        assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    else:
+        assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+
+
+def _run_validator(rule: object) -> None:
+    batch = MagicMock(tenant=_tenant(), rules=[rule])
+    with (
+        patch("opentide.platforms.elastic.validator.TideDeployment") as mock_deployment,
+        patch.object(ElasticClient, "preview_rule") as mock_preview,
+    ):
+        mock_deployment.return_value.rule_deployment = [batch]
+        mock_preview.return_value = _mock_response(200, json_data={"logs": []})
+        ElasticValidator().validate([rule])
+
+
+@patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
+def test_validator_eql_reads_the_header_maxspan(
+    _mock_checks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_validation_flags(monkeypatch)
+    query = (
+        "sequence by host.id with maxspan=15m\n"
+        '  [process where process.name : "a.exe"] // maxspan=1s in a comment\n'
+        "  [network where true]"
+    )
+    _run_validator(
+        _elastic_rule(
+            "EQL Two Maxspans",
+            "00000000-0000-4000-8003-000000000016",
+            rule_type="eql",
+            query=query,
+            lookback="1m",
+        )
+    )
+    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+
+
+@patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
+def test_validator_eql_maxspan_in_a_string_is_not_a_sequence(
+    _mock_checks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_validation_flags(monkeypatch)
+    _run_validator(
+        _elastic_rule(
+            "EQL Event Query",
+            "00000000-0000-4000-8003-000000000017",
+            rule_type="eql",
+            query='process where process.name : "sequence.exe" and process.args : "maxspan=1d"',
+            lookback="1m",
+        )
+    )
+    assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+
+
+@pytest.mark.parametrize(
+    ("query", "should_warn"),
+    [
+        ("FROM logs-* | INLINE STATS c = COUNT(*) BY host.name | WHERE c > 5", True),
+        ("FROM logs-* | INLINESTATS c = COUNT(*) BY host.name | WHERE c > 5", True),
+        ("// add METADATA _id later\nFROM logs-* | WHERE x", True),
+        ('FROM logs-* | WHERE message == "| STATS c = COUNT(*)"', True),
+        ("FROM logs-* | STATS c = COUNT(*) BY host.name", False),
+        ("FROM logs-* METADATA _id | INLINE STATS c = COUNT(*) BY host.name", False),
+    ],
+)
+@patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
+def test_validator_esql_metadata_id_warning_reads_past_comments_and_inline_stats(
+    _mock_checks, monkeypatch: pytest.MonkeyPatch, query: str, should_warn: bool
+) -> None:
+    _clear_validation_flags(monkeypatch)
+    _run_validator(
+        _elastic_rule(
+            "ES|QL Dedup",
+            "00000000-0000-4000-8003-000000000018",
+            rule_type="esql",
+            query=query,
+            lookback="1m",
+        )
+    )
     if should_warn:
         assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
     else:

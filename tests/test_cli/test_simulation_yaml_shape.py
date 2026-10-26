@@ -13,7 +13,7 @@ from tests.test_cli.e2e.helpers import TUTORIAL, TUTORIAL_FILES, yaml_fence_afte
 
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS_OBJECTS = ROOT / "tests" / "fixtures" / "tide_corpus" / "current" / "Objects"
-QUOTED_DATE = re.compile(r"^[ \t]*(created|modified): \"\d{4}-\d{2}-\d{2}\"", re.M)
+QUOTED_DATE = re.compile(r"^[ \t]*(created|modified): \"\d{4}-\d{2}-\d{2}\"", re.MULTILINE)
 
 
 def test_tutorial_object_fences_use_unquoted_dates() -> None:
@@ -22,8 +22,8 @@ def test_tutorial_object_fences_use_unquoted_dates() -> None:
         fence = yaml_fence_after(markdown, heading)
         quoted = QUOTED_DATE.findall(fence)
         assert not quoted, f"{relpath} quotes metadata dates: {quoted}"
-        assert re.search(r"^[ \t]*created: \d{4}-\d{2}-\d{2}$", fence, re.M)
-        assert re.search(r"^[ \t]*modified: \d{4}-\d{2}-\d{2}$", fence, re.M)
+        assert re.search(r"^[ \t]*created: \d{4}-\d{2}-\d{2}$", fence, re.MULTILINE)
+        assert re.search(r"^[ \t]*modified: \d{4}-\d{2}-\d{2}$", fence, re.MULTILINE)
 
 
 def test_tide_corpus_objects_use_unquoted_dates() -> None:

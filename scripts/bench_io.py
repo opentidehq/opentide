@@ -76,7 +76,7 @@ def main() -> int:
         os.environ["OPENTIDE_TIDE_WORKSPACE"] = str(workspace)
         os.environ["OPENTIDE_REPO_ROOT"] = str(workspace)
 
-        IndexManager._cache = None  # noqa: SLF001
+        IndexManager._cache = None
 
         started = time.perf_counter()
         IndexManager.load()

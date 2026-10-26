@@ -47,7 +47,7 @@ def _ci_env(
         "OPENTIDE_TIDE_WORKSPACE",
         "DEPLOYMENT_PLAN",
     }
-    env: dict[str, str | None] = {key: None for key in hidden}
+    env: dict[str, str | None] = dict.fromkeys(hidden)
     if marker is not None:
         env[marker] = "true"
         if change_request:
