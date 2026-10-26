@@ -9,6 +9,7 @@ from typer.core import TyperGroup
 
 from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import emit_error, emit_success, emit_usage_error
 from opentide.cli.services.document import run_document
 from opentide.cli.services.export import run_export
@@ -66,6 +67,10 @@ generate_app.add_typer(docs_app, name="docs")
 generate_app.add_typer(exports_app, name="exports")
 generate_app.add_typer(extract_app, name="extract")
 
+
+#: Help shared by every ``generate docs`` command.
+_DOCS_OUTPUT_HELP = "Write the pages here instead of the configured docs folder"
+_DOCS_FLAVOR_HELP = "Markdown flavour: github, gitlab, azure_devops or generic"
 
 _NAMED_GENERATE_PHASES = frozenset({"schemas", "templates", "vocabs", "snippets"})
 
@@ -137,6 +142,7 @@ def _emit_docs(
     objectives: bool = False,
     changed: bool = False,
 ) -> None:
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     if changed and (scope is not None or rules or threats or objectives):
@@ -163,15 +169,24 @@ def _emit_docs(
 @docs_app.callback(invoke_without_command=True)
 def generate_docs_all(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
-    rules: bool = typer.Option(False, "--rules"),
-    threats: bool = typer.Option(False, "--threats"),
-    objectives: bool = typer.Option(False, "--objectives"),
-    changed: bool = typer.Option(False, "--changed"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
+    rules: bool = typer.Option(
+        False, "--rules", help="Only rule pages; combine with --threats, --objectives"
+    ),
+    threats: bool = typer.Option(
+        False, "--threats", help="Only threat pages; combine with --rules, --objectives"
+    ),
+    objectives: bool = typer.Option(
+        False, "--objectives", help="Only objective pages; combine with --rules, --threats"
+    ),
+    changed: bool = typer.Option(
+        False, "--changed", help="Regenerate only the pages of objects git reports as changed"
+    ),
 ) -> None:
     """Generate documentation (all scopes, then index)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     _emit_docs(
         ctx,
@@ -187,8 +202,8 @@ def generate_docs_all(
 @docs_app.command("rules")
 def generate_docs_rules(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.rules)
 
@@ -196,8 +211,8 @@ def generate_docs_rules(
 @docs_app.command("objectives")
 def generate_docs_objectives(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.objectives)
 
@@ -205,8 +220,8 @@ def generate_docs_objectives(
 @docs_app.command("threats")
 def generate_docs_threats(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.threats)
 
@@ -214,8 +229,8 @@ def generate_docs_threats(
 @docs_app.command("index")
 def generate_docs_index(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.index)
 
@@ -252,7 +267,7 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
     cli = get_context(ctx)
     try:
         result = run_extract(cli, import_target=target)
-    except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
+    except Exception as exc:
         # Enumerating exception types is how #242 escaped: the importers reach
         # vendor SDKs and half-typed config, so anything they raise has to come
         # back as a result document rather than a Rich traceback. `str(exc)` is

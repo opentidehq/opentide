@@ -11,6 +11,7 @@ import re
 from opentide.core.files import resolve_configurations
 from opentide.core.logging import get_logger
 from opentide.core.progress import report_stage
+from opentide.core.runtime import is_debug
 from opentide.deployment.git_repo import local_rule_files
 
 logger = get_logger(__name__)
@@ -22,10 +23,7 @@ DEPLOYMENT_CONFIG = CONFIGURATIONS["deployment"]
 PROMOTION_ENABLED = DEPLOYMENT_CONFIG["promotion"].get("enabled")
 PROMOTION_TARGET = DEPLOYMENT_CONFIG["promotion"].get("promotion_target")
 
-if os.environ.get("DEBUG") == True or os.environ.get("TERM_PROGRAM") == "vscode":
-    DEBUG = True
-else:
-    DEBUG = False
+DEBUG = is_debug()
 
 
 # TODO Rework Promotion to consume from opentide
@@ -57,7 +55,7 @@ def get_valid_statuses() -> list[str]:
     for status in statuses_config:
         name = status.get("name")
         if not name:
-            raise Exception(f"Missing name in status definition: {str(status)}")
+            raise Exception(f"Missing name in status definition: {status!s}")
         valid_statuses.append(name)
         logger.info("found_valid_status", detail=name)
 
@@ -134,23 +132,22 @@ class PromoteMDR:
                 if "configurations" in line:
                     crossed = True
 
-                if crossed:
-                    if re.search(r"status\s*:\s*", line):
-                        for word in status_to_promote:
-                            if word in line:
-                                line = line.replace(word, PROMOTION_TARGET)
+                if crossed and re.search(r"status\s*:\s*", line):
+                    for word in status_to_promote:
+                        if word in line:
+                            line = line.replace(word, PROMOTION_TARGET)
                 buffer.append(line)
 
         with open(mdr_path, "w", encoding="utf-8") as file:
             for line in buffer:
                 file.write(line)
 
-        logger.info("mdr_promoted", target=PROMOTION_TARGET)
+        logger.info("rule_promoted", target=PROMOTION_TARGET)
 
     def promote(self, deployment: list[Path]):
         report_stage("status promotion")
         logger.info(
-            "mdr_promotion_started",
+            "rule_promotion_started",
             detail="Promotes the status of modified rule files according to configuration",
         )
 
@@ -187,11 +184,12 @@ class PromoteMDR:
 
                 if not system_promotion:
                     logger.info(
-                        "nothing_to_promote_mdr_already_in_production_status", detail=mdr_name
+                        "nothing_to_promote_rule_already_in_production_status", detail=mdr_name
                     )
                 else:
                     logger.info(
-                        "detected_statuses_needing_promotion_for_the_following_mdr", detail=mdr_name
+                        "detected_statuses_needing_promotion_for_the_following_rule",
+                        detail=mdr_name,
                     )
                     logger.info(
                         "promoting_the_following_systems_statuses",
@@ -204,6 +202,6 @@ class PromoteMDR:
 
         else:
             logger.info(
-                "mdr_promotion_disabled_in_config",
+                "rule_promotion_disabled_in_config",
                 detail="Enable status promotion under [promotion] in deployment.toml",
             )

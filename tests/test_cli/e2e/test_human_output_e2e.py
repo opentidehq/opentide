@@ -141,9 +141,9 @@ def test_info_summary_lists_each_platform_capability(tutorial: Path) -> None:
     """#292: the capability cell `[deploy, validate]` was parsed as a markup tag."""
     lines = _human(tutorial, "info").splitlines()
     assert any(
-        "Microsoft Sentinel" in line and "enabled=True [deploy, validate]" in line for line in lines
+        "Microsoft Sentinel" in line and "enabled · deploy, validate" in line for line in lines
     )
-    assert any("CrowdStrike" in line and "enabled=False [deploy]" in line for line in lines)
+    assert any("CrowdStrike" in line and "disabled · deploy" in line for line in lines)
 
 
 def test_failing_validate_keeps_the_severity_tag(tutorial: Path) -> None:
@@ -227,7 +227,8 @@ class Case:
     context: Callable[[], AbstractContextManager[None]] = nullcontext
     marks: tuple[pytest.MarkDecorator, ...] = ()
     #: Run the human form on a copy. A second ``setup platforms`` reports files
-    #: already present (#350), so the two forms must start from the same tree.
+    #: already present (#350), and a second ``setup skills`` keeps the agent
+    #: entrypoint the first wrote, so the two forms must start from the same tree.
     separate_trees: bool = False
 
 
@@ -262,7 +263,7 @@ _CASES = {
     "lint-findings-strict": Case(("lint", "--strict"), _drop_author),
     "setup-mcp-generic": Case(("setup", "mcp", "--generic", "--yes")),
     "setup-mcp-no-host": Case(("setup", "mcp", "--yes")),
-    "setup-skills": Case(("setup", "skills", "--generic", "--yes")),
+    "setup-skills": Case(("setup", "skills", "--generic", "--yes"), separate_trees=True),
     "setup-platforms": Case(("setup", "platforms", "--splunk", "--yes"), separate_trees=True),
 }
 
@@ -283,8 +284,7 @@ def _info_expectations(payload: dict[str, Any]) -> list[Expectation]:
         expected.append(
             (
                 platform_label(DetectionPlatform(plat["name"])),
-                f"enabled={plat['enabled']}",
-                f"[{', '.join(caps) or 'none'}]",
+                f"{'enabled' if plat['enabled'] else 'disabled'} · {', '.join(caps) or 'none'}",
             )
         )
     return expected
@@ -316,7 +316,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     return expected
 
 
-_PANEL_CHROME = str.maketrans({char: " " for char in "│╭╮╰╯─"})
+_PANEL_CHROME = str.maketrans(dict.fromkeys("│╭╮╰╯─", " "))
 
 
 def _panel_text(text: str) -> str:

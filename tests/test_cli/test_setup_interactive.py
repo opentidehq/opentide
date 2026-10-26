@@ -59,18 +59,42 @@ def test_require_interactive_rejects_redirected_stdin(monkeypatch) -> None:
 
 
 def _construct_and_stub_ask(monkeypatch, prompt_name: str, result):
-    """Build the real Questionary prompt, then stub ``.ask()`` (issue #177)."""
+    """Build the real Questionary prompt, then stub ``.unsafe_ask()`` (issue #177)."""
     real = getattr(interactive.questionary, prompt_name)
     mock_ask = MagicMock(return_value=result)
 
     def wrap(*args, **kwargs):
         assert kwargs.get("validate") is not None or "validate" not in kwargs
         built = real(*args, **kwargs)
-        built.ask = mock_ask
+        built.unsafe_ask = mock_ask
         return built
 
     monkeypatch.setattr(interactive.questionary, prompt_name, wrap)
     return mock_ask
+
+
+def test_ask_select_preselects_the_choice_holding_the_default(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    real_select = interactive.questionary.select
+
+    def wrap(*args: object, **kwargs: object) -> object:
+        captured.update(kwargs)
+        built = real_select(*args, **kwargs)
+        built.unsafe_ask = MagicMock(return_value="gitlab")
+        return built
+
+    monkeypatch.setattr(interactive.questionary, "select", wrap)
+    choices = [("GitHub Actions", "github"), ("GitLab CI", "gitlab")]
+
+    assert interactive.ask_select("CI/CD platform", choices, default="gitlab") == "gitlab"
+    default = captured["default"]
+    assert isinstance(default, interactive.Choice)
+    assert default.value == "gitlab"
+
+
+def test_ask_select_refuses_a_default_that_is_not_a_choice() -> None:
+    with pytest.raises(ValueError, match="not one of the choices"):
+        interactive.ask_select("CI/CD platform", [("GitHub Actions", "github")], default="azure")
 
 
 def test_questionary_prompt_helpers_construct_real_prompts(monkeypatch) -> None:
@@ -103,7 +127,7 @@ def test_ask_checkbox_required_constructs_with_callable_validator(monkeypatch) -
     def wrap(*args, **kwargs):
         captured.update(kwargs)
         built = real_checkbox(*args, **kwargs)
-        built.ask = mock_ask
+        built.unsafe_ask = mock_ask
         return built
 
     monkeypatch.setattr(interactive.questionary, "checkbox", wrap)

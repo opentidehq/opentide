@@ -333,3 +333,104 @@ def test_deploy_routes_tenants_with_the_run_strategies(splunk_rule_payload: dict
     ) as tide_deployment:
         _deployer().deploy([rule], run)
     assert tide_deployment.call_args.kwargs["strategies"] == run
+
+
+def _configured_tenant(
+    name: str, *, actions: list[str], frequency: str, allow_skew: str | None
+) -> ConfigurationModels.Systems.Splunk.Tenant:
+    Tenant = ConfigurationModels.Systems.Splunk.Tenant
+    return Tenant(
+        name=name,
+        description=name,
+        setup=Tenant.Setup(
+            ssl=True,
+            url="https://splunk.example",
+            port=8089,
+            app="search",
+            token="token",
+            enterprise_security=bool(actions),
+            actions_enabled=actions,
+            default_actions=actions,
+            frequency_scheduling=frequency,
+            allow_skew=allow_skew,
+        ),
+    )
+
+
+def _deploy_to_tenants(
+    monkeypatch: pytest.MonkeyPatch,
+    rule_payload: dict,
+    *tenants: ConfigurationModels.Systems.Splunk.Tenant,
+) -> dict[str, tuple[list[str], list[str], str, float]]:
+    """Deploy one rule to *tenants*, configured in that order; what each was deployed with."""
+    from types import SimpleNamespace
+
+    from opentide.models.deployment_enums import StatusStrategy
+    from opentide.platforms.splunk import client as splunk_client
+    from opentide.platforms.splunk import deployer as splunk_deployer
+
+    splunk_config = SimpleNamespace(tenants=list(tenants), defaults={}, modifiers=None)
+    registry = SimpleNamespace(
+        Configurations=SimpleNamespace(Systems=SimpleNamespace(Splunk=splunk_config)),
+        TideSchemas=SimpleNamespace(subschemas={"systems": {"splunk": {"properties": {}}}}),
+    )
+    monkeypatch.setattr(splunk_client, "Opentide", registry)
+    deployer = splunk_deployer.SplunkDeploy()
+
+    rule = load_rule_from_dict(rule_payload)
+    batches = [SimpleNamespace(tenant=tenant, rules=[rule]) for tenant in tenants]
+    monkeypatch.setattr(
+        splunk_deployer,
+        "TideDeployment",
+        lambda **_kwargs: SimpleNamespace(rule_deployment=batches),
+    )
+    monkeypatch.setattr(splunk_deployer, "connect_splunk", lambda **_kwargs: object())
+    seen: dict[str, tuple[list[str], list[str], str, float]] = {}
+
+    def deploy_mdr(*, data: object, service: object, tenant_config) -> None:
+        seen[tenant_config.name] = (
+            list(deployer.SPLUNK_ACTIONS),
+            list(deployer.SPLUNK_DEFAULT_ACTIONS),
+            deployer.TIMERANGE_MODE,
+            deployer.SKEWING_VALUE,
+        )
+
+    monkeypatch.setattr(deployer, "deploy_mdr", deploy_mdr)
+    deployer.deploy([rule], (StatusStrategy.RELEASE,))
+    return seen
+
+
+def test_each_tenant_deploys_with_its_own_actions_and_schedule(
+    monkeypatch: pytest.MonkeyPatch, splunk_rule_payload: dict
+) -> None:
+    """The deployer read these settings from the first tenant, for every tenant.
+
+    A production tenant listed after a staging one deployed without its
+    notable action, on the staging tenant's schedule.
+    """
+    staging = _configured_tenant("Staging", actions=[], frequency="current", allow_skew=None)
+    prod = _configured_tenant("Prod", actions=["notable"], frequency="random", allow_skew="10%")
+
+    assert _deploy_to_tenants(monkeypatch, splunk_rule_payload, staging, prod) == {
+        "Staging": ([], [], "current", 0),
+        "Prod": (["notable"], ["notable"], "random", 0.1),
+    }
+
+
+def test_the_first_tenant_warns_once_across_setup_and_deploy(
+    monkeypatch: pytest.MonkeyPatch, splunk_rule_payload: dict
+) -> None:
+    from structlog.testing import CapturingLogger
+
+    from opentide.platforms.splunk import client as splunk_client
+
+    captured = CapturingLogger()
+    monkeypatch.setattr(splunk_client, "logger", captured)
+    first = _configured_tenant("First", actions=[], frequency="bogus", allow_skew=None)
+    second = _configured_tenant("Second", actions=[], frequency="random", allow_skew=None)
+
+    seen = _deploy_to_tenants(monkeypatch, splunk_rule_payload, first, second)
+
+    assert [seen[name][2] for name in ("First", "Second")] == ["current", "random"]
+    warnings = [call.args[0] for call in captured.calls if call.method_name == "warning"]
+    assert warnings == ["frequency_scheduling_is_not_valid"]

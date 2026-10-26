@@ -60,7 +60,7 @@ def seconds_text(seconds: float) -> str:
     """``0.3s``, ``12.4s``, ``2m05s``."""
     if seconds < 60:
         return f"{seconds:.1f}s"
-    minutes, rest = divmod(int(round(seconds)), 60)
+    minutes, rest = divmod(round(seconds), 60)
     return f"{minutes}m{rest:02d}s"
 
 
@@ -153,7 +153,10 @@ def checklist_table(
     """The checklist as ``human`` mode draws it: one row per step, the running one last."""
     if running is None:
         # One terminal row per step: a narrow terminal cuts the row, it never wraps it.
-        return Cropped(columns([_row(step, encoding) for step in steps], indent=2, right=(2, 3)))
+        # Counts align on their numbers, so ``1 file`` sits under ``7 files``.
+        digits = max((len(str(step.count)) for step in steps if step.count is not None), default=0)
+        rows = [_row(step, encoding, digits) for step in steps]
+        return Cropped(columns(rows, indent=2, right=(3,)))
     grid = Table.grid(padding=(0, 2))
     grid.add_column(no_wrap=True)
     grid.add_column(style="bold", no_wrap=True)
@@ -180,15 +183,18 @@ def checklist_table(
     return Padding(grid, (0, 0, 0, 2), expand=False)
 
 
-def _row(step: Step, encoding: str) -> tuple[Text, ...]:
+def _row(step: Step, encoding: str, digits: int = 0) -> tuple[Text, ...]:
     status = step.status if step.status != "running" else "failed"
     mark = Text(glyph(_GLYPH[status], encoding=encoding), style=_STYLE[status])
     if step.status == "skipped":
         return (mark, Text(step.name, style="dim"), Text(), Text(), Text(step.detail, style="dim"))
+    count = ""
+    if step.count is not None:
+        count = " " * (digits - len(str(step.count))) + plural(step.count, step.unit)
     return (
         mark,
         Text(step.name, style="bold"),
-        Text(plural(step.count, step.unit) if step.count is not None else "", style="dim"),
+        Text(count, style="dim"),
         Text(seconds_text(step.seconds), style="dim"),
         Text(step.where or "", style="dim"),
     )
@@ -250,16 +256,25 @@ class Checklist:
             self._terminal = self._stack.enter_context(
                 TerminalProgress(self.console, total=self.total, mode=self.mode, quiet=False)
             )
-            self._live = Live(
-                get_renderable=self._renderable,
-                console=self.console,
-                refresh_per_second=8,
-                transient=True,
-                redirect_stdout=False,
-                redirect_stderr=False,
-            )
-            self._live.start()
         return self
+
+    def _start_live(self) -> None:
+        """Start the live display with the first step: a run with no step draws nothing.
+
+        A ``Live`` started and stopped empty still writes a line feed, which a
+        log or a dry-run plan shows as a stray blank line.
+        """
+        if self._live is not None or not self.live:
+            return
+        self._live = Live(
+            get_renderable=self._renderable,
+            console=self.console,
+            refresh_per_second=8,
+            transient=True,
+            redirect_stdout=False,
+            redirect_stderr=False,
+        )
+        self._live.start()
 
     def __exit__(
         self,
@@ -282,6 +297,7 @@ class Checklist:
         """Run one step. Its row prints when the block ends, failed if it raised."""
         step = Step(name=name, where=where, unit=unit)
         self.current = step
+        self._start_live()
         try:
             yield step
         except BaseException:

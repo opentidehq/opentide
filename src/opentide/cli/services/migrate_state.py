@@ -298,7 +298,9 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
             "code": "deployment_state_ignored",
             "message": "deployment_state_ignored: " + ignored_message(ignore),
             "ignore": {"pattern": ignore.pattern, "source": ignore.source, "line": ignore.line},
-            "advice": "Edit .gitignore so it ignores .opentide/states/sharing.jsonl only, then re-run",
+            "advice": (
+                "Edit .gitignore so it ignores .opentide/states/sharing.jsonl only, then re-run"
+            ),
             "migrated": [],
             "unused": [],
             "errors": [],
@@ -373,7 +375,7 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
             }
         )
 
-    ids = sum(len(item["bindings"]) for item in migrated)  # type: ignore[arg-type]
+    ids = sum(len(item["bindings"]) for item in migrated)  # ty: ignore[invalid-argument-type]
     result: dict[str, object] = {
         "migrated": migrated,
         "unused": unused,

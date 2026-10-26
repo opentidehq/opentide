@@ -23,7 +23,7 @@ A flag that is the value of the option before it stays that option's value: in `
 | `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
 | `--debug` | `OPENTIDE_DEBUG`, or `DEBUG` when it is a boolean | off | Enable debug logging, with timestamps |
 | `--quiet` | — | off | Print only the outcome line and errors |
-| `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
+| `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable colour |
 | `--json` | `OPENTIDE_OUTPUT=json` | off | Print one JSON document on stdout; see [JSON output](./json-output.md) |
 | `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |
 | `--version`, `-V` | — | — | Print `opentide <version>` and exit |

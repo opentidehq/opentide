@@ -5,20 +5,37 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import structlog
 from rich.console import Console
+from rich.segment import Segment
 
 from opentide.core.logging.render import ConsoleLogHandler, OpentideConsoleRenderer
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
+
+class EncodingSafeConsole(Console):
+    """A console that never raises ``UnicodeEncodeError`` on a narrow stream.
+
+    What it writes goes through :func:`opentide.cli.ui.glyphs.encodable`, so on
+    an ASCII stream (``PYTHONIOENCODING=ascii``) ``·`` prints as ``-`` and ``…``
+    as ``...``. Text the stream can encode is written unchanged.
+    """
+
+    def _render_buffer(self, buffer: Iterable[Segment]) -> str:
+        from opentide.cli.ui.glyphs import encodable
+
+        return encodable(super()._render_buffer(buffer), self.file)
+
+
 _config: LoggingConfig | None = None
-_console = Console(stderr=True, highlight=False)
-_stdout_console = Console(highlight=False)
+_console: Console = EncodingSafeConsole(stderr=True, highlight=False)
+_stdout_console: Console = EncodingSafeConsole(highlight=False)
 
 
 @dataclass(frozen=True)
@@ -32,6 +49,8 @@ class LoggingConfig:
     quiet: bool = False
     #: Print log lines unwrapped (every mode but ``human``).
     soft_wrap: bool = False
+    #: No colour, the rest unchanged: ``plain`` and ``agent`` mode on a terminal.
+    no_color: bool = False
 
     @classmethod
     def from_env(cls) -> LoggingConfig:
@@ -55,6 +74,7 @@ class LoggingConfig:
             plain=ctx.no_color or no_color,
             quiet=ctx.quiet,
             soft_wrap=get_mode() is not OutputMode.HUMAN,
+            no_color=colourless_mode(),
         )
 
 
@@ -108,14 +128,27 @@ def forced_terminal(variable: str = "FORCE_COLOR") -> bool | None:
     return force_color.strip().lower() not in _FORCE_COLOR_OFF
 
 
+def colourless_mode() -> bool:
+    """Whether the output mode is ``plain`` or ``agent`` and nothing forces colour.
+
+    Those modes colour only when ``FORCE_COLOR`` or ``PY_COLORS`` asks for it,
+    a terminal or not: CI logs and agent transcripts get no escapes.
+    """
+    from opentide.cli.ui.mode import OutputMode, get_mode
+
+    if get_mode() not in (OutputMode.PLAIN, OutputMode.AGENT):
+        return False
+    return not (forced_terminal() or forced_terminal("PY_COLORS"))
+
+
 def _make_console(*, stderr: bool, config: LoggingConfig) -> Console:
     """Create a stream-aware console without forcing ANSI into redirects."""
     plain = config.plain or config.json_output
     forced = forced_terminal()
-    return Console(
+    return EncodingSafeConsole(
         stderr=stderr,
         highlight=False,
-        no_color=plain,
+        no_color=plain or config.no_color,
         force_terminal=None if forced is None else forced and not plain,
     )
 

@@ -8,6 +8,7 @@ fails when a visible command has neither.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 #: The longest summary a listing shows.
@@ -104,23 +105,95 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
 
 
 def epilog(path: str) -> str | None:
-    """The ``Examples`` block for *path*, as Typer's Rich help renders it."""
+    """The ``Examples`` block for *path*, as Rich markup, one example per line.
+
+    :func:`render_help` prints it rather than Typer, which would pad it with
+    a blank line below.
+    """
     examples = EXAMPLES.get(path)
     if not examples:
         return None
     from rich.markup import escape
 
-    lines = "\n\n".join(f"  [bold]$ {escape(example)}[/bold]" for example in examples)
-    return f"[dim]Examples[/dim]\n\n{lines}"
+    lines = "\n".join(f"  [bold]$ {escape(example)}[/bold]" for example in examples)
+    return f"[dim]Examples[/dim]\n{lines}"
+
+
+def _help_console() -> Any:
+    """The console Typer draws help with, so the examples match its colours and width."""
+    try:
+        from typer.rich_utils import _get_rich_console
+
+        return _get_rich_console()
+    except ImportError:  # pragma: no cover -- a Typer without the helper
+        from rich.console import Console
+
+        return Console()
+
+
+def render_help(command: Any, ctx: Any, formatter: Any, typer_help: Callable[..., None]) -> None:
+    """Typer's help for *command*, then its examples, single-spaced.
+
+    The help ends in exactly one newline: Typer pads an epilog with a blank
+    line below it, so the examples are printed here instead, and
+    :func:`_show_help` adds no newline of its own.
+    """
+    saved = command.epilog
+    command.epilog = None
+    try:
+        typer_help(ctx, formatter)
+    finally:
+        command.epilog = saved
+    examples = getattr(command, "opentide_examples", ())
+    if not examples:
+        return
+    from rich.text import Text
+
+    console = _help_console()
+    console.print()
+    console.print(Text(" Examples", style="dim"))
+    for example in examples:
+        console.print(Text.assemble("   ", (f"$ {example}", "bold")), soft_wrap=True)
+
+
+def _show_help(ctx: Any, param: Any, value: bool) -> None:
+    """``--help``: Click's callback, without the newline it echoes after Rich's help."""
+    if not value or ctx.resilient_parsing:
+        return
+    import click
+
+    text = ctx.get_help()
+    if text:
+        click.echo(text, color=ctx.color)
+    ctx.exit()
+
+
+def help_option(option: Any) -> Any:
+    """*option* (a command's ``--help``) answered by :func:`_show_help`."""
+    if option is not None:
+        option.callback = _show_help
+    return option
 
 
 def decorate(command: Any, path: str) -> Any:
     """Give *command* and its subcommands their summary and examples, once."""
+    from types import MethodType
+
     summary = SUMMARIES.get(path)
     if summary is not None:
         command.short_help = summary
     if not getattr(command, "epilog", None):
         command.epilog = epilog(path)
+    if not hasattr(command, "opentide_examples"):
+        command.opentide_examples = EXAMPLES.get(path, ())
+        typer_help = command.format_help
+        get_help_option = command.get_help_option
+        command.format_help = MethodType(
+            lambda self, ctx, formatter: render_help(self, ctx, formatter, typer_help), command
+        )
+        command.get_help_option = MethodType(
+            lambda self, ctx: help_option(get_help_option(ctx)), command
+        )
     for name, child in (getattr(command, "commands", None) or {}).items():
         decorate(child, f"{path} {name}".strip())
     return command

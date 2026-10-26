@@ -476,7 +476,7 @@ A tenant now lists the strategies it accepts. Replace the `deployment` line the 
 
 ### A changed rule was not deployed
 
-Check three things, all named in the `mdr_skipped_for_strategy` and `skipping_tenant` log lines:
+Check three things, all named in the `rule_skipped_for_strategy` and `skipping_tenant` log lines:
 
 1. The strategy its status maps to. A `PREVIEW` run skips a rule in `PRODUCTION` (it maps to `RELEASE`); a `RELEASE` run skips one in `DEVELOPMENT` (`PREVIEW`) unless promotion rewrites it first; `INERT` rules never deploy.
 2. The tenant's `strategies`. A tenant with `strategies = ["RELEASE"]` never receives a `PREVIEW` run, and a `manual` tenant only receives rules that list it.

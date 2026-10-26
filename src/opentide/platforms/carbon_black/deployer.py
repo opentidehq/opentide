@@ -12,7 +12,7 @@ from opentide.deployment.external_ids import without_legacy_external_ids
 from opentide.generation.framework import techniques_resolver
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels
+from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.carbon_black.client import (
     CarbonBlackCloudConnection,
     CarbonBlackCloudService,
@@ -52,36 +52,41 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
             techniques = techniques_resolver(str(uuid))
             tags.append(str(data.detection_model))
             tags.extend(techniques)
-        if config_tags := config_data.get("tags"):
-            tags.extend(list(config_tags))  # type: ignore[arg-type]
+        config_tags = config_data.get("tags")
+        if isinstance(config_tags, (list, tuple)):
+            tags.extend(str(tag) for tag in config_tags)
 
-        alert_severity = data.response.alert_severity if data.response else "Low"
+        alert_severity = data.alert_severity if data.response else "Low"
         severity = self.SEVERITY_MAPPING[str(alert_severity)]
-        selected_watchlist = config_data.get("watchlist") or self.DEFAULT_WATCHLIST
+        selected_watchlist = str(config_data.get("watchlist") or "")
         selected_report = config_data.get("report") or name
 
         watchlist_list = service.select(Watchlist)
         report = None
         watchlist = None
-        if watchlist_list:
-            for item in watchlist_list:
-                if item.name == selected_watchlist:
-                    watchlist = item
-            if watchlist:
-                for item in watchlist.reports:
-                    if item.title == selected_report:
-                        report = item
-            else:
-                raise RuntimeError(
-                    f"The CBC Deployer cannot create a detection in a nonexistent Watchlist: "
-                    f"{selected_watchlist}. Create it on the console before retriggering deployment."
-                )
+        for item in watchlist_list or []:
+            if item.name == selected_watchlist:
+                watchlist = item
+        # An org with no watchlist at all used to fall through and fail later
+        # with AttributeError on None.
+        if watchlist is None:
+            raise RuntimeError(
+                "The CBC Deployer cannot create a detection in a nonexistent Watchlist: "
+                f"{selected_watchlist}. Create it on the console before retriggering "
+                "deployment."
+            )
+        for item in watchlist.reports:
+            if item.title == selected_report:
+                report = item
 
         ioc = IOC_V2.create_query(service, uuid, query)
+        # remove_iocs_by_id takes a list: given the string it removed nothing,
+        # since a set of its characters matches no IOC id.
+        own_ioc = [str(uuid)]
         if report:
             if selected_report == name:
                 if deployment:
-                    report.remove_iocs_by_id(str(uuid))
+                    report.remove_iocs_by_id(own_ioc)
                     report.append_iocs([ioc])
                     if severity != report.severity:
                         report.update(description=description, tags=tags, severity=severity)
@@ -93,7 +98,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                     report.delete()
                     logger.warning("report_deleted_with_rule", report=selected_report)
             elif deployment:
-                report.remove_iocs_by_id(uuid)
+                report.remove_iocs_by_id(own_ioc)
                 report.append_iocs([ioc])
                 tags.extend(tag for tag in report.tags if tag not in tags)
                 if severity > report.severity:
@@ -103,8 +108,11 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                     report.update(description=description, tags=tags)
                 logger.info("deployed_ioc_to_report", report=selected_report)
             elif removal:
-                if len(report.iocs_) > 1:
-                    report.remove_iocs_by_id(uuid)
+                # A shared report holds other rules' IOCs: delete it only once
+                # this rule's IOC was the last one, never for a lone IOC that
+                # belongs to another rule.
+                report.remove_iocs_by_id(own_ioc)
+                if report.iocs_:
                     report.update()
                     logger.info("deleted_ioc_from_report", report=selected_report)
                 else:
@@ -130,15 +138,17 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
         tenant_config: ConfigurationModels.Systems.CarbonBlackCloud.Tenant,
     ) -> bool | None:
         """Deploy a single typed MDR to Carbon Black Cloud."""
-        config = data.configurations.carbon_black_cloud
+        config = data.platform_configs().carbon_black_cloud
         if not config or not config.query:
-            logger.info("mdr_skipped", mdr_name=data.name, reason="no typed CBC configuration")
+            logger.info("rule_skipped", mdr_name=data.name, reason="no typed CBC configuration")
             return None
 
         config_data = {
             "status": config.status,
             "query": config.query,
-            "watchlist": config.watchlist,
+            # The tenant's own watchlist, not DEFAULT_WATCHLIST: that one is
+            # the first tenant's, and every other tenant has its own.
+            "watchlist": config.watchlist or tenant_config.setup.watchlist,
             "report": config.report,
             "tags": config.tags,
         }
@@ -151,7 +161,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
 
     def deploy(
         self,
-        mdr_deployment: Sequence[DetectionRule] | list[str],
+        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
     ) -> None:
         """Deploy CBC MDRs through TideDeployment tenant routing."""
@@ -166,7 +176,7 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
                 loaded_mdr.append(mdr)
         loaded_mdr = without_legacy_external_ids(loaded_mdr, platform="carbon_black_cloud")
         if not loaded_mdr:
-            logger.info("no_mdrs_to_deploy_for_carbon_black_cloud")
+            logger.info("no_rules_to_deploy_for_carbon_black_cloud")
             return
 
         tide_deployment = TideDeployment(
@@ -175,14 +185,17 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
             strategies=strategies,
         )
         for tenant_deployment in tide_deployment.rule_deployment:
-            logger.info("currently_targeting_tenant", tenant=tenant_deployment.tenant.name)
-            cbc_service = CarbonBlackCloudService(tenant_deployment.tenant)
+            tenant_config = batch_tenant(
+                tenant_deployment, ConfigurationModels.Systems.CarbonBlackCloud.Tenant
+            )
+            logger.info("currently_targeting_tenant", tenant=tenant_config.name)
+            cbc_service = CarbonBlackCloudService(tenant_config)
             for mdr in tenant_deployment.rules:
                 logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
                 self.deploy_mdr(
                     data=mdr,
                     service=cbc_service.service,
-                    tenant_config=tenant_deployment.tenant,
+                    tenant_config=tenant_config,
                 )
 
 

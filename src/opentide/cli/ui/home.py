@@ -99,7 +99,7 @@ def _platforms(directory: Path) -> dict[str, int]:
     for path in sorted(directory.glob("*.toml")) if directory.is_dir() else ():
         try:
             document = load_toml(path)
-        except Exception:  # noqa: BLE001 -- a broken file is validate's to report
+        except Exception:
             continue
         platform = document.get("platform")
         if not isinstance(platform, dict) or platform.get("enabled") is not True:
@@ -162,19 +162,25 @@ def next_steps(facts: HomeFacts) -> list[NextAction]:
     return steps[:3]
 
 
-def _home_path(path: Path) -> str:
+def workspace_path(path: Path, cwd: Path | None = None) -> str:
+    """*path* as the reader types it from here: ``.``, ``../..`` or ``detections``.
+
+    Relative to the current directory when the workspace contains it or sits
+    inside it; otherwise ``~/…`` or the whole absolute path, never cut.
+    """
+    import os
+
+    here = (cwd or Path.cwd()).resolve()
     try:
-        return "~/" + path.resolve().relative_to(Path.home().resolve()).as_posix()
-    except (ValueError, RuntimeError, OSError):
+        target = path.resolve()
+    except (OSError, RuntimeError):
         return path.as_posix()
-
-
-#: A longer workspace path keeps its tail, so what follows it stays visible.
-MAX_PATH = 40
-
-
-def _shorten(path: str, limit: int = MAX_PATH) -> str:
-    return path if len(path) <= limit else "…" + path[-(limit - 1) :]
+    if target == here or here.is_relative_to(target) or target.is_relative_to(here):
+        return Path(os.path.relpath(target, here)).as_posix()
+    try:
+        return "~/" + target.relative_to(Path.home().resolve()).as_posix()
+    except (ValueError, RuntimeError, OSError):
+        return target.as_posix()
 
 
 def facts_table(facts: HomeFacts, *, encoding: str = "utf-8") -> Text:
@@ -186,9 +192,9 @@ def facts_table(facts: HomeFacts, *, encoding: str = "utf-8") -> Text:
         return Text(text, style="bold dim")
 
     if facts.workspace is None:
-        rows.append((label("workspace"), Text("none here", style="yellow")))
+        rows.append((label("workspace"), Text("none here", style="dim")))
     else:
-        where = Text(_shorten(_home_path(facts.workspace)), style="underline")
+        where = Text(workspace_path(facts.workspace), style="underline")
         if facts.git:
             where.append(f"  git: {facts.git}", style="dim")
         rows.append((label("workspace"), where))
@@ -206,11 +212,11 @@ def facts_table(facts: HomeFacts, *, encoding: str = "utf-8") -> Text:
                 value = Text(name, style="bold")
                 value.append(
                     f" ({plural(tenants, 'tenant')})" if tenants else " (no tenant yet)",
-                    style="dim" if tenants else "yellow",
+                    style="dim",
                 )
                 rows.append((label("platforms" if number == 0 else ""), value))
         else:
-            rows.append((label("platforms"), Text("none enabled", style="yellow")))
+            rows.append((label("platforms"), Text("none enabled", style="dim")))
     table = columns(rows, right=(0,))
     table.no_wrap = True
     table.overflow = "ellipsis"
@@ -246,18 +252,21 @@ def home_view(console: Console, facts: HomeFacts) -> RenderableType:
         if marks
         else Text("Suggested next", style="bold")
     )
-    rows = columns(
-        [(Text(step.command, style="bold"), Text(step.reason, style="dim")) for step in steps],
-        gap=3,
-        indent=2,
-    )
-    footer = Text.assemble(
-        ("opentide --help", "bold"),
-        (" for every command", "dim"),
-        (f" {glyph('separator', encoding=encoding)} ", "dim"),
-        ("opentide --json <command>", "bold"),
-        (" for agents", "dim"),
-    )
+    # The screen is indented by 2: a line wider than what is left would wrap
+    # mid-phrase, so a narrow terminal drops the descriptions instead.
+    room = console.width - 2
+    described = [
+        (Text(step.command, style="bold"), Text(step.reason, style="dim")) for step in steps
+    ]
+    rows = columns(described, gap=3, indent=2)
+    if any(line.cell_len > room for line in rows.split("\n")):
+        rows = columns([(command,) for command, _ in described], indent=2)
+    help_hint = Text.assemble(("opentide --help", "bold"), (" for every command", "dim"))
+    json_hint = Text.assemble(("opentide --json <command>", "bold"), (" for agents", "dim"))
+    separator = Text(f" {glyph('separator', encoding=encoding)} ", style="dim")
+    footer = Text.assemble(help_hint, separator, json_hint)
+    if footer.cell_len > room:
+        footer = Text.assemble(help_hint, "\n", json_hint)
     return Padding(Group(top, Text(), heading, rows, Text(), footer), (1, 0, 0, 2), expand=False)
 
 

@@ -14,6 +14,7 @@ from typer.testing import CliRunner
 import opentide.cli.services.setup as setup_package
 from opentide.cli import app
 from opentide.cli.enums import CiPlatform, DetectionPlatform
+from opentide.cli.services.setup.skills import SkillsSetupOptions
 
 setup_app_module = importlib.import_module("opentide.cli.setup_app")
 _has_repo_flags = setup_app_module._has_repo_flags
@@ -274,11 +275,62 @@ def test_setup_skills_interactive(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         setup_app_module,
         "run_interactive_skills_setup",
-        lambda base: {"message": "skills-wizard", "files": []},
+        lambda base, given=None: {"message": "skills-wizard", "files": []},
     )
     result = runner.invoke(app, ["setup", "skills", "--path", str(tmp_path)])
     assert result.exit_code == 0, result.stdout
     assert "skills-wizard" in result.stdout
+
+
+def test_setup_skills_wizard_receives_the_flags_typed_with_it(tmp_path: Path, monkeypatch) -> None:
+    """Without a target flag the wizard opened with the path alone.
+
+    ``--install``, ``--all``, ``--name``, ``--org`` and ``--description`` were
+    dropped, and the starter skills were installed instead.
+    """
+    seen: list[object] = []
+
+    def _wizard(base: Path, given: object = None) -> dict[str, object]:
+        seen.append(given)
+        return {"message": "skills-wizard", "files": []}
+
+    monkeypatch.setattr(setup_app_module, "run_interactive_skills_setup", _wizard)
+    result = runner.invoke(
+        app,
+        [
+            "setup",
+            "skills",
+            "--path",
+            str(tmp_path),
+            "--install",
+            "kql-hunting",
+            "--all",
+            "--name",
+            "SOC",
+            "--org",
+            "SecOps",
+            "--description",
+            "Detections",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    (given,) = seen
+    assert given == SkillsSetupOptions(
+        path=tmp_path,
+        skill_slugs=["kql-hunting"],
+        install_all=True,
+        name="SOC",
+        org="SecOps",
+        description="Detections",
+    )
+
+
+def test_setup_skills_json_refusal_names_flags_that_exist(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--json", "setup", "skills", "--path", str(tmp_path)])
+    assert result.exit_code == 2
+    message = json.loads(result.stdout)["message"]
+    assert "--install" in message
+    assert "--skill," not in message
 
 
 def test_setup_skills_confirm_cancel(tmp_path: Path, monkeypatch, mock_skill_download) -> None:

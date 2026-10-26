@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Generator, Iterator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -92,7 +92,7 @@ def run_generate_phase(phase: str) -> None:
 
 
 @contextmanager
-def workspace_repo_env(target: Path) -> Iterator[Path]:
+def workspace_repo_env(target: Path) -> Generator[Path, None, None]:
     """Bind generation/index lookup to ``target`` and restore process state."""
     resolved = target.resolve()
     resolved.mkdir(parents=True, exist_ok=True)
@@ -283,20 +283,43 @@ def run_generate_docs(
 
     if changed and (scope is not None or rules or threats or objectives):
         raise ValueError("--changed cannot be combined with scoped docs generation")
-    if scope != DocumentScope.index.value:
-        if rules:
-            scope = DocumentScope.rules.value
-        elif threats:
-            scope = DocumentScope.threats.value
-        elif objectives:
-            scope = DocumentScope.objectives.value
+    flagged = [
+        value.value
+        for value, given in (
+            (DocumentScope.rules, rules),
+            (DocumentScope.threats, threats),
+            (DocumentScope.objectives, objectives),
+        )
+        if given
+    ]
+    if scope != DocumentScope.index.value and flagged:
+        scope = flagged[0]
     try:
         with (
             Checklist(total=1) as checklist,
             generation_step(checklist, "docs", outputs=(output,)) as step,
         ):
             with failing_phase("docs"):
-                result = dict(run_docs(scope=scope, output=output, flavor=flavor, changed=changed))
+                if scope == DocumentScope.index.value or len(flagged) < 2:
+                    result = dict(
+                        run_docs(scope=scope, output=output, flavor=flavor, changed=changed)
+                    )
+                else:
+                    # The first flag used to win: `--rules --threats` wrote rules only.
+                    results = [
+                        run_docs(scope=name, output=output, flavor=flavor) for name in flagged
+                    ]
+                    counts: dict[str, int] = {}
+                    for scoped in results:
+                        scoped_counts = scoped.get("counts")
+                        if isinstance(scoped_counts, dict):
+                            for name, count in scoped_counts.items():
+                                counts[str(name)] = counts.get(str(name), 0) + int(count)
+                    result = {
+                        "message": f"Documentation scopes {', '.join(flagged)} completed",
+                        "scopes": flagged,
+                        "counts": counts,
+                    }
             if result.get("status") == "failed":
                 step.status = "failed"
     except GenerationPhaseError as exc:

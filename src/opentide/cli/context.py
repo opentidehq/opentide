@@ -61,7 +61,9 @@ class CliContext:
             # Rich reads any non-empty FORCE_COLOR, "0" included, as "force a
             # terminal", which writes bold/italic escapes into redirected output.
             os.environ.pop("FORCE_COLOR", None)
-        sync_typer_rendering(no_color=bool(os.getenv("NO_COLOR")))
+        from opentide.core.logging.config import colourless_mode
+
+        sync_typer_rendering(no_color=bool(os.getenv("NO_COLOR")) or colourless_mode())
 
     def activate(self) -> None:
         """Register this context for nested Typer subcommand resolution."""

@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.cli.ui.contract import USAGE_ERROR, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE
+from opentide.cli.ui.contract import (
+    USAGE_ERROR,
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+)
 from opentide.core.logging.config import get_stdout_console
 from opentide.registry.discovery import discover_workspace
 from opentide.validation.errors import format_issues_for_console
@@ -23,6 +28,7 @@ if TYPE_CHECKING:
 
     from opentide.cli.context import CliContext
     from opentide.deployment.git_repo import RuleScope
+    from opentide.models.deployment_enums import RunStrategies
     from opentide.platforms.transport import TenantUnreachableError
 
 
@@ -96,6 +102,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "missing_uuid",
             "invalid_ref",
             "vocab_unknown",
+            "config_enum_unknown",
             "chaining_relation_unknown",
             "external_id_in_rule",
             "deployment_state_uuid_mismatch",
@@ -329,7 +336,9 @@ def _live_required_result(platform: str) -> dict[str, object]:
         "supported": True,
         "status": "failed",
         "message": "Query validation checks the tenant. Re-run with --live.",
-        "_exit_code": 1,
+        "_exit_code": 2,
+        "_failure_code": USAGE_MISSING_OPTION,
+        "_failure_argument": "--live",
     }
 
 
@@ -561,7 +570,10 @@ def validate_query_platform(
 _NO_RULES_MESSAGES: dict[str | None, str] = {
     None: "No rule for this platform has a status that maps to the run's strategies",
     "changed": "No changed rule for this platform has a status that maps to the run's strategies",
-    "selected": "None of the selected rules has a status for this platform that maps to the run's strategies",
+    "selected": (
+        "None of the selected rules has a status for this platform that maps to the run's "
+        "strategies"
+    ),
 }
 
 
@@ -572,7 +584,9 @@ def _scoped(result: dict[str, object], label: str | None) -> dict[str, object]:
     return result
 
 
-def queries_per_tenant(platform: str, rules: Sequence[Any], strategies: Any) -> dict[str, int]:
+def queries_per_tenant(
+    platform: str, rules: Sequence[str], strategies: RunStrategies
+) -> dict[str, int]:
     """How many rule queries a live check sends to each tenant.
 
     The same resolution the platform validator runs, so a tenant listed here
@@ -645,8 +659,8 @@ def _no_tenant_reached(platform: str, strategies: Sequence[Any], rules: int) -> 
 def _run_live_validator(
     ctx: CliContext,
     platform: str,
-    rules: Sequence[Any],
-    strategies: Any,
+    rules: Sequence[str],
+    strategies: RunStrategies,
     reach: dict[str, int],
 ) -> dict[str, object]:
     from opentide.core.registry import Opentide as LegacyOpentide
@@ -691,19 +705,16 @@ def _run_live_validator(
         checklist.step(f"{system_name} queries", unit="rule") as step,
     ):
         step.done(len(rules))
+        # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
+        # was retried exists on no engine, and its own TypeError hid the real one.
         try:
-            try:
-                validator.validate(mdr_deployment=rules, strategies=strategies)
-            except TypeError:
-                logger.warning("trying_mdrv3_style_method")
-                validator.validate(deployment=rules)
+            validator.validate(mdr_deployment=rules, strategies=strategies)
         except ModuleNotFoundError as exc:
             early = _missing_sdk_result(platform, exc)
         except TenantUnreachableError as exc:
             early = _unreachable_tenant_result(exc)
         except ValueError as exc:
             # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
-            # TypeError stays uncaught here so the legacy validator signature retry works.
             early = {
                 "platform": platform,
                 "mode": "live",
@@ -712,17 +723,34 @@ def _run_live_validator(
                 "message": str(exc),
                 "_exit_code": 1,
             }
+        except Exception as exc:
+            detail = str(exc).strip()
+            error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+            logger.error("query_validation_failed", system=platform, detail=error)
+            early = {
+                "platform": platform,
+                "mode": "live",
+                "status": "failed",
+                "supported": True,
+                **counts,
+                "message": f"Query validation for {platform} failed: {error}",
+                "_exit_code": 1,
+            }
         if early is not None:
             step.status = "skipped" if early.get("status") == "skipped" else "failed"
     if early is not None:
         return early
     from opentide.cli.exit_codes import validation_outcome
+    from opentide.cli.ui.progress import plural
 
     outcome = validation_outcome()
+    queries = sum(reach.values())
+    # The validators report a rejection as a run flag, not per query, so a
+    # failure counts what was checked rather than what was rejected.
     message = (
-        f"Query validation failed for {platform}"
+        f"Queries rejected on {platform} · {queries} checked on {plural(len(reach), 'tenant')}"
         if outcome.failed
-        else f"Query validation passed for {platform}"
+        else f"{plural(queries, 'query', 'queries')} valid on {plural(len(reach), 'tenant')}"
     )
     result: dict[str, object] = {
         "platform": platform,
@@ -731,6 +759,7 @@ def _run_live_validator(
         "supported": True,
         **counts,
         "message": message,
+        "_summary": {"queries": queries, "tenants": len(reach)},
         "_exit_code": outcome.exit_code,
     }
     if outcome.failed:

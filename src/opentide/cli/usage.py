@@ -32,6 +32,22 @@ _NO_SUCH_COMMAND = re.compile(r"^No such command '(?P<name>.*?)'\.")
 #: ``failure.suggestion`` and a ``help:`` line instead.
 _TYPER_SUGGESTION = re.compile(r"\.? Did you mean .*\?$")
 _CHOICE_VALUE = re.compile(r"^'(?P<value>.*?)' is not ")
+#: Typer lists the choices of a missing option one per line: ``Choose from:\n\ta,\n\tb``.
+_CHOOSE_FROM = re.compile(r"\.?\s*Choose from:\s*(?P<choices>.*)$", re.DOTALL)
+_LINE_BREAK = re.compile(r"\s*\n\s*")
+
+
+def _choose_from(choices: Sequence[str]) -> str:
+    return "choose from " + ", ".join(choices)
+
+
+def one_line(message: str) -> str:
+    """*message* on one line, Typer's choice list folded into ``: choose from a, b``."""
+    match = _CHOOSE_FROM.search(message)
+    if match:
+        choices = [part.strip() for part in match["choices"].split(",") if part.strip()]
+        message = f"{message[: match.start()]}: {_choose_from(choices)}."
+    return _LINE_BREAK.sub(" ", message).strip()
 
 #: Commands people type that are root options: the option, and the ``help:`` line.
 _ROOT_OPTION_COMMANDS: dict[str, tuple[str, str]] = {
@@ -81,7 +97,7 @@ def describe(error: _click.exceptions.UsageError) -> Failure:
     if isinstance(error, _click.exceptions.MissingParameter):
         return Failure(
             code=USAGE_MISSING_OPTION,
-            message=error.format_message(),
+            message=one_line(error.format_message()),
             argument=_param_label(error.param),
         )
     if isinstance(error, _click.exceptions.BadParameter):
@@ -90,13 +106,13 @@ def describe(error: _click.exceptions.UsageError) -> Failure:
             match = _CHOICE_VALUE.match(error.message)
             return Failure(
                 code=USAGE_INVALID_CHOICE,
-                message=error.format_message(),
+                message=one_line(error.format_message()),
                 argument=_param_label(error.param),
                 suggestion=did_you_mean(match["value"], choices) if match else None,
             )
         return Failure(
             code=USAGE_INVALID_VALUE,
-            message=error.format_message(),
+            message=one_line(error.format_message()),
             argument=_param_label(error.param),
         )
     if match := _NO_SUCH_COMMAND.match(error.message):
@@ -108,7 +124,11 @@ def describe(error: _click.exceptions.UsageError) -> Failure:
             argument=name,
             suggestion=option[0] if option else did_you_mean(name, _commands(error.ctx)),
         )
-    return Failure(code=USAGE_ERROR, message=error.format_message())
+    return Failure(
+        code=USAGE_ERROR,
+        message=one_line(error.format_message()),
+        argument=getattr(error, "option_name", None),
+    )
 
 
 def render_usage_error(

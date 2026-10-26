@@ -120,7 +120,9 @@ def test_sentinel_preview_fails_when_grouping_alert_is_missing(
     preview = preview_rule_deployment("sentinel", rule)
 
     assert preview["status"] == "failed"
-    assert preview["error"].startswith("TideRuleDataModelErrors: ")
-    assert rule.metadata.uuid in preview["error"]
-    assert "configurations.sentinel.grouping.alert is missing" in preview["error"]
+    # The reader's words: no class name, and the rule is named by its file, not again here.
+    assert preview["code"] == "compile_missing_field"
+    assert preview["error"] == "configurations.sentinel.grouping.alert is missing"
+    assert "grouping.alert.enabled" in preview["help"]
+    assert rule.metadata.uuid not in preview["error"]
     assert os.environ.get("DEPLOYMENT_ERROR_RAISED") == "1"

@@ -154,10 +154,10 @@ def test_plan_reads_create_and_update_from_the_shard_per_tenant(catalogue: Path)
         (DEFENDER, "dev", "Live Rule"): "create",
         ("sentinel", None, "Sentinel Rule"): "upsert",
     }
-    assert deploy_plan.plan_message(changes, [DEFENDER, "sentinel"], 2) == (
+    assert deploy_plan.plan_message(changes) == (
         "Plan: 1 to create, 1 to update, 1 to create or update, 1 to disable, 1 to delete"
-        " · 2 platforms, 2 tenants"
     )
+    assert deploy_plan.plan_scope(2, 2) == "2 platforms, 2 tenants"
 
 
 def test_a_state_platform_without_tenants_plans_a_create(catalogue: Path) -> None:
@@ -237,7 +237,7 @@ def test_a_path_with_a_space_is_quoted_in_the_cd_step(tmp_path: Path, monkeypatc
     assert message == "Created My Detections in ./My Detections"
     assert actions[0].command == "cd 'My Detections'"
     assert (
-        subprocess.run(  # noqa: S603 -- the command under test, on a POSIX shell
+        subprocess.run(
             ["sh", "-c", f"{actions[0].command} && pwd"], capture_output=True, text=True, check=True
         )
         .stdout.strip()
@@ -280,12 +280,22 @@ def test_git_state_counts_changes(monkeypatch, tmp_path: Path) -> None:
     assert home._git_state(tmp_path) == "main, 2 changed"
 
 
-def test_a_long_workspace_path_keeps_its_tail_and_the_git_state() -> None:
-    facts = home.HomeFacts(
-        version="1",
-        workspace=Path("/srv/" + "very-long-directory-name/" * 4 + "detections"),
-        git="main, clean",
-    )
+def test_the_workspace_path_is_relative_to_the_current_directory(tmp_path: Path) -> None:
+    """A left-truncated absolute path (``…nt-a2bb…/ws/acme``) said nothing (E2E 8)."""
+    workspace = tmp_path / "very-long-directory-name" / "detections"
+    (workspace / "objects" / "rules").mkdir(parents=True)
+    assert home.workspace_path(workspace, cwd=workspace) == "."
+    assert home.workspace_path(workspace, cwd=workspace / "objects" / "rules") == "../.."
+    assert home.workspace_path(workspace, cwd=tmp_path) == "very-long-directory-name/detections"
+    shown = home.workspace_path(Path("/srv/detections"), cwd=tmp_path)
+    assert shown == "/srv/detections"
+
+
+def test_the_facts_never_cut_the_workspace_path(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path.joinpath(*["very-long-directory-name"] * 4, "detections")
+    workspace.mkdir(parents=True)
+    monkeypatch.chdir(workspace)
+    facts = home.HomeFacts(version="1", workspace=workspace, git="main, clean")
     line = home.facts_table(facts).plain.splitlines()[0]
-    assert line.endswith("detections  git: main, clean")
-    assert "…" in line
+    assert line.endswith("workspace  .  git: main, clean")
+    assert "…" not in line

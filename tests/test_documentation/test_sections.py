@@ -264,6 +264,54 @@ def test_render_rule_queries_include_platform_metadata(metadata: dict[str, Any])
     assert "SecurityEvent | take 1" in rendered
 
 
+def test_render_rule_queries_include_elastic_after_the_other_platforms(
+    metadata: dict[str, Any],
+) -> None:
+    """Elastic configurations were missing from every rule page.
+
+    The section walked a hard-coded platform list that predates Elastic.
+    """
+    formatter = formatter_for(DocumentFlavor.github)
+    rule = DetectionRule.from_yaml_dict(
+        {
+            "name": "Rule on two platforms",
+            "metadata": {**metadata, "schema": "rule::1.0"},
+            "description": "desc",
+            "status": "STAGING",
+            "severity": "High",
+            "techniques": [],
+            "configurations": {
+                "elastic": {
+                    "enabled": True,
+                    "schema": "platform::elastic::1.0",
+                    "status": "STAGING",
+                    "type": "query",
+                    "language": "kuery",
+                    "query": 'process.name: "powershell.exe"',
+                    "index": ["logs-*"],
+                },
+                "sentinel": {
+                    "enabled": True,
+                    "name": "Rule on two platforms",
+                    "status": "STAGING",
+                    "query": "SecurityEvent | take 1",
+                    "scheduling": {"frequency": "PT1H", "lookback": "PT2H"},
+                    "alert": {"title": "Sentinel alert", "suppression": False},
+                    "grouping": {"event": "SingleAlert"},
+                },
+            },
+        }
+    )
+
+    rendered = render_rule_queries(rule, formatter)
+
+    assert "<summary>elastic</summary>" in rendered
+    assert 'process.name: "powershell.exe"' in rendered
+    assert rendered.index("<summary>sentinel</summary>") < rendered.index(
+        "<summary>elastic</summary>"
+    )
+
+
 def test_render_objective_meta_does_not_lookup_criticality_vocab(
     metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -659,7 +707,7 @@ def test_render_signal_mdr_coverage_uses_catalog_rules(metadata: dict[str, Any])
         resolve_name=lambda uuid: f"Rule {uuid[-4:]}",
     )
 
-    assert "## Signal MDR coverage" in coverage
-    assert "| Signal | Downstream MDR rules |" in coverage
+    assert "## Signal rule coverage" in coverage
+    assert "| Signal | Downstream rules |" in coverage
     assert "Rule 0031" in coverage
     assert "Rule 0032" in coverage

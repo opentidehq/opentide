@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import yaml
+
 from opentide.ci.github import render_github
 from opentide.ci.models import CiRenderOptions
 
@@ -161,3 +163,25 @@ def test_render_github_explorer_pages_jobs() -> None:
     assert "HAS_GITHUB_APP" in workflow
     assert "if: ${{ env.HAS_GITHUB_APP == 'true' }}" in workflow
     assert "secrets.GH_APP_ID && secrets.GH_APP_KEY" not in workflow.split("if:")[1:]
+
+
+def test_render_github_explorer_pages_concurrency_is_the_deploy_explorer_job_only() -> None:
+    """A workflow-level ``pages`` group cancelled queued production deploys.
+
+    GitHub keeps one pending run per concurrency group and cancels the older
+    pending one, so with ``--explorer-pages`` a burst of merges skipped the
+    middle merge's deploy. The workflow also granted ``pages: write`` and
+    ``id-token: write`` to every job, pull request jobs included.
+    """
+    options = CiRenderOptions(ci="github", explorer_pages=True, default_branch="main")
+    parsed = yaml.safe_load(render_github(options))
+
+    assert "concurrency" not in parsed
+    assert parsed["permissions"] == {"contents": "read"}
+    jobs = parsed["jobs"]
+    deploy_explorer = jobs["deploy-explorer"]
+    assert deploy_explorer["concurrency"] == {"group": "pages", "cancel-in-progress": False}
+    assert deploy_explorer["permissions"] == {"pages": "write", "id-token": "write"}
+    for job_id, job in jobs.items():
+        if job_id != "deploy-explorer":
+            assert "concurrency" not in job, job_id

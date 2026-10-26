@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -56,5 +56,5 @@ def run_document(
                 step.status = "failed"
     except GenerationPhaseError as exc:
         return phase_failure(exc)
-    data = {key: value for key, value in dict(result).items() if key != "message"}
+    data: dict[str, Any] = {key: value for key, value in dict(result).items() if key != "message"}
     return {**result, **generation_result(checklist, **data)}

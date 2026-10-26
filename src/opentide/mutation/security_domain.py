@@ -84,10 +84,9 @@ class MigrateSecurityDomainMDR:
 
     def migrate(self):
         for mdr in os.listdir(PATHS["rule"]):
-            if not mdr.endswith(".yaml"):
-                if not mdr.endswith(".yml"):
-                    logger.info("the_file_doesn_t_end_with_yaml_or_yml_skipping", detail=mdr)
-                    continue
+            if not mdr.endswith(".yaml") and not mdr.endswith(".yml"):
+                logger.info("the_file_doesn_t_end_with_yaml_or_yml_skipping", detail=mdr)
+                continue
 
             with open(MDR_PATH / mdr, encoding="utf-8") as handle:
                 data = yaml.safe_load(handle)

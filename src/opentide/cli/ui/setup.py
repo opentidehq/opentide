@@ -130,6 +130,41 @@ def render_summary(console: Console, result: Mapping[str, Any]) -> None:
     console.print()
 
 
+def plan_rows(
+    path: Path,
+    *,
+    platforms: Iterable[str],
+    ci: str | None,
+    mcp: Iterable[str] | None,
+    skills: Iterable[str] | None,
+) -> list[tuple[str, str]]:
+    """The wizard's ``Setup plan``: one ``(label, choice)`` row per step, in the prompts' words.
+
+    *ci*, *mcp* and *skills* are labels; ``None`` means the step was not chosen.
+    """
+    shown = display_path(path).rstrip("/") or "."
+    if shown == ".":
+        shown = f"this folder ({path.resolve().name})"
+    return [
+        ("Repository", shown),
+        ("Platforms", ", ".join(platforms) or "none"),
+        ("CI/CD", ci or "configure later"),
+        ("MCP", ", ".join(mcp) if mcp is not None else "none"),
+        ("Agent skills", ", ".join(skills) if skills is not None else "none"),
+    ]
+
+
+def render_plan(console: Console, rows: Iterable[tuple[str, str]]) -> None:
+    """``Setup plan`` and its rows, with a blank line around them, before the confirmation."""
+    console.print()
+    console.print(Text("Setup plan", style="bold"))
+    table = columns(
+        [(Text(label, style="bold"), Text(choice)) for label, choice in rows], gap=3, indent=2
+    )
+    console.print(table, soft_wrap=True)
+    console.print()
+
+
 def _where(shown: str) -> str:
     """``./tutorial-detections`` for a relative path; an absolute one as it is."""
     bare = shown.rstrip("/") or shown
@@ -175,7 +210,9 @@ def setup_outcome(
             or str(repo_step.get("name") or "")
             or (target.name if target is not None else "the repository")
         )
-        message = f"Created {title} in {_where(shown)}"
+        here = target is None or target.resolve() == Path.cwd().resolve()
+        # "in ." reads as a typo: the current folder is "here".
+        message = f"Created {title} here" if here else f"Created {title} in {_where(shown)}"
         actions: list[NextAction] = []
         if target is not None and target.resolve() != Path.cwd().resolve():
             actions.append(NextAction(f"cd {shell_quote(shown.rstrip('/'))}"))

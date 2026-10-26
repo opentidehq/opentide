@@ -206,18 +206,50 @@ def _filename_findings(
             expected=dest.relative_to(root).as_posix(),
         )
         if fix:
-            if dest.exists():
+            if dest.exists() and not _case_only_rename(record.path, dest):
                 finding["fixed"] = False
                 finding["message"] = (
                     f"{finding['message']}; --fix skipped because {finding['expected']} exists"
                 )
             else:
-                record.path.rename(dest)
+                _rename(record.path, dest)
                 finding["fixed"] = True
                 finding["from"] = record.relative
                 finding["path"] = dest.relative_to(root).as_posix()
         findings.append(finding)
     return findings
+
+
+_CASE_RENAME_SUFFIX = ".opentide-case-rename"
+
+
+def _case_only_rename(src: Path, dest: Path) -> bool:
+    """Whether *dest* exists only because it is *src* under another case.
+
+    On a case-insensitive filesystem (macOS, Windows) ``Phishing.yaml`` and
+    ``phishing.yaml`` are one file, so the slug's name always "existed" and
+    ``--fix`` skipped the rename it was asked for.
+    """
+    return (
+        src.name != dest.name
+        and src.name.casefold() == dest.name.casefold()
+        and dest.exists()
+        and dest.samefile(src)
+        and not (src.parent / f"{src.name}{_CASE_RENAME_SUFFIX}").exists()
+    )
+
+
+def _rename(src: Path, dest: Path) -> None:
+    """Rename *src* to *dest*, through a temporary name when only the case changes.
+
+    A case-only rename is a no-op on some case-insensitive filesystems.
+    """
+    if not _case_only_rename(src, dest):
+        src.rename(dest)
+        return
+    staged = src.with_name(f"{src.name}{_CASE_RENAME_SUFFIX}")
+    src.rename(staged)
+    staged.rename(dest)
 
 
 def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
@@ -303,7 +335,10 @@ def run_lint(
     }
     if renamable:
         result["_next_actions"] = [
-            NextAction("opentide lint --fix", f"rename {renamable} file(s) to match their names")
+            NextAction(
+                "opentide lint --fix",
+                f"rename {renamable} {'file' if renamable == 1 else 'files'} to match their names",
+            )
         ]
     return result
 

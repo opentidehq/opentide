@@ -7,6 +7,7 @@ import typer
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
 from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, ValidateCheck, platform_help
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_result, emit_success, emit_usage_error
 from opentide.cli.services.validation import run_validate, validate_query_platform
 
@@ -21,16 +22,21 @@ QUERY_STRATEGY_HELP = (
 @validate_app.callback(invoke_without_command=True)
 def validate_group(
     ctx: typer.Context,
-    check: ValidateCheck | None = typer.Option(None, "--check"),
+    check: ValidateCheck | None = typer.Option(None, "--check", help="Run one check only"),
     file: list[str] | None = typer.Option(
         None, "--file", help="Validate only this file (repeatable)"
     ),
-    uuid: list[str] | None = typer.Option(None, "--uuid"),
-    object_type: list[str] | None = typer.Option(None, "--type"),
-    strict: bool = typer.Option(False, "--strict"),
+    uuid: list[str] | None = typer.Option(
+        None, "--uuid", help="Validate only the object with this UUID (repeatable)"
+    ),
+    object_type: list[str] | None = typer.Option(
+        None, "--type", help="Validate only this type: rule, threat or objective (repeatable)"
+    ),
+    strict: bool = typer.Option(False, "--strict", help="Fail on warnings too"),
 ) -> None:
     """Validate detection objects (schema, UUID, uniqueness)."""
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     valid_object_types = ("rule", "threat", "objective")
@@ -87,7 +93,8 @@ def validate_query_cmd(
         None, "--uuid", help="Check only the rule with this UUID (repeatable)"
     ),
 ) -> None:
-    """Query validation checks the tenant. Pass --live."""
+    """Check rule queries on the platform's tenants (needs --live)."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
     result = validate_query_platform(

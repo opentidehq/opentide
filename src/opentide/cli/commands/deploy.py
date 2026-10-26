@@ -7,6 +7,7 @@ import typer
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
 from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
+from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_error, emit_result
 from opentide.cli.services.deploy import run_deploy
 
@@ -44,7 +45,9 @@ def deploy_cmd(
         "--wide",
         help="Deploy the rule files read whatever their status strategy, INERT included",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the plan and compile each rule; send nothing"
+    ),
     keep_deprecated: bool | None = typer.Option(
         None,
         "--keep-deprecated/--drop-deprecated",
@@ -53,7 +56,9 @@ def deploy_cmd(
             "disables or deletes them. Default: on, off with --all"
         ),
     ),
-    skip_promotion: bool = typer.Option(False, "--skip-promotion"),
+    skip_promotion: bool = typer.Option(
+        False, "--skip-promotion", help="Skip the status promotion of a RELEASE run on a push"
+    ),
     skip_unconfigured: bool = typer.Option(
         False,
         "--skip-unconfigured",
@@ -77,6 +82,7 @@ def deploy_cmd(
     --strategy PREVIEW; the default-branch job runs --strategy RELEASE.
     """
     if ctx.invoked_subcommand is not None:
+        hand_down(ctx)
         return
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
@@ -92,11 +98,14 @@ def deploy_cmd(
         skip_unconfigured=skip_unconfigured,
         persist_state_externally=persist_state_externally,
     )
-    if dry_run and not cli.json_output and not cli.quiet:
-        from opentide.cli.ui.plan import render_plan
-        from opentide.core.logging.config import get_stdout_console
+    if dry_run and not cli.json_output:
+        from opentide.cli.ui.plan import render_plan, render_plan_diagnostics
+        from opentide.core.logging.config import get_console, get_stdout_console
 
-        render_plan(get_stdout_console(), result)
+        if not cli.quiet:
+            render_plan(get_stdout_console(), result)
+        # Errors print under --quiet too; the tally follows them.
+        render_plan_diagnostics(get_console(), result)
     emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
 
 
@@ -112,6 +121,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
     from opentide.core.index_manager import IndexManager
     from opentide.registry.discovery import discover_workspace
 
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     cli.apply_environment()
     workspace = discover_workspace()
@@ -124,6 +134,7 @@ def deploy_migrate_state_cmd(ctx: typer.Context) -> None:
 
 @deploy_app.command("replay-state", hidden=True)
 def deploy_replay_state_cmd(
+    ctx: typer.Context,
     state_commit: str = typer.Argument(..., help="Commit whose deployment-state changes to replay"),
 ) -> None:
     """Replay one commit's deployment-state changes onto the checkout (CI write-back).
@@ -134,6 +145,7 @@ def deploy_replay_state_cmd(
     """
     from opentide.ci.state_replay import main as replay_main
 
+    refuse_dropped(ctx)
     raise typer.Exit(replay_main([state_commit]))
 
 
@@ -145,6 +157,7 @@ def deploy_metadata_cmd(
     ),
 ) -> None:
     """Reserved for a future metadata deployment implementation."""
+    refuse_dropped(ctx)
     cli = get_context(ctx)
     emit_error(
         cli,

@@ -125,6 +125,33 @@ def test_quiet_prints_only_the_outcome(tmp_path: Path) -> None:
         (("validate", "--type", "rul"), "usage_invalid_choice", "--type", "rule", "validate"),
         (("generate", "schemaz"), "usage_invalid_choice", "phase", "schemas", "generate"),
         (("info", "coverage"), "usage_missing_option", "--technique", None, "info"),
+        # Case-only typos still get a suggestion.
+        (("VALIDATE",), "usage_unknown_command", "VALIDATE", "validate", ""),
+        (("info", "RULES"), "usage_invalid_choice", "section", "rules", "info"),
+        (("validate", "--type", "RULE"), "usage_invalid_choice", "--type", "rule", "validate"),
+        (
+            ("deploy", "--strategy", "PREVEW"),
+            "usage_invalid_choice",
+            "--strategy",
+            "PREVIEW",
+            "deploy",
+        ),
+        (("deploy", "--dry-run", "--all"), "usage_missing_option", "--strategy", None, "deploy"),
+        (
+            ("validate", "query", "--platform", "sentinel"),
+            "usage_missing_option",
+            "--live",
+            None,
+            "validate query",
+        ),
+        (
+            ("rules", "unreviewed", "--older-than", "9x"),
+            "usage_invalid_value",
+            "--older-than",
+            None,
+            "rules unreviewed",
+        ),
+        (("mcp",), "usage_error", None, None, "mcp"),
     ],
 )
 def test_usage_errors_print_one_json_document(
@@ -164,6 +191,37 @@ def test_a_json_document_ends_with_exactly_one_newline(
     assert result.stdout.endswith("}\n")
     assert not result.stdout.endswith("\n\n")
     _document(result)
+
+
+def test_missing_choice_option_is_one_line(tmp_path: Path) -> None:
+    """Typer lists the choices one per line under ``Choose from:``; the contract folds them."""
+    result = _invoke("--repo", str(tmp_path), "--json", "validate", "query")
+    message = _document(result)["message"]
+    assert message.startswith("Missing option '--platform': choose from sentinel, splunk, ")
+    assert "\n" not in message and "Choose from:" not in message
+    human = _invoke("--repo", str(tmp_path), "validate", "query")
+    assert human.stderr.splitlines()[0] == f"error: {message}"
+
+
+def test_a_group_alone_is_a_usage_error_for_a_program(tmp_path: Path) -> None:
+    """``no_args_is_help`` would print the help screen on stdout, which no parser reads."""
+    result = _invoke("--repo", str(tmp_path), "--json", "mcp")
+    assert result.exit_code == 2
+    assert _document(result)["message"] == "Missing command: choose from start."
+    agent = _invoke("--repo", str(tmp_path), "mcp", env={"CLAUDECODE": "1"})
+    assert agent.exit_code == 2
+    assert agent.stdout == ""
+    assert agent.stderr.splitlines()[:2] == [
+        "error: Missing command: choose from start.",
+        "  usage: opentide mcp [OPTIONS] COMMAND [ARGS]...",
+    ]
+
+
+def test_a_group_alone_still_prints_help_for_a_person(tmp_path: Path) -> None:
+    result = _invoke("--repo", str(tmp_path), "mcp")
+    assert result.exit_code == 2
+    assert "Usage: opentide mcp" in result.output
+    assert "error:" not in result.output
 
 
 def test_usage_error_in_plain_mode_is_an_error_line(tmp_path: Path) -> None:
@@ -206,6 +264,7 @@ def test_agent_mode_never_prompts(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     plain = _invoke("setup", "repo", str(tmp_path), env={"AI_AGENT": "test-agent"})
     assert plain.exit_code == 2, plain.output
     assert "does not prompt in a coding agent (test-agent)" in plain.stderr
+    assert "(--name, --platform)" in " ".join(plain.stderr.split())
     assert "--yes" in plain.stderr
     assert not (tmp_path / "objects").exists()
 

@@ -83,7 +83,7 @@ def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action
         from opentide.deployment.utils import check_status
 
         strategy = check_status(status)
-    except Exception:  # noqa: BLE001 -- an unknown status fails the deploy, not the plan
+    except Exception:
         strategy = None
     if strategy is StatusStrategy.DELETION:
         return "delete"
@@ -95,7 +95,7 @@ def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action
         return "create"
     try:
         known = DeploymentState.load(uuid).get(platform, tenant)
-    except Exception:  # noqa: BLE001 -- the deployer reports a bad shard
+    except Exception:
         known = None
     return "update" if known else "create"
 
@@ -118,7 +118,7 @@ def plan_changes(
         for tenant, uuid in pairs:
             try:
                 rule = Opentide.Rules[uuid]
-            except Exception:  # noqa: BLE001 -- planning already refused a missing rule
+            except Exception:
                 rule = None
             name = str(getattr(rule, "name", "") or uuid)
             status = _rule_status(rule, platform)
@@ -148,16 +148,24 @@ def plan_summary(
     return {**tally(changes), "platforms": len(platforms), "tenants": tenants}
 
 
-def plan_message(changes: Sequence[PlannedChange], platforms: Sequence[str], tenants: int) -> str:
-    """``Plan: 1 to create, 0 to update, 0 to disable, 0 to delete · 1 platform, 0 tenants``."""
+def plan_scope(platforms: int, tenants: int) -> str:
+    """``1 platform, 0 tenants``: what a plan covers, printed on its header."""
+    return f"{plural(platforms, 'platform')}, {plural(tenants, 'tenant')}"
+
+
+def plan_message(changes: Sequence[PlannedChange]) -> str:
+    """``Plan: 1 to create, 0 to update, 0 to disable, 0 to delete``.
+
+    The platforms and tenants it covers are on the plan's header and in
+    ``summary``, so the tally fits a 100-column line.
+    """
     counts = tally(changes)
     parts = [
         f"{counts[action]} {_PLANNED[action]}"
         for action in ACTIONS
         if action != "upsert" or counts[action]
     ]
-    scope = f"{plural(len(platforms), 'platform')}, {plural(tenants, 'tenant')}"
-    return f"Plan: {', '.join(parts)} · {scope}"
+    return f"Plan: {', '.join(parts)}"
 
 
 def deployed_message(changes: Sequence[PlannedChange], seconds: float) -> str:

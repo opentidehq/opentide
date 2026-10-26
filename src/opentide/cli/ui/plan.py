@@ -2,14 +2,15 @@
 
 ::
 
-    Deploy plan · strategy PREVIEW · dry run, nothing is sent
+    Deploy plan · strategy PREVIEW · 1 platform, 0 tenants · dry run, nothing is sent
 
     sentinel · 0 tenants
       + create or update  Sentinel KQL Rule  …000000000001  status STAGING
 
-The tally that follows is the command's outcome line (``Plan: 1 to create, …``),
-printed from its result. ``json`` and ``mcp`` never reach this module: the
-result's ``changes`` carries the same rows.
+A rule that would fail to deploy prints next, as ``error[code]: message`` and
+its file. The tally that follows is the command's outcome line (``Plan: 1 to
+create, …``), printed from its result. ``json`` and ``mcp`` never reach this
+module: the result's ``changes`` and ``diagnostics`` carry the same rows.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from typing import Any
 from rich.console import Console, Group, RenderableType
 from rich.text import Text
 
-from opentide.cli.ui.glyphs import glyph
+from opentide.cli.ui.glyphs import can_encode, glyph
 from opentide.cli.ui.layout import columns
 from opentide.cli.ui.progress import plural
 
@@ -34,8 +35,11 @@ _ROWS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def _short_uuid(uuid: str) -> str:
-    return f"…{uuid[-12:]}" if len(uuid) > 12 else uuid
+def _short_uuid(uuid: str, encoding: str = "utf-8") -> str:
+    """The UUID's tail, after ``…`` (``...`` on a stream that cannot encode it)."""
+    if len(uuid) <= 12:
+        return uuid
+    return ("…" if can_encode("…", encoding=encoding) else "...") + uuid[-12:]
 
 
 def plan_view(
@@ -43,14 +47,21 @@ def plan_view(
     *,
     strategies: Sequence[str] = (),
     tenants: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
+    scope: str | None = None,
     encoding: str = "utf-8",
 ) -> RenderableType:
-    """The plan grouped by platform, then tenant. *changes* are ``PlannedChange.to_dict()`` rows."""
+    """The plan grouped by platform, then tenant. *changes* are ``PlannedChange.to_dict()`` rows.
+
+    *scope* (``1 platform, 1 tenant``) goes on the header, which keeps the
+    tally that follows the plan within 100 columns.
+    """
     separator = f" {glyph('separator', encoding=encoding)} "
     header = Text("Deploy plan", style="bold")
     if strategies:
         header.append(separator + "strategy ", style="dim")
         header.append(" ".join(strategies), style="bold")
+    if scope:
+        header.append(separator + scope, style="dim")
     header.append(separator + "dry run, nothing is sent", style="dim")
     parts: list[RenderableType] = [header]
     platforms: dict[str, list[Mapping[str, Any]]] = {}
@@ -79,7 +90,7 @@ def plan_view(
                     (
                         Text(f"{glyph(name, encoding=encoding)} {label}", style=style),
                         Text(str(row.get("name") or row["uuid"]), style="bold"),
-                        Text(_short_uuid(str(row["uuid"])), style="dim"),
+                        Text(_short_uuid(str(row["uuid"]), encoding), style="dim"),
                         Text(f"status {row['status']}" if row.get("status") else "", style="dim"),
                     )
                 )
@@ -93,12 +104,57 @@ def render_plan(console: Console, payload: Mapping[str, Any]) -> None:
     changes = payload.get("changes")
     if not isinstance(changes, list) or not changes:
         return
+    summary = payload.get("_summary")
+    scope = None
+    if isinstance(summary, Mapping) and "platforms" in summary and "tenants" in summary:
+        from opentide.cli.services.deploy_plan import plan_scope
+
+        scope = plan_scope(int(summary["platforms"]), int(summary["tenants"]))
     console.print(
         plan_view(
             changes,
             strategies=[str(item) for item in payload.get("strategies") or ()],
             tenants=payload.get("tenants") if isinstance(payload.get("tenants"), dict) else None,
+            scope=scope,
             encoding=console.encoding or "utf-8",
         ),
         soft_wrap=True,
     )
+
+
+def diagnostic_text(diagnostic: Mapping[str, Any], *, encoding: str = "utf-8") -> Text:
+    """``error[compile_missing_field]: message`` then ``  --> path``, one rule's failure.
+
+    The path names the rule, so neither its name nor its UUID repeats.
+    """
+    line = Text()
+    line.append(f"error[{diagnostic.get('code') or 'compile_failed'}]:", style="bold red")
+    line.append(" ")
+    line.append(str(diagnostic.get("message") or ""))
+    source, where = diagnostic.get("file_path"), diagnostic.get("path")
+    if source or where:
+        from opentide.cli.ui.paths import display_path
+        from opentide.core.root import get_repo_root
+
+        line.append("\n  --> ", style="bold blue")
+        # Relative to the current directory when inside it, else to the workspace.
+        line.append(display_path(str(source), workspace=get_repo_root()) if source else str(where))
+    else:
+        line.append(f" {glyph('separator', encoding=encoding)} ", style="dim")
+        line.append(str(diagnostic.get("name") or diagnostic.get("uuid") or ""))
+    if diagnostic.get("help"):
+        line.append("\n  help:", style="bold cyan")
+        line.append(f" {diagnostic['help']}")
+    return line
+
+
+def render_plan_diagnostics(console: Console, payload: Mapping[str, Any]) -> None:
+    """Print each rule a dry run could not compile; the plan's tally follows them."""
+    diagnostics = payload.get("diagnostics")
+    if not isinstance(diagnostics, list):
+        return
+    for diagnostic in diagnostics:
+        if isinstance(diagnostic, Mapping):
+            console.print(
+                diagnostic_text(diagnostic, encoding=console.encoding or "utf-8"), soft_wrap=True
+            )

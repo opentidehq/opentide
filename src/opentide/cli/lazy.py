@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import importlib
 import sys
-from collections.abc import Iterator, MutableMapping, Sequence
+from collections.abc import Generator, Iterator, MutableMapping, Sequence
 from contextlib import contextmanager
 from typing import Any, NoReturn
 
 import typer
 from typer import _click
-from typer.core import TyperCommand, TyperGroup
+from typer.core import TyperCommand, TyperGroup, TyperOption
 
 from opentide.cli.commands import ROOT_COMMANDS, CommandSpec
 
@@ -80,7 +80,7 @@ class LazyTyperGroup(TyperGroup):
         self._listing = 0
 
     @contextmanager
-    def _list_from_index(self) -> Iterator[None]:
+    def _list_from_index(self) -> Generator[None]:
         self._listing += 1
         try:
             yield
@@ -96,6 +96,7 @@ class LazyTyperGroup(TyperGroup):
         prog_name: str | None = None,
         complete_var: str | None = None,
         standalone_mode: bool = True,
+        windows_expand_args: bool = True,
         **extra: Any,
     ) -> Any:
         from opentide.cli.ui.mode import resolve_mode, set_mode, start_clock
@@ -105,12 +106,6 @@ class LazyTyperGroup(TyperGroup):
         # A first guess, for usage errors Click raises before the root callback
         # resolves the mode properly from the parsed flags.
         options = argv[: argv.index("--")] if "--" in argv else argv
-        if "--no-color" in options:
-            # A usage error is printed before the root callback configures the
-            # consoles; it has to honour --no-color too, FORCE_COLOR or not.
-            from opentide.core.logging import LoggingConfig, init_logging
-
-            init_logging(LoggingConfig(plain=True), force=True)
         start_clock()
         set_mode(
             resolve_mode(
@@ -119,11 +114,27 @@ class LazyTyperGroup(TyperGroup):
                 command=_leading_words(self, argv),
             )
         )
+        from opentide.core.logging.config import colourless_mode
+
+        colourless = colourless_mode()
+        if "--no-color" in options or colourless:
+            # A usage error is printed before the root callback configures the
+            # consoles; it has to honour --no-color, FORCE_COLOR or not, and
+            # the colourless plain and agent modes.
+            from opentide.cli.context import sync_typer_rendering
+            from opentide.core.logging import LoggingConfig, init_logging
+
+            init_logging(
+                LoggingConfig(plain="--no-color" in options, no_color=colourless), force=True
+            )
+            if colourless:
+                sync_typer_rendering(no_color=True)
         return super().main(
             args=args,
             prog_name=prog_name,
             complete_var=complete_var,
             standalone_mode=standalone_mode,
+            windows_expand_args=windows_expand_args,
             **extra,
         )
 
@@ -166,6 +177,34 @@ class LazyTyperGroup(TyperGroup):
         except _click.exceptions.UsageError as error:
             _usage_error(error)
 
+    def resolve_command(
+        self, ctx: _click.Context, args: list[str]
+    ) -> tuple[str | None, _click.Command | None, list[str]]:
+        """Resolve as Click does; a group named alone is a usage error for a program.
+
+        A person who types ``opentide mcp`` gets its help (``no_args_is_help``).
+        In ``json`` and ``agent`` mode it is ``Missing command`` instead, raised
+        before Typer builds the ``NoArgsIsHelpError``, which prints the help as
+        it is created. Only the bare root still prints help in every mode.
+        """
+        from opentide.cli.ui.mode import OutputMode, get_mode
+
+        name, command, rest = super().resolve_command(ctx, args)
+        if (
+            not rest
+            and not ctx.resilient_parsing
+            and isinstance(command, TyperGroup)
+            and command.no_args_is_help
+            and get_mode() in (OutputMode.JSON, OutputMode.AGENT)
+        ):
+            sub = _click.Context(command, info_name=name, parent=ctx)
+            choices = ", ".join(command.list_commands(sub))
+            raise _click.exceptions.UsageError(
+                f"Missing command: choose from {choices}." if choices else "Missing command.",
+                ctx=sub,
+            )
+        return name, command, rest
+
     def get_command(self, ctx: _click.Context, cmd_name: str) -> _click.Command | None:
         if self._listing and cmd_name in self.specs and cmd_name not in self.commands.added:
             return _describe(self.specs[cmd_name])
@@ -200,8 +239,16 @@ class LazyTyperGroup(TyperGroup):
         return command
 
     def format_help(self, ctx: _click.Context, formatter: _click.HelpFormatter) -> None:
+        from opentide.cli.help import EXAMPLES, render_help
+
+        self.opentide_examples = EXAMPLES.get("", ())
         with self._list_from_index():
-            super().format_help(ctx, formatter)
+            render_help(self, ctx, formatter, super().format_help)
+
+    def get_help_option(self, ctx: _click.Context) -> TyperOption | None:
+        from opentide.cli.help import help_option
+
+        return help_option(super().get_help_option(ctx))
 
     def shell_complete(self, ctx: _click.Context, incomplete: str) -> list[Any]:
         with self._list_from_index():
@@ -242,7 +289,7 @@ def _show_home() -> bool:
 
     try:
         facts = gather(__version__)
-    except Exception:  # noqa: BLE001 -- the help is always a correct answer
+    except Exception:
         return False
     render_home(get_stdout_console(), facts)
     return True
