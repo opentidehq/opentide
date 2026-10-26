@@ -52,3 +52,33 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
     assert "query: |" in platform_text
     assert "schema: platform::sentinel::1.0" in platform_text
     clear_runtime_caches()
+
+
+def test_template_renderer_follows_workspace_lint_required_metadata(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """``lint.toml`` ``[metadata].required`` decides which metadata keys render live."""
+    from tests.corpus_support import clear_runtime_caches
+
+    from opentide.core.registry import Opentide
+    from opentide.generation.template_renderer import run as template_renderer_run
+
+    target = tmp_path / "detections"
+    run_repo_setup(RepoSetupOptions(path=target, name="Lint Repo", yes=True))
+    (target / ".opentide" / "configurations" / "lint.toml").write_text(
+        '[metadata]\nrequired = ["author"]\n', encoding="utf-8"
+    )
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(target))
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(target))
+    monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
+    clear_runtime_caches()
+    try:
+        Opentide.initialise()
+        template_renderer_run()
+        threat = (target / ".opentide" / "templates" / "threat.1.0.template.yaml").read_text(
+            encoding="utf-8"
+        )
+    finally:
+        clear_runtime_caches()
+    assert "\n  author: \n" in threat
+    assert "\n  #organisation:\n" in threat

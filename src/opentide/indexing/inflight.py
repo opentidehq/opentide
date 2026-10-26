@@ -21,6 +21,7 @@ from opentide.indexing.inflight_shard import (
 from opentide.registry.catalogue import catalogue_files
 from opentide.registry.discovery import discover_workspace
 from opentide.registry.paths import resolve_workspace_paths
+from opentide.registry.signals import drop_objective_signals, index_objective_signals
 
 logger = get_logger(__name__)
 
@@ -259,21 +260,7 @@ def load_inflight_shards(inflight_dir: Path | None = None) -> dict[str, dict[str
 def _ingest_signals(
     objects_index: dict[str, Any], objective_uuid: str, body: dict[str, Any]
 ) -> None:
-    objective = body.get("objective")
-    if not isinstance(objective, dict):
-        return
-    signals = objective.get("signals") or []
-    if not isinstance(signals, list):
-        return
-    for signal in signals:
-        if not isinstance(signal, dict):
-            continue
-        signal_uuid = signal.get("uuid")
-        if not signal_uuid:
-            continue
-        signal_copy = signal.copy()
-        signal_copy["parent"] = objective_uuid
-        objects_index.setdefault("signal", {})[str(signal_uuid)] = signal_copy
+    index_objective_signals(objects_index.setdefault("signal", {}), objective_uuid, body)
 
 
 def apply_inflight_overlay(
@@ -289,6 +276,7 @@ def apply_inflight_overlay(
     overlay = shards if shards is not None else load_inflight_shards(inflight_dir)
     added = 0
     updated = 0
+    replaced_objectives: list[str] = []
 
     for uuid, shard in overlay.items():
         body = shard_object(shard)
@@ -309,7 +297,16 @@ def apply_inflight_overlay(
             continue
 
         if family == "objective":
-            _ingest_signals(objects_index, uuid, body)
+            replaced_objectives.append(uuid)
+
+    # Re-index the signals of every overlaid objective only once all of them are
+    # in place: a signal a shard removed must leave the index, and one a PR moves
+    # from objective A to B must land on B whichever shard is applied first.
+    if replaced_objectives:
+        signal_bucket = objects_index.setdefault("signal", {})
+        drop_objective_signals(signal_bucket, set(replaced_objectives))
+        for uuid in replaced_objectives:
+            _ingest_signals(objects_index, uuid, objects_index["objective"][uuid])
 
     if added or updated:
         logger.info("inflight_overlay_applied", added=added, updated=updated)

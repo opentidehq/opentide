@@ -27,6 +27,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 ├── schema.toml             # template defaults
 ├── visibility.toml         # what is exposed/deployed
 ├── documentation.toml      # `opentide generate docs` settings
+├── lint.toml               # `opentide lint` checks and required metadata
 └── platforms/
     ├── sentinel.toml
     └── splunk.toml
@@ -179,6 +180,20 @@ opentide 0.17.0 removed deployment plans: `--plan`, `DEPLOYMENT_PLAN`, and the t
 
 - `visibility.toml` controls which objects are exposed/deployed in a given context; it is validated by a generated `visibility` schema.
 - `documentation.toml` tunes `opentide generate docs` output (which folders, which sections). CVE links and optional API enrichment use [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu); see [`generate docs`](../cli/generate.md).
+
+## Lint
+
+`lint.toml` tunes [`opentide lint`](../cli/lint.md#configuration): switch a check off, change the severity of its findings, or choose which `metadata` keys every object must fill. Generated templates leave those keys uncommented, so a new object and the lint check agree.
+
+```toml
+# .opentide/configurations/lint.toml
+[metadata]
+required = ["author"]   # replaces the default ["author", "organisation"]
+severity = "warning"
+
+[filenames]
+enabled = false         # `opentide lint --check filenames` still runs it
+```
 
 ## Paths
 
