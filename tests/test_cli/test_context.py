@@ -21,10 +21,13 @@ def _reset_cli_context() -> None:
 
 def test_cli_context_apply_environment(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
+    monkeypatch.delenv("DEBUG", raising=False)
     ctx = CliContext(repo=tmp_path, debug=True, no_color=True)
     ctx.apply_environment()
     assert os.environ["OPENTIDE_REPO_ROOT"] == str(tmp_path)
-    assert os.environ["DEBUG"] == "True"
+    assert os.environ["OPENTIDE_DEBUG"] == "1"
+    # Never exported: Node's debug package and others read it in child processes.
+    assert "DEBUG" not in os.environ
     assert os.environ["NO_COLOR"] == "1"
 
 

@@ -11,7 +11,8 @@ import re
 
 from typer.testing import CliRunner
 
-from opentide.cli import _NAMED_GENERATE_PHASES, app
+from opentide.cli import app
+from opentide.cli.commands.generate import _NAMED_GENERATE_PHASES
 
 runner = CliRunner()
 

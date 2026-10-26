@@ -106,7 +106,7 @@ def test_techniques_resolver_signal_walks_parent_objective() -> None:
     signal_uuid = "00000000-0000-4000-8000-000000000041"
     objective_uuid = "00000000-0000-4000-8000-000000000042"
     rule_uuid = "00000000-0000-4000-8000-000000000043"
-    signal = {"name": "Signal", "uuid": signal_uuid, "parent": objective_uuid}
+    signal = {"name": "Signal", "uuid": signal_uuid, "owner": objective_uuid}
     objective = {
         "name": "Objective",
         "metadata": {"schema": "objective::1.0", "uuid": objective_uuid},

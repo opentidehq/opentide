@@ -1,0 +1,56 @@
+# serializer version: 1
+# name: test_renderers_snapshot[agent]
+  '''
+  warning: /home/you/detections/objects/rules/a-very-long-rule-file-name-a-very-long-rule-file-name-a-very-long-rule-file-name-x.yaml:24: configurations.splunk: this block will not deploy
+  warning: [bracketed]
+  ✓ 3 objects valid · 0.9s
+  ! 3 findings in 2 files
+  Skipped: no configured tenant reached
+  ✗ 2 errors in 1 file
+    note: a detail
+    help: some advice
+  → opentide lint --fix · rename 2 files to match their names
+  → opentide validate --strict
+  → opentide generate
+  error: Unknown info section: rulez
+    help: did you mean 'rules'?
+  tip: add --json for machine-readable output
+  
+  '''
+# ---
+# name: test_renderers_snapshot[human]
+  '''
+  [1;33mwarning:[0m /home/you/detections/objects/rules/a-very-long-rule-file-name-a-very-long-rule-file-name-a-very-long-rule-file-name-x.yaml:24: configurations.splunk: this block will not deploy
+  [1;33mwarning:[0m [bracketed]
+  [1;32m✓[0m 3 objects valid · 0.9s
+  [1;33m![0m 3 findings in 2 files
+  [1mSkipped:[0m no configured tenant reached
+  [1;31m✗[0m 2 errors in 1 file
+    [1;34mnote:[0m a detail
+    [1;36mhelp:[0m some advice
+  [1;36m→[0m [1mopentide lint --fix[0m[2m · [0m[2mrename 2 files to match their names[0m
+  [1;36m→[0m [1mopentide validate --strict[0m
+  [1;36m→[0m [1mopentide generate[0m
+  [1;31merror:[0m Unknown info section: rulez
+    [1;36mhelp:[0m did you mean 'rules'?
+  
+  '''
+# ---
+# name: test_renderers_snapshot[plain]
+  '''
+  warning: /home/you/detections/objects/rules/a-very-long-rule-file-name-a-very-long-rule-file-name-a-very-long-rule-file-name-x.yaml:24: configurations.splunk: this block will not deploy
+  warning: [bracketed]
+  ✓ 3 objects valid · 0.9s
+  ! 3 findings in 2 files
+  Skipped: no configured tenant reached
+  ✗ 2 errors in 1 file
+    note: a detail
+    help: some advice
+  → opentide lint --fix · rename 2 files to match their names
+  → opentide validate --strict
+  → opentide generate
+  error: Unknown info section: rulez
+    help: did you mean 'rules'?
+  
+  '''
+# ---

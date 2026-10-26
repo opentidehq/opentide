@@ -45,25 +45,38 @@ class DetectionRule(TideModel):
 
     __schema_identifier__: ClassVar[str] = "rule::1.0"
     name: str
+    """Rule display name."""
     metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
+    """Object metadata: identifier, schema, version, dates and TLP."""
     description: str = TideField(
         schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
+    """Rule narrative (multiline YAML encouraged)."""
     status: str = "STAGING"
+    """Deployment lifecycle status."""
     severity: str = "Informational"
+    """`alert_severity::1.0`."""
     techniques: list[str] = TideField(default_factory=list, role=FieldRole.TECHNIQUES)
+    """MITRE ATT&CK technique ids (`att&ck::1.2`)."""
     platforms: dict[str, dict[str, Any]] = TideField(
         default_factory=dict,
         schema_extra={"tide.template.hide": True},
         role=FieldRole.CONFIGURATIONS,
     )
+    """Legacy flat platform dict (prefer `configurations`)."""
     references: ObjectReferences | None = None
+    """External and internal references."""
     detection_model: str | None = None
+    """UUID of the objective, or of a signal defined under an objective, that this rule implements
+    (`objective::1.0` or `objective::1.1`)."""
     response: RuleResponse | None = TideField(None, schema_extra={"tide.template.required": True})
+    """Alert and response configuration."""
     configurations: RuleConfigurations | None = TideField(
         None, schema_extra={"tide.template.required": True}, role=FieldRole.CONFIGURATIONS
     )
+    """Typed per-platform configuration blocks."""
     file: Path | None = TideField(None, schema_extra={"tide.template.hide": True})
+    """Path of the file the rule was loaded from. Set by the loader, not written by authors."""
     _registry: TideRegistry | None = PrivateAttr(default=None)
 
     def platform_configs(self) -> RuleConfigurations:
@@ -207,3 +220,5 @@ class DetectionRule_v1_1(DetectionRule):
 
     __schema_identifier__: ClassVar[str] = "rule::1.1"
     metadata: RuleMetadata = TideField(schema_extra={"tide.template.spacer": True})
+    """Object metadata: identifier, schema, version, dates and TLP. This revision adds optional
+    `reviewed`."""

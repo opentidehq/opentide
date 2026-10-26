@@ -35,7 +35,8 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 | Search catalogue | `search` |
 | Threat → objective → rule graph | `get_chaining` |
 | ATT&CK coverage gaps | `coverage` |
-| Validate a rule | `validate_rule`, `validation_report` |
+| Validate a rule, with positions and fixes | `validate_rule`, `validation_report` |
+| What a diagnostic code means | `explain` |
 | Check queries against the tenant | `validate_query` with `live: true` |
 | Run read-only query | `run_query` — **not implemented** |
 | Deploy (dry-run default) | `deploy_rule` |
@@ -44,9 +45,11 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 
 ## Server instructions
 
-The server advertises this purpose to MCP hosts:
+The server sends `instructions` to MCP hosts with its `initialize` response. They open with:
 
-> Detection engineering assistant. Search and analyse detection content, validate rules against their schema, check platform queries against the tenant when live is true, and dry-run rule deployment. Query execution against live platforms is not implemented: run_query never contacts a tenant and never returns rows.
+> opentide: Spec-driven development for agentic detection engineering. opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents.
+
+Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` with `live: true` contacts the tenant, that `run_query` is not implemented, and how to read [`next_actions`](./tools.md#next-actions). The text is `INSTRUCTIONS` in `src/opentide/mcp_server/server.py`.
 
 <Callout type="warn">
 `validate_query` refuses unless you pass `live: true`. That call checks the

@@ -58,6 +58,8 @@ With a section, the table for that section replaces the summary:
 
 An empty section prints `No rules found` (or threats, objectives).
 
+Every view ends with one line counting the catalogue: `✓ 1 rule · 1 threat · 1 objective · 0 load errors`. When object files failed to load, `status` is `issues`, the line starts with `!`, and the next step is `opentide validate`, which shows the file, line and column of each. With `--strict` the run fails instead: `✗ … · 1 load error` on stderr, exit `1`, and `failure.code` `issues_found`. `summary` carries the four counts (`rules`, `threats`, `objectives`, `load_errors`).
+
 ## JSON payload shape
 
 `info` emits the same envelope as every other command, so the payload carries the `ok` / `status` / `message` keys alongside its own fields. In the [tutorial](../usage/tutorial.md) repository, with the platform list filtered to Sentinel:
@@ -73,11 +75,18 @@ An empty section prints `No rules found` (or threats, objectives).
   ],
   "ok": true,
   "status": "completed",
-  "message": "Completed successfully"
+  "message": "Completed successfully",
+  "schema_version": 1,
+  "command": "info",
+  "duration_ms": "...",
+  "exit_code": 0,
+  "summary": {},
+  "next_actions": [],
+  "failure": null
 }
 ```
 
-Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
+The keys from `schema_version` on are the envelope every command adds; see [JSON output](./json-output.md). Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
 With coverage, the payload adds a `coverage` object:
 
@@ -102,7 +111,7 @@ opentide --json info vocab surface
 | `info vocab` | One row per vocabulary: entries, keys carrying `removed`, the latest revision its lifecycle defines, and whether it is staged |
 | `info vocab <name>` | The vocabulary's title, key field, entry count, removed-key count, stage ids, then two tables: **Revisions** and **Pins** |
 
-The name is the vocabulary's `field`, which is also its file name without `.vocab.toml` (`surface`, `signal.entities`, `att&ck`). An unknown name exits `1` and lists the available names. A key whose `version` or `removed` is not `M` or `M.m` (`1`, `1.2`) also exits `1`, naming the vocabulary and the key. The vocabularies listed are the ones bundled with the engine; the object vocabularies (`rule`, `threat`, `objective`) built from your repository have no key lifecycle and are not listed. A name typed after any other section (`info rules surface`) also exits `1`.
+The name is the vocabulary's `field`, which is also its file name without `.vocab.toml` (`surface`, `signal.entities`, `att&ck`). An unknown name is a [usage error](./exit-codes.md): it exits `2`, lists the available names and suggests the closest one. A name typed after any other section (`info rules surface`) also exits `2`. A key whose `version` or `removed` is not `M` or `M.m` (`1`, `1.2`) exits `1`, naming the vocabulary and the key. The vocabularies listed are the ones under the data root (bundled with the engine unless `--data` / `OPENTIDE_DATA_ROOT` points elsewhere); the object vocabularies (`rule`, `threat`, `objective`) built from your repository have no key lifecycle and are not listed.
 
 **Revisions** lists each revision the key lifecycle defines, oldest first: the keys it introduces, the keys it removes, and how many keys a pin to it admits (introduced at or before it, and not removed at or before it).
 
@@ -147,4 +156,4 @@ A staged vocabulary whose field is not scoped takes the bare key name; only a sc
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/info.py`
+`src/opentide/cli/commands/info.py`, `src/opentide/cli/services/info.py`

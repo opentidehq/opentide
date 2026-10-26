@@ -1,16 +1,19 @@
 ---
 title: Global options
-description: Repository root, data root, debug logging, colour, JSON output, and version flags shared by all CLI commands.
+description: Repository root, data root, debug logging, quiet, colour, JSON output, version flags, shell completion and terminal progress shared by all CLI commands.
 ---
 
 # Global options
 
-Set on the root `opentide` callback before any subcommand.
+Set on the root `opentide` callback. The boolean flags (`--json`, `--no-color`, `--debug`, `--quiet`) are accepted anywhere before `--`, after the command too; options that take a value (`--repo`, `--data`, `--proxy`) go before the command.
 
 ```bash
 opentide --repo /path/to/repo --json validate --strict
+opentide validate --strict --json
 opentide --debug --no-color generate
 ```
+
+A flag that is the value of the option before it stays that option's value: in `opentide setup skills discover --query --json`, `--json` is the search text. There are no short forms (`-q` belongs to `--query`).
 
 ## Options
 
@@ -18,9 +21,10 @@ opentide --debug --no-color generate
 |------|---------------------|---------|-------------|
 | `--repo` | `OPENTIDE_REPO_ROOT` | Discovered from the current directory | Detection workspace root |
 | `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
-| `--debug` | `DEBUG` | off | Enable structlog debug logging |
-| `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable Rich colour output |
-| `--json` | — | off | Emit JSON instead of Rich tables / logs |
+| `--debug` | `OPENTIDE_DEBUG`, or `DEBUG` when it is a boolean | off | Enable debug logging, with timestamps |
+| `--quiet` | — | off | Print only the outcome line and errors |
+| `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable colour |
+| `--json` | `OPENTIDE_OUTPUT=json` | off | Print one JSON document on stdout; see [JSON output](./json-output.md) |
 | `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |
 | `--version`, `-V` | — | — | Print `opentide <version>` and exit |
 
@@ -69,21 +73,88 @@ opentide --proxy http://proxy.internal.example:8080 deploy --strategy RELEASE
 
 A `proxy` key under a tenant's `[tenants.setup]`, in `deployment.toml` `[proxy]` or in `[cve]` is retired: the command fails and names `opentide --proxy`. For pipelines behind a proxy, see [CI/CD → Behind a proxy or a private CA](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 
+## Debug
+
+`--debug` turns on debug logging on stderr, each line with its time. `OPENTIDE_DEBUG=1` does the same for every command. `DEBUG` is read too, but only when its value is a boolean (`1`, `true`, `yes`, `on`, or `0`, `false`, `no`, `off`): `DEBUG='*'`, which Node tooling exports, is ignored instead of failing every command. `OPENTIDE_DEBUG` wins when both are set.
+
+opentide exports `OPENTIDE_DEBUG=1` to the processes it starts when debugging, never `DEBUG`.
+
+When opentide stops on an unexpected error, `--debug` also prints the traceback, above the `error[internal]` line. Without it the traceback is only in the crash log; see [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
+
+## Environment variables
+
+`opentide --json commands` lists these under `environment`, and a test fails when the code reads an `OPENTIDE_*` variable the list leaves out.
+
+| Variable | Effect |
+|----------|--------|
+| `OPENTIDE_OUTPUT` | Output mode: `human`, `plain`, `agent` or `json`; see [Output modes](./json-output.md#output-modes) |
+| `OPENTIDE_DEBUG` | `1` for debug logging, like `--debug` |
+| `NO_COLOR` | Any value turns colour off, like `--no-color` |
+| `OPENTIDE_JSON_INDENT` | `0` prints every `--json` document on one line, `2` indents it; default: indented at a terminal, one line otherwise |
+| `OPENTIDE_REPO_ROOT` | Repository root, like `--repo` |
+| `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
+| `OPENTIDE_PROXY` | HTTP(S) proxy, like `--proxy` |
+| `OPENTIDE_TIDE_WORKSPACE` | Folder whose objects are read, when it is not the repository root; see [Repository root resolution](#repository-root-resolution) |
+| `OPENTIDE_LINKS` | Link scheme of code-frame paths: `file`, `vscode`, `cursor` or `none`; default `vscode` inside VS Code, else `file` |
+| `OPENTIDE_LOG_JSON` | `1` for one JSON object per log line on stderr |
+| `OPENTIDE_VALIDATE_WORKERS` | Most threads `validate` uses: a number, or `auto` |
+| `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
+| `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar) |
+| `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
+
 ## Environment propagation
 
 The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
 
 ## Terminal output
 
-Interactive terminals receive Rich colours. Redirected or captured streams automatically use clean plain text. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it.
+Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
-With `--json`, stdout is one machine-readable JSON document. Diagnostics and debug logs use stderr.
+With `--json`, stdout is one machine-readable JSON document, usage errors included: indented at a terminal, one compact line otherwise, and `OPENTIDE_JSON_INDENT=0` or `2` chooses either way. Logs use stderr, at `WARNING` and above unless `--debug`.
 
-Without `--json`, a result prints its `message` first, then any `detail` and `advice` from the payload as indented `detail:` / `advice:` lines, then its warnings. The text is printed as-is: brackets such as `[error]` or `[deploy, validate]` are shown, never read as Rich markup.
+Without `--json`, a result prints its warnings first (`warning: …`), then one outcome line (`✓ message`, `! message` when there are issues, `Skipped: message`), then any `detail` and `advice` from the payload as indented `note:` / `help:` lines, then at most three next steps (`→ command`). A failure prints `error: message` on stderr instead of the outcome line; a command that failed on findings it printed (`validate`, `lint --strict`, `info --strict`) prints its outcome line as `✗ …` on stderr instead. The text is printed as-is: brackets such as `[error]` or `[deploy, validate]` are shown, never read as Rich markup. `--quiet` keeps only the outcome line and errors: it drops section headers, progress lines, warnings, notes and next steps, but keeps the result tables a command prints as its output, such as `info` and `setup skills discover`.
 
-`--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits non-zero with a JSON error naming the flags to pass instead — `--yes` plus the explicit selections. Without `--json` the same commands open the wizard as before.
+`--json` therefore cannot drive an interactive wizard. `opentide --json setup` (and `setup repo`, `setup mcp`, `setup skills`) refuses to prompt and exits `2` with `failure.code` `usage_needs_input`, naming the flags to pass instead — `--yes` plus the explicit selections. A coding agent gets the same refusal without `--json`, even on a terminal. Otherwise the same commands open the wizard as before.
+
+### Progress in the tab and taskbar
+
+While a long command runs (`generate` and its subcommands, `deploy`, `validate query --live`, `share`), opentide also sends the terminal's progress sequence (OSC 9;4), so the tab or the taskbar shows how far the run is: a percentage for a run of several steps, a busy indicator for a single step. The bar is cleared when the command ends, fails, or is stopped with Ctrl-C.
+
+It is sent only in `human` mode, without `--quiet`, when standard error is itself a terminal (so `2> build.log` gets none, even with `FORCE_COLOR` set), and only to a terminal that reads it: Windows Terminal (`WT_SESSION` set), WezTerm (`TERM_PROGRAM`), Ghostty 1.2 or later and iTerm2 3.6.6 or later (`TERM_PROGRAM` and `TERM_PROGRAM_VERSION`), and kitty (`TERM=xterm-kitty`). Older iTerm2 shows each OSC 9 sequence as a desktop notification, so a version that is older or unknown gets nothing. Inside tmux (`TMUX` set) the sequence goes through tmux passthrough, which needs `set -g allow-passthrough on` in `tmux.conf`; there the outer terminal is recognised from `WT_SESSION`, `KITTY_WINDOW_ID`, `WEZTERM_PANE` or `LC_TERMINAL=iTerm2` with `LC_TERMINAL_VERSION` 3.6.6 or later, because tmux replaces `TERM` and `TERM_PROGRAM`.
+
+| `OPENTIDE_PROGRESS` | Effect |
+|---------------------|--------|
+| unset | Sent to the terminals above |
+| `0`, `false`, `no`, `off` | Never sent |
+| `1`, `true`, `yes`, `on` | Sent to any terminal in `human` mode, for one that reads OSC 9;4 but is not recognised (Ghostty inside tmux, or a version opentide cannot read) |
+
+## Shell completion
+
+`opentide --install-completion` installs completion for the current shell (bash, zsh, fish or PowerShell) and prints where it went and how to load it:
+
+```console
+$ opentide --install-completion
+✓ Installed zsh completion in ~/.zfunc/_opentide
+→ source ~/.zshrc · or restart your shell
+```
+
+`opentide --show-completion` prints the script instead, to install it by hand. Both take the shell as the word after them (`opentide --show-completion fish`); a word that is not `bash`, `zsh`, `fish`, `powershell` or `pwsh` is a usage error (exit `2`). Besides commands and option names, it completes these values from the workspace:
+
+| Value | Completes with | Read from |
+|-------|----------------|-----------|
+| `--uuid` (`validate`, `validate query`, `share`) | Object UUIDs, with the object's name and kind | The `name` and `metadata.uuid` lines at the top of each object file |
+| `--file` (same commands) | Object file paths, relative to the current directory when inside it, otherwise to the workspace; a bare file name when no path matches | The object folders |
+| `--type` | `rule`, `threat`, `objective` | — |
+| `--technique` (`info`) | ATT&CK ids, with their titles | The bundled ATT&CK vocabulary (`--data` or `OPENTIDE_DATA_ROOT` when set) |
+| `--platform` | The platforms enabled in the workspace first, marked `enabled`, then the others | `.opentide/configurations/platforms/*.toml` |
+| `--strategy` (`deploy`, `validate query`) | `PREVIEW`, `RELEASE` | — |
+| `explain <code>` | Diagnostic codes, with what each one means; applies once `opentide explain` ([#620](https://github.com/opentidehq/opentide/issues/620)) is available | The pages bundled with `opentide explain` |
+
+`validate query` completes rules only, and a `--type` already on the command line narrows `--uuid` and `--file`. The workspace is the one the command would use: `--repo`, then `OPENTIDE_REPO_ROOT`, then the nearest one up from the current directory. Object folders follow `[paths.objects]` in `.opentide/configurations/paths.toml` when it sets them.
+
+Completing a value does not load the command's module or the engine, so it costs about what completing a command name does. Completing an option name (`opentide validate --<Tab>`), or a value after an option completion does not know, loads the command. Completion never loads the catalogue the way a command does: it reads only the first lines of each object file, and `--file` reads only those of the paths that match. That keeps it close to `--help` for a catalogue of hundreds of objects; with many thousands, `--uuid` takes about a second. In bash, spaces and shell characters in a completed path are escaped with a backslash. When nothing matches `--file`, the shell completes file names itself.
 
 ## Strategy
 
@@ -96,5 +167,6 @@ Without `--json`, a result prints its `message` first, then any `detail` and `ad
 
 ## Related
 
+- [JSON output](./json-output.md)
 - [Usage: Installation](../usage/installation.md)
 - [CLI validate](./validate.md)

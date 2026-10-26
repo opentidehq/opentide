@@ -115,7 +115,7 @@ def object_link(
     """Render a backlink to an object or to a signal heading on its parent objective."""
     signal = catalog.resolve_signal(uuid)
     if signal is not None:
-        parent = catalog.resolve_record(signal.parent_uuid)
+        parent = catalog.resolve_record(signal.owner_uuid)
         if parent is None:
             return f"{signal.name} (`{uuid}`)"
         filename = formatter.page_filename(

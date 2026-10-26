@@ -193,10 +193,24 @@ def test_lint_cli_human_lists_each_finding(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
     assert result.exit_code == 0, result.output
     assert (
-        "[filenames/warning] objects/threats/Simulated Actor.yaml: Filename 'Simulated Actor.yaml'"
-        " does not match slugify(name)='simulated-actor'"
+        "warning[filename_mismatch]: Filename 'Simulated Actor.yaml'"
+        " does not match slugify(name)='simulated-actor'\n"
+        "  ╭─▶ objects/threats/Simulated Actor.yaml\n"
+        "  ╰─ help: rename it to objects/threats/simulated-actor.yaml\n"
     ) in result.output
-    assert "ISSUES Catalogue lint found issues" in result.output
+    assert result.stdout.endswith(
+        "! 1 finding in 1 file\n→ opentide lint --fix · rename 1 file to match their names\n"
+    )
+
+
+def test_lint_cli_suggests_fix_only_for_renamable_files(tmp_path: Path) -> None:
+    """Metadata findings have no automatic fix, so no ``--fix`` next step."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _NO_METADATA)
+    result = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint"])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["count"] > 0
+    assert payload["next_actions"] == []
 
 
 def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
@@ -204,10 +218,13 @@ def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint", "--fix"])
     assert result.exit_code == 0, result.output
     assert (
-        "[filenames/warning] objects/threats/simulated-actor.yaml: Filename 'Simulated Actor.yaml'"
-        " does not match slugify(name)='simulated-actor'"
-        " (renamed from objects/threats/Simulated Actor.yaml)"
+        "warning[filename_mismatch]: Filename 'Simulated Actor.yaml'"
+        " does not match slugify(name)='simulated-actor'\n"
+        "  ╭─▶ objects/threats/simulated-actor.yaml\n"
+        "  ╰─ note: renamed from objects/threats/Simulated Actor.yaml\n"
     ) in result.output
+    # The fixed finding is shown, and no longer counted (D23).
+    assert result.stdout.endswith("✓ 1 file clean · 1 fixed\n")
 
 
 def test_lint_cli_strict(tmp_path: Path) -> None:
@@ -217,8 +234,11 @@ def test_lint_cli_strict(tmp_path: Path) -> None:
         ["--json", "--repo", str(tmp_path), "lint", "--check", "filenames", "--strict"],
     )
     assert result.exit_code == 1
-    assert '"ok": false' in result.stdout
+    assert json.loads(result.stdout)["ok"] is False
 
+
+#: Keys every finding gains for the diagnostic contract.
+DIAGNOSTIC_KEYS = ("code", "field_path", "line", "column", "end_column", "help", "fix", "explain")
 
 _NO_METADATA = """\
 name: Simulated Actor
@@ -239,6 +259,14 @@ def test_lint_metadata_finding_carries_uuid_severity_and_line(tmp_path: Path) ->
         "yaml_line": 2,
         "uuid": "00000000-0000-4000-8001-000000000001",
         "message": "Recommended metadata missing: author, organisation",
+        "code": "metadata_recommended",
+        "field_path": ["metadata"],
+        "line": 3,
+        "column": 1,
+        "end_column": 9,
+        "help": "add the missing keys under metadata",
+        "fix": None,
+        "explain": "opentide explain metadata_recommended",
     }
 
 
@@ -260,6 +288,14 @@ def test_lint_filename_finding_carries_uuid_and_severity(tmp_path: Path) -> None
         "uuid": "00000000-0000-4000-8001-000000000001",
         "expected": "objects/threats/simulated-actor.yaml",
         "message": "Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'",
+        "code": "filename_mismatch",
+        "field_path": [],
+        "line": None,
+        "column": None,
+        "end_column": None,
+        "help": "rename it to objects/threats/simulated-actor.yaml",
+        "fix": None,
+        "explain": "opentide explain filename_mismatch",
     }
 
 
@@ -276,6 +312,7 @@ def test_lint_fixed_filename_finding_keeps_its_uuid(tmp_path: Path) -> None:
         "message",
         "fixed",
         "from",
+        *DIAGNOSTIC_KEYS,
     }
     assert finding["uuid"] == "00000000-0000-4000-8001-000000000001"
     assert finding["severity"] == "warning"
@@ -284,10 +321,22 @@ def test_lint_fixed_filename_finding_keeps_its_uuid(tmp_path: Path) -> None:
 def test_lint_parse_error_is_an_error_without_uuid_or_line(tmp_path: Path) -> None:
     _write_object(tmp_path, "rules", "broken.yaml", "name: [unclosed\n")
     (finding,) = run_lint(tmp_path)["findings"]
-    assert set(finding) == {"check", "severity", "path", "yaml_line", "uuid", "message"}
+    assert set(finding) == {
+        "check",
+        "severity",
+        "path",
+        "yaml_line",
+        "uuid",
+        "message",
+        *DIAGNOSTIC_KEYS,
+    }
     assert finding["severity"] == "error"
     assert finding["uuid"] is None
     assert finding["yaml_line"] is None
+    # The parser's position, never "<unicode string>".
+    assert finding["code"] == "yaml_parse"
+    assert (finding["line"], finding["column"]) == (2, 1)
+    assert "<unicode string>" not in finding["message"]
 
 
 @pytest.mark.parametrize("name", ['""', "123"], ids=["empty", "not-a-string"])
@@ -306,6 +355,14 @@ name: {name}
         "yaml_line": 2,
         "uuid": "00000000-0000-4000-8001-000000000001",
         "message": "Object has no name; cannot check filename slug",
+        "code": "name_missing",
+        "field_path": ["name"],
+        "line": 3,
+        "column": 1,
+        "end_column": 5,
+        "help": "add a name: the file name is derived from it",
+        "fix": None,
+        "explain": "opentide explain name_missing",
     }
 
 
@@ -319,7 +376,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload == {
         "path": str(tmp_path.resolve()),
-        "checks": ["filenames", "metadata"],
+        "checks": ["filenames", "metadata", "placeholders"],
         "findings": [
             {
                 "check": "metadata",
@@ -328,6 +385,14 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "yaml_line": 1,
                 "uuid": "00000000-0000-4000-8001-000000000001",
                 "message": "Recommended metadata missing: author, organisation",
+                "code": "metadata_recommended",
+                "field_path": ["metadata"],
+                "line": 2,
+                "column": 1,
+                "end_column": 9,
+                "help": "add the missing keys under metadata",
+                "fix": None,
+                "explain": "opentide explain metadata_recommended",
             },
             {
                 "check": "filenames",
@@ -339,6 +404,14 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "message": (
                     "Filename 'Simulated Actor.yaml' does not match slugify(name)='simulated-actor'"
                 ),
+                "code": "filename_mismatch",
+                "field_path": [],
+                "line": None,
+                "column": None,
+                "end_column": None,
+                "help": "rename it to objects/threats/simulated-actor.yaml",
+                "fix": None,
+                "explain": "opentide explain filename_mismatch",
             },
             {
                 "check": "filenames",
@@ -347,6 +420,14 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "yaml_line": None,
                 "uuid": None,
                 "message": "Object has no name; cannot check filename slug",
+                "code": "name_missing",
+                "field_path": ["name"],
+                "line": None,
+                "column": None,
+                "end_column": None,
+                "help": "add a name: the file name is derived from it",
+                "fix": None,
+                "explain": "opentide explain name_missing",
             },
             {
                 "check": "filenames",
@@ -355,6 +436,15 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "yaml_line": None,
                 "uuid": None,
                 "message": "Could not parse object YAML: object YAML is not a mapping",
+                "code": "yaml_parse",
+                "field_path": [],
+                # The frame points at where the document starts.
+                "line": 1,
+                "column": 1,
+                "end_column": 16,
+                "help": None,
+                "fix": None,
+                "explain": "opentide explain yaml_parse",
             },
         ],
         "count": 4,
@@ -362,6 +452,25 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
         "ok": True,
         "status": "issues",
         "message": "Catalogue lint found issues",
+        "schema_version": 1,
+        "command": "lint",
+        "duration_ms": payload["duration_ms"],
+        "exit_code": 0,
+        "summary": {
+            "files": 3,
+            "findings": 4,
+            "errors": 2,
+            "warnings": 1,
+            "notes": 1,
+            "fixed": 0,
+        },
+        "next_actions": [
+            {
+                "command": "opentide --json lint --fix",
+                "reason": "rename 1 file to match their names",
+            }
+        ],
+        "failure": None,
     }
     assert list(payload["findings"][1]) == [
         "check",
@@ -371,6 +480,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
         "uuid",
         "expected",
         "message",
+        *DIAGNOSTIC_KEYS,
     ]
 
 
@@ -380,8 +490,12 @@ def test_lint_cli_human_shows_severity_and_line(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
     assert result.exit_code == 0, result.output
     assert (
-        "[metadata/info] objects/threats/simulated-actor.yaml:2:"
-        " Recommended metadata missing: author, organisation"
+        "note[metadata_recommended]: Recommended metadata missing: author, organisation\n"
+        "  ╭─▶ objects/threats/simulated-actor.yaml:2:1\n"
+        "  │\n"
+        "1 │ name: Simulated Actor\n"
+        "2 │ metadata:\n"
+        "  │ ━━━━━━━━\n"
     ) in result.output
 
 
@@ -410,6 +524,94 @@ def test_lint_object_built_only_from_a_merge_has_no_lines(tmp_path: Path) -> Non
         ("objects/threats/b.yaml", "metadata", None),
         ("objects/threats/a.yaml", "filenames", None),
     ]
+
+
+_MARKED = """\
+name: Simulated Actor
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+  schema: threat::1.0
+  author: SOC
+  organisation: Example
+threat:
+  mitre_attack:
+    - T1548  # opentide:placeholder
+  description: |  # opentide:placeholder
+    ...
+  note: "# opentide:placeholder is quoted, not a marker"
+  surface:
+    - OS::Linux
+    - OS::Windows  # opentide:placeholder
+  severity: Localised incident  # opentide:placeholder
+"""
+
+
+def test_lint_placeholders_reports_each_marked_line(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _MARKED)
+    result = run_lint(tmp_path, checks=[LintCheck.placeholders])
+    assert result["checks"] == ["placeholders"]
+    # ``yaml_line`` is zero-based, as for the other checks; human output adds one.
+    # A list item is named by its key and index; ``OS::Windows`` is a value, not a key.
+    assert [
+        (finding["code"], finding["severity"], finding["yaml_line"], finding["message"])
+        for finding in result["findings"]
+    ] == [
+        (
+            "placeholder",
+            "warning",
+            8,
+            "mitre_attack[0] holds a placeholder value written by opentide new",
+        ),
+        (
+            "placeholder",
+            "warning",
+            9,
+            "description holds a placeholder value written by opentide new",
+        ),
+        (
+            "placeholder",
+            "warning",
+            14,
+            "surface[1] holds a placeholder value written by opentide new",
+        ),
+        (
+            "placeholder",
+            "warning",
+            15,
+            "severity holds a placeholder value written by opentide new",
+        ),
+    ]
+    # ``line`` is 1-based and the columns span the value (the key of a block
+    # scalar), so a frame can underline it.
+    assert [
+        (finding["line"], finding["column"], finding["end_column"])
+        for finding in result["findings"]
+    ] == [(9, 7, 12), (10, 3, 14), (15, 7, 18), (16, 13, 31)]
+    assert all("opentide:placeholder" in str(finding["help"]) for finding in result["findings"])
+
+
+def test_lint_placeholders_fail_strict_only(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _MARKED)
+    plain = runner.invoke(app, ["--no-color", "--repo", str(tmp_path), "lint"])
+    assert plain.exit_code == 0, plain.stdout + plain.stderr
+    # Findings print as code frames (#641), with the check's own help line.
+    assert "warning[placeholder]: description holds a placeholder" in plain.stdout
+    assert "objects/threats/simulated-actor.yaml:10:3" in plain.stdout
+    assert (
+        "help: replace the value, then delete the '# opentide:placeholder' comment" in plain.stdout
+    )
+    strict = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint", "--strict"])
+    assert strict.exit_code == 1
+    [finding, *_] = json.loads(strict.stdout)["findings"]
+    assert finding["code"] == "placeholder"
+    assert finding["help"].startswith("replace the value")
+    assert finding["explain"] == "opentide explain placeholder"
+    page = runner.invoke(app, ["--json", "explain", finding["code"]])
+    assert page.exit_code == 0, page.stdout
+    other = runner.invoke(
+        app, ["--json", "--repo", str(tmp_path), "lint", "--strict", "--check", "metadata"]
+    )
+    assert other.exit_code == 0, other.stdout + other.stderr
 
 
 def test_top_level_key_lines_reads_column_zero_keys_only() -> None:

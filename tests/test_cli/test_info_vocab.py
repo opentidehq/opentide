@@ -204,17 +204,20 @@ def test_cli_info_vocab_lists_vocabularies() -> None:
 
 
 def test_cli_info_vocab_unknown_name_lists_available() -> None:
-    result = runner.invoke(app, ["--json", "info", "vocab", "nope"])
-    assert result.exit_code == 1
+    result = runner.invoke(app, ["--json", "info", "vocab", "surfce"])
+    assert result.exit_code == 2
     body = json.loads(result.stdout)
     assert body["ok"] is False
-    assert body["message"].startswith("Unknown vocabulary: nope. Available: ")
+    assert body["message"].startswith("Unknown vocabulary: surfce. Available: ")
     assert "surface" in body["message"]
+    assert body["failure"]["code"] == "usage_invalid_choice"
+    assert body["failure"]["argument"] == "name"
+    assert body["failure"]["suggestion"] == "surface"
 
 
 def test_cli_info_name_only_with_vocab_section() -> None:
     result = runner.invoke(app, ["--json", "info", "rules", "surface"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert "Only the vocab section takes a name" in result.stdout
 
 
@@ -252,4 +255,5 @@ def test_cli_info_vocab_malformed_lifecycle_version_emits_json_error() -> None:
     assert result.exit_code == 1
     body = json.loads(result.stdout)
     assert body["ok"] is False
+    assert body["failure"]["code"] == "command_failed"
     assert body["message"].startswith("Vocabulary broken: key 'b' has an invalid version")

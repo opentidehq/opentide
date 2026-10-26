@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from opentide.cli.enums import DocumentScope
-from opentide.cli.services.generation import phase_failure
-from opentide.core.logging.console import emit_section
+from opentide.cli.services.generation import generation_result, generation_step, phase_failure
 from opentide.generation.errors import GenerationPhaseError, failing_phase
 
 logger = structlog.get_logger("opentide.cli.services.document")
@@ -40,12 +39,22 @@ def run_document(
     flavor: str | None = None,
 ) -> dict[str, object]:
     """Entry point for document command."""
+    from opentide.cli.ui.progress import Checklist
+
     ctx.apply_environment()
-    emit_section(f"Documentation — {'full pipeline' if scope is None else scope.value}")
     try:
-        with failing_phase("docs"):
+        with (
+            Checklist(total=1) as checklist,
+            generation_step(checklist, "docs", outputs=(output,)) as step,
+            failing_phase("docs"),
+        ):
             if scope is None:
-                return run_document_all(output=output, flavor=flavor)
-            return run_document_scope(scope, output=output, flavor=flavor)
+                result = run_document_all(output=output, flavor=flavor)
+            else:
+                result = run_document_scope(scope, output=output, flavor=flavor)
+            if result.get("status") == "failed":
+                step.status = "failed"
     except GenerationPhaseError as exc:
         return phase_failure(exc)
+    data: dict[str, Any] = {key: value for key, value in dict(result).items() if key != "message"}
+    return {**result, **generation_result(checklist, **data)}

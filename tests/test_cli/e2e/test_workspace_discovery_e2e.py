@@ -159,8 +159,10 @@ def test_a_checkout_without_markers_at_its_root_keeps_the_git_root(
     validate = _ok(_run(script_runner, checkout / start, ["validate", "--strict"]))
     assert validate["report"]["stats"]["objects_checked"] == 0, validate
     assert Path(validate["workspace"]) == checkout, validate
+    # Relative to where it ran: the checkout itself, or the folder above `tools`.
+    shown = "./" if start == "." else "../"
     assert validate["message"] == (
-        f"Validation passed, but no detection objects were found under {checkout}"
+        f"Validation passed, but no detection objects were found under {shown}"
     ), validate
 
 
