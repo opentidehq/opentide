@@ -14,6 +14,9 @@ from opentide.cli.services import migrate_objects
 from opentide.cli.services.migrate_objects import _fix_destination_case, run_migrate_objects
 
 runner = CliRunner()
+#: The assertions read the human output; keep it on one line and uncoloured
+#: whatever the host terminal is (CI runners report 80 columns).
+_PLAIN_TERMINAL = {"COLUMNS": "1000", "NO_COLOR": "1", "FORCE_COLOR": None}
 
 
 def _case_insensitive(directory: Path) -> bool:
@@ -143,8 +146,10 @@ def test_migrate_objects_cli_warns_about_a_configurations_folder_it_left(tmp_pat
         "enabled = true\n", encoding="utf-8"
     )
 
-    dry = runner.invoke(app, ["--repo", str(root), "migrate", "objects"])
-    applied = runner.invoke(app, ["--repo", str(root), "migrate", "objects", "--apply"])
+    dry = runner.invoke(app, ["--repo", str(root), "migrate", "objects"], env=_PLAIN_TERMINAL)
+    applied = runner.invoke(
+        app, ["--repo", str(root), "migrate", "objects", "--apply"], env=_PLAIN_TERMINAL
+    )
 
     assert dry.exit_code == 0, dry.output
     assert "Left Configurations/ in place" in " ".join(dry.output.split())

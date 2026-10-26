@@ -30,8 +30,13 @@ def run_share(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     return mock
 
 
+#: Rich wraps a usage error in a panel at the terminal's width (80 on CI runners),
+#: breaking the message across borders; render it on one line, uncoloured.
+_PLAIN_TERMINAL = {"COLUMNS": "1000", "NO_COLOR": "1", "FORCE_COLOR": None}
+
+
 def _invoke(tmp_path: Path, *argv: str) -> Any:
-    return runner.invoke(app, ["--repo", str(tmp_path), *argv])
+    return runner.invoke(app, ["--repo", str(tmp_path), *argv], env=_PLAIN_TERMINAL)
 
 
 def test_share_options_before_push_reach_push(tmp_path: Path, run_share: MagicMock) -> None:
