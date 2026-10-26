@@ -7,6 +7,13 @@ description: Common opentide failures — validation errors, generation drift, p
 
 The failures you are most likely to hit, why they happen, and how to fix them. If your problem is a genuine bug, open an issue on [opentide](https://github.com/opentidehq/opentide/issues).
 
+Start with `opentide doctor`. It checks the installation, the workspace, git, the generated templates and schemas, enabled platforms and their SDKs, tenant credentials (set or unset, never printed), the proxy, editor settings and MCP configuration, and prints the command that fixes each problem it finds. See [`opentide doctor`](../cli/doctor.md).
+
+```bash
+opentide doctor
+opentide --json doctor --offline
+```
+
 ## Unexpected errors
 
 ### opentide stops with `error[internal]`
@@ -710,6 +717,7 @@ ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairm
 
 ## Still stuck?
 
+- Run `opentide doctor` and fix what it reports first.
 - Re-run with debug logging: `OPENTIDE_DEBUG=1 opentide validate --strict`.
 - Compare your object against a known-good [fixture](https://github.com/opentidehq/specifications/blob/main/fixtures/valid).
 - Check the [CLI reference](../cli/index.md) for the exact flags and [exit codes](../cli/exit-codes.md).

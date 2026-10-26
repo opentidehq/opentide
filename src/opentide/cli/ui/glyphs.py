@@ -22,6 +22,7 @@ GLYPHS: dict[str, Glyph] = {
     "ok": Glyph("✓", "ok"),
     "failed": Glyph("✗", "x"),
     "warning": Glyph("!", "!"),
+    "skip": Glyph("○", "o"),
     "create": Glyph("+", "+"),
     "update": Glyph("~", "~"),
     "disable": Glyph("-", "-"),

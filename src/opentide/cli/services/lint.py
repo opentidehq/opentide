@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 import structlog
 import yaml
@@ -37,6 +38,8 @@ class _ObjectRecord:
     parse_error: str | None = None
     expected_stem: str | None = None
     key_lines: dict[str, int] = field(default_factory=dict)
+    #: Each value ``opentide new`` marked as a placeholder.
+    placeholder_lines: list[_Marked] = field(default_factory=list)
 
 
 def _object_files(root: Path) -> list[Path]:
@@ -87,6 +90,77 @@ def _top_level_key_lines(text: str) -> dict[str, int]:
     return lines
 
 
+#: The trailing comment ``opentide new`` writes on a value it invented.
+_PLACEHOLDER = re.compile(r"\s#\s*opentide:placeholder\s*$")
+#: A YAML key is followed by ``: `` or a colon at the end: ``OS::Windows`` is a value.
+_MARKED_KEY = re.compile(r"^(?P<lead>\s*(?:-\s+)?)(?P<key>[A-Za-z_][\w.-]*)\s*:(?:\s+|$)")
+_ITEM = re.compile(r"^(?P<lead>(?P<indent>\s*)-\s+)")
+
+PLACEHOLDER_CODE = "placeholder"
+PLACEHOLDER_HELP = "replace the value, then delete the '# opentide:placeholder' comment"
+
+
+class _Marked(NamedTuple):
+    """A value ``opentide new`` marked.
+
+    ``line`` is zero-based; columns are 1-based, end exclusive.
+    """
+
+    line: int
+    #: The key, or ``key[index]`` for an item of a list.
+    label: str
+    column: int
+    end_column: int
+
+
+def _list_item_label(lines: Sequence[str], number: int, indent: int) -> str:
+    """``surface[0]``: the key that owns the item on line *number*, and its index."""
+    index = 0
+    for previous in range(number - 1, -1, -1):
+        text = lines[previous]
+        if not text.strip() or text.lstrip().startswith("#"):
+            continue
+        current = len(text) - len(text.lstrip())
+        if current == indent and text.lstrip().startswith("-"):
+            index += 1
+            continue
+        if current < indent and (key := _MARKED_KEY.match(text)) is not None:
+            return f"{key['key']}[{index}]"
+        if current < indent:
+            break
+    return f"list item {index}"
+
+
+def _placeholder_lines(text: str) -> list[_Marked]:
+    """Each placeholder marker: its line, what holds it, and the columns of the value.
+
+    A block scalar (``description: |``) points at its key, since the value
+    starts on the next line.
+    """
+    lines = text.splitlines()
+    marked: list[_Marked] = []
+    for number, line in enumerate(lines):
+        marker = _PLACEHOLDER.search(line)
+        if marker is None:
+            continue
+        content = line[: marker.start()].rstrip()
+        if (key := _MARKED_KEY.match(content)) is not None:
+            start, label = key.end(), key["key"]
+            if content[start:] in ("", "|", ">", "|-", ">-"):
+                start = key.start("key")
+                end = key.end("key")
+            else:
+                end = len(content)
+        elif (item := _ITEM.match(content)) is not None:
+            start, end = item.end(), len(content)
+            label = _list_item_label(lines, number, len(item["indent"]))
+        else:
+            start = len(content) - len(content.lstrip())
+            end, label = len(content), "value"
+        marked.append(_Marked(number, label, start + 1, max(end, start + 1) + 1))
+    return marked
+
+
 def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
     record = _ObjectRecord(path=path, relative=relative)
@@ -97,6 +171,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
         record.parse_error = str(exc)
         return record
     record.key_lines = _top_level_key_lines(text)
+    record.placeholder_lines = _placeholder_lines(text)
     if not isinstance(data, dict):
         record.parse_error = "object YAML is not a mapping"
         return record
@@ -275,6 +350,27 @@ def _metadata_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
     return findings
 
 
+def _placeholder_findings(records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """One warning per value ``opentide new`` marked as a stand-in nobody chose."""
+    return [
+        _finding(
+            LintCheck.placeholders,
+            "warning",
+            record,
+            f"{marked.label} holds a placeholder value written by opentide new",
+            yaml_line=marked.line,
+            code=PLACEHOLDER_CODE,
+            help=PLACEHOLDER_HELP,
+            line=marked.line + 1,
+            column=marked.column,
+            end_column=marked.end_column,
+        )
+        for record in records
+        if not record.parse_error
+        for marked in record.placeholder_lines
+    ]
+
+
 def _rewrite_renamed_paths(findings: list[dict[str, object]]) -> None:
     """Point earlier findings at the path ``--fix`` just renamed the file to."""
     renamed = {
@@ -299,11 +395,17 @@ def run_lint(
 ) -> dict[str, object]:
     """Run catalogue hygiene checks without a full registry rebuild."""
     target = root.resolve()
-    selected = list(checks) if checks else [LintCheck.filenames, LintCheck.metadata]
+    selected = (
+        list(checks)
+        if checks
+        else [LintCheck.filenames, LintCheck.metadata, LintCheck.placeholders]
+    )
     records = [_load_record(target, path) for path in _object_files(target)]
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
         findings.extend(_metadata_findings(records))
+    if LintCheck.placeholders in selected:
+        findings.extend(_placeholder_findings(records))
     if LintCheck.filenames in selected:
         findings.extend(_filename_findings(target, records, fix=fix))
         _rewrite_renamed_paths(findings)
@@ -350,8 +452,12 @@ def render_findings(findings: list[dict[str, object]]) -> None:
         renamed = f" (renamed from {finding['from']})" if finding.get("fixed") is True else ""
         line = finding.get("yaml_line")
         where = f"{finding['path']}:{line + 1}" if isinstance(line, int) else finding["path"]
+        if isinstance(line, int) and isinstance(finding.get("column"), int):
+            where = f"{where}:{finding['column']}"
         console.print(
             f"[{finding['check']}/{finding['severity']}] {where}: {finding['message']}{renamed}",
             markup=False,
             soft_wrap=True,
         )
+        if finding.get("help"):
+            console.print(f"  help: {finding['help']}", markup=False, soft_wrap=True)

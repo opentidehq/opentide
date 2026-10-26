@@ -19,6 +19,8 @@
     "deploy",
     "share",
     "info",
-    "tui"
+    "tui",
+    "new",
+    "doctor"
   ]
 }

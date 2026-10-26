@@ -28,6 +28,8 @@ Run `opentide --help` for the live command tree.
 | [`share`](./share.md) | Publish objects to a MISP destination |
 | [`info`](./info.md) | Repository and platform statistics |
 | [`tui`](./tui.md) | Terminal UI: catalogue tree, YAML and diagnostics, ATT&CK coverage, validate / generate / deploy dry run |
+| [`new`](./new.md) | Scaffold a threat, objective or rule from the generated template |
+| [`doctor`](./doctor.md) | Check the installation, the workspace and its integrations |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
 
 <Callout type="info">

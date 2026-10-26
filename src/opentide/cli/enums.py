@@ -87,6 +87,7 @@ class LintCheck(str, Enum):
 
     filenames = "filenames"
     metadata = "metadata"
+    placeholders = "placeholders"
 
 
 def platform_label(platform: DetectionPlatform) -> str:

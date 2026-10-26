@@ -20,8 +20,9 @@ opentide lint --strict
 |----------|----------------|---------|
 | `filenames` | Object YAML stem must equal `slugify(name)` | Renames files. On a collision in the same folder, appends `{uuid[:8]}` |
 | `metadata` | Reports a missing `metadata.author` or `metadata.organisation` | Not auto-fixed |
+| `placeholders` | Reports each value [`opentide new`](./new.md) filled in for you, marked `# opentide:placeholder` | Not auto-fixed |
 
-Default (no `--check`) runs both. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
+Default (no `--check`) runs all three. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
 
 Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild the object registry.
 
@@ -29,7 +30,7 @@ Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild t
 
 | Flag | Purpose |
 |------|---------|
-| `--check` | Repeatable. `filenames` or `metadata` |
+| `--check` | Repeatable. `filenames`, `metadata` or `placeholders` |
 | `--fix` | Apply safe filename renames |
 | `--strict` | Exit `1` when any finding exists (CI gate). Default is report-only |
 
@@ -37,7 +38,7 @@ Lint walks `objects/{threats,objectives,rules}/**/*.yaml` and does not rebuild t
 
 ## Output
 
-Human output prints one line per finding, then the summary. The [tutorial](../usage/tutorial.md) catalogue passes both checks:
+Human output prints one line per finding, then the summary. The [tutorial](../usage/tutorial.md) catalogue passes every check:
 
 ```text output-of="opentide lint"
 ✓ Catalogue lint passed
@@ -60,14 +61,14 @@ When a filename finding can be fixed by renaming, the summary is followed by the
 
 | Key | Value |
 |-----|-------|
-| `check` | `filenames` or `metadata` |
+| `check` | `filenames`, `metadata` or `placeholders` |
 | `severity` | `error`, `warning` or `info` (table below) |
 | `path` | Object file, relative to the workspace |
 | `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
 | `uuid` | The object's `metadata.uuid`. `null` when the file did not parse or has no UUID |
 | `message` | What is wrong |
 
-A filename mismatch adds `expected`, the path the file should have. Under `--fix` it also has `fixed`, and `from` (the old path) when the file was renamed. `fixed` is `false` when a file already exists at `expected`.
+A placeholder adds `code` (`placeholder`) and `help`, the step that clears it. A filename mismatch adds `expected`, the path the file should have. Under `--fix` it also has `fixed`, and `from` (the old path) when the file was renamed. `fixed` is `false` when a file already exists at `expected`.
 
 | Finding | `severity` | `yaml_line` |
 |---------|------------|-------------|
@@ -75,8 +76,20 @@ A filename mismatch adds `expected`, the path the file should have. Under `--fix
 | Object has no `name` | `error` | The `name:` key when it is present but empty or not a string, else `null` |
 | Filename is not `slugify(name)` | `warning` | `null` |
 | `metadata.author` or `metadata.organisation` missing | `info` | The `metadata:` key, or `null` when there is no `metadata` block |
+| A value marked `# opentide:placeholder` | `warning` | The marked line |
 
 Severity is for sorting and triage only. `--strict` exits `1` on any finding, whatever its severity.
+
+### Placeholders
+
+`opentide new` writes a valid object at once, so a required value nobody has chosen yet gets a stand-in: the first value the schema allows (an ATT&CK technique, a category) or `...` for free text. Each such line ends in `# opentide:placeholder`, and `lint` reports it as a `placeholder` warning. The message names the key, or the key and index for an item of a list (`mitre_attack[0]`), and the finding carries `line`, `column` and `end_column` (1-based, end exclusive) around the value, or around the key of a block scalar:
+
+```text illustrative
+[placeholders/warning] objects/threats/credential-dumping.yaml:12:7: mitre_attack[0] holds a placeholder value written by opentide new
+  help: replace the value, then delete the '# opentide:placeholder' comment
+```
+
+Plain `lint` and `validate` still pass, so a draft can be committed: the commit hook runs `validate --strict` only. The CI pipeline from `opentide setup ci` also runs `lint --strict`, which fails until every marked value is replaced and its marker deleted. A placeholder looks like a real choice, so until then `generate` exports it like one (an ATT&CK technique in the coverage layer, for instance).
 
 ## Source
 
