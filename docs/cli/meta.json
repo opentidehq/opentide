@@ -18,6 +18,7 @@
     "rules",
     "deploy",
     "share",
-    "info"
+    "info",
+    "tui"
   ]
 }
