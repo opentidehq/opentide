@@ -164,8 +164,9 @@ def _render(
 def test_render_info_summary_keeps_the_capability_list(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rich read `[deploy, validate]` as a markup tag and printed nothing (#292)."""
     output = _render(monkeypatch, _SUMMARY)
-    assert "enabled=True [deploy, validate]" in output
-    assert "enabled=False [deploy]" in output
+    assert "enabled · deploy, validate" in output
+    assert "disabled · deploy" in output
+    assert "enabled=" not in output
 
 
 @pytest.mark.parametrize(

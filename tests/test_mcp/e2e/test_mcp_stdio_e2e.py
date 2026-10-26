@@ -38,6 +38,7 @@ EXPECTED_TOOLS = {
     "coverage",
     "validate_rule",
     "validation_report",
+    "explain",
     "validate_query",
     "run_query",
     "deploy_rule",
@@ -115,6 +116,16 @@ class StdioClient:
             assert envelope["jsonrpc"] == "2.0", f"non JSON-RPC frame on stdout: {text}"
             if envelope.get("id") == request_id:
                 return envelope
+
+    def close_and_drain(self) -> list[str]:
+        """Close stdin, let the server exit, and return every stdout line it still wrote."""
+        assert self._process.stdin is not None
+        self._process.stdin.close()
+        self._process.wait(timeout=READ_TIMEOUT)
+        lines: list[str] = []
+        while (line := self._lines.get(timeout=READ_TIMEOUT)) is not None:
+            lines.append(line)
+        return lines
 
     def handshake(self) -> dict[str, Any]:
         response = self.request(
@@ -242,6 +253,92 @@ def test_logs_never_bleed_onto_the_jsonrpc_stream(mcp_stdio: StdioClient) -> Non
     mcp_stdio.call_tool("validation_report", {})
     mcp_stdio.request("tools/list")
     mcp_stdio.read_resource("opentide://index")
+
+
+def test_stdout_holds_only_jsonrpc_while_tools_run(mcp_stdio: StdioClient) -> None:
+    """``mcp start`` runs in ``mcp`` mode: every byte on stdout is a JSON-RPC frame.
+
+    ``validate_query`` drives the CLI's query service with a non-JSON context,
+    the path most likely to print a human line. Everything the server writes
+    until it exits is read back, not only the frames a request waited for.
+    """
+    mcp_stdio.handshake()
+    payload = mcp_stdio.call_tool(
+        "validate_query", {"query": "SecurityEvent", "platform": "sentinel", "live": True}
+    )
+    assert isinstance(payload, dict)
+    assert "_failure_code" not in payload
+    mcp_stdio.call_tool("validation_report", {})
+    mcp_stdio.call_tool("explain", {"code": "vocab_unknown"})
+    for line in mcp_stdio.close_and_drain():
+        if line.strip():
+            assert json.loads(line)["jsonrpc"] == "2.0", line
+
+
+def test_initialize_carries_the_tagline_and_workflow(mcp_stdio: StdioClient) -> None:
+    instructions = mcp_stdio.handshake()["result"]["instructions"]
+    assert instructions.startswith(
+        "opentide: Spec-driven development for agentic detection engineering."
+    )
+    assert "validation_report" in instructions
+    assert "dry_run true" in instructions
+
+
+def test_every_tool_describes_itself(mcp_stdio: StdioClient) -> None:
+    mcp_stdio.handshake()
+    tools = mcp_stdio.request("tools/list")["result"]["tools"]
+    for tool in tools:
+        assert len(tool["description"].split()) >= 8, tool["name"]
+
+
+def test_explain_over_stdio(mcp_stdio: StdioClient) -> None:
+    mcp_stdio.handshake()
+    page = mcp_stdio.call_tool("explain", {"code": "invalid_ref"})
+    assert page["found"] is True
+    assert page["code"] == "invalid_ref"
+    assert page["markdown"].startswith("# invalid_ref")
+    listing = mcp_stdio.call_tool("explain", {})
+    assert "invalid_ref" in {entry["code"] for entry in listing["codes"]}
+
+
+def test_validation_report_over_stdio_carries_diagnostic_fields(tmp_path: Path) -> None:
+    """A typo on disk comes back with its position, a fix and next actions."""
+    repo = materialise_corpus(tmp_path / "corpus")
+    rule = repo / "objects" / "rules" / "rule-0001-sentinel-kql.yaml"
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("  tlp: clear\n", "  tlp: clearr\n", 1),
+        encoding="utf-8",
+    )
+    env = {**os.environ, **corpus_env(repo), "CI": "true"}
+    process = subprocess.Popen(
+        _server_argv(),
+        cwd=repo,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    client = StdioClient(process)
+    try:
+        client.handshake()
+        report = client.call_tool(
+            "validation_report", {"file": "objects/rules/rule-0001-sentinel-kql.yaml"}
+        )
+        issue = next(item for item in report["issues"] if item["code"] == "vocab_unknown")
+        assert issue["line"] == issue["yaml_line"] + 1
+        assert issue["fix"]["safe"] is False
+        assert issue["fix"]["edits"][0]["replacement"] == "clear"
+        assert issue["explain"] == "opentide explain vocab_unknown"
+        assert report["next_actions"][0]["tool"] == "explain"
+        for line in client.close_and_drain():
+            if line.strip():
+                assert json.loads(line)["jsonrpc"] == "2.0", line
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=15)
 
 
 def test_text_blocks_agree_with_structured_content(mcp_stdio: StdioClient) -> None:

@@ -11,6 +11,8 @@ Author threats as `threat::1.0` YAML under `objects/threats/`.
 ## Check
 
 ```bash
-opentide validate --strict
-opentide lint --strict
+opentide --json validate --strict
+opentide --json lint --strict
 ```
+
+Apply each finding's `fix.edits`, run `opentide explain <code>` for a finding without one, and repeat until the exit code is `0`.

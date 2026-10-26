@@ -90,9 +90,9 @@ def test_a_diff_without_a_checkout_names_the_directory(
         assert payload["message"] == message
     else:
         rendered = result.stdout + result.stderr
-        # Plain mode prints ``FATAL: <message>``. A Rich panel titles itself
-        # FATAL and wraps the sentence between border characters.
-        assert "FATAL" in rendered
+        # An ordinary failure is one ``error: <message>`` line, not a panel.
+        assert "FATAL" not in rendered
+        assert "error: " in rendered
         visible = _ANSI.sub("", rendered)
         visible = re.sub(r"[\u2500-\u257f]", "", visible)
         assert re.sub(r"\s+", "", message) in re.sub(r"\s+", "", visible)

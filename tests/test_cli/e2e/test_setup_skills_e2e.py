@@ -82,7 +82,7 @@ def test_skills_install_uses_packaged_authoring_and_agents_template(
         encoding="utf-8"
     )
     agents = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
-    assert "rule::1.0" in engineering
+    assert "rule::1.1" in engineering
     assert "objects/rules/" in rule
     assert "schema: mdr::" not in engineering
     assert "SOC Detections" in agents

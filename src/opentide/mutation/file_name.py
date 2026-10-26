@@ -4,7 +4,7 @@ import yaml
 
 from opentide.core.files import resolve_configurations, resolve_paths, safe_file_name
 from opentide.core.logging import get_logger
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.core.root import get_repo_root
 
 logger = get_logger(__name__)
@@ -16,7 +16,7 @@ MODELS_TYPES = CONFIGURATIONS["global"]["objects"]
 
 
 def run():
-    emit_section("File Name Aligner")
+    report_stage("file name alignment")
     logger.info(
         "file_name_aligner_started",
         detail=(

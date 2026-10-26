@@ -102,7 +102,8 @@ def test_validate_query_platform_matrix(
         "RELEASE",
         "--wide",
     )
-    assert result.exit_code == 1, result.stdout + result.stderr
+    # Without --live a supported platform is a usage error; an unsupported one fails.
+    assert result.exit_code == (2 if expects_supported else 1), result.stdout + result.stderr
     if "{" in result.stdout:
         body = parse_cli_json(result)
         assert body.get("supported") is expects_supported
@@ -117,8 +118,10 @@ def test_validate_query_platform_matrix(
 def test_validate_query_without_strategy_or_wide(invoke_cli) -> None:
     """No ``--strategy`` must not traceback on validate query (issue #164)."""
     result = invoke_cli("validate", "query", "--platform", "sentinel")
-    assert result.exit_code == 1, result.stdout + result.stderr
+    assert result.exit_code == 2, result.stdout + result.stderr
     payload = parse_cli_json(result)
+    assert payload["failure"]["code"] == "usage_missing_option"
+    assert payload["failure"]["argument"] == "--live"
     assert payload.get("supported") is True
     assert payload.get("status") == "failed"
     assert "--live" in payload["message"]
@@ -148,7 +151,7 @@ def test_validate_query_bare_needs_no_vendor_sdk(invoke_cli) -> None:
     """A stock install has no azure package. The refusal must not import it."""
     with hidden_modules("azure"):
         result = invoke_cli("validate", "query", "--platform", "sentinel")
-    assert result.exit_code == 1, result.stdout + result.stderr
+    assert result.exit_code == 2, result.stdout + result.stderr
     payload = parse_cli_json(result)
     assert payload["status"] == "failed"
     assert "--live" in payload["message"]

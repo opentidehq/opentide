@@ -20,7 +20,7 @@ from tests.corpus_support import (
     real_rules_folder,
     write_rule_variant,
 )
-from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok
+from tests.test_cli.conftest import LOCAL_SHELL_UNSET, assert_json_ok, without_envelope
 from tests.test_cli.e2e.helpers import EVERY_RULE, uncomment_tenants
 
 from opentide.core.root import find_repo_root
@@ -257,8 +257,32 @@ def test_deploy_dry_run_fails_when_a_sentinel_rule_does_not_compile(
     assert preview["status"] == "failed"
     assert "hourly" in preview["error"]
     assert preview["api_request"] is None
-    (event,) = _log_events(result.stderr, "sentinel_preview_compile_failed")
-    assert corpus_rule_uuids["sentinel"] in str(event["detail"])
+    # One diagnostic, said once: the log carries it only under --debug.
+    (diagnostic,) = payload["diagnostics"]
+    assert diagnostic["path"].endswith("/rule-0001-sentinel-kql.yaml")
+    assert not Path(diagnostic["path"]).is_absolute()
+    assert diagnostic["code"] == "compile_invalid_rule"
+    assert "TideRuleDataModelErrors" not in diagnostic["message"]
+    assert payload["failure"]["message"] == "1 rule would fail to deploy"
+    assert not _log_events(result.stderr, "sentinel_preview_compile_failed")
+
+    human = invoke_cli(
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "sentinel",
+        *EVERY_RULE,
+        "--wide",
+        "--skip-promotion",
+        json_output=False,
+        extra_env={"DEPLOYMENT_ERROR_RAISED": "", "OPENTIDE_OUTPUT": "plain"},
+    )
+    assert human.exit_code == 1
+    assert "error[compile_invalid_rule]: Duration 'hourly'" in human.stderr
+    assert f"─▶ {diagnostic['path']}" in human.stderr  # #641's code frame
+    (tally,) = [line for line in human.stdout.splitlines() if line.startswith("Plan: ")]
+    assert len(tally) <= 100
+    assert "error: Plan" not in human.stdout + human.stderr
 
 
 def test_deploy_loads_only_the_requested_engine(
@@ -378,10 +402,10 @@ def test_deploy_dry_run_without_rules_folder_reports_no_rules(
     assert "No such file or directory" not in output
     assert refuse_deployment_engines == []
     if not json_output:
-        assert "SKIPPED No rules to deploy for this platform" in result.stdout
+        assert "Skipped: No rules to deploy for this platform" in result.stdout
         return
     payload = json.loads(result.stdout)
-    assert payload == {
+    assert without_envelope(payload) == {
         "platform": "sentinel",
         "deployed": [],
         "dry_run": True,
@@ -450,9 +474,9 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     deployer.deploy.assert_not_called()
     warning = f"1 {SUBFOLDER_RULES_LEAD}objects/rules/team-a/rule-0101-subfolder.yaml"
     if not json_output:
-        assert "OK Deployment completed" in result.stdout
+        assert "Plan: " in result.stdout and "1 platform" in result.stdout
         stderr = " ".join(result.stderr.split())
-        assert stderr.count(f"WARNING {warning}") == 1
+        assert stderr.count(f"warning: {warning}") == 1
         assert stderr.count("in subfolders of") == 1
         return
     payload = json.loads(result.stdout)
@@ -460,9 +484,8 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     assert payload["warnings"] == [warning]
     assert CORPUS_RULE_UUIDS["sentinel"] in payload["plan"]["sentinel"]
     assert nested_uuid not in payload["plan"]["sentinel"]
-    assert [
-        event["files"] for event in _log_events(result.stderr, "deploy_nested_rules_skipped")
-    ] == [["objects/rules/team-a/rule-0101-subfolder.yaml"]]
+    # Reported once, in `warnings`: the log event is INFO, below --json's WARNING level.
+    assert _log_events(result.stderr, "deploy_nested_rules_skipped") == []
 
 
 @pytest.mark.parametrize("json_output", [True, False], ids=["json", "human"])
@@ -513,10 +536,10 @@ def test_deploy_dry_run_with_rules_only_in_subfolders_is_skipped_with_the_warnin
         ]
     )
     if not json_output:
-        assert f"SKIPPED {message}" in result.stdout
-        assert " ".join(result.stderr.split()).count(f"WARNING {warning}") == 1
+        assert f"Skipped: {message}" in result.stdout
+        assert " ".join(result.stderr.split()).count(f"warning: {warning}") == 1
         return
-    assert json.loads(result.stdout) == {
+    assert without_envelope(json.loads(result.stdout)) == {
         **fields,
         "deployed": [],
         "dry_run": True,

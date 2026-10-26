@@ -15,6 +15,7 @@ from opentide.cli.services.setup.interactive import (
     ask_platforms,
     ask_text,
     require_interactive,
+    require_text,
 )
 from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
 from opentide.core.logging.config import get_stdout_console
@@ -105,6 +106,8 @@ def _write_gitignore(target: Path) -> None:
                 # Only the sharing cache. ``states/deployment/`` holds vendor rule
                 # ids and must be committed (RFC 0010).
                 f"{OPENTIDE_DIR}/states/sharing.jsonl",
+                # Findings reports and the GitLab summary that CI runs write.
+                "opentide-reports/",
             ]
         )
         + "\n",
@@ -123,6 +126,7 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
             (directory / ".gitkeep").write_text("", encoding="utf-8")
     skipped: list[str] = []
     warnings: list[str] = []
+    files: list[str] = []
     readme = target / "README.md"
     if readme.is_file():
         skipped.append("README.md")
@@ -135,16 +139,21 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
             )
     else:
         _write_readme(target, options)
+        files.append("README.md")
     gitignore = target / ".gitignore"
     if gitignore.is_file():
         skipped.append(".gitignore")
     else:
         _write_gitignore(target)
+        files.append(".gitignore")
     platforms = [p.value for p in options.platforms]
     result: dict[str, object] = {
         "message": "Repository scaffold created",
         "path": str(target),
         "platforms": platforms,
+        "name": options.name or target.name,
+        "scaffolded": True,
+        "files": files,
     }
     if skipped:
         result["skipped"] = skipped
@@ -161,10 +170,14 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
 
 def run_interactive_repo_setup(ctx: CliContext, base_path: Path) -> dict[str, object]:
     """Prompt for repository metadata and scaffold the workspace."""
+    from opentide import __version__
+    from opentide.cli.ui.setup import welcome
+
     require_interactive()
     ctx.apply_environment()
     target = base_path.resolve()
-    name = ask_text("Repository name", default=target.name)
+    welcome(get_stdout_console(), version=__version__)
+    name = ask_text("Repository name", default=target.name, validate=require_text("a name"))
     org = ask_text("Organisation / team (optional)")
     description = ask_text("Description (optional)")
     options = RepoSetupOptions(

@@ -16,7 +16,6 @@ from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import Opentide
 from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.registry.catalogue import (
-    NESTED_OBJECT_FILE,
     catalogue_files,
     display_path,
     nested_entries,
@@ -35,6 +34,7 @@ from opentide.validation.errors import (
     attach_yaml_lines,
     is_vocab_shape_duplicate,
     issues_from_pydantic,
+    merge_reference_findings,
     vocab_shape_rejections,
 )
 from opentide.validation.field_vocab import validate_object_vocab_from_metaschema
@@ -262,7 +262,7 @@ def _nested_object_warnings(
         folder = display_path(row.get("folder") or path.parent)
         warnings.append(
             ValidationIssue(
-                code=NESTED_OBJECT_FILE,
+                code="nested_object_file",
                 severity="warning",
                 object_type=object_type,
                 file_path=path,
@@ -483,6 +483,7 @@ def _validate_work_item(
         if item.object_type == "threat":
             issues.extend(check_chaining_for_object(item.uuid, item.body, graph))
 
+    issues = merge_reference_findings(issues)
     if file_path is not None:
         issues = attach_yaml_lines(issues, item.body, file_path=file_path)
         warnings = attach_yaml_lines(warnings, item.body, file_path=file_path)
@@ -652,7 +653,7 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
 def _scan_id_file(path_row: tuple[Path, str]) -> list[_IdScanRow] | _IdScanParseError:
     import yaml
 
-    from opentide.core.io import load_yaml
+    from opentide.core.io import describe_yaml_error, load_yaml
 
     model_file, meta_name = path_row
     try:
@@ -663,7 +664,7 @@ def _scan_id_file(path_row: tuple[Path, str]) -> list[_IdScanRow] | _IdScanParse
         return _IdScanParseError(
             model_file=model_file,
             meta_name=meta_name,
-            error=str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__,
+            error=describe_yaml_error(exc).message,
         )
     if not isinstance(model_body, dict):
         return []

@@ -8,7 +8,7 @@ from typing import Any
 import structlog
 
 from opentide.core.logging.config import get_stdout_console, is_json_output
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 from opentide.validation.errors import format_issues_for_console
 from opentide.validation.session import run_validation
@@ -29,7 +29,7 @@ def _format_stats_table(rows: list[list[Any]]) -> str:
 
 
 def run() -> None:
-    emit_section("Pydantic Schema Validation")
+    report_stage("schema validation")
     logger.info("validates_all_opentide_objects_via_model_validate")
     Opentide.initialise()
     report = run_validation()

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from opentide.generation.schema_annotations import annotate_editor_schema
 from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.models.schema_registry import identifiers_for_families
 from opentide.models.version import SchemaVersion
@@ -58,7 +59,7 @@ def build_opentide_router(identifiers: list[str] | None = None) -> dict[str, Any
     editor completes them and reports an unknown identifier on that field.
     """
     ids = sorted(identifiers or identifiers_for_families(CORE_OBJECT_TYPES))
-    return {
+    router: dict[str, Any] = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": ROUTER_TITLE,
         "description": (
@@ -69,6 +70,8 @@ def build_opentide_router(identifiers: list[str] | None = None) -> dict[str, Any
         "required": ["metadata"],
         "properties": {
             "metadata": {
+                "title": "Metadata",
+                "description": "Object metadata. `schema` selects the revision schema.",
                 "type": "object",
                 "required": ["schema"],
                 "properties": {
@@ -87,6 +90,7 @@ def build_opentide_router(identifiers: list[str] | None = None) -> dict[str, Any
         },
         "allOf": [_route(schema_id) for schema_id in ids],
     }
+    return annotate_editor_schema(router)
 
 
 def export_opentide_router(output_path: Path, identifiers: list[str] | None = None) -> None:

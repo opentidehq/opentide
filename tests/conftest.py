@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Iterator
+from functools import partial
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -19,7 +20,7 @@ for path in (SRC, ROOT):
 
 os.environ.setdefault("TERM_PROGRAM", "vscode")
 
-pytest_plugins = ["tests.corpus_support"]
+pytest_plugins = ["tests.corpus_support", "tests.result_models_support"]
 
 _repo_patcher: patch | None = None
 _original_find_workspace_root = None
@@ -110,6 +111,48 @@ def _isolate_ci_event_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
+#: Variables that switch on the CLI's CI sinks: annotations on stdout and a job
+#: summary file. This suite runs in GitHub Actions, where every CLI test would
+#: otherwise print ``::error`` lines into the output it asserts on and append
+#: to the real job summary. ``CI`` goes too, so a run there sees the same
+#: provider as a local run: none. A test that needs one sets it.
+_CI_SINK_ENV = ("CI", "GITHUB_ACTIONS", "GITLAB_CI", "TF_BUILD", "GITHUB_STEP_SUMMARY")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ci_sinks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test outside CI."""
+    for name in _CI_SINK_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
+#: Variables that pick the CLI output mode. A developer running the suite from a
+#: coding agent (``CLAUDECODE``, ``AI_AGENT``, ...) would otherwise get agent
+#: mode in every CLI test, and ``OPENTIDE_DEBUG`` would turn on debug logging.
+_OUTPUT_MODE_ENV = ("OPENTIDE_OUTPUT", "OPENTIDE_DEBUG")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Start every test outside an agent, with no output mode chosen yet."""
+    from opentide.cli.ui.mode import AGENT_VARIABLES, reset_mode
+
+    for name in (*AGENT_VARIABLES, *_OUTPUT_MODE_ENV):
+        monkeypatch.delenv(name, raising=False)
+    reset_mode()
+    yield
+    reset_mode()
+
+
+@pytest.fixture(autouse=True)
+def _no_terminal_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No OSC 9;4 in captured output when the suite runs inside Ghostty, kitty, tmux, ...
+
+    Tests of the sequence itself pass their own environment.
+    """
+    monkeypatch.setenv("OPENTIDE_PROGRESS", "0")
+
+
 @pytest.fixture
 def metadata() -> dict[str, Any]:
     return {
@@ -135,6 +178,29 @@ def rule_payload(metadata: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _restore_environment(saved: dict[str, str]) -> None:
+    if dict(os.environ) != saved:
+        os.environ.clear()
+        os.environ.update(saved)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_fixture_setup(fixturedef: Any, request: pytest.FixtureRequest) -> Iterator[Any]:
+    """Give every module-, class-, package- or session-scoped fixture its own environment.
+
+    Such a fixture runs before any test's ``_restore_process_environment``
+    snapshot, so what it leaves in ``os.environ`` would outlive its scope: an
+    in-process CLI call exports ``OPENTIDE_REPO_ROOT``, ``OPENTIDE_DATA_ROOT``
+    and ``OPENTIDE_TIDE_WORKSPACE``, which ``CliRunner(env=...)`` does not
+    take back, and tests in other modules then depend on the order they run in
+    (#642 and #647 each fixed one). The environment is restored when the
+    fixture is torn down, after its own teardown, so it holds for its scope.
+    """
+    if fixturedef.scope != "function":
+        fixturedef.addfinalizer(partial(_restore_environment, dict(os.environ)))
+    return (yield)
+
+
 @pytest.fixture(autouse=True)
 def _restore_process_environment() -> Iterator[None]:
     """Undo ``os.environ`` writes a test makes outside ``monkeypatch``.
@@ -145,9 +211,7 @@ def _restore_process_environment() -> Iterator[None]:
     """
     saved = dict(os.environ)
     yield
-    if dict(os.environ) != saved:
-        os.environ.clear()
-        os.environ.update(saved)
+    _restore_environment(saved)
 
 
 @pytest.fixture(autouse=True)

@@ -286,7 +286,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             if "allowed_actions" in attrs:
                 allowed_actions_config = attrs.pop("allowed_actions")
                 if allowed_actions_config in [False, None]:
-                    logger.info("mdr_actions_disabled_in_splunk", status=status)
+                    logger.info("rule_actions_disabled_in_splunk", status=status)
                     status_allowed_actions = []
                 elif isinstance(allowed_actions_config, list):
                     status_allowed_actions = list(allowed_actions_config)
@@ -400,7 +400,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         """Deploy a single typed MDR to Splunk."""
         splunk_config = data.platform_configs().splunk
         if not splunk_config:
-            logger.info("mdr_skipped", mdr_name=data.name, reason="no Splunk configuration")
+            logger.info("rule_skipped", mdr_name=data.name, reason="no Splunk configuration")
             return None
 
         tenant_setup = tenant_config.setup
@@ -448,7 +448,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         loaded_mdr = without_legacy_external_ids(loaded_mdr, platform="splunk")
 
         if not loaded_mdr:
-            logger.info("no_mdrs_to_deploy_for_splunk")
+            logger.info("no_rules_to_deploy_for_splunk")
             return
 
         tide_deployment = TideDeployment(

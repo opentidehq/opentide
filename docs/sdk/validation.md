@@ -57,7 +57,7 @@ Structured report with:
 - `errors`, `warnings` — `ValidationIssue` lists
 - `model_dump_json_ready()` — JSON-safe dict for APIs
 
-MCP `validation_report` tool returns this shape.
+MCP `validation_report` tool returns this shape, with the [diagnostic fields](../mcp/tools.md#diagnostic-fields) added to each issue and a `next_actions` list.
 
 ## Single rule via registry
 

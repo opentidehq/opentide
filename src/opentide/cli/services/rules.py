@@ -64,6 +64,35 @@ def list_unreviewed_rules(
     return findings
 
 
+_UNITS = {"d": "day", "h": "hour", "m": "minute"}
+
+
+def window_text(older_than: str) -> str:
+    """``90d`` → ``90 days``, ``12h`` → ``12 hours``, ``1`` → ``1 day``."""
+    text = older_than.strip()
+    unit = text[-1:] if text[-1:] in _UNITS else "d"
+    number = text[:-1] if text[-1:] in _UNITS else text
+    word = _UNITS[unit]
+    return f"{number} {word}" if number == "1" else f"{number} {word}s"
+
+
+def _has_rule_files(repo: Path) -> bool:
+    # A file in a subfolder is not a rule (#584).
+    return bool(catalogue_files(repo / "objects" / "rules", include_debug=True))
+
+
+def _first_rule_step() -> dict[str, str]:
+    """The command that writes a first rule: ``new rule`` where this build has it."""
+    from opentide.cli.commands import ROOT_COMMANDS
+
+    if any(spec.name == "new" for spec in ROOT_COMMANDS):
+        return {"command": "opentide new rule", "reason": "scaffold your first rule"}
+    return {
+        "command": "opentide generate templates",
+        "reason": "rule templates to copy into objects/rules/",
+    }
+
+
 def run_unreviewed(repo: Path, *, older_than: str, now: datetime | None = None) -> dict[str, Any]:
     """Build the ``rules unreviewed`` payload. Raises ``ValueError`` on a bad window."""
     window = parse_window(older_than)
@@ -71,9 +100,23 @@ def run_unreviewed(repo: Path, *, older_than: str, now: datetime | None = None) 
     unreadable: dict[str, str] = {}
     rules = list_unreviewed_rules(repo, window=window, now=evaluated_at, unreadable=unreadable)
     count = len(rules)
-    noun = "rule" if count == 1 else "rules"
+    span = window_text(older_than)
+    extra: dict[str, Any] = {}
+    if count:
+        noun = "rule" if count == 1 else "rules"
+        message = f"{count} {noun} unreviewed for {span}"
+        extra["_outcome_kind"] = "warning"
+    elif not _has_rule_files(repo):
+        # Nothing was checked, so nothing can be called reviewed.
+        message = "No rules yet"
+        extra["status"] = "skipped"
+        extra["_next_actions"] = [_first_rule_step()]
+    else:
+        message = f"Every rule reviewed in the last {span}"
     payload: dict[str, Any] = {
-        "message": f"Listed {count} unreviewed {noun}",
+        "message": message,
+        "_summary": {"unreviewed": count},
+        **extra,
         "evaluated_at": evaluated_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
         "window": older_than.strip(),
         "count": count,
