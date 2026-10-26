@@ -670,8 +670,8 @@ def test_refused_with_json(tmp_path: Path) -> None:
     assert payload["failure"]["code"] == "usage_tui_needs_tty"
     assert payload["command"] == "tui"
     assert [action["command"] for action in payload["next_actions"]] == [
-        "opentide info",
-        "opentide validate",
+        "opentide --json info",
+        "opentide --json validate",
     ]
 
 
@@ -746,7 +746,8 @@ def test_the_service_module_does_not_import_textual() -> None:
         [
             sys.executable,
             "-c",
-            "import sys\nimport opentide.cli.services.tui\nraise SystemExit('textual' in sys.modules)",
+            "import sys\nimport opentide.cli.services.tui\n"
+            "raise SystemExit('textual' in sys.modules)",
         ],
         capture_output=True,
         text=True,

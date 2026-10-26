@@ -312,7 +312,8 @@ ACTIONS: tuple[Action, ...] = (
     Action(
         "generate",
         "opentide generate",
-        "Run the full generation pipeline: docs, exports, vocabularies, templates, schemas, snippets",
+        "Run the full generation pipeline: "
+        "docs, exports, vocabularies, templates, schemas, snippets",
         _generate,
     ),
     Action(
@@ -354,7 +355,7 @@ def run_action(ctx: CliContext, action: Action) -> ActionOutcome:
     quiet = dataclasses.replace(ctx, json_output=True)
     try:
         payload = action.run(quiet)
-    except Exception as exc:  # noqa: BLE001 -- shown in the UI instead of ending it
+    except Exception as exc:
         message = f"{type(exc).__name__}: {exc}"
         result = CommandResult(
             message=message,

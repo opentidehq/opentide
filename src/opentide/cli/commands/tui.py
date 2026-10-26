@@ -41,7 +41,10 @@ def tui_cmd(ctx: typer.Context) -> None:
     reason = _plain_reason(cli) if mode is OutputMode.PLAIN and interactive else None
     if reason is not None:
         # A person at a terminal, put in plain mode by a setting: say which one.
-        message = f"opentide tui runs only in the human output mode; this run is in plain mode because {reason}"
+        message = (
+            "opentide tui runs only in the human output mode; "
+            f"this run is in plain mode because {reason}"
+        )
         data["advice"] = "set OPENTIDE_OUTPUT=human to open it anyway"
     elif mode is OutputMode.HUMAN:
         message = "opentide tui needs an interactive terminal; stdin or stdout is not one"
@@ -70,7 +73,10 @@ def _interactive() -> bool:
 
 
 def _plain_reason(cli: CliContext) -> str | None:
-    """The setting that chose ``plain`` mode at a terminal, in the order the mode rules read them."""
+    """The setting that chose ``plain`` mode at a terminal.
+
+    Settings are read in the order the mode rules read them.
+    """
     if os.environ.get("OPENTIDE_OUTPUT", "").strip().lower() == "plain":
         return "OPENTIDE_OUTPUT is plain"
     if cli.no_color:

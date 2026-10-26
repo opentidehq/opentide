@@ -13,7 +13,7 @@ import io
 from collections.abc import Callable, Iterable
 from functools import partial
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from rich.cells import set_cell_size
 from rich.console import Console, Group, RenderableType
@@ -146,7 +146,7 @@ class CatalogueTree(Tree[Any]):
     name in full.
     """
 
-    def __init__(self, label: str, *, id: str | None = None) -> None:  # noqa: A002 -- Textual's name
+    def __init__(self, label: str, *, id: str | None = None) -> None:
         super().__init__(label, id=id)
         #: Node id → how many trailing characters of its label to keep whole.
         self.tails: dict[int, int] = {}
@@ -383,7 +383,7 @@ class OpentideTui(App[None]):
         self.reload_error = None
         try:
             catalogue = load_catalogue(self.cli)
-        except Exception as exc:  # noqa: BLE001 -- shown in the UI with the outcome
+        except Exception as exc:
             self.reload_error = f"{type(exc).__name__}: {exc}"
             return outcome, None
         return outcome, catalogue
@@ -411,7 +411,7 @@ class OpentideTui(App[None]):
             self._show_catalogue(result)
             self._status("")
             return
-        outcome, catalogue = result
+        outcome, catalogue = cast("tuple[ActionOutcome, Catalogue | None]", result)
         self._show_outcome(outcome)
         if catalogue is None:
             self._internal_error(f"the catalogue could not be read again: {self.reload_error}")
