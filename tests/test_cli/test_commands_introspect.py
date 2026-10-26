@@ -334,7 +334,7 @@ def test_environment_names_every_variable_the_code_reads() -> None:
 
 
 def test_the_docs_table_lists_every_environment_variable() -> None:
-    """``docs/cli/global-options.md`` has a row for each ``OPENTIDE_*`` entry of ``environment()``."""
+    """The global-options table has a row for each ``OPENTIDE_*`` entry of ``environment()``."""
     from opentide.cli.services.introspect import environment
 
     docs = Path(__file__).resolve().parents[2] / "docs" / "cli" / "global-options.md"
