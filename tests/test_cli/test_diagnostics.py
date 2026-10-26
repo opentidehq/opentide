@@ -880,6 +880,29 @@ def test_a_narrow_terminal_never_breaks_a_word(
     assert set(str(issue.suggestion).split()) <= words
 
 
+def test_an_underline_label_past_the_edge_moves_to_the_next_row(workspace: Path) -> None:
+    """At 60 columns ``no object has this id`` ran past the edge after a long underline
+    and the terminal broke it mid-word (post-merge end-to-end run)."""
+    issue = ValidationIssue(
+        code="invalid_ref",
+        file_path=_rule(workspace),
+        field_path=("detection_model",),
+        message=f"Unknown objective or signal reference '{DANGLING}'",
+        context={"value": DANGLING},
+    )
+    sources = SourceFiles()
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=sources)
+    console = Console(file=io.StringIO(), force_terminal=True, width=60, record=True)
+    render_diagnostics(console, [diagnostic], sources=sources, mode=OutputMode.HUMAN, cwd=workspace)
+    lines = console.export_text().splitlines()
+    underline = next(index for index, line in enumerate(lines) if "━" in line)
+    # The source line stays whole; the rows opentide draws fit.
+    assert cell_len(lines[underline]) <= 60
+    assert "no object has this id" not in lines[underline]
+    assert lines[underline + 1].rstrip().endswith("│                  no object has this id")
+    assert cell_len(lines[underline + 1]) <= 60
+
+
 def test_a_pipe_keeps_lines_whole(workspace: Path) -> None:
     """Without a terminal nothing is wrapped: the reader (a CI log, an editor) wraps it."""
     long_name = "sentinel-kql-rule-with-a-much-longer-file-name-here.yaml"

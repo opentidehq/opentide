@@ -7,7 +7,8 @@
   [34m   [0m[34m│[0m
   [34m 9 [0m[34m│[0m techniques: [T1059, T9999]
   [34m10 [0m[34m│[0m detection_model: 00000000-0000-4000-8002-DEADBEEF0000   # the objective from step 4
-  [34m   [0m[34m│[0m                  [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[1;31m no object has this id[0m
+  [34m   [0m[34m│[0m                  [1;31m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [34m   [0m[34m│[0m                  [1;31mno object has this id[0m
   [34m   [0m[34m│[0m
      [34m╰─[0m [1;36mhelp:[0m opentide info objectives lists the ones that exist
   
