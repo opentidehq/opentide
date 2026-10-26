@@ -19,7 +19,7 @@ from opentide.cli.ui.home import HomeFacts, gather, home_view, next_steps
 from opentide.cli.ui.layout import columns
 from opentide.cli.ui.mode import OutputMode, set_mode
 from opentide.cli.ui.plan import plan_view
-from opentide.cli.ui.progress import Checklist, Step, checklist_table, step_line
+from opentide.cli.ui.progress import Checklist, Step, busy, checklist_table, step_line
 from opentide.cli.ui.render import render_next_actions
 from opentide.cli.ui.setup import render_summary, setup_outcome, welcome
 
@@ -369,3 +369,25 @@ def test_checklist_rows_are_cut_not_wrapped_on_a_narrow_terminal() -> None:
     assert len(lines) == len(_STEPS)
     assert all(len(line) <= 30 for line in lines)
     assert lines[2].startswith("  ✓  schemas") and lines[2].endswith("…")
+
+
+@pytest.mark.parametrize(
+    ("mode", "quiet", "terminal", "drawn"),
+    [
+        (OutputMode.HUMAN, False, True, True),
+        (OutputMode.HUMAN, True, True, False),
+        (OutputMode.HUMAN, False, False, False),
+        (OutputMode.PLAIN, False, True, False),
+        (OutputMode.AGENT, False, True, False),
+        (OutputMode.JSON, False, True, False),
+    ],
+)
+def test_busy_spins_only_for_a_person_at_a_terminal(
+    mode: OutputMode, quiet: bool, terminal: bool, drawn: bool
+) -> None:
+    """validate on 300 rules was seconds of nothing; the spinner is transient (post-merge run)."""
+    stream = io.StringIO()
+    console = Console(file=stream, force_terminal=terminal, width=80)
+    with busy("Validating objects", console=console, mode=mode, quiet=quiet):
+        pass
+    assert ("Validating objects" in stream.getvalue()) is drawn

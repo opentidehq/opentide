@@ -135,10 +135,14 @@ def validate_group(
             )
         _watch(cli, files=file, **scope)
         return
-    if fix:
-        result = run_validate_fix(cli, dry_run=dry_run, files=file, **scope)
-    else:
-        result = run_validate(cli, files=file, **scope)
+    from opentide.cli.ui.progress import busy
+
+    # A report on stdout is whole: no spinner then either (it draws on stderr).
+    with busy("Validating objects", quiet=cli.quiet or report_format is not ReportFormat.text):
+        if fix:
+            result = run_validate_fix(cli, dry_run=dry_run, files=file, **scope)
+        else:
+            result = run_validate(cli, files=file, **scope)
     diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
     plan = cast("FixPlan | None", result.pop("_fix_plan", None))
     fixed = cast("FixPlan | None", result.pop("_fixed", None))

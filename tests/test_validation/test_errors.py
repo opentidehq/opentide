@@ -378,3 +378,18 @@ def test_load_yaml_with_lines_returns_none_for_invalid_yaml(tmp_path: Path) -> N
     yaml_path = tmp_path / "broken.yaml"
     yaml_path.write_text("name: [unclosed\n", encoding="utf-8")
     assert load_yaml_with_lines(yaml_path) is None
+
+
+def test_a_clean_object_is_not_parsed_again_for_line_hints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """validate re-read every object it had already read; 300 rules took 8-12 s (post-merge run)."""
+    import opentide.validation.errors as errors
+
+    def refuse(path: Path) -> None:
+        raise AssertionError(f"parsed {path} for no finding")
+
+    monkeypatch.setattr(errors, "load_yaml_with_lines", refuse)
+    yaml_path = tmp_path / "clean.yaml"
+    yaml_path.write_text("name: clean\n", encoding="utf-8")
+    assert errors.attach_yaml_lines([], {"name": "clean"}, file_path=yaml_path) == []

@@ -192,7 +192,9 @@ def attach_yaml_lines(
     file_path: Path | None = None,
 ) -> list[ValidationIssue]:
     """Best-effort YAML line hints; issues are returned unchanged when the file cannot be loaded."""
-    if file_path is None:
+    # Nothing to place: a round-trip parse per clean object made validate take
+    # 8-12 s on a 300-rule catalogue (post-merge end-to-end run).
+    if file_path is None or not issues:
         return issues
     data = load_yaml_with_lines(file_path)
     if data is None:
