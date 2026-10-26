@@ -9,7 +9,7 @@ from typing import NoReturn
 import typer
 
 from opentide.cli.context import CliContext, get_context
-from opentide.cli.enums import DetectionPlatform
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.output import CommandResult, emit_error, emit_result
 from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_NEEDS_INPUT, NextAction
 
@@ -207,7 +207,10 @@ def new_rule(
     ctx: typer.Context,
     name: str | None = typer.Option(None, "--name", help=_NAME_HELP),
     platform: list[DetectionPlatform] | None = typer.Option(
-        None, "--platform", help="Add a configuration block for this platform (repeatable)"
+        None,
+        "--platform",
+        metavar=PLATFORM_METAVAR,
+        help=platform_help("Add a configuration block for this platform (repeatable)"),
     ),
     objective: str | None = typer.Option(
         None, "--objective", help="UUID of the objective this rule implements (detection_model)"

@@ -377,6 +377,44 @@ def test_help_ends_with_one_newline_and_single_spaced_examples(argv, monkeypatch
     assert "Disable Rich" not in text
 
 
+def _command_tree() -> list[dict]:
+    import json
+
+    from opentide.cli.root import app
+
+    result = CliRunner().invoke(app, ["--json", "commands"])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)["commands"]
+
+
+def test_help_reads_as_text_not_markup() -> None:
+    """Four help screens printed docstring markup (``.env.example``), and eight of 55
+    summaries ended in a period where the rest do not (post-merge end-to-end run)."""
+    commands = _command_tree()
+    markup = [c["path"] for c in commands if "``" in (c["help"] or "") + (c["summary"] or "")]
+    assert markup == []
+    periods = [c["path"] for c in commands if (c["summary"] or "").endswith(".")]
+    assert periods == []
+
+
+def test_a_long_list_of_choices_gets_a_short_metavar() -> None:
+    """``<sentinel|splunk|…>`` broke mid-word in ``new rule --help`` (``defender_for_endpo``)
+    and ``setup --help`` (``<github|gitlab|azure|no`` / ``ne>``) (post-merge run)."""
+    from opentide.cli.root import app
+
+    root = typer.main.get_group(app)
+    crowded = [
+        f"{path} {param.opts[0]}"
+        for path, command in _visible(root)
+        for param in command.params
+        if param.param_type_name == "option"
+        and not getattr(param, "hidden", False)
+        and len("|".join(getattr(param.type, "choices", None) or ())) > 24
+        and param.metavar is None
+    ]
+    assert crowded == []
+
+
 def test_root_help_names_no_library() -> None:
     from opentide.cli.root import app
 

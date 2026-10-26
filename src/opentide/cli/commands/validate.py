@@ -59,7 +59,12 @@ QUERY_STRATEGY_HELP = (
 @validate_app.callback(invoke_without_command=True)
 def validate_group(
     ctx: typer.Context,
-    check: ValidateCheck | None = typer.Option(None, "--check", help="Run one check only"),
+    check: ValidateCheck | None = typer.Option(
+        None,
+        "--check",
+        metavar="CHECK",
+        help="Run one check only: " + ", ".join(item.value for item in ValidateCheck),
+    ),
     file: list[str] | None = typer.Option(
         None, "--file", help="Validate only this file (repeatable)"
     ),

@@ -348,7 +348,10 @@ def setup_cmd(
         help=platform_help("Enable a detection platform (repeatable)"),
     ),
     ci: CiPlatform | None = typer.Option(
-        None, "--ci", help="CI/CD pipeline to write: github, gitlab, azure or none"
+        None,
+        "--ci",
+        metavar="PROVIDER",
+        help="CI/CD pipeline to write: github, gitlab, azure or none",
     ),
     staging: bool = typer.Option(True, "--staging/--no-staging", help=_STAGING_HELP),
     inflight: bool = typer.Option(
@@ -525,7 +528,7 @@ def setup_platforms_cmd(
     elastic: bool = typer.Option(False, "--elastic", help="Enable Elastic Security"),
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
-    """Create and enable platform configuration files in ``.opentide/configurations/platforms/``."""
+    """Create and enable platform configuration files in `.opentide/configurations/platforms/`."""
     from opentide.cli.services.setup.platforms import PlatformsSetupOptions, run_platforms_setup
 
     cli = get_context(ctx)
@@ -635,7 +638,7 @@ def setup_env_cmd(
     path_flag: str = PATH_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
-    """Write ``.env.example`` with ``OPENTIDE_REPO_ROOT`` and ignore ``.env``."""
+    """Write `.env.example` with `OPENTIDE_REPO_ROOT` and ignore `.env`."""
     from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
 
     cli = get_context(ctx)

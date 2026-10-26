@@ -27,7 +27,10 @@ def lint_cmd(
         False, "--strict", help="Exit non-zero when findings exist (CI gate)"
     ),
     check: list[LintCheck] = typer.Option(
-        [], "--check", help="Limit to one check: filenames, metadata or placeholders (repeatable)"
+        [],
+        "--check",
+        metavar="CHECK",
+        help="Limit to one check: filenames, metadata or placeholders (repeatable)",
     ),
     report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
     output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
