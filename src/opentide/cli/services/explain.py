@@ -88,9 +88,14 @@ def reference_markdown() -> str:
     for page in pages:
         lines.append("")
         in_fence = False
-        for line in page.markdown.rstrip("\n").splitlines():
+        source = page.markdown.rstrip("\n").splitlines()
+        for index, line in enumerate(source):
             if line.startswith("```"):
                 in_fence = not in_fence
+                following = source[index + 1] if index + 1 < len(source) else ""
+                if in_fence and line == "```text" and not following.startswith("opentide "):
+                    # Output an example shows, not a command the docs check could run.
+                    line = "```text illustrative"
             if not in_fence and line.startswith("#"):
                 line = "#" + line
             lines.append(line)

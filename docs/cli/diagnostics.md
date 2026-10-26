@@ -226,7 +226,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ### Example
 
-```text
+```text illustrative
 error[compile_empty_block]: `response` is empty, so Sentinel cannot read `alert_severity`
   ╭─▶ objects/rules/sentinel-kql-rule.yaml
   ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
@@ -244,7 +244,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ### Example
 
-```text
+```text illustrative
 error[compile_failed]: Sentinel cannot compile this rule: …
   ╰─▶ objects/rules/lsass-access.yaml
 ```
@@ -261,7 +261,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ### Example
 
-```text
+```text illustrative
 error[compile_invalid_rule]: …
   ╰─▶ objects/rules/lsass-access.yaml
 ```
@@ -278,7 +278,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ### Example
 
-```text
+```text illustrative
 error[compile_invalid_value]: configurations.sentinel.alert.suppression is true
   ╭─▶ objects/rules/lsass-access.yaml
   ╰─ help: set it to false or a duration such as PT1H
@@ -296,7 +296,7 @@ Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for
 
 ### Example
 
-```text
+```text illustrative
 error[compile_missing_field]: configurations.sentinel.scheduling.frequency is missing
   ╭─▶ objects/rules/lsass-access.yaml
   ╰─ help: required unless scheduling.nrt is true
@@ -348,7 +348,7 @@ Reported by `opentide doctor`. Fails when one does not parse; the message names 
 
 ### Example
 
-```text
+```text illustrative
 ✗ .opentide/configurations/platforms/sentinel.toml is not valid TOML: Expected '=' after a key (at line 4, column 9) · configuration
 ```
 
@@ -364,7 +364,7 @@ Reported by `opentide doctor`. Warns when a variable is unset or empty, with `su
 
 ### Example
 
-```text
+```text illustrative
 ! sentinel/prod: 1 of 2 variables unset: AZURE_CLIENT_SECRET · credentials
   → set AZURE_CLIENT_SECRET in the environment (or a .env file you load)
 ```
@@ -430,7 +430,7 @@ Severity: error. Reported by `opentide validate` (schema check).
 
 ### Example
 
-```text
+```text illustrative
 .opentide/states/deployment/00000000-0000-4000-8003-00000000000A.json   # not lowercase
 ```
 
@@ -479,7 +479,7 @@ Severity: error. Reported by `opentide validate` (id-uniqueness check).
 
 ### Example
 
-```text
+```text illustrative
 objects/rules/a.yaml     metadata.uuid: 00000000-0000-4000-8003-000000000001
 objects/rules/a-copy.yaml metadata.uuid: 00000000-0000-4000-8003-000000000001
 ```
@@ -550,7 +550,7 @@ Severity: warning. Reported by `opentide lint` (filenames check).
 
 ### Example
 
-```text
+```text illustrative
 objects/threats/Simulated Actor.yaml   # name: Simulated Actor → simulated-actor.yaml
 ```
 
@@ -566,7 +566,7 @@ Reported by `opentide doctor`. Warns when it is missing: `--changed`, the defaul
 
 ### Example
 
-```text
+```text illustrative
 ✓ git 2.43.0 · git
 ```
 
@@ -582,7 +582,7 @@ Reported by `opentide doctor`. Warns when it is not a repository, or `origin/HEA
 
 ### Example
 
-```text
+```text illustrative
 ! ./ is not in a git repository · git_repository
   → git init ./
 ```
@@ -599,7 +599,7 @@ Exit 1, as `failure.code`. Under `--json` the document also carries `failure.cra
 
 ### Example
 
-```text
+```text illustrative
 error[internal]: RuntimeError: index exploded
   note: crash log, with credentials and tenant names redacted: ~/.local/state/opentide/crash-20261023T110335102704Z-648.log
   help: this is a bug in opentide; report it: https://github.com/opentidehq/opentide/issues/new?…
@@ -716,7 +716,7 @@ Reported by `opentide doctor`. Warns when no configuration has such a server, or
 
 ### Example
 
-```text
+```text illustrative
 ○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
   → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)
 ```
@@ -905,7 +905,7 @@ Reported by `opentide doctor`. Warns when a newer release exists or PyPI did not
 
 ### Example
 
-```text
+```text illustrative
 ! opentide 0.18.0 is available; 0.17.2 is installed · opentide_latest
   → pip install --upgrade opentide
 ```
@@ -922,7 +922,7 @@ Reported by `opentide doctor`. Always passes: it records the version the other c
 
 ### Example
 
-```text
+```text illustrative
 ✓ opentide 0.17.2 · opentide_version
 ```
 
@@ -1024,7 +1024,7 @@ Reported by `opentide doctor`. Fails when it does not, with `subject` naming the
 
 ### Example
 
-```text
+```text illustrative
 ✗ splunk: cannot import splunklib (ModuleNotFoundError) · platform_sdk
   → pip install --force-reinstall opentide
 ```
@@ -1041,7 +1041,7 @@ Reported by `opentide doctor`. Warns when none is: rules validate but nothing de
 
 ### Example
 
-```text
+```text illustrative
 ✓ Enabled: sentinel · platforms_enabled
 ```
 
@@ -1057,7 +1057,7 @@ Reported by `opentide doctor`. Fails when it does not (3-second timeout); skippe
 
 ### Example
 
-```text
+```text illustrative
 ✗ Cannot connect to proxy http://proxy.example:3128 (ConnectionRefusedError) · proxy
   → check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
 ```
@@ -1074,7 +1074,7 @@ Reported by `opentide doctor`. Fails when it is older than 3.10.
 
 ### Example
 
-```text
+```text illustrative
 ✓ Python 3.13.16 · python_version
 ```
 
@@ -1174,7 +1174,7 @@ Reported by `opentide doctor`. Warns when one is missing. Schemas carry no versi
 
 ### Example
 
-```text
+```text illustrative
 ! 1 schema(s) this version generates are missing: rule · schemas_fresh
   → opentide generate schemas
 ```
@@ -1271,7 +1271,7 @@ Severity: error. Reported by `opentide validate --check sharing-config` and `ope
 
 ### Example
 
-```text
+```text illustrative
 .opentide/configurations/sharing/misp.toml
 ```
 
@@ -1303,7 +1303,7 @@ Reported by `opentide doctor`. Warns when a template is missing or differs, usua
 
 ### Example
 
-```text
+```text illustrative
 ! 2 template(s) differ from what this version generates: rule, threat · templates_fresh
   → opentide generate templates
 ```
@@ -1532,7 +1532,7 @@ Reported by `opentide doctor`. Warns when it maps something else or is not valid
 
 ### Example
 
-```text
+```text illustrative
 ○ No .vscode/settings.json: editors get no schema completion · vscode_settings
   → opentide setup vscode
 ```
@@ -1549,7 +1549,7 @@ Reported by `opentide doctor`. Skipped when it does not.
 
 ### Example
 
-```text
+```text illustrative
 ○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets
   → opentide generate snippets
 ```
@@ -1566,7 +1566,7 @@ Reported by `opentide doctor`. Fails when neither `.opentide/` nor `objects/` is
 
 ### Example
 
-```text
+```text illustrative
 ✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
 ```
 
@@ -1582,7 +1582,7 @@ Exit 1, as `failure.code`. `new` writes only into a workspace, the folder `--rep
 
 ### Example
 
-```text
+```text illustrative
 cd ~ && opentide new threat --name "Credential Dumping"
 ```
 
