@@ -757,3 +757,29 @@ def test_no_target_says_which_file_to_write(invoke_cli, tide_corpus_repo: Path) 
     assert payload["preflight"] == "scope_no_match"
     assert payload["message"] == "No sharing target is configured"
     assert "sharing.toml" in payload["advice"]
+
+
+def test_a_skipped_row_fits_100_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``its status is not one the target shares`` beside a long rule name wrapped
+    mid-word at 100 columns (post-merge AFTER shots)."""
+    import io
+
+    from rich.cells import cell_len
+    from rich.console import Console
+
+    from opentide.cli.services import share
+
+    console = Console(file=io.StringIO(), width=100, color_system=None)
+    monkeypatch.setattr("opentide.core.logging.config.get_stdout_console", lambda: console)
+    long_name = "LSASS access on defender_for_endpoint"
+    reasons = ("rule_status", "max_tlp", "object_type")
+    uuids = [f"00000000-0000-4000-8003-00000000000{n}" for n in range(len(reasons))]
+    monkeypatch.setattr(share, "_object_names", lambda: dict.fromkeys(uuids, long_name))
+    records = [
+        {"target": "misp-lab", "action": "skipped", "object_uuid": uuid, "reason": reason}
+        for uuid, reason in zip(uuids, reasons, strict=True)
+    ]
+    share.render_share({"records": records, "_outcome_kind": "plan"})
+    lines = console.file.getvalue().splitlines()
+    assert sum(long_name in line for line in lines) == len(reasons)
+    assert max(cell_len(line) for line in lines) <= 100, lines

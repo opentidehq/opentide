@@ -183,10 +183,11 @@ _SHARE_ROWS: dict[str, tuple[str, str, str, str]] = {
 }
 
 #: Why an object was skipped, in words (the record keeps the code).
+#: Short, so a row fits 100 columns beside a long name (a sentence wrapped mid-word).
 _SKIP_REASONS = {
-    "max_tlp": "its TLP is above the target's max_tlp",
-    "object_type": "the target does not take this object type",
-    "rule_status": "its status is not one the target shares",
+    "max_tlp": "TLP above max_tlp",
+    "object_type": "type not shared",
+    "rule_status": "status not shared",
 }
 
 
