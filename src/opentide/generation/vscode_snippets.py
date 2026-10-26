@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 
 logger = structlog.get_logger("opentide.generation.vscode_snippets")
@@ -142,7 +142,7 @@ def _require_template(path: Path, *, kind: str) -> None:
 
 
 def run() -> None:
-    emit_section("Generate VSCode Snippets")
+    report_stage("VS Code snippets")
     logger.info("converts_the_templates_into_vscode_formatted_snippets_inproject")
     paths = Opentide.Configurations.Global.Paths
     snippets_path = _snippets_output_path(paths)
@@ -185,7 +185,9 @@ def run() -> None:
             subschema_template_path = (
                 subschemas_folder / subschema_type_folder / "Templates" / subchema_template_name
             )
-            title = f"{subschema_type_folder} : {subschema_name} Template".strip()
+            # The folder name ("MDR Systems Deployment") stays a package path;
+            # people see "Platform configuration".
+            title = f"Platform configuration : {subschema_name} Template".strip()
             _require_template(subschema_template_path, kind=f"platform {platform_id}")
             snippets[title] = vs_code_snippet_generator(
                 subschema_template_path,

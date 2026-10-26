@@ -444,7 +444,7 @@ def test_setup_yes_ci_none_still_scaffolds(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
-    assert payload["message"] == "Setup complete"
+    assert payload["message"].startswith("Created ")
     assert any(step["step"] == "repo" for step in payload["steps"])
     assert (tmp_path / "README.md").is_file()
     assert not (tmp_path / ".github" / "workflows" / "opentide.yml").exists()

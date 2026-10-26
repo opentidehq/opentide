@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 import structlog
 import typer
-from rich.markup import escape
 
 from opentide.cli.enums import (
     CiPlatform,
@@ -28,6 +27,7 @@ from opentide.cli.services.setup.interactive import (
     ask_text,
     mcp_hosts_from_keys,
     require_interactive,
+    require_text,
     skill_targets_from_keys,
 )
 from opentide.cli.services.setup.mcp import McpSetupOptions, run_mcp_setup
@@ -51,6 +51,13 @@ from opentide.core.logging.config import get_stdout_console
 logger = structlog.get_logger("opentide.cli.services.setup.orchestrator")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
+
+#: The wizard's CI choices, and how the setup plan names them.
+CI_LABELS: dict[CiPlatform, str] = {
+    CiPlatform.github: "GitHub Actions",
+    CiPlatform.gitlab: "GitLab CI",
+    CiPlatform.azure: "Azure Pipelines",
+}
 
 
 @dataclass
@@ -222,31 +229,22 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
 
 
 def _print_setup_plan(options: SetupOptions) -> None:
-    """Show the choices and mutation target before files are written."""
-    from rich.table import Table
-    from rich.text import Text
+    """Show the choices and mutation target before files are written, in the prompts' words."""
+    from opentide.cli.ui.setup import plan_rows, render_plan
 
-    table = Table(title="Setup plan", show_header=False)
-    table.add_column("Step", style="bold cyan")
-    table.add_column("Selection")
-    table.add_row("Repository", Text(str(options.path.resolve())))
-    table.add_row("Platforms", Text(", ".join(platform_label(item) for item in options.platforms)))
-    table.add_row(
-        "CI/CD", Text(options.ci.value if options.run_ci and options.ci else "configure later")
+    ci = options.ci if options.run_ci and options.ci else None
+    rows = plan_rows(
+        options.path,
+        platforms=[platform_label(item) for item in options.platforms],
+        ci=CI_LABELS[ci] if ci is not None and ci is not CiPlatform.none else None,
+        mcp=[MCP_LABELS.get(item.value, item.value) for item in options.mcp_hosts]
+        if options.run_mcp
+        else None,
+        skills=[SKILL_LABELS.get(item.value, item.value) for item in options.skill_targets]
+        if options.run_skills
+        else None,
     )
-    table.add_row(
-        "MCP",
-        Text(", ".join(item.value for item in options.mcp_hosts) if options.run_mcp else "skip"),
-    )
-    table.add_row(
-        "Agent skills",
-        Text(
-            ", ".join(item.value for item in options.skill_targets)
-            if options.run_skills
-            else "skip"
-        ),
-    )
-    get_stdout_console().print(table)
+    render_plan(get_stdout_console(), rows)
 
 
 #: Checked when the wizard opens. Sharing stays off until someone selects it.
@@ -269,19 +267,17 @@ def _ci_feature_choices(ci: CiPlatform | None) -> list[tuple[str, str]]:
 
 def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]:
     """Launch the full interactive setup wizard."""
-    from rich.panel import Panel
+    from opentide import __version__
+    from opentide.cli.ui.render import labelled_text
+    from opentide.cli.ui.setup import welcome
 
     require_interactive()
     console = get_stdout_console()
-    console.print(
-        Panel(
-            "[bold]opentide — Detection Repository Setup[/]",
-            title=" opentide",
-            border_style="blue",
-        )
-    )
+    welcome(console, version=__version__)
     options = SetupOptions(path=base_path, run_repo=True)
-    options.name = ask_text("Repository name", default=base_path.name)
+    options.name = ask_text(
+        "Repository name", default=base_path.resolve().name, validate=require_text("a name")
+    )
     options.org = ask_text("Organisation / team (optional)")
     options.description = ask_text("Description (optional)")
     options.platforms = ask_platforms()
@@ -289,12 +285,7 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
 
     options.ci = ask_select(
         "CI/CD platform",
-        [
-            ("Configure later", CiPlatform.none),
-            ("GitHub Actions", CiPlatform.github),
-            ("GitLab CI", CiPlatform.gitlab),
-            ("Azure Pipelines", CiPlatform.azure),
-        ],
+        [("Configure later", CiPlatform.none), *((label, ci) for ci, label in CI_LABELS.items())],
         default=CiPlatform.none,
     )
     options.run_ci = options.ci is not CiPlatform.none
@@ -344,9 +335,8 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
                 )
 
     _print_setup_plan(options)
-    if options.warnings:
-        for warning in options.warnings:
-            console.print(f"[yellow]WARNING[/] {escape(warning)}")
+    for warning in options.warnings:
+        console.print(labelled_text("warning", warning), soft_wrap=True)
     if not ask_confirm("Apply this setup plan?", default=True):
         return {
             "message": "Setup cancelled; no files were written",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from opentide.cli.context import get_context
-from opentide.cli.enums import DetectionPlatform
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.output import CommandResult, emit_result, emit_usage_error
 from opentide.cli.services.info import collect_info, info_outcome, info_summary, render_info
 from opentide.cli.ui.contract import ISSUES_FOUND, USAGE_MISSING_OPTION, NextAction
@@ -16,14 +16,18 @@ from opentide.cli.ui.contract import ISSUES_FOUND, USAGE_MISSING_OPTION, NextAct
 # (``info coverage --technique T1059``) as a subcommand name.
 def info_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform | None = typer.Option(None, "--platform"),
+    platform: DetectionPlatform | None = typer.Option(
+        None, "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
     section: str | None = typer.Argument(None),
-    technique: str | None = typer.Option(None, "--technique"),
+    technique: str | None = typer.Option(
+        None, "--technique", help="ATT&CK technique ID for the coverage section (T1059)"
+    ),
     strict: bool = typer.Option(
         False, "--strict", help="Exit non-zero when any object failed to load"
     ),
 ) -> None:
-    """Show repository and platform information."""
+    """Show repository and platform information"""
     cli = get_context(ctx)
     sections = ("rules", "threats", "objectives", "coverage")
     if section is not None and section not in sections:

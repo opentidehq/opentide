@@ -33,7 +33,10 @@ def lint_cmd(
     report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
     output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
 ) -> None:
-    """Catalogue hygiene: filename slugs and recommended metadata (not schema validation)."""
+    """Check file names and recommended metadata
+
+    Catalogue hygiene: filename slugs and recommended metadata, not schema validation.
+    """
     from opentide.cli.ui.diagnostics import SourceFiles, diagnostic_from_lint_finding
 
     cli = get_context(ctx)

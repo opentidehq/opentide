@@ -6,7 +6,7 @@ import typer
 
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import get_context
-from opentide.cli.enums import DetectionPlatform
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import CommandResult, emit_error, emit_result
 from opentide.cli.services.deploy import run_deploy
@@ -21,13 +21,15 @@ DEPLOY_STRATEGY_HELP = (
     "PRODUCTION are not strategies"
 )
 
-deploy_app = typer.Typer(help="Rule deployment")
+deploy_app = typer.Typer(help="Deploy rules to platform tenants")
 
 
 @deploy_app.callback(invoke_without_command=True)
 def deploy_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform | None = typer.Option(None, "--platform"),
+    platform: DetectionPlatform | None = typer.Option(
+        None, "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
     strategy: list[str] | None = typer.Option(None, "--strategy", help=DEPLOY_STRATEGY_HELP),
     all_files: bool = typer.Option(
         False,
@@ -43,7 +45,9 @@ def deploy_cmd(
         "--wide",
         help="Deploy the rule files read whatever their status strategy, INERT included",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Print the plan and compile each rule; send nothing"
+    ),
     keep_deprecated: bool | None = typer.Option(
         None,
         "--keep-deprecated/--drop-deprecated",
@@ -52,7 +56,9 @@ def deploy_cmd(
             "disables or deletes them. Default: on, off with --all"
         ),
     ),
-    skip_promotion: bool = typer.Option(False, "--skip-promotion"),
+    skip_promotion: bool = typer.Option(
+        False, "--skip-promotion", help="Skip the status promotion of a RELEASE run on a push"
+    ),
     skip_unconfigured: bool = typer.Option(
         False,
         "--skip-unconfigured",
@@ -92,6 +98,15 @@ def deploy_cmd(
         skip_unconfigured=skip_unconfigured,
         persist_state_externally=persist_state_externally,
     )
+    if dry_run and not cli.json_output:
+        from opentide.cli.ui.plan import render_plan, render_plan_diagnostics
+        from opentide.core.logging.config import get_console, get_stdout_console
+
+        if not cli.quiet:
+            render_plan(get_stdout_console(), result)
+        # Errors print under --quiet too; the tally follows them.
+        render_plan_diagnostics(get_console(), result)
+
     from opentide.cli.findings import publish_summary
     from opentide.cli.ui.summary import deploy_summary
 
@@ -141,7 +156,10 @@ def deploy_replay_state_cmd(
 
 @deploy_app.command("metadata", hidden=True)
 def deploy_metadata_cmd(
-    ctx: typer.Context, platform: DetectionPlatform = typer.Option(..., "--platform")
+    ctx: typer.Context,
+    platform: DetectionPlatform = typer.Option(
+        ..., "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
 ) -> None:
     """Reserved for a future metadata deployment implementation."""
     refuse_dropped(ctx)

@@ -15,7 +15,7 @@ from typing import Any, NoReturn
 
 import typer
 from typer import _click
-from typer.core import TyperCommand, TyperGroup
+from typer.core import TyperCommand, TyperGroup, TyperOption
 
 from opentide.cli.commands import ROOT_COMMANDS, CommandSpec
 
@@ -135,6 +135,8 @@ class LazyTyperGroup(TyperGroup):
         )
 
     def parse_args(self, ctx: _click.Context, args: list[str]) -> list[str]:
+        if not args and not ctx.resilient_parsing and _show_home():
+            ctx.exit(0)
         args = hoist_root_flags(self, ctx, args)
         ctx.meta[COMMAND_WORDS_KEY] = _leading_words(self, args)
         return super().parse_args(ctx, args)
@@ -221,16 +223,49 @@ class LazyTyperGroup(TyperGroup):
         else:
             holder.command(spec.name, **panel)(target)
         command = typer.main.get_group(holder).commands[spec.name]
+        from opentide.cli.help import decorate
+
+        decorate(command, spec.name)
         self._loaded[spec.name] = command
         return command
 
     def format_help(self, ctx: _click.Context, formatter: _click.HelpFormatter) -> None:
+        from opentide.cli.help import EXAMPLES, render_help
+
+        self.opentide_examples = EXAMPLES.get("", ())
         with self._list_from_index():
-            super().format_help(ctx, formatter)
+            render_help(self, ctx, formatter, super().format_help)
+
+    def get_help_option(self, ctx: _click.Context) -> TyperOption | None:
+        from opentide.cli.help import help_option
+
+        return help_option(super().get_help_option(ctx))
 
     def shell_complete(self, ctx: _click.Context, incomplete: str) -> list[Any]:
         with self._list_from_index():
             return super().shell_complete(ctx, incomplete)
+
+
+def _show_home() -> bool:
+    """Draw the home screen for a bare ``opentide`` in ``human`` mode.
+
+    Every other mode, and a home screen that fails to gather its facts, falls
+    back to the help ``no_args_is_help`` prints.
+    """
+    from opentide.cli.ui.mode import OutputMode, get_mode
+
+    if get_mode() is not OutputMode.HUMAN:
+        return False
+    from opentide import __version__
+    from opentide.cli.ui.home import gather, render_home
+    from opentide.core.logging.config import get_stdout_console
+
+    try:
+        facts = gather(__version__)
+    except Exception:
+        return False
+    render_home(get_stdout_console(), facts)
+    return True
 
 
 def _usage_error(error: _click.exceptions.UsageError) -> NoReturn:

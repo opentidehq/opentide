@@ -12,7 +12,7 @@ import typer
 
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import CliContext, get_context
-from opentide.cli.enums import DetectionPlatform, ValidateCheck
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, ValidateCheck, platform_help
 from opentide.cli.findings import (
     FORMAT_HELP,
     OUTPUT_HELP,
@@ -55,7 +55,7 @@ from opentide.core.logging.config import get_console, get_stdout_console
 if TYPE_CHECKING:
     from opentide.cli.ui.fixes import FixPlan
 
-validate_app = typer.Typer(help="Object and query validation")
+validate_app = typer.Typer(help="Validate objects and queries")
 
 QUERY_STRATEGY_HELP = (
     "Check only rules a run with this strategy deploys (repeatable), on the tenants that "
@@ -66,13 +66,17 @@ QUERY_STRATEGY_HELP = (
 @validate_app.callback(invoke_without_command=True)
 def validate_group(
     ctx: typer.Context,
-    check: ValidateCheck | None = typer.Option(None, "--check"),
+    check: ValidateCheck | None = typer.Option(None, "--check", help="Run one check only"),
     file: list[str] | None = typer.Option(
         None, "--file", help="Validate only this file (repeatable)"
     ),
-    uuid: list[str] | None = typer.Option(None, "--uuid"),
-    object_type: list[str] | None = typer.Option(None, "--type"),
-    strict: bool = typer.Option(False, "--strict"),
+    uuid: list[str] | None = typer.Option(
+        None, "--uuid", help="Validate only the object with this UUID (repeatable)"
+    ),
+    object_type: list[str] | None = typer.Option(
+        None, "--type", help="Validate only this type: rule, threat or objective (repeatable)"
+    ),
+    strict: bool = typer.Option(False, "--strict", help="Fail on warnings too"),
     fix: bool = typer.Option(
         False, "--fix", help="Apply every safe fix (vocabulary typos), then validate again"
     ),
@@ -266,7 +270,9 @@ def _shown(roots: Sequence[Path]) -> str:
 @validate_app.command("query")
 def validate_query_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform = typer.Option(..., "--platform"),
+    platform: DetectionPlatform = typer.Option(
+        ..., "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    ),
     strategy: list[str] | None = typer.Option(None, "--strategy", help=QUERY_STRATEGY_HELP),
     plan: str | None = typer.Option(None, "--plan", hidden=True, help=REMOVED_PLAN_HELP),
     wide: bool = typer.Option(
@@ -292,7 +298,7 @@ def validate_query_cmd(
         None, "--uuid", help="Check only the rule with this UUID (repeatable)"
     ),
 ) -> None:
-    """Check rule queries against the platform's tenants (needs --live)."""
+    """Check rule queries on the platform's tenants (needs --live)."""
     refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)

@@ -33,6 +33,7 @@ from opentide.cli.ui.glyphs import can_encode
 from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
 from opentide.cli.ui.render import (
     AGENT_TIP,
+    OutcomeKind,
     labelled_text,
     outcome_kind,
     render_error,
@@ -84,6 +85,10 @@ class CommandResult:
     outcome: str | None = None
     #: The JSON ``command``, when the Click context that ran it is gone.
     command: str | None = None
+    #: The outcome line's kind when the status alone does not say (``plan``).
+    outcome_kind: OutcomeKind | None = None
+    #: Print the next steps as a numbered list (a sequence to follow, ``setup``).
+    numbered_next: bool = False
 
     @classmethod
     def from_payload(
@@ -95,7 +100,9 @@ class CommandResult:
         or ``{"command", "reason"}`` items), ``_failure_code``,
         ``_failure_argument``, ``_failure_suggestion`` and ``_outcome`` (the
         printed outcome line); they are moved into the envelope, or into the
-        human view, rather than left in the payload.
+        human view, rather than left in the payload. ``_outcome_kind`` names
+        the outcome line's kind (``plan``) and ``_next_numbered`` numbers the
+        next steps; neither reaches JSON.
         """
         data = dict(payload)
         exit_code = int(data.pop("_exit_code", 0))
@@ -108,6 +115,8 @@ class CommandResult:
         failure_argument = data.pop("_failure_argument", None)
         failure_suggestion = data.pop("_failure_suggestion", None)
         outcome = data.pop("_outcome", None)
+        kind = data.pop("_outcome_kind", None)
+        numbered_next = bool(data.pop("_next_numbered", False))
         ok = status != "failed"
         failure = None
         if not ok or exit_code:
@@ -129,6 +138,8 @@ class CommandResult:
             next_actions=next_actions,
             failure=failure,
             outcome=None if outcome is None else str(outcome),
+            outcome_kind=kind,
+            numbered_next=numbered_next,
         )
 
     def payload(self) -> dict[str, Any]:
@@ -333,6 +344,10 @@ def render_result(
     if not quiet:
         render_warnings(stderr, result.warnings)
     kind = outcome_kind(result.status, ok=result.ok)
+    # A plan's tally never takes a glyph or ``error:``, even when a rule would
+    # fail: the diagnostics above it say so, and the exit code carries it.
+    if result.outcome_kind is not None and (kind != "failed" or result.outcome_kind == "plan"):
+        kind = result.outcome_kind
     line = result.outcome or result.message
     if kind == "failed" and result.failure is not None and result.failure.code in FRAMED_FAILURES:
         # The findings are the error report; the outcome line counts them.
@@ -353,7 +368,9 @@ def render_result(
         render_outcome(stdout, kind, line)
         if not quiet:
             render_notes(stdout, notes)
-            render_next_actions(stdout, result.next_actions)
+            render_next_actions(stdout, result.next_actions, numbered=result.numbered_next)
+        if not result.ok and mode is OutputMode.AGENT:
+            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
 
 
 def emit_error(

@@ -9,6 +9,7 @@ from __future__ import annotations
 import typer
 
 from opentide.cli.context import CliContext, sync_typer_rendering
+from opentide.cli.help import epilog
 from opentide.cli.lazy import LazyTyperGroup
 from opentide.core.logging import LoggingConfig, init_logging
 from opentide.core.root import get_repo_root
@@ -16,7 +17,8 @@ from opentide.core.root import get_repo_root
 app = typer.Typer(
     name="opentide",
     cls=LazyTyperGroup,
-    help="opentide — DetectionOps Engine",
+    help="Spec-driven development for agentic detection engineering",
+    epilog=epilog(""),
     rich_markup_mode="rich",
     no_args_is_help=True,
 )
@@ -75,7 +77,7 @@ def main_callback(
         "--no-color",
         is_eager=True,
         callback=_no_color_before_help,
-        help="Disable Rich colour output",
+        help="Disable colour",
     ),
     json_output: bool = typer.Option(
         False, "--json", help="Machine-readable output: one JSON object on stdout"
@@ -85,7 +87,7 @@ def main_callback(
         "--proxy",
         envvar="OPENTIDE_PROXY",
         help=(
-            "HTTP(S) proxy URL (http://\\[user:pass@\\]host:port) for platform and lookup "
+            "HTTP(S) proxy URL (http://\\[user:pass@]host:port) for platform and lookup "
             "calls. Overrides HTTP_PROXY and HTTPS_PROXY; hosts in NO_PROXY are still "
             "reached directly."
         ),

@@ -193,7 +193,7 @@ def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
     with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
         vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
-    key = "MDR Systems Deployment : Microsoft Sentinel Template"
+    key = "Platform configuration : Microsoft Sentinel Template"
     assert key in payload
     assert payload[key]["prefix"] == "tide-sentinel"
     assert payload[key]["scope"] == "yaml"

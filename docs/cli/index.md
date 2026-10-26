@@ -21,7 +21,7 @@ Run `opentide --help` for the live command tree.
 | [`setup`](./setup.md) | Onboard detection repositories (repo, platforms, CI, MCP, skills) |
 | [`migrate`](./migrate.md) | Move legacy `Configurations/` and `Objects/` into the greenfield layout |
 | [`generate`](./generate.md) | Documentation, exports, framework artifacts, optional platform import |
-| [`validate`](./validate.md) | Object and query validation |
+| [`validate`](./validate.md) | Validate objects and queries |
 | [`lint`](./lint.md) | Catalogue hygiene (filename slugs, recommended metadata) |
 | [`rules`](./rules.md) | Review staleness for detection rules |
 | [`deploy`](./deploy.md) | Platform rule deployment |
@@ -50,7 +50,7 @@ All commands inherit [global options](./global-options.md):
 | `--data` | `OPENTIDE_DATA_ROOT` | Bundled data root override |
 | `--debug` | `OPENTIDE_DEBUG` | Debug logging |
 | `--quiet` | — | Only the outcome line and errors |
-| `--no-color` | `NO_COLOR` | Disable Rich colour |
+| `--no-color` | `NO_COLOR` | Disable colour |
 | `--json` | `OPENTIDE_OUTPUT=json` | One [JSON document](./json-output.md) on stdout |
 | `--version`, `-V` | — | Print the installed version and exit |
 

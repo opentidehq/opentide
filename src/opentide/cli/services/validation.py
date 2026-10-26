@@ -28,7 +28,6 @@ from opentide.cli.ui.diagnostics import (
 )
 from opentide.cli.ui.fixes import FixPlan, plan_fixes
 from opentide.cli.ui.glyphs import glyph
-from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
 from opentide.validation.issues import ValidationIssue, ValidationReport
@@ -954,46 +953,61 @@ def _run_live_validator(
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["tide"]["name"]
     except Exception:
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
-    emit_section(f"Query Validation - {system_name}")
+    from opentide.cli.ui.progress import Checklist
+
     validator = cast(Any, query_validators[platform])
-    # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
-    # was retried exists on no engine, and its own TypeError hid the real one.
-    try:
-        validator.validate(mdr_deployment=rules, strategies=strategies)
-    except ModuleNotFoundError as exc:
-        return _missing_sdk_result(platform, exc)
-    except TenantUnreachableError as exc:
-        return _unreachable_tenant_result(exc)
-    except ValueError as exc:
-        # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
-        return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
-            "message": str(exc),
-            "_exit_code": 1,
-        }
-    except Exception as exc:
-        detail = str(exc).strip()
-        error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
-        logger.error("query_validation_failed", system=platform, detail=error)
-        return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
-            **counts,
-            "message": f"Query validation for {platform} failed: {error}",
-            "_exit_code": 1,
-        }
+    early: dict[str, object] | None = None
+    with (
+        Checklist(total=1) as checklist,
+        checklist.step(f"{system_name} queries", unit="rule") as step,
+    ):
+        step.done(len(rules))
+        # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
+        # was retried exists on no engine, and its own TypeError hid the real one.
+        try:
+            validator.validate(mdr_deployment=rules, strategies=strategies)
+        except ModuleNotFoundError as exc:
+            early = _missing_sdk_result(platform, exc)
+        except TenantUnreachableError as exc:
+            early = _unreachable_tenant_result(exc)
+        except ValueError as exc:
+            # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
+            early = {
+                "platform": platform,
+                "mode": "live",
+                "status": "failed",
+                "supported": True,
+                "message": str(exc),
+                "_exit_code": 1,
+            }
+        except Exception as exc:
+            detail = str(exc).strip()
+            error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+            logger.error("query_validation_failed", system=platform, detail=error)
+            early = {
+                "platform": platform,
+                "mode": "live",
+                "status": "failed",
+                "supported": True,
+                **counts,
+                "message": f"Query validation for {platform} failed: {error}",
+                "_exit_code": 1,
+            }
+        if early is not None:
+            step.status = "skipped" if early.get("status") == "skipped" else "failed"
+    if early is not None:
+        return early
     from opentide.cli.exit_codes import validation_outcome
+    from opentide.cli.ui.progress import plural
 
     outcome = validation_outcome()
+    queries = sum(reach.values())
+    # The validators report a rejection as a run flag, not per query, so a
+    # failure counts what was checked rather than what was rejected.
     message = (
-        f"Query validation failed for {platform}"
+        f"Queries rejected on {platform} · {queries} checked on {plural(len(reach), 'tenant')}"
         if outcome.failed
-        else f"Query validation passed for {platform}"
+        else f"{plural(queries, 'query', 'queries')} valid on {plural(len(reach), 'tenant')}"
     )
     result: dict[str, object] = {
         "platform": platform,
@@ -1002,6 +1016,7 @@ def _run_live_validator(
         "supported": True,
         **counts,
         "message": message,
+        "_summary": {"queries": queries, "tenants": len(reach)},
         "_exit_code": outcome.exit_code,
     }
     if outcome.failed:

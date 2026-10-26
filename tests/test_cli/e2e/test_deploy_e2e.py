@@ -257,8 +257,32 @@ def test_deploy_dry_run_fails_when_a_sentinel_rule_does_not_compile(
     assert preview["status"] == "failed"
     assert "hourly" in preview["error"]
     assert preview["api_request"] is None
-    (event,) = _log_events(result.stderr, "sentinel_preview_compile_failed")
-    assert corpus_rule_uuids["sentinel"] in str(event["detail"])
+    # One diagnostic, said once: the log carries it only under --debug.
+    (diagnostic,) = payload["diagnostics"]
+    assert diagnostic["path"].endswith("/rule-0001-sentinel-kql.yaml")
+    assert not Path(diagnostic["path"]).is_absolute()
+    assert diagnostic["code"] == "compile_invalid_rule"
+    assert "TideRuleDataModelErrors" not in diagnostic["message"]
+    assert payload["failure"]["message"] == "1 rule would fail to deploy"
+    assert not _log_events(result.stderr, "sentinel_preview_compile_failed")
+
+    human = invoke_cli(
+        "deploy",
+        "--dry-run",
+        "--platform",
+        "sentinel",
+        *EVERY_RULE,
+        "--wide",
+        "--skip-promotion",
+        json_output=False,
+        extra_env={"DEPLOYMENT_ERROR_RAISED": "", "OPENTIDE_OUTPUT": "plain"},
+    )
+    assert human.exit_code == 1
+    assert "error[compile_invalid_rule]: Duration 'hourly'" in human.stderr
+    assert f"  --> {diagnostic['path']}" in human.stderr
+    (tally,) = [line for line in human.stdout.splitlines() if line.startswith("Plan: ")]
+    assert len(tally) <= 100
+    assert "error: Plan" not in human.stdout + human.stderr
 
 
 def test_deploy_loads_only_the_requested_engine(
@@ -450,7 +474,7 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     deployer.deploy.assert_not_called()
     warning = f"1 {SUBFOLDER_RULES_LEAD}objects/rules/team-a/rule-0101-subfolder.yaml"
     if not json_output:
-        assert "✓ Deployment completed" in result.stdout
+        assert "Plan: " in result.stdout and "1 platform" in result.stdout
         stderr = " ".join(result.stderr.split())
         assert stderr.count(f"warning: {warning}") == 1
         assert stderr.count("in subfolders of") == 1

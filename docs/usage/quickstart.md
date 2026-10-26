@@ -35,16 +35,16 @@ opentide generate
 This runs the full pipeline: docs → exports → vocabs → templates → schemas → snippets. On a repo that already has objects, exports include ATT&CK navigator JSON and `objects.export.json` (actor IDs are enriched from the vocabulary). On a freshly scaffolded empty repo, docs and exports are empty artifacts and the rest of the pipeline still completes.
 
 ```text output-of="opentide generate"
-== Documentation generation ==
-== Export generation ==
-== Object vocabulary generation ==
-== Template generation ==
-== JSON schema generation ==
-== VS Code snippet generation ==
-✓ Full generation pipeline completed
+✓ docs · 7 files · 1.2s · docs/
+✓ exports · 3 files · 0.0s · .opentide/exports/
+✓ vocabularies · 0 files · 0.0s
+✓ templates · 4 files · 1.9s · .opentide/templates/
+✓ schemas · 6 files · 2.6s · .opentide/schemas/
+✓ snippets · 1 file · 0.0s · .vscode/
+✓ Generated 21 files in 5.8s · 6 phases
 ```
 
-Each phase announces itself on stderr; the closing status is the only line on stdout. This is the output with `--no-color` or `NO_COLOR` set; otherwise each `== … ==` header is drawn as a horizontal rule.
+Each finished phase prints one line on stderr (files written, time, destination); the outcome line is the only line on stdout. This is the output with `--no-color`, in a pipe or in CI; at a terminal the phases draw as a live checklist.
 
 Generation runs first because validation checks objects against these generated schemas — no schemas, nothing to validate against.
 

@@ -52,7 +52,7 @@ generate_app = typer.Typer(
     # No square brackets: Rich parses them as console markup and silently
     # renders the contents as nothing.
     help=(
-        "Framework generation and documentation pipeline.\n\n"
+        "Generate schemas, templates, docs and exports\n\n"
         "Run with no argument for the full pipeline, or name one or more "
         "phases to run only those, in the order given: "
         "schemas, templates, vocabs, snippets.\n\n"
@@ -68,6 +68,10 @@ generate_app.add_typer(docs_app, name="docs")
 generate_app.add_typer(exports_app, name="exports")
 generate_app.add_typer(extract_app, name="extract")
 
+
+#: Help shared by every ``generate docs`` command.
+_DOCS_OUTPUT_HELP = "Write the pages here instead of the configured docs folder"
+_DOCS_FLAVOR_HELP = "Markdown flavour: github, gitlab, azure_devops or generic"
 
 _NAMED_GENERATE_PHASES = frozenset({"schemas", "templates", "vocabs", "snippets"})
 
@@ -166,12 +170,20 @@ def _emit_docs(
 @docs_app.callback(invoke_without_command=True)
 def generate_docs_all(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
-    rules: bool = typer.Option(False, "--rules"),
-    threats: bool = typer.Option(False, "--threats"),
-    objectives: bool = typer.Option(False, "--objectives"),
-    changed: bool = typer.Option(False, "--changed"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
+    rules: bool = typer.Option(
+        False, "--rules", help="Only rule pages; combine with --threats, --objectives"
+    ),
+    threats: bool = typer.Option(
+        False, "--threats", help="Only threat pages; combine with --rules, --objectives"
+    ),
+    objectives: bool = typer.Option(
+        False, "--objectives", help="Only objective pages; combine with --rules, --threats"
+    ),
+    changed: bool = typer.Option(
+        False, "--changed", help="Regenerate only the pages of objects git reports as changed"
+    ),
 ) -> None:
     """Generate documentation (all scopes, then index)."""
     if ctx.invoked_subcommand is not None:
@@ -191,8 +203,8 @@ def generate_docs_all(
 @docs_app.command("rules")
 def generate_docs_rules(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.rules)
 
@@ -200,8 +212,8 @@ def generate_docs_rules(
 @docs_app.command("objectives")
 def generate_docs_objectives(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.objectives)
 
@@ -209,8 +221,8 @@ def generate_docs_objectives(
 @docs_app.command("threats")
 def generate_docs_threats(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.threats)
 
@@ -218,8 +230,8 @@ def generate_docs_threats(
 @docs_app.command("index")
 def generate_docs_index(
     ctx: typer.Context,
-    output: str | None = typer.Option(None, "--output"),
-    flavor: str | None = typer.Option(None, "--flavor"),
+    output: str | None = typer.Option(None, "--output", help=_DOCS_OUTPUT_HELP),
+    flavor: str | None = typer.Option(None, "--flavor", help=_DOCS_FLAVOR_HELP),
 ) -> None:
     _emit_docs(ctx, output=output, flavor=flavor, scope=DocumentScope.index)
 

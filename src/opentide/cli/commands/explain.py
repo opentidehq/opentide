@@ -15,7 +15,10 @@ def explain_cmd(
         None, help="A diagnostic code, such as vocab_unknown. Omit it to list every code."
     ),
 ) -> None:
-    """Explain a diagnostic code: what it means, an example, and how to fix it."""
+    """Explain a diagnostic code and how to fix it
+
+    Prints what the code means, an example, and how to fix it.
+    """
     from opentide.cli.services.explain import all_pages, diagnostic_codes, load_page
 
     cli = get_context(ctx)

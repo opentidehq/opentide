@@ -254,7 +254,13 @@ def test_deploy_dry_run_without_tenants_previews_but_does_not_claim_the_platform
         assert payload["strategies"] == ["PREVIEW", "RELEASE"]
         assert payload["tenants"] == {}
     else:
-        assert "✓ Deployment completed" in output
+        assert (
+            "Deploy plan · strategy PREVIEW RELEASE · 1 platform, 0 tenants · "
+            "dry run, nothing is sent" in output
+        )
+        assert f"{platform.value} · 0 tenants" in output
+        assert "Plan: " in output and "error: Plan" not in output
+        assert "✓ " not in output  # a dry run claims nothing happened
         assert f"warning: {warning}" in output
     mock_deployers.deploy.assert_not_called()
 

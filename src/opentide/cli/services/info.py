@@ -137,10 +137,10 @@ def _summary_table(payload: dict[str, Any]) -> Table:
             display_name = platform_label(DetectionPlatform(plat["name"]))
         except ValueError:
             display_name = plat["name"]
-        table.add_row(
-            Text(display_name),
-            Text(f"enabled={plat['enabled']} [{', '.join(caps) or 'none'}]"),
-        )
+        # "enabled · deploy, validate": the reader's words, not a Python repr.
+        state = "enabled" if plat["enabled"] else "disabled"
+        separator = f" {glyph('separator', get_stdout_console().file)} "
+        table.add_row(Text(display_name), Text(f"{state}{separator}{', '.join(caps) or 'none'}"))
     return table
 
 

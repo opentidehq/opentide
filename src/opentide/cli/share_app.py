@@ -10,7 +10,7 @@ from opentide.cli.output import CommandResult, emit_result
 from opentide.cli.services.share import ShareMode, render_share, run_share
 
 share_app = typer.Typer(
-    help="Publish Tide objects to intelligence platforms",
+    help="Publish objects to intelligence platforms",
     no_args_is_help=False,
 )
 
@@ -51,26 +51,26 @@ def _dispatch(
     emit_result(cli, CommandResult.from_payload(payload, default_message="Share finished"))
 
 
+#: Option help shared by ``share`` and its subcommands.
+_TARGET_HELP = "Destination block name. Repeatable."
+_UUID_HELP = "Limit to these object UUIDs."
+_TYPE_HELP = "Limit to threat, objective, or rule."
+_FILE_HELP = "Limit to these object files."
+_DRY_RUN_HELP = "Resolve the run locally and make no request."
+_PUBLISH_HELP = "Override the block publish flag."
+_WORKERS_HELP = "Parallel object workers for one destination."
+
+
 @share_app.callback(invoke_without_command=True)
 def share_default(
     ctx: typer.Context,
-    target: list[str] | None = typer.Option(
-        None, "--target", help="Destination block name. Repeatable."
-    ),
-    uuid: list[str] | None = typer.Option(None, "--uuid", help="Limit to these object UUIDs."),
-    object_type: list[str] | None = typer.Option(
-        None, "--type", help="Limit to threat, objective, or rule."
-    ),
-    file: list[str] | None = typer.Option(None, "--file", help="Limit to these object files."),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Resolve the run locally and make no request."
-    ),
-    publish: bool | None = typer.Option(
-        None, "--publish/--no-publish", help="Override the block publish flag."
-    ),
-    workers: int = typer.Option(
-        1, "--workers", help="Parallel object workers for one destination."
-    ),
+    target: list[str] | None = typer.Option(None, "--target", help=_TARGET_HELP),
+    uuid: list[str] | None = typer.Option(None, "--uuid", help=_UUID_HELP),
+    object_type: list[str] | None = typer.Option(None, "--type", help=_TYPE_HELP),
+    file: list[str] | None = typer.Option(None, "--file", help=_FILE_HELP),
+    dry_run: bool = typer.Option(False, "--dry-run", help=_DRY_RUN_HELP),
+    publish: bool | None = typer.Option(None, "--publish/--no-publish", help=_PUBLISH_HELP),
+    workers: int = typer.Option(1, "--workers", help=_WORKERS_HELP),
     changed: bool = typer.Option(
         False,
         "--changed",
@@ -100,13 +100,13 @@ def share_default(
 @share_app.command("push")
 def share_push(
     ctx: typer.Context,
-    target: list[str] | None = typer.Option(None, "--target"),
-    uuid: list[str] | None = typer.Option(None, "--uuid"),
-    object_type: list[str] | None = typer.Option(None, "--type"),
-    file: list[str] | None = typer.Option(None, "--file"),
-    dry_run: bool = typer.Option(False, "--dry-run"),
-    publish: bool | None = typer.Option(None, "--publish/--no-publish"),
-    workers: int = typer.Option(1, "--workers"),
+    target: list[str] | None = typer.Option(None, "--target", help=_TARGET_HELP),
+    uuid: list[str] | None = typer.Option(None, "--uuid", help=_UUID_HELP),
+    object_type: list[str] | None = typer.Option(None, "--type", help=_TYPE_HELP),
+    file: list[str] | None = typer.Option(None, "--file", help=_FILE_HELP),
+    dry_run: bool = typer.Option(False, "--dry-run", help=_DRY_RUN_HELP),
+    publish: bool | None = typer.Option(None, "--publish/--no-publish", help=_PUBLISH_HELP),
+    workers: int = typer.Option(1, "--workers", help=_WORKERS_HELP),
     changed: bool = typer.Option(
         False,
         "--changed",
@@ -133,11 +133,11 @@ def share_push(
 @share_app.command("preview")
 def share_preview(
     ctx: typer.Context,
-    target: list[str] | None = typer.Option(None, "--target"),
-    uuid: list[str] | None = typer.Option(None, "--uuid"),
-    object_type: list[str] | None = typer.Option(None, "--type"),
-    file: list[str] | None = typer.Option(None, "--file"),
-    workers: int = typer.Option(1, "--workers"),
+    target: list[str] | None = typer.Option(None, "--target", help=_TARGET_HELP),
+    uuid: list[str] | None = typer.Option(None, "--uuid", help=_UUID_HELP),
+    object_type: list[str] | None = typer.Option(None, "--type", help=_TYPE_HELP),
+    file: list[str] | None = typer.Option(None, "--file", help=_FILE_HELP),
+    workers: int = typer.Option(1, "--workers", help=_WORKERS_HELP),
 ) -> None:
     """Show what push would do. Makes no request and writes nothing."""
     _dispatch(
@@ -158,10 +158,10 @@ def share_preview(
 @share_app.command("status")
 def share_status(
     ctx: typer.Context,
-    target: list[str] | None = typer.Option(None, "--target"),
-    uuid: list[str] | None = typer.Option(None, "--uuid"),
-    object_type: list[str] | None = typer.Option(None, "--type"),
-    file: list[str] | None = typer.Option(None, "--file"),
+    target: list[str] | None = typer.Option(None, "--target", help=_TARGET_HELP),
+    uuid: list[str] | None = typer.Option(None, "--uuid", help=_UUID_HELP),
+    object_type: list[str] | None = typer.Option(None, "--type", help=_TYPE_HELP),
+    file: list[str] | None = typer.Option(None, "--file", help=_FILE_HELP),
 ) -> None:
     """Compare the local ledger with object versions. Does not contact the destination."""
     _dispatch(
@@ -182,15 +182,15 @@ def share_status(
 @share_app.command("retract")
 def share_retract(
     ctx: typer.Context,
-    target: list[str] | None = typer.Option(None, "--target"),
-    uuid: list[str] | None = typer.Option(None, "--uuid"),
-    object_type: list[str] | None = typer.Option(None, "--type"),
-    file: list[str] | None = typer.Option(None, "--file"),
+    target: list[str] | None = typer.Option(None, "--target", help=_TARGET_HELP),
+    uuid: list[str] | None = typer.Option(None, "--uuid", help=_UUID_HELP),
+    object_type: list[str] | None = typer.Option(None, "--type", help=_TYPE_HELP),
+    file: list[str] | None = typer.Option(None, "--file", help=_FILE_HELP),
     delete: bool = typer.Option(
         False, "--delete", help="Delete the remote event instead of unpublishing it."
     ),
     yes: bool = typer.Option(False, "--yes", help="Confirm --delete."),
-    workers: int = typer.Option(1, "--workers"),
+    workers: int = typer.Option(1, "--workers", help=_WORKERS_HELP),
 ) -> None:
     """Unpublish a shared event, or delete it when ``--delete --yes`` is set."""
     _dispatch(

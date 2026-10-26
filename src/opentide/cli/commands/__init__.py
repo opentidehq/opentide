@@ -30,31 +30,111 @@ class CommandSpec(NamedTuple):
     epilog: str | None = None
 
 
-#: In the order ``opentide --help`` lists them.
+#: Panels the root listing groups commands under (``opentide.cli.help``).
+AUTHOR = "Author"
+SHIP = "Ship"
+WORKSPACE = "Workspace"
+AGENTS = "Agents and integrations"
+
+#: In the order ``opentide --help`` lists them, panel by panel.
 ROOT_COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec(
+        "validate",
+        "opentide.cli.commands.validate",
+        "validate_app",
+        "Validate objects and queries",
+        rich_help_panel=AUTHOR,
+    ),
     CommandSpec(
         "lint",
         "opentide.cli.commands.lint",
         "lint_cmd",
-        "Catalogue hygiene: filename slugs and recommended metadata (not schema validation).",
+        "Check file names and recommended metadata",
+        rich_help_panel=AUTHOR,
     ),
     CommandSpec(
         "info",
         "opentide.cli.commands.info",
         "info_cmd",
-        "Show repository and platform information.",
+        "Show repository and platform information",
+        rich_help_panel=AUTHOR,
+    ),
+    CommandSpec(
+        "new",
+        "opentide.cli.commands.new",
+        "new_app",
+        "Scaffold a threat, objective or rule from the generated template.",
+        rich_help_panel=AUTHOR,
+    ),
+    CommandSpec(
+        "generate",
+        "opentide.cli.commands.generate",
+        "generate_app",
+        "Generate schemas, templates, docs and exports",
+        rich_help_panel=AUTHOR,
+    ),
+    CommandSpec(
+        "rules",
+        "opentide.cli.rules_app",
+        "rules_app",
+        "Detection rule maintenance",
+        rich_help_panel=AUTHOR,
+    ),
+    CommandSpec(
+        "deploy",
+        "opentide.cli.commands.deploy",
+        "deploy_app",
+        "Deploy rules to platform tenants",
+        rich_help_panel=SHIP,
+    ),
+    CommandSpec(
+        "share",
+        "opentide.cli.share_app",
+        "share_app",
+        "Publish objects to intelligence platforms",
+        rich_help_panel=SHIP,
+    ),
+    CommandSpec(
+        "setup",
+        "opentide.cli.setup_app",
+        "setup_app",
+        "Set up a detection repository and its tooling",
+        rich_help_panel=WORKSPACE,
+    ),
+    CommandSpec(
+        "doctor",
+        "opentide.cli.commands.doctor",
+        "doctor_cmd",
+        "Check the installation, the workspace and its integrations.",
+        rich_help_panel=WORKSPACE,
+    ),
+    CommandSpec(
+        "migrate",
+        "opentide.cli.commands.migrate",
+        "migrate_app",
+        "Migrate legacy repository layouts",
+        rich_help_panel=WORKSPACE,
+    ),
+    CommandSpec(
+        "tui",
+        "opentide.cli.commands.tui",
+        "tui_cmd",
+        "Browse the catalogue, its diagnostics and ATT&CK coverage in a terminal UI.",
+        rich_help_panel=WORKSPACE,
     ),
     CommandSpec(
         "explain",
         "opentide.cli.commands.explain",
         "explain_cmd",
-        "Explain a diagnostic code: what it means, an example, and how to fix it.",
+        "Explain a diagnostic code and how to fix it",
+        rich_help_panel=AGENTS,
     ),
     CommandSpec(
         "commands",
         "opentide.cli.commands.introspect",
         "commands_cmd",
         "List every command and option, for agents",
+        rich_help_panel=AGENTS,
         epilog=(
             "[dim]Examples[/dim]\n\n"
             "  [bold]$ opentide commands[/bold]\n\n"
@@ -65,44 +145,8 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "mcp",
         "opentide.cli.mcp_app",
         "mcp_app",
-        "Run the opentide MCP server on stdio. The editor owns the process: "
-        "stop is the host closing stdin, and reload is the host spawning this "
-        "command again. There is no reload or stop subcommand.",
-    ),
-    CommandSpec("setup", "opentide.cli.setup_app", "setup_app", "Repository and tooling setup"),
-    CommandSpec(
-        "share",
-        "opentide.cli.share_app",
-        "share_app",
-        "Publish Tide objects to intelligence platforms",
-    ),
-    CommandSpec("rules", "opentide.cli.rules_app", "rules_app", "Detection rule maintenance"),
-    CommandSpec(
-        "generate",
-        "opentide.cli.commands.generate",
-        "generate_app",
-        "Framework generation and documentation pipeline.",
-    ),
-    CommandSpec(
-        "validate",
-        "opentide.cli.commands.validate",
-        "validate_app",
-        "Object and query validation",
-    ),
-    CommandSpec("deploy", "opentide.cli.commands.deploy", "deploy_app", "Rule deployment"),
-    CommandSpec(
-        "new",
-        "opentide.cli.commands.new",
-        "new_app",
-        "Scaffold a threat, objective or rule from the generated template.",
-        rich_help_panel="Author",
-    ),
-    CommandSpec(
-        "doctor",
-        "opentide.cli.commands.doctor",
-        "doctor_cmd",
-        "Check the installation, the workspace and its integrations.",
-        rich_help_panel="Workspace",
+        "Run the opentide MCP server for editors and agents",
+        rich_help_panel=AGENTS,
     ),
     CommandSpec(
         "document",
@@ -124,18 +168,5 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "extract_legacy_app",
         "\\[deprecated] Use opentide generate extract",
         hidden=True,
-    ),
-    CommandSpec(
-        "migrate",
-        "opentide.cli.commands.migrate",
-        "migrate_app",
-        "Migrate legacy client repository layouts",
-    ),
-    CommandSpec(
-        "tui",
-        "opentide.cli.commands.tui",
-        "tui_cmd",
-        "Browse the catalogue, its diagnostics and ATT&CK coverage in a terminal UI.",
-        rich_help_panel="Workspace",
     ),
 )

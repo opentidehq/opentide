@@ -56,18 +56,24 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 
 ## Output
 
-A dry-run in the [tutorial](../usage/tutorial.md) repository prints the section header on stderr and the result on stdout:
+A dry-run in the [tutorial](../usage/tutorial.md) repository prints the plan: each rule on each tenant with what a deploy would do (`+ create`, `~ update`, `+ create or update`, `- disable`, `× delete`), then the tally as the outcome line:
 
 ```bash
 opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 ```
 
 ```text output-of="opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all"
-== MDR Deployment ==
-✓ Deployment completed
+Deploy plan · strategy PREVIEW · 1 platform, 0 tenants · dry run, nothing is sent
+
+sentinel · 0 tenants
+  + create or update  Sentinel KQL Rule  …000000000001  status STAGING
+
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+  help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
 ```
 
-A colour terminal draws the header as a rule. Human output does not list the rules; `OPENTIDE_DEBUG=1` logs each selected rule to stderr, and `--json` returns the selection:
+Defender for Endpoint, SentinelOne and CrowdStrike keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A real run ends with a counted outcome line, `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 12.4s`. Those counts are the plan: they are predicted from `.opentide/states/deployment/` and each rule's status before anything is sent, not reported back by the vendor. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
 
 ```bash
 opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -93,14 +99,23 @@ opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
   "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
   "ok": true,
   "status": "completed",
-  "message": "Deployment completed",
+  "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete",
   "warnings": [
     "sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop"
   ]
 }
 ```
 
-`plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, or a missing `grouping` or `grouping.alert`) is listed with `"status": "failed"`, an `error` naming the cause, and a null `api_request`; the error is also logged with the rule's name and UUID, and the dry-run reports `failed` and exits `1`. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
+`plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, a missing `grouping` or `grouping.alert`, or an empty `response` block with no `alert.severity`) is listed with `"status": "failed"`, a `code`, an `error` naming the cause, a `help`, and a null `api_request`. `diagnostics` holds one entry per such rule (`code`, `severity`, `message`, `help`, a workspace-relative `path`, `platform`, `uuid`, `name`), and the dry-run reports `failed` and exits `1`. The plan prints each one above its tally, which keeps no glyph:
+
+```text
+error[compile_empty_block]: `response` is empty, so Sentinel cannot read `alert_severity`
+  --> objects/rules/sentinel-kql-rule.yaml
+  help: set response.alert_severity, or configurations.sentinel.alert.severity
+Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+```
+
+The codes are `compile_missing_field`, `compile_empty_block`, `compile_invalid_value`, `compile_invalid_rule` and `compile_failed`. A dry run sends nothing, so an unset `$VARIABLE` in a tenant's setup is a warning there (`a real deploy would need $AZURE_CLIENT_SECRET, which is unset`), not an error. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
 When no rule the run read has a status mapping to its strategies, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 
@@ -160,7 +175,7 @@ error: Metadata deployment is not implemented for splunk
 - **Authentication error** — credentials missing/wrong; see [Troubleshooting](../usage/troubleshooting.md#deploy-fails-with-an-authentication-error).
 - **`AttributeError: module 'azure.mgmt.securityinsight.models' has no attribute 'AlertPropertyMapping'`** — through 0.14.2 the `sentinel` extra resolved `azure-mgmt-securityinsight` 1.0.0, which lacks that model, so every rule with `alert.dynamic_properties` failed to deploy while the dry-run still passed. Since 0.16.0 opentide calls the ARM REST API directly and no longer uses that SDK; upgrade with `pip install -U opentide`.
 - **`configurations.sentinel.grouping.alert is missing`** — Sentinel deploy needs `grouping.event` and `grouping.alert`. The error names the rule UUID, and `deploy --dry-run` reports it too. Through 0.14.2 it was `AttributeError: 'NoneType' object has no attribute 'enabled'`.
-- **A rule did not deploy** — check the strategy its status maps to, the run's `--strategy`, and the tenant's `strategies`. A `PREVIEW` run skips a rule in `PRODUCTION` (it maps to `RELEASE`), a `RELEASE` run skips a rule in `DEVELOPMENT` (it maps to `PREVIEW`, unless promotion rewrites it first), `INERT` rules never deploy, and a tenant with `strategies = ["RELEASE"]` never receives a `PREVIEW` run. The `mdr_skipped_for_strategy` and `skipping_tenant` log lines name all three. Outside CI, deploy reads the last commit only: commit the rule, or pass `--all`. See [Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md).
+- **A rule did not deploy** — check the strategy its status maps to, the run's `--strategy`, and the tenant's `strategies`. A `PREVIEW` run skips a rule in `PRODUCTION` (it maps to `RELEASE`), a `RELEASE` run skips a rule in `DEVELOPMENT` (it maps to `PREVIEW`, unless promotion rewrites it first), `INERT` rules never deploy, and a tenant with `strategies = ["RELEASE"]` never receives a `PREVIEW` run. The `rule_skipped_for_strategy` and `skipping_tenant` log lines name all three. Outside CI, deploy reads the last commit only: commit the rule, or pass `--all`. See [Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md).
 - **`--strategy 'STAGING' is not a deployable strategy`** — `STAGING` is a default status name (and was a deployment plan). Pass `--strategy PREVIEW`. The message names the strategy any configured status maps to.
 - **`the tenant key 'deployment' was removed in 0.17.0`** — replace the tenant's `deployment` line as the message says: `STAGING` becomes `strategies = ["PREVIEW"]`, `PRODUCTION` becomes `strategies = ["RELEASE"]`, `ALWAYS` is dropped, `MANUAL` becomes `manual = true`.
 - **`--plan was removed` / `DEPLOYMENT_PLAN was removed`** — use `--strategy`, and unset `DEPLOYMENT_PLAN` in your CI variables. Regenerate the pipeline with `opentide setup ci <github|gitlab|azure>`.

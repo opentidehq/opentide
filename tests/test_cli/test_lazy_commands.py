@@ -63,13 +63,16 @@ print("\\n" + json.dumps(sorted(sys.modules)), file=sys.stderr)
 """
 
 
-def _modules_after(argv: list[str], **env: str) -> tuple[subprocess.CompletedProcess[str], set]:
+def _modules_after(
+    argv: list[str], *, cwd: str | None = None, **env: str
+) -> tuple[subprocess.CompletedProcess[str], set]:
     """Run ``main()`` with *argv* in a fresh interpreter; return what it imported."""
     done = subprocess.run(
         [sys.executable, "-c", _LOADED_MODULES, *argv],
         capture_output=True,
         text=True,
         check=False,
+        cwd=cwd,
         env={**os.environ, "NO_COLOR": "1", **env},
     )
     modules = set(json.loads(done.stderr.strip().splitlines()[-1]))
@@ -142,6 +145,21 @@ def test_version_imports_neither_typer_nor_the_registry() -> None:
 def test_root_help_imports_no_engine_module(argv: list[str]) -> None:
     done, modules = _modules_after(argv)
     assert "validate" in _plain(done.stdout), done.stderr
+    assert _engine_modules(modules) == []
+
+
+def test_home_screen_imports_no_engine_module(tmp_path) -> None:
+    """Bare ``opentide`` for a person draws the home screen at the cost of ``--help``."""
+    platforms = tmp_path / ".opentide" / "configurations" / "platforms"
+    platforms.mkdir(parents=True)
+    (platforms / "sentinel.toml").write_text(
+        '[platform]\nenabled = true\n\n[[tenants]]\nname = "prod"\n', encoding="utf-8"
+    )
+    (tmp_path / "objects" / "rules").mkdir(parents=True)
+    env = {"OPENTIDE_OUTPUT": "human", "OPENTIDE_REPO_ROOT": "", "OPENTIDE_TIDE_WORKSPACE": ""}
+    done, modules = _modules_after([], cwd=str(tmp_path), **env)
+    assert "Suggested next" in _plain(done.stdout), done.stdout + done.stderr
+    assert "sentinel (1 tenant)" in _plain(done.stdout)
     assert _engine_modules(modules) == []
 
 

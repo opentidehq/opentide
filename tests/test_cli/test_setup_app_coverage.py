@@ -379,7 +379,7 @@ def test_setup_subcommand_skips_default_callback(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload.get("message") == "Repository scaffold created"
+    assert payload.get("message", "").startswith("Created Only Repo in ")
 
 
 #: Each wizard entry point, with whichever path form the subcommand accepts.
