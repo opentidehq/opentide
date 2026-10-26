@@ -19,6 +19,24 @@ class RulePayload(ResultModel):
     )
     status: str | None = Field(None, description="failed, when the rule could not be compiled")
     error: str | None = None
+    # A rule the dry run could not compile (#643): the diagnostic's own fields.
+    code: str | None = Field(None, description="compile_* code, when the rule could not compile")
+    help: str | None = Field(None, description="What fixes it, when known")
+    file: str | None = Field(None, description="The rule's file, absolute")
+
+
+class CompileDiagnostic(ResultModel):
+    """A rule a dry run could not compile, as one diagnostic (#643)."""
+
+    code: str = Field(description="compile_missing_field, compile_empty_block, …")
+    severity: Literal["error", "warning"]
+    message: str | None
+    help: str | None
+    path: str | None = Field(description="Workspace-relative; null outside the workspace")
+    file_path: str | None = Field(description="Absolute")
+    platform: str
+    uuid: str | None
+    name: str | None
 
 
 class PlannedChange(ResultModel):
@@ -52,6 +70,9 @@ class DeployResult(CommandDocument):
     advice: str | None = None
     # Added by #643 (flow), declared ahead so either merge order stays green.
     changes: list[PlannedChange] | None = Field(None, description="One entry per rule and tenant")
+    diagnostics: list[CompileDiagnostic] | None = Field(
+        None, description="Dry run: one entry per rule that would fail to compile"
+    )
 
 
 class StateBinding(ResultModel):
