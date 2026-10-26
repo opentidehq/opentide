@@ -178,7 +178,7 @@ def run_interactive_repo_setup(ctx: CliContext, base_path: Path) -> dict[str, ob
     target = base_path.resolve()
     welcome(get_stdout_console(), version=__version__)
     name = ask_text("Repository name", default=target.name, validate=require_text("a name"))
-    org = ask_text("Organisation / team (optional)")
+    org = ask_text("Organisation / team for the README (optional)")
     description = ask_text("Description (optional)")
     options = RepoSetupOptions(
         path=target,

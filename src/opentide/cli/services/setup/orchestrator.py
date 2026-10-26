@@ -278,7 +278,7 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
     options.name = ask_text(
         "Repository name", default=base_path.resolve().name, validate=require_text("a name")
     )
-    options.org = ask_text("Organisation / team (optional)")
+    options.org = ask_text("Organisation / team for the README (optional)")
     options.description = ask_text("Description (optional)")
     options.platforms = ask_platforms()
     options.run_platforms = True

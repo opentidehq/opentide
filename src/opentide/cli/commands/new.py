@@ -172,12 +172,20 @@ def _run(
             for platform in options.platforms
             if platform not in enabled
         )
-    if not payload.get("author"):
-        warnings.append("No git user.name is set, so metadata.author is left out")
-    if not payload.get("organisation"):
-        warnings.append(
-            "No object in the catalogue names an organisation, so metadata.organisation is left out"
+    # One line for what was left out, not one warning per field on every run
+    # (post-merge end-to-end run printed both on each `new`).
+    left_out = [
+        (field, reason)
+        for field, reason in (
+            ("metadata.author", "no git user.name is set"),
+            ("metadata.organisation", "no catalogue object names one"),
         )
+        if not payload.get(field.split(".")[1])
+    ]
+    if left_out:
+        fields = " and ".join(field for field, _ in left_out)
+        reasons = "; ".join(reason for _, reason in left_out)
+        warnings.append(f"{fields} left out: {reasons}")
     if warnings:
         payload["warnings"] = warnings
     emit_result(cli, CommandResult.from_payload(payload))

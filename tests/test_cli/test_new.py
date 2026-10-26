@@ -495,9 +495,24 @@ def test_no_git_author_is_a_warning(workspace: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setattr("opentide.cli.services.new.git_author", lambda workspace: None)
     payload = parse_cli_json(_new(workspace, "threat", "--name", "Anonymous"))
     assert payload["author"] is None
-    assert "No git user.name is set, so metadata.author is left out" in payload["warnings"]
+    (left_out,) = [line for line in payload["warnings"] if "left out" in line]
+    assert left_out.startswith("metadata.author")
+    assert "no git user.name is set" in left_out
     data = parse_yaml(Path(payload["file_path"]).read_text(encoding="utf-8"))
     assert "author" not in data["metadata"]
+
+
+def test_optional_metadata_left_out_is_one_warning(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two warnings on every `new` for two optional fields (post-merge end-to-end run)."""
+    monkeypatch.setattr("opentide.cli.services.new.git_author", lambda workspace: None)
+    monkeypatch.setattr("opentide.cli.services.new.catalogue_organisation", lambda root: None)
+    payload = parse_cli_json(_new(workspace, "threat", "--name", "Nobody's"))
+    assert payload["warnings"] == [
+        "metadata.author and metadata.organisation left out: no git user.name is set; "
+        "no catalogue object names one"
+    ]
 
 
 def test_missing_template_is_generated_first(
