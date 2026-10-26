@@ -76,6 +76,23 @@ _DEFAULT_HELP = {
     "schema_validation": "the template in .opentide/templates/ shows the field and its values",
 }
 
+#: ``yaml_parse`` problems that are not syntax: the indentation hint would mislead.
+_YAML_PARSE_HELP = (
+    ("found an empty file", "fill it in from a template with opentide new, or delete it"),
+    ("is not a valid date", "write the date as YYYY-MM-DD, with a month from 01 to 12"),
+    ("is not UTF-8 text", "re-save it as UTF-8; most editors offer the encoding under Save As"),
+)
+
+
+def _yaml_parse_help(message: str, notes: Sequence[tuple[str, str]]) -> str | None:
+    """The step for a ``yaml_parse`` frame: one that fits the problem, never a second help."""
+    if any(kind == "help" for kind, _ in notes):
+        return None
+    for needle, help_text in _YAML_PARSE_HELP:
+        if needle in message:
+            return help_text
+    return _DEFAULT_HELP["yaml_parse"]
+
 
 def explain_command(code: str) -> str:
     """``opentide explain <code>``: the page that says what *code* means."""
@@ -646,7 +663,9 @@ def diagnostic_from_issue(
         )
         if listing:
             help_text = f"{listing} lists the ones that exist"
-    if not help_text:
+    if not help_text and issue.code == "yaml_parse":
+        help_text = _yaml_parse_help(message, notes)
+    elif not help_text:
         help_text = _DEFAULT_HELP.get(issue.code)
     if issue.code == "duplicate_id":
         message, also = _duplicate_message(issue, value, workspace=workspace, sources=sources)

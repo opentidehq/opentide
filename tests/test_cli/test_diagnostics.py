@@ -368,6 +368,40 @@ def test_every_frame_ends_in_a_step_to_take(
     assert (diagnostic.message, diagnostic.help) == (message_shown, help_shown)
 
 
+@pytest.mark.parametrize(
+    ("content", "message", "help_shown"),
+    [
+        (b"", "expected a mapping at the top of the file, found an empty file", "fill it in"),
+        (
+            RULE.replace("created: 2026-01-01", "created: 2026-13-45").encode(),
+            "Could not parse object YAML: '2026-13-45' is not a valid date",
+            "YYYY-MM-DD",
+        ),
+        (
+            "name: Équipe\n".encode("latin-1"),
+            "the file is not UTF-8 text (byte 0xc9 at offset 6); save it as UTF-8",
+            "re-save it as UTF-8",
+        ),
+        (b"- name: A list\n", "expected a mapping at the top of the file, found a list", None),
+        (b"name: x\n  bad: : y\n", "Could not parse object YAML", "indentation"),
+    ],
+)
+def test_a_parse_frame_has_one_help_that_fits_the_problem(
+    workspace: Path, content: bytes, message: str, help_shown: str | None
+) -> None:
+    """The indentation hint ended frames for an empty file, an impossible date and a
+    Latin-1 file, and came second after a list root's own help (post-merge AFTER shots)."""
+    path = _rule(workspace)
+    path.write_bytes(content)
+    issue = ValidationIssue(code="yaml_parse", severity="error", file_path=path, message=message)
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    helps = [text for kind, text in diagnostic.notes if kind == "help"]
+    if diagnostic.help:
+        helps.append(diagnostic.help)
+    assert len(helps) == 1, helps
+    assert help_shown is None or help_shown in helps[0]
+
+
 def test_a_duplicate_uuid_names_the_other_object_and_both_places(workspace: Path) -> None:
     """``Duplicated ID … on 'A' @ a.yaml; already used by 'B' @ b.yaml`` had no line, no
     frame and no place for the other file (post-merge end-to-end run)."""

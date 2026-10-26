@@ -100,7 +100,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **A misspelled `enabled` key in a platform file is named** (`sentinel.toml sets 'enabeld' in [platform], not 'enabled'`) instead of the warning sending you to `opentide setup platforms`.
 - **`validate` is 3-4 times faster on a large catalogue** (306 objects: 8-12 s → 2-3 s): an object with no finding is no longer parsed again to place findings it does not have. A transient `Validating objects` spinner shows meanwhile at a terminal.
 - **A duplicate UUID is framed at the value**: `UUID … is also used by 'Other rule'`, the frame under the UUID, an `also:` note with the other file's line and column, and help that does not guess which file is the copy.
-- **Every frame ends in a step to take**: a YAML syntax error, a missing field and a disabled platform's block had none.
+- **Every frame ends in a step to take**: a YAML syntax error, a missing field and a disabled platform's block had none. A file that does not parse gets the step that fits it (an empty file, an impossible date, a file that is not UTF-8), and one step only.
 - **`generate` reports an object that does not validate in one line** (`'LSASS access on splunk' does not validate: description: field required; opentide validate shows each finding`) instead of Pydantic's report with the internal model name and an errors.pydantic.dev link.
 - **`share preview` and `share targets` print plan rows**, by object name, with the actions a preview would take (`+ create`, `○ skip` and why) instead of a table of raw records that said `created` for a dry run; with no target configured they say which file to write.
 - **The MCP server reports opentide's version** in `serverInfo`, not the MCP SDK's.
