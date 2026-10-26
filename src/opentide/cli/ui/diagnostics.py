@@ -59,6 +59,15 @@ LINT_CODES = {
 }
 
 
+#: Help for codes whose issue carries no suggestion, so their frame still ends
+#: in a step to take (``╰─ help: …``), as the spec's frame does.
+_DEFAULT_HELP = {
+    "invalid_uuid": 'replace it with a UUID v4: python -c "import uuid; print(uuid.uuid4())"',
+    "missing_uuid": "add metadata.uuid with a fresh UUID v4",
+    "duplicate_id": "give the copy a fresh UUID v4; keep this one where it is deployed",
+}
+
+
 def explain_command(code: str) -> str:
     """``opentide explain <code>``: the page that says what *code* means."""
     return f"opentide explain {code}"
@@ -594,6 +603,8 @@ def diagnostic_from_issue(
         )
         if listing:
             help_text = f"{listing} lists the ones that exist"
+    if not help_text:
+        help_text = _DEFAULT_HELP.get(issue.code)
     allowed = issue.context.get("allowed")
     if issue.code == "config_enum_unknown" and isinstance(allowed, list) and allowed:
         notes.append(("expected", "one of " + ", ".join(str(item) for item in allowed)))

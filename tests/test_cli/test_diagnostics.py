@@ -307,6 +307,26 @@ def test_a_dangling_reference_names_the_listing(workspace: Path) -> None:
     assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (10, 18, 54)
 
 
+@pytest.mark.parametrize("code", ["invalid_uuid", "missing_uuid", "duplicate_id"])
+def test_a_uuid_finding_closes_its_frame_with_a_step(workspace: Path, code: str) -> None:
+    """The engine gives these codes no suggestion; the frame still ends in ``╰─ help:``."""
+    issue = ValidationIssue(
+        code=code,
+        object_uuid=UUID,
+        object_type="rule",
+        file_path=_rule(workspace),
+        yaml_line=2,
+        field_path=("metadata", "uuid"),
+        message="UUID 'x' is not a valid UUIDv4",
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    assert diagnostic.help and "UUID v4" in diagnostic.help
+    console = Console(file=io.StringIO(), width=120, color_system=None)
+    render_diagnostics(console, [diagnostic], mode=OutputMode.PLAIN, cwd=workspace)
+    lines = console.file.getvalue().rstrip("\n").splitlines()
+    assert lines[-1].lstrip().startswith("╰─ help: ")
+
+
 def test_no_fix_when_the_file_says_something_else(workspace: Path) -> None:
     issue = _typo(workspace).model_copy(update={"context": {"value": "other"}})
     assert diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles()).fix is None
