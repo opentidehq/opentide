@@ -1,4 +1,4 @@
-"""opentide DetectionOps engine."""
+"""opentide: spec-driven development for agentic detection engineering."""
 
 from __future__ import annotations
 

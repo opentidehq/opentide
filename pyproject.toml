@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "opentide"
 dynamic = ["version"]
-description = "DetectionOps engine: validate, generate, deploy, and document detection-as-code across eight security platforms."
+description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across eight security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
 license-files = ["LICENSE"]
