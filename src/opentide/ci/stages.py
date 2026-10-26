@@ -242,6 +242,12 @@ def production_deploy_steps(options: CiRenderOptions) -> list[str]:
     return _deploy_steps("RELEASE")
 
 
+#: The share job's command. Every provider runs it after the production job,
+#: on a checkout of the default branch's tip, so ``--changed`` covers the
+#: push and the promotion write-back the production job committed (#590).
+SHARE_COMMAND = "opentide share push --changed"
+
+
 def github_deploy_env() -> str:
     """Map each platform credential into the GitHub Actions secret store."""
     lines = ["env:"]
