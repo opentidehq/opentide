@@ -326,3 +326,29 @@ def test_legacy_export_unknown_raises() -> None:
 
     with pytest.raises(AttributeError):
         reg_mod.__getattr__("NotARealExport")
+
+
+def test_initialise_drops_typed_objects_of_a_replaced_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``IndexManager._cache = None`` swapped ``Index`` but kept the old ``Rules``.
+
+    ``initialise()`` then served typed objects from the previous snapshot next
+    to the new raw index, so the two disagreed about the catalogue.
+    """
+    registry = OpentideRegistry()
+    first: dict[str, Any] = {"objects": {"rule": {}, "threat": {}, "objective": {}}}
+    second: dict[str, Any] = {"objects": {"rule": {}, "threat": {}, "objective": {}}}
+    stale = MagicMock()
+
+    monkeypatch.setattr(index_mod.IndexManager, "load", lambda: first)
+    registry.initialise()
+    registry._rules = {"old": stale}
+    registry._objects_loaded = True
+    registry.initialise()
+    assert registry.Rules == {"old": stale}, "the same snapshot keeps its typed objects"
+
+    monkeypatch.setattr(index_mod.IndexManager, "load", lambda: second)
+    registry.initialise()
+    assert registry.Index is second
+    assert registry.Rules == {}

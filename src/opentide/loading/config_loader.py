@@ -6,7 +6,7 @@ file's Pydantic model, then hands callers the dataclasses they already use.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from pydantic import ValidationError
 

@@ -162,7 +162,8 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
                 not isinstance(raw_key, str) or not raw_key.startswith("$")
             ):
                 raise ValueError(
-                    f"{where} setup: api_key must be an environment variable reference (e.g. $ELASTIC_API_KEY)"
+                    f"{where} setup: api_key must be an environment variable reference (e.g. "
+                    "$ELASTIC_API_KEY)"
                 )
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))

@@ -31,8 +31,7 @@ def run() -> None:
     export_all_registered_schemas(json_schema_folder=schema_dir, schema_map=schema_map)
 
     # model_json_schema() of VisibilityConfig, the same document the configuration
-    # export writes: the enriched schema put an enum of qualified names on the
-    # `[[logsources]]` tables themselves and refused every visibility.toml.
+    # export writes: one schema source for visibility.toml (#374).
     visibility_name = schema_map.get("visibility", "visibility.1.0.schema.json")
     visibility_schema = generate_configuration_schema("visibility.toml")
     (schema_dir / visibility_name).write_text(

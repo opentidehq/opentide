@@ -138,3 +138,20 @@ def test_add_and_remove_same_cycle_still_pins_minor() -> None:
     by_id = {str(entry["id"]): entry for entry in result.keys}
     assert by_id["T1001"]["removed"] == "2.0"
     assert by_id["T1002"]["version"] == "1.1"
+
+
+def test_an_identity_repeated_upstream_keeps_its_first_entry() -> None:
+    """Upstream lists its sources in priority order, so the first entry wins.
+
+    The last one used to: ATT&CK groups concatenate the Enterprise, ICS and
+    Mobile bundles, and a group in all three came out as ``[Mobile] APT28``.
+    """
+    upstream = [
+        {"id": "G0007", "name": "APT28", "description": "enterprise"},
+        {"id": "G0007", "name": "[Mobile] APT28", "description": "mobile"},
+    ]
+    result = merge_vocab_keys([], upstream, key_field="id")
+    assert [(entry["name"], entry["description"]) for entry in result.keys] == [
+        ("APT28", "enterprise")
+    ]
+    assert result.added == ("G0007",)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-_FORBIDDEN = str.maketrans({char: "" for char in "()[]{}|"})
+_FORBIDDEN = str.maketrans(dict.fromkeys("()[]{}|", ""))
 
 
 def sanitize_identifier(value: str) -> str:

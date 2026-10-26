@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import requests
 
 from opentide.platforms.elastic.client import ElasticClient
+from opentide.platforms.elastic.query_text import esql_sources
 
-_FROM_PATTERN = re.compile(r"(?i)\bFROM\s+(.+)")
-_SOURCE_CUT = re.compile(r"(?i)\s*(?:\||\bMETADATA\b)")
-_LINE_COMMENT = re.compile(r"//.*")
 _DATE_FIELD_TYPES = frozenset({"date", "date_nanos"})
 
 
@@ -24,22 +21,13 @@ class ElasticTenantError(RuntimeError):
 
 
 def esql_from_sources(query: str) -> str:
-    """Index patterns named by the first ``FROM``, without ``METADATA`` or pipes.
+    """Index patterns named by the ``FROM`` or ``TS`` source command.
 
     ``FROM logs-* METADATA _id, _version | ...`` resolves as ``logs-*``.
-    Quoted names and ``//`` comments are stripped.
+    Sources may span lines; quotes are stripped, and comments and pipes or
+    ``METADATA`` inside comments or strings are ignored.
     """
-    match = _FROM_PATTERN.search(query)
-    if not match:
-        return ""
-    head = _SOURCE_CUT.split(match.group(1), maxsplit=1)[0]
-    head = _LINE_COMMENT.sub("", head)
-    parts: list[str] = []
-    for raw in head.split(","):
-        token = raw.strip().strip("\"'`")
-        if token:
-            parts.append(token)
-    return ",".join(parts)
+    return esql_sources(query)
 
 
 def _error_payload(resp: requests.Response) -> tuple[str, str, str]:

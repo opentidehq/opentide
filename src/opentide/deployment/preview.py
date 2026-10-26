@@ -93,10 +93,7 @@ def preview_platform_deployment(
     Opentide.initialise()
     previews: list[dict[str, Any]] = []
     for uuid in uuids:
-        if rules_by_uuid is not None:
-            rule = rules_by_uuid.get(uuid)
-        else:
-            rule = Opentide.Rules[uuid]
+        rule = rules_by_uuid.get(uuid) if rules_by_uuid is not None else Opentide.Rules[uuid]
         if rule is None:
             continue
         if isinstance(rule, DetectionRule):

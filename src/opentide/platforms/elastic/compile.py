@@ -80,7 +80,11 @@ def compile_filter(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def related_integration(entry: str | dict[str, Any]) -> dict[str, str]:
-    """Compile integration block: string 'pkg' becomes {'package': pkg, 'version': '*'}; dict keeps version default."""
+    """Compile an integration block.
+
+    A string ``pkg`` becomes ``{'package': pkg, 'version': '*'}``; a dict keeps
+    its version, defaulting to ``'*'``.
+    """
     if isinstance(entry, str):
         item = {"package": entry}
     else:

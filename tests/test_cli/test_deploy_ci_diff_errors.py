@@ -80,7 +80,7 @@ def _init_repo(path: Path, commits: int = 1) -> str:
 
 
 def _env(repo: Path, **values: str | None) -> dict[str, str | None]:
-    env: dict[str, str | None] = {key: None for key in _HIDDEN}
+    env: dict[str, str | None] = dict.fromkeys(_HIDDEN)
     env["OPENTIDE_REPO_ROOT"] = str(repo)
     env["OPENTIDE_TIDE_WORKSPACE"] = str(repo)
     env.update(values)
