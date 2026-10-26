@@ -169,6 +169,19 @@ def test_render_info_summary_keeps_the_capability_list(monkeypatch: pytest.Monke
     assert "enabled=" not in output
 
 
+def test_render_info_summary_is_columns_not_a_boxed_key_value_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A heavy-box "opentide Info" table with Key/Value headers repeated the outcome's
+    counts as "Parse errors" where the outcome says "load errors" (post-merge run)."""
+    output = _render(monkeypatch, _SUMMARY)
+    for absent in ("opentide Info", "Key", "Parse errors", "┏", "│"):
+        assert absent not in output
+    rows = [" ".join(line.split()) for line in output.splitlines()]
+    assert rows[0].startswith("version ")
+    assert rows[1].startswith("platforms Microsoft Sentinel enabled · deploy, validate")
+
+
 @pytest.mark.parametrize(
     ("section", "uuid", "name"),
     [

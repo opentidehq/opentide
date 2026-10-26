@@ -15,6 +15,7 @@ from opentide.registry.builder import parse_errors_reported_by_caller
 
 if TYPE_CHECKING:
     from rich.table import Table
+    from rich.text import Text
 
     from opentide.cli.context import CliContext
 
@@ -116,18 +117,22 @@ def render_info(payload: dict[str, Any], *, section: str | None = None) -> None:
         console.print(_summary_table(payload))
 
 
-def _summary_table(payload: dict[str, Any]) -> Table:
-    from rich.table import Table
+def _summary_table(payload: dict[str, Any]) -> Text:
+    """The version and every platform, enabled first, as label and value columns.
+
+    The heavy-box "opentide Info" table this replaces had Key/Value headers and
+    repeated the counts the outcome line gives, under another name ("Parse
+    errors" there, "load errors" in the outcome) (post-merge end-to-end run).
+    """
     from rich.text import Text
 
-    table = Table(title="opentide Info")
-    table.add_column("Key")
-    table.add_column("Value")
-    table.add_row("Version", Text(str(payload["version"])))
-    for family, title in _SECTION_TITLES.items():
-        table.add_row(title, str(payload["counts"][family]))
-    table.add_row("Parse errors", str(payload.get("parse_error_count", 0)))
-    for plat in payload["platforms"]:
+    from opentide.cli.ui.layout import columns
+
+    rows: list[tuple[Text, ...]] = [
+        (Text("version", style="bold dim"), Text(str(payload["version"])), Text(""))
+    ]
+    platforms = sorted(payload["platforms"], key=lambda plat: not plat["enabled"])
+    for number, plat in enumerate(platforms):
         caps = []
         if plat["can_deploy"]:
             caps.append("deploy")
@@ -137,11 +142,19 @@ def _summary_table(payload: dict[str, Any]) -> Table:
             display_name = platform_label(DetectionPlatform(plat["name"]))
         except ValueError:
             display_name = plat["name"]
-        # "enabled · deploy, validate": the reader's words, not a Python repr.
-        state = "enabled" if plat["enabled"] else "disabled"
-        separator = f" {glyph('separator', get_stdout_console().file)} "
-        table.add_row(Text(display_name), Text(f"{state}{separator}{', '.join(caps) or 'none'}"))
-    return table
+        enabled = bool(plat["enabled"])
+        rows.append(
+            (
+                Text("platforms" if number == 0 else "", style="bold dim"),
+                Text(display_name, style="bold" if enabled else "dim"),
+                Text.assemble(
+                    ("enabled" if enabled else "disabled", "green" if enabled else "dim"),
+                    (f" {glyph('separator', get_stdout_console().file)} ", "dim"),
+                    (", ".join(caps) or "none", "dim"),
+                ),
+            )
+        )
+    return columns(rows, right=(0,))
 
 
 def _objects_table(family: str, uuids: list[str]) -> Table:
