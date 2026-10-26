@@ -118,6 +118,9 @@ class LintFinding(DiagnosticFields):
 class LintSummary(ResultModel):
     files: int = 0
     findings: int = 0
+    errors: int = 0
+    warnings: int = 0
+    notes: int = 0
     fixed: int = 0
 
 
