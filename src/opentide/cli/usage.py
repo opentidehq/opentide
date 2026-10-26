@@ -49,15 +49,16 @@ def one_line(message: str) -> str:
         message = f"{message[: match.start()]}: {_choose_from(choices)}."
     return _LINE_BREAK.sub(" ", message).strip()
 
+
 #: Commands people type that are root options: the option, and the ``help:`` line.
-_ROOT_OPTION_COMMANDS: dict[str, tuple[str, str]] = {
-    word: (
+_ROOT_OPTION_COMMANDS: dict[str, tuple[str, str]] = dict.fromkeys(
+    ("completion", "completions", "install-completion"),
+    (
         "--install-completion",
         "did you mean 'opentide --install-completion'? "
         "'opentide --show-completion' prints the script instead",
-    )
-    for word in ("completion", "completions", "install-completion")
-} | {
+    ),
+) | {
     "show-completion": (
         "--show-completion",
         "did you mean 'opentide --show-completion'?",

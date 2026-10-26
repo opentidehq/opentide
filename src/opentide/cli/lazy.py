@@ -265,6 +265,8 @@ def _adopt_completion_options(group: LazyTyperGroup) -> None:
     from opentide.cli.completion import install_completion, show_completion
 
     for param in group.params:
+        if not isinstance(param, TyperOption):
+            continue
         if param.name == "install_completion":
             param.callback = install_completion
             param.help = "Install completion; name a shell after it to pick one"

@@ -210,7 +210,10 @@ print("\\n" + json.dumps({"modules": sorted(sys.modules), "built": built}), file
 
 
 def _complete_bash(words: str, **env: str) -> tuple[str, set, bool]:
-    """Complete *words* as bash would: the output, the modules loaded, whether the registry was built."""
+    """Complete *words* as bash would.
+
+    Returns the output, the modules loaded, and whether the registry was built.
+    """
     done = subprocess.run(
         [sys.executable, "-c", _COMPLETE_AND_REPORT],
         capture_output=True,

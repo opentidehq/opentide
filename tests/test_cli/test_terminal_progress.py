@@ -196,7 +196,7 @@ def test_only_the_outermost_block_draws() -> None:
         assert not inner.active
         outer.update(1)
     assert _states(stream.getvalue()) == [(1, 0), (1, 50), (0, 0)]
-    assert terminal_progress._running == []  # noqa: SLF001
+    assert terminal_progress._running == []
 
 
 def test_tmux_wraps_every_sequence() -> None:

@@ -113,7 +113,7 @@ _UUID = re.compile(r"^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")
 _YAML_ESCAPES = {
     "0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t", "n": "\n", "v": "\v",
     "f": "\f", "r": "\r", "e": "\x1b", " ": " ", '"': '"', "/": "/", "\\": "\\",
-    "N": "\x85", "_": "\xa0", "L": " ", "P": " ",
+    "N": "\x85", "_": "\xa0", "L": "\u2028", "P": "\u2029",
 }  # fmt: skip
 _YAML_ESCAPE = re.compile(r"\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)", re.DOTALL)
 # A character bash reads back unchanged without a backslash in front of it.
@@ -512,7 +512,7 @@ def _shell_complete(source: Source) -> Callable[[Any, Any, str], list[Any]]:
                 # A line break cannot be escaped: bash would split the candidate.
                 if not (bash and "\n" in value)
             ]
-        except Exception:  # noqa: BLE001 -- a traceback in the shell helps nobody
+        except Exception:
             return []
 
     complete.__doc__ = source.__doc__

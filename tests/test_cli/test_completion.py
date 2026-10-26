@@ -159,14 +159,14 @@ def test_object_folders_follow_paths_toml(workspace: Path) -> None:
     ("text", "expected"),
     [
         (f"name: Plain\nmetadata:\n  uuid: {RULE_A}\n", (RULE_A, "Plain")),
-        (f"name: 'Quoted # not a comment'\nuuid: \"{RULE_A}\"\n", (RULE_A, "Quoted # not a comment")),
-        (f'# header\nname: "Esc \\" quote" # comment\nmetadata:\n  uuid: {RULE_A} # c\n', (RULE_A, 'Esc " quote')),
+        (f"name: 'Quoted # not a comment'\nuuid: \"{RULE_A}\"\n", (RULE_A, "Quoted # not a comment")),  # noqa: E501
+        (f'# header\nname: "Esc \\" quote" # comment\nmetadata:\n  uuid: {RULE_A} # c\n', (RULE_A, 'Esc " quote')),  # noqa: E501
         ('name: "line\\nbreak \\u00e9\\x41\\\\"\n', (None, "line\nbreak éA\\")),
         ("name: 'Detect: user''s \"admin\"' # c\n", (None, 'Detect: user\'s "admin"')),
         # Only metadata's own uuid, never one nested deeper (an alphabetical dump puts it first).
-        (f"name: Rule 1\nmetadata:\n  organisation:\n    uuid: {ORGANISATION}\n    name: Example Corp\n  uuid: {RULE_A}\n", (RULE_A, "Rule 1")),
-        (f"name: Four spaces\nmetadata:\n    organisation:\n        uuid: {ORGANISATION}\n    uuid: {RULE_A}\n", (RULE_A, "Four spaces")),
-        ("description: |\n  name: nested\nname: Late\nconfigurations:\n  uuid: wrong\n", (None, "Late")),
+        (f"name: Rule 1\nmetadata:\n  organisation:\n    uuid: {ORGANISATION}\n    name: Example Corp\n  uuid: {RULE_A}\n", (RULE_A, "Rule 1")),  # noqa: E501
+        (f"name: Four spaces\nmetadata:\n    organisation:\n        uuid: {ORGANISATION}\n    uuid: {RULE_A}\n", (RULE_A, "Four spaces")),  # noqa: E501
+        ("description: |\n  name: nested\nname: Late\nconfigurations:\n  uuid: wrong\n", (None, "Late")),  # noqa: E501
         ("name: |\n  block scalar\n", (None, None)),
         ("", (None, None)),
     ],
@@ -249,7 +249,7 @@ def test_bash_gets_spaces_and_metacharacters_escaped(
 
 
 def test_bash_skips_a_candidate_with_a_line_break(monkeypatch: pytest.MonkeyPatch) -> None:
-    complete = completion._shell_complete(lambda ctx, incomplete: [("a\nb", ""), ("ok", "")])  # noqa: SLF001
+    complete = completion._shell_complete(lambda ctx, incomplete: [("a\nb", ""), ("ok", "")])
     assert [item.value for item in complete(None, None, "")] == ["a\nb", "ok"]
     monkeypatch.setenv("_OPENTIDE_COMPLETE", "complete_bash")
     assert [item.value for item in complete(None, None, "")] == ["ok"]
@@ -464,13 +464,13 @@ def test_index_lists_every_option_a_loaded_command_completes() -> None:
         for param in command.params:
             if param.param_type_name != "option":
                 continue
-            if completion._source_for(path, param) is None:  # noqa: SLF001
+            if completion._source_for(path, param) is None:
                 continue
             found.setdefault(path, set()).update(param.opts)
             if "--platform" in param.opts:
                 choices = [
                     str(getattr(choice, "value", choice)) for choice in completion._choices(param)
-                ]  # noqa: SLF001
+                ]
                 assert choices == list(completion.PLATFORMS), path
         for name, child in (getattr(command, "commands", None) or {}).items():
             walk(child, (*path, name))
@@ -499,7 +499,7 @@ def _from_index(words: str) -> list[tuple[str, str | None]] | None:
     if found is None:
         return None
     source, ctx, incomplete = found
-    complete = completion._shell_complete(source)  # noqa: SLF001
+    complete = completion._shell_complete(source)
     return [(item.value, item.help) for item in complete(ctx, None, incomplete)]
 
 
