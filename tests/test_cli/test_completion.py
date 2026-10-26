@@ -7,7 +7,9 @@ files; it never builds the registry. The import-graph budget is checked in
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 import typer
@@ -439,3 +441,305 @@ def test_completion_never_builds_the_registry(
     ):
         assert _values(words), words
     assert calls == []
+
+
+# --------------------------------------------------------------------------
+# The index: values complete without loading the command
+# --------------------------------------------------------------------------
+
+_INDEXED = sorted(
+    (path, option) for path, options in completion.INDEXED_OPTIONS.items() for option in options
+)
+
+
+def _group() -> Any:
+    return typer.main.get_command(cli_package.app)
+
+
+def test_index_lists_every_option_a_loaded_command_completes() -> None:
+    """A completed option missing from the index would load the engine on every Tab."""
+    found: dict[tuple[str, ...], set[str]] = {}
+
+    def walk(command: Any, path: tuple[str, ...]) -> None:
+        for param in command.params:
+            if param.param_type_name != "option":
+                continue
+            if completion._source_for(path, param) is None:  # noqa: SLF001
+                continue
+            found.setdefault(path, set()).update(param.opts)
+            if "--platform" in param.opts:
+                choices = [
+                    str(getattr(choice, "value", choice)) for choice in completion._choices(param)
+                ]  # noqa: SLF001
+                assert choices == list(completion.PLATFORMS), path
+        for name, child in (getattr(command, "commands", None) or {}).items():
+            walk(child, (*path, name))
+
+    group = _group()
+    for name in group.list_commands(None):
+        walk(group.get_command(None, name), (name,))
+    assert found == {path: set(options) for path, options in completion.INDEXED_OPTIONS.items()}
+
+
+def test_platform_and_strategy_copies_match_the_engine() -> None:
+    from opentide.cli.enums import DetectionPlatform
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+    assert tuple(platform.value for platform in DetectionPlatform) == completion.PLATFORMS
+    assert (
+        tuple((strategy.name, str(strategy.value)) for strategy in DEPLOYABLE_STRATEGIES)
+        == completion.STRATEGIES
+    )
+
+
+def _from_index(words: str) -> list[tuple[str, str | None]] | None:
+    args = words.split()
+    incomplete = "" if words.endswith(" ") or not args else args.pop()
+    found = completion.indexed_source(_group(), args, incomplete)
+    if found is None:
+        return None
+    source, ctx, incomplete = found
+    complete = completion._shell_complete(source)  # noqa: SLF001
+    return [(item.value, item.help) for item in complete(ctx, None, incomplete)]
+
+
+@pytest.mark.parametrize(
+    ("path", "option"), _INDEXED, ids=[" ".join((*path, option)) for path, option in _INDEXED]
+)
+def test_index_answers_as_the_loaded_command_does(
+    workspace: Path, path: tuple[str, ...], option: str
+) -> None:
+    words = f"{' '.join(path)} {option} "
+    answer = _from_index(words)
+    assert answer, words
+    assert answer == [(item.value, item.help) for item in _complete(words)]
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "validate --type rule --uuid ",
+        "validate --type=threat --file ",
+        "share push --type objective --json --uuid 0",
+        "--json validate --uuid=00000000-0000-4000-8003",
+        "validate query --strategy pre",
+        "--repo {repo} deploy --platform ",
+    ],
+)
+def test_index_reads_the_options_already_typed(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, words: str
+) -> None:
+    other = tmp_path / "other"
+    (other / ".opentide/configurations/platforms").mkdir(parents=True)
+    (other / ".opentide/configurations/platforms/elastic.toml").write_text(
+        "[platform]\nenabled = true\n", encoding="utf-8"
+    )
+    words = words.format(repo=other)
+    answer = _from_index(words)
+    assert answer
+    assert answer == [(item.value, item.help) for item in _complete(words)]
+    if "--repo" in words:
+        assert answer[0] == ("elastic", "enabled")
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "validate --",  # an option name
+        "validate --uu",
+        "validate --check schema --uuid ",  # an option the index does not know
+        "validate --uuid x query --uuid ",  # a positional word after the path
+        "validate --file --uuid ",  # --file has no value of its own
+        "lint --platform ",  # a command the index does not hold
+        "validate -- --uuid ",
+        "validate ",
+        "",
+    ],
+)
+def test_index_leaves_the_rest_to_click(workspace: Path, words: str) -> None:
+    assert _from_index(words) is None
+
+
+@pytest.mark.parametrize(
+    ("shell", "env"),
+    [
+        ("zsh", {"_TYPER_COMPLETE_ARGS": "opentide validate --uuid "}),
+        (
+            "fish",
+            {
+                "_TYPER_COMPLETE_ARGS": "opentide deploy --platform ",
+                "_TYPER_COMPLETE_FISH_ACTION": "get-args",
+            },
+        ),
+        ("bash", {"COMP_WORDS": "opentide info --technique T1059.00", "COMP_CWORD": "3"}),
+    ],
+)
+def test_each_shell_gets_the_answer_click_would_format(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    shell: str,
+    env: dict[str, str],
+) -> None:
+    from typer._click.shell_completion import get_completion_class
+
+    monkeypatch.setenv("_OPENTIDE_COMPLETE", f"complete_{shell}")
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    group = _group()
+    with pytest.raises(SystemExit) as exited:
+        completion.complete_from_index(group, "opentide", "_OPENTIDE_COMPLETE")
+    assert exited.value.code == 0
+    fast = capsys.readouterr().out
+    shell_class = get_completion_class(shell)
+    assert shell_class is not None
+    slow = shell_class(group, {}, "opentide", "_OPENTIDE_COMPLETE").complete()
+    assert fast.strip()
+    assert fast.rstrip("\n") == slow
+
+
+def test_complete_from_index_returns_for_anything_else(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    group = _group()
+    monkeypatch.delenv("_OPENTIDE_COMPLETE", raising=False)
+    completion.complete_from_index(group, "opentide", "_OPENTIDE_COMPLETE")
+    for instruction in ("source_bash", "complete_tcsh"):
+        monkeypatch.setenv("_OPENTIDE_COMPLETE", instruction)
+        completion.complete_from_index(group, "opentide", "_OPENTIDE_COMPLETE")
+    monkeypatch.setenv("_OPENTIDE_COMPLETE", "complete_bash")
+    monkeypatch.setenv("COMP_WORDS", "opentide validate --")
+    monkeypatch.setenv("COMP_CWORD", "2")
+    completion.complete_from_index(group, "opentide", "_OPENTIDE_COMPLETE")
+    assert capsys.readouterr().out == ""
+
+
+# --------------------------------------------------------------------------
+# --install-completion, --show-completion, `opentide completion`
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A throwaway home with a project in it as the current directory; no shell detected."""
+    home = tmp_path / "home"
+    (home / "proj").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("_TYPER_COMPLETE_TEST_DISABLE_SHELL_DETECTION", raising=False)
+    monkeypatch.setattr("typer._completion_shared._get_shell_name", lambda: None)
+    monkeypatch.chdir(home / "proj")
+    return home
+
+
+def _invoke(*args: str) -> Any:
+    from typer.testing import CliRunner
+
+    return CliRunner().invoke(
+        cli_package.app, list(args), prog_name="opentide", env={"NO_COLOR": "1"}
+    )
+
+
+@pytest.mark.parametrize(
+    ("shell", "path", "step"),
+    [
+        ("bash", "~/.bash_completions/opentide.sh", "→ source ~/.bashrc · or restart your shell"),
+        ("zsh", "~/.zfunc/_opentide", "→ source ~/.zshrc · or restart your shell"),
+        ("fish", "~/.config/fish/completions/opentide.fish", "→ exec fish · restart your shell"),
+    ],
+)
+def test_install_completion_names_the_shell_the_path_and_the_next_step(
+    home: Path, shell: str, path: str, step: str
+) -> None:
+    result = _invoke("--install-completion", shell)
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines() == [f"✓ Installed {shell} completion in {path}", step]
+    assert (home / path.removeprefix("~/")).is_file()
+
+
+def test_install_completion_inside_the_current_directory_is_relative_to_it(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(home)
+    result = _invoke("--install-completion", "bash")
+    assert result.stdout.splitlines()[0] == (
+        "✓ Installed bash completion in .bash_completions/opentide.sh"
+    )
+
+
+def test_install_completion_quiet_and_json(home: Path) -> None:
+    quiet = _invoke("--quiet", "--install-completion", "zsh")
+    assert quiet.stdout.splitlines() == ["✓ Installed zsh completion in ~/.zfunc/_opentide"]
+    document = json.loads(_invoke("--json", "--install-completion", "zsh").stdout)
+    assert document["message"] == "Installed zsh completion in ~/.zfunc/_opentide"
+    assert document["shell"] == "zsh"
+    assert document["path"] == str(home / ".zfunc" / "_opentide")
+    assert document["next_actions"] == [
+        {"command": "source ~/.zshrc", "reason": "or restart your shell"}
+    ]
+
+
+@pytest.mark.parametrize("option", ["--install-completion", "--show-completion"])
+@pytest.mark.parametrize("words", [["tcsh"], ["validate"], ["bash", "zsh"]])
+def test_completion_options_refuse_a_word_that_is_not_one_shell(
+    home: Path, option: str, words: list[str]
+) -> None:
+    result = _invoke(option, *words)
+    assert result.exit_code == 2
+    assert f"Use: opentide {option} [bash|zsh|fish|powershell|pwsh]" in result.stderr
+    assert not (home / ".bashrc").exists()
+
+
+@pytest.mark.parametrize("option", ["--install-completion", "--show-completion"])
+def test_completion_options_ask_for_a_shell_they_cannot_detect(home: Path, option: str) -> None:
+    result = _invoke(option)
+    assert result.exit_code == 2
+    assert f"Name it: opentide {option} [bash|" in result.stderr
+
+
+def test_completion_options_use_the_detected_shell(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("typer._completion_shared._get_shell_name", lambda: "zsh")
+    assert "#compdef opentide" in _invoke("--show-completion").stdout
+    installed = _invoke("--install-completion")
+    assert installed.stdout.splitlines()[0] == "✓ Installed zsh completion in ~/.zfunc/_opentide"
+
+
+def test_typer_s_test_mode_passes_the_shell_as_the_value(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under this variable Typer builds both options to take a value instead of being flags."""
+    monkeypatch.setenv("_TYPER_COMPLETE_TEST_DISABLE_SHELL_DETECTION", "1")
+    result = _invoke("--show-completion", "fish")
+    assert result.exit_code == 0
+    assert "complete --command opentide" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("shell", "marker"),
+    [
+        ("zsh", "#compdef opentide"),
+        ("fish", "complete --command opentide"),
+        ("bash", "complete -o default -F"),
+    ],
+)
+def test_show_completion_prints_the_named_shell_s_script(
+    home: Path, shell: str, marker: str
+) -> None:
+    result = _invoke("--show-completion", shell)
+    assert result.exit_code == 0
+    assert marker in result.stdout
+    assert "_OPENTIDE_COMPLETE" in result.stdout
+
+
+@pytest.mark.parametrize("word", ["completion", "completions", "install-completion"])
+def test_completion_as_a_command_points_at_the_options(word: str) -> None:
+    result = _invoke(word)
+    assert result.exit_code == 2
+    assert (
+        "help: did you mean 'opentide --install-completion'? "
+        "'opentide --show-completion' prints the script instead"
+    ) in result.stderr
+    failure = json.loads(_invoke("--json", word).stdout)["failure"]
+    assert failure["code"] == "usage_unknown_command"
+    assert failure["suggestion"] == "--install-completion"

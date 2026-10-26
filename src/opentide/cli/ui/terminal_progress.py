@@ -14,9 +14,9 @@ It is sent only when all of these hold:
 - the terminal is one that reads it (:func:`detected`), or ``OPENTIDE_PROGRESS``
   is true (``1``, ``true``, ``yes``, ``on``).
 
-iTerm2 before 3.6 reads a bare OSC 9 as a desktop notification, so it is
-recognised only from ``TERM_PROGRAM_VERSION`` 3.6 on, and Ghostty from 1.2,
-the first release with OSC 9;4. An older or unknown version gets nothing
+iTerm2 before 3.6.6 reads a bare OSC 9 as a desktop notification, so it is
+recognised only from ``TERM_PROGRAM_VERSION`` 3.6.6 on, and Ghostty from 1.2,
+the first releases with OSC 9;4. An older or unknown version gets nothing
 unless ``OPENTIDE_PROGRESS`` is true.
 
 Inside tmux (``TMUX`` set) the sequence is wrapped for passthrough, which
@@ -52,14 +52,15 @@ INDETERMINATE = 3
 
 #: ``TERM_PROGRAM`` values of terminals that read OSC 9;4.
 TERM_PROGRAMS = frozenset({"ghostty", "WezTerm", "iTerm.app"})
-#: The first ``TERM_PROGRAM_VERSION`` that reads OSC 9;4, where older ones do not.
-MINIMUM_VERSIONS: dict[str, tuple[int, int]] = {"iTerm.app": (3, 6), "ghostty": (1, 2)}
+#: The first ``TERM_PROGRAM_VERSION`` that reads OSC 9;4, where older ones do not:
+#: iTerm2 3.6.6 (November 2025) and Ghostty 1.2.0 (September 2025).
+MINIMUM_VERSIONS: dict[str, tuple[int, int, int]] = {"iTerm.app": (3, 6, 6), "ghostty": (1, 2, 0)}
 #: ``TERM`` values of terminals that read OSC 9;4 in every version that sets them.
 TERMS = frozenset({"xterm-kitty"})
 #: Variables the outer terminal exports that survive into a tmux pane, where
 #: tmux replaces ``TERM`` and ``TERM_PROGRAM`` with its own.
 _OUTER_TERMINAL_MARKERS = ("KITTY_WINDOW_ID", "WEZTERM_PANE")
-_VERSION = re.compile(r"\s*(\d+)\.(\d+)")
+_VERSION = re.compile(r"\s*(\d+)\.(\d+)(?:\.(\d+))?")
 
 _running: list[TerminalProgress] = []
 
@@ -93,7 +94,10 @@ def _recent(program: str, version: str | None) -> bool:
     if minimum is None:
         return True
     match = _VERSION.match(version or "")
-    return match is not None and (int(match.group(1)), int(match.group(2))) >= minimum
+    if match is None:
+        return False
+    major, minor, patch = match.groups()
+    return (int(major), int(minor), int(patch or 0)) >= minimum
 
 
 def sequence(state: int, percent: int = 0, *, tmux: bool = False) -> str:

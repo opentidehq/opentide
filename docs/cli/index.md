@@ -76,8 +76,8 @@ The CLI is one of three interfaces to the same engine. For humans and pipelines,
 ## Shell completion
 
 ```bash
-opentide --install-completion
-opentide --show-completion
+opentide --install-completion        # the current shell
+opentide --show-completion zsh       # print the script for zsh
 ```
 
 Completion also fills in object UUIDs, object files, ATT&CK techniques, platforms and strategies from the workspace; see [Global options → Shell completion](./global-options.md#shell-completion).

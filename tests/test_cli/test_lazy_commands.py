@@ -18,6 +18,7 @@ from typer.testing import CliRunner
 import opentide.cli as cli_package
 from opentide import __version__
 from opentide.cli.commands import ROOT_COMMANDS
+from opentide.cli.completion import INDEXED_OPTIONS
 from opentide.cli.lazy import LazyTyperGroup
 
 runner = CliRunner()
@@ -228,40 +229,40 @@ def _complete_bash(words: str, **env: str) -> tuple[str, set, bool]:
     return done.stdout, set(report["modules"]), report["built"]
 
 
-#: Modules a completion source may add: the package that holds the bundled data.
-_COMPLETION_MAY_IMPORT = frozenset({"opentide.data"})
-
-
-@pytest.mark.parametrize(
-    ("command", "option"),
-    [
-        ("validate", "--uuid"),
-        ("validate", "--file"),
-        ("validate", "--type"),
-        ("validate query", "--uuid"),
-        ("validate query", "--strategy"),
-        ("deploy", "--platform"),
-        ("deploy", "--strategy"),
-        ("info", "--technique"),
-        ("share", "--uuid"),
-    ],
+_INDEXED = sorted(
+    (" ".join(path), option) for path, options in INDEXED_OPTIONS.items() for option in options
 )
-def test_completing_a_value_imports_nothing_new(tmp_path: Path, command: str, option: str) -> None:
-    """Completing a value costs what completing the command's option names does.
 
-    The command's own module loads either way; a completion source adds only
-    standard library modules and never builds the registry.
+
+@pytest.mark.parametrize(("command", "option"), _INDEXED, ids=[f"{c} {o}" for c, o in _INDEXED])
+def test_completing_a_value_imports_no_engine_module(
+    tmp_path: Path, command: str, option: str
+) -> None:
+    """Each completer answers from the index: not the command's module, not the engine.
+
+    Completing a value costs what completing a command name does.
     """
     env = {"OPENTIDE_REPO_ROOT": str(_workspace(tmp_path))}
-    _, baseline, _ = _complete_bash(f"opentide {command} --", **env)
+    _, baseline, _ = _complete_bash("opentide va", **env)
     output, modules, built = _complete_bash(f"opentide {command} {option} ", **env)
     assert output.strip()
+    assert _engine_modules(modules) == []
+    assert not any(name == "pydantic" or name.startswith("pydantic.") for name in modules)
     added = sorted(
         name
-        for name in modules - baseline - _COMPLETION_MAY_IMPORT
+        for name in modules - baseline - {"opentide.data"}
         if name.split(".")[0] not in sys.stdlib_module_names
     )
     assert added == []
+    assert built is False
+
+
+def test_completing_after_an_unindexed_option_still_answers(tmp_path: Path) -> None:
+    """A command line the index cannot read falls back to Click, which loads the command."""
+    env = {"OPENTIDE_REPO_ROOT": str(_workspace(tmp_path))}
+    output, modules, built = _complete_bash("opentide validate --check schema --uuid ", **env)
+    assert output.split() == ["00000000-0000-4000-8003-000000000001"]
+    assert "opentide.cli.commands.validate" in modules
     assert built is False
 
 

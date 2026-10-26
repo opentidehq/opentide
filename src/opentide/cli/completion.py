@@ -10,12 +10,20 @@ source that cannot be read completes nothing rather than failing.
 :func:`attach` gives a command's parameters their completion when the lazy
 group loads it (:meth:`opentide.cli.lazy.LazyTyperGroup.load`), by option
 name, so ``--uuid`` completes the same way on ``validate``, ``share`` and
-every ``share`` subcommand. ``tests/test_cli/test_completion.py`` covers each
-source and checks that completing a value imports nothing new.
+every ``share`` subcommand. Completing an option's value does not load the
+command at all: :func:`complete_from_index` answers from
+:data:`INDEXED_OPTIONS` before Click resolves the command line, since a
+command's module imports the engine. ``tests/test_cli/test_completion.py``
+checks the index against the loaded commands, and ``test_lazy_commands.py``
+that completing each indexed option imports no engine module.
+
+``--install-completion`` and ``--show-completion`` take the shell as the word
+after them (:func:`install_completion`, :func:`show_completion`).
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
@@ -24,6 +32,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 #: The object kinds, in the order completion lists them, and their default folders.
@@ -38,6 +47,60 @@ ATTACK_VOCABULARY = "att&ck.vocab.toml"
 
 #: How far into an object file its ``name`` and ``metadata.uuid`` are looked for.
 HEADER_LINES = 200
+
+#: ``--platform`` values, as :class:`opentide.cli.enums.DetectionPlatform` holds
+#: them. A copy: importing that module loads the validation engine.
+PLATFORMS = (
+    "sentinel",
+    "splunk",
+    "crowdstrike",
+    "defender_for_endpoint",
+    "sentinel_one",
+    "carbon_black_cloud",
+    "harfanglab",
+    "elastic",
+)
+
+#: ``--strategy`` values and what each deploys, as
+#: ``opentide.models.deployment_enums.DEPLOYABLE_STRATEGIES`` holds them. A
+#: copy: importing ``opentide.models`` loads pydantic and every model.
+STRATEGIES: tuple[tuple[str, str], ...] = (
+    ("PREVIEW", "Deployment from Pull/Merge Requests"),
+    ("RELEASE", "Deployment from the default branch (also called trunk, or main branch)"),
+)
+
+_OBJECT_OPTIONS = frozenset({"--uuid", "--type", "--file"})
+
+#: The options each command completes a value for, by command path. Completing
+#: one of these answers from here, without importing the command's module.
+#: ``test_completion.py`` checks it against what :func:`attach` gives the
+#: loaded commands, so a new completed option fails a test until it is listed.
+INDEXED_OPTIONS: dict[tuple[str, ...], frozenset[str]] = {
+    ("validate",): _OBJECT_OPTIONS,
+    ("validate", "query"): frozenset({"--uuid", "--file", "--platform", "--strategy"}),
+    ("info",): frozenset({"--platform", "--technique"}),
+    ("deploy",): frozenset({"--platform", "--strategy"}),
+    ("deploy", "metadata"): frozenset({"--platform"}),
+    ("setup",): frozenset({"--platform"}),
+    ("setup", "repo"): frozenset({"--platform"}),
+    ("share",): _OBJECT_OPTIONS,
+    ("share", "push"): _OBJECT_OPTIONS,
+    ("share", "preview"): _OBJECT_OPTIONS,
+    ("share", "status"): _OBJECT_OPTIONS,
+    ("share", "retract"): _OBJECT_OPTIONS,
+}
+
+#: The shells Typer writes a completion script for.
+SHELLS = ("bash", "zsh", "fish", "powershell", "pwsh")
+
+#: What loads a freshly installed script into the running shell, and the alternative.
+_RELOAD: dict[str, tuple[str, str]] = {
+    "bash": ("source ~/.bashrc", "or restart your shell"),
+    "zsh": ("source ~/.zshrc", "or restart your shell"),
+    "fish": ("exec fish", "restart your shell"),
+    "powershell": (". $PROFILE", "or restart your shell"),
+    "pwsh": (". $PROFILE", "or restart your shell"),
+}
 
 #: A value and the help a shell shows beside it (``""`` for none).
 Candidate = tuple[str, str]
@@ -330,7 +393,7 @@ def _technique_key(technique: str) -> tuple[int, int]:
 
 def platforms(ctx: Any, incomplete: str, *, choices: Sequence[str] = ()) -> list[Candidate]:
     """``--platform``: the platforms enabled in the workspace first, then the others."""
-    names = list(choices) or [platform.value for platform in _detection_platforms()]
+    names = list(choices) or list(PLATFORMS)
     found = enabled_platforms(workspace_root(ctx))
     enabled = [name for name in found if name in names]
     ordered = [*enabled, *(name for name in names if name not in enabled)]
@@ -360,22 +423,10 @@ def enabled_platforms(root: Path) -> list[str]:
     return enabled
 
 
-def _detection_platforms() -> Any:
-    from opentide.cli.enums import DetectionPlatform
-
-    return DetectionPlatform
-
-
 def strategies(ctx: Any, incomplete: str) -> list[Candidate]:
     """``--strategy``: the strategies a run deploys, ``PREVIEW`` and ``RELEASE``."""
-    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
-
     prefix = incomplete.upper()
-    return [
-        (strategy.name, str(strategy.value))
-        for strategy in DEPLOYABLE_STRATEGIES
-        if strategy.name.startswith(prefix)
-    ]
+    return [(name, meaning) for name, meaning in STRATEGIES if name.startswith(prefix)]
 
 
 def diagnostic_codes(ctx: Any, incomplete: str) -> list[Candidate]:
@@ -418,6 +469,14 @@ def _source_for(path: tuple[str, ...], param: Any) -> Source | None:
             return diagnostic_codes
         return None
     names = {*getattr(param, "opts", ()), *getattr(param, "secondary_opts", ())}
+    choices = [str(getattr(choice, "value", choice)) for choice in _choices(param)]
+    return _option_source(path, names, choices)
+
+
+def _option_source(
+    path: tuple[str, ...], names: set[str], choices: Sequence[str] = ()
+) -> Source | None:
+    """The source for an option called *names* of the command at *path*, if it has one."""
     # validate query --uuid / --file select rules only.
     kinds = ("rule",) if path == ("validate", "query") else tuple(OBJECT_FOLDERS)
     if "--uuid" in names:
@@ -431,7 +490,6 @@ def _source_for(path: tuple[str, ...], param: Any) -> Source | None:
     if "--strategy" in names:
         return strategies
     if "--platform" in names:
-        choices = [str(getattr(choice, "value", choice)) for choice in _choices(param)]
         return lambda ctx, incomplete: platforms(ctx, incomplete, choices=choices)
     return None
 
@@ -486,3 +544,204 @@ def attach(command: Any, path: str) -> Any:
     for name, child in (getattr(command, "commands", None) or {}).items():
         attach(child, f"{path} {name}".strip())
     return command
+
+
+# --------------------------------------------------------------------------- index
+
+
+def indexed_source(
+    group: Any, args: Sequence[str], incomplete: str
+) -> tuple[Source, Any, str] | None:
+    """The source, context and typed text for completing *incomplete* after *args*.
+
+    Answered from :data:`INDEXED_OPTIONS` alone: *args* must be the root's
+    options, a command path the index holds, and then only that command's
+    indexed options with their values (and the hoisted root flags), ending
+    with the option being completed. ``None`` for anything else, which Click
+    then completes by loading the command: an option name, an unindexed
+    option, a positional argument, or ``--``.
+
+    The context carries what the sources read: the root's ``--repo`` and
+    ``--data``, and the ``--type`` values already typed.
+    """
+    if incomplete.startswith("-"):
+        name, equals, value = incomplete.partition("=")
+        if not equals:
+            return None
+        args, incomplete = [*args, name], value
+    if "--" in args:
+        return None
+    from opentide.cli.lazy import HOISTED_FLAGS, split_root_options
+
+    root, words = split_root_options(group, args)
+    path = tuple(itertools.takewhile(lambda word: not word.startswith("-"), words))
+    options = INDEXED_OPTIONS.get(path)
+    rest = words[len(path) :]
+    if options is None or not rest or rest[-1] not in options:
+        return None
+    typed: dict[str, list[str]] = {}
+    index = 0
+    while index < len(rest) - 1:
+        token = rest[index]
+        index += 1
+        if token in HOISTED_FLAGS:
+            continue
+        name, equals, value = token.partition("=")
+        if name not in options:
+            return None
+        if not equals:
+            if index >= len(rest) - 1:
+                return None
+            value = rest[index]
+            index += 1
+        typed.setdefault(name, []).append(value)
+    source = _option_source(path, {rest[-1]}, PLATFORMS)
+    if source is None:  # pragma: no cover -- every indexed option has a source (tested)
+        return None
+    ctx = SimpleNamespace(
+        params={"object_type": tuple(typed.get("--type", ()))},
+        find_root=lambda: SimpleNamespace(params=root),
+    )
+    return source, ctx, incomplete
+
+
+def complete_from_index(group: Any, prog_name: str, complete_var: str) -> None:
+    """Answer a shell's request for an indexed option's value, and exit.
+
+    Returns without printing when :func:`indexed_source` cannot answer, so
+    Click completes as usual. The answer goes through the shell's own
+    completion class, so it is formatted exactly as Click would format it.
+    """
+    action, _, shell = os.environ.get(complete_var, "").partition("_")
+    if action != "complete":
+        return
+    from typer import _click
+    from typer._click.shell_completion import get_completion_class
+    from typer._completion_classes import completion_init
+
+    completion_init()
+    shell_class = get_completion_class(shell)
+    if shell_class is None:
+        return
+    shell_completion = shell_class(group, {}, prog_name, complete_var)
+    args, incomplete = shell_completion.get_completion_args()
+    found = indexed_source(group, args, incomplete)
+    if found is None:
+        return
+    source, ctx, incomplete = found
+    items = _shell_complete(source)(ctx, None, incomplete)
+    shell_completion.get_completions = lambda args, incomplete: items  # ty: ignore[invalid-assignment]
+    _click.echo(shell_completion.complete())
+    sys.exit(0)
+
+
+# --------------------------------------------------------------------------- install and show
+
+
+def install_completion(ctx: Any, param: Any, value: Any) -> Any:
+    """``--install-completion [SHELL]``: write the script, then say where and how to load it."""
+    if not value or ctx.resilient_parsing:
+        return value
+    from typer._completion_shared import install
+
+    from opentide.cli.context import CliContext
+    from opentide.cli.lazy import ROOT_ARGS_KEY
+    from opentide.cli.output import CommandResult, emit_result
+    from opentide.cli.ui.contract import NextAction
+    from opentide.cli.ui.mode import OutputMode, get_mode
+    from opentide.core.logging import LoggingConfig, init_logging
+
+    shell = _shell_for(ctx, param, value)
+    prog_name = ctx.find_root().info_name
+    shell, path = install(
+        shell=shell, prog_name=prog_name, complete_var=complete_var_for(prog_name)
+    )
+    command, reason = _RELOAD.get(shell, ("", "restart your shell"))
+    flags = ctx.meta.get(ROOT_ARGS_KEY, ())
+    cli = CliContext(
+        repo=Path.cwd(),
+        json_output=get_mode() is OutputMode.JSON,
+        quiet="--quiet" in flags,
+        no_color="--no-color" in flags,
+    )
+    # The root callback, which configures the consoles, has not run: this flag is eager.
+    init_logging(LoggingConfig.from_cli_context(cli), force=True)
+    emit_result(
+        cli,
+        CommandResult(
+            message=f"Installed {shell} completion in {person_path(path)}",
+            data={"shell": shell, "path": str(path)},
+            next_actions=(NextAction(command or "restart your shell", reason if command else ""),),
+        ),
+    )
+    ctx.exit(0)
+
+
+def show_completion(ctx: Any, param: Any, value: Any) -> Any:
+    """``--show-completion [SHELL]``: print the script for SHELL, or for the current shell."""
+    if not value or ctx.resilient_parsing:
+        return value
+    from typer import _click
+    from typer._completion_shared import get_completion_script
+
+    shell = _shell_for(ctx, param, value)
+    prog_name = ctx.find_root().info_name
+    _click.echo(
+        get_completion_script(
+            prog_name=prog_name, complete_var=complete_var_for(prog_name), shell=shell
+        )
+    )
+    ctx.exit(0)
+
+
+def _shell_for(ctx: Any, param: Any, value: Any) -> str:
+    """The shell named after the flag (``--show-completion zsh``), else the one running.
+
+    A word that is not a shell, or no word when the running shell cannot be
+    told, is a usage error that names the form to use. Under
+    ``_TYPER_COMPLETE_TEST_DISABLE_SHELL_DETECTION`` Typer makes both options
+    take the shell as their value, already checked against its shells.
+    """
+    if isinstance(value, str):
+        return value
+    from typer import _click
+
+    from opentide.cli.lazy import COMMAND_WORDS_KEY
+
+    option = param.opts[0]
+    form = f"opentide {option} [{'|'.join(SHELLS)}]"
+    words = ctx.meta.get(COMMAND_WORDS_KEY, ())
+    if words:
+        if len(words) == 1 and words[0] in SHELLS:
+            return words[0]
+        raise _click.exceptions.BadParameter(
+            f"{' '.join(words)!r} is not a supported shell. Use: {form}",
+            ctx=ctx,
+            param=param,
+        )
+    from typer._completion_shared import _get_shell_name
+
+    detected = _get_shell_name()
+    if detected not in SHELLS:
+        raise _click.exceptions.UsageError(
+            f"Could not tell which shell this is. Name it: {form}", ctx=ctx
+        )
+    return str(detected)
+
+
+def complete_var_for(prog_name: str) -> str:
+    """The variable Typer's scripts set to ask *prog_name* for completions."""
+    return f"_{prog_name}_COMPLETE".replace("-", "_").upper()
+
+
+def person_path(path: Path) -> str:
+    """*path* relative to the current directory when inside it, else to ``~``, else absolute."""
+    from opentide.cli.ui.paths import display_path
+
+    shown = display_path(path)
+    if not Path(shown).is_absolute():
+        return shown
+    try:
+        return "~/" + path.resolve().relative_to(Path.home().resolve()).as_posix()
+    except (ValueError, RuntimeError, OSError):
+        return shown

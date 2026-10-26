@@ -33,6 +33,7 @@ from typer.main import get_command
 
 from opentide.cli import app
 from opentide.cli.commands.generate import _NAMED_GENERATE_PHASES
+from opentide.cli.completion import SHELLS
 from opentide.cli.lazy import HOISTED_FLAGS
 
 if TYPE_CHECKING:  # pragma: no cover - import only for annotations
@@ -474,6 +475,9 @@ def _choice_problem(param: click.Parameter, value: str, where: str) -> str | Non
     return f"{where!r} {label} does not accept {value!r} (choose from {', '.join(names)})"
 
 
+_SHELL_FLAGS = frozenset({"--install-completion", "--show-completion"})
+
+
 def resolve(argv: tuple[str, ...]) -> list[str]:
     """Return the reasons *argv* would not parse, empty when it is valid.
 
@@ -511,6 +515,9 @@ def resolve(argv: tuple[str, ...]) -> list[str]:
             if not _takes_value(param):
                 if separator:
                     problems.append(f"{where!r} {name} is a flag and takes no value")
+                # `--show-completion zsh`: these two root flags read a shell after them.
+                if name in _SHELL_FLAGS and index < len(tokens) and tokens[index] in SHELLS:
+                    index += 1
                 continue
             if separator:
                 value = inline

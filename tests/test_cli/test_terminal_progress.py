@@ -40,14 +40,15 @@ def _states(text: str) -> list[tuple[int, int]]:
         {"TERM_PROGRAM": "ghostty", "TERM_PROGRAM_VERSION": "1.2.0"},
         {"TERM_PROGRAM": "ghostty", "TERM_PROGRAM_VERSION": "1.10.3-main+0a1b2c"},
         {"TERM_PROGRAM": "WezTerm"},
-        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.6.0"},
-        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.6.1beta2"},
+        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.6.6"},
+        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.6.10"},
+        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.7"},
         {"TERM": "xterm-kitty"},
         {"TMUX": "/tmp/tmux-1/default,1,0", "TERM_PROGRAM": "tmux", "KITTY_WINDOW_ID": "1"},
         {
             "TMUX": "/tmp/tmux-1/default,1,0",
             "LC_TERMINAL": "iTerm2",
-            "LC_TERMINAL_VERSION": "3.6.0",
+            "LC_TERMINAL_VERSION": "3.6.6",
         },
     ],
     ids=lambda env: "+".join(f"{key}={value}" for key, value in env.items()),
@@ -66,14 +67,17 @@ def test_detects_terminals_that_read_osc_9_4(env: dict[str, str]) -> None:
         {"TMUX": "/tmp/tmux-1/default,1,0", "TERM_PROGRAM": "tmux"},
         # Outside tmux, a variable left over from another terminal proves nothing.
         {"KITTY_WINDOW_ID": "1", "TERM": "xterm-256color"},
-        # Older iTerm2 posts each bare OSC 9 as a desktop notification.
+        # iTerm2 before 3.6.6 posts each bare OSC 9 as a desktop notification.
         {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.5.14"},
+        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.6.0"},
+        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.6.5"},
+        {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "3.6"},
         {"TERM_PROGRAM": "iTerm.app"},
         {"TERM_PROGRAM": "iTerm.app", "TERM_PROGRAM_VERSION": "nightly"},
         {
             "TMUX": "/tmp/tmux-1/default,1,0",
             "LC_TERMINAL": "iTerm2",
-            "LC_TERMINAL_VERSION": "3.4.0",
+            "LC_TERMINAL_VERSION": "3.6.5",
         },
         {"TMUX": "/tmp/tmux-1/default,1,0", "LC_TERMINAL": "iTerm2"},
         # Ghostty before 1.2, or with no version to tell.

@@ -99,7 +99,7 @@ Without `--json`, a result prints its warnings first (`warning: …`), then one 
 
 While a long command runs (`generate` and its subcommands, `deploy`, `validate query --live`, `share`), opentide also sends the terminal's progress sequence (OSC 9;4), so the tab or the taskbar shows how far the run is: a percentage for a run of several steps, a busy indicator for a single step. The bar is cleared when the command ends, fails, or is stopped with Ctrl-C.
 
-It is sent only in `human` mode, without `--quiet`, when standard error is itself a terminal (so `2> build.log` gets none, even with `FORCE_COLOR` set), and only to a terminal that reads it: Windows Terminal (`WT_SESSION` set), WezTerm (`TERM_PROGRAM`), Ghostty 1.2 or later and iTerm2 3.6 or later (`TERM_PROGRAM` and `TERM_PROGRAM_VERSION`), and kitty (`TERM=xterm-kitty`). Older iTerm2 shows each OSC 9 sequence as a desktop notification, so a version that is older or unknown gets nothing. Inside tmux (`TMUX` set) the sequence goes through tmux passthrough, which needs `set -g allow-passthrough on` in `tmux.conf`; there the outer terminal is recognised from `WT_SESSION`, `KITTY_WINDOW_ID`, `WEZTERM_PANE` or `LC_TERMINAL=iTerm2` with `LC_TERMINAL_VERSION` 3.6 or later, because tmux replaces `TERM` and `TERM_PROGRAM`.
+It is sent only in `human` mode, without `--quiet`, when standard error is itself a terminal (so `2> build.log` gets none, even with `FORCE_COLOR` set), and only to a terminal that reads it: Windows Terminal (`WT_SESSION` set), WezTerm (`TERM_PROGRAM`), Ghostty 1.2 or later and iTerm2 3.6.6 or later (`TERM_PROGRAM` and `TERM_PROGRAM_VERSION`), and kitty (`TERM=xterm-kitty`). Older iTerm2 shows each OSC 9 sequence as a desktop notification, so a version that is older or unknown gets nothing. Inside tmux (`TMUX` set) the sequence goes through tmux passthrough, which needs `set -g allow-passthrough on` in `tmux.conf`; there the outer terminal is recognised from `WT_SESSION`, `KITTY_WINDOW_ID`, `WEZTERM_PANE` or `LC_TERMINAL=iTerm2` with `LC_TERMINAL_VERSION` 3.6.6 or later, because tmux replaces `TERM` and `TERM_PROGRAM`.
 
 | `OPENTIDE_PROGRESS` | Effect |
 |---------------------|--------|
@@ -109,7 +109,15 @@ It is sent only in `human` mode, without `--quiet`, when standard error is itsel
 
 ## Shell completion
 
-`opentide --install-completion` installs completion for the current shell (bash, zsh, fish or PowerShell); `opentide --show-completion` prints the script instead. Besides commands and option names, it completes these values from the workspace:
+`opentide --install-completion` installs completion for the current shell (bash, zsh, fish or PowerShell) and prints where it went and how to load it:
+
+```console
+$ opentide --install-completion
+✓ Installed zsh completion in ~/.zfunc/_opentide
+→ source ~/.zshrc · or restart your shell
+```
+
+`opentide --show-completion` prints the script instead, to install it by hand. Both take the shell as the word after them (`opentide --show-completion fish`); a word that is not `bash`, `zsh`, `fish`, `powershell` or `pwsh` is a usage error (exit `2`). Besides commands and option names, it completes these values from the workspace:
 
 | Value | Completes with | Read from |
 |-------|----------------|-----------|
@@ -123,7 +131,7 @@ It is sent only in `human` mode, without `--quiet`, when standard error is itsel
 
 `validate query` completes rules only, and a `--type` already on the command line narrows `--uuid` and `--file`. The workspace is the one the command would use: `--repo`, then `OPENTIDE_REPO_ROOT`, then the nearest one up from the current directory. Object folders follow `[paths.objects]` in `.opentide/configurations/paths.toml` when it sets them.
 
-Completion never loads the catalogue the way a command does: it reads only the first lines of each object file, and `--file` reads only those of the paths that match. That keeps it close to `--help` for a catalogue of hundreds of objects; with many thousands, `--uuid` takes about a second. In bash, spaces and shell characters in a completed path are escaped with a backslash. When nothing matches `--file`, the shell completes file names itself.
+Completing a value does not load the command's module or the engine, so it costs about what completing a command name does. Completing an option name (`opentide validate --<Tab>`), or a value after an option completion does not know, loads the command. Completion never loads the catalogue the way a command does: it reads only the first lines of each object file, and `--file` reads only those of the paths that match. That keeps it close to `--help` for a catalogue of hundreds of objects; with many thousands, `--uuid` takes about a second. In bash, spaces and shell characters in a completed path are escaped with a backslash. When nothing matches `--file`, the shell completes file names itself.
 
 ## Strategy
 
