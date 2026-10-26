@@ -62,10 +62,12 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `share_failed` | 1 | `share`: objects failed and none succeeded |
 | `scope_no_match`, `api_key_unset`, … | 1 | `share` preflight failures; the code is the `preflight` value |
 | `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
+| `config_parse` | 1 | A configuration TOML file does not parse. `diagnostics` holds the file, line and column |
+| `yaml_parse` | 1 | `deploy` read a rule file whose YAML is not one mapping. `diagnostics` holds the file and line |
 | `not_run` | non-zero | The command was skipped and says why in `message` |
 | `command_failed` | 1 | Any other failure |
 
-Exit codes are in [Exit codes](./exit-codes.md).
+Exit codes are in [Exit codes](./exit-codes.md). `opentide explain <code>` prints the page for each failure code, as it does for findings ([Diagnostic codes](./diagnostics.md)).
 
 ## A usage error
 

@@ -15,6 +15,7 @@ from opentide.cli.services.export import run_export
 from opentide.cli.services.extraction import run_extract
 from opentide.cli.services.generation import run_generate, run_generate_docs
 from opentide.cli.ui.contract import USAGE_ERROR
+from opentide.core.errors import UserFileError
 
 
 class GeneratePhaseGroup(TyperGroup):
@@ -252,6 +253,8 @@ def _run_extract_command(ctx: typer.Context, target: ExtractImport) -> None:
     cli = get_context(ctx)
     try:
         result = run_extract(cli, import_target=target)
+    except UserFileError:
+        raise  # the CLI points at the file
     except Exception as exc:  # noqa: BLE001 - one JSON document is the contract
         # Enumerating exception types is how #242 escaped: the importers reach
         # vendor SDKs and half-typed config, so anything they raise has to come
@@ -301,6 +304,8 @@ def generate_extract_elastic(
             space=space,
             include_prebuilt=include_prebuilt,
         )
+    except UserFileError:
+        raise  # the CLI points at the file
     except Exception as exc:
         detail = str(exc).strip()
         message = (

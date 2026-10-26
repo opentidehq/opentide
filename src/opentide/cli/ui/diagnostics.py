@@ -41,11 +41,13 @@ Severity = Literal["error", "warning", "note"]
 DIAGNOSTIC_FIELDS = ("path", "line", "column", "end_column", "help", "fix", "explain")
 
 #: Codes whose ``suggestion`` is a replacement value for the one at fault.
-VALUE_SUGGESTION_CODES = frozenset({"vocab_unknown", "invalid_ref", "chaining_relation_unknown"})
+VALUE_SUGGESTION_CODES = frozenset(
+    {"vocab_unknown", "invalid_ref", "chaining_relation_unknown", "config_enum_unknown"}
+)
 
 #: Codes whose fix may be ``safe``. A reference fix never is: its suggestion
 #: is a fuzzy match on an object's name.
-SAFE_FIX_CODES = frozenset({"vocab_unknown", "chaining_relation_unknown"})
+SAFE_FIX_CODES = frozenset({"vocab_unknown", "chaining_relation_unknown", "config_enum_unknown"})
 
 #: Lint finding codes, by what the finding is about.
 LINT_CODES = {
@@ -293,6 +295,9 @@ class SourceFiles:
                 found = False
                 break
             node, parent, key = child, node, part
+        if parent is None and not found and isinstance(document, dict) and document:
+            # A top-level field is missing: point at the mapping's first key.
+            parent, key = document, str(next(iter(document)))
         if parent is None or key is None:
             return None
         if found and isinstance(node, list) and value is not None:
@@ -442,7 +447,9 @@ def _yaml_parse_frame(
     message, the parser's position as the span, its context as a note.
     """
     problem = sources.yaml_problem(file_path)
-    if problem is None or problem.line is None or problem.column is None:
+    if problem is None:
+        return _root_shape_frame(file_path, sources)
+    if problem.line is None or problem.column is None:
         return None
     end_column = problem.end_column or problem.column + 1
     span = Span(problem.line, problem.column, end_column)
@@ -450,8 +457,65 @@ def _yaml_parse_frame(
     return f"Could not parse object YAML: {problem.problem}", span, notes
 
 
+def _root_shape_frame(
+    file_path: Path, sources: SourceFiles
+) -> tuple[str, Span, tuple[tuple[str, str], ...]] | None:
+    """A file that parses but is not one mapping: point at where its document starts."""
+    from opentide.core.io import first_content_span, parse_yaml, root_mapping_problem
+
+    text = sources.text(file_path)
+    if text is None:
+        return None
+    try:
+        message = root_mapping_problem(parse_yaml(text))
+    except Exception:  # noqa: BLE001 -- yaml_problem() already said it parses
+        return None
+    position = first_content_span(text)
+    if message is None or position is None:
+        return None
+    from opentide.core.errors import OBJECT_FILE_HELP
+
+    return message, Span(*position), (("help", OBJECT_FILE_HELP),)
+
+
 #: ``schema_validation`` messages about a key rather than its value.
 _KEY_ERRORS = ("Extra inputs are not permitted",)
+
+#: The schema's message for a required field that is not there.
+_MISSING_FIELD = "Field required"
+
+#: Vocabulary names written as an acronym in a message (``'clearr' is not a TLP value``).
+_VOCAB_ACRONYMS = frozenset({"tlp", "pap", "rsit"})
+
+
+def _vocab_noun(vocab: str) -> str:
+    """``tlp::1.0`` → ``TLP``, ``signal.entities::1.0`` → ``signal entities``."""
+    name = vocab.split("::", 1)[0]
+    if name in _VOCAB_ACRONYMS:
+        return name.upper()
+    return re.sub(r"[._]+", " ", name)
+
+
+def _vocab_message(value: str, context: Mapping[str, Any]) -> str | None:
+    vocab = context.get("vocab")
+    return f"{value!r} is not a {_vocab_noun(vocab)} value" if isinstance(vocab, str) else None
+
+
+def _config_enum_message(value: str, context: Mapping[str, Any]) -> str | None:
+    setting = context.get("setting")
+    if not isinstance(setting, str):
+        return None
+    noun = {"statuses": "status", "responders": "responder"}.get(setting, setting)
+    return f"{value!r} is not a configured {noun}"
+
+
+#: The message a person reads, in the spec's words, for a finding about one
+#: value. The engine's message (kept in JSON and MCP) also says how to fix it,
+#: which the frame's label, notes and help already show.
+_VALUE_MESSAGES = {
+    "vocab_unknown": _vocab_message,
+    "config_enum_unknown": _config_enum_message,
+}
 
 
 def _issue_label(issue: ValidationIssue) -> str | None:
@@ -461,7 +525,7 @@ def _issue_label(issue: ValidationIssue) -> str | None:
     if issue.code == "invalid_ref":
         return "no object has this id"
     if issue.code == "config_enum_unknown" and context.get("setting"):
-        return f"not a configured {context['setting']} value"
+        return f"not in [[{context['setting']}]]"
     if issue.code == "chaining_relation_unknown":
         return "not a chaining relation"
     return None
@@ -503,11 +567,18 @@ def diagnostic_from_issue(
             file_path, issue.field_path, value, occurrence=occurrence, at_key=at_key
         )
     if issue.code == "schema_validation" and issue.field_path:
-        # The schema's message ("Field required") does not say which field.
-        message = f"{'.'.join(issue.field_path)}: {message}"
+        missing, parent = issue.field_path[-1], ".".join(issue.field_path[:-1])
+        where = f" in {parent}" if parent else ""
+        if message == _MISSING_FIELD:
+            message = f"missing required field {missing!r}{where}"
+        else:
+            # The schema's message does not say which field.
+            message = f"{'.'.join(issue.field_path)}: {message}"
         if span is not None and not span.found:
-            missing, parent = issue.field_path[-1], ".".join(issue.field_path[:-1])
-            label = f"missing field {missing!r} in {parent}"
+            # The message names the field; the label says where it goes.
+            label = f"add {missing!r} " + ("under this key" if parent else "at the top level")
+    elif issue.code in _VALUE_MESSAGES and value is not None:
+        message = _VALUE_MESSAGES[issue.code](value, issue.context) or message
     if span is not None:
         line = span.line
     help_text = issue.suggestion

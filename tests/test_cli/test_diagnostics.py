@@ -191,8 +191,8 @@ def test_a_missing_field_names_itself(workspace: Path) -> None:
         message="Field required",
     )
     diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
-    assert diagnostic.message == "configurations.sentinel.status: Field required"
-    assert diagnostic.label == "missing field 'status' in configurations.sentinel"
+    assert diagnostic.message == "missing required field 'status' in configurations.sentinel"
+    assert diagnostic.label == "add 'status' under this key"
     assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (13, 3, 11)
 
 
@@ -214,7 +214,13 @@ def test_span_is_none_without_a_document(workspace: Path) -> None:
     assert sources.span(_rule(workspace, "broken.yaml"), ("metadata",)) is None
     assert sources.span(workspace / "absent.yaml", ("metadata",)) is None
     assert sources.span(_rule(workspace), ()) is None
-    assert sources.span(_rule(workspace), ("absent",)) is None
+
+
+def test_a_missing_top_level_key_spans_the_first_key(workspace: Path) -> None:
+    """The top-level mapping has no key of its own: its first key stands for it."""
+    span = SourceFiles().span(_rule(workspace), ("absent",))
+    assert span is not None and not span.found
+    assert (span.line, span.column, span.end_column, span.text) == (1, 1, 5, "name")
 
 
 def test_relative_path_falls_back_to_the_absolute_path(tmp_path: Path) -> None:
@@ -332,7 +338,8 @@ def test_a_configuration_enum_lists_what_is_expected(workspace: Path) -> None:
     )
     diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
     assert diagnostic.notes == (("expected", "one of SOC, CERT"),)
-    assert diagnostic.label == "not a configured responders value"
+    assert diagnostic.label == "not in [[responders]]"
+    assert diagnostic.message == "'Night' is not a configured responder"
 
 
 def test_a_warning_stays_a_warning(workspace: Path) -> None:
@@ -607,7 +614,7 @@ def test_an_unencodable_source_line_never_raises(tmp_path: Path) -> None:
     text = raw.getvalue().decode("cp1252")
     assert "2 |   tlp: clearr  # ? hot" in text
     assert "  |        ^^^^^^ not in tlp::1.0" in text
-    assert "vocabulary entry ? ?" in text
+    assert "error[vocab_unknown]: 'clearr' is not a TLP value" in text
 
 
 @pytest.mark.parametrize(
@@ -713,3 +720,123 @@ def test_a_path_with_a_space_is_still_a_link(
     console = Console(file=io.StringIO(), force_terminal=True, width=72)
     render_diagnostics(console, [diagnostic], sources=sources, mode=OutputMode.HUMAN, cwd=tmp_path)
     assert "Jane%20Doe/Simulated%20Actor.yaml:2:8" in console.file.getvalue()  # type: ignore[attr-defined]
+
+
+# --------------------------------------------------------------------------
+# Spec wording, root-level positions and narrow terminals
+# --------------------------------------------------------------------------
+
+
+def test_a_vocabulary_typo_reads_as_the_spec_says(workspace: Path) -> None:
+    """Diagnostics: ``'clearr' is not a TLP value``, not the engine's sentence."""
+    diagnostic = diagnostic_from_issue(_typo(workspace), workspace=workspace, sources=SourceFiles())
+    assert diagnostic.message == "'clearr' is not a TLP value"
+
+
+def test_a_missing_top_level_field_points_at_the_top_mapping(workspace: Path) -> None:
+    """E2E 9: the frame had no line, and the message was Pydantic's."""
+    issue = ValidationIssue(
+        code="schema_validation",
+        file_path=_rule(workspace),
+        field_path=("severity",),
+        message="Field required",
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    assert diagnostic.message == "missing required field 'severity'"
+    assert diagnostic.label == "add 'severity' at the top level"
+    assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (1, 1, 5)
+
+
+def test_a_configuration_enum_case_typo_is_a_safe_fix(workspace: Path) -> None:
+    """E2E 15: ``status: design`` for ``DESIGN`` is the same word, so it is a safe fix."""
+    path = _rule(workspace)
+    path.write_text(RULE + "    status: design\n", encoding="utf-8")
+    issue = ValidationIssue(
+        code="config_enum_unknown",
+        file_path=path,
+        field_path=("configurations", "sentinel", "status"),
+        message="Value 'design' is not a configured statuses value.",
+        suggestion="DESIGN",
+        context={"setting": "statuses", "value": "design", "allowed": ["DESIGN", "STAGING"]},
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    assert diagnostic.message == "'design' is not a configured status"
+    assert diagnostic.label == "not in [[statuses]]"
+    assert diagnostic.help == "did you mean 'DESIGN'?"
+    assert diagnostic.fix == Fix(True, (TextEdit(15, 13, 19, "DESIGN"),))
+
+
+def test_a_list_at_the_top_of_an_object_file_is_framed(tmp_path: Path) -> None:
+    """E2E 3: 'expected a mapping', at the line where the document starts."""
+    path = tmp_path / "listy.yaml"
+    path.write_text("# a comment\n---\n- name: one\n- name: two\n", encoding="utf-8")
+    issue = ValidationIssue(
+        code="yaml_parse",
+        file_path=path,
+        message="Could not parse object YAML: expected a mapping at the top of the file",
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=tmp_path, sources=SourceFiles())
+    assert diagnostic.message == "expected a mapping at the top of the file, found a list"
+    assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (3, 1, 12)
+    assert diagnostic.notes[0][0] == "help"
+
+
+def test_wrap_text_breaks_at_spaces_then_at_path_segments() -> None:
+    from rich.text import Text
+
+    from opentide.cli.ui.codeframe import wrap_text
+
+    lines = wrap_text(Text("error: one two three four"), 12, Text("  "))
+    assert [line.plain for line in lines] == ["error: one", "  two three", "  four"]
+    lines = wrap_text(Text("at objects/rules/long-name.yaml"), 16, Text(""))
+    assert [line.plain for line in lines] == ["at", "objects/rules/", "long-name.yaml"]
+
+
+def test_shorten_path_keeps_the_ends() -> None:
+    from opentide.cli.ui.codeframe import shorten_path
+
+    location = "objects/rules/team/sentinel-kql-rule.yaml:8:8"
+    assert shorten_path(location, 80) == location
+    assert shorten_path(location, 40) == "objects/…/sentinel-kql-rule.yaml:8:8"
+    shortened = shorten_path(location, 20)
+    assert len(shortened) == 20 and shortened.startswith("obj") and shortened.endswith(":8:8")
+
+
+@pytest.mark.parametrize("mode", [OutputMode.HUMAN, OutputMode.PLAIN])
+def test_a_narrow_terminal_never_breaks_a_word(
+    workspace: Path, mode: OutputMode, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E2E 7: at 60 columns the terminal broke messages and paths mid-word."""
+    monkeypatch.setenv("OPENTIDE_LINKS", "none")
+    long_name = "sentinel-kql-rule-with-a-much-longer-file-name-here.yaml"
+    _rule(workspace).rename(_rule(workspace, long_name))
+    issue = ValidationIssue(
+        code="invalid_value",
+        file_path=_rule(workspace, long_name),
+        field_path=("metadata", "tlp"),
+        message="the value 'clearr' is not one of the values this vocabulary allows today",
+        suggestion="choose one of the values the tlp vocabulary lists, such as clear or green",
+    )
+    sources = SourceFiles()
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=sources)
+    console = Console(file=io.StringIO(), force_terminal=True, width=60, record=True)
+    render_diagnostics(console, [diagnostic], sources=sources, mode=mode, cwd=workspace)
+    lines = console.export_text().splitlines()
+    assert all(cell_len(line) <= 60 for line in lines), lines
+    assert "…" in lines[2] and lines[2].endswith(":7:8"), lines
+    # Every word of the message and the help survives whole.
+    words = set(" ".join(lines).split())
+    assert set(issue.message.split()) <= words
+    assert set(str(issue.suggestion).split()) <= words
+
+
+def test_a_pipe_keeps_lines_whole(workspace: Path) -> None:
+    """Without a terminal nothing is wrapped: the reader (a CI log, an editor) wraps it."""
+    long_name = "sentinel-kql-rule-with-a-much-longer-file-name-here.yaml"
+    _rule(workspace).rename(_rule(workspace, long_name))
+    issue = _typo(workspace).model_copy(update={"file_path": _rule(workspace, long_name)})
+    sources = SourceFiles()
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=sources)
+    console = Console(file=io.StringIO(), width=60, record=True)
+    render_diagnostics(console, [diagnostic], sources=sources, mode=OutputMode.PLAIN, cwd=workspace)
+    assert f"objects/rules/{long_name}:7:8" in console.export_text()

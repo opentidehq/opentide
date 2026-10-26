@@ -163,7 +163,7 @@ def test_a_vocabulary_typo_carries_a_fix_for_review(tutorial: Path) -> None:
     _edit_rule(tutorial, "  tlp: clear\n", "  tlp: clearr\n")
     text = _text(_run(tutorial, "validate"))
     assert (
-        "error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry\n"
+        "error[vocab_unknown]: 'clearr' is not a TLP value\n"
         "  ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8\n"
         "  │\n"
         "7 │   modified: 2026-01-02\n"

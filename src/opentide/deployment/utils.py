@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from opentide.core import registry
-from opentide.core.io import load_yaml
+from opentide.core.errors import ObjectFileError
+from opentide.core.io import first_content_span, load_yaml, root_mapping_problem
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
 from opentide.deployment.git_repo import (
@@ -210,6 +212,8 @@ def make_deploy_plan(
     refused: list[str] = []
     for rule in scope.files:
         data = load_yaml(rule)
+        if (problem := root_mapping_problem(data)) is not None:
+            raise _object_file_error(Path(rule), problem)
         name = data["name"]
         conf_data = data["configurations"]
         mdr_uuid = object_uuid(data)
@@ -279,6 +283,15 @@ def make_deploy_plan(
             "Run 'opentide deploy migrate-state' and commit the result."
         )
     return deploy_mdr
+
+
+def _object_file_error(path: Path, problem: str) -> ObjectFileError:
+    """A rule file that is not one mapping, pointing at where its document starts."""
+    position = first_content_span(path.read_text(encoding="utf-8"))
+    if position is None:
+        return ObjectFileError(path, problem)
+    line, column, end_column = position
+    return ObjectFileError(path, problem, line=line, column=column, end_column=end_column)
 
 
 class ExternalIdInRuleError(ValueError):

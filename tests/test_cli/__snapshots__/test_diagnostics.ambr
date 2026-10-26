@@ -1,7 +1,8 @@
 # serializer version: 1
 # name: test_code_frame_snapshot[human-dangling-reference]
   '''
-  [1;31merror[invalid_ref][0m[1m: [0m[1mUnknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'[0m
+  [1;31merror[invalid_ref][0m[1m: [0m[1mUnknown objective or signal reference[0m
+    [1m'00000000-0000-4000-8002-DEADBEEF0000'[0m
      [34m╭─▶[0m objects/rules/sentinel-kql-rule.yaml:10:18
   [34m   [0m[34m│[0m
   [34m 9 [0m[34m│[0m techniques: [T1059, T9999]
@@ -15,7 +16,7 @@
 # ---
 # name: test_code_frame_snapshot[human-enum-typo]
   '''
-  [1;31merror[vocab_unknown][0m[1m: [0m[1mValue 'clearr' is not a valid 'tlp::1.0' vocabulary entry[0m
+  [1;31merror[vocab_unknown][0m[1m: [0m[1m'clearr' is not a TLP value[0m
     [34m╭─▶[0m objects/rules/sentinel-kql-rule.yaml:7:8
   [34m  [0m[34m│[0m
   [34m6 [0m[34m│[0m   modified: 2026-01-02
@@ -29,7 +30,8 @@
 # ---
 # name: test_code_frame_snapshot[human-yaml-syntax]
   '''
-  [1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected ',' or ']'[0m
+  [1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: did not find expected[0m
+    [1m',' or ']'[0m
     [34m╭─▶[0m objects/rules/broken.yaml:8:9
   [34m  [0m[34m│[0m
   [34m7 [0m[34m│[0m   tlp: [clear
@@ -57,7 +59,7 @@
 # ---
 # name: test_code_frame_snapshot[plain-enum-typo]
   '''
-  error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry
+  error[vocab_unknown]: 'clearr' is not a TLP value
     ╭─▶ objects/rules/sentinel-kql-rule.yaml:7:8
     │
   6 │   modified: 2026-01-02

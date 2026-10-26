@@ -190,7 +190,8 @@ def test_lint_cli_human_names_the_renamed_file(tmp_path: Path) -> None:
         "  ╭─▶ objects/threats/simulated-actor.yaml\n"
         "  ╰─ note: renamed from objects/threats/Simulated Actor.yaml\n"
     ) in result.output
-    assert result.stdout.endswith("! 1 finding in 1 file · 1 fixed\n")
+    # The fixed finding is shown, and no longer counted (D23).
+    assert result.stdout.endswith("✓ 1 file clean · 1 fixed\n")
 
 
 def test_lint_cli_strict(tmp_path: Path) -> None:
@@ -404,9 +405,10 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "message": "Could not parse object YAML: object YAML is not a mapping",
                 "code": "yaml_parse",
                 "field_path": [],
-                "line": None,
-                "column": None,
-                "end_column": None,
+                # The frame points at where the document starts.
+                "line": 1,
+                "column": 1,
+                "end_column": 16,
                 "help": None,
                 "fix": None,
                 "explain": "opentide explain yaml_parse",
@@ -421,7 +423,14 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
         "command": "lint",
         "duration_ms": payload["duration_ms"],
         "exit_code": 0,
-        "summary": {"files": 3, "findings": 4, "fixed": 0},
+        "summary": {
+            "files": 3,
+            "findings": 4,
+            "errors": 2,
+            "warnings": 1,
+            "notes": 1,
+            "fixed": 0,
+        },
         "next_actions": [
             {
                 "command": "opentide lint --fix",

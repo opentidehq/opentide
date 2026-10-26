@@ -30,6 +30,10 @@ COMMAND_FAILED = "command_failed"
 ISSUES_FOUND = "issues_found"
 NOT_RUN = "not_run"
 
+#: ``failure.code`` when a workspace configuration file does not parse. It is
+#: also the code of the diagnostic that points at the file.
+CONFIG_PARSE = "config_parse"
+
 #: Exit code of every usage error.
 USAGE_EXIT_CODE = 2
 

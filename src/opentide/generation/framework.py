@@ -467,7 +467,7 @@ def get_type(model_uuid: str, mute: bool = False):
         if mute:
             return None
         else:
-            logger.critical("uuid_does_not_exist_in_the_index_of_tide_objects", detail=model_uuid)
+            # Raised, not also logged: the caller reports the exception once.
             raise Exception(f"UUID {model_uuid} does not exist in the catalogue")
     schema = model_body.get("metadata", {}).get("schema")
     if not schema:

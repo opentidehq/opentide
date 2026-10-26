@@ -141,10 +141,14 @@ class LazyTyperGroup(TyperGroup):
             _usage_error(error)
 
     def invoke(self, ctx: _click.Context) -> Any:
+        from opentide.core.errors import UserFileError
+
         try:
             return super().invoke(ctx)
         except _click.exceptions.UsageError as error:
             _usage_error(error)
+        except UserFileError as error:
+            _file_error(ctx, error)
 
     def get_command(self, ctx: _click.Context, cmd_name: str) -> _click.Command | None:
         if self._listing and cmd_name in self.specs and cmd_name not in self.commands.added:
@@ -194,6 +198,29 @@ def _usage_error(error: _click.exceptions.UsageError) -> NoReturn:
     from opentide.cli.usage import render_usage_error
 
     raise typer.Exit(render_usage_error(error))
+
+
+def _file_error(ctx: _click.Context, error: Any) -> NoReturn:
+    """A file the user must fix (a TOML typo, a list for an object): a diagnostic, exit 1."""
+    from opentide.cli.context import CliContext
+    from opentide.cli.output import emit_file_error
+    from opentide.cli.ui.mode import OutputMode, get_mode
+
+    cli = ctx.find_object(CliContext) or CliContext(json_output=get_mode() is OutputMode.JSON)
+    emit_file_error(cli, error, command=_command_words(ctx))
+
+
+def _command_words(ctx: _click.Context) -> str:
+    """``validate query``: the leading words that name commands, not arguments."""
+    command: Any = ctx.command
+    names: list[str] = []
+    for word in ctx.meta.get(COMMAND_WORDS_KEY, ()):
+        lookup = getattr(command, "get_command", None)
+        command = lookup(ctx, word) if callable(lookup) else None
+        if command is None:
+            break
+        names.append(word)
+    return " ".join(names)
 
 
 def _option_lookup(command: Any) -> dict[str, Any]:

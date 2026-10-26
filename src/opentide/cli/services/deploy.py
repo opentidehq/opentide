@@ -13,6 +13,7 @@ from opentide.cli.ui.contract import (
     USAGE_INVALID_VALUE,
     USAGE_MISSING_OPTION,
 )
+from opentide.core.errors import UserFileError
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
 from opentide.core.logging.console import emit_section
@@ -248,6 +249,8 @@ def _deploy(
             "message": missing_checkout_message(exc.searched),
             "_exit_code": 1,
         }
+    except UserFileError:
+        raise  # the CLI points at the file
     except Exception as exc:
         message = str(exc).strip() or (f"{type(exc).__name__} while selecting the rules to deploy")
         return {"status": "failed", "message": message, "_exit_code": 1}

@@ -185,6 +185,38 @@ def load_yaml(path: Path) -> Any:
     return parse_yaml(path.read_text(encoding="utf-8"))
 
 
+def root_mapping_problem(document: Any) -> str | None:
+    """Why a parsed object file is not one mapping, in words; ``None`` when it is."""
+    if isinstance(document, dict):
+        return None
+    if document is None:
+        found = "an empty file"
+    elif isinstance(document, list):
+        found = "a list"
+    elif isinstance(document, str):
+        found = "a string"
+    else:
+        found = "a single value"
+    return f"expected a mapping at the top of the file, found {found}"
+
+
+def first_content_span(text: str) -> tuple[int, int, int] | None:
+    """``(line, column, end_column)`` of the first line holding YAML content, 1-based.
+
+    Skips blank lines, comments, directives and the ``---`` marker, so a frame
+    about the document's root points at where the document starts. ``None``
+    for a file with no content.
+    """
+    for number, raw in enumerate(text.splitlines(), start=1):
+        content = raw.split(" #", 1)[0].rstrip()
+        stripped = content.lstrip()
+        if not stripped or stripped.startswith(("#", "%")) or stripped == "---":
+            continue
+        column = len(content) - len(stripped) + 1
+        return number, column, len(content) + 1
+    return None
+
+
 def load_json(path: Path) -> Any:
     """Load JSON from *path*."""
     return orjson.loads(path.read_bytes())

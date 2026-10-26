@@ -35,7 +35,7 @@ opentide validate --check schema
 Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A typo in a vocabulary value:
 
 ```text illustrative
-error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry
+error[vocab_unknown]: 'clearr' is not a TLP value
   ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
   │
 7 │   modified: 2026-01-02
@@ -45,9 +45,11 @@ error[vocab_unknown]: Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry
   ╰─ help: did you mean 'clear'?
 
 ✗ 1 error in 1 file · 3 objects checked · 0.9s
+→ opentide explain vocab_unknown · how to fix it
+→ opentide validate · check again
 ```
 
-The sample is illustrative because the outcome line carries the run time. Paths are relative to the current directory when you run inside it, otherwise to the workspace; in a terminal they are links your editor opens (`OPENTIDE_LINKS=file|vscode|cursor|none` picks the scheme). `opentide explain <code>` prints what a code means and how to fix it; [Diagnostic codes](./diagnostics.md) lists them all.
+The sample is illustrative because the outcome line carries the run time. A failed run ends with what to run next, the page of the first finding's code and `validate` again; `--json` lists them under `next_actions`. A value that differs from an allowed one only in case or in its separators (`AMBER`, `localised_incident`) gets a `safe` fix. On a terminal, a long message wraps between words and a long path is shortened in the middle with `…`. Paths are relative to the current directory when you run inside it, otherwise to the workspace; in a terminal they are links your editor opens (`OPENTIDE_LINKS=file|vscode|cursor|none` picks the scheme). `opentide explain <code>` prints what a code means and how to fix it; [Diagnostic codes](./diagnostics.md) lists them all.
 
 One cause is one finding: a dangling reference such as `detection_model` is reported as `invalid_ref` only, not also as `vocab_unknown`.
 
@@ -119,8 +121,10 @@ Run from anywhere inside the detection workspace: the CLI walks up to it (see [R
 An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
 
 ```text illustrative
-✓ Validation passed, but no detection objects were found under /home/you/monorepo
+✓ Validation passed, but no detection objects were found under ./
 ```
+
+The directory is relative to the one you run in (`./`, `./detections`, `../`), or absolute when it is elsewhere.
 
 If that path is not your workspace, `cd` into it or pass `--repo`.
 

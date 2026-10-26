@@ -46,7 +46,7 @@ def info_cmd(
     result["_summary"] = summary
     result["_outcome"] = info_outcome(summary)
     if summary["load_errors"]:
-        # Each unreadable file is logged where it is found; validate says why.
+        # The table counts the unreadable files; validate says why.
         result["_next_actions"] = [
             NextAction("opentide validate", "show where each object failed to load")
         ]

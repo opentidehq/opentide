@@ -16,8 +16,16 @@ from opentide.cli.ui.contract import (
     USAGE_ERROR,
     USAGE_INVALID_CHOICE,
     USAGE_INVALID_VALUE,
+    NextAction,
 )
-from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, annotate, diagnostics_from_issues
+from opentide.cli.ui.diagnostics import (
+    Diagnostic,
+    SourceFiles,
+    annotate,
+    diagnostics_from_issues,
+    explain_command,
+    relative_path,
+)
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.logging.console import emit_section
 from opentide.registry.builder import parse_errors_reported_by_caller
@@ -275,7 +283,8 @@ def run_validate(
         # Not a failure: an empty catalogue exits 0, even under --strict. The
         # path is what exposes a run that looked in the wrong directory.
         result["message"] = (
-            f"Validation passed, but no detection objects were found under {workspace}"
+            "Validation passed, but no detection objects were found under "
+            + _shown_directory(workspace)
         )
     else:
         result["message"] = "Validation passed"
@@ -286,9 +295,40 @@ def run_validate(
     result["_exit_code"] = outcome.exit_code
     if outcome.failed:
         result["_failure_code"] = ISSUES_FOUND
+        result["_next_actions"] = _failure_next_actions(ctx, diagnostics)
     result["_summary"] = _summary(report, diagnostics)
     result["_diagnostics"] = diagnostics
     return result
+
+
+def _shown_directory(path: Path) -> str:
+    """*path* as ``./sub`` (or ``./``) inside the current directory, ``../..`` above it.
+
+    Anywhere else it stays absolute.
+    """
+    cwd = Path.cwd()
+    shown = relative_path(path, cwd)
+    if not Path(shown).is_absolute():
+        return "./" if shown == "." else f"./{shown}"
+    if relative_path(cwd, path) != cwd.as_posix():
+        return os.path.relpath(path, cwd) + "/"
+    return shown
+
+
+def _failure_next_actions(ctx: CliContext, diagnostics: Sequence[Diagnostic]) -> list[NextAction]:
+    """What to run after a failed validation: the first finding's page, then validate again.
+
+    The same two steps MCP's ``validation_report`` gives. Errors come before
+    warnings, so a run that fails on errors points at an error.
+    """
+    ordered = sorted(diagnostics, key=lambda item: item.severity != "error")
+    actions: list[NextAction] = []
+    if ordered:
+        code = ordered[0].code
+        actions.append(NextAction(explain_command(code), "how to fix it"))
+    rerun = "opentide --json validate" if ctx.json_output else "opentide validate"
+    actions.append(NextAction(rerun, "check again"))
+    return actions
 
 
 def _annotate_report(
