@@ -76,6 +76,13 @@ class DuplicateKeyError(yaml.MarkedYAMLError):
         return f"{self.problem} at line {mark.line + 1}" if mark else str(self.problem)
 
 
+class InvalidDateError(ConstructorError):
+    """A value YAML reads as a date that is no date (``2026-13-45``), at its position."""
+
+    #: Where the value ends, so a diagnostic can underline all of it.
+    end_mark: yaml.Mark | None = None
+
+
 @dataclass(frozen=True)
 class YamlProblem:
     """Why a YAML document did not parse, and where. Positions are 1-based."""
@@ -200,7 +207,7 @@ def _construct_timestamp_text(loader: SafeConstructor, node: yaml.ScalarNode) ->
         # ``2026-13-45`` matches YAML's timestamp pattern, and ``datetime``
         # refuses it with a bare ValueError. Report it like any other parse
         # problem, at the value, instead of letting it escape as a crash.
-        error = ConstructorError(
+        error = InvalidDateError(
             problem=f"{node.value!r} is not a valid date ({exc})",
             problem_mark=node.start_mark,
         )
