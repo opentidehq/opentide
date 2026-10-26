@@ -41,7 +41,7 @@ def check_cve_issues(
     file_paths = index.get("file_paths", {})
 
     for threat_id, threat_data in threats.items():
-        threat_uuid = str(threat_data.get("metadata", {}).get("uuid") or threat_id)
+        threat_uuid = str(_mapping(threat_data.get("metadata")).get("uuid") or threat_id)
         file_name = files_index.get(threat_uuid)
         raw_path = file_paths.get(threat_uuid)
         file_path = Path(raw_path) if raw_path else None
@@ -50,11 +50,13 @@ def check_cve_issues(
         ):
             continue
 
-        cve_list = normalize_identifiers(threat_data.get(THREAT_MODEL_FIELD, {}).get("cve"))
+        cve_list = normalize_identifiers(_mapping(threat_data.get(THREAT_MODEL_FIELD)).get("cve"))
         if not cve_list:
             continue
 
         broken: list[str] = []
+        unchecked: list[str] = []
+        lookup_error = ""
         for cve in cve_list:
             try:
                 record = lookup.get(cve)
@@ -65,6 +67,8 @@ def check_cve_issues(
                     threat=threat_uuid,
                     detail=str(exc),
                 )
+                unchecked.append(cve)
+                lookup_error = str(exc)
                 continue
             if record is None:
                 logger.warning(
@@ -95,5 +99,30 @@ def check_cve_issues(
                     context={"threat_id": threat_id, "broken_cve": broken},
                 )
             )
+        if unchecked:
+            # Fail open, since an outage is not the author's mistake, but say
+            # so: a warning reaches the report and fails ``--strict``, where a
+            # log line alone let an unchecked run pass as a checked one.
+            issues.append(
+                ValidationIssue(
+                    code="cve_lookup_unavailable",
+                    severity="warning",
+                    object_uuid=threat_uuid,
+                    object_type="threat",
+                    file_path=file_path,
+                    field_path=(THREAT_MODEL_FIELD, "cve"),
+                    message=(
+                        f"Could not check CVE references on Vulnerability-Lookup: "
+                        f"{', '.join(unchecked)} ({lookup_error})"
+                    ),
+                    suggestion="Run `opentide validate --check cve` again once it is reachable.",
+                    context={"threat_id": threat_id, "unchecked_cve": unchecked},
+                )
+            )
 
     return issues
+
+
+def _mapping(block: object) -> Mapping[str, Any]:
+    """Return *block*, or ``{}`` when an all-commented-out block loaded as ``None``."""
+    return block if isinstance(block, Mapping) else {}

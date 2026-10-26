@@ -8,7 +8,11 @@ from typing import Any
 from opentide.core.files import resolve_configurations
 from opentide.core.io import parse_json
 from opentide.core.logging import get_logger
-from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
+from opentide.registry.paths import (
+    legacy_path_aliases,
+    object_yaml_files,
+    resolve_workspace_paths,
+)
 
 logger = get_logger(__name__)
 
@@ -108,9 +112,13 @@ class RegistryBuilder:
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
         index["parse_errors"] = self.parse_errors
-        from opentide.indexing.inflight import apply_inflight_overlay
+        from opentide.indexing.inflight import apply_inflight_overlay, inflight_preview_enabled
 
-        apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
+        # Shards are other pull requests' unreviewed objects. Deploy and
+        # validate resolve rules from this index, so only preview output
+        # (``inflight_preview``) may read them.
+        if inflight_preview_enabled():
+            apply_inflight_overlay(objects_index, inflight_dir=paths.get("inflight"))
         index["objects"] = objects_index
         index["files"] = files_index
         index["file_paths"] = self.file_paths
@@ -275,13 +283,11 @@ class RegistryBuilder:
                 _log_missing_object_folder(object_dir, error=True, reason="not_a_directory")
                 continue
             try:
-                model_paths = sorted(object_dir.rglob("*.yaml"))
+                model_paths = object_yaml_files(object_dir)
             except OSError as exc:
                 _log_missing_object_folder(object_dir, error=True, reason=str(exc))
                 continue
             for model_path in model_paths:
-                if model_path.name.endswith(".debug.yaml"):
-                    continue
                 yaml_files.append((meta_name, str(model_path)))
 
         if not yaml_files:

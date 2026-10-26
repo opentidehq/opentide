@@ -166,7 +166,7 @@ def resolve_specifications_sha(specifications_root: Path) -> str | None:
     except (subprocess.SubprocessError, FileNotFoundError):
         return None
     sha = result.stdout.strip()
-    return sha if sha else None
+    return sha or None
 
 
 def load_lockfile(lockfile_path: Path) -> dict[str, object] | None:
