@@ -15,6 +15,7 @@ from typing import TextIO
 
 from mcp.server.fastmcp import FastMCP
 
+from opentide import __version__
 from opentide.mcp_server import resources as res
 from opentide.mcp_server.constants import QUERY_VALIDATION_PLATFORMS
 from opentide.mcp_server.tools import (
@@ -66,6 +67,9 @@ reason before following one.\
 """
 
 mcp = FastMCP("opentide", instructions=INSTRUCTIONS)
+# FastMCP takes no version, and the low-level server then reports the MCP SDK's
+# (``serverInfo.version`` read 1.30.0): a host shows the version of opentide.
+mcp._mcp_server.version = __version__
 
 
 @mcp.tool()
