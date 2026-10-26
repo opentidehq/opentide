@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, ClassVar, Protocol, cast
@@ -9,10 +10,16 @@ from typing import Any, ClassVar, Protocol, cast
 from pydantic import PrivateAttr
 
 from opentide.models.base import FieldRole, TideField, TideModel
+from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 from opentide.models.metadata import ObjectMetadata, ObjectReferences, RuleMetadata
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
 from opentide.models.results import DeploymentResult, ValidationResult
+
+#: Environment flags a platform query validator raises on a failure or a warning.
+_ERROR_FLAG = "VALIDATION_ERROR_RAISED"
+_WARNING_FLAG = "VALIDATION_WARNING_RAISED"
+_QUERY_VALIDATION_FLAGS = (_ERROR_FLAG, _WARNING_FLAG)
 
 
 class TideRegistry(Protocol):
@@ -71,6 +78,24 @@ class DetectionRule(TideModel):
     file: Path | None = TideField(None, schema_extra={"tide.template.hide": True})
     """Path of the file the rule was loaded from. Set by the loader, not written by authors."""
     _registry: TideRegistry | None = PrivateAttr(default=None)
+
+    def platform_configs(self) -> RuleConfigurations:
+        """``configurations``, or an error naming the rule when it has none.
+
+        Deployers and validators only receive rules the planner selected for
+        their platform, so a missing block is a malformed rule; it used to
+        surface as ``'NoneType' object has no attribute 'sentinel'``.
+        """
+        if self.configurations is None:
+            raise ValueError(f"Rule {self.metadata.uuid} ({self.name}) has no configurations block")
+        return self.configurations
+
+    @property
+    def alert_severity(self) -> str:
+        """``response.alert_severity``, or its default when the rule has no response."""
+        if self.response is None:
+            return RuleResponse.model_fields["alert_severity"].default
+        return self.response.alert_severity
 
     def bind_registry(self, registry: TideRegistry) -> DetectionRule:
         """Return a copy with registry back-reference for delegation."""
@@ -137,8 +162,33 @@ class DetectionRule(TideModel):
             return ValidationResult(
                 ok=False, errors=[f"Platform {platform!r} does not support query validation"]
             )
-        validator.validate([self.metadata.uuid])
-        return ValidationResult(ok=True)
+        # Platform validators log each refused query and report the verdict
+        # only through these process-wide flags, which the CLI grades after a
+        # run. Clear them for the call so an earlier failure does not fail
+        # this rule, then put back what was there so the caller's run keeps
+        # its own verdict.
+        saved = {flag: os.environ.get(flag) for flag in _QUERY_VALIDATION_FLAGS}
+        for flag in _QUERY_VALIDATION_FLAGS:
+            os.environ[flag] = ""
+        try:
+            # The CLI default: without strategies no tenant is targeted and
+            # nothing would be checked (and most validators required them).
+            # Pass the rule itself: by UUID the validator re-read the registry
+            # copy, not this (possibly edited, possibly unregistered) object.
+            validator.validate([self], DEPLOYABLE_STRATEGIES)
+            failed = bool(os.environ.get(_ERROR_FLAG))
+            warned = bool(os.environ.get(_WARNING_FLAG))
+        finally:
+            for flag, value in saved.items():
+                if value is None:
+                    os.environ.pop(flag, None)
+                else:
+                    os.environ[flag] = value
+        return ValidationResult(
+            ok=not failed,
+            errors=[f"Query validation failed for {platform}"] if failed else [],
+            warnings=[f"Query validation reported warnings for {platform}"] if warned else [],
+        )
 
     def document(self) -> str:
         if self._registry is None:

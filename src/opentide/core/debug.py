@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+
 from opentide.core import registry
 from opentide.core.environment import DebugHelpers
 
@@ -28,9 +29,10 @@ class DebugEnvironment:
     This class encapsultes all relevant data, attributes and behaviours related to
     debugging to facilitate local development
     """
+
     ENABLED = False
     if DebugHelpers().is_debug():
         ENABLED = True
-        os.environ['DEBUG_ENABLED'] = 'True'
-    MDR_DEPLOYMENT_TEST_UUIDS = _DebugSetting('mdr_test_uuids', list)
-    SSL_ENABLED = _DebugSetting('ssl_enabled')
+        os.environ["DEBUG_ENABLED"] = "True"
+    MDR_DEPLOYMENT_TEST_UUIDS = _DebugSetting("mdr_test_uuids", list)
+    SSL_ENABLED = _DebugSetting("ssl_enabled")

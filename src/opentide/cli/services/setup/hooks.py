@@ -7,6 +7,7 @@ import os
 import re
 import shlex
 import subprocess
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -327,8 +328,99 @@ def _kept_pin_warning(shown: str, pin: str, relative: str) -> str:
 
 def _write_executable(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    # Text mode writes CRLF on Windows, and sh reads the carriage return as
+    # part of each line: Git Bash failed the hook on `set -e\r`.
+    path.write_text(content, encoding="utf-8", newline="\n")
     path.chmod(path.stat().st_mode | 0o111)
+
+
+def _holds(path: Path, content: str) -> bool:
+    """Whether *path* holds exactly *content*; a text read would hide CRLF."""
+    return path.is_file() and path.read_bytes() == content.encode("utf-8")
+
+
+def _hook_lines(relative: str, indent: int) -> str:
+    """The local hook entry with its ``-`` at column *indent*."""
+    return textwrap.indent(textwrap.dedent(local_hook_block(relative)), " " * indent)
+
+
+def _blank_or_comment(line: str) -> bool:
+    stripped = line.strip()
+    return not stripped or stripped.startswith("#")
+
+
+def _with_local_hook(text: str, relative: str) -> str | None:
+    """*text* with the opentide hook added as the last ``repos`` entry.
+
+    The entry goes right after the last existing one, at its indentation.
+    Appending it to the end of the file broke a config with a top-level key
+    after ``repos`` (``ci:``, ``exclude:``) or with the zero-indented entries
+    ``pre-commit sample-config`` writes. ``None`` when the layout is not one
+    this can extend (flow style, ``repos`` that is not a list).
+    """
+    if not text.endswith("\n"):
+        text += "\n"
+    root = yaml.compose(text, Loader=yaml.SafeLoader)
+    if root is None:
+        return f"{text}repos:\n{_hook_lines(relative, 2)}"
+    if not isinstance(root, yaml.MappingNode) or root.flow_style:
+        return None
+    entry = next(
+        (
+            (key, value)
+            for key, value in root.value
+            if isinstance(key, yaml.ScalarNode) and key.value == "repos"
+        ),
+        None,
+    )
+    if entry is None:
+        return f"{text}repos:\n{_hook_lines(relative, root.start_mark.column + 2)}"
+    key, repos = entry
+    if isinstance(repos, yaml.SequenceNode) and repos.value and not repos.flow_style:
+        lines = text.split("\n")
+        # A block sequence ends where the next token starts, after any
+        # comments and blank lines; those stay below the new entry.
+        insert_at = min(repos.end_mark.line, len(lines) - 1)
+        while insert_at - 1 > repos.value[-1].start_mark.line and _blank_or_comment(
+            lines[insert_at - 1]
+        ):
+            insert_at -= 1
+        lines.insert(insert_at, _hook_lines(relative, repos.start_mark.column).rstrip("\n"))
+        return "\n".join(lines)
+    empty = (isinstance(repos, yaml.SequenceNode) and not repos.value) or (
+        isinstance(repos, yaml.ScalarNode) and repos.tag == "tag:yaml.org,2002:null"
+    )
+    if not empty:
+        return None
+    # `repos:`, `repos: []` or `repos: null`: the hook becomes the only entry.
+    head = text[: repos.start_mark.index].rstrip(" \t")
+    block = _hook_lines(relative, key.start_mark.column + 2).rstrip("\n")
+    return f"{head}\n{block}{text[repos.end_mark.index :]}"
+
+
+def _parse_config(text: str) -> object:
+    """*text* as YAML; ``None`` for a document that is only comments.
+
+    ``parse_yaml`` cannot construct an empty document.
+    """
+    if yaml.compose(text, Loader=yaml.SafeLoader) is None:
+        return None
+    return parse_yaml(text)
+
+
+def _adds_only_the_hook(before: dict[object, object], after: object, relative: str) -> bool:
+    """Whether *after* is *before* with the opentide hook appended to ``repos``."""
+    if not isinstance(after, dict):
+        return False
+    repos = after.get("repos")
+    hook = parse_yaml(local_hook_block(relative))[0]
+    return (
+        {key: value for key, value in after.items() if key != "repos"}
+        == {key: value for key, value in before.items() if key != "repos"}
+        and isinstance(repos, list)
+        and repos[:-1] == (before.get("repos") or [])
+        and repos[-1:] == [hook]
+    )
 
 
 def _ensure_pre_commit_config(
@@ -346,8 +438,11 @@ def _ensure_pre_commit_config(
             return PRE_COMMIT_CONFIG_PATH, False
         dest.write_text(refreshed, encoding="utf-8")
         return PRE_COMMIT_CONFIG_PATH, True
+    if not text.strip():
+        dest.write_text(pre_commit_config(relative), encoding="utf-8")
+        return PRE_COMMIT_CONFIG_PATH, True
     try:
-        parsed: object = parse_yaml(text) if text.strip() else {}
+        parsed = _parse_config(text)
     except yaml.YAMLError:
         warnings.append(
             f"{PRE_COMMIT_CONFIG_PATH} is not valid YAML; left unchanged. "
@@ -360,12 +455,21 @@ def _ensure_pre_commit_config(
             "Add a local opentide-validate hook manually."
         )
         return PRE_COMMIT_CONFIG_PATH, False
-    repos = parsed.get("repos") if isinstance(parsed, dict) else None
-    if not repos:
-        dest.write_text(pre_commit_config(relative), encoding="utf-8")
-        return PRE_COMMIT_CONFIG_PATH, True
-    suffix = "" if text.endswith("\n") else "\n"
-    dest.write_text(text + suffix + local_hook_block(relative), encoding="utf-8")
+    # The edit is textual, to keep the user's comments and layout; it is
+    # written only if the file still reads as before plus the one hook.
+    candidate = _with_local_hook(text, relative)
+    try:
+        after = _parse_config(candidate) if candidate is not None else None
+    except yaml.YAMLError:
+        after = None
+    if candidate is None or not _adds_only_the_hook(parsed or {}, after, relative):
+        warnings.append(
+            f"Could not add the opentide-validate hook to {PRE_COMMIT_CONFIG_PATH} "
+            "without changing the rest of it; left unchanged. "
+            "Add a local opentide-validate hook to its repos manually."
+        )
+        return PRE_COMMIT_CONFIG_PATH, False
+    dest.write_text(candidate, encoding="utf-8")
     return PRE_COMMIT_CONFIG_PATH, True
 
 
@@ -397,8 +501,7 @@ def _refresh_root_pre_commit_config(
 def _ensure_versioned_hook(target: Path, relative: str = "") -> tuple[str, bool]:
     dest = target / VERSIONED_HOOK_PATH
     script = pre_commit_script(relative)
-    existing = dest.read_text(encoding="utf-8") if dest.is_file() else None
-    if existing == script:
+    if _holds(dest, script):
         if os.access(dest, os.X_OK):
             return VERSIONED_HOOK_PATH, False
         dest.chmod(dest.stat().st_mode | 0o111)
@@ -486,7 +589,7 @@ def _install_git_hook(
         )
         return shown, False
     script = pre_commit_script(*_hook_workspaces_after_setup(existing, layout, shown, warnings))
-    if existing == script and os.access(dest, os.X_OK):
+    if _holds(dest, script) and os.access(dest, os.X_OK):
         return shown, False
     _write_executable(dest, script)
     return shown, True

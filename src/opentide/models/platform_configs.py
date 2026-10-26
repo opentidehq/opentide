@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from pydantic import Field
+
 from opentide.models.base import TideField, TideModel
 
 
@@ -575,7 +577,7 @@ class ElasticCardinality(TideModel):
 
 
 class ElasticThreshold(TideModel):
-    field: list[str] = []
+    field: list[str] = Field(default_factory=list)
     """Group by, 0–5 fields. `[]` counts all matches."""
     value: int
     """Threshold, at least 1."""

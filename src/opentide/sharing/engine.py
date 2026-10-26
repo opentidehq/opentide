@@ -84,13 +84,13 @@ def run_misp(
     needs_key = mode in {"push", "retract"}
     if needs_key and any(block.resolved_api_key() is None for block in active):
         return ShareRun((), "api_key_unset")
-    if mode == "retract" and not selected and not _ledger_uuids(ledger, active, filters):
+    if mode == "retract" and not selected and not _ledger_uuids(ledger, active, filters, documents):
         return ShareRun((), "scope_no_match")
 
     factory = client_for or _default_client
     stamp = _timestamp(clock)
     if mode == "preview":
-        return ShareRun(tuple(_preview(selected, active, ledger)))
+        return ShareRun(tuple(_preview(selected, active, ledger, publish)))
     if mode == "status":
         return ShareRun(tuple(_status(selected, active, ledger)))
 
@@ -104,7 +104,9 @@ def run_misp(
     for probe in probes:
         if mode == "retract":
             records.extend(
-                _retract_block(probe, selected, ledger, filters, delete, workers, lock, stamp)
+                _retract_block(
+                    probe, selected, documents, ledger, filters, delete, workers, lock, stamp
+                )
             )
         else:
             records.extend(
@@ -251,6 +253,22 @@ def _upsert(
         and stored == document.content_hash
     ):
         remote = matched[0]
+        if do_publish and not remote.published:
+            # The bytes match, but a run that asks to publish must still
+            # publish an event an earlier push left unpublished.
+            try:
+                _publish(client, remote)
+            except MispCallError as exc:
+                return _failed(document, block, "publish_failed", exc.kind, tuple(notes))
+            _remember(ledger, lock, document, block, remote, True, stamp, org)
+            return _record(
+                document,
+                block,
+                "updated",
+                remote_event_uuid=remote.event_uuid,
+                remote_event_id=remote.event_id,
+                notes=tuple(notes),
+            )
         return _record(
             document,
             block,
@@ -321,6 +339,7 @@ def _upsert(
 def _retract_block(
     probe: _Probe,
     documents: Sequence[TideDocument],
+    catalogue: Sequence[TideDocument],
     ledger: ShareLedger,
     filters: ShareFilters | None,
     delete: bool,
@@ -331,7 +350,7 @@ def _retract_block(
     block = probe.block
     by_uuid = {document.uuid: document for document in documents if document.uuid}
     candidates = list(by_uuid)
-    for uuid in _ledger_uuids(ledger, (block,), filters):
+    for uuid in _ledger_uuids(ledger, (block,), filters, catalogue):
         if uuid not in by_uuid:
             candidates.append(uuid)
     if probe.error is not None or probe.client is None:
@@ -408,9 +427,11 @@ def _preview(
     documents: Sequence[TideDocument],
     blocks: Sequence[MispBlock],
     ledger: ShareLedger,
+    publish: bool | None,
 ) -> list[ShareRecord]:
     records: list[ShareRecord] = []
     for block in blocks:
+        do_publish = block.publish if publish is None else publish
         _local, shareable = _split_local(documents, block, None)
         records.extend(_local)
         known = {document.uuid for document in shareable if document.uuid}
@@ -439,7 +460,7 @@ def _preview(
                 _record(
                     document,
                     block,
-                    _predict(ledger, document, block.name),
+                    _predict(ledger, document, block.name, publish=do_publish),
                     notes=tuple(notes),
                 )
             )
@@ -638,14 +659,20 @@ def _publish(client: MispClient, remote: RemoteEvent) -> None:
     client.publish_event(address)
 
 
-def _predict(ledger: ShareLedger, document: TideDocument, target: str) -> str:
+def _predict(
+    ledger: ShareLedger, document: TideDocument, target: str, *, publish: bool = False
+) -> str:
     assert document.uuid is not None
     line = ledger.get(document.uuid, INTEGRATION_MISP, target)
     if line is None:
         return "created"
     if line.get("state") == "retracted":
         return "updated"
-    if line.get("state") == "synced" and line.get("content_hash") == document.content_hash:
+    if (
+        line.get("state") == "synced"
+        and line.get("content_hash") == document.content_hash
+        and (not publish or line.get("published") is True)
+    ):
         return "unchanged"
     return "updated"
 
@@ -762,20 +789,40 @@ def _ledger_uuids(
     ledger: ShareLedger,
     blocks: Sequence[MispBlock],
     filters: ShareFilters | None,
+    catalogue: Sequence[TideDocument],
 ) -> list[str]:
+    """Shared objects that are no longer in *catalogue*, narrowed by *filters*.
+
+    An object still in the catalogue is retracted only when the filters select
+    its document. A deleted object has no file, so ``--file`` never matches it,
+    and ``--type`` matches the schema its ledger line recorded.
+    """
     names = {block.name for block in blocks}
+    present = {document.uuid for document in catalogue if document.uuid}
     found: list[str] = []
     for line in ledger.records():
         if line.get("integration") != INTEGRATION_MISP or line.get("target") not in names:
             continue
         uuid = line.get("object_uuid")
-        if not isinstance(uuid, str):
+        if not isinstance(uuid, str) or uuid in present:
             continue
-        if filters is not None and filters.uuids is not None and uuid not in filters.uuids:
-            continue
+        if filters is not None:
+            if filters.uuids is not None and uuid not in filters.uuids:
+                continue
+            if filters.files is not None:
+                continue
+            if filters.types is not None and _schema_family(line) not in filters.types:
+                continue
         if uuid not in found:
             found.append(uuid)
     return found
+
+
+def _schema_family(line: Mapping[str, object]) -> str | None:
+    schema = line.get("object_schema")
+    if not isinstance(schema, str):
+        return None
+    return schema.split("::", 1)[0]
 
 
 _T = TypeVar("_T")

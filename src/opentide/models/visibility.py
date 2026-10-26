@@ -47,7 +47,13 @@ class VisibilityDetector(TideModel):
 
 
 class VisibilityConfig(TideModel):
-    """Code-first visibility configuration schema."""
+    """Code-first visibility configuration schema.
+
+    ``logsources`` and ``detectors`` declare the objects themselves, so they
+    carry no ``tide.config.visibility.*`` marker: that marker fills a field with
+    the configured names, and on these lists it replaced the object schema of
+    every item with a string enum.
+    """
 
     __schema_identifier__: ClassVar[str] = "visibility::1.0"
 
@@ -58,17 +64,11 @@ class VisibilityConfig(TideModel):
     """Assets that generate logs in the environment."""
     logsources: list[VisibilityLogSource] = TideField(
         ...,
-        schema_extra={
-            "title": "Log Sources",
-            "tide.config.visibility.logsources": True,
-        },
+        schema_extra={"title": "Log Sources"},
     )
     """Log sources available to detection signals."""
     detectors: list[VisibilityDetector] | None = TideField(
         default=None,
-        schema_extra={
-            "title": "External Detectors",
-            "tide.config.visibility.detectors": True,
-        },
+        schema_extra={"title": "External Detectors"},
     )
     """External detectors that already cover parts of the environment."""
