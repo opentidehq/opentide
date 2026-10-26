@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import importlib
 import sys
-from collections.abc import Generator, Iterator, MutableMapping, Sequence
+from collections.abc import Generator, Iterator, Mapping, MutableMapping, Sequence
 from contextlib import contextmanager
 from typing import Any, NoReturn
 
@@ -156,6 +156,11 @@ class LazyTyperGroup(TyperGroup):
             return super().invoke(ctx)
         except _click.exceptions.UsageError as error:
             _usage_error(error)
+        except KeyboardInterrupt:
+            # Typer would exit 130 without a word; say why, in one line.
+            from opentide.cli.ui.crash import report_interrupt
+
+            raise typer.Exit(report_interrupt()) from None
 
     def resolve_command(
         self, ctx: _click.Context, args: list[str]
@@ -270,6 +275,35 @@ def _leading_words(group: Any, args: Sequence[str]) -> tuple[str, ...]:
         if token.startswith("-"):
             break
         words.append(token)
+    return tuple(words)
+
+
+def command_words(group: Any, args: Sequence[str]) -> tuple[str, ...]:
+    """The command path *args* name: ``("generate", "docs", "rules")``.
+
+    Only words that name a subcommand count, so an argument value
+    (``explain invalid_ref``) never does. Root options and the hoisted flags
+    are skipped wherever they appear.
+    """
+    words: list[str] = []
+    command = group
+    for token in args[_root_options_end(group, args) :]:
+        if token in HOISTED_FLAGS:
+            continue
+        if token.startswith("-"):
+            break
+        commands = getattr(command, "commands", None)
+        if not isinstance(commands, Mapping):
+            break
+        try:
+            sub = commands.get(token)
+        except Exception:
+            # The command's module may be what failed to import.
+            sub = None
+        if sub is None:
+            break
+        words.append(token)
+        command = sub
     return tuple(words)
 
 
