@@ -91,10 +91,10 @@ def test_debug_env_var_is_read_as_a_switch(argv: list[str], value: str, debug: b
     boolean word: ``DEBUG=*`` (the Node ``debug`` convention) failed every command."""
     seen: list[bool] = []
     with (
-        patch("opentide.cli.run_generate", return_value={"status": "ok"}),
-        patch("opentide.cli.init_logging"),
+        patch("opentide.cli.commands.generate.run_generate", return_value={"status": "ok"}),
+        patch("opentide.cli.root.init_logging"),
         patch(
-            "opentide.cli.LoggingConfig.from_cli_context",
+            "opentide.cli.root.LoggingConfig.from_cli_context",
             side_effect=lambda cli: seen.append(cli.debug),
         ),
     ):
