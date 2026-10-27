@@ -10,7 +10,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## What agents can and cannot do today
 
 <Callout type="warn">
-`validate_query` refuses unless you pass `live: true`. That call checks the catalogue rules against the tenant. It does not scan the `query` argument. A missing SDK is a failed live check. `run_query` also refuses until you pass `live: true`; then it runs a read-only query on the tenants you name and returns the rows, as [`opentide query`](../../cli/query.md) does. Both use the configured credentials, so the agent should ask first. Use `validation_report` for structured object validation an agent can act on.
+`validate_query` refuses unless you pass `live: true`. That call checks the catalogue rules against the tenant. It does not scan the `query` argument. A missing SDK is a failed live check. `run_query` also refuses until you pass `live: true`; then it runs a read-only query on the tenants you name and returns the rows, as the [query command](../../cli/query.md) does. Both use the configured credentials, so the agent should ask first. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
 | Capability | Status |
