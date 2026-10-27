@@ -33,10 +33,14 @@ def test_info_no_color_renders_platform_table(cli_runner, tide_corpus_repo, monk
     assert result.exit_code == 0
     plain = result.stdout
     assert "\x1b[" not in plain
-    assert "opentide Info" in plain
-    assert "Rules" in plain and "9" in plain
-    assert "Splunk Enterprise Security" in plain
-    assert "enabled=True" in plain
+    # Label and value columns, not a boxed "opentide Info" table; the counts are
+    # the outcome line's, once (post-merge end-to-end run).
+    assert "opentide Info" not in plain and "┏" not in plain
+    assert "Parse errors" not in plain
+    assert "9 rules" in plain
+    rows = [" ".join(line.split()) for line in plain.splitlines()]
+    assert any(row.startswith("version ") for row in rows)
+    assert "Splunk Enterprise Security enabled · deploy, validate" in rows
 
 
 def test_info_coverage_matches_top_level_techniques(invoke_cli, corpus_rule_uuids) -> None:

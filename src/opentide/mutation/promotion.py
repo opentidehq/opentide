@@ -10,7 +10,7 @@ import re
 
 from opentide.core.files import resolve_configurations
 from opentide.core.logging import get_logger
-from opentide.core.logging.console import emit_section
+from opentide.core.progress import report_stage
 from opentide.core.runtime import is_debug
 from opentide.deployment.git_repo import local_rule_files
 
@@ -142,13 +142,13 @@ class PromoteMDR:
             for line in buffer:
                 file.write(line)
 
-        logger.info("mdr_promoted", target=PROMOTION_TARGET)
+        logger.info("rule_promoted", target=PROMOTION_TARGET)
 
     def promote(self, deployment: list[Path]):
-        emit_section("MDR Status Promotion")
+        report_stage("status promotion")
         logger.info(
-            "mdr_promotion_started",
-            detail="Promotes the status of modified MDR files according to configuration",
+            "rule_promotion_started",
+            detail="Promotes the status of modified rule files according to configuration",
         )
 
         if PROMOTION_ENABLED:
@@ -184,11 +184,12 @@ class PromoteMDR:
 
                 if not system_promotion:
                     logger.info(
-                        "nothing_to_promote_mdr_already_in_production_status", detail=mdr_name
+                        "nothing_to_promote_rule_already_in_production_status", detail=mdr_name
                     )
                 else:
                     logger.info(
-                        "detected_statuses_needing_promotion_for_the_following_mdr", detail=mdr_name
+                        "detected_statuses_needing_promotion_for_the_following_rule",
+                        detail=mdr_name,
                     )
                     logger.info(
                         "promoting_the_following_systems_statuses",
@@ -201,6 +202,6 @@ class PromoteMDR:
 
         else:
             logger.info(
-                "mdr_promotion_disabled_in_config",
-                detail="You can enable MDR Promotion under config>deployment>status>promotion",
+                "rule_promotion_disabled_in_config",
+                detail="Enable status promotion under [promotion] in deployment.toml",
             )

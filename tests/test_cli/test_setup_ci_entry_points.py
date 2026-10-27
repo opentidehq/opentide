@@ -190,12 +190,16 @@ def test_both_entry_points_refuse_a_default_branch_they_cannot_render(
     result = _invoke(entry, "github", repo, "--default-branch", "main; id")
 
     assert result.exit_code == 2, result.stdout + result.stderr
-    assert "--default-branch" in re.sub(r"\x1b\[[0-9;]*m", "", result.stderr)
+    # --json: the usage error is the one JSON document on stdout.
+    failure = json.loads(result.stdout)["failure"]
+    assert failure["code"] == "usage_invalid_value"
+    assert failure["argument"] == "--default-branch"
     assert not (repo / _WORKFLOWS["github"]).exists()
 
 
-#: A ``WARNING <message>`` line of the human result, not a timestamped structlog record.
-_PRINTED_WARNING = re.compile(r"^WARNING (?!\s|\d{4}-\d\d-\d\d )(.+)$", re.MULTILINE)
+#: A ``warning: <message>`` line of the human result, not a structlog record
+#: (whose fields follow the event text after `` · ``).
+_PRINTED_WARNING = re.compile(r"^warning: ((?:(?! · ).)+)$", re.MULTILINE)
 
 
 def _printed_warnings(entry: str, ci: str, repo: Path, *extra: str) -> list[str]:
@@ -247,6 +251,22 @@ def test_both_entry_points_print_the_same_warnings(
         printed[entry] = _printed_warnings(entry, ci, repo, *extra)
 
     assert printed == {entry: [expected] for entry in ENTRY_POINTS}
+
+
+def test_a_folder_outside_git_is_told_how_to_start_the_repository(
+    tmp_path: Path, git_home: Path
+) -> None:
+    """The wizard in a new folder warned "'main', which is not a branch of this repository.
+    Re-run with --default-branch": there was no repository, and the wizard has no such
+    flag (post-merge end-to-end run)."""
+    workdir = tmp_path / "new-detections"
+    workdir.mkdir()
+    printed = _printed_warnings("setup --ci", "github", workdir, "--platform", "sentinel")
+    assert printed == [
+        "This folder is not a git repository yet, so the pipeline targets 'main'; create it "
+        "on that branch with 'git init -b main', or write the pipeline for another one with "
+        "'opentide setup ci <provider> --default-branch <branch>'."
+    ]
 
 
 def _command(*names: str) -> click.Command:
@@ -334,7 +354,7 @@ def ci_options_seen(monkeypatch: pytest.MonkeyPatch) -> list[CiSetupOptions]:
         seen.append(options)
         return {"message": "recorded", "files": []}
 
-    for module in ("opentide.cli.setup_app", "opentide.cli.services.setup.orchestrator"):
+    for module in ("opentide.cli.services.setup.ci", "opentide.cli.services.setup.orchestrator"):
         monkeypatch.setattr(importlib.import_module(module), "run_ci_setup", _record)
     return seen
 

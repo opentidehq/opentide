@@ -10,6 +10,7 @@ from opentide.validation.deprecated_fields import resolve_metaschema
 from opentide.validation.errors import _leaf_field_name
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.preflight import PreflightGraph
+from opentide.validation.vocab_resolver import closest_value
 
 
 def _configured_responders() -> list[str]:
@@ -21,6 +22,23 @@ def _configured_responders() -> list[str]:
     from opentide.core.responders import configured_responders
 
     return configured_responders()
+
+
+def _configured_statuses() -> list[str]:
+    """Read the status names declared in ``[[statuses]]``.
+
+    Deploy maps a platform block's ``status`` to its strategy by exact name
+    (``check_status``), so ``validate`` checks the same set: a status deploy
+    would reject, such as ``design`` for ``DESIGN``, fails here first. The
+    names are read without validating ``deployment.toml``: a typo there is the
+    ``configuration`` check's finding, not a crash of this one.
+    """
+    from opentide.core.registry import Opentide
+
+    try:
+        return list(Opentide.Configurations.Deployment.status_names)
+    except (KeyError, AttributeError):
+        return []
 
 
 def walk_vocab_fields(
@@ -132,6 +150,7 @@ def walk_vocab_fields(
 #: implementation to drift (the failure class #508 was about).
 CONFIG_ENUM_RESOLVERS: dict[str, Callable[[], list[str]]] = {
     "tide.config.responders": _configured_responders,
+    "tide.config.statuses": _configured_statuses,
 }
 
 CONFIG_ENUM_KEYWORDS: tuple[str, ...] = tuple(CONFIG_ENUM_RESOLVERS)
@@ -201,6 +220,7 @@ def _validate_config_enum_value(
                     f"Declare it in the [[{setting}]] block of your deployment "
                     f"configuration, or use one of: {', '.join(allowed)}"
                 ),
+                suggestion=closest_value(item, allowed),
                 context={"setting": setting, "value": item, "allowed": allowed},
             )
         )
@@ -268,10 +288,44 @@ def validate_object_vocab_from_metaschema(
     schema = resolve_metaschema(metaschemas, payload, object_type)
     if not schema:
         return []
-    return walk_vocab_fields(
+    issues = walk_vocab_fields(
         payload,
         schema,
         graph,
         object_uuid=object_uuid,
         object_type=object_type,
     )
+    seen = {issue.field_path for issue in issues}
+    issues.extend(
+        issue
+        for issue in _platform_status_issues(payload, object_uuid, object_type)
+        if issue.field_path not in seen
+    )
+    return issues
+
+
+#: A platform block's ``status``. The keyword lives on the platform models'
+#: schema extras (``opentide.models.platform_schema``), which the rule
+#: metaschema in the index does not carry, so the field is checked here.
+_PLATFORM_STATUS_SCHEMA: dict[str, Any] = {"tide.config.statuses": True}
+
+
+def _platform_status_issues(
+    payload: dict[str, Any], object_uuid: str, object_type: str
+) -> list[ValidationIssue]:
+    configurations = payload.get("configurations") if isinstance(payload, dict) else None
+    if not isinstance(configurations, dict):
+        return []
+    issues: list[ValidationIssue] = []
+    for platform, block in configurations.items():
+        if isinstance(block, dict) and "status" in block:
+            issues.extend(
+                _validate_config_enum_value(
+                    block["status"],
+                    _PLATFORM_STATUS_SCHEMA,
+                    field_path=("configurations", str(platform), "status"),
+                    object_uuid=object_uuid,
+                    object_type=object_type,
+                )
+            )
+    return issues

@@ -15,6 +15,12 @@ from pydantic import ValidationError
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import Opentide
 from opentide.models.object_types import CORE_OBJECT_TYPES
+from opentide.registry.catalogue import (
+    catalogue_files,
+    display_path,
+    nested_entries,
+    nested_file_message,
+)
 from opentide.validation.checks.cross_object import (
     check_chaining_for_object,
     check_references_for_object,
@@ -28,6 +34,7 @@ from opentide.validation.errors import (
     attach_yaml_lines,
     is_vocab_shape_duplicate,
     issues_from_pydantic,
+    merge_reference_findings,
     vocab_shape_rejections,
 )
 from opentide.validation.field_vocab import validate_object_vocab_from_metaschema
@@ -41,6 +48,7 @@ _DEFAULT_CHECKS = frozenset(
         ValidateCheck.id_uniqueness,
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
+        ValidateCheck.configuration,
     }
 )
 
@@ -62,6 +70,8 @@ class _IdScanRow:
     meta_name: str
     uuid: str
     name: str
+    #: Where the UUID is written, so a duplicate points at the value.
+    field_path: tuple[str, ...] = ("metadata", "uuid")
 
 
 @dataclass(frozen=True)
@@ -158,10 +168,22 @@ def run_validation(
         for issue in check_cve_issues(index, scope):
             (warnings if issue.severity == "warning" else issues).append(issue)
 
+    # Files in subfolders are not objects (#584): say so once, as warnings.
+    warnings.extend(_nested_object_warnings(index, scope))
+
     if ValidateCheck.sharing_config in checks:
         sharing_issues, sharing_warnings = _sharing_config_issues()
         issues.extend(sharing_issues)
         warnings.extend(sharing_warnings)
+
+    # Workspace-wide, so a run narrowed to some objects skips it unless asked for.
+    if ValidateCheck.configuration in checks and (
+        scope.mode == "full" or checks == {ValidateCheck.configuration}
+    ):
+        from opentide.validation.configuration import workspace_configuration_issues
+
+        for issue in workspace_configuration_issues():
+            (warnings if issue.severity == "warning" else issues).append(issue)
 
     if object_checks:
         enabled_platforms = _enabled_platforms(work_items, object_checks)
@@ -227,6 +249,39 @@ def _enabled_platforms(
     from opentide.platforms.enabled import enabled_systems
 
     return frozenset(enabled_systems())
+
+
+def _nested_object_warnings(
+    index: Mapping[str, Any], scope: ValidationScope
+) -> list[ValidationIssue]:
+    """One ``nested_object_file`` warning per YAML file in a subfolder of an object folder.
+
+    A narrow run warns only about the files its ``--file`` or ``--type``
+    filters point at, so ``--file objects/rules/team/x.yaml`` explains why
+    nothing matched.
+    """
+    warnings: list[ValidationIssue] = []
+    for row in nested_entries(index):
+        path = Path(row["path"])
+        object_type = str(row.get("object_type") or "")
+        if scope.mode == "narrow":
+            if scope.object_types and object_type not in scope.object_types:
+                continue
+            if scope.file_targets and not scope.matches_file(path.name, path):
+                continue
+            if not scope.file_targets and not scope.object_types:
+                continue
+        folder = display_path(row.get("folder") or path.parent)
+        warnings.append(
+            ValidationIssue(
+                code="nested_object_file",
+                severity="warning",
+                object_type=object_type,
+                file_path=path,
+                message=nested_file_message(display_path(path), folder),
+            )
+        )
+    return warnings
 
 
 def _sharing_config_issues() -> tuple[list[ValidationIssue], list[ValidationIssue]]:
@@ -440,6 +495,7 @@ def _validate_work_item(
         if item.object_type == "threat":
             issues.extend(check_chaining_for_object(item.uuid, item.body, graph))
 
+    issues = merge_reference_findings(issues)
     if file_path is not None:
         issues = attach_yaml_lines(issues, item.body, file_path=file_path)
         warnings = attach_yaml_lines(warnings, item.body, file_path=file_path)
@@ -599,8 +655,9 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
         object_path = paths.get(meta_name)
         if not object_path or not object_path.exists():
             continue
-        # Must walk the same tree as ``RegistryBuilder``, which indexes subfolders.
-        for model_file in sorted(object_path.rglob("*.yaml")):
+        # The same catalogue as ``RegistryBuilder`` (direct children only, #584),
+        # plus ``*.debug.yaml`` so an unparseable one is still reported (#250).
+        for model_file in catalogue_files(object_path, include_debug=True):
             scan_paths.append((model_file, meta_name))
     return scan_paths
 
@@ -608,7 +665,7 @@ def _id_scan_paths() -> list[tuple[Path, str]]:
 def _scan_id_file(path_row: tuple[Path, str]) -> list[_IdScanRow] | _IdScanParseError:
     import yaml
 
-    from opentide.core.io import load_yaml
+    from opentide.core.io import describe_yaml_error, load_yaml
 
     model_file, meta_name = path_row
     try:
@@ -619,7 +676,7 @@ def _scan_id_file(path_row: tuple[Path, str]) -> list[_IdScanRow] | _IdScanParse
         return _IdScanParseError(
             model_file=model_file,
             meta_name=meta_name,
-            error=str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__,
+            error=describe_yaml_error(exc).message,
         )
     if not isinstance(model_body, dict):
         return []
@@ -659,8 +716,9 @@ def _signal_id_rows(model_file: Path, body: dict[str, Any]) -> list[_IdScanRow]:
             meta_name="signal",
             uuid=str(signal["uuid"]),
             name=str(signal.get("name", "")),
+            field_path=("objective", "signals", str(index), "uuid"),
         )
-        for signal in signals
+        for index, signal in enumerate(signals)
         if isinstance(signal, dict) and signal.get("uuid")
     ]
 
@@ -682,15 +740,20 @@ def _merge_id_duplicates(scans: list[_IdScanRow], scope: ValidationScope) -> lis
                 object_uuid=row.uuid,
                 object_type=row.meta_name,
                 file_path=row.model_file,
+                # The UUID's own position, so the frame underlines it.
+                field_path=row.field_path,
                 message=(
                     f"Duplicated ID {row.uuid} on {row.name!r} @ {row.model_file.name}; "
                     f"already used by {original.name!r} @ {original.model_file.name}"
                 ),
                 context={
+                    "value": row.uuid,
                     "original": {
                         "name": original.name,
                         "file_name": original.model_file.name,
-                    }
+                        "file_path": str(original.model_file),
+                        "field_path": list(original.field_path),
+                    },
                 },
             )
         )

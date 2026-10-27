@@ -108,3 +108,36 @@ def test_tenant_valid_env_api_key_loads() -> None:
     assert tenant.setup.elasticsearch_url == "https://es.test"
     assert tenant.setup.space == "staging"
     assert tenant.setup.suppression is True
+
+
+def _tenant_with_key(api_key: object) -> dict:
+    return {
+        "platform": {"enabled": True, "identifier": "elastic"},
+        "tenants": [
+            {
+                "name": "staging",
+                "setup": {
+                    "url": "https://kibana.test",
+                    "elasticsearch_url": "https://es.test",
+                    "api_key": api_key,
+                },
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize("api_key", ["$", "${}", "$ELASTIC KEY", "$1KEY", "${KEY", "x$KEY", 42])
+def test_tenant_api_key_that_is_not_an_env_reference_rejected(api_key: object) -> None:
+    # #589: anything starting with `$` used to pass; the form is `$VAR` or `${VAR}`.
+    with pytest.raises(ValueError, match="api_key must be an environment variable reference"):
+        build_system_config("elastic", _tenant_with_key(api_key))
+
+
+@pytest.mark.parametrize("api_key", ["$ELASTIC_API_KEY", "${ELASTIC_API_KEY}"])
+def test_tenant_api_key_env_reference_forms_resolve(
+    api_key: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ELASTIC_API_KEY", "resolved-secret")
+    cfg = build_system_config("elastic", _tenant_with_key(api_key))
+    assert cfg.tenants is not None
+    assert cfg.tenants[0].setup.api_key == "resolved-secret"

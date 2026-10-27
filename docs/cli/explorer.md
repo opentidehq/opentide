@@ -28,7 +28,7 @@ npx --yes --package @opentide/explorer@latest opentide-explorer build --exports-
 
 ## Choosing the explorer release
 
-opentide does not pin the package. Without a flag, or with `--latest`, `npx` runs the newest published release (the `latest` dist-tag), so the explorer can ship fixes without an opentide release. `--version` runs a specific one: an exact version (`0.5.0`), a range npm resolves (`0.5`, `^0.5.1`) or another dist-tag (`next`). Pin one in scripts that must build the same site every time. Passing both flags is a usage error (exit `2`), and a value that is not a version, range or tag exits `1` before anything is exported.
+opentide does not pin the package. Without a flag, or with `--latest`, `npx` runs the newest published release (the `latest` dist-tag), so the explorer can ship fixes without an opentide release. `--version` runs a specific one: an exact version (`0.5.0`), a range npm resolves (`0.5`, `^0.5.1`) or another dist-tag (`next`). Pin one in scripts that must build the same site every time. Passing both flags, or a value that is not a version, range or tag, is a usage error: exit `2` before anything is exported.
 
 ```bash
 opentide explorer serve --latest
@@ -36,7 +36,7 @@ opentide explorer build --version 0.5.0
 opentide explorer build --version ^0.5
 ```
 
-To run a build that is not on the registry, such as a local tarball or a fork, set `OPENTIDE_EXPLORER_PACKAGE` to any spec `npx --package` accepts. It replaces the package spec entirely, so it cannot be combined with `--version` or `--latest`:
+To run a build that is not on the registry, such as a local tarball or a fork, set `OPENTIDE_EXPLORER_PACKAGE` to any spec `npx --package` accepts. It replaces the package spec entirely, so combining it with `--version` or `--latest` is a usage error:
 
 ```bash
 OPENTIDE_EXPLORER_PACKAGE=./opentide-explorer-0.5.0.tgz opentide explorer build
@@ -53,7 +53,7 @@ Exports the corpus and builds the static site.
 | `--version` | `latest` | `@opentide/explorer` release to run: version, range, or dist-tag |
 | `--latest` | on | Run the latest release; the explicit form of the default |
 
-The output directory holds plain HTML, JavaScript and the exported JSON, ready for any static host. With `--json`, the package's build log goes to stderr and stdout carries one result document with `command`, `package` (the spec that ran, e.g. `@opentide/explorer@latest`), `node`, `exports_dir` and `output`. A build that fails reports the package's exit status in `exit_status`.
+The output directory holds plain HTML, JavaScript and the exported JSON, ready for any static host. With `--json`, the package's build log goes to stderr and stdout carries one result document with `package` (the spec that ran, e.g. `@opentide/explorer@latest`), `node`, `exports_dir` and `output`. A build that fails reports the package's exit status in `exit_status`.
 
 ## `explorer serve`
 

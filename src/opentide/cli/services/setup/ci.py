@@ -112,15 +112,24 @@ def detect_default_branch(path: Path) -> str:
 def _default_branch_warnings(path: Path, branch: str, source: str) -> list[str]:
     """Flag a detected branch that is likely not the one that deploys."""
     local = _local_branches(_repository_dir(path))
+    if source == "fallback" and not _git_stdout(_repository_dir(path), "rev-parse", "--git-dir"):
+        # A new folder: there is no repository to have a branch yet, and the
+        # wizard has no --default-branch to re-run with.
+        logger.debug("ci_default_branch_missing", detail=branch)
+        return [
+            f"This folder is not a git repository yet, so the pipeline targets {branch!r}; "
+            f"create it on that branch with 'git init -b {branch}', or write the pipeline "
+            "for another one with 'opentide setup ci <provider> --default-branch <branch>'."
+        ]
     if source == "fallback" and branch not in local:
-        logger.warning("ci_default_branch_missing", detail=branch)
+        logger.debug("ci_default_branch_missing", detail=branch)
         return [
             f"Found no origin/HEAD, checked-out branch or init.defaultBranch; the pipeline "
             f"targets {branch!r}, which is not a branch of this repository. "
             "Re-run with --default-branch <branch>."
         ]
     if source == "HEAD" and local - {branch}:
-        logger.warning("ci_default_branch_guessed", detail=branch)
+        logger.debug("ci_default_branch_guessed", detail=branch)
         return [
             f"origin/HEAD is not set, so the pipeline targets the checked-out branch {branch!r}. "
             "Re-run with --default-branch <branch> if another branch deploys."
@@ -144,17 +153,17 @@ def run_ci_setup(options: CiSetupOptions) -> dict[str, object]:
     warnings: list[str] = []
     if not platform_ids:
         warnings.append(_NO_PLATFORMS_WARNING)
-        logger.warning("ci_platforms_missing", detail=str(target), warnings=warnings)
+        logger.debug("ci_platforms_missing", detail=str(target), warnings=warnings)
     if options.explorer_pages and options.ci in (CiPlatform.gitlab, CiPlatform.azure):
         warnings.append(f"Explorer pages were not written for {options.ci.value}")
-        logger.warning("explorer_pages_unsupported", ci=options.ci.value)
+        logger.debug("explorer_pages_unsupported", ci=options.ci.value)
     if options.ci is CiPlatform.gitlab:
         branch = GITLAB_DEFAULT_BRANCH
         if options.default_branch is not None:
             warnings.append(
                 f"GitLab pipelines publish to {GITLAB_DEFAULT_BRANCH}; --default-branch is ignored."
             )
-            logger.warning("ci_default_branch_ignored", detail=options.default_branch)
+            logger.debug("ci_default_branch_ignored", detail=options.default_branch)
     elif options.default_branch is not None:
         branch = options.default_branch
     else:

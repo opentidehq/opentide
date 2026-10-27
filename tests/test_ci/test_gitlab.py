@@ -76,7 +76,7 @@ def test_generate_needs_every_query_validation_job() -> None:
 def test_disabled_docs_omits_the_document_job() -> None:
     content = render_gitlab(CiRenderOptions(ci="gitlab", docs_enabled=False, sharing=True))
     parsed = yaml.safe_load(content)
-    assert parsed["stages"] == ["validate", "generate", "share", "deploy"]
+    assert parsed["stages"] == ["validate", "generate", "deploy", "share"]
     assert "document" not in parsed
     assert "script:\n  needs:" not in content
 

@@ -1,0 +1,335 @@
+"""Configuration models on the load path: each loader validates with the file's model."""
+
+from __future__ import annotations
+
+import re
+import sys
+from typing import Any
+from unittest.mock import patch
+
+import pytest
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
+from opentide.loading.config_loader import ConfigurationsLoader
+from opentide.models.configuration import (
+    DeploymentConfiguration,
+    configuration_files,
+)
+from opentide.models.configuration.loading import ConfigurationError
+from opentide.models.deployment_enums import StatusStrategy
+from opentide.models.system_config import DeploymentStatus
+
+_STATUS = {"name": "LIVE", "description": "Live", "strategy": "RELEASE"}
+
+
+def _bundled(name: str) -> dict[str, Any]:
+    from opentide.core.root import get_data_root
+
+    path = get_data_root() / "configurations" / name
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def test_every_bundled_file_validates() -> None:
+    from opentide.core.root import get_data_root
+
+    root = get_data_root() / "configurations"
+    for key, model in configuration_files().items():
+        path = root / key
+        if path.is_file():
+            model.model_validate(_bundled(key))
+
+
+# --- deployment.toml -------------------------------------------------------------------
+
+
+def test_load_deployment_returns_the_model() -> None:
+    loaded = ConfigurationsLoader.load_deployment(_bundled("deployment.toml"))
+    assert isinstance(loaded, DeploymentConfiguration)
+    assert loaded.promotion.promotion_target == "PRODUCTION"
+    assert {status.strategy for status in loaded.statuses} >= {StatusStrategy.RELEASE}
+
+
+def test_statuses_stay_dataclasses_with_enum_strategy() -> None:
+    statuses = ConfigurationsLoader.load_statuses([_STATUS])
+    assert statuses == [DeploymentStatus(name="LIVE", description="Live", strategy="RELEASE")]
+    assert statuses[0].strategy is StatusStrategy.RELEASE
+
+
+@pytest.mark.parametrize(
+    ("document", "where"),
+    [
+        ({"statuses": [{**_STATUS, "strategy": "LATER"}]}, "statuses.0.strategy"),
+        ({"statuses": [{**_STATUS, "colour": "red"}]}, "statuses.0.colour: unknown key"),
+        ({"statuses": [_STATUS], "promotion": {"enabeld": True}}, "promotion.enabeld"),
+        ({"statuses": [_STATUS], "debug": {"ssl_enabled": "yes"}}, "debug.ssl_enabled"),
+        ({"statuses": [{"name": "LIVE", "strategy": "RELEASE"}]}, "statuses.0.description"),
+        ({"statuses": []}, "statuses"),
+    ],
+)
+def test_load_deployment_names_the_failing_key(document: dict[str, Any], where: str) -> None:
+    with pytest.raises(ConfigurationError, match=re.escape("deployment.toml is invalid")) as raised:
+        ConfigurationsLoader.load_deployment(document)
+    assert where in str(raised.value)
+
+
+def test_malformed_responder_is_skipped_not_fatal() -> None:
+    loaded = ConfigurationsLoader.load_deployment(
+        {
+            "statuses": [_STATUS],
+            "responders": [{"description": "no name"}, {"name": "SOC", "description": "x"}],
+        }
+    )
+    assert [responder.name for responder in loaded.responders] == ["SOC"]
+
+
+def test_registry_deployment_accessors_read_the_model() -> None:
+    from opentide.core.registry import _DeploymentConfig
+
+    accessor = _DeploymentConfig(
+        {"configurations": {"deployment": {"statuses": [_STATUS], "debug": {}}}}  # ty: ignore[invalid-argument-type]  # a plain dict stands in for the index snapshot
+    )
+    assert [status.name for status in accessor.statuses] == ["LIVE"]
+    assert accessor.debug == {"mdr_test_uuids": [], "ssl_enabled": True, "proxy_enabled": False}
+    assert accessor.model.promotion.enabled is True
+
+
+# --- platforms/<id>.toml ---------------------------------------------------------------
+
+
+def _sentinel_tenant(**setup: object) -> dict[str, Any]:
+    base: dict[str, object] = {
+        "resource_group": "rg",
+        "workspace_name": "ws",
+        "workspace_id": "$AZURE_WORKSPACE_ID",
+        "azure_tenant_id": "$AZURE_TENANT_ID",
+        "azure_subscription_id": "$AZURE_SUBSCRIPTION_ID",
+        "azure_client_id": "$AZURE_CLIENT_ID",
+        "azure_client_secret": "$AZURE_CLIENT_SECRET",
+    }
+    base.update(setup)
+    return {"name": "Primary", "setup": base}
+
+
+def test_platform_loader_rejects_an_unknown_tenant_key() -> None:
+    from opentide.platforms.config import build_system_config
+
+    raw = {"platform": {"enabled": True}, "tenants": [_sentinel_tenant(colour="red")]}
+    with pytest.raises(
+        ConfigurationError, match=re.escape("platforms/sentinel.toml is invalid")
+    ) as raised:
+        build_system_config("sentinel", raw)
+    assert "tenants.0.setup.colour: unknown key" in str(raised.value)
+
+
+def test_platform_loader_accepts_a_valid_file() -> None:
+    from opentide.platforms.config import build_system_config
+
+    built = build_system_config(
+        "sentinel", {"platform": {"enabled": True}, "tenants": [_sentinel_tenant()]}
+    )
+    assert built.tenants[0].name == "Primary"
+
+
+def test_platform_loader_keeps_its_retired_key_messages() -> None:
+    from opentide.platforms.config import build_system_config
+
+    raw = {"tenants": [{**_sentinel_tenant(), "deployment": "STAGING"}]}
+    with pytest.raises(ValueError, match=re.escape("was removed in 0.17.0")):
+        build_system_config("sentinel", raw)
+
+
+def test_platform_error_never_repeats_a_secret() -> None:
+    from opentide.platforms.config import build_system_config
+
+    secret = "Very-Secret-Value-42"
+    raw = {"tenants": [_sentinel_tenant(azure_client_secret=secret, extra_secret=secret)]}
+    with pytest.raises(ConfigurationError) as raised:
+        build_system_config("sentinel", raw)
+    assert secret not in str(raised.value)
+
+
+def test_splunk_legacy_tables_are_accepted() -> None:
+    from opentide.platforms.config import validate_platform_config
+
+    validate_platform_config(
+        "splunk",
+        {
+            "tide": {"identifier": "splunk"},
+            "setup": {"url": "u"},
+            "secrets": {"token": "$T"},
+            "defaults": {"cron_schedule": "0 * * * *"},
+            "modifiers": {},
+        },
+    )
+
+
+# --- paths.toml, documentation.toml, visibility.toml -----------------------------------
+
+
+def test_workspace_paths_reject_an_unknown_key(tmp_path) -> None:
+    from opentide.registry.paths import resolve_workspace_paths
+
+    configs = {"paths": {**_bundled("paths.toml"), "paths": {"objekts": {}}}}
+    with pytest.raises(ConfigurationError, match=re.escape("paths.toml is invalid: paths.objekts")):
+        resolve_workspace_paths(configs, workspace=tmp_path)
+
+
+def test_bundled_paths_resolve(tmp_path) -> None:
+    from opentide.registry.paths import resolve_workspace_paths
+
+    paths = resolve_workspace_paths(
+        {"paths": _bundled("paths.toml"), "global": _bundled("global.toml")}, workspace=tmp_path
+    )
+    assert paths["rule"] == (tmp_path / "objects" / "rules").resolve()
+
+
+def test_documentation_settings_reject_an_unknown_direction() -> None:
+    from opentide.documentation.config import load_settings
+
+    with patch("opentide.documentation.config.Opentide") as mock_ot:
+        mock_ot.Configurations.Documentation.Index = {
+            "diagrams": {"relations_direction": "sideways"}
+        }
+        mock_ot.Configurations.Global.Index = {"paths": {"core": {}}}
+        with pytest.raises(ConfigurationError, match=re.escape("diagrams.relations_direction")):
+            load_settings()
+
+
+def test_documentation_flavor_name_with_hyphen() -> None:
+    from opentide.documentation.types import DocumentFlavor
+    from opentide.models.configuration import DocumentationConfiguration
+
+    loaded = DocumentationConfiguration.model_validate({"flavor": "azure-devops"})
+    assert loaded.default_flavor() is DocumentFlavor.azure_devops
+
+
+def test_visibility_unknown_asset_is_logged_not_fatal() -> None:
+    with patch("opentide.loading.config_loader.logger") as logger:
+        loaded = ConfigurationsLoader.load_visibility(
+            {
+                "assets": [{"name": "dc", "description": "d", "criticality": "high"}],
+                "logsources": [
+                    {"name": "l", "description": "d", "system": "splunk", "assets": ["nope"]}
+                ],
+                "detectors": [{"name": "edr", "description": "d", "assets": ["gone"]}],
+            }
+        )
+    assert loaded is not None
+    events = [call.args[0] for call in logger.error.call_args_list]
+    assert events == ["logsource_invalid_assets", "detector_invalid_assets"]
+
+
+# --- sharing.toml ----------------------------------------------------------------------
+
+
+def test_misp_keys_are_the_sharing_spec_keys() -> None:
+    """The `[[misp]]` keys and required keys of sharing::misp::1.0, written out from the spec."""
+    from opentide.sharing import constants
+
+    assert {
+        "name",
+        "enabled",
+        "url",
+        "api_key",
+        "max_tlp",
+        "object_types",
+        "rule_statuses",
+        "organisation_uuid",
+        "publish",
+        "verify_ssl",
+    } == constants.MISP_BLOCK_KEYS
+    assert {"name", "url", "api_key", "max_tlp"} == constants.REQUIRED_MISP_KEYS
+    assert constants.OBJECT_FAMILIES == ("threat", "objective", "rule")
+
+
+# --- Review follow-ups: tolerance where the loader was tolerant, no secret anywhere ----
+
+
+def test_responder_with_a_stray_key_is_kept() -> None:
+    # `default_responders` written below the last [[responders]] lands inside it.
+    with patch("opentide.loading.config_loader.logger") as logger:
+        loaded = ConfigurationsLoader.load_responders(
+            [{"name": "CSIRC"}, {"name": "CATCH", "default_responders": "CSIRC"}]
+        )
+    assert [responder.name for responder in loaded] == ["CSIRC", "CATCH"]
+    (call,) = logger.warning.call_args_list
+    assert call.args[0] == "responder_has_invalid_keys"
+    assert call.kwargs["keys"] == ["default_responders"]
+
+
+def test_responder_log_never_holds_values() -> None:
+    secret = "SEKRET_9f8e7d"
+    with patch("opentide.loading.config_loader.logger") as logger:
+        ConfigurationsLoader.load_responders([{"token": secret}, {"name": "x", "token": secret}])
+    assert secret not in repr(logger.mock_calls)
+
+
+def test_non_list_responders_is_a_configuration_error() -> None:
+    with pytest.raises(ConfigurationError, match="responders: must be"):
+        ConfigurationsLoader.load_deployment({"statuses": [_STATUS], "responders": 5})
+
+
+def test_plugin_platform_is_not_validated() -> None:
+    from opentide.platforms.config import build_system_config
+
+    raw = {
+        "platform": {"enabled": True},
+        "defaults": {"x": 1},
+        "tenants": [{"name": "T", "region": "eu-west-1", "parameters": {"retries": 3}}],
+    }
+    assert build_system_config("acme", raw).raw["defaults"] == {"x": 1}
+
+
+def test_coretide_global_toml_does_not_fail_the_paths(tmp_path) -> None:
+    from opentide.registry.paths import resolve_workspace_paths
+
+    legacy = {"paths": {"core": {"wiki_docs_folder": "wiki/"}}, "data_fields": {}}
+    resolve_workspace_paths({"paths": _bundled("paths.toml"), "global": legacy}, workspace=tmp_path)
+
+
+@pytest.mark.parametrize(
+    "setup",
+    [
+        {"ssl": "SECRET-VALUE-1"},
+        {"schedule_offset": "SECRET-VALUE-1"},
+        {"port": 1.5, "token": "SECRET-VALUE-1", "url": ["SECRET-VALUE-1"]},
+    ],
+)
+def test_a_failing_secret_value_is_never_repeated(setup: dict[str, Any]) -> None:
+    from opentide.models.configuration.loading import validate_configuration
+    from opentide.models.configuration.platforms import SplunkConfiguration
+
+    document = {"tenants": [{"name": "T", "setup": {"url": "u", "port": 1, "app": "a", **setup}}]}
+    with pytest.raises(ConfigurationError) as raised:
+        validate_configuration(SplunkConfiguration, document, file_key="platforms/splunk.toml")
+    error = raised.value
+    assert "SECRET-VALUE-1" not in f"{error} {error!r} {error.errors!r}"
+    assert error.__context__ is None and error.__cause__ is None
+
+
+def test_visibility_error_never_repeats_values() -> None:
+    with pytest.raises(ValueError, match="Failed to load visibility") as raised:
+        ConfigurationsLoader.load_visibility({"logsources": [{"name": "SEKRET", "x": ["SEKRET"]}]})
+    assert "SEKRET" not in str(raised.value)
+    # Only opentide's own, value-free error may be chained; never pydantic's.
+    from pydantic import ValidationError
+
+    chained = raised.value.__context__
+    assert chained is None or not isinstance(chained, ValidationError)
+    assert raised.value.__cause__ is None
+
+
+def test_status_names_do_not_validate_the_file() -> None:
+    """`validate`'s status check reads names only; a typo is the configuration check's finding."""
+    from opentide.core.registry import _DeploymentConfig
+
+    accessor = _DeploymentConfig(
+        {"configurations": {"deployment": {"statuses": [_STATUS], "promotion": {"enabeld": 1}}}}  # ty: ignore[invalid-argument-type]  # a plain dict stands in for the index snapshot
+    )
+    assert accessor.status_names == ["LIVE"]
+    with pytest.raises(ConfigurationError):
+        _ = accessor.statuses

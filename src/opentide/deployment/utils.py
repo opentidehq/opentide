@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from opentide.core import registry
-from opentide.core.io import load_yaml
+from opentide.core.errors import ObjectFileError
+from opentide.core.io import first_content_span, load_yaml, root_mapping_problem
 from opentide.core.logging import get_logger
 from opentide.core.object_refs import object_uuid
 from opentide.deployment.git_repo import (
@@ -150,8 +152,21 @@ def _report_nested_rules(nested: tuple[str, ...], warnings: list[str] | None) ->
         logger.warning("deploy_nested_rules_skipped", **fields)
         return
     # The caller prints the message: a warning-level log would print it twice.
-    logger.info("deploy_nested_rules_skipped", **fields)
+    logger.debug("deploy_nested_rules_skipped", **fields)
     warnings.append(_nested_rules_warning(nested))
+
+
+def statuses_deployed_by(strategies: RunStrategies) -> list[str]:
+    """The ``[[statuses]]`` names, in order, whose strategy one of *strategies* deploys."""
+    names: list[str] = []
+    for status in registry.Opentide.Configurations.Deployment.statuses:
+        try:
+            strategy = check_status(status.name)
+        except ValueError:
+            continue
+        if any(deploys(strategy, run) for run in strategies):
+            names.append(status.name)
+    return names
 
 
 def make_deploy_plan(
@@ -162,6 +177,7 @@ def make_deploy_plan(
     warnings: list[str] | None = None,
     scope: RuleScope | None = None,
     all_files: bool = False,
+    skipped: list[dict[str, str]] | None = None,
 ) -> dict[str, list[str]]:
     """Assemble MDR UUIDs to deploy, organized per system.
 
@@ -185,6 +201,11 @@ def make_deploy_plan(
     marks the run as failed (RFC 0010). If that leaves nothing to deploy, the
     plan raises :class:`ExternalIdInRuleError` so the run cannot end as an
     empty success.
+
+    A block whose status no run strategy deploys is left out. With *skipped*,
+    each one is appended there (``rule``, ``uuid``, ``platform``, ``status``,
+    ``strategy``) for the caller to count, and logged at DEBUG only; without
+    it, it is logged as a warning, one line per block.
     """
     systems_deployment = enabled_systems()
     run_names = ", ".join(strategy.name for strategy in strategies) or "none"
@@ -211,6 +232,8 @@ def make_deploy_plan(
     refused: list[str] = []
     for rule in scope.files:
         data = load_yaml(rule)
+        if (problem := root_mapping_problem(data)) is not None:
+            raise _object_file_error(Path(rule), problem)
         name = data["name"]
         conf_data = data["configurations"]
         mdr_uuid = object_uuid(data)
@@ -251,7 +274,7 @@ def make_deploy_plan(
             if any(deploys(strategy, run) for run in strategies):
                 selected.append(system)
                 logger.info(
-                    "mdr_selected_for_deploy",
+                    "rule_selected_for_deploy",
                     system=system.upper(),
                     status=platform_status,
                     strategy=strategy.name,
@@ -259,14 +282,28 @@ def make_deploy_plan(
                     rule=name,
                 )
             else:
-                logger.warning(
-                    "mdr_skipped_for_strategy",
-                    system=system.upper(),
-                    status=platform_status,
-                    strategy=strategy.name,
-                    run_strategies=run_names,
-                    deployed_by=", ".join(r.name for r in deployed_by(strategy)) or "no run",
-                    rule=name,
+                fields = {
+                    "system": system.upper(),
+                    "status": platform_status,
+                    "strategy": strategy.name,
+                    "run_strategies": run_names,
+                    "deployed_by": ", ".join(r.name for r in deployed_by(strategy)) or "no run",
+                    "rule": name,
+                }
+                if skipped is None:
+                    logger.warning("rule_skipped_for_strategy", **fields)
+                    continue
+                # The caller counts these in one line: a warning per block was
+                # a wall of key=value log lines on a first dry run.
+                logger.debug("rule_skipped_for_strategy", **fields)
+                skipped.append(
+                    {
+                        "rule": str(name),
+                        "uuid": str(mdr_uuid),
+                        "platform": system,
+                        "status": str(platform_status),
+                        "strategy": strategy.name,
+                    }
                 )
 
         if selected and _refuse_external_ids(data, rule=rule, uuid=mdr_uuid, warnings=warnings):
@@ -284,6 +321,15 @@ def make_deploy_plan(
     return deploy_mdr
 
 
+def _object_file_error(path: Path, problem: str) -> ObjectFileError:
+    """A rule file that is not one mapping, pointing at where its document starts."""
+    position = first_content_span(path.read_text(encoding="utf-8"))
+    if position is None:
+        return ObjectFileError(path, problem)
+    line, column, end_column = position
+    return ObjectFileError(path, problem, line=line, column=column, end_column=end_column)
+
+
 class ExternalIdInRuleError(ValueError):
     """Every rule in the plan was refused for carrying vendor ids on the rule."""
 
@@ -297,7 +343,7 @@ def _refuse_external_ids(
     error = legacy_key_error(uuid, data)
     if error is None:
         return False
-    report_failure(error, object_uuid=uuid, platform="*")
+    report_failure(error, object_uuid=uuid, platform="*", reported=warnings is not None)
     if warnings is not None:
         warnings.append(f"{error} -- {rule} was not deployed to any platform")
     return True

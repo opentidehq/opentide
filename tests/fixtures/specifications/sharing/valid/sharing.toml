@@ -1,0 +1,22 @@
+# Conformance sharing file: one [[misp]] block per MISP instance.
+# misp-internal selects STAGING rules so the committed object fixtures are in scope.
+# The normative default for rule_statuses remains ["PRODUCTION"].
+
+[[misp]]
+name = "misp-internal"
+enabled = true
+url = "https://misp.internal.example.org"
+api_key = "${MISP_INTERNAL_API_KEY}"
+max_tlp = "amber"
+object_types = ["threat", "objective", "rule"]
+rule_statuses = ["PRODUCTION", "STAGING"]
+
+[[misp]]
+name = "misp-isac"
+enabled = true
+url = "https://misp.isac.example.net"
+api_key = "${MISP_ISAC_API_KEY}"
+max_tlp = "green"
+object_types = ["rule"]
+publish = true
+organisation_uuid = "00000000-0000-4000-8aaa-000000000002"

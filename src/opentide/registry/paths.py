@@ -9,18 +9,6 @@ from opentide.core.root import get_data_root
 from opentide.package.paths import recomposition_platforms_root
 from opentide.registry.discovery import client_configurations_dir, discover_workspace, opentide_dir
 
-#: Object file name patterns. Deploy and lint read both spellings, so the
-#: registry has to index both: a rule it skipped was never validated, and
-#: deploy failed looking it up.
-OBJECT_YAML_PATTERNS = ("*.yaml", "*.yml")
-_DEBUG_SUFFIXES = (".debug.yaml", ".debug.yml")
-
-
-def object_yaml_files(object_dir: Path) -> list[Path]:
-    """Object YAML files under *object_dir*, subfolders included, without debug dumps."""
-    found = (path for pattern in OBJECT_YAML_PATTERNS for path in object_dir.rglob(pattern))
-    return sorted(path for path in found if not path.name.endswith(_DEBUG_SUFFIXES))
-
 
 def workspace_config(configs: dict[str, Any]) -> dict[str, Any]:
     """Return paths config (``paths.toml``), falling back to legacy ``global.toml``."""
@@ -29,6 +17,22 @@ def workspace_config(configs: dict[str, Any]) -> dict[str, Any]:
     if "global" in configs:
         return configs["global"]
     raise KeyError("Bundled paths.toml or global.toml missing from configurations")
+
+
+def validate_paths_configuration(configs: dict[str, Any]) -> None:
+    """Validate the paths document `workspace_config` reads against `PathsConfiguration`.
+
+    That is merged `paths.toml`, which always ships; legacy `global.toml` only
+    when there is no `paths.toml`. A migrated CoreTIDE `global.toml` carries
+    keys no current code reads, and validating it would fail every command.
+    """
+    from opentide.models.configuration.loading import validate_configuration
+    from opentide.models.configuration.paths import PathsConfiguration
+
+    key = "paths" if "paths" in configs else "global"
+    document = configs.get(key)
+    if isinstance(document, dict):
+        validate_configuration(PathsConfiguration, document, file_key=f"{key}.toml")
 
 
 def _rel(base: Path, value: str) -> Path:
@@ -65,6 +69,7 @@ def resolve_workspace_paths(
 
         configs = resolve_configurations()
 
+    validate_paths_configuration(configs)
     cfg = workspace_config(configs)
     base = workspace or discover_workspace()
     data_root = get_data_root()

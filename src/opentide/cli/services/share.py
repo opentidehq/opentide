@@ -8,8 +8,15 @@ from pathlib import Path
 from typing import Any, Literal
 
 from opentide.cli.context import CliContext
+from opentide.cli.ui.contract import (
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+    did_you_mean,
+)
 from opentide.core.logging import get_logger
 from opentide.core.registry import Opentide
+from opentide.registry.catalogue import is_object_file_name, report_nested_object_files
 from opentide.sharing.config import MispBlock, SharingConfig, load_sharing
 from opentide.sharing.constants import (
     INTEGRATION_MISP,
@@ -39,11 +46,16 @@ _PREFLIGHT = {
     "changed_diff": "Could not calculate the changed objects",
 }
 
-_OBJECT_SUFFIXES = frozenset({".yaml", ".yml"})
+#: ``failure.code`` for a run that reached the destination, by exit code.
+_RUN_FAILURE_CODES = {1: "share_failed", 2: "share_unreachable", 3: "share_partial"}
 #: The ``share`` subcommands; ``targets`` lists destinations and calls no engine.
 ShareMode = Literal["push", "preview", "status", "retract", "targets"]
-
 _NO_ENABLED_TARGET = "No enabled sharing target"
+#: When sharing.toml holds no target at all: what to add, and where.
+_NO_TARGET = "No sharing target is configured"
+_ADD_TARGET = (
+    "add a [[misp]] block to .opentide/configurations/sharing.toml (see docs/cli/share.md)"
+)
 _NO_CHANGED_OBJECTS = "No changed objects to share"
 
 
@@ -61,16 +73,38 @@ def run_share(
     delete: bool = False,
     confirmed: bool = False,
     changed: bool = False,
+    since: str | None = None,
 ) -> dict[str, Any]:
     """Run one share command and return a CLI payload, including ``_exit_code``."""
+    if since is not None and not changed:
+        return _failed(
+            "--since needs --changed",
+            exit_code=2,
+            code=USAGE_MISSING_OPTION,
+            argument="--changed",
+        )
+    if since is not None and not since.strip():
+        return _failed(
+            "--since needs a commit SHA or ref",
+            exit_code=2,
+            code=USAGE_INVALID_VALUE,
+            argument="--since",
+        )
     if workers < 1:
-        return _failed("workers must be at least 1", exit_code=2)
+        return _failed(
+            "workers must be at least 1",
+            exit_code=2,
+            code=USAGE_INVALID_VALUE,
+            argument="--workers",
+        )
     unknown = sorted(set(types or []) - set(OBJECT_FAMILIES))
     if unknown:
         listed = ", ".join(unknown)
         return _failed(
             f"Unknown object type(s): {listed}. Choose threat, objective, or rule.",
             exit_code=2,
+            code=USAGE_INVALID_CHOICE,
+            argument="--type",
         )
     config = load_sharing(cli.repo)
     secrets = _secrets(config.blocks)
@@ -93,24 +127,54 @@ def run_share(
         return _redact(_targets_payload(config), secrets)
 
     if changed and mode == "push":
-        problem = _changed_context()
+        problem = _changed_context(explicit_base=since is not None)
         if problem is not None:
             return _redact(_preflight(problem, config), secrets)
 
     effective = "preview" if dry_run and mode == "push" else mode
+    names = [block.name for block in config.blocks]
+    missing = [name for name in targets or () if name not in names]
+    if missing:
+        listed = ", ".join(names) or "none configured"
+        payload = _failed(
+            f"Unknown sharing target {missing[0]!r}. Configured targets: {listed}.",
+            exit_code=2,
+            code=USAGE_INVALID_CHOICE,
+            argument="--target",
+        )
+        # A usage error, but still the scope_no_match preflight scripts read.
+        payload["preflight"] = "scope_no_match"
+        payload["records"] = []
+        warnings = [issue.message for issue in config.issues if issue.severity == "warning"]
+        if warnings:
+            payload["warnings"] = warnings
+        payload["_failure_suggestion"] = did_you_mean(missing[0], names)
+        return _redact(payload, secrets)
     selected, problem = _select_blocks(config.blocks, targets)
     if problem is not None or selected is None:
         if changed and mode == "push" and not targets and problem == "scope_no_match":
             return _redact(_quiet(_NO_ENABLED_TARGET, config), secrets)
+        if not config.blocks:
+            # "No sharing target matched the request" said nothing about the
+            # file to write when there is none (post-merge end-to-end run).
+            payload = _preflight("scope_no_match", config, message=_NO_TARGET)
+            payload["advice"] = _ADD_TARGET
+            return _redact(payload, secrets)
         return _redact(_preflight(problem or "scope_no_match", config), secrets)
     documents = _catalogue()
+    # Files in subfolders are not objects (#584): never shared, named once.
+    nested: list[str] = []
+    report_nested_object_files(warnings=nested)
     filters = _filters(cli.repo, uuids, types, files)
     if changed and mode == "push":
-        filters, stop = _changed_files(cli.repo, filters)
+        filters, stop = _changed_files(cli.repo, filters, since=since)
         if stop == "empty":
-            return _redact(_quiet(_NO_CHANGED_OBJECTS, config), secrets)
+            return _redact(_with_warnings(_quiet(_NO_CHANGED_OBJECTS, config), nested), secrets)
         if stop is not None:
-            return _redact(_preflight("changed_diff", config, message=stop), secrets)
+            return _redact(
+                _with_warnings(_preflight("changed_diff", config, message=stop), nested),
+                secrets,
+            )
     validate = _validator(documents) if effective in {"push", "preview"} else None
     outcome = run_misp(
         documents,
@@ -127,48 +191,115 @@ def run_share(
     log.info(
         "share.completed", mode=effective, exit_code=outcome.exit_code, records=len(outcome.records)
     )
-    return _redact(_from_run(outcome, config), secrets)
+    return _redact(_with_warnings(_from_run(outcome, config, mode=effective), nested), secrets)
+
+
+#: Record action → (glyph name, label in a preview, label after a push, style).
+_SHARE_ROWS: dict[str, tuple[str, str, str, str]] = {
+    "created": ("create", "create", "created", "bold green"),
+    "updated": ("update", "update", "updated", "bold yellow"),
+    "unchanged": ("skip", "unchanged", "unchanged", "dim"),
+    "retracted": ("delete", "retract", "retracted", "bold red"),
+    "skipped_tlp": ("skip", "skip", "skipped", "dim"),
+    "skipped_status": ("skip", "skip", "skipped", "dim"),
+    "skipped_type": ("skip", "skip", "skipped", "dim"),
+    "failed": ("failed", "fail", "failed", "bold red"),
+}
+
+#: Why an object was skipped, in words (the record keeps the code).
+#: Short, so a row fits 100 columns beside a long name (a sentence wrapped mid-word).
+_SKIP_REASONS = {
+    "max_tlp": "TLP above max_tlp",
+    "object_type": "type not shared",
+    "rule_status": "status not shared",
+}
+
+
+def _object_names() -> dict[str, str]:
+    """Object names by UUID, from the registry the run has already loaded."""
+    try:
+        objects = Opentide.Index.get("objects") or {}
+    except Exception:
+        return {}
+    names: dict[str, str] = {}
+    for family in objects.values():
+        if not isinstance(family, dict):
+            continue
+        for uuid, body in family.items():
+            name = body.get("name") if isinstance(body, dict) else None
+            if isinstance(name, str) and name:
+                names[str(uuid)] = name
+    return names
 
 
 def render_share(payload: dict[str, Any]) -> None:
-    """Print the share table. JSON mode skips this and uses the payload."""
-    from rich.table import Table
+    """Print the targets, or what a share did or would do, as plan rows. JSON skips this.
 
+    The table this replaces dumped the records: snake_case actions
+    (``skipped_status``), raw keys as headers, an empty ``remote_event_id``
+    column, full UUIDs, and ``created`` for a preview that sent nothing.
+    """
+    from rich.text import Text
+
+    from opentide.cli.ui.glyphs import glyph
+    from opentide.cli.ui.layout import columns
+    from opentide.cli.ui.plan import short_uuid
+    from opentide.cli.ui.render import print_block
     from opentide.core.logging.config import get_stdout_console
 
     console = get_stdout_console()
+    encoding = console.encoding or "utf-8"
+    separator = f" {glyph('separator', encoding=encoding)} "
     rows = payload.get("targets")
     if isinstance(rows, list):
-        table = Table(title="Sharing targets")
-        for column in ("integration", "name", "enabled", "max_tlp", "url"):
-            table.add_column(column)
-        for row in rows:
-            if isinstance(row, dict):
-                table.add_row(
-                    *(
-                        str(row.get(column, ""))
-                        for column in ("integration", "name", "enabled", "max_tlp", "url")
-                    )
-                )
-        console.print(table)
+        listed = [
+            (
+                Text(str(row.get("name", "")), style="bold"),
+                Text(str(row.get("integration", "")), style="dim"),
+                Text("enabled" if row.get("enabled") else "disabled", style="dim"),
+                Text(f"max TLP {row.get('max_tlp')}" if row.get("max_tlp") else "", style="dim"),
+                Text(str(row.get("url") or ""), style="dim"),
+            )
+            for row in rows
+            if isinstance(row, dict)
+        ]
+        if listed:
+            print_block(console, columns(listed))
         return
     records = payload.get("records")
     if not isinstance(records, list) or not records:
         return
-    table = Table(title="Share")
-    for column in ("object_uuid", "target", "action", "remote_event_id", "reason"):
-        table.add_column(column)
+    preview = payload.get("_outcome_kind") == "plan"
+    names = _object_names()
+    targets: dict[str, list[dict[str, Any]]] = {}
     for record in records:
-        if not isinstance(record, dict):
-            continue
-        table.add_row(
-            str(record.get("object_uuid", "")),
-            str(record.get("target", "")),
-            str(record.get("action", "")),
-            "" if record.get("remote_event_id") is None else str(record.get("remote_event_id")),
-            str(record.get("reason") or ""),
-        )
-    console.print(table)
+        if isinstance(record, dict):
+            targets.setdefault(str(record.get("target", "")), []).append(record)
+    for target, members in targets.items():
+        title = Text(target, style="bold")
+        if preview:
+            title.append(separator + "dry run, nothing is sent", style="dim")
+        console.print(title, soft_wrap=True)
+        lines = []
+        for record in members:
+            action = str(record.get("action", ""))
+            mark, planned, done, style = _SHARE_ROWS.get(action, ("skip", action, action, "dim"))
+            uuid = str(record.get("object_uuid", ""))
+            reason = record.get("reason")
+            why = _SKIP_REASONS.get(str(reason), str(reason).replace("_", " ")) if reason else ""
+            lines.append(
+                (
+                    Text(
+                        f"{glyph(mark, encoding=encoding)} {planned if preview else done}",
+                        style=style,
+                    ),
+                    Text(names.get(uuid, uuid), style="bold"),
+                    Text(short_uuid(uuid, encoding), style="dim"),
+                    Text(why, style="dim"),
+                )
+            )
+        print_block(console, columns(lines, indent=2), hang=4)
+        console.print()
 
 
 def _catalogue() -> list[TideDocument]:
@@ -228,30 +359,36 @@ def _select_blocks(
     return enabled, None
 
 
-def _changed_context() -> str | None:
-    """Preflight for ``--changed`` before any git diff or HTTP call."""
+def _changed_context(*, explicit_base: bool = False) -> str | None:
+    """Preflight for ``--changed`` before any git diff or HTTP call.
+
+    Outside CI there is no push to diff, unless ``--since`` names the base.
+    """
     from opentide.deployment.ci import CIEnvironment, is_change_request
 
     environment = CIEnvironment().environment
     if environment is CIEnvironment.CIPlatforms.LocalDebug:
-        return "changed_outside_ci"
+        return None if explicit_base else "changed_outside_ci"
     if is_change_request(environment):
         return "changed_on_pull_request"
     return None
 
 
 def _changed_files(
-    workspace: Path, filters: ShareFilters | None
+    workspace: Path, filters: ShareFilters | None, *, since: str | None = None
 ) -> tuple[ShareFilters | None, str | None]:
-    """Narrow *filters* to the production diff.
+    """Narrow *filters* to the push's diff, read up to the checkout's ``HEAD``.
 
-    The second value is ``None`` when *filters* is ready, ``"empty"`` when the
-    diff selects nothing, or the diff error text.
+    The diff starts where the production deploy's starts, or at *since*, and
+    ends at ``HEAD``. The generated share job checks out the default branch
+    after the production write-back, so a rule that deploy promoted is in the
+    diff (#590). The second value is ``None`` when *filters* is ready,
+    ``"empty"`` when the diff selects nothing, or the diff error text.
     """
-    from opentide.deployment.git_repo import DiffSource, diff_calculation
+    from opentide.deployment.git_repo import changed_through_head
 
     try:
-        changed = diff_calculation(DiffSource.PUSH)
+        changed = changed_through_head(since)
     except Exception as exc:
         text = str(exc).strip()
         return None, text or _PREFLIGHT["changed_diff"]
@@ -301,7 +438,8 @@ def _direct_object_files(workspace: Path, changed: object) -> list[Path]:
             resolved = path.resolve()
         except OSError:
             continue
-        if resolved.suffix.lower() not in _OBJECT_SUFFIXES:
+        # The catalogue's names: no ``*.debug.yaml``, suffixes as deploy spells them.
+        if not is_object_file_name(resolved.name):
             continue
         if resolved.parent not in allowed:
             continue
@@ -414,22 +552,69 @@ def _restore_validation_env(previous: tuple[str | None, str | None]) -> None:
             os.environ[name] = value
 
 
-def _from_run(outcome: ShareRun, config: SharingConfig) -> dict[str, Any]:
+#: Record action → the word the outcome line counts it under.
+_ACTION_WORDS = {
+    "created": "new",
+    "updated": "updated",
+    "unchanged": "unchanged",
+    "retracted": "retracted",
+    "skipped_tlp": "skipped",
+    "skipped_status": "skipped",
+    "skipped_type": "skipped",
+    "failed": "failed",
+}
+
+
+#: Actions that send something to the destination.
+_SENT_ACTIONS = frozenset({"created", "updated", "retracted"})
+
+
+def share_outcome(mode: str, outcome: ShareRun) -> tuple[str, dict[str, int]]:
+    """``Shared 4 objects to misp-prod · 3 new, 1 updated``, and the counts behind it."""
+    from collections import Counter
+
+    from opentide.cli.ui.progress import plural
+
+    records = outcome.records
+    targets = ", ".join(sorted({record.target for record in records})) or "no target"
+    counts = Counter(_ACTION_WORDS.get(record.action, record.action) for record in records)
+    # "unchanged" succeeds but sends nothing, so it is not a shared object.
+    done = len({record.object_uuid for record in records if record.action in _SENT_ACTIONS})
+    objects = plural(done, "object")
+    lead = {
+        "push": f"Shared {objects} to {targets}",
+        "preview": f"Would share {objects} to {targets}",
+        "retract": f"Retracted {objects} from {targets}",
+    }.get(mode, f"{plural(len({r.object_uuid for r in records}), 'object')} on {targets}")
+    if not done and records and mode in ("push", "preview", "retract"):
+        lead = "Nothing to retract" if mode == "retract" else "Nothing to share"
+    order = ("new", "updated", "unchanged", "retracted", "skipped", "failed")
+    facts = ", ".join(f"{counts[word]} {word}" for word in order if counts.get(word))
+    summary = {"objects": done, **{word: counts.get(word, 0) for word in order}}
+    return (f"{lead} · {facts}" if facts else lead), summary
+
+
+def _from_run(outcome: ShareRun, config: SharingConfig, *, mode: str = "push") -> dict[str, Any]:
     if outcome.preflight:
         return _preflight(outcome.preflight, config, outcome)
     records = [record.as_dict() for record in outcome.records]
     code = outcome.exit_code
     failed = code != 0
-    created = sum(1 for record in outcome.records if record.action == "created")
-    updated = sum(1 for record in outcome.records if record.action == "updated")
-    message = f"Share finished: {len(records)} record(s), {created} created, {updated} updated"
-    return _result(
+    message, summary = share_outcome(mode, outcome)
+    payload = _result(
         message,
         exit_code=code,
         status="failed" if failed else "completed",
         records=records,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    payload["_summary"] = summary
+    if failed:
+        payload["_failure_code"] = _RUN_FAILURE_CODES.get(code, "share_failed")
+    elif mode == "preview":
+        # "Would share …": nothing was sent, so the line takes no ✓.
+        payload["_outcome_kind"] = "plan"
+    return payload
 
 
 def _preflight(
@@ -440,7 +625,7 @@ def _preflight(
     message: str | None = None,
 ) -> dict[str, Any]:
     records = [] if outcome is None else [record.as_dict() for record in outcome.records]
-    return _result(
+    payload = _result(
         message or _PREFLIGHT.get(code, code),
         exit_code=1,
         status="failed",
@@ -448,6 +633,8 @@ def _preflight(
         records=records,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    payload["_failure_code"] = code
+    return payload
 
 
 def _quiet(message: str, config: SharingConfig) -> dict[str, Any]:
@@ -471,13 +658,19 @@ def _targets_payload(config: SharingConfig) -> dict[str, Any]:
         }
         for block in config.blocks
     ]
-    return _result(
-        f"{len(rows)} sharing target(s)",
+    payload = _result(
+        f"{len(rows)} sharing target{'' if len(rows) == 1 else 's'}",
         exit_code=0,
         status="completed",
         targets=rows,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    if not rows:
+        # Not "✓ 0 sharing targets" under an empty table: nothing is set up yet.
+        payload["status"] = "skipped"
+        payload["_outcome"] = _NO_TARGET
+        payload["advice"] = _ADD_TARGET
+    return payload
 
 
 def _result(
@@ -495,8 +688,17 @@ def _result(
     return payload
 
 
-def _failed(message: str, *, exit_code: int) -> dict[str, Any]:
-    return _result(message, exit_code=exit_code, status="failed", error=message)
+def _with_warnings(payload: dict[str, Any], extra: list[str]) -> dict[str, Any]:
+    if extra:
+        payload["warnings"] = [*payload.get("warnings", []), *extra]
+    return payload
+
+
+def _failed(message: str, *, exit_code: int, code: str, argument: str) -> dict[str, Any]:
+    payload = _result(message, exit_code=exit_code, status="failed", error=message)
+    payload["_failure_code"] = code
+    payload["_failure_argument"] = argument
+    return payload
 
 
 def _secrets(blocks: tuple[MispBlock, ...]) -> tuple[str, ...]:

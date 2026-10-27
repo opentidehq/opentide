@@ -8,6 +8,8 @@
     "---Global---",
     "global-options",
     "exit-codes",
+    "json-output",
+    "diagnostics",
     "---Commands---",
     "setup",
     "migrate",
@@ -18,6 +20,9 @@
     "deploy",
     "share",
     "explorer",
-    "info"
+    "info",
+    "tui",
+    "new",
+    "doctor"
   ]
 }

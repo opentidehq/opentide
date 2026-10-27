@@ -81,7 +81,8 @@ def load_document(raw: str | bytes, *, path: Path | None = None) -> TideDocument
         text = raw
     try:
         loaded = yaml.safe_load(text)
-    except yaml.YAMLError:
+    except (yaml.YAMLError, ValueError):
+        # ValueError: a timestamp YAML matches but ``datetime`` refuses (2026-13-45).
         return TideDocument(text, {}, path, "yaml")
     if not isinstance(loaded, dict):
         return TideDocument(text, {}, path, "root")

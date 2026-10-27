@@ -65,26 +65,26 @@ def test_start_missing_mcp_prints_repair_line_on_stderr(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         "opentide.mcp_server.launcher.probe",
         lambda: (
-            "opentide mcp start cannot import mcp.server.fastmcp, but mcp ships as a "
+            "opentide mcp start cannot import mcp.server.mcpserver, but mcp ships as a "
             "base dependency of opentide — this environment is incomplete.\n"
-            "Repair it with:  pip install 'mcp>=1.28.1,<2'\n"
+            "Repair it with:  pip install 'mcp>=2.3,<3'\n"
         ),
     )
     result = runner.invoke(app, ["mcp", "start"])
     assert result.exit_code == 1
-    assert "pip install 'mcp>=1.28.1,<2'" in result.stderr
+    assert "pip install 'mcp>=2.3,<3'" in result.stderr
     assert result.stdout.strip() == ""
     assert "jsonrpc" not in result.stdout
     assert "Traceback" not in result.stderr
 
 
-def test_probe_names_mcp_start_when_fastmcp_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_names_mcp_start_when_mcpserver_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     import importlib
 
     real_import = importlib.import_module
 
     def boom(name: str) -> object:
-        if name == "mcp.server.fastmcp":
+        if name == "mcp.server.mcpserver":
             raise ImportError(name)
         return real_import(name)
 
@@ -92,15 +92,15 @@ def test_probe_names_mcp_start_when_fastmcp_is_missing(monkeypatch: pytest.Monke
     monkeypatch.setattr("opentide.mcp_server.launcher.importlib.import_module", boom)
     text = probe()
     assert text is not None
-    assert text.startswith("opentide mcp start cannot import mcp.server.fastmcp")
-    assert "pip install 'mcp>=1.28.1,<2'" in text
+    assert text.startswith("opentide mcp start cannot import mcp.server.mcpserver")
+    assert "pip install 'mcp>=2.3,<3'" in text
     assert "opentide-mcp" not in text
     # mcp is a base dependency since 0.14.0, so the [mcp] extra is an empty
     # alias: advising it would install nothing and strand the user.
     assert "opentide[mcp]" not in text
 
 
-def test_probe_names_mcp_start_when_mcp_2_replaced_fastmcp(
+def test_probe_names_mcp_start_when_mcp_1_lacks_mcpserver(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import importlib
@@ -108,8 +108,8 @@ def test_probe_names_mcp_start_when_mcp_2_replaced_fastmcp(
     real_import = importlib.import_module
 
     def boom(name: str) -> object:
-        if name == "mcp.server.fastmcp":
-            raise ImportError("server.fastmcp was removed")
+        if name == "mcp.server.mcpserver":
+            raise ImportError("No module named mcp.server.mcpserver")
         return real_import(name)
 
     monkeypatch.setattr("opentide.mcp_server.launcher._package_installed", lambda _name: True)
@@ -117,7 +117,7 @@ def test_probe_names_mcp_start_when_mcp_2_replaced_fastmcp(
     text = probe()
     assert text is not None
     assert text.startswith("opentide mcp start cannot use the installed mcp package")
-    assert "pip install 'mcp>=1.28.1,<2'" in text
+    assert "pip install 'mcp>=2.3,<3'" in text
     assert "opentide-mcp" not in text
     assert "opentide[mcp]" not in text
 
@@ -128,16 +128,17 @@ def test_server_main_forces_json_logging_after_cli_init(
     """The root callback installs Rich logging. start must replace it before run."""
     init_logging(LoggingConfig(json_output=False, plain=False), force=True)
 
-    def fake_run(*, transport: str) -> None:
-        assert transport == "stdio"
+    async def fake_serve() -> None:
         logging.getLogger("opentide.mcp.stdio").warning("mcp_ready")
 
-    monkeypatch.setattr("opentide.mcp_server.server.mcp.run", fake_run)
+    monkeypatch.setattr("opentide.mcp_server.server.serve_stdio", fake_serve)
+    from opentide.cli.ui.mode import OutputMode, get_mode
     from opentide.core.logging.config import current_config
     from opentide.mcp_server.server import main as serve
 
     try:
         serve()
+        assert get_mode() is OutputMode.MCP
         assert current_config().json_output is True
         assert current_config().plain is True
         err = capsys.readouterr().err
@@ -146,3 +147,30 @@ def test_server_main_forces_json_logging_after_cli_init(
     line = next(item for item in err.splitlines() if "mcp_ready" in item)
     payload = json.loads(line)
     assert payload["event"] == "mcp_ready"
+
+
+_STRAY_WRITERS = """
+import subprocess, sys
+from opentide.mcp_server.server import reserve_stdout
+
+with reserve_stdout() as rpc:
+    print("stray print")
+    sys.stdout.flush()
+    subprocess.run([sys.executable, "-c", "print('child process')"], check=True)
+    rpc.write('{"jsonrpc": "2.0"}\\n')
+print("after the server")
+"""
+
+
+def test_reserve_stdout_sends_every_other_writer_to_stderr() -> None:
+    """A print, a Rich console or a child process must not corrupt a JSON-RPC frame."""
+    done = subprocess.run(
+        [sys.executable, "-c", _STRAY_WRITERS],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert done.stdout == '{"jsonrpc": "2.0"}\nafter the server\n'
+    assert "stray print" in done.stderr
+    assert "child process" in done.stderr

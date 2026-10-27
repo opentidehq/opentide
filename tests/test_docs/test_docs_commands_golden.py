@@ -90,8 +90,9 @@ EXECUTABLE_COMMANDS = [command for command in DOC_COMMANDS if _is_executable(com
 
 DOC_OUTPUTS = documented_outputs()
 #: An output sample may also pair with `deploy`: its tests stub the vendor
-#: boundary, so a sample cannot reach a platform API.
-SAMPLE_ROOTS = EXECUTABLE_ROOTS | {"deploy"}
+#: boundary, so a sample cannot reach a platform API. And with `tui`, which
+#: refuses to start without a terminal, as it always is under CliRunner.
+SAMPLE_ROOTS = EXECUTABLE_ROOTS | {"deploy", "tui"}
 
 _TUTORIAL_RULE = Path("objects", "rules", "sentinel-kql-rule.yaml")
 
@@ -115,6 +116,8 @@ REPO_STATES: dict[str, Callable[[Path], None]] = {
         "detection_model: 00000000-0000-4000-8002-000000000001",
         "detection_model: 00000000-0000-4000-8002-DEADBEEF0000",
     ),
+    # A vocabulary value in the wrong case: a safe fix (`validate --fix`).
+    "vocabulary-case": _edit_tutorial_rule("  tlp: clear\n", "  tlp: Clear\n"),
 }
 
 
@@ -345,6 +348,13 @@ CLI_OUTPUT_DIRS = (DOCS / "cli", DOCS / "usage")
         ("  WARNING rule has no author", True),
         ("DEPRECATED opentide x; use opentide y.", True),
         ("FATAL: Validation failed", True),
+        ("✓ Full generation pipeline completed", True),
+        ("! Catalogue lint found issues", True),
+        ("error: Validation failed", True),
+        ("  warning: rule has no author", True),
+        ("Skipped: nothing to deploy", True),
+        ("→ opentide lint --fix", True),
+        ("!important", False),
         ("== Documentation generation ==", True),
         ("OKAY", False),
         ("status: STAGING", False),
@@ -475,13 +485,26 @@ def test_every_documented_command_resolves(command: DocCommand) -> None:
 
 
 @pytest.mark.parametrize(
+    "argv",
+    [
+        ("validate", "--json"),
+        ("setup", "--json", "repo"),
+        ("validate", "query", "--platform", "sentinel", "--quiet", "--no-color", "--debug"),
+    ],
+)
+def test_resolution_accepts_root_flags_after_the_command(argv: tuple[str, ...]) -> None:
+    """``--json`` and the other boolean root flags are hoisted from anywhere before ``--``."""
+    assert resolve(argv) == []
+
+
+@pytest.mark.parametrize(
     ("argv", "fragment"),
     [
         # #202: once emitted into CI templates before it existed; `dev` still does not.
         (("explorer", "dev"), "no subcommand 'dev'"),
-        # #257: --json lives on the root callback only.
-        (("validate", "--json"), "no option '--json'"),
-        (("setup", "--json", "repo"), "no option '--json'"),
+        # Only the boolean root flags are hoisted; value options stay on the root.
+        (("validate", "--repo", "."), "no option '--repo'"),
+        (("validate", "--jsn"), "no option '--jsn'"),
         # A flag that never existed must not quietly pass.
         (("validate", "--strict", "--make-it-work"), "no option '--make-it-work'"),
         (("generate", "nonsense"), "no subcommand 'nonsense'"),
@@ -600,16 +623,25 @@ def documented_repo(
     yield repo
 
 
+#: A duration (``0.9s``, ``12.4s``, ``2m05s``): it differs on every run, so any
+#: duration in a sample matches any duration printed in the same place.
+_DURATION = re.compile(r"\b\d+(?:\.\d+)?s\b|\b\d+m\d{2}s\b")
+
+
+def _comparable(line: str) -> str:
+    return _DURATION.sub("<duration>", line.strip())
+
+
 def _lines_in_order(sample: str, live: str) -> list[str]:
     """Sample lines missing from *live*, matched as whole lines and in order."""
-    live_lines = [line.strip() for line in live.splitlines()]
+    live_lines = [_comparable(line) for line in live.splitlines()]
     missing: list[str] = []
     cursor = 0
     for line in (line.strip() for line in sample.splitlines()):
         if not line:
             continue
         try:
-            cursor = live_lines.index(line, cursor) + 1
+            cursor = live_lines.index(_comparable(line), cursor) + 1
         except ValueError:
             missing.append(line)
     return missing

@@ -146,7 +146,12 @@ def test_run_generate_docs_writes_every_scope_flag_given(monkeypatch: pytest.Mon
     def _run_docs(*, scope: str, **_: object) -> dict[str, object]:
         counts = {"rules": 0, "objectives": 0, "threats": 0}
         counts[scope] = 2
-        return {"message": f"Documentation scope {scope} completed", "counts": counts}
+        # Each scoped run names the same nested object files (#584).
+        return {
+            "message": f"Documentation scope {scope} completed",
+            "counts": counts,
+            "warnings": ["1 object file(s) in subfolders ...: objects/rules/team/x.yaml"],
+        }
 
     run_docs = MagicMock(side_effect=_run_docs)
     monkeypatch.setattr("opentide.documentation.cli.run", run_docs)
@@ -157,3 +162,4 @@ def test_run_generate_docs_writes_every_scope_flag_given(monkeypatch: pytest.Mon
     assert all(call.kwargs["output"] == "out" for call in run_docs.call_args_list)
     assert result["scopes"] == ["rules", "threats"]
     assert result["counts"] == {"rules": 2, "objectives": 0, "threats": 2}
+    assert result["warnings"] == ["1 object file(s) in subfolders ...: objects/rules/team/x.yaml"]

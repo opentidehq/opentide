@@ -164,8 +164,22 @@ def _render(
 def test_render_info_summary_keeps_the_capability_list(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rich read `[deploy, validate]` as a markup tag and printed nothing (#292)."""
     output = _render(monkeypatch, _SUMMARY)
-    assert "enabled=True [deploy, validate]" in output
-    assert "enabled=False [deploy]" in output
+    assert "enabled · deploy, validate" in output
+    assert "disabled · deploy" in output
+    assert "enabled=" not in output
+
+
+def test_render_info_summary_is_columns_not_a_boxed_key_value_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A heavy-box "opentide Info" table with Key/Value headers repeated the outcome's
+    counts as "Parse errors" where the outcome says "load errors" (post-merge run)."""
+    output = _render(monkeypatch, _SUMMARY)
+    for absent in ("opentide Info", "Key", "Parse errors", "┏", "│"):
+        assert absent not in output
+    rows = [" ".join(line.split()) for line in output.splitlines()]
+    assert rows[0].startswith("version ")
+    assert rows[1].startswith("platforms Microsoft Sentinel enabled · deploy, validate")
 
 
 @pytest.mark.parametrize(

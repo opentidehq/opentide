@@ -182,3 +182,50 @@ def test_the_old_registry_class_spelling_still_imports_with_a_warning() -> None:
     with pytest.warns(DeprecationWarning, match="OpenTideRegistry is now OpentideRegistry"):
         old = registry.OpenTideRegistry
     assert old is registry.OpentideRegistry
+
+
+@pytest.mark.parametrize(
+    "module",
+    ["opentide.core.files", "opentide.registry.builder", "opentide.mutation.promotion"],
+)
+def test_module_imports_first_in_a_fresh_interpreter(module: str) -> None:
+    """``import opentide`` no longer loads the registry, so no import order is implied.
+
+    ``opentide.core.files`` and ``opentide.registry`` import each other; a
+    module that reaches ``core.files`` first must still import.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", f"import {module}"],
+        capture_output=True,
+        check=False,
+        text=True,
+        env={**os.environ},
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("package", "name", "loads"),
+    [
+        ("opentide", "Opentide", "opentide.core.registry"),
+        ("opentide.core", "Opentide", "opentide.core.registry"),
+        ("opentide.registry", "RegistryBuilder", "opentide.registry.builder"),
+    ],
+)
+def test_lazy_names_are_listed_without_being_loaded(package: str, name: str, loads: str) -> None:
+    """``dir()`` lists the lazy export for REPL and IDE completion, and loads nothing."""
+    script = f"""
+import sys
+import {package} as package
+
+assert {name!r} in dir(package), dir(package)
+assert {loads!r} not in sys.modules, "dir() loaded {loads}"
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        check=False,
+        text=True,
+        env={**os.environ},
+    )
+    assert result.returncode == 0, result.stderr

@@ -297,7 +297,9 @@ def parents(id: str) -> list:
     parents = []
     parent_mappings = {
         "objective": {"data": "objective", "parent": "threats"},
-        "signal": {"parent": "parent"},
+        # `owner` is the objective a signal is indexed under; the authored
+        # `parent` names a parent signal and is not an objective hop.
+        "signal": {"parent": "owner"},
         "rule": {"parent": "detection_model"},
     }
     if model_type not in parent_mappings:
@@ -329,7 +331,7 @@ _CHILD_RELATION_MAPPINGS: Mapping[str, Mapping[str, Any]] = {
     },
     "objective": {
         "child_types": ["signal", "rule"],
-        "references": ["detection_model", "parent"],
+        "references": ["detection_model", "owner"],
     },
     "signal": {"child_types": ["rule"], "references": ["detection_model"]},
 }
@@ -414,7 +416,7 @@ def _child_relation_index() -> dict[str, dict[str, list[str]]]:
 def _referenced_uuids(value: Any) -> list[str]:
     """Normalise a reference field to the list of UUIDs it names.
 
-    A reference is usually a list, but ``parent`` / ``detection_model`` may be a
+    A reference is usually a list, but ``owner`` / ``detection_model`` may be a
     bare string. The pre-index code tested ``model_id in value``, which on a
     string was a SUBSTRING test; treating it as a single-element list makes that
     an equality test instead. For the UUIDs these fields hold the two agree --
@@ -469,7 +471,7 @@ def get_type(model_uuid: str, mute: bool = False):
         if mute:
             return None
         else:
-            logger.critical("uuid_does_not_exist_in_the_index_of_tide_objects", detail=model_uuid)
+            # Raised, not also logged: the caller reports the exception once.
             raise Exception(f"UUID {model_uuid} does not exist in the catalogue")
     schema = model_body.get("metadata", {}).get("schema")
     if not schema:
@@ -499,13 +501,13 @@ def keep_active_rules(rule_list: list[str]) -> list[str]:
         try:
             mdr_data = Opentide.Models.Index["rule"][mdr]
         except Exception:
-            logger.error("could_not_retrieve_uuid_in_mdr_index", detail=mdr)
+            logger.error("could_not_retrieve_uuid_in_rule_index", detail=mdr)
             continue
         deprecated = False
         for system in mdr_data["configurations"]:
             system_data = mdr_data["configurations"][system]
             if check_status(system_data["status"]) in DEPRECATED_STATUSES:
-                logger.info("skipping_mdr_as_is_in_a_deprecated_status", detail=mdr)
+                logger.info("skipping_rule_as_is_in_a_deprecated_status", detail=mdr)
                 deprecated = True
         if deprecated is False:
             active_rules.append(mdr)
@@ -548,7 +550,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
             else:
                 return techniques
     if model_type == "signal":
-        parent_id = model_body.get("parent")
+        parent_id = model_body.get("owner")
         if not parent_id:
             return []
         elif recursive:

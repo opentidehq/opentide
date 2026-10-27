@@ -205,3 +205,42 @@ def test_resolve_changed_targets_marks_objects_whose_name_changed() -> None:
     mock_closure.assert_called_once_with({"objective-1", "rule-1"}, {"objective-1"})
     assert changed == {"objective-1", "rule-1"}
     assert targets == {"objective-1", "rule-1"}
+
+
+def test_changed_targets_read_only_catalogue_files(tmp_path: Path) -> None:
+    """``docs --changed`` follows the catalogue (#584): direct ``.yaml``/``.yml`` children only.
+
+    A file in a subfolder never has a page, so a change to it (or moving it up
+    into ``objects/rules/``, as the ``nested_object_file`` warning asks) is no
+    changed object, and its baseline name never marks a catalogue object renamed.
+    """
+    from opentide.core.git_baseline import ChangedPath
+    from opentide.documentation.cli import _changed_object_paths_and_uuids
+
+    rules = tmp_path / "objects" / "rules"
+    (rules / "team").mkdir(parents=True)
+    body = "name: Moved Rule\nuuid: rule-moved\n"
+    (rules / "moved.yaml").write_text(body, encoding="utf-8")
+    (rules / "other.yml").write_text("name: Other\nuuid: rule-yml\n", encoding="utf-8")
+    (rules / "team" / "nested.yaml").write_text("name: N\nuuid: rule-nested\n", encoding="utf-8")
+    changes = [
+        ChangedPath(relative=Path(rel), absolute=tmp_path / rel)
+        for rel in (
+            "objects/rules/team/moved.yaml",
+            "objects/rules/moved.yaml",
+            "objects/rules/other.yml",
+            "objects/rules/team/nested.yaml",
+        )
+    ]
+    registry = MagicMock(Index={"paths": {"rule": str(rules)}})
+    with (
+        patch("opentide.core.registry.Opentide", registry),
+        patch("opentide.core.git_baseline.resolve_baseline", return_value=MagicMock(commit="b")),
+        patch("opentide.core.git_baseline.changed_paths", return_value=changes),
+        patch("opentide.documentation.cli._git_stdout", side_effect=OSError("no baseline")),
+    ):
+        paths, uuids, previous = _changed_object_paths_and_uuids(tmp_path)
+
+    assert uuids == {"rule-moved", "rule-yml"}
+    assert paths == {Path("objects/rules/moved.yaml"), Path("objects/rules/other.yml")}
+    assert previous == {}

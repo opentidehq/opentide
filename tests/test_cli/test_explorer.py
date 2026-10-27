@@ -184,7 +184,7 @@ def test_build_reports_json_and_keeps_npx_output_off_stdout(
     payload = assert_json_ok(result)
     repo = tide_corpus_repo.resolve()
     exports = repo / ".opentide" / "exports"
-    assert payload["command"] == "build"
+    assert payload["command"] == "explorer build"
     assert payload["exports_dir"] == str(exports)
     assert payload["output"] == str(repo / "out" / "explorer")
     assert payload["node"] == "v22.11.0"
@@ -339,7 +339,9 @@ def test_version_and_latest_together_are_a_usage_error(invoke_cli) -> None:
     with patch.object(service, "run_generate") as generate:
         result = invoke_cli("explorer", "serve", "--latest", "--version", "0.5.0")
     assert result.exit_code == 2
-    assert "not both" in parse_cli_json(result)["error"]
+    payload = parse_cli_json(result)
+    assert "not both" in payload["error"]
+    assert payload["failure"]["code"] == "usage_error"
     generate.assert_not_called()
 
 
@@ -350,7 +352,10 @@ def test_a_bad_version_fails_before_node_or_export(invoke_cli, monkeypatch) -> N
         patch.object(service, "run_generate") as generate,
     ):
         result = invoke_cli("explorer", "build", "--version", "file:../x")
-    assert result.exit_code == 1
-    assert "--version takes a version" in parse_cli_json(result)["error"]
+    assert result.exit_code == 2
+    payload = parse_cli_json(result)
+    assert "--version takes a version" in payload["error"]
+    assert payload["failure"]["code"] == "usage_invalid_value"
+    assert payload["failure"]["argument"] == "file:../x"
     toolchain.assert_not_called()
     generate.assert_not_called()

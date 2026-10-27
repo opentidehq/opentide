@@ -11,6 +11,9 @@ import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 
+from opentide.core.errors import UserFileError
+from opentide.core.logging.render import readable_event
+
 #: Keys structlog adds to every event; they say nothing about the failure.
 _LOG_BOILERPLATE = frozenset({"event", "logger", "level", "timestamp"})
 
@@ -36,9 +39,42 @@ def describe_exception(exc: BaseException) -> str:
     """Render *exc* as a traceback's last line: ``KeyError: 'tlp'``, not ``'tlp'``."""
     if isinstance(exc, ObjectGenerationError | GenerationPhaseError):
         return str(exc)
+    if _is_validation_error(exc):
+        return _describe_validation_error(exc)
     detail = str(exc).strip()
     name = type(exc).__name__
     return f"{name}: {detail}" if detail else name
+
+
+def _is_validation_error(exc: BaseException) -> bool:
+    from pydantic import ValidationError
+
+    return isinstance(exc, ValidationError)
+
+
+def _describe_validation_error(exc: BaseException) -> str:
+    """One line instead of Pydantic's report, which named the internal model
+    (``DetectionRule_v1_1``), dumped the input and linked errors.pydantic.dev
+    (post-merge end-to-end run of ``generate docs`` on an invalid rule).
+    """
+    from pydantic import ValidationError
+
+    assert isinstance(exc, ValidationError)
+    errors = exc.errors()
+    if not errors:
+        return "an object does not validate; opentide validate shows each finding"
+    first = errors[0]
+    location = ".".join(str(part) for part in first.get("loc", ())) or "the object"
+    message = str(first.get("msg", "is not valid"))
+    message = message[:1].lower() + message[1:]
+    data = first.get("input")
+    name = data.get("name") if isinstance(data, dict) else None
+    subject = f"{name!r}" if isinstance(name, str) and name else "an object"
+    more = f" (and {len(errors) - 1} more)" if len(errors) > 1 else ""
+    return (
+        f"{subject} does not validate: {location}: {message}{more}; "
+        "opentide validate shows each finding"
+    )
 
 
 @contextmanager
@@ -46,7 +82,7 @@ def rendering(uuid: str) -> Generator[None, None, None]:
     """Name the object *uuid* on anything that escapes the block."""
     try:
         yield
-    except ObjectGenerationError:
+    except (ObjectGenerationError, UserFileError):
         raise
     except Exception as exc:
         raise ObjectGenerationError(uuid, exc) from exc
@@ -83,14 +119,13 @@ def _record_key(record: logging.LogRecord) -> object:
 
 
 def _describe_record(record: logging.LogRecord) -> str:
+    """The record as a log line reads: readable text, then ``key: value`` fields."""
     event = record.msg
     if not isinstance(event, dict):
         return " ".join(record.getMessage().split())
-    fields = ", ".join(
-        f"{key}={value}" for key, value in event.items() if key not in _LOG_BOILERPLATE
-    )
-    name = str(event.get("event", "error"))
-    return " ".join((f"{name} ({fields})" if fields else name).split())
+    parts = [readable_event(event.get("event", "error"))]
+    parts.extend(f"{key}: {value}" for key, value in event.items() if key not in _LOG_BOILERPLATE)
+    return " ".join(" · ".join(parts).split())
 
 
 @contextmanager
@@ -105,7 +140,8 @@ def failing_phase(phase: str) -> Generator[None, None, None]:
     root.addHandler(errors)
     try:
         yield
-    except GenerationPhaseError:
+    except (GenerationPhaseError, UserFileError):
+        # A file the user must fix is reported by the CLI where it is.
         raise
     except Exception as exc:
         detail = describe_exception(exc)

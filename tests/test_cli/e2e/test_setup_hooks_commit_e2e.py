@@ -160,9 +160,10 @@ def test_hook_validates_the_worktree_not_opentide_repo_root(
         "the hook validated OPENTIDE_REPO_ROOT instead of the committed worktree; "
         f"broken YAML in {repo} was committed\n{output}"
     )
-    # Flattened: the hook prints the path inside a Rich panel, which wraps a long
-    # absolute path across lines. See _flattened.
-    assert _flattened(str(repo)) in _flattened(output), output
+    # The hook runs in the worktree, so the finding names the broken file
+    # relative to it: a file only the committed worktree has.
+    assert not (other / BROKEN_RELPATH).exists()
+    assert f"{BROKEN_RELPATH}:" in output, output
 
 
 def test_hook_still_honours_the_documented_bypass(

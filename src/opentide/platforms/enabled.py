@@ -34,6 +34,31 @@ def enabled_systems() -> list[str]:
     return enabled
 
 
+def misspelled_enabled_key(system: str) -> tuple[str, str] | None:
+    """``(table, key)`` for a key that misspells ``enabled`` (``enabeld``), or ``None``.
+
+    The merged configuration keeps the bundled ``enabled = false`` beside a
+    workspace's ``enabeld = true``, so a typo there disabled the platform
+    silently and ``validate`` blamed the platform, not the key.
+    """
+    import difflib
+
+    config = resolve_configurations().get("systems", {}).get(system) or {}
+    # `[tide]` is the older spelling of the table `enabled_systems` also reads.
+    for table in ("platform", "tide"):
+        block = config.get(table)
+        if not isinstance(block, dict):
+            continue
+        for key in block:
+            lowered = str(key).lower()
+            if key != "enabled" and (
+                lowered == "enabled"
+                or difflib.SequenceMatcher(None, lowered, "enabled").ratio() >= 0.75
+            ):
+                return table, str(key)
+    return None
+
+
 def enable_platform_command(system: str) -> str:
     """The ``setup platforms`` call that enables *system*.
 

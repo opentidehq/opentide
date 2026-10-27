@@ -16,7 +16,27 @@ opentide setup env --yes
 opentide setup hooks --yes
 ```
 
-The interactive wizard uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
+The interactive wizard opens with the opentide logo and the tagline (the one-line pill in a terminal narrower than 82 columns, and no mark with `--no-color` or `NO_COLOR`), then uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. An empty repository name is refused on screen. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
+
+Every `setup` command, scripted or interactive, ends the same way: the files it wrote, its warnings (each once), one outcome line, and numbered next steps when it created a repository:
+
+```text illustrative
+  objects/{threats,objectives,rules}/                your detection catalogue
+  README.md                                          quick start
+  .gitignore                                         files git leaves out
+  .opentide/configurations/platforms/sentinel.toml   platform configuration
+  .github/workflows/opentide.yml                     GitHub Actions pipeline
+
+warning: This folder is not a git repository yet, so the pipeline targets 'main'; create it on that branch with 'git init -b main', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'.
+✓ Created Tutorial Detections in ./tutorial-detections
+
+Next steps
+  1  cd tutorial-detections
+  2  opentide generate · schemas, templates and editor snippets
+  3  opentide validate · check every object before you commit
+```
+
+This is `opentide setup --yes --name "Tutorial Detections" --platform sentinel --ci github --path tutorial-detections` outside a git repository; it is not captured by the docs harness, which runs no `setup`. `--json` returns the same facts: the outcome under `message`, each step's `files`, and the next steps under `next_actions`.
 
 The wizard needs a terminal and a stdout it can draw on, so it is incompatible with `--json`. Combining the two exits non-zero with a JSON error listing the flags to script instead; see [global options](global-options.md).
 
@@ -84,7 +104,7 @@ Run `setup platforms` before `setup ci` so `validate query` jobs are included. I
 
 Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (GitLab), or pipeline (Azure) scope so `opentide` commands resolve the detection repository in CI. Re-run `setup ci` to refresh existing pipeline files.
 
-The validate job runs `opentide validate --strict` and `opentide lint --strict`. Each enabled platform that supports query validation also runs `opentide validate query --live --changed`, which checks only the rule files the run's pull request, merge request or push changed (see [validate](./validate.md#which-rules-are-checked)), and skips that step when any required credential for the platform is unset. GitHub runs those checks in the validate job. GitLab and Azure run one job per platform in that stage, and generate does not start until they succeed. CrowdStrike and HarfangLab have no query job. Live query validation and the staging deploy first replace the repository root's `.opentide/configurations` with the default branch's copy, so a pull request cannot send a credential to a tenant it added or changed there. A platform with no tenant there yet skips its live query step with exit 0; see [CI/CD](../usage/workflows/ci-cd.md#tenant-configuration-on-pull-requests). The staging job runs a dry-run and then `opentide deploy --strategy PREVIEW --skip-unconfigured`; the production job does the same with `--strategy RELEASE` ([Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md#the-two-generated-jobs)). `--skip-unconfigured` exits 0 when every platform with rules to deploy still has the commented-out `[[tenants]]` block `setup` writes. A `RELEASE` run also disables or deletes changed rules whose status maps to `DISABLEMENT` or `DELETION`. The production job then commits what the deploy wrote back (promoted rule statuses and `.opentide/states/deployment/`) to the default branch with a `[skip ci]` message, also after a deploy that failed part way; see [CI/CD](../usage/workflows/ci-cd.md#production-write-back). The file header lists the credential variables from the bundled platform files. GitHub deploy jobs map each of those names to `secrets.<NAME>`. The GitLab file sets `workflow:rules` so pipelines run for merge requests and the default branch, which every job needs to run in a merge request pipeline. Proxies and private certificate authorities are runner settings, not part of the generated file; see [CI/CD](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
+The validate job runs `opentide validate --strict` and `opentide lint --strict`, each writing its findings as a report under `opentide-reports/`: SARIF on GitHub (kept as an artifact, and sent to code scanning on a public repository by a `code_scanning` job that holds only `security-events: write`) and Azure (the `CodeAnalysisLogs` artifact), Code Quality on GitLab (`artifacts:reports:codequality`). Annotations and job summaries need no step; see [CI/CD](../usage/workflows/ci-cd.md#annotations-summaries-and-reports). Each enabled platform that supports query validation also runs `opentide validate query --live --changed`, which checks only the rule files the run's pull request, merge request or push changed (see [validate](./validate.md#which-rules-are-checked)), and skips that step when any required credential for the platform is unset. GitHub runs those checks in the validate job. GitLab and Azure run one job per platform in that stage, and generate does not start until they succeed. CrowdStrike and HarfangLab have no query job. Live query validation and the staging deploy first replace the repository root's `.opentide/configurations` with the default branch's copy, so a pull request cannot send a credential to a tenant it added or changed there. A platform with no tenant there yet skips its live query step with exit 0; see [CI/CD](../usage/workflows/ci-cd.md#tenant-configuration-on-pull-requests). The staging job runs a dry-run and then `opentide deploy --strategy PREVIEW --skip-unconfigured`; the production job does the same with `--strategy RELEASE` ([Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md#the-two-generated-jobs)). `--skip-unconfigured` exits 0 when every platform with rules to deploy still has the commented-out `[[tenants]]` block `setup` writes. A `RELEASE` run also disables or deletes changed rules whose status maps to `DISABLEMENT` or `DELETION`. The production job then commits what the deploy wrote back (promoted rule statuses and `.opentide/states/deployment/`) to the default branch with a `[skip ci]` message, also after a deploy that failed part way; see [CI/CD](../usage/workflows/ci-cd.md#production-write-back). The file header lists the credential variables from the bundled platform files. GitHub deploy jobs map each of those names to `secrets.<NAME>`. The GitLab file sets `workflow:rules` so pipelines run for merge requests and the default branch, which every job needs to run in a merge request pipeline. Proxies and private certificate authorities are runner settings, not part of the generated file; see [CI/CD](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 
 The Azure pipeline sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. `pr:` is kept for Azure Pipelines hosted on GitHub or Bitbucket. Azure Repos Git ignores `pr:`; add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason.
 
@@ -100,7 +120,7 @@ Positional argument: `github`, `gitlab`, or `azure` (CI **provider**, not Sentin
 
 `setup ci` accepts the same CI flags as the [default callback](#default-callback-flags) (`--staging`, `--inflight`, `--sharing`, `--promotion`, `--promotion-target`, `--python-version`, `--explorer-pages`, `--default-branch`, `--path`, `--yes`), so `opentide setup --ci github --default-branch trunk --yes` and `opentide setup ci github --default-branch trunk --yes` write the same pipeline and print the same `WARNING` lines. The one-shot JSON result lists each step's warnings under `steps[].warnings` and again in the top-level `warnings`.
 
-`--sharing` adds one job, `share`, that runs `opentide share push --changed` after generate on a push to the default branch. Deploy does not wait for it. The flag does not write `sharing.toml` and does not ask for a URL, API key, or block name. The wizard checkbox is "Sharing on the default branch", and it stays unchecked. `--sharing` with `--ci none`, or with no `--ci`, warns and writes no pipeline. A later `setup ci` that leaves the flag off removes the job when it rewrites the pipeline.
+`--sharing` adds one job, `share`, that runs `opentide share push --changed` on a push to the default branch, after the production deploy job and on a checkout of the default branch's tip, so the rules that deploy promoted are shared in the same run ([sharing in CI](../usage/workflows/ci-cd.md)). It runs after a failed deploy too, and a share failure does not affect deploy. The flag does not write `sharing.toml` and does not ask for a URL, API key, or block name. The wizard checkbox is "Sharing on the default branch", and it stays unchecked. `--sharing` with `--ci none`, or with no `--ci`, warns and writes no pipeline. A later `setup ci` that leaves the flag off removes the job when it rewrites the pipeline.
 
 `--default-branch` names the branch that triggers deploys and receives inflight shards. It applies to GitHub and Azure; GitLab pipelines always use `$CI_DEFAULT_BRANCH` and warn that the flag is ignored.
 
@@ -191,7 +211,13 @@ opentide setup skills show opentide-detection-rule
 opentide setup skills show opentide-detection-rule --path /path/to/repo
 ```
 
-JSON output includes `manifest_source` (`remote`) and `manifest_refreshed` when using `--refresh`. Discovery always fetches the live `manifest.json`; there is no packaged catalogue snapshot.
+`discover` prints a table of the skills, each description cut at a word boundary to about 80 characters (`setup skills show <slug>` prints all of it), then one outcome line. The sample is illustrative because the counts come from the live catalogue:
+
+```text illustrative
+✓ 31 skills available · 2 installed · opentidehq/skills@main
+```
+
+With `--query`, the line counts the matches (`3 skills match 'kql'`); `--installed` keeps the skills under `.agents/skills/`. JSON output has `skills`, `count`, `source`, `manifest_source` (`remote`) and `manifest_refreshed`, and `summary` gives `skills` and `installed`. Discovery always fetches the live `manifest.json`; there is no packaged catalogue snapshot.
 
 </Step>
 
@@ -217,11 +243,17 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository path (install, discover, show) |
-| `--cursor` / `--claude-code` / `--generic` / `--github-copilot` | Target harness layouts |
-| `--install` | Skill slug (repeatable) |
-| `--all` | Install full catalogue |
-| `--name`, `--org`, `--description` | Entrypoint metadata |
-| `--refresh` | Re-fetch `manifest.json` from GitHub (`discover` / `show`) |
+| `--cursor` | Copy the skills to `.cursor/skills/` |
+| `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/` |
+| `--generic` | Write `AGENTS.md` for any agent that reads `.agents/skills/` |
+| `--github-copilot` | Write `.github/copilot-instructions.md`, and `AGENTS.md` as `--generic` does |
+| `--install` | Skill slug to install (repeatable); default: `opentide-detection-rule` and `detection-engineering` |
+| `--all` | Install every skill in the catalogue |
+| `--name`, `--org`, `--description` | Heading (default: the folder name), organisation and opening paragraph of the agent files |
+| `--yes` / `-y` | Install without asking |
+| `--query` / `-q` | `discover`: keep skills whose name, slug or description holds the text |
+| `--installed` | `discover`: keep only the skills installed in `.agents/skills/` |
+| `--refresh` | `discover` / `show`: fetch `manifest.json` again rather than reuse the in-process copy from the last 30 seconds; each CLI run fetches it once anyway |
 
 Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 

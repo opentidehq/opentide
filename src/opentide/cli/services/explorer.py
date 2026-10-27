@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal
 import structlog
 
 from opentide.cli.services.generation import run_generate
+from opentide.cli.ui.contract import USAGE_ERROR, USAGE_EXIT_CODE, USAGE_INVALID_VALUE
 from opentide.export.explorer_package import (
     EXPLORER_PACKAGE,
     MIN_NODE_VERSION,
@@ -172,7 +173,13 @@ def run_explorer(
     try:
         spec = package_spec(version)
     except ValueError as exc:
-        return _failure(str(exc), error=str(exc))
+        # A bad --version, or one the environment override would drop: usage errors.
+        return {
+            **_failure(str(exc), error=str(exc)),
+            "_exit_code": USAGE_EXIT_CODE,
+            "_failure_code": USAGE_INVALID_VALUE if version else USAGE_ERROR,
+            "_failure_argument": version,
+        }
     try:
         toolchain = find_node_toolchain()
     except ExplorerToolchainError as exc:
@@ -202,7 +209,6 @@ def run_explorer(
         host=host,
     )
     data: dict[str, object] = {
-        "command": command,
         "package": spec,
         "node": toolchain.node_version,
         "exports_dir": str(exports_dir),

@@ -32,7 +32,7 @@ def test_get_vocab_entry_legacy_identifier() -> None:
 def test_parents_for_signal() -> None:
     signal_uuid = "00000000-0000-4000-8000-000000000060"
     parent_uuid = "00000000-0000-4000-8000-000000000061"
-    signal = {"metadata": {"schema": "signal::1.0"}, "parent": parent_uuid}
+    signal = {"metadata": {"schema": "signal::1.0"}, "owner": parent_uuid}
     with (
         patch("opentide.generation.framework.get_type", return_value="signal"),
         patch.object(fw, "MODELS_INDEX", {"signal": {signal_uuid: signal}}),

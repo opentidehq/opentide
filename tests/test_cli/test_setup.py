@@ -416,7 +416,7 @@ _REAL_STEP_WARNINGS: dict[
     ),
     "mcp-server-unavailable": (
         "mcp",
-        "Repair it with: pip install 'mcp>=1.28.1,<2'",
+        "Repair it with: pip install 'mcp>=2.3,<3'",
         _mcp_server_unavailable,
     ),
 }

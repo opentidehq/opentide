@@ -44,3 +44,11 @@ def test_bytes_and_yaml_failures() -> None:
     root = load_document("- just\n- a\n- list\n", path=None)
     assert root.parse_error == "root"
     assert isinstance(root, TideDocument)
+
+
+def test_an_impossible_date_is_a_parse_error_not_a_crash() -> None:
+    # YAML reads 2026-13-45 as a timestamp, which datetime refuses with a
+    # ValueError; share preview crashed on it (post-merge end-to-end run).
+    document = load_document("name: x\nmetadata:\n  created: 2026-13-45\n")
+    assert document.parse_error == "yaml"
+    assert document.body == {}

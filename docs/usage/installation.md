@@ -66,7 +66,7 @@ uv pip install 'opentide==0.17.2'    # pin the current release
 
 </Tabs>
 
-That installs the **DetectionOps engine**: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, and all eight platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, and all eight platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### MCP server
 
@@ -75,7 +75,7 @@ For agent/MCP hosts, remember the path to this environment's `opentide` binary �
 The base install above already ships the MCP server. There is no extra step:
 
 ```bash
-opentide mcp start        # mcp (>=1.28.1,<2) is a base dependency since 0.14.0
+opentide mcp start        # mcp (>=2.3,<3) is a base dependency since 0.14.0
 ```
 
 An older command such as `pip install 'opentide[mcp]'` still installs opentide: pip and uv warn that the extra does not exist and install the package anyway. Drop the brackets when you next touch it. See [MCP installation](../mcp/installation.md).

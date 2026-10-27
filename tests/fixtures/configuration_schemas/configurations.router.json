@@ -1,0 +1,74 @@
+{
+  "title": "opentide Configuration Router",
+  "description": "Maps a file under .opentide/configurations/ to the JSON Schema that validates it. A file is a partial override: required keys apply to the merge of the bundled file, the workspace file and the parent instance. platforms/*.toml matches a platform file without a dedicated entry.",
+  "files": {
+    "paths.toml": {
+      "schema": "paths.schema.json",
+      "merge": "deep"
+    },
+    "global.toml": {
+      "schema": "paths.schema.json",
+      "merge": "deep"
+    },
+    "deployment.toml": {
+      "schema": "deployment.schema.json",
+      "merge": "deep"
+    },
+    "schema.toml": {
+      "schema": "schema.schema.json",
+      "merge": "deep"
+    },
+    "visibility.toml": {
+      "schema": "visibility.schema.json",
+      "merge": "deep",
+      "schema_id": "visibility::1.0"
+    },
+    "documentation.toml": {
+      "schema": "documentation.schema.json",
+      "merge": "deep"
+    },
+    "sharing.toml": {
+      "schema": "sharing.schema.json",
+      "merge": "by-name",
+      "connectors": {
+        "misp": "sharing::misp::1.0"
+      }
+    },
+    "platforms/sentinel.toml": {
+      "schema": "platforms.sentinel.schema.json",
+      "merge": "deep"
+    },
+    "platforms/splunk.toml": {
+      "schema": "platforms.splunk.schema.json",
+      "merge": "deep"
+    },
+    "platforms/carbon_black_cloud.toml": {
+      "schema": "platforms.carbon_black_cloud.schema.json",
+      "merge": "deep"
+    },
+    "platforms/sentinel_one.toml": {
+      "schema": "platforms.sentinel_one.schema.json",
+      "merge": "deep"
+    },
+    "platforms/defender_for_endpoint.toml": {
+      "schema": "platforms.defender_for_endpoint.schema.json",
+      "merge": "deep"
+    },
+    "platforms/crowdstrike.toml": {
+      "schema": "platforms.crowdstrike.schema.json",
+      "merge": "deep"
+    },
+    "platforms/harfanglab.toml": {
+      "schema": "platforms.harfanglab.schema.json",
+      "merge": "deep"
+    },
+    "platforms/elastic.toml": {
+      "schema": "platforms.elastic.schema.json",
+      "merge": "deep"
+    },
+    "platforms/*.toml": {
+      "schema": "platforms.schema.json",
+      "merge": "deep"
+    }
+  }
+}

@@ -6,12 +6,13 @@ import typer
 
 from opentide.cli.context import get_context
 from opentide.cli.output import emit_error, emit_success
-from opentide.cli.services.explorer import run_explorer
+from opentide.cli.ui.contract import USAGE_ERROR, USAGE_EXIT_CODE
 from opentide.export.explorer_package import DEFAULT_EXPLORER_VERSION, EXPLORER_PACKAGE
 
 explorer_app = typer.Typer(
     help=(
-        "Corpus explorer: export the corpus, then build or serve it with the "
+        "Build or serve the corpus explorer\n\n"
+        "Exports the corpus, then builds it with the "
         f"{EXPLORER_PACKAGE} npm package (latest release unless --version names one). "
         "Needs Node.js 20.19+ on PATH."
     ),
@@ -25,7 +26,12 @@ _LATEST_HELP = f"Run the latest {EXPLORER_PACKAGE} release (the default)"
 def _package_version(ctx: typer.Context, version: str | None, latest: bool) -> str | None:
     """``None`` for the default, else what was asked for; both at once is refused."""
     if version is not None and latest:
-        emit_error(get_context(ctx), "Pass --version or --latest, not both", exit_code=2)
+        emit_error(
+            get_context(ctx),
+            "Pass --version or --latest, not both",
+            exit_code=USAGE_EXIT_CODE,
+            code=USAGE_ERROR,
+        )
     return DEFAULT_EXPLORER_VERSION if latest else version
 
 
@@ -43,7 +49,9 @@ def explorer_build(
     version: str | None = typer.Option(None, "--version", help=_VERSION_HELP),
     latest: bool = typer.Option(False, "--latest", help=_LATEST_HELP),
 ) -> None:
-    """Run `generate explorer`, then build the static explorer site."""
+    """Export the corpus and build the static explorer site"""
+    from opentide.cli.services.explorer import run_explorer
+
     cli = get_context(ctx)
     package_version = _package_version(ctx, version, latest)
     result = run_explorer(cli, "build", output=output, base_path=base_path, version=package_version)
@@ -61,7 +69,9 @@ def explorer_serve(
     version: str | None = typer.Option(None, "--version", help=_VERSION_HELP),
     latest: bool = typer.Option(False, "--latest", help=_LATEST_HELP),
 ) -> None:
-    """Run `generate explorer`, build the explorer, and serve it until Ctrl-C."""
+    """Export, build and serve the explorer until Ctrl-C"""
+    from opentide.cli.services.explorer import run_explorer
+
     cli = get_context(ctx)
     package_version = _package_version(ctx, version, latest)
     result = run_explorer(

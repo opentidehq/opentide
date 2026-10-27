@@ -3,24 +3,41 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+import shlex
+from collections.abc import Mapping, Sequence
+from contextlib import nullcontext
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
 from opentide.cli.enums import QUERY_VALIDATION_PLATFORMS, ValidateCheck
-from opentide.core.logging.config import get_stdout_console
-from opentide.core.logging.console import emit_section
+from opentide.cli.ui.contract import (
+    ISSUES_FOUND,
+    NO_WORKSPACE_STEP,
+    USAGE_ERROR,
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+    NextAction,
+)
+from opentide.cli.ui.diagnostics import (
+    Diagnostic,
+    annotate_report,
+    explain_command,
+    relative_path,
+)
+from opentide.cli.ui.fixes import FixPlan, plan_fixes
+from opentide.cli.ui.glyphs import glyph
+from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
-from opentide.validation.errors import format_issues_for_console
+from opentide.validation.configuration import CONFIGURATION_OBJECT_TYPE
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.cli.services.validation")
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from opentide.cli.context import CliContext
     from opentide.deployment.git_repo import RuleScope
     from opentide.models.deployment_enums import RunStrategies
@@ -54,6 +71,7 @@ def _checks_for(check: ValidateCheck | None) -> frozenset[ValidateCheck]:
                 ValidateCheck.id_uniqueness,
                 ValidateCheck.uuid_format,
                 ValidateCheck.schema,
+                ValidateCheck.configuration,
             }
         )
     return frozenset({check})
@@ -100,6 +118,7 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "config_enum_unknown",
             "chaining_relation_unknown",
             "external_id_in_rule",
+            "external_id_shape",
             "deployment_state_uuid_mismatch",
             "deployment_state_platform",
             "deployment_state_shape",
@@ -122,14 +141,53 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "rule_status_unknown",
         }
     ),
+    # Shares codes with sharing-config; `_issues_for_check` tells them apart by
+    # object type. The responder variants of these codes are warnings.
+    ValidateCheck.configuration.value: frozenset(
+        {
+            "missing_field",
+            "unknown_key",
+            "schema_validation",
+            "promotion_target_unknown",
+            "config_parse",
+            # Reported by the per-file helper an editor calls, not by `validate`.
+            "identifier_mismatch",
+        }
+    ),
 }
+
+#: Warning codes each check can report. They never fail the check's status.
+_CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
+    ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
+    ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_connector"}),
+    ValidateCheck.configuration.value: frozenset({"asset_unknown", "not_a_configuration_file"}),
+    ValidateCheck.cve.value: frozenset({"cve_lookup_unavailable"}),
+}
+
+#: Every code a ``validate`` finding can carry. ``tests/test_cli/test_explain.py``
+#: requires an ``opentide explain`` page for each, and fails on a code emitted
+#: in the source but missing here.
+VALIDATION_CODES: frozenset[str] = frozenset(
+    # ``nested_object_file`` (#584) belongs to no check: every run reports it.
+    {"scope_no_match", "nested_object_file"}.union(
+        *_CHECK_ISSUE_CODES.values(), *_CHECK_WARNING_CODES.values()
+    )
+)
 
 _OBJECT_CHECKS = frozenset({ValidateCheck.uuid_format.value, ValidateCheck.schema.value})
 
 
 def _issues_for_check(issues: list[ValidationIssue], check_name: str) -> list[ValidationIssue]:
+    # Configuration findings share codes (`unknown_key`, `missing_field`) with
+    # sharing-config; the object type tells them apart.
+    if check_name == ValidateCheck.configuration.value:
+        return [issue for issue in issues if issue.object_type == CONFIGURATION_OBJECT_TYPE]
     codes = _CHECK_ISSUE_CODES.get(check_name, frozenset())
-    matched = [issue for issue in issues if issue.code in codes]
+    matched = [
+        issue
+        for issue in issues
+        if issue.code in codes and issue.object_type != CONFIGURATION_OBJECT_TYPE
+    ]
     if check_name in _OBJECT_CHECKS and any(issue.code == "scope_no_match" for issue in issues):
         matched.extend(issue for issue in issues if issue.code == "scope_no_match")
     return matched
@@ -150,6 +208,7 @@ DEFAULT_CHECK_NAMES: tuple[str, ...] = (
     ValidateCheck.id_uniqueness.value,
     ValidateCheck.uuid_format.value,
     ValidateCheck.schema.value,
+    ValidateCheck.configuration.value,
 )
 
 
@@ -189,7 +248,12 @@ def run_validate_all(*, scope: ValidationScope | None = None) -> dict[str, objec
     _reset_validation_env()
     report = run_validation(scope=scope or ValidationScope.full())
     results: dict[str, object] = {}
-    for check in (ValidateCheck.id_uniqueness, ValidateCheck.uuid_format, ValidateCheck.schema):
+    for check in (
+        ValidateCheck.id_uniqueness,
+        ValidateCheck.uuid_format,
+        ValidateCheck.schema,
+        ValidateCheck.configuration,
+    ):
         check_issues = _issues_for_check(report.issues, check.value)
         results[check.value] = {
             "check": check.value,
@@ -209,17 +273,27 @@ def run_validate(
     uuids: list[str] | None = None,
     object_types: list[str] | None = None,
 ) -> dict[str, object]:
-    """Entry point for validate command."""
-    ctx.apply_environment()
-    _reset_validation_env()
+    """Entry point for validate command.
 
+    Besides the JSON document, the result carries ``_diagnostics`` (one
+    :class:`Diagnostic` per issue and warning, for the code frames) and
+    ``_summary``; the command pops both before rendering.
+    """
     file_list = list(files or [])
     if file:
         file_list.append(file)
     scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
     checks = _checks_for(check)
-
-    report = run_validation(scope=scope, checks=checks)
+    # The schema check turns each unreadable object file into a yaml_parse or
+    # missing_uuid diagnostic, so the registry need not also log it. Any other
+    # check would not report the file at all: then the log line stays.
+    reported = (
+        parse_errors_reported_by_caller() if ValidateCheck.schema in checks else nullcontext()
+    )
+    with reported:
+        ctx.apply_environment()
+        _reset_validation_env()
+        report = run_validation(scope=scope, checks=checks)
     if not report.ok:
         os.environ["VALIDATION_ERROR_RAISED"] = "1"
 
@@ -233,18 +307,7 @@ def run_validate(
         result["check"] = check.value
     workspace = discover_workspace()
     result["workspace"] = str(workspace)
-
-    if not ctx.json_output and report.issues:
-        from rich.panel import Panel
-        from rich.text import Text
-
-        get_stdout_console().print(
-            Panel(
-                Text(format_issues_for_console(report.issues)),
-                title="[bold red]Validation issues[/]",
-                border_style="red",
-            )
-        )
+    diagnostics = _annotate_report(result, report, workspace)
 
     from opentide.cli.exit_codes import validation_outcome
 
@@ -256,8 +319,15 @@ def run_validate(
         # Not a failure: an empty catalogue exits 0, even under --strict. The
         # path is what exposes a run that looked in the wrong directory.
         result["message"] = (
-            f"Validation passed, but no detection objects were found under {workspace}"
+            "Validation passed, but no detection objects were found under "
+            + _shown_directory(workspace)
         )
+        from opentide.core.root import is_workspace_root
+
+        if not is_workspace_root(workspace):
+            # Outside any workspace the pass says nothing about a catalogue
+            # (post-merge end-to-end run): point at the command that makes one.
+            result["_next_actions"] = [NO_WORKSPACE_STEP]
     else:
         result["message"] = "Validation passed"
     warnings = ["Validation reported warnings"] if outcome.warned else []
@@ -265,7 +335,239 @@ def run_validate(
     if warnings:
         result["warnings"] = warnings
     result["_exit_code"] = outcome.exit_code
+    if outcome.failed:
+        result["_failure_code"] = ISSUES_FOUND
+        result["_next_actions"] = _failure_next_actions(ctx, diagnostics)
+    plan = plan_fixes(diagnostics)
+    result["_summary"] = {**_summary(report, diagnostics), "fixable": len(plan.changes)}
+    result["_diagnostics"] = diagnostics
+    result["_fix_plan"] = plan
+    if plan:
+        # Applying the safe fixes comes first; a failed run's explain and
+        # validate-again steps follow it.
+        result["_next_actions"] = [
+            NextAction(
+                fix_command(check=check, files=file_list, uuids=uuids, object_types=object_types),
+                _apply_reason(len(plan.changes)),
+            ),
+            *cast(list[NextAction], result.get("_next_actions", [])),
+        ]
     return result
+
+
+def run_validate_fix(
+    ctx: CliContext,
+    *,
+    dry_run: bool = False,
+    check: ValidateCheck | None = None,
+    strict: bool = False,
+    files: list[str] | None = None,
+    uuids: list[str] | None = None,
+    object_types: list[str] | None = None,
+) -> dict[str, object]:
+    """``validate --fix``: apply every safe fix, then validate again.
+
+    The result is the second run's, plus ``fixed`` (one entry per value
+    replaced) and ``summary.fixed``. With *dry_run* nothing is written: the
+    result is the first run's, plus ``would_fix`` and ``diff``.
+    """
+    scope: dict[str, Any] = {
+        "check": check,
+        "strict": strict,
+        "files": files,
+        "uuids": uuids,
+        "object_types": object_types,
+    }
+    result = run_validate(ctx, **scope)
+    plan = cast(FixPlan, result["_fix_plan"])
+    if dry_run:
+        result["would_fix"] = [change.to_dict() for change in plan.changes]
+        result["diff"] = plan.diff()
+        if plan:
+            # The same command without --dry-run applies them.
+            result["_next_actions"] = [
+                NextAction(
+                    fix_command(check=check, files=files, uuids=uuids, object_types=object_types),
+                    _apply_reason(len(plan.changes)),
+                )
+            ]
+        return result
+    unwritten: list[str] = []
+    planned = len(plan.changes)
+    if plan:
+        plan, unwritten = plan.write()
+        # run_validate rebuilds the registry, so it reads the files just written.
+        result = run_validate(ctx, **scope)
+        # A fix this run could not apply would not apply on the next one either.
+        remaining = [
+            action
+            for action in cast(list[Any], result.pop("_next_actions", []))
+            if not _is_fix_action(action)
+        ]
+        if remaining:
+            result["_next_actions"] = remaining
+    if unwritten:
+        warnings = cast(list[str], result.setdefault("warnings", []))
+        warnings.extend(f"Could not write the fix to {line}" for line in unwritten)
+        result["_unwritten"] = unwritten
+        result["_unwritten_fixes"] = planned - len(plan.changes)
+    summary = cast(dict[str, int], result["_summary"])
+    summary["fixed"] = len(plan.changes)
+    result["fixed"] = [change.to_dict() for change in plan.changes]
+    result["_fixed"] = plan
+    return result
+
+
+def _is_fix_action(action: NextAction | dict[str, object]) -> bool:
+    command = action.command if isinstance(action, NextAction) else action.get("command")
+    return str(command).startswith("opentide validate --fix")
+
+
+def _apply_reason(count: int) -> str:
+    return f"apply {count} safe fix" if count == 1 else f"apply {count} safe fixes"
+
+
+def fix_command(
+    *,
+    check: ValidateCheck | None = None,
+    files: Sequence[str] | None = None,
+    uuids: Sequence[str] | None = None,
+    object_types: Sequence[str] | None = None,
+) -> str:
+    """``opentide validate --fix`` with the scope of the run that found the fixes."""
+    words = ["opentide", "validate", "--fix"]
+    if check is not None:
+        words += ["--check", check.value]
+    for flag, values in (("--file", files), ("--uuid", uuids), ("--type", object_types)):
+        for value in values or ():
+            words += [flag, value]
+    return shlex.join(words)
+
+
+def _shown_directory(path: Path) -> str:
+    """*path* as ``./sub`` (or ``./``) inside the current directory, ``../..`` above it.
+
+    Anywhere else it stays absolute.
+    """
+    cwd = Path.cwd()
+    shown = relative_path(path, cwd)
+    if not Path(shown).is_absolute():
+        return "./" if shown == "." else f"./{shown}"
+    if relative_path(cwd, path) != cwd.as_posix():
+        return os.path.relpath(path, cwd) + "/"
+    return shown
+
+
+def _failure_next_actions(ctx: CliContext, diagnostics: Sequence[Diagnostic]) -> list[NextAction]:
+    """What to run after a failed validation: the first finding's page, then validate again.
+
+    The same two steps MCP's ``validation_report`` gives. Errors come before
+    warnings, so a run that fails on errors points at an error.
+    """
+    ordered = sorted(diagnostics, key=lambda item: item.severity != "error")
+    actions: list[NextAction] = []
+    if ordered:
+        code = ordered[0].code
+        actions.append(NextAction(explain_command(code), "how to fix it"))
+    rerun = "opentide --json validate" if ctx.json_output else "opentide validate"
+    actions.append(NextAction(rerun, "check again"))
+    return actions
+
+
+def _annotate_report(
+    result: dict[str, object], report: ValidationReport, workspace: Path
+) -> list[Diagnostic]:
+    """Add the diagnostic fields to each JSON issue and warning; return the diagnostics."""
+    return annotate_report(cast(dict[str, Any], result["report"]), report, workspace=workspace)
+
+
+def _summary(report: ValidationReport, diagnostics: Sequence[Diagnostic]) -> dict[str, int]:
+    """Counts behind the outcome line.
+
+    ``files`` counts the files with an error; ``warning_files`` those with a
+    warning (a file can be in both).
+    """
+
+    def files_with(severity: str) -> int:
+        return len(
+            {
+                item.path
+                for item in diagnostics
+                if item.path is not None and item.severity == severity
+            }
+        )
+
+    return {
+        "objects": int(report.stats.get("objects_checked") or 0),
+        "errors": len(report.errors),
+        "warnings": len(report.warnings),
+        "files": files_with("error"),
+        "warning_files": files_with("warning"),
+    }
+
+
+def plural(count: int, noun: str) -> str:
+    """``1 error``, ``2 errors``."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def validate_outcome_line(
+    summary: Mapping[str, int],
+    *,
+    failed: bool,
+    seconds: float,
+    fix: str | None = None,
+) -> str:
+    """``3 objects valid · 0.9s`` or ``2 errors in 1 file · 3 objects checked · 0.9s``.
+
+    *fix* is what ``--fix`` did (``Fixed 3 values in 2 files``): it leads a
+    passing line and follows the count of a failing one. Without it, a run
+    with safe fixes says ``3 fixable with --fix``.
+    """
+    sep = f" {glyph('separator')} "
+    objects = plural(summary.get("objects", 0), "object")
+    errors, warnings = summary.get("errors", 0), summary.get("warnings", 0)
+    fixable = summary.get("fixable", 0)
+    took = f"{seconds:.1f}s"
+    if not failed and not summary.get("objects"):
+        # A check that reads no object (id-uniqueness, cve, sharing-config).
+        return f"Validation passed{sep}{took}"
+    hint = f"{sep}{fixable} fixable with --fix" if fixable and fix is None else ""
+    if not failed:
+        line = f"{objects} valid"
+        if warnings:
+            line += f"{sep}{plural(warnings, 'warning')}"
+        line += hint
+        if fix:
+            line = f"{fix}{sep}{line}"
+        return f"{line}{sep}{took}"
+    # Under --strict a run can fail on warnings alone; count where they are.
+    if errors:
+        counted, files = plural(errors, "error"), summary.get("files", 0)
+    else:
+        counted, files = plural(warnings, "warning"), summary.get("warning_files", 0)
+    where = f" in {plural(files, 'file')}" if files else ""
+    done = f"{sep}{fix[0].lower()}{fix[1:]}" if fix else ""
+    checked = f"{sep}{objects} checked" if summary.get("objects") else ""
+    return f"{counted}{where}{done}{hint}{checked}{sep}{took}"
+
+
+def fix_phrase(count: int, files: int, *, dry_run: bool = False, unwritten: int = 0) -> str:
+    """``Fixed 3 values in 2 files``, ``Would fix 1 value in 1 file``, ``No safe fix to apply``.
+
+    *unwritten* counts the fixes whose file could not be written:
+    ``Could not write 1 fix``, or ``Fixed 1 value in 1 file · could not write 1 fix``.
+    """
+    failed = (
+        f"could not write {unwritten} fix"
+        if unwritten == 1
+        else f"could not write {unwritten} fixes"
+    )
+    if not count:
+        return failed.capitalize() if unwritten else "No safe fix to apply"
+    verb = "Would fix" if dry_run else "Fixed"
+    done = f"{verb} {plural(count, 'value')} in {plural(files, 'file')}"
+    return f"{done} {glyph('separator')} {failed}" if unwritten else done
 
 
 def _exempt_warning_lines(report: ValidationReport) -> list[str]:
@@ -331,7 +633,9 @@ def _live_required_result(platform: str) -> dict[str, object]:
         "supported": True,
         "status": "failed",
         "message": "Query validation checks the tenant. Re-run with --live.",
-        "_exit_code": 1,
+        "_exit_code": 2,
+        "_failure_code": USAGE_MISSING_OPTION,
+        "_failure_argument": "--live",
     }
 
 
@@ -343,6 +647,7 @@ def _query_scope_refused(platform: str, message: str, *, exit_code: int) -> dict
         "supported": True,
         "message": message,
         "_exit_code": exit_code,
+        **({"_failure_code": USAGE_ERROR} if exit_code == 2 else {}),
     }
 
 
@@ -464,11 +769,21 @@ def validate_query_platform(
     failed = {"platform": platform, "mode": "live", "status": "failed", "supported": True}
     removed = removed_plan_error()
     if removed is not None:
-        return {**failed, "message": removed, "_exit_code": 2}
+        return {
+            **failed,
+            "message": removed,
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_VALUE,
+        }
     try:
         run = resolve_run_strategies(strategies) if strategies else DEPLOYABLE_STRATEGIES
     except ValueError as exc:
-        return {**failed, "message": str(exc), "_exit_code": 2}
+        return {
+            **failed,
+            "message": str(exc),
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_CHOICE,
+        }
     rule_scope, scope_label, refusal = _query_rule_scope(
         platform, changed=changed, files=files, uuids=uuids
     )
@@ -634,6 +949,7 @@ def _no_tenant_reached(platform: str, strategies: Sequence[Any], rules: int) -> 
             "tenants; and a rule's tenants list must name a tenant configured for this platform"
         ),
         "_exit_code": 2,
+        "_failure_code": "no_tenant_reached",
     }
 
 
@@ -677,46 +993,61 @@ def _run_live_validator(
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["tide"]["name"]
     except Exception:
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
-    emit_section(f"Query Validation - {system_name}")
+    from opentide.cli.ui.progress import Checklist
+
     validator = cast(Any, query_validators[platform])
-    # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
-    # was retried exists on no engine, and its own TypeError hid the real one.
-    try:
-        validator.validate(mdr_deployment=rules, strategies=strategies)
-    except ModuleNotFoundError as exc:
-        return _missing_sdk_result(platform, exc)
-    except TenantUnreachableError as exc:
-        return _unreachable_tenant_result(exc)
-    except ValueError as exc:
-        # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
-        return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
-            "message": str(exc),
-            "_exit_code": 1,
-        }
-    except Exception as exc:
-        detail = str(exc).strip()
-        error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
-        logger.error("query_validation_failed", system=platform, detail=error)
-        return {
-            "platform": platform,
-            "mode": "live",
-            "status": "failed",
-            "supported": True,
-            **counts,
-            "message": f"Query validation for {platform} failed: {error}",
-            "_exit_code": 1,
-        }
+    early: dict[str, object] | None = None
+    with (
+        Checklist(total=1) as checklist,
+        checklist.step(f"{system_name} queries", unit="rule") as step,
+    ):
+        step.done(len(rules))
+        # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
+        # was retried exists on no engine, and its own TypeError hid the real one.
+        try:
+            validator.validate(mdr_deployment=rules, strategies=strategies)
+        except ModuleNotFoundError as exc:
+            early = _missing_sdk_result(platform, exc)
+        except TenantUnreachableError as exc:
+            early = _unreachable_tenant_result(exc)
+        except ValueError as exc:
+            # Unsubstituted ``$VAR`` credentials raise before the vendor client runs.
+            early = {
+                "platform": platform,
+                "mode": "live",
+                "status": "failed",
+                "supported": True,
+                "message": str(exc),
+                "_exit_code": 1,
+            }
+        except Exception as exc:
+            detail = str(exc).strip()
+            error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+            logger.error("query_validation_failed", system=platform, detail=error)
+            early = {
+                "platform": platform,
+                "mode": "live",
+                "status": "failed",
+                "supported": True,
+                **counts,
+                "message": f"Query validation for {platform} failed: {error}",
+                "_exit_code": 1,
+            }
+        if early is not None:
+            step.status = "skipped" if early.get("status") == "skipped" else "failed"
+    if early is not None:
+        return early
     from opentide.cli.exit_codes import validation_outcome
+    from opentide.cli.ui.progress import plural
 
     outcome = validation_outcome()
+    queries = sum(reach.values())
+    # The validators report a rejection as a run flag, not per query, so a
+    # failure counts what was checked rather than what was rejected.
     message = (
-        f"Query validation failed for {platform}"
+        f"Queries rejected on {platform} · {queries} checked on {plural(len(reach), 'tenant')}"
         if outcome.failed
-        else f"Query validation passed for {platform}"
+        else f"{plural(queries, 'query', 'queries')} valid on {plural(len(reach), 'tenant')}"
     )
     result: dict[str, object] = {
         "platform": platform,
@@ -725,6 +1056,7 @@ def _run_live_validator(
         "supported": True,
         **counts,
         "message": message,
+        "_summary": {"queries": queries, "tenants": len(reach)},
         "_exit_code": outcome.exit_code,
     }
     if outcome.failed:
