@@ -375,6 +375,15 @@ class ElasticSetup(TenantSetup):
     suppression: bool | EnvPlaceholder = Field(
         default=True, description="Apply alert suppression settings."
     )
+    version: str | None = Field(
+        default=None,
+        pattern=r"^(?:[0-9]+\.[0-9]+|serverless)$",
+        description=(
+            "Stack version the tenant runs, MAJOR.MINOR (8.19, 9.5) or serverless. "
+            "Editors check ES|QL against the lowest version a rule targets; "
+            "unset means the 8.19 floor."
+        ),
+    )
 
 
 class ElasticTenant(TenantBase):

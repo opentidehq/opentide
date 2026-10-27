@@ -348,6 +348,53 @@ def test_make_deploy_plan_with_no_rules_is_empty(
     assert make_deploy_plan(strategies, all_files=True) == {}
 
 
+_NO_PLATFORM_BLOCKS = {
+    # What `opentide new rule` writes without --platform: the key holds a comment only.
+    "null.yaml": "name: No blocks\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000a1\n"
+    "configurations:\n  # Other platforms: copy a block\n",
+    "missing.yaml": "name: No key\nmetadata:\n  uuid: 00000000-0000-4000-8000-0000000000a2\n",
+}
+
+
+def _write_rules_without_platform_blocks(rules: Path) -> list[Path]:
+    rules.mkdir(parents=True, exist_ok=True)
+    for name, text in _NO_PLATFORM_BLOCKS.items():
+        (rules / name).write_text(text, encoding="utf-8")
+    return [rules / name for name in _NO_PLATFORM_BLOCKS]
+
+
+@pytest.mark.parametrize("strategies", _RUNS)
+def test_make_deploy_plan_skips_a_rule_without_platform_blocks(
+    catalogue: Path, strategies: tuple[StatusStrategy, ...]
+) -> None:
+    """An empty or absent ``configurations`` failed the whole deploy (TypeError, KeyError)."""
+    from opentide.deployment import make_deploy_plan
+
+    expected = make_deploy_plan(strategies, all_files=True)
+    _write_rules_without_platform_blocks(catalogue / "objects" / "rules")
+    assert make_deploy_plan(strategies, all_files=True) == expected
+
+
+def test_promotion_skips_a_rule_without_platform_blocks(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A RELEASE run promotes the changed rules first, and crashed on the same file."""
+    from opentide.mutation import promotion
+
+    monkeypatch.setattr(promotion, "DEBUG", False)
+    monkeypatch.setattr(promotion, "PROMOTION_ENABLED", True)
+    monkeypatch.setattr(promotion, "PROMOTION_TARGET", promotion.VALID_STATUSES[-1])
+    edited: list[Path] = []
+    monkeypatch.setattr(
+        promotion.PromoteMDR,
+        "edit_mdr_statuses",
+        lambda self, mdr_path, status_to_promote: edited.append(mdr_path),
+    )
+    rules = _write_rules_without_platform_blocks(workspace / "objects" / "rules")
+    promotion.PromoteMDR().promote(rules)
+    assert edited == []
+
+
 def test_debug_promotion_without_rules_folder_promotes_nothing(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

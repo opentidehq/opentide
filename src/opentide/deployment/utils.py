@@ -235,7 +235,8 @@ def make_deploy_plan(
         if (problem := root_mapping_problem(data)) is not None:
             raise _object_file_error(Path(rule), problem)
         name = data["name"]
-        conf_data = data["configurations"]
+        # `opentide new rule` without --platform leaves the key empty (None).
+        conf_data = data.get("configurations") or {}
         mdr_uuid = object_uuid(data)
         selected: list[str] = []
 
