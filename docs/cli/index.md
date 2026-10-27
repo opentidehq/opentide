@@ -9,7 +9,7 @@ icon: Terminal
 The `opentide` command is a [Typer](https://typer.tiangolo.com/) application included in the core package:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.18.0'
 ```
 
 Run `opentide --help` for the live command tree.
@@ -96,7 +96,7 @@ opentide --json commands
 ```json illustrative
 {
   "program": "opentide",
-  "version": "0.17.2",
+  "version": "0.18.0",
   "global_options": [
     {
       "name": "repo",

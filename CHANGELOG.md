@@ -6,7 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
-**Regenerate CI** with `opentide setup ci <github|gitlab|azure> --yes` if the pipeline was written with `--sharing`.
+## [0.18.0] — 2026-10-27
+
+Minor release: configuration files are now validated, rule `severity` moves to the alert labels, and new commands arrive (`new`, `doctor`, `tui`, `explain`, `commands`, `info vocab`, `validate --fix` and `--watch`). It is a minor because files that loaded under 0.17.2 can now fail, and because the CLI's human and JSON output changed. After upgrading:
+
+- **Run `opentide validate`.** An unknown key or a wrong type in `.opentide/configurations/` now fails every command that reads the file and names the file and the key. Two cases seen while preparing this release: a Splunk tenant's `schedule_offset = "5"` must be the number `5`, and a `documentation.toml` that `opentide migrate` carried over from CoreTIDE must drop `skip_vocabularies`, `model_cover_pages` and `[titles]`. A rule whose top-level `severity` is an incident-scale value (`Substantial incident`) must use an alert label (`High`).
+- **Regenerate CI** with `opentide setup ci <github|gitlab|azure> --yes`. The pipeline then keeps SARIF and Code Quality reports, and a pipeline written with `--sharing` shares a rule after the production deploy has promoted it.
+- **Run `opentide generate`** to refresh schemas and templates, and `opentide setup skills` to refresh agent instruction files.
+- **Move a pin of `mcp` 1.x** to `mcp>=2.3,<3`. `opentide mcp start` needs `mcp` 2.x.
 
 Every configuration file under `.opentide/configurations/` in the configuration specification now has a Pydantic model (`lint.toml` keeps its own loader), and the CLI validates the merged file against it when it reads the file (#374). A misspelt or unknown key that was silently ignored now fails the command that reads the file, naming the file and the key: `deployment.toml is invalid: promotion.enabeld: unknown key`. `opentide validate` runs the same check by default (`configuration`), so run it after upgrading to find any.
 
@@ -182,7 +189,6 @@ Every configuration file under `.opentide/configurations/` in the configuration 
 - **`validate` crashed on a `threat:` or `objective:` block whose keys are all commented out,** and on a YAML parse error recorded without an object type. Both are now reported as issues.
 - **A Defender block without `scope` passed validation, then broke loading of every rule.**
 - **The `uuid-format` check accepted any UUID** (v1, v5, nil, braced, unhyphenated). It now requires a hyphenated version-4 UUID.
-- **Duplicate signal UUIDs were never reported;** a copied objective silently took over its original's signals.
 - **An unreachable CVE lookup passed silently, even with `--strict`.** It is now a `cve_lookup_unavailable` warning.
 - **A small YAML file of nested aliases took seconds to minutes to validate, and a recursive alias crashed `validate`.** Parsing is linear and a recursive alias is a YAML error.
 - **The MCP `validate_rule` and `validation_report` tools validated the workspace as it was when the server started,** and one rule that failed to load broke `validate_rule` for all. They now reload and look rules up individually.
@@ -193,6 +199,14 @@ Every configuration file under `.opentide/configurations/` in the configuration 
 - **A rule without a `configurations` block failed deep in a deployer with `'NoneType' object has no attribute …`.** The error now names the rule.
 - **Generated schemas:** the visibility configuration schema rejected every valid configuration; a misspelled rule tenant passed and deployed nowhere (tenants are now an enum of the configured ones); a Splunk rule from the shipped template was flagged for missing `scheduling`; `metadata.tlp` ignored its vocabulary pin; a scoped vocabulary entry without stages crashed generation.
 - **ATT&CK groups present in several domains kept the Mobile entry** (`G0007` read `[Mobile] APT28`); the generator now keeps the Enterprise one. The bundled vocabulary is regenerated upstream in `opentidehq/specifications`.
+
+### Install
+
+```bash
+pip install opentide==0.18.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.17.2] — 2026-10-22
 
@@ -1298,7 +1312,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.2...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/opentidehq/opentide/releases/tag/v0.18.0
 [0.17.2]: https://github.com/opentidehq/opentide/releases/tag/v0.17.2
 [0.17.1]: https://github.com/opentidehq/opentide/releases/tag/v0.17.1
 [0.17.0]: https://github.com/opentidehq/opentide/releases/tag/v0.17.0

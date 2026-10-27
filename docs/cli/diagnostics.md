@@ -987,7 +987,7 @@ Reported by `opentide doctor`. Warns when a newer release exists or PyPI did not
 ### Example
 
 ```text illustrative
-! opentide 0.18.0 is available; 0.17.2 is installed · opentide_latest
+! opentide 0.19.0 is available; 0.18.0 is installed · opentide_latest
   → pip install --upgrade opentide
 ```
 
@@ -1004,7 +1004,7 @@ Reported by `opentide doctor`. Always passes: it records the version the other c
 ### Example
 
 ```text illustrative
-✓ opentide 0.17.2 · opentide_version
+✓ opentide 0.18.0 · opentide_version
 ```
 
 ### How to fix

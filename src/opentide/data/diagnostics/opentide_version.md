@@ -7,7 +7,7 @@ Reported by `opentide doctor`. Always passes: it records the version the other c
 ## Example
 
 ```text
-✓ opentide 0.17.2 · opentide_version
+✓ opentide 0.18.0 · opentide_version
 ```
 
 ## How to fix
