@@ -266,22 +266,26 @@ fn parse_query_block(
             break;
         }
         let strip = *content_indent.get_or_insert(ind);
-        if inner.is_empty() {
-            host_start = b;
-        }
         let body = if l.len() >= strip {
             &l[strip..]
         } else {
             l.trim_start()
         };
+        // Where the body starts in the line: `trim_start` may cut fewer bytes.
+        let cut = l.len() - body.len();
+        if inner.is_empty() {
+            // The query starts at its text, not at the line's indentation.
+            host_start = b + cut;
+        }
         let body = body.strip_suffix('\n').unwrap_or(body);
         if !inner.is_empty() {
             inner.push('\n');
             host_map.push(b.saturating_sub(1));
         }
-        for (k, ch) in body.char_indices() {
-            host_map.push(b + strip + k);
-            let _ = ch;
+        // One entry per byte: `host_map` maps inner *byte* offsets, so a
+        // multi-byte character takes as many entries as it has bytes.
+        for k in 0..body.len() {
+            host_map.push(b + cut + k);
         }
         inner.push_str(body);
         host_end = b + l.len();
@@ -1623,6 +1627,41 @@ meta:
             Some(["meta".to_string()].as_slice())
         );
         assert!(diag.message.contains("metadata"));
+    }
+
+    #[test]
+    fn non_ascii_text_keeps_later_query_positions_exact() {
+        // `🔥` is four bytes and two UTF-16 units; `é` is two bytes and one unit.
+        for prefix in ["\"ab\"", "\"é\"", "\"🔥🔥\""] {
+            let src = format!(
+                "name: Rule\nmetadata:\n  schema: rule::1.0\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | where Account == {prefix} | wher EventID == 1\n"
+            );
+            let (query,) = match extract_injections(&src).as_slice() {
+                [query] => (query.clone(),),
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(query.host_map.len(), query.inner.len());
+            assert_eq!(
+                &src[query.host_span.start..query.host_span.start + 13],
+                "SecurityEvent"
+            );
+            let r = analyze(AnalyzeInput {
+                path: "objects/rules/rule.yaml",
+                source: &src,
+                workspace: &[],
+                elastic_tenants: &[],
+            });
+            let d = r
+                .diagnostics
+                .iter()
+                .find(|d| d.code == codes::KQL_UNKNOWN_OPERATOR)
+                .expect("wher");
+            let line = src.lines().nth(d.range.start.line as usize).unwrap();
+            let units: Vec<u16> = line.encode_utf16().collect();
+            let at = String::from_utf16(&units[d.range.start.character as usize..]).unwrap();
+            assert!(at.starts_with("wher"), "{prefix}: {at:?}");
+            assert_eq!(d.range.start.line, d.range.end.line, "{prefix}");
+        }
     }
 
     #[test]

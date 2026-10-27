@@ -1056,15 +1056,81 @@ pub fn install_workspace_catalog(root: &Path) {
     }
 }
 
+/// A `file:` URI as a filesystem path: percent-decoded, an optional
+/// `localhost` authority dropped, and `/c:/x` read as the Windows path `c:/x`.
+/// Editors send `file:///home/u/My%20Detections` and `file:///c%3A/Users/...`.
+/// Anything that is not a `file:` URI is returned as it is.
 fn uri_to_path(uri: &str) -> String {
-    uri.strip_prefix("file://").unwrap_or(uri).to_string()
+    let Some(rest) = uri.strip_prefix("file://") else {
+        return uri.to_string();
+    };
+    let rest = rest.strip_prefix("localhost").unwrap_or(rest);
+    let decoded = percent_decode(rest);
+    let bytes = decoded.as_bytes();
+    if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+        return decoded[1..].to_string();
+    }
+    decoded
 }
 
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok();
+            if let Some(value) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(value);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
+}
+
+/// A filesystem path as a `file:` URI, the inverse of [`uri_to_path`]: the
+/// characters a URI path cannot hold are percent-encoded, and a Windows path
+/// gets the leading `/` (`file:///c:/x`).
 fn path_to_uri(path: &str) -> String {
     if path.starts_with("file://") {
-        path.to_string()
+        return path.to_string();
+    }
+    let path = path.replace('\\', "/");
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        match byte {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'/'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'~'
+            | b':'
+            | b'@'
+            | b'!'
+            | b'$'
+            | b'&'
+            | b'\''
+            | b'('
+            | b')'
+            | b'*'
+            | b'+'
+            | b','
+            | b';'
+            | b'=' => encoded.push(byte as char),
+            other => encoded.push_str(&format!("%{other:02X}")),
+        }
+    }
+    if encoded.starts_with('/') {
+        format!("file://{encoded}")
     } else {
-        format!("file://{path}")
+        format!("file:///{encoded}")
     }
 }
 
@@ -1120,4 +1186,30 @@ fn collect_objects(root: &Path) -> Result<Vec<(String, String)>, std::io::Error>
     }
     rec(&objects, &mut out)?;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{path_to_uri, uri_to_path};
+
+    #[test]
+    fn file_uris_become_paths_and_back() {
+        assert_eq!(
+            uri_to_path("file:///home/u/My%20Detections"),
+            "/home/u/My Detections"
+        );
+        assert_eq!(uri_to_path("file:///c%3A/Users/u/det"), "c:/Users/u/det");
+        assert_eq!(uri_to_path("file://localhost/srv/d%C3%A9t"), "/srv/dét");
+        assert_eq!(uri_to_path("file:///a/100%"), "/a/100%");
+        assert_eq!(uri_to_path("untitled:Untitled-1"), "untitled:Untitled-1");
+        for path in [
+            "/home/u/My Detections/a#1.yaml",
+            "/srv/dét/r.yaml",
+            "c:/Users/u/r.yaml",
+        ] {
+            assert_eq!(uri_to_path(&path_to_uri(path)), path, "{path}");
+        }
+        assert_eq!(path_to_uri("/a b"), "file:///a%20b");
+        assert_eq!(path_to_uri("c:/x"), "file:///c:/x");
+    }
 }

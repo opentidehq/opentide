@@ -15,6 +15,12 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - `opentide-lsp` is also a library (`opentide_lsp::run_stdio`), so a host can serve the protocol from its own process.
 - The server and `opentide-lsp analyze` read the workspace field catalog `.opentide/lsp/catalogs/generated/fields.json`, which `opentide generate schemas` writes, as well as `deprecations.json`. Hover, completion and vocabulary checks then follow the workspace's schemas, custom vocabulary included. A catalog that does not parse is reported on stderr, and the bundled one is used.
 
+### Fixed
+
+- A diagnostic inside a block-scalar query (`query: |`) after a non-ASCII character (`é`, `🔥`, an accented comment) pointed too far right, and could spill onto the next line: the injection map counted characters where it is indexed by bytes. Semantic tokens and hover inside the query moved the same way.
+- An injected query's span starts at its text, not at the indentation of its first line.
+- `rootUri` and document URIs are percent-decoded, and a Windows drive (`file:///c%3A/...`) becomes `c:/...`, so a workspace whose path has a space or a drive letter finds its objects and catalogs. Locations the server returns are percent-encoded.
+
 ### Changed
 
 - The other library crates say on crates.io that they are engine components and point to `opentide-analysis`.
