@@ -91,8 +91,13 @@ fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
     let text = std::fs::read_to_string(file)?;
     let language = detect_language(file, language)?;
     let mut files = vec![(file.display().to_string(), text.clone())];
-    if let Some(root) = find_objects_root(file) {
-        collect_yaml(&root, &mut files)?;
+    // Only Tide YAML resolves references across the workspace; a raw query
+    // file is analysed on its own.
+    let root = (language == LanguageId::TideYaml)
+        .then(|| find_objects_root(file))
+        .flatten();
+    if let Some(root) = root {
+        collect_yaml(&root, &mut files);
         if let Some(workspace) = root.parent() {
             let config = workspace.join(opentide_analysis::ELASTIC_CONFIGURATION);
             if let Ok(text) = std::fs::read_to_string(&config) {
@@ -200,36 +205,40 @@ fn find_objects_root(file: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-fn collect_yaml(root: &Path, files: &mut Vec<(String, String)>) -> Result<()> {
+/// The workspace YAML under `root`. A file that cannot be read as UTF-8 is
+/// left out rather than failing the file being analysed.
+fn collect_yaml(root: &Path, files: &mut Vec<(String, String)>) {
     if !root.is_dir() {
-        return Ok(());
+        return;
     }
-    for entry in walk(root)? {
-        if matches!(
+    for entry in walk(root) {
+        if !matches!(
             entry.extension().and_then(|s| s.to_str()),
             Some("yaml" | "yml")
         ) {
-            let text = std::fs::read_to_string(&entry)?;
+            continue;
+        }
+        if let Ok(text) = std::fs::read_to_string(&entry) {
             files.push((entry.display().to_string(), text));
         }
     }
-    Ok(())
 }
 
-fn walk(dir: &Path) -> Result<Vec<PathBuf>> {
+/// Every file under `dir`. A directory that cannot be listed is skipped.
+fn walk(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    fn rec(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
-        for e in std::fs::read_dir(dir)? {
-            let e = e?;
-            let p = e.path();
+    fn rec(dir: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for p in entries.flatten().map(|e| e.path()) {
             if p.is_dir() {
-                rec(&p, out)?;
+                rec(&p, out);
             } else {
                 out.push(p);
             }
         }
-        Ok(())
     }
-    rec(dir, &mut out)?;
-    Ok(out)
+    rec(dir, &mut out);
+    out
 }

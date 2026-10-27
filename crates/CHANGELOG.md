@@ -4,6 +4,13 @@ Notable changes to the opentide language server, newest first. The format follow
 
 Each version's first paragraph is its summary: the GitHub Release and [opentide.org/releases](https://opentide.org/releases/language-server/) show it above the change lists. Versions before 0.5.0 were tagged after the fact, each on the commit where that stretch of work ended. The crates still said 0.1.0 then, so a binary built from those tags reports 0.1.0, and none of them was published to crates.io.
 
+## [Unreleased]
+
+### Fixed
+
+- `opentide-lsp analyze` on a `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` or `.lucene` file no longer reads the directories around it. Outside a workspace it walked the file's grandparent directory, so one YAML file there that was not UTF-8 failed the command.
+- One unreadable workspace file (not UTF-8, no permission) no longer drops the whole object index. The stdio server reported every reference to another object as `invalid_ref`, and `analyze` on a Tide object failed. Now that file is left out, and the rest of the workspace still resolves.
+
 ## [0.5.0] - 2026-10-26
 
 The Elastic Security release: ES|QL, EQL, Kibana KQL, and Lucene rules get the same editing support as KQL and SPL, and the server installs from crates.io with `cargo install opentide-lsp`.
