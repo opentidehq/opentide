@@ -8,7 +8,7 @@ metadata:
 
 # Catalogs and conformance
 
-Catalogs are data compiled into the binary. The engine does not read them from disk at request time. A workspace override path exists for deprecations (`.opentide/lsp/catalogs/`); the bundled files under `catalogs/` are the default.
+Catalogs are data compiled into the binary. The engine does not read them from disk at request time. A workspace override path exists for the Tide field catalog and deprecations (`.opentide/lsp/catalogs/generated/fields.json` and `deprecations.json`, written by `opentide generate schemas`); the bundled files under `catalogs/` are the fallback.
 
 Read `references/highlight-spec.md` before touching `highlights/spec.toml` or a capture name.
 

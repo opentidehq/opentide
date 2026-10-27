@@ -459,6 +459,256 @@ pub mod codes {
     pub const EQL_NOT_BOOLEAN: &str = "eql_not_boolean";
     pub const ESQL_PATTERN: &str = "esql_pattern";
     pub const ESQL_EXPRESSION_DEPTH: &str = "esql_expression_depth";
+
+    /// Every code above, in declaration order.
+    pub const ALL: &[&str] = &[
+        SCHEMA_VALIDATION,
+        VOCAB_UNKNOWN,
+        INVALID_UUID,
+        DUPLICATE_ID,
+        INVALID_REF,
+        CHAINING_RELATION_UNKNOWN,
+        DEPRECATED_FIELD,
+        KQL_CONTROL_COMMAND_UNSUPPORTED,
+        KQL_UNKNOWN_OPERATOR,
+        KQL_UNKNOWN_FUNCTION,
+        KQL_DEPRECATED_FUNCTION,
+        KQL_UNKNOWN_TABLE,
+        KQL_RENDER_NOT_VALID,
+        KQL_PARSE_ERROR,
+        KQL_WHERE_NOT_FIRST,
+        KQL_UNSCOPED_SEARCH,
+        KQL_UNSCOPED_UNION,
+        KQL_WILDCARD_TABLE,
+        KQL_JOIN_SUMMARIZE_BEFORE_PROJECT,
+        SPL_UNKNOWN_COMMAND,
+        SPL_PARSE_ERROR,
+        SPL_WILDCARD,
+        SPL_LEADING_NOT,
+        SPL_SUBSEARCH_TRUNCATION,
+        ESQL_PARSE_ERROR,
+        ESQL_UNKNOWN_COMMAND,
+        ESQL_UNKNOWN_FUNCTION,
+        ESQL_UNAVAILABLE,
+        ESQL_METADATA_ID,
+        EQL_PARSE_ERROR,
+        EQL_UNKNOWN_FUNCTION,
+        EQL_UNSUPPORTED,
+        EQL_MAXSPAN_UNIT,
+        EQL_MAXSPAN_WINDOW,
+        EQL_MAXSPAN_LOOKBACK,
+        EQL_FUNCTION_ARITY,
+        EQL_CASE_SENSITIVE,
+        EQL_LITERAL_WILDCARD,
+        EQL_NESTED_COMMENT,
+        EQL_EXPRESSION_DEPTH,
+        EQL_ARGUMENT_TYPE,
+        EQL_FIELD_COMPARISON,
+        EQL_RUNS_IGNORED,
+        EQL_UNTIL_TERM,
+        EQL_REGEX,
+        EQL_MAXSPAN_MISSING,
+        KUERY_PARSE_ERROR,
+        KUERY_LUCENE_SYNTAX,
+        KUERY_ESCAPE,
+        KUERY_QUOTED_WILDCARD,
+        LUCENE_PARSE_ERROR,
+        LUCENE_LOWERCASE_OPERATOR,
+        LUCENE_MIXED_OPERATORS,
+        LUCENE_ESCAPE,
+        LUCENE_KUERY_SYNTAX,
+        LUCENE_REGEXP,
+        LUCENE_FUZZY,
+        LUCENE_RANGE_OPERATOR,
+        LUCENE_UNESCAPED_SLASH,
+        LUCENE_BARE_TERM,
+        LUCENE_LOOKS_LIKE_KUERY,
+        LUCENE_ELASTICSEARCH_ONLY,
+        KUERY_QUESTION_MARK,
+        KUERY_FREE_TEXT,
+        KUERY_LOOKS_LIKE_LUCENE,
+        KUERY_RANGE_TYPE,
+        LOOKBACK_ZERO,
+        LOOKBACK_LONG,
+        THRESHOLD_LOOKBACK,
+        RISK_BAND,
+        TECHNIQUE_NOT_ENTERPRISE,
+        CROWDSTRIKE_UNSUPPORTED,
+        FILENAME_SLUG,
+        MISSING_AUTHOR,
+        MISSING_ORGANISATION,
+        DEFENDER_OUTPUT_COLUMNS,
+        ESQL_UNKNOWN_TYPE,
+        ESQL_GROUP_BY_COLUMN,
+        EQL_NOT_BOOLEAN,
+        ESQL_PATTERN,
+        ESQL_EXPRESSION_DEPTH,
+    ];
+
+    /// One sentence on what a code means, for hosts that explain a diagnostic
+    /// (`opentide explain <code>`). `None` for a code this engine does not emit.
+    pub fn describe(code: &str) -> Option<&'static str> {
+        Some(match code {
+            SCHEMA_VALIDATION => {
+                "A Tide object does not match its schema: a required field is missing, or a value has the wrong shape."
+            }
+            VOCAB_UNKNOWN => "A value is not in the vocabulary its field draws from.",
+            INVALID_UUID => "An object id is not a version 4 UUID.",
+            DUPLICATE_ID => "Two object files carry the same UUID.",
+            INVALID_REF => "A reference names an object the workspace does not have.",
+            CHAINING_RELATION_UNKNOWN => {
+                "A threat chaining relation is not in the chaining_relations vocabulary."
+            }
+            DEPRECATED_FIELD => "The field is deprecated in its schema revision.",
+            KQL_CONTROL_COMMAND_UNSUPPORTED => {
+                "A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it."
+            }
+            KQL_UNKNOWN_OPERATOR => "The KQL tabular operator is not one Kusto knows.",
+            KQL_UNKNOWN_FUNCTION => "The KQL function is not in the Kusto function catalog.",
+            KQL_DEPRECATED_FUNCTION => {
+                "The KQL function is a deprecated alias; Microsoft Learn names its replacement."
+            }
+            KQL_UNKNOWN_TABLE => {
+                "The table is not in the platform's KQL schema (Sentinel or Defender)."
+            }
+            KQL_RENDER_NOT_VALID => "render draws a chart; it has no effect in a detection rule.",
+            KQL_PARSE_ERROR => "The KQL query does not parse.",
+            KQL_WHERE_NOT_FIRST => {
+                "A filter comes after a more expensive operator; filtering first scans fewer rows."
+            }
+            KQL_UNSCOPED_SEARCH => "search without a table scans every table in the workspace.",
+            KQL_UNSCOPED_UNION => "union * or an unscoped union reads every table.",
+            KQL_WILDCARD_TABLE => "A wildcard table name reads every matching table.",
+            KQL_JOIN_SUMMARIZE_BEFORE_PROJECT => {
+                "join or summarize runs before project, so it carries every column."
+            }
+            SPL_UNKNOWN_COMMAND => "The SPL command is not in the Splunk Search Reference.",
+            SPL_PARSE_ERROR => "The SPL search does not parse.",
+            SPL_WILDCARD => {
+                "A leading or mid-token wildcard cannot use the index and scans every event."
+            }
+            SPL_LEADING_NOT => {
+                "A search that starts with NOT scans every event before excluding any."
+            }
+            SPL_SUBSEARCH_TRUNCATION => {
+                "A subsearch is silently truncated at its result or time limit."
+            }
+            ESQL_PARSE_ERROR => "The ES|QL query does not parse.",
+            ESQL_UNKNOWN_COMMAND => "The ES|QL command is not one Elasticsearch knows.",
+            ESQL_UNKNOWN_FUNCTION => {
+                "The ES|QL function is not in the Elasticsearch function catalog."
+            }
+            ESQL_UNAVAILABLE => {
+                "The command, function or form is missing or in preview on a targeted stack version."
+            }
+            ESQL_METADATA_ID => {
+                "A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated."
+            }
+            EQL_PARSE_ERROR => "The EQL query does not parse.",
+            EQL_UNKNOWN_FUNCTION => {
+                "The EQL function is not in the Elasticsearch function catalog."
+            }
+            EQL_UNSUPPORTED => {
+                "Elasticsearch EQL does not support this construct (pipes, relationships, ...)."
+            }
+            EQL_MAXSPAN_UNIT => "A sequence maxspan uses a unit Elasticsearch does not accept.",
+            EQL_MAXSPAN_WINDOW => {
+                "A sequence maxspan is longer than the rule's interval plus lookback, so the rule cannot see whole sequences."
+            }
+            EQL_MAXSPAN_LOOKBACK => "A sequence maxspan is longer than the rule's lookback.",
+            EQL_FUNCTION_ARITY => "An EQL function is called with the wrong number of arguments.",
+            EQL_CASE_SENSITIVE => {
+                "The comparison is case-sensitive; the case-insensitive form may be meant."
+            }
+            EQL_LITERAL_WILDCARD => {
+                "A wildcard character is compared literally; use : or like for a pattern."
+            }
+            EQL_NESTED_COMMENT => {
+                "Elasticsearch nests /* */ comments; the comment ends later than it looks."
+            }
+            EQL_EXPRESSION_DEPTH => "The expression nests deeper than Elasticsearch accepts.",
+            EQL_ARGUMENT_TYPE => "A literal has a type the EQL verifier rejects in this position.",
+            EQL_FIELD_COMPARISON => {
+                "Both sides of a comparison read fields, which EQL does not support."
+            }
+            EQL_RUNS_IGNORED => "A decimal runs count is truncated by Elasticsearch.",
+            EQL_UNTIL_TERM => "runs or a missing-event term ![ ] is not allowed on until.",
+            EQL_REGEX => "The regular expression trips a Lucene RegExp pitfall.",
+            EQL_MAXSPAN_MISSING => {
+                "A sequence has no maxspan, so partial sequences are held until they expire."
+            }
+            KUERY_PARSE_ERROR => "The Kibana KQL (kuery) query does not parse.",
+            KUERY_LUCENE_SYNTAX => "Lucene syntax inside a Kibana KQL (kuery) query.",
+            KUERY_ESCAPE => "A character needs escaping in Kibana KQL (kuery).",
+            KUERY_QUOTED_WILDCARD => {
+                "A wildcard inside quotes is a literal * in Kibana KQL (kuery)."
+            }
+            LUCENE_PARSE_ERROR => "The Lucene query does not parse.",
+            LUCENE_LOWERCASE_OPERATOR => {
+                "Lucene operators are upper case; lowercase and/or/not are search terms."
+            }
+            LUCENE_MIXED_OPERATORS => {
+                "AND and OR mixed without parentheses do not bind as they read."
+            }
+            LUCENE_ESCAPE => "A character needs escaping in Lucene.",
+            LUCENE_KUERY_SYNTAX => "Kibana KQL (kuery) syntax inside a Lucene query.",
+            LUCENE_REGEXP => {
+                "The /regexp/ body is rejected by, or too costly for, Lucene's RegExp."
+            }
+            LUCENE_FUZZY => "Elasticsearch accepts only 0, 1, 2 or AUTO as a fuzziness.",
+            LUCENE_RANGE_OPERATOR => {
+                "f:> 10 searches f for the text >; the value must follow the operator."
+            }
+            LUCENE_UNESCAPED_SLASH => "An unescaped / starts a regular expression.",
+            LUCENE_BARE_TERM => "A term with no field searches every field.",
+            LUCENE_LOOKS_LIKE_KUERY => {
+                "The query reads like Kibana KQL (kuery); language: kuery may be meant."
+            }
+            LUCENE_ELASTICSEARCH_ONLY => {
+                "The syntax works in Elasticsearch but not in Carbon Black Cloud."
+            }
+            KUERY_QUESTION_MARK => {
+                "? is a literal in Kibana KQL (kuery), not a single-character wildcard."
+            }
+            KUERY_FREE_TEXT => "A value with no field searches every field.",
+            KUERY_LOOKS_LIKE_LUCENE => {
+                "The query reads like Lucene; language: lucene may be meant."
+            }
+            KUERY_RANGE_TYPE => "A range compares a value of the wrong type.",
+            LOOKBACK_ZERO => {
+                "The Elastic rule's lookback is zero, so events that arrive late are missed."
+            }
+            LOOKBACK_LONG => {
+                "The Elastic rule's lookback exceeds an hour; it is added to the interval, not the whole window."
+            }
+            THRESHOLD_LOOKBACK => {
+                "A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat."
+            }
+            RISK_BAND => "The risk score is outside the band of the rule's severity.",
+            TECHNIQUE_NOT_ENTERPRISE => {
+                "The ATT&CK technique is not in the Enterprise matrix that Elastic maps."
+            }
+            CROWDSTRIKE_UNSUPPORTED => {
+                "CrowdStrike queries are not validated; the engine never fakes it."
+            }
+            FILENAME_SLUG => "The file name is not the slug of the object's name.",
+            MISSING_AUTHOR => "The recommended metadata.author field is missing.",
+            MISSING_ORGANISATION => "The recommended metadata.organisation field is missing.",
+            DEFENDER_OUTPUT_COLUMNS => {
+                "A Defender custom detection must return the columns Defender requires."
+            }
+            ESQL_UNKNOWN_TYPE => {
+                "The ::type cast names a type no Elasticsearch release can cast to."
+            }
+            ESQL_GROUP_BY_COLUMN => {
+                "A suppression group_by field is not a column the ES|QL query returns."
+            }
+            EQL_NOT_BOOLEAN => "A string or number literal is used as a condition.",
+            ESQL_PATTERN => "A LIKE or RLIKE pattern escapes or matches differently than it reads.",
+            ESQL_EXPRESSION_DEPTH => "The expression nests deeper than Elasticsearch accepts.",
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Debug, Error)]
@@ -494,6 +744,29 @@ mod tests {
                 || env!("CARGO_PKG_NAME").starts_with("opentide")
         );
         assert!(env!("CARGO_PKG_NAME").starts_with("opentide"));
+    }
+
+    #[test]
+    fn every_code_is_listed_and_described() {
+        let source = include_str!("lib.rs");
+        let module =
+            &source[source.find("pub mod codes").unwrap()..source.find("pub const ALL").unwrap()];
+        let declared = module.matches("pub const ").count();
+        assert_eq!(
+            declared,
+            codes::ALL.len(),
+            "codes::ALL must list every code"
+        );
+        let mut seen = std::collections::BTreeSet::new();
+        for code in codes::ALL {
+            assert!(seen.insert(*code), "{code} listed twice");
+            let text = codes::describe(code).unwrap_or_else(|| panic!("{code} has no description"));
+            assert!(
+                text.ends_with('.'),
+                "{code}: one sentence ending in a period"
+            );
+        }
+        assert_eq!(codes::describe("not_a_code"), None);
     }
 
     #[test]

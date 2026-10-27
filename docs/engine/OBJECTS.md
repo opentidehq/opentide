@@ -51,7 +51,12 @@ Query extras (engine may add these inside `query: |`):
 
 ## Catalogs
 
-Snapshot from `opentide generate schemas` into `catalogs/tide/`. A workspace file `.opentide/lsp/catalogs/generated/deprecations.json` (same shape as the bundled catalog) adds `deprecated_field` warnings on top of `catalogs/tide/generated/deprecations.json`.
+Snapshot from `opentide generate schemas` into `catalogs/tide/`. That is the fallback: a workspace that ran `opentide generate schemas` has its own catalogs under `.opentide/lsp/catalogs/generated/`, in the same shapes, and they replace the bundled ones when the server starts (`initialize`), in `opentide-lsp analyze`, and in the `opentide` CLI:
+
+- `fields.json` replaces `catalogs/tide/generated/fields.json`: hover, completion and the enum checks follow the workspace's schemas, custom vocabulary included.
+- `deprecations.json` adds `deprecated_field` warnings on top of `catalogs/tide/generated/deprecations.json`.
+
+A file that does not parse is reported on stderr, and the bundled catalogs are used. Hosts embedding the engine call `opentide_analysis::install_catalog`.
 
 Snippets come from the same templates `opentide generate` writes (`catalogs/tide/templates/`).
 

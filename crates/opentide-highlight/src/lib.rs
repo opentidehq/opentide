@@ -9,7 +9,7 @@ use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, RwLock};
 use thiserror::Error;
 
 pub use markdown::highlight_markdown_line;
@@ -68,6 +68,8 @@ pub enum HighlightError {
     Spec(String),
     #[error("unknown capture '{0}' (not in highlights/spec.toml)")]
     UnknownCapture(String),
+    #[error("tide field catalog: {0}")]
+    Catalog(String),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -199,36 +201,109 @@ struct TideCatalog {
     children: BTreeMap<String, BTreeMap<String, Vec<usize>>>,
 }
 
-fn tide_catalog() -> &'static TideCatalog {
-    static CATALOG: OnceLock<TideCatalog> = OnceLock::new();
-    CATALOG.get_or_init(|| {
-        let file: TideFieldsFile =
-            serde_json::from_str(TIDE_FIELDS_JSON).expect("generated fields.json");
-        let mut by_path: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
-        let mut children: BTreeMap<String, BTreeMap<String, Vec<usize>>> = BTreeMap::new();
-        for (i, field) in file.fields.iter().enumerate() {
-            by_path
-                .entry(field.schema.clone())
-                .or_default()
-                .insert(field.path.clone(), i);
-            let parent = match field.path.rsplit_once('.') {
-                Some((parent, _)) => parent.to_string(),
-                None => String::new(),
-            };
-            children
-                .entry(field.schema.clone())
-                .or_default()
-                .entry(parent)
-                .or_default()
-                .push(i);
-        }
-        TideCatalog {
-            opentide: file.opentide,
-            fields: file.fields,
-            by_path,
-            children,
-        }
+fn build_tide_catalog(json: &str) -> Result<TideCatalog, String> {
+    let file: TideFieldsFile = serde_json::from_str(json).map_err(|err| err.to_string())?;
+    let mut by_path: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    let mut children: BTreeMap<String, BTreeMap<String, Vec<usize>>> = BTreeMap::new();
+    for (i, field) in file.fields.iter().enumerate() {
+        by_path
+            .entry(field.schema.clone())
+            .or_default()
+            .insert(field.path.clone(), i);
+        let parent = match field.path.rsplit_once('.') {
+            Some((parent, _)) => parent.to_string(),
+            None => String::new(),
+        };
+        children
+            .entry(field.schema.clone())
+            .or_default()
+            .entry(parent)
+            .or_default()
+            .push(i);
+    }
+    Ok(TideCatalog {
+        opentide: file.opentide,
+        fields: file.fields,
+        by_path,
+        children,
     })
+}
+
+fn bundled_tide_catalog() -> &'static TideCatalog {
+    static CATALOG: OnceLock<TideCatalog> = OnceLock::new();
+    CATALOG.get_or_init(|| build_tide_catalog(TIDE_FIELDS_JSON).expect("generated fields.json"))
+}
+
+/// The workspace catalog a host installed, and the text it was built from.
+type InstalledCatalog = Option<(&'static TideCatalog, u64)>;
+
+fn installed_tide_catalog() -> &'static RwLock<InstalledCatalog> {
+    static INSTALLED: OnceLock<RwLock<InstalledCatalog>> = OnceLock::new();
+    INSTALLED.get_or_init(|| RwLock::new(None))
+}
+
+fn tide_catalog() -> &'static TideCatalog {
+    let installed = installed_tide_catalog()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    match *installed {
+        Some((catalog, _)) => catalog,
+        None => bundled_tide_catalog(),
+    }
+}
+
+fn text_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Replace the bundled Tide field catalog with a workspace one: a
+/// `fields.json` in the shape of `catalogs/tide/generated/fields.json`, as
+/// `opentide generate schemas` writes it to `.opentide/lsp/catalogs/generated/`.
+/// `None` goes back to the bundled catalog. Process-wide: every thread sees it.
+///
+/// Fields are handed out as `&'static`, so each distinct catalog is kept for
+/// the life of the process. A catalog is built once per distinct text, so a
+/// host may install on every workspace load without growing memory.
+pub fn install_tide_fields(json: Option<&str>) -> Result<(), HighlightError> {
+    let mut installed = installed_tide_catalog()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Some(json) = json else {
+        *installed = None;
+        return Ok(());
+    };
+    let hash = text_hash(json);
+    static BUILT: OnceLock<Mutex<Vec<(u64, &'static TideCatalog)>>> = OnceLock::new();
+    let mut built = BUILT
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, catalog)) = built.iter().find(|(seen, _)| *seen == hash) {
+        *installed = Some((catalog, hash));
+        return Ok(());
+    }
+    let catalog = build_tide_catalog(json).map_err(HighlightError::Catalog)?;
+    if catalog.fields.is_empty() {
+        return Err(HighlightError::Catalog(
+            "fields.json lists no fields".into(),
+        ));
+    }
+    let catalog: &'static TideCatalog = Box::leak(Box::new(catalog));
+    built.push((hash, catalog));
+    *installed = Some((catalog, hash));
+    Ok(())
+}
+
+/// Whether the Tide field catalog in use is a workspace one
+/// ([`install_tide_fields`]) rather than the bundled snapshot.
+pub fn tide_catalog_is_workspace() -> bool {
+    installed_tide_catalog()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .is_some()
 }
 
 pub fn tide_catalog_version() -> &'static str {

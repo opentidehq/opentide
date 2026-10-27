@@ -16,9 +16,8 @@ use opentide_highlight::{
 use opentide_kql::Profile;
 use regex::Regex;
 use serde::Deserialize;
-use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 use uuid::Uuid;
 
 pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
@@ -754,91 +753,14 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let injections = extract_injections(input.source);
     let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
     let mut tokens = highlight_tide(&spec, input.source, &skip);
-    for inj in &injections {
-        match inj.language {
-            LanguageId::Kql => {
-                let profile = if inj.field_path.iter().any(|p| p == "defender_for_endpoint") {
-                    Profile::Defender
-                } else {
-                    Profile::Sentinel
-                };
-                let result = opentide_kql::analyze(&inj.inner, profile);
-                for d in result.diagnostics {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in result.tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::Spl => {
-                let result = opentide_spl::analyze(&inj.inner);
-                for d in result.diagnostics {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in result.tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
-                let (found, query_tokens) = match inj.language {
-                    LanguageId::Esql => {
-                        // Hunts have no tenants; only the rule block is targeted.
-                        let target = (inj.field_path.first().map(String::as_str)
-                            == Some("configurations"))
-                        .then(|| {
-                            elastic::stack_target(
-                                object
-                                    .configurations
-                                    .as_ref()
-                                    .and_then(|c| c.get("elastic")),
-                                input.elastic_tenants,
-                            )
-                        })
-                        .flatten();
-                        let r = opentide_esql::analyze_for(&inj.inner, target);
-                        (r.diagnostics, r.tokens)
-                    }
-                    LanguageId::Eql => {
-                        let r = opentide_eql::analyze(&inj.inner);
-                        // Hunts have no schedule; only the rule query is compared.
-                        if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                            diagnostics.extend(elastic::maxspan_advisories(
-                                input.source,
-                                object.configurations.as_ref(),
-                                inj,
-                            ));
-                        }
-                        (r.diagnostics, r.tokens)
-                    }
-                    LanguageId::Kuery => {
-                        let r = opentide_kuery::analyze(&inj.inner);
-                        (r.diagnostics, r.tokens)
-                    }
-                    _ => {
-                        let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
-                            opentide_lucene::Dialect::CarbonBlack
-                        } else {
-                            opentide_lucene::Dialect::Elastic
-                        };
-                        let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
-                        (r.diagnostics, r.tokens)
-                    }
-                };
-                for d in found {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in query_tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::TideYaml => {}
-        }
+    for query in analyze_injections(
+        input.source,
+        object.configurations.as_ref(),
+        input.elastic_tenants,
+        injections,
+    ) {
+        diagnostics.extend(query.diagnostics);
+        tokens.extend(query.tokens);
     }
 
     tokens.sort_by_key(|t| (t.span.start, t.span.end));
@@ -848,6 +770,108 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         tokens,
         symbols,
     }
+}
+
+/// One query injected into a Tide object, analyzed in its language. Ranges and
+/// token spans are in the object file's coordinates.
+#[derive(Debug, Clone)]
+pub struct QueryAnalysis {
+    pub query: InjectedQuery,
+    pub diagnostics: Vec<Diagnostic>,
+    pub tokens: Vec<HighlightToken>,
+}
+
+/// Every query injected into a Tide object, each analyzed in its language,
+/// including queries with no diagnostic (so a host can count what it checked).
+/// The object's other fields are not checked. A file that is not YAML has no
+/// queries.
+pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
+    let configurations = serde_yaml::from_str::<TideObject>(source)
+        .ok()
+        .and_then(|object| object.configurations);
+    analyze_injections(
+        source,
+        configurations.as_ref(),
+        elastic_tenants,
+        extract_injections(source),
+    )
+}
+
+fn analyze_injections(
+    source: &str,
+    configurations: Option<&serde_yaml::Value>,
+    elastic_tenants: &[ElasticTenant],
+    injections: Vec<InjectedQuery>,
+) -> Vec<QueryAnalysis> {
+    let mut out = Vec::with_capacity(injections.len());
+    for inj in injections {
+        let mut extra = Vec::new();
+        let (found, query_tokens) = match inj.language {
+            LanguageId::Kql => {
+                let profile = if inj.field_path.iter().any(|p| p == "defender_for_endpoint") {
+                    Profile::Defender
+                } else {
+                    Profile::Sentinel
+                };
+                let r = opentide_kql::analyze(&inj.inner, profile);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Spl => {
+                let r = opentide_spl::analyze(&inj.inner);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Esql => {
+                // Hunts have no tenants; only the rule block is targeted.
+                let target = (inj.field_path.first().map(String::as_str) == Some("configurations"))
+                    .then(|| {
+                        elastic::stack_target(
+                            configurations.and_then(|c| c.get("elastic")),
+                            elastic_tenants,
+                        )
+                    })
+                    .flatten();
+                let r = opentide_esql::analyze_for(&inj.inner, target);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Eql => {
+                let r = opentide_eql::analyze(&inj.inner);
+                // Hunts have no schedule; only the rule query is compared.
+                if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    extra = elastic::maxspan_advisories(source, configurations, &inj);
+                }
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Kuery => {
+                let r = opentide_kuery::analyze(&inj.inner);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Lucene => {
+                let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
+                    opentide_lucene::Dialect::CarbonBlack
+                } else {
+                    opentide_lucene::Dialect::Elastic
+                };
+                let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::TideYaml => (Vec::new(), Vec::new()),
+        };
+        let mut diagnostics: Vec<Diagnostic> = found
+            .into_iter()
+            .map(|d| remap_diagnostic(source, &inj, d))
+            .collect();
+        diagnostics.extend(extra);
+        let tokens = query_tokens
+            .iter()
+            .filter_map(|t| remap_token(source, &inj, t))
+            .collect();
+        out.push(QueryAnalysis {
+            query: inj,
+            diagnostics,
+            tokens,
+        });
+    }
+    out
 }
 
 fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
@@ -1227,13 +1251,17 @@ struct DeprecationRow {
     deprecated: Option<String>,
 }
 
-thread_local! {
-    static DEPRECATION_OVERLAY: RefCell<Vec<FieldDeprecation>> = const { RefCell::new(Vec::new()) };
+fn deprecation_overlay() -> &'static RwLock<Vec<FieldDeprecation>> {
+    static OVERLAY: OnceLock<RwLock<Vec<FieldDeprecation>>> = OnceLock::new();
+    OVERLAY.get_or_init(|| RwLock::new(Vec::new()))
 }
 
-/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for this thread.
+/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for the
+/// whole process, so a host that analyzes on several threads sees one overlay.
 pub fn install_deprecation_overlay(items: Vec<FieldDeprecation>) {
-    DEPRECATION_OVERLAY.with(|cell| *cell.borrow_mut() = items);
+    *deprecation_overlay()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
 }
 
 /// Parse `deprecations.json` or a `fields.json` that carries `deprecated` messages.
@@ -1284,7 +1312,10 @@ fn diagnose_deprecations(object_type: &str, source: &str, diagnostics: &mut Vec<
     };
     let mut present = Vec::new();
     collect_mapping_paths(&value, &[], &mut present);
-    let overlay = DEPRECATION_OVERLAY.with(|cell| cell.borrow().clone());
+    let overlay = deprecation_overlay()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
     for path in present {
         let dotted = path.join(".");
         let message = overlay

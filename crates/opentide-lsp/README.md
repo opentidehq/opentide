@@ -57,7 +57,7 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 
 ## Crates
 
-`opentide-analysis` is the engine's public entry point: the server, the browser build, and the `opentide` Python package depend on it alone, and it re-exports the types its API uses. The other library crates are its components, published so it can be; their APIs follow the engine, not a promise of their own. Every crate shares the workspace version.
+`opentide-analysis` is the engine's public entry point: the server, the browser build, and the `opentide` Python package depend on it alone, and it re-exports the types its API uses. The `opentide` package also links `opentide-lsp` as a library, so `pip install opentide` serves this server as `opentide lsp start` with no second install. The other library crates are its components, published so it can be; their APIs follow the engine, not a promise of their own. Every crate shares the workspace version.
 
 | Crate | Role |
 | --- | --- |

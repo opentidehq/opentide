@@ -19,6 +19,10 @@ default-run = "opentide-lsp"
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ binary-ext }"
 pkg-fmt = "bin"
 
+[lib]
+name = "opentide_lsp"
+path = "src/lib.rs"
+
 [[bin]]
 name = "opentide-lsp"
 path = "src/main.rs"

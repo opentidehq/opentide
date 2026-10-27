@@ -61,7 +61,7 @@ Pinned stack (do not bump in passing):
 
 `LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, or `opentide-yaml`. `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
 
-Diagnostic codes are constants in `opentide_core::codes`. Add a constant. Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
+Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list it in `codes::ALL` and give it a sentence in `codes::describe` (a unit test fails otherwise; `opentide explain` prints it). Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
 
 LSP `character` is a UTF-16 code unit count. `é` is one unit; an emoji outside the BMP is two. Ranges **sent** to the client go through `span_to_range` / `offset_to_position` in `opentide-core`, which uses `char::len_utf16`.
 

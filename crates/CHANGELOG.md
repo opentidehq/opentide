@@ -10,10 +10,15 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - `opentide-analysis` re-exports every type its functions take and return, so a host (the `opentide` Python package, an editor) depends on it alone. Its crates.io page shows a usage example, run as a doctest.
 - `cargo binstall opentide-lsp` downloads the release binary for the target instead of compiling the workspace.
+- A host API on `opentide-analysis` for the `opentide` Python package ([opentide#332](https://github.com/opentidehq/opentide/issues/332), [#16](https://github.com/opentidehq/language-server/issues/16)): `analyze_queries` reports every query a Tide object carries, with its language, YAML path, place and diagnostics, including queries with no finding; `analyze_query` checks one query with its platform's profile (Defender KQL, Carbon Black Lucene, an ES|QL stack); `install_catalog` replaces the bundled Tide field and deprecation catalogs with a workspace's; `analyze_with_index` reuses one workspace index across files; `VERSION`.
+- `opentide_core::codes::ALL` lists every diagnostic code, and `codes::describe` gives each one a sentence, for hosts that explain a code (`opentide explain`).
+- `opentide-lsp` is also a library (`opentide_lsp::run_stdio`), so a host can serve the protocol from its own process.
+- The server and `opentide-lsp analyze` read the workspace field catalog `.opentide/lsp/catalogs/generated/fields.json`, which `opentide generate schemas` writes, as well as `deprecations.json`. Hover, completion and vocabulary checks then follow the workspace's schemas, custom vocabulary included. A catalog that does not parse is reported on stderr, and the bundled one is used.
 
 ### Changed
 
 - The other library crates say on crates.io that they are engine components and point to `opentide-analysis`.
+- The workspace deprecation overlay is process-wide instead of per thread, so a host that analyzes on several threads sees the one it installed.
 
 ## [0.5.0] - 2026-10-26
 

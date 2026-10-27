@@ -4,12 +4,11 @@
 use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
-    AnalyzeRequest, MemoryWorkspace, WorkspaceHost, analyze, compiled_kql, compiled_spl,
-    completions, hover, index_workspace, signature_help,
+    AnalyzeRequest, Catalog, MemoryWorkspace, WorkspaceHost, analyze, compiled_kql, compiled_spl,
+    completions, hover, index_workspace, install_catalog, signature_help,
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
-use opentide_tide::{install_deprecation_overlay, parse_deprecation_overlay};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufReader, Write};
@@ -111,10 +110,10 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 .map(uri_to_path)
             {
                 let root = PathBuf::from(root);
-                install_deprecation_overlay(load_catalog_deprecations(&root));
+                install_workspace_catalog(&root);
                 session.root = Some(root);
             } else {
-                install_deprecation_overlay(Vec::new());
+                install_workspace_catalog(Path::new(""));
             }
             jsonrpc::write_message(
                 writer,
@@ -1030,12 +1029,31 @@ fn range_json(range: Range) -> Value {
     })
 }
 
-fn load_catalog_deprecations(root: &Path) -> Vec<opentide_tide::FieldDeprecation> {
-    let path = root.join(".opentide/lsp/catalogs/generated/deprecations.json");
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return Vec::new();
+/// Where `opentide generate schemas` writes the workspace catalogs.
+pub const WORKSPACE_CATALOGS: &str = ".opentide/lsp/catalogs/generated";
+
+/// Install the workspace's `fields.json` and `deprecations.json` when they
+/// exist, and the bundled catalogs otherwise. A file that does not parse is
+/// reported on stderr and leaves the bundled catalogs in place.
+pub fn install_workspace_catalog(root: &Path) {
+    let dir = root.join(WORKSPACE_CATALOGS);
+    let read = |name: &str| {
+        if root.as_os_str().is_empty() {
+            return None;
+        }
+        std::fs::read_to_string(dir.join(name)).ok()
     };
-    parse_deprecation_overlay(&text).unwrap_or_default()
+    let catalog = Catalog {
+        fields: read("fields.json"),
+        deprecations: read("deprecations.json"),
+    };
+    if let Err(err) = install_catalog(&catalog) {
+        eprintln!(
+            "opentide-lsp: ignoring {}: {err}; using the bundled catalogs",
+            dir.display()
+        );
+        let _ = install_catalog(&Catalog::default());
+    }
 }
 
 fn uri_to_path(uri: &str) -> String {
