@@ -4,6 +4,17 @@ Notable changes to the opentide language server, newest first. The format follow
 
 Each version's first paragraph is its summary: the GitHub Release and [opentide.org/releases](https://opentide.org/releases/language-server/) show it above the change lists. Versions before 0.5.0 were tagged after the fact, each on the commit where that stretch of work ended. The crates still said 0.1.0 then, so a binary built from those tags reports 0.1.0, and none of them was published to crates.io.
 
+## [Unreleased]
+
+### Changed
+
+- `@opentide/lsp-client` works on all three transports ([#14](https://github.com/opentidehq/language-server/issues/14)):
+  - `stdio` keeps one `opentide-lsp --stdio` running and calls `opentide/analyze` and `opentide/highlight` over JSON-RPC;
+  - `worker` calls the `opentide-wasm` module you load with `@opentide/lsp-worker`;
+  - `wasi` runs the `wasm32-wasip1` CLI under `node:wasi`.
+  
+  Before, `analyze` always returned no diagnostics, `wasi` did nothing, and `legend()` was a hard-coded list that lacked `markdown.*` and `macro`. A transport that cannot answer now rejects, as does an unknown language id. The `worker` transport takes `module` instead of reading a global, and `wasi` takes the binary as `wasi`.
+
 ## [0.5.0] - 2026-10-26
 
 The Elastic Security release: ES|QL, EQL, Kibana KQL, and Lucene rules get the same editing support as KQL and SPL, and the server installs from crates.io with `cargo install opentide-lsp`.

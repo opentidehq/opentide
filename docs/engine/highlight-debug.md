@@ -167,8 +167,6 @@ So the CLI path is not “missing keywords”; it is **low-contrast for everythi
 | Path | Behavior |
 |------|----------|
 | `highlights/generated/*.tmLanguage.json` | Patterns are **name-only stubs** — no `match` / `begin`. TextMate-only coloring does nothing. |
-| `packages/lsp-client` `highlight()` (stdio without bindgen) | Returns **`tokens: []`**. |
-| `packages/lsp-worker` stub | Returns **`tokens: []`**. |
 
 Failing test documenting the TextMate stub (intentionally red):  
 `opentide_highlight::tm_language_stub_bug::generated_kql_tm_language_has_executable_match_rules`.
