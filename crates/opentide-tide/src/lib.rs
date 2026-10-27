@@ -1587,7 +1587,7 @@ metadata:
 description: |
   test
 status: STAGING
-severity: Substantial incident
+severity: High
 detection_model: 00000000-0000-4000-8002-000000000001
 response:
   alert_severity: High
@@ -1875,6 +1875,27 @@ threat:
     }
 
     #[test]
+    fn rule_severity_is_an_alert_severity() {
+        // opentide 0.18.0: a rule's `severity` takes alert_severity values
+        // (`High`), not the threat severity scale (`Substantial incident`).
+        let check = |severity: &str| {
+            let source = RULE.replace("severity: High", &format!("severity: {severity}"));
+            analyze(AnalyzeInput {
+                path: "objects/rules/sentinel-kql-rule.yaml",
+                source: &source,
+                workspace: &[],
+                elastic_tenants: &[],
+            })
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == "vocab_unknown" && d.message.contains("severity"))
+            .count()
+        };
+        assert_eq!(check("High"), 0);
+        assert_eq!(check("Substantial incident"), 1);
+    }
+
+    #[test]
     fn tide_values_use_legend_captures() {
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
@@ -1891,7 +1912,7 @@ threat:
         assert!(schema_vals.contains(&"rule::1.0"), "{schema_vals:?}");
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"STAGING"));
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"clear"));
-        assert!(token_text(RULE, &r.tokens, "constant").contains(&"Substantial incident"));
+        assert!(token_text(RULE, &r.tokens, "constant").contains(&"High"));
         let uuid_keys = token_text(RULE, &r.tokens, "tide.property");
         assert!(uuid_keys.contains(&"uuid"), "{uuid_keys:?}");
         let starts: Vec<usize> = r.tokens.iter().map(|t| t.span.start).collect();

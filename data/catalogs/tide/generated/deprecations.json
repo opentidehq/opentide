@@ -1,5 +1,5 @@
 {
-  "opentide": "0.16.1",
+  "opentide": "0.18.0",
   "generator": "scripts/sync_opentide_schemas.py",
   "fields": [
     {

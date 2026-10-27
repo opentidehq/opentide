@@ -17,6 +17,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Fixed
 
+- A rule's `severity: High` was reported as `vocab_unknown` when the workspace had no generated catalog: the bundled Tide catalogs came from opentide 0.16.1, which checked a rule's severity against the threat severity scale. They are generated from opentide 0.18.0 now, where it takes `alert_severity` values, and hover shows the field descriptions 0.18.0 added.
 - A diagnostic inside a block-scalar query (`query: |`) after a non-ASCII character (`é`, `🔥`, an accented comment) pointed too far right, and could spill onto the next line: the injection map counted characters where it is indexed by bytes. Semantic tokens and hover inside the query moved the same way.
 - An injected query's span starts at its text, not at the indentation of its first line.
 - `rootUri` and document URIs are percent-decoded, and a Windows drive (`file:///c%3A/...`) becomes `c:/...`, so a workspace whose path has a space or a drive letter finds its objects and catalogs. Locations the server returns are percent-encoded.

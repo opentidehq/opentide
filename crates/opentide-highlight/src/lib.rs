@@ -836,7 +836,7 @@ mod tests {
         assert!(spec.contains_capture("macro"));
         assert!(spec.token_index("keyword").is_ok());
         assert!(!load_tide_fields().is_empty());
-        assert_eq!(tide_catalog_version(), "0.16.1");
+        assert_eq!(tide_catalog_version(), "0.18.0");
         assert_eq!(tide_key_capture("description"), "tide.property");
         assert_eq!(tide_key_capture("alert"), "tide.property");
         assert_eq!(tide_key_capture("response"), "tide.property");

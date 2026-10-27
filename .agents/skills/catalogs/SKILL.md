@@ -1,6 +1,6 @@
 ---
 name: catalogs
-description: Load opentide catalogs and conformance corpora. Covers include_str, OnceLock, toml 0.8, HighlightSpec capture freezes, Pydantic schema sync for opentide 0.16.1, and external KQL/SPL/Elastic fault twins. Use when editing catalogs/, highlights/spec.toml, testdata/conformance, or scripts/sync_opentide_schemas.py.
+description: Load opentide catalogs and conformance corpora. Covers include_str, OnceLock, toml 0.8, HighlightSpec capture freezes, Pydantic schema sync for opentide 0.18.0, and external KQL/SPL/Elastic fault twins. Use when editing catalogs/, highlights/spec.toml, testdata/conformance, or scripts/sync_opentide_schemas.py.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -55,7 +55,7 @@ ECS is never a closed list: elastic-1.0 says field names MUST NOT be checked aga
 
 ## Tide objects
 
-`scripts/sync_opentide_schemas.py` pins `opentide==0.16.1` (`scripts/requirements-opentide.txt`) and writes `catalogs/tide/generated/`. Pydantic is the CLI authority. The LSP emits the same `{code, field_path, severity}` with ranges. `scripts/pydantic_object_issues.py` is the comparison source. Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.
+`scripts/sync_opentide_schemas.py` pins `opentide==0.18.0` (`scripts/requirements-opentide.txt`) and writes `catalogs/tide/generated/`. Pydantic is the CLI authority. The LSP emits the same `{code, field_path, severity}` with ranges. `scripts/pydantic_object_issues.py` is the comparison source. Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.
 
 Vocabularies live in `catalogs/tide/vocabs/*.vocab.toml` and load once (`OnceLock` in `vocabs.rs`). An unknown vocab value is `vocab_unknown`. Deprecated fields use the generated deprecation list (`deprecated_field`).
 
