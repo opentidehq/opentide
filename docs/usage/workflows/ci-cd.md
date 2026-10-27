@@ -321,19 +321,19 @@ The flavor adapts to where the docs are read: `--flavor` if given, else the CI p
 
 ## Corpus explorer on GitHub Pages
 
-`opentide setup ci github --explorer-pages --yes` adds two jobs to the GitHub workflow. `explorer` exports the corpus and builds the static site with the [`@opentide/explorer`](../../cli/explorer.md) npm package, pinned to its `0.5` release line; `deploy-explorer` publishes it to GitHub Pages on pushes to the default branch. The build step is the same command `opentide explorer build` runs, with the repository name as the base path:
+`opentide setup ci github --explorer-pages --yes` adds two jobs to the GitHub workflow. `explorer` exports the corpus and builds the static site with the [`@opentide/explorer`](../../cli/explorer.md) npm package (its latest release); `deploy-explorer` publishes it to GitHub Pages on pushes to the default branch. The build step is the same command `opentide explorer build` runs, with the repository name as the base path:
 
 ```yaml
 - name: Export explorer bundle
   run: opentide --json generate explorer
 
 - name: Build explorer static site
-  run: npx --yes --package @opentide/explorer@0.5 opentide-explorer build --exports-dir .opentide/exports --output ./out/explorer --base-path "/$REPOSITORY_NAME"
+  run: npx --yes --package @opentide/explorer@latest opentide-explorer build --exports-dir .opentide/exports --output ./out/explorer --base-path "/$REPOSITORY_NAME"
   env:
     REPOSITORY_NAME: ${{ github.event.repository.name }}
 ```
 
-The job no longer checks out `opentidehq/explorer` or runs `npm ci` in it. Workflows written by an earlier `setup ci` keep working; re-run `opentide setup ci github --explorer-pages --yes` to switch to the package. Enable Pages with **Settings → Pages → Source: GitHub Actions**. To preview the same site locally, run [`opentide explorer serve`](../../cli/explorer.md).
+The job no longer checks out `opentidehq/explorer` or runs `npm ci` in it. Workflows written by an earlier `setup ci` keep working; re-run `opentide setup ci github --explorer-pages --yes` to switch to the package. To hold the site on one release, replace `@latest` with a version such as `@0.5.0` in the workflow. Enable Pages with **Settings → Pages → Source: GitHub Actions**. To preview the same site locally, run [`opentide explorer serve`](../../cli/explorer.md).
 
 ## Migrating from submodule CI
 

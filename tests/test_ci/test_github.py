@@ -6,7 +6,7 @@ import yaml
 
 from opentide.ci.github import render_github
 from opentide.ci.models import CiRenderOptions
-from opentide.export.explorer_package import MIN_NODE_VERSION, explorer_package_spec
+from opentide.export.explorer_package import MIN_NODE_VERSION
 
 
 def test_render_github_includes_core_jobs() -> None:
@@ -155,7 +155,7 @@ def test_render_github_explorer_pages_jobs() -> None:
     assert "explorer:" in workflow
     assert "deploy-explorer:" in workflow
     # The bundle is exported by `opentide generate explorer` and built by the
-    # pinned @opentide/explorer npm package; the explorer repo is not checked out.
+    # @opentide/explorer npm package (latest release); the explorer repo is not checked out.
     assert "opentide --json generate explorer" in workflow
     assert "repository: opentidehq/explorer" not in workflow
     assert "OPENTIDE_BUNDLE" not in workflow
@@ -167,13 +167,13 @@ def test_render_github_explorer_pages_jobs() -> None:
     assert "secrets.GH_APP_ID && secrets.GH_APP_KEY" not in workflow.split("if:")[1:]
 
 
-def test_render_github_explorer_builds_with_the_pinned_npm_package() -> None:
+def test_render_github_explorer_builds_with_the_latest_npm_package() -> None:
     options = CiRenderOptions(ci="github", explorer_pages=True, default_branch="main")
     jobs = yaml.safe_load(render_github(options))["jobs"]
     steps = {step.get("name"): step for step in jobs["explorer"]["steps"]}
     build = steps["Build explorer static site"]
     assert build["run"] == (
-        f"npx --yes --package {explorer_package_spec()} opentide-explorer build "
+        "npx --yes --package @opentide/explorer@latest opentide-explorer build "
         "--exports-dir .opentide/exports --output ./out/explorer "
         '--base-path "/$REPOSITORY_NAME"'
     )

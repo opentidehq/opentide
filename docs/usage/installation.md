@@ -119,7 +119,7 @@ opentide --help
 | `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations). See [Repository setup](./repository-setup.md) |
 | `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
 | `DEBUG` | Enable debug logging when set |
-| `OPENTIDE_EXPLORER_PACKAGE` | npm spec `opentide explorer` runs instead of `@opentide/explorer@0.5` (a mirror, fork, or local tarball) |
+| `OPENTIDE_EXPLORER_PACKAGE` | npm spec `opentide explorer` runs instead of `@opentide/explorer@<version>` (a mirror, fork, or local tarball) |
 
 ## Verify installation
 

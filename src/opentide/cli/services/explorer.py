@@ -14,8 +14,10 @@ import structlog
 
 from opentide.cli.services.generation import run_generate
 from opentide.export.explorer_package import (
+    EXPLORER_PACKAGE,
     MIN_NODE_VERSION,
     explorer_package_spec,
+    is_explorer_version,
     npx_explorer_args,
 )
 
@@ -24,7 +26,7 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger("opentide.cli.services.explorer")
 
-#: Replaces the pinned ``@opentide/explorer@<range>``: a mirror, a fork, or a
+#: Replaces ``@opentide/explorer@<version>``: a mirror, a fork, or a
 #: local tarball (``./opentide-explorer-0.5.0.tgz``).
 PACKAGE_ENV = "OPENTIDE_EXPLORER_PACKAGE"
 _BUNDLE = "explorer.bundle.json"
@@ -95,15 +97,35 @@ def find_node_toolchain() -> NodeToolchain:
     return NodeToolchain(npx=npx, node_version=reported)
 
 
-def package_spec() -> str:
-    """The npm package spec to run: ``OPENTIDE_EXPLORER_PACKAGE`` or the pinned range."""
-    return os.environ.get(PACKAGE_ENV, "").strip() or explorer_package_spec()
+def package_spec(version: str | None = None) -> str:
+    """The npm package spec to run.
+
+    ``OPENTIDE_EXPLORER_PACKAGE`` when set, else ``@opentide/explorer@<version>``,
+    ``latest`` when *version* is ``None``. Raises ``ValueError`` for a version
+    that is not one, and for a version given alongside the environment override,
+    which would otherwise be dropped without a word.
+    """
+    override = os.environ.get(PACKAGE_ENV, "").strip()
+    if override:
+        if version is not None:
+            raise ValueError(
+                f"{PACKAGE_ENV} is set to {override}; unset it to choose a version "
+                "with --version or --latest"
+            )
+        return override
+    if version is not None and not is_explorer_version(version):
+        raise ValueError(
+            f"--version takes a version, range or dist-tag of {EXPLORER_PACKAGE} "
+            f"(0.5.0, ^0.5, latest), not {version!r}"
+        )
+    return explorer_package_spec(version)
 
 
 def explorer_argv(
     npx: str,
     command: ExplorerCommand,
     *,
+    spec: str,
     exports_dir: Path,
     output: Path,
     base_path: str | None = None,
@@ -113,7 +135,7 @@ def explorer_argv(
     """The ``npx`` command line for ``opentide-explorer build|serve``."""
     argv = [
         npx,
-        *npx_explorer_args(package_spec()),
+        *npx_explorer_args(spec),
         command,
         "--exports-dir",
         str(exports_dir),
@@ -141,8 +163,16 @@ def run_explorer(
     base_path: str | None = None,
     port: int | None = None,
     host: str | None = None,
+    version: str | None = None,
 ) -> dict[str, object]:
-    """Export the explorer bundle, then build or serve it with ``@opentide/explorer``."""
+    """Export the explorer bundle, then build or serve it with ``@opentide/explorer``.
+
+    *version* picks the package release (``None`` runs ``latest``).
+    """
+    try:
+        spec = package_spec(version)
+    except ValueError as exc:
+        return _failure(str(exc), error=str(exc))
     try:
         toolchain = find_node_toolchain()
     except ExplorerToolchainError as exc:
@@ -164,13 +194,13 @@ def run_explorer(
     argv = explorer_argv(
         toolchain.npx,
         command,
+        spec=spec,
         exports_dir=exports_dir,
         output=site,
         base_path=base_path,
         port=port,
         host=host,
     )
-    spec = package_spec()
     data: dict[str, object] = {
         "command": command,
         "package": spec,

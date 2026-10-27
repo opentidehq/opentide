@@ -19,7 +19,6 @@ from opentide.cli.services.explorer import (
     find_node_toolchain,
     parse_node_version,
 )
-from opentide.export.explorer_package import explorer_package_spec
 
 TOOLCHAIN = NodeToolchain(npx="/usr/bin/npx", node_version="v22.11.0")
 
@@ -90,11 +89,11 @@ def test_toolchain_accepts_the_minimum_version() -> None:
         assert find_node_toolchain() == NodeToolchain(npx="/bin/npx", node_version="v20.19.0")
 
 
-def test_argv_runs_the_named_bin_of_the_pinned_package(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(service.PACKAGE_ENV, raising=False)
+def test_argv_runs_the_named_bin_of_the_package() -> None:
     argv = explorer_argv(
         "npx",
         "build",
+        spec="@opentide/explorer@latest",
         exports_dir=Path("/repo/.opentide/exports"),
         output=Path("/repo/out/explorer"),
         base_path="/repo",
@@ -103,7 +102,7 @@ def test_argv_runs_the_named_bin_of_the_pinned_package(monkeypatch: pytest.Monke
         "npx",
         "--yes",
         "--package",
-        explorer_package_spec(),
+        "@opentide/explorer@latest",
         "opentide-explorer",
         "build",
         "--exports-dir",
@@ -115,13 +114,46 @@ def test_argv_runs_the_named_bin_of_the_pinned_package(monkeypatch: pytest.Monke
     ]
 
 
-def test_argv_takes_the_package_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(service.PACKAGE_ENV, "./opentide-explorer-0.5.0.tgz")
+def test_serve_argv_adds_port_and_host() -> None:
     argv = explorer_argv(
-        "npx", "serve", exports_dir=Path("e"), output=Path("o"), port=0, host="0.0.0.0"
+        "npx", "serve", spec="s", exports_dir=Path("e"), output=Path("o"), port=0, host="0.0.0.0"
     )
-    assert argv[3] == "./opentide-explorer-0.5.0.tgz"
     assert argv[-4:] == ["--port", "0", "--host", "0.0.0.0"]
+
+
+@pytest.mark.parametrize(
+    ("version", "spec"),
+    [
+        (None, "@opentide/explorer@latest"),
+        ("latest", "@opentide/explorer@latest"),
+        ("0.5.0", "@opentide/explorer@0.5.0"),
+        ("0.5", "@opentide/explorer@0.5"),
+        ("^0.5.1", "@opentide/explorer@^0.5.1"),
+        ("next", "@opentide/explorer@next"),
+        ("1.0.0-rc.1", "@opentide/explorer@1.0.0-rc.1"),
+    ],
+)
+def test_package_spec_runs_latest_unless_a_version_is_named(
+    monkeypatch: pytest.MonkeyPatch, version: str | None, spec: str
+) -> None:
+    monkeypatch.delenv(service.PACKAGE_ENV, raising=False)
+    assert service.package_spec(version) == spec
+
+
+@pytest.mark.parametrize("version", ["--foo", "../evil", "file:../x", "1.0 || 2", "", "a/b"])
+def test_package_spec_refuses_what_is_not_a_version(
+    monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    monkeypatch.delenv(service.PACKAGE_ENV, raising=False)
+    with pytest.raises(ValueError, match="--version takes a version"):
+        service.package_spec(version)
+
+
+def test_package_spec_takes_the_environment_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(service.PACKAGE_ENV, "./opentide-explorer-0.5.0.tgz")
+    assert service.package_spec() == "./opentide-explorer-0.5.0.tgz"
+    with pytest.raises(ValueError, match="unset it to choose a version"):
+        service.package_spec("0.5.0")
 
 
 @pytest.fixture
@@ -275,3 +307,50 @@ def test_serve_stopped_with_ctrl_c_succeeds(
 def test_serve_rejects_an_out_of_range_port(invoke_cli) -> None:
     result = invoke_cli("explorer", "serve", "--port", "70000")
     assert result.exit_code == 2
+
+
+@pytest.mark.parametrize(
+    ("flags", "spec"),
+    [
+        ((), "@opentide/explorer@latest"),
+        (("--latest",), "@opentide/explorer@latest"),
+        (("--version", "0.5.0"), "@opentide/explorer@0.5.0"),
+    ],
+)
+def test_build_runs_the_requested_release(
+    invoke_cli,
+    monkeypatch: pytest.MonkeyPatch,
+    no_generate: MagicMock,
+    flags: tuple[str, ...],
+    spec: str,
+) -> None:
+    monkeypatch.delenv(service.PACKAGE_ENV, raising=False)
+    npx = _npx()
+    with (
+        patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
+        patch.object(service.subprocess, "run", npx),
+    ):
+        payload = assert_json_ok(invoke_cli("explorer", "build", *flags))
+    assert payload["package"] == spec
+    assert npx.call_args.args[0][3] == spec
+
+
+def test_version_and_latest_together_are_a_usage_error(invoke_cli) -> None:
+    with patch.object(service, "run_generate") as generate:
+        result = invoke_cli("explorer", "serve", "--latest", "--version", "0.5.0")
+    assert result.exit_code == 2
+    assert "not both" in parse_cli_json(result)["error"]
+    generate.assert_not_called()
+
+
+def test_a_bad_version_fails_before_node_or_export(invoke_cli, monkeypatch) -> None:
+    monkeypatch.delenv(service.PACKAGE_ENV, raising=False)
+    with (
+        patch.object(service, "find_node_toolchain") as toolchain,
+        patch.object(service, "run_generate") as generate,
+    ):
+        result = invoke_cli("explorer", "build", "--version", "file:../x")
+    assert result.exit_code == 1
+    assert "--version takes a version" in parse_cli_json(result)["error"]
+    toolchain.assert_not_called()
+    generate.assert_not_called()
