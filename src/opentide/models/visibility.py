@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-
 from opentide.models.base import TideField, TideModel
 
 
