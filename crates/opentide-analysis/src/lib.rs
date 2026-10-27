@@ -1,11 +1,22 @@
 //! I/O-free analysis orchestrator. Filesystem lives behind [`WorkspaceHost`].
+//!
+//! The engine's public entry point: the language server, the browser build, and
+//! bindings such as the `opentide` Python package depend on this crate alone. The
+//! types its functions take and return are re-exported here, so a host never needs
+//! the per-language crates behind it.
 
-use opentide_core::{CompletionItem, Diagnostic, LanguageId, Position, SignatureHelp};
-use opentide_highlight::{
-    HighlightResult, HighlightSpec, HighlightToken, SemanticTokens, encode_lsp_semantic_tokens,
-};
+pub use opentide_core::{CompletionItem, Diagnostic, LanguageId, Position, SignatureHelp};
+pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
+pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
+
+use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
 use opentide_kql::Profile;
-use opentide_tide::{IndexedObject, TideAnalyzeResult};
+use opentide_tide::TideAnalyzeResult;
+
+// The README's example runs as a doctest, so the crates.io page cannot drift.
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
 
 mod ecs;
 
@@ -44,7 +55,7 @@ pub struct AnalyzeRequest {
 pub struct AnalyzeResponse {
     pub diagnostics: Vec<Diagnostic>,
     pub tokens: Vec<HighlightToken>,
-    pub symbols: Vec<opentide_tide::DocumentSymbol>,
+    pub symbols: Vec<DocumentSymbol>,
 }
 
 pub fn index_workspace(host: &dyn WorkspaceHost) -> Vec<IndexedObject> {
@@ -61,7 +72,7 @@ pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elas
 
 /// Elastic tenants declared in the workspace, if the host supplies the
 /// configuration file.
-pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<opentide_tide::ElasticTenant> {
+pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
     host.documents()
         .iter()
         .find(|(path, _)| path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION))

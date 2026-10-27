@@ -13,6 +13,12 @@ keywords = ["lsp", "kql", "spl", "esql", "detection"]
 categories = ["development-tools", "command-line-utilities"]
 default-run = "opentide-lsp"
 
+# `cargo binstall opentide-lsp` downloads the binary each GitHub Release
+# carries for the target, instead of compiling the workspace.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ binary-ext }"
+pkg-fmt = "bin"
+
 [[bin]]
 name = "opentide-lsp"
 path = "src/main.rs"

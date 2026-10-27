@@ -7,7 +7,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-description = "Elastic Common Schema field catalog for the Elastic query engines (I/O-free)"
+description = "opentide engine component: Elastic Common Schema field catalog for the Elastic query engines (I/O-free). Depend on opentide-analysis."
+readme = "../COMPONENT.md"
 
 [dependencies]
 serde.workspace = true

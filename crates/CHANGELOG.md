@@ -4,6 +4,17 @@ Notable changes to the opentide language server, newest first. The format follow
 
 Each version's first paragraph is its summary: the GitHub Release and [opentide.org/releases](https://opentide.org/releases/language-server/) show it above the change lists. Versions before 0.5.0 were tagged after the fact, each on the commit where that stretch of work ended. The crates still said 0.1.0 then, so a binary built from those tags reports 0.1.0, and none of them was published to crates.io.
 
+## [Unreleased]
+
+### Added
+
+- `opentide-analysis` re-exports every type its functions take and return, so a host (the `opentide` Python package, an editor) depends on it alone. Its crates.io page shows a usage example, run as a doctest.
+- `cargo binstall opentide-lsp` downloads the release binary for the target instead of compiling the workspace.
+
+### Changed
+
+- The other library crates say on crates.io that they are engine components and point to `opentide-analysis`.
+
 ## [0.5.0] - 2026-10-26
 
 The Elastic Security release: ES|QL, EQL, Kibana KQL, and Lucene rules get the same editing support as KQL and SPL, and the server installs from crates.io with `cargo install opentide-lsp`.

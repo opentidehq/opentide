@@ -13,7 +13,8 @@ v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations
 ## Install
 
 ```bash
-cargo install opentide-lsp          # from crates.io
+cargo binstall opentide-lsp         # prebuilt binary for your target (cargo-binstall)
+cargo install opentide-lsp          # or build it from crates.io
 opentide-lsp --version
 ```
 
@@ -55,6 +56,8 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 - Client factory is `createOpentideClient`, not `createOtideClient`.
 
 ## Crates
+
+`opentide-analysis` is the engine's public entry point: the server, the browser build, and the `opentide` Python package depend on it alone, and it re-exports the types its API uses. The other library crates are its components, published so it can be; their APIs follow the engine, not a promise of their own. Every crate shares the workspace version.
 
 | Crate | Role |
 | --- | --- |
