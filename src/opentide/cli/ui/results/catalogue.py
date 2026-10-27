@@ -95,6 +95,63 @@ class QueryValidationResult(CommandDocument):
 
 
 # --------------------------------------------------------------------------
+# query
+# --------------------------------------------------------------------------
+
+
+class QueryColumnModel(ResultModel):
+    name: str
+    type: str | None = Field(None, description="The platform's type name, when it reports one")
+
+
+class QueryWindow(ResultModel):
+    from_: str = Field(alias="from", description="Start of the window, UTC ISO-8601")
+    to: str = Field(description="End of the window, UTC ISO-8601")
+
+
+class QueryTenantResult(ResultModel):
+    """One tenant's outcome for one query."""
+
+    tenant: str
+    status: Literal["ok", "failed"]
+    label: str | None = Field(None, description="Which of a rule's queries this is")
+    columns: list[QueryColumnModel] = Field(default_factory=list)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    row_count: int | None = None
+    truncated: bool | None = Field(None, description="More rows matched than --limit let through")
+    partial: bool | None = Field(None, description="The platform stopped early")
+    language: str | None = None
+    sent: str | None = Field(None, description="The query as sent, when it differs")
+    vendor_query_id: str | None = None
+    error: str | None = Field(None, description="Why the tenant returned no rows")
+    detail: str | None = Field(None, description="The platform's own message")
+    warnings: list[str] = Field(default_factory=list)
+    elapsed_ms: int
+
+
+class QueryRuleRef(ResultModel):
+    uuid: str
+    name: str
+    queries: list[str] = Field(description="The queries the rule sends to the platform")
+
+
+class QueryCommandResult(CommandDocument):
+    """``opentide query``: a read-only query's rows from each selected tenant."""
+
+    platform: str | None = None
+    source: Literal["query", "rule"] | None = None
+    query: str | None = None
+    rule: QueryRuleRef | None = None
+    window: QueryWindow | None = None
+    limit: int | None = None
+    tenants: list[str] = Field(default_factory=list, description="The tenants queried")
+    results: list[QueryTenantResult] = Field(default_factory=list)
+    row_count: int | None = None
+    detail: str | None = None
+    choices: list[str] = Field(default_factory=list, description="Valid values of the flag")
+
+
+# --------------------------------------------------------------------------
 # lint
 # --------------------------------------------------------------------------
 
@@ -145,6 +202,7 @@ class PlatformInfo(ResultModel):
     enabled: bool
     can_deploy: bool
     can_validate: bool
+    can_query: bool = Field(False, description="Whether opentide query runs on the platform")
 
 
 class TechniqueCoverage(ResultModel):

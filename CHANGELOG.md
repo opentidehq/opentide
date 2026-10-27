@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide query` runs a read-only query on a platform's tenants and returns the rows** ([#665](https://github.com/opentidehq/opentide/issues/665)). Trying a detection against real telemetry meant copying it into the Sentinel, Defender, Splunk or Kibana console: `validate query --live` only says whether a query runs. `opentide query --platform <p> '<query>'` sends the query over a window (`--since 24h` by default, or `--from`/`--to`) to the tenant `--tenant` names, several, or `--tenant all`, and prints at most `--limit` rows per tenant (100 by default) as a table, `--format jsonl` or `csv`, or the `--json` envelope with one `results` entry per tenant. `--rule <uuid>` or `--file <rule.yaml>` runs the query that rule deploys. Every platform has a runner: Sentinel (Log Analytics), Defender (Graph advanced hunting), Splunk (one-shot search), SentinelOne (PowerQuery), Carbon Black Cloud (process search), CrowdStrike (Next-Gen SIEM, needs `NGSIEM: Read`), HarfangLab (telemetry source and field filters) and Elastic (ES|QL, EQL and Lucene on Elasticsearch; KQL through a rule preview, whose rows are the preview's alerts). Nothing is saved on a tenant. With several tenants and no `--tenant` the command exits `2` and lists them; a tenant that refuses the query fails the run with exit `1` while the others still return rows. See [opentide query](docs/cli/query.md).
+- **MCP `run_query` runs the query** instead of returning a stub. Like `validate_query`, it refuses until `live: true`, and its next action is the live call; then it returns the `opentide --json query` payload. It takes `tenant` (names, comma-separated, or `all`), `rule`, `since`, `limit` and `language`. The `stub` and `rows` keys of the old answer are gone.
+- **`DetectionRule.run_query(platform, tenants=..., since=..., limit=...)`** runs a rule's query from Python, and `opentide.query.run_query` runs any query.
+- **`opentide info` and `opentide://platforms` report `can_query`** for each platform.
+
 ## [0.18.0] — 2026-10-27
 
 Minor release: configuration files are now validated, rule `severity` moves to the alert labels, and new commands arrive (`new`, `doctor`, `tui`, `explain`, `commands`, `info vocab`, `validate --fix` and `--watch`). It is a minor because files that loaded under 0.17.2 can now fail, and because the CLI's human and JSON output changed. After upgrading:

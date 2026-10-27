@@ -1,6 +1,6 @@
 ---
 title: Platforms
-description: Eight deployment platforms, six query validators, and where each platform block schema is specified.
+description: Eight deployment platforms, six query validators, eight query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
@@ -9,20 +9,22 @@ opentide integrates with **eight detection platforms** through built-in adapters
 
 ## Capability matrix
 
-| Platform | CLI `--platform` | Deploy | Query validate | Query language |
-|----------|------------------|:------:|:--------------:|----------------|
-| Microsoft Sentinel | `sentinel` | yes | yes | KQL |
-| Defender for Endpoint | `defender_for_endpoint` | yes | yes | KQL |
-| Elastic Security | `elastic` | yes | yes | Kuery / Lucene / EQL / ES\|QL |
-| Splunk Enterprise Security | `splunk` | yes | yes | SPL |
-| SentinelOne | `sentinel_one` | yes | yes | S1QL |
-| Carbon Black Cloud | `carbon_black_cloud` | yes | yes | Lucene |
-| CrowdStrike Falcon | `crowdstrike` | yes | no | correlation filter |
-| HarfangLab | `harfanglab` | yes | no | Sigma or YARA |
+| Platform | CLI `--platform` | Deploy | Query validate | [Query](../../cli/query.md) | Query language |
+|----------|------------------|:------:|:--------------:|:-----:|----------------|
+| Microsoft Sentinel | `sentinel` | yes | yes | yes | KQL |
+| Defender for Endpoint | `defender_for_endpoint` | yes | yes | yes | KQL |
+| Elastic Security | `elastic` | yes | yes | yes | Kuery / Lucene / EQL / ES\|QL |
+| Splunk Enterprise Security | `splunk` | yes | yes | yes | SPL |
+| SentinelOne | `sentinel_one` | yes | yes | yes | S1QL |
+| Carbon Black Cloud | `carbon_black_cloud` | yes | yes | yes | Lucene |
+| CrowdStrike Falcon | `crowdstrike` | yes | no | yes | correlation filter (CQL) |
+| HarfangLab | `harfanglab` | yes | no | telemetry filters | Sigma or YARA |
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
 CrowdStrike stores a correlation filter. HarfangLab stores a Sigma rule or a YARA rule. Neither language is syntax-checked: `opentide validate query` reports `supported: false`.
+
+Every platform answers [`opentide query`](../../cli/query.md), which runs a read-only query on its tenants and returns the rows. CrowdStrike queries run on Next-Gen SIEM. HarfangLab has no query language for telemetry: a query names a telemetry source and field filters, and a HarfangLab rule has no query to run.
 
 Elastic query validation is the live tenant check only. `validate query --platform elastic --live` previews the compiled rule in Kibana and runs the Elasticsearch pre-flight (ES|QL `LIMIT 0`, then `_field_caps` on aggregation fields). The same pre-flight runs before every Elastic deploy. There is no offline syntax check. See [Validate](../../cli/validate.md#elastic-live-validation-and-deploy).
 

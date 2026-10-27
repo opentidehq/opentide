@@ -10,7 +10,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## What agents can and cannot do today
 
 <Callout type="warn">
-`validate_query` refuses unless you pass `live: true`. That call checks the catalogue rules against the tenant. It does not scan the `query` argument. A missing SDK is a failed live check. `run_query` is **not implemented** — it returns `stub: true` with `rows: null` and never contacts a platform. Use `validation_report` for structured object validation an agent can act on.
+`validate_query` refuses unless you pass `live: true`. That call checks the catalogue rules against the tenant. It does not scan the `query` argument. A missing SDK is a failed live check. `run_query` also refuses until you pass `live: true`; then it runs a read-only query on the tenants you name and returns the rows, as [`opentide query`](../../cli/query.md) does. Both use the configured credentials, so the agent should ask first. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
 | Capability | Status |
@@ -21,7 +21,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 | List every CLI command and option (`opentide --json commands`) | Supported |
 | Dry-run deploy (`deploy_rule`, `dry_run=true`) | Supported |
 | Tenant query check via MCP (`validate_query`, `live: true`) | Supported — catalogue rules, not the `query` string |
-| Live query execution via MCP (`run_query`) | Not implemented |
+| Read-only query on a tenant via MCP (`run_query`, `live: true`) | Supported — every platform; rows capped by `limit` |
 
 ## Install and configure the server
 
@@ -151,7 +151,8 @@ The generated `AGENTS.md` already tells the agent to validate until clean and to
 - Always run `validation_report` (or `opentide --json validate --file …`) until it is
   clean before proposing a rule as done.
 - `validate_query` with `live: true` checks the catalogue rules against the tenant.
-  Never report a rule as platform-ready on its result alone; `run_query` is not implemented.
+  Never report a rule as platform-ready on its result alone.
+- Ask before `run_query` with `live: true`: it queries a tenant with real credentials.
 - Never claim query validation for CrowdStrike or HarfangLab — they are deploy-only.
 - Deploys are `dry_run=true` unless a human explicitly approves a real deploy.
 ```

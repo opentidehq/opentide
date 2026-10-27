@@ -38,7 +38,7 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 | Validate a rule, with positions and fixes | `validate_rule`, `validation_report` |
 | What a diagnostic code means | `explain` |
 | Check queries against the tenant | `validate_query` with `live: true` |
-| Run read-only query | `run_query` — **not implemented** |
+| Run a read-only query, get rows | `run_query` with `live: true` |
 | Deploy (dry-run default) | `deploy_rule` |
 | Deployment state | `deployment_status` |
 | Read schemas, templates, vocab | `opentide://*` resources |
@@ -49,14 +49,14 @@ The server sends `instructions` to MCP hosts with its `initialize` response. The
 
 > opentide: Spec-driven development for agentic detection engineering. opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents.
 
-Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` with `live: true` contacts the tenant, that `run_query` is not implemented, and how to read [`next_actions`](./tools.md#next-actions). The text is `INSTRUCTIONS` in `src/opentide/mcp_server/server.py`.
+Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` and `run_query` with `live: true` contact the tenant, so the agent asks first, and how to read [`next_actions`](./tools.md#next-actions). The text is `INSTRUCTIONS` in `src/opentide/mcp_server/server.py`.
 
 <Callout type="warn">
 `validate_query` refuses unless you pass `live: true`. That call checks the
 catalogue rules for the platform against the tenant. It does not scan the
 `query` argument. A missing SDK or a missing plan is a failed live check.
-`run_query` returns `stub: true` and `rows: null` — it never contacted a
-platform. Everything else (search, `validate_rule` / `validation_report`,
+`run_query` refuses the same way until `live: true`, then runs a read-only
+query on the named tenants and returns their rows. Everything else (search, `validate_rule` / `validation_report`,
 chaining, coverage, dry-run deploy) is fully functional.
 </Callout>
 

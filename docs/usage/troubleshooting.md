@@ -446,7 +446,7 @@ CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query sy
 ### MCP `validate_query` refuses
 
 The default does not scan the query string. Pass `live: true` to check the
-catalogue rules against the tenant. A missing plan fails that check. `run_query` is not implemented and returns `stub: true` with `rows: null`.
+catalogue rules against the tenant. A missing plan fails that check. `run_query` refuses the same way until `live: true`, then returns rows.
 See [Agentic setup](./workflows/agentic-setup.md).
 
 ### `opentide validate query` fails before it reaches the tenant

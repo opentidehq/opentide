@@ -15,6 +15,7 @@
     "migrate",
     "generate",
     "validate",
+    "query",
     "lint",
     "rules",
     "deploy",
