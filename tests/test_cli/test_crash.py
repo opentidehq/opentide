@@ -1025,3 +1025,15 @@ def test_built_in_app_names_count_only_under_an_app_key(tmp_path: Path) -> None:
     platforms.mkdir(parents=True)
     (platforms / "splunk.toml").write_text('[[tenants]]\nname = "launcher"\n', encoding="utf-8")
     assert workspace_redactor([tmp_path], env={})("tenant launcher") == "tenant ***"
+
+
+def test_a_stream_that_cannot_say_whether_it_is_a_terminal_is_not_one() -> None:
+    from opentide.cli.ui.crash import _is_terminal
+
+    class _Closed:
+        def isatty(self) -> bool:
+            raise ValueError("I/O operation on closed file")
+
+    assert _is_terminal(None) is False
+    assert _is_terminal(_Closed()) is False  # ty: ignore[invalid-argument-type]  # a stub stream
+    assert _is_terminal(object()) is False  # ty: ignore[invalid-argument-type]  # no isatty at all

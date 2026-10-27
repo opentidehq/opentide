@@ -60,8 +60,11 @@ def test_run_sets_validation_error_flag_when_issues_present() -> None:
         patch("opentide.validation.tide_schema.run_validation", return_value=report),
         patch("opentide.validation.tide_schema.report_stage"),
         patch("opentide.validation.tide_schema.format_issues_for_console", return_value="issues"),
-        patch.object(tide_schema.get_stdout_console(), "print"),
+        # Pinned, as above: an earlier `--json` test in the worker skipped the print.
+        patch("opentide.validation.tide_schema.is_json_output", return_value=False),
+        patch.object(tide_schema.get_stdout_console(), "print") as mock_print,
     ):
         os.environ.pop("VALIDATION_ERROR_RAISED", None)
         tide_schema.run()
         assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
+    mock_print.assert_called_once_with("issues", markup=False)

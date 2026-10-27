@@ -881,3 +881,20 @@ def test_a_skipped_row_fits_100_columns(monkeypatch: pytest.MonkeyPatch) -> None
     lines = console.file.getvalue().splitlines()
     assert sum(long_name in line for line in lines) == len(reasons)
     assert max(cell_len(line) for line in lines) <= 100, lines
+
+
+def test_object_names_survive_an_index_that_is_not_loaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rows fall back to UUIDs, never a crash, when the registry is missing or odd."""
+    from types import SimpleNamespace
+
+    from opentide.cli.services import share
+
+    class _Broken:
+        def get(self, key: str) -> None:
+            raise RuntimeError("not initialised")
+
+    monkeypatch.setattr(share, "Opentide", SimpleNamespace(Index=_Broken()))
+    assert share._object_names() == {}
+    index = {"objects": {"rules": ["not", "a", "mapping"], "threats": {"u1": {"name": "T"}}}}
+    monkeypatch.setattr(share, "Opentide", SimpleNamespace(Index=index))
+    assert share._object_names() == {"u1": "T"}
