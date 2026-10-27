@@ -246,6 +246,11 @@ _CASES = {
     "validate-unknown-type": Case(("validate", "--type", "bogus")),
     "validate-query": Case(("validate", "query", "--platform", "sentinel")),
     "validate-query-broken": Case(("validate", "query", "--platform", "sentinel"), _break_query),
+    "validate-query-offline": Case(("validate", "query")),
+    "validate-query-sentinel-one": Case(("validate", "query", "--platform", "sentinel_one")),
+    "validate-deep-broken": Case(("validate", "--deep"), _break_query),
+    "lsp-check": Case(("lsp", "check")),
+    "lsp-check-broken": Case(("lsp", "check"), _break_query),
     "validate-query-disabled-platform": Case(("validate", "query", "--platform", "splunk")),
     "validate-query-unsupported": Case(("validate", "query", "--platform", "crowdstrike")),
     "validate-query-live-without-sdk": Case(
@@ -299,10 +304,12 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     """
     # Where findings print as code frames, the outcome line counts them in
     # place of the message, and each warning is a frame, not a warning line.
-    framed = payload.get("command") in {"validate", "lint"}
+    # The engine's commands (#332) frame their findings the same way.
+    engine = payload.get("command") in {"validate query", "lsp check"} and "diagnostics" in payload
+    framed = payload.get("command") in {"validate", "lint"} or engine
     # A run that found issues repeats its message as `error`; a usage error
     # has no findings, and prints its `error`.
-    counted = framed and ("report" in payload or "findings" in payload)
+    counted = framed and ("report" in payload or "findings" in payload or engine)
     expected: list[Expectation] = [
         value
         for key, value in payload.items()
@@ -324,7 +331,15 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
         (f"{_SEVERITY_WORD[finding['severity']]}[{finding['code']}]: {finding['message']}",)
         for finding in payload.get("findings") or []
     )
+    if engine:
+        for finding in payload["diagnostics"]:
+            expected.append((f"{finding['severity']}[{finding['code']}]: {finding['message']}",))
+            expected.append((f"{finding['path']}:{finding['line']}",))
     summary = payload.get("summary") or {}
+    if engine and "queries" in summary:
+        expected.append(f"{summary['queries']} quer")
+    elif engine and "files" in summary:
+        expected.append(f"{summary['files']} file")
     if framed and "findings" in summary:
         # Notes alone are counted as notes, not findings.
         noun = (

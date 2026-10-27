@@ -252,8 +252,20 @@ def tool_explain(code: str = "") -> dict[str, Any]:
     return {"found": True, **page.to_dict()}
 
 
-def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[str, Any]:
-    """Tenant query check. The default refuses; ``live=True`` calls the tenant.
+#: The language a platform's ``query`` is in, when the tool is not told one.
+_DEFAULT_QUERY_LANGUAGE = {
+    "sentinel": "kql",
+    "defender_for_endpoint": "kql",
+    "splunk": "spl",
+    "carbon_black_cloud": "lucene",
+    "elastic": "kuery",
+}
+
+
+def tool_validate_query(
+    query: str, platform: str, live: bool = False, language: str = "", stack: str = ""
+) -> dict[str, Any]:
+    """Check *query* offline with the analysis engine; ``live=True`` checks the tenant.
 
     ``live=True`` validates the catalogue rules for ``platform``, not ``query``.
     """
@@ -265,33 +277,130 @@ def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[s
             "message": f"query validation not supported for {platform}",
             "errors": [],
         }
-    if not live:
-        return {
-            "valid": None,
-            "supported": True,
-            "status": "failed",
-            "message": "Query validation checks the tenant. Pass live: true.",
-            "query_preview": query[:200],
-            "next_actions": [
-                next_action(
-                    "validate_query",
-                    {"query": query, "platform": platform, "live": True},
-                    command=f"opentide --json validate query --platform {platform} --live",
-                    reason=(
-                        f"check the catalogue's {platform} rules: this contacts the "
-                        f"{platform} tenant with the configured credentials, so ask a "
-                        "person first"
-                    ),
-                )
-            ],
-        }
-    from opentide.cli.context import CliContext
-    from opentide.cli.services.validation import validate_query_platform
+    if live:
+        from opentide.cli.context import CliContext
+        from opentide.cli.services.validation import validate_query_platform
 
-    result = validate_query_platform(CliContext(), platform, live=True)
-    # The CLI envelope's failure code; the tool payload keeps its shape.
-    result.pop("_failure_code", None)
-    return result
+        result = validate_query_platform(CliContext(), platform, live=True)
+        # The CLI envelope's failure code; the tool payload keeps its shape.
+        result.pop("_failure_code", None)
+        return result
+    return _offline_query_check(query, platform, language=language, stack=stack)
+
+
+def _offline_query_check(query: str, platform: str, *, language: str, stack: str) -> dict[str, Any]:
+    """``validate_query`` without ``live``: the engine checks the text it is given."""
+    from opentide.analysis import (
+        OFFLINE_QUERY_LANGUAGES,
+        EngineUnavailableError,
+        check_query,
+        engine_versions,
+    )
+    from opentide.cli.ui.diagnostics import engine_reference, explain_command
+
+    live_step = next_action(
+        "validate_query",
+        {"query": query, "platform": platform, "live": True},
+        command=f"opentide --json validate query --platform {platform} --live",
+        reason=(
+            f"check the catalogue's {platform} rules: this contacts the {platform} tenant with "
+            "the configured credentials, so ask a person first"
+        ),
+    )
+    base: dict[str, Any] = {"supported": True, "mode": "offline", "platform": platform}
+    languages = OFFLINE_QUERY_LANGUAGES.get(platform, ())
+    if not languages:
+        return {
+            **base,
+            "valid": None,
+            "status": "failed",
+            "message": (
+                f"{platform} queries are checked on the tenant only; the engine does not parse "
+                "them. Pass live: true."
+            ),
+            "query_preview": query[:200],
+            "next_actions": [live_step],
+        }
+    if not query.strip():
+        # Most engines accept an empty query; an empty query is not a detection.
+        return {
+            **base,
+            "valid": None,
+            "status": "failed",
+            "message": "query is empty: pass the query text to check",
+        }
+    chosen = language.strip().lower() or _DEFAULT_QUERY_LANGUAGE[platform]
+    if chosen not in languages:
+        return {
+            **base,
+            "valid": None,
+            "status": "failed",
+            "message": (
+                f"{platform} queries are in {', '.join(languages)}, not {chosen!r}; pass one "
+                "of those as language"
+            ),
+        }
+    try:
+        findings = check_query(query, language=chosen, platform=platform, stack=stack or None)
+        versions = engine_versions()
+    except EngineUnavailableError as exc:
+        return {
+            **base,
+            "valid": None,
+            "status": "failed",
+            "message": str(exc),
+            "advice": exc.advice,
+        }
+    diagnostics = []
+    for finding in findings:
+        reference = engine_reference(finding.code)
+        diagnostics.append(
+            {
+                "code": finding.code,
+                "severity": finding.severity,
+                "message": finding.message,
+                "line": finding.line,
+                "column": finding.column,
+                "end_line": finding.end_line,
+                "end_column": finding.end_column,
+                "suggestion": finding.suggestion,
+                "reference": None if reference is None else reference[1],
+                "explain": explain_command(finding.code),
+            }
+        )
+    errors = [item for item in diagnostics if item["severity"] == "error"]
+    warnings = [item for item in diagnostics if item["severity"] == "warning"]
+    payload: dict[str, Any] = {
+        **base,
+        "language": chosen,
+        "valid": not errors,
+        "status": "failed" if errors else "passed",
+        "message": (
+            f"{len(errors)} error(s) in the {chosen} query"
+            if errors
+            else f"The {chosen} query is valid offline"
+            + (f", with {len(warnings)} warning(s)" if warnings else "")
+        ),
+        "errors": errors,
+        "warnings": warnings,
+        "diagnostics": diagnostics,
+        "engine": versions,
+        "query_preview": query[:200],
+    }
+    first = (errors or warnings or [None])[0]
+    actions = []
+    if first is not None:
+        actions.append(
+            next_action(
+                "explain",
+                {"code": first["code"]},
+                command=str(first["explain"]),
+                reason="how to fix it",
+            )
+        )
+    actions.append(live_step)
+    payload["next_actions"] = actions
+    return payload
 
 
 def tool_run_query(query: str, platform: str, tenant: str = "") -> dict[str, Any]:

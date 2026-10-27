@@ -19,6 +19,21 @@ if ! command -v uv >/dev/null 2>&1; then
   fi
 fi
 
+# `uv sync` builds the analysis engine (analysis/, Rust) with maturin, so the
+# session needs cargo. rustup installs a minimal stable toolchain once.
+if ! command -v cargo >/dev/null 2>&1; then
+  if [[ -x "$HOME/.cargo/bin/cargo" ]]; then
+    export PATH="$HOME/.cargo/bin:$PATH"
+  else
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --profile minimal --component rustfmt,clippy >/dev/null
+    export PATH="$HOME/.cargo/bin:$PATH"
+  fi
+  if [[ -n "${CLAUDE_ENV_FILE:-}" ]]; then
+    echo "export PATH=\"$HOME/.cargo/bin:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+  fi
+fi
+
 # Idempotent; the container caches the result after the first session.
 uv sync --group dev --quiet
 

@@ -95,3 +95,8 @@ workshop/
 # Agent tooling: per-user settings and harness worktrees stay local
 .claude/settings.local.json
 .claude/worktrees/
+
+# The engine bindings (analysis/): cargo output and the built extension.
+analysis/target/
+analysis/python/opentide_analysis/*.so
+analysis/python/opentide_analysis/*.pyd

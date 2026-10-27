@@ -120,6 +120,7 @@ def test_a_narrowed_watch_passes_its_filters_to_every_full_run(
         "files": ["objects/rules/a.yaml"],
         "uuids": ["u-1"],
         "object_types": ["rule"],
+        "deep": False,
     }
     # A pass over changed files validates those files, not the narrowed scope.
     assert scoped == {
@@ -128,6 +129,7 @@ def test_a_narrowed_watch_passes_its_filters_to_every_full_run(
         "files": [str(_CHANGED)],
         "uuids": None,
         "object_types": None,
+        "deep": False,
     }
     assert re.search(r"^✓ 3 objects valid · 0\.4s$", _text(result), re.MULTILINE), result.output
 

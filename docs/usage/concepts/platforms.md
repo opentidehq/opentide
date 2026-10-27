@@ -1,6 +1,6 @@
 ---
 title: Platforms
-description: Eight deployment platforms, six query validators, and where each platform block schema is specified.
+description: Eight deployment platforms, six query validators (five offline), and where each platform block schema is specified.
 ---
 
 # Platforms
@@ -9,22 +9,24 @@ opentide integrates with **eight detection platforms** through built-in adapters
 
 ## Capability matrix
 
-| Platform | CLI `--platform` | Deploy | Query validate | Query language |
-|----------|------------------|:------:|:--------------:|----------------|
-| Microsoft Sentinel | `sentinel` | yes | yes | KQL |
-| Defender for Endpoint | `defender_for_endpoint` | yes | yes | KQL |
-| Elastic Security | `elastic` | yes | yes | Kuery / Lucene / EQL / ES\|QL |
-| Splunk Enterprise Security | `splunk` | yes | yes | SPL |
-| SentinelOne | `sentinel_one` | yes | yes | S1QL |
-| Carbon Black Cloud | `carbon_black_cloud` | yes | yes | Lucene |
-| CrowdStrike Falcon | `crowdstrike` | yes | no | correlation filter |
-| HarfangLab | `harfanglab` | yes | no | Sigma or YARA |
+| Platform | CLI `--platform` | Deploy | Query validate (live) | Offline query check | Query language |
+|----------|------------------|:------:|:--------------:|:------------:|----------------|
+| Microsoft Sentinel | `sentinel` | yes | yes | yes | KQL |
+| Defender for Endpoint | `defender_for_endpoint` | yes | yes | yes | KQL |
+| Elastic Security | `elastic` | yes | yes | yes | Kuery / Lucene / EQL / ES\|QL |
+| Splunk Enterprise Security | `splunk` | yes | yes | yes | SPL |
+| SentinelOne | `sentinel_one` | yes | yes | no | S1QL |
+| Carbon Black Cloud | `carbon_black_cloud` | yes | yes | yes | Lucene |
+| CrowdStrike Falcon | `crowdstrike` | yes | no | no | correlation filter |
+| HarfangLab | `harfanglab` | yes | no | no | Sigma or YARA |
+
+The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate query`, `opentide validate --deep`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
 CrowdStrike stores a correlation filter. HarfangLab stores a Sigma rule or a YARA rule. Neither language is syntax-checked: `opentide validate query` reports `supported: false`.
 
-Elastic query validation is the live tenant check only. `validate query --platform elastic --live` previews the compiled rule in Kibana and runs the Elasticsearch pre-flight (ES|QL `LIMIT 0`, then `_field_caps` on aggregation fields). The same pre-flight runs before every Elastic deploy. There is no offline syntax check. See [Validate](../../cli/validate.md#elastic-live-validation-and-deploy).
+`validate query --platform elastic --live` previews the compiled rule in Kibana and runs the Elasticsearch pre-flight (ES|QL `LIMIT 0`, then `_field_caps` on aggregation fields). The same pre-flight runs before every Elastic deploy. Offline, the engine parses Kuery, Lucene, EQL and ES|QL, ES|QL against the stack versions of the block's tenants. See [Validate](../../cli/validate.md#elastic-live-validation-and-deploy).
 
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
@@ -67,12 +69,13 @@ Only platforms with `can_validate=True` run syntax validation. For CrowdStrike a
 opentide validate query --platform crowdstrike   # reports unsupported
 ```
 
-For the five that can, query validation is the tenant check. A bare
-`opentide validate query` refuses and names `--live`. `--live` submits the
-catalogue queries and requires tenant credentials; every vendor SDK ships with
-`pip install opentide`. A missing plan fails that check. Only the requested platform's engine
-is imported, so a Sentinel run never loads the CrowdStrike or HarfangLab
-modules. See [`validate`](../../cli/validate.md#query-validation).
+For the six that can, `opentide validate query` checks each query offline with
+the analysis engine (every platform but SentinelOne, whose S1QL it does not
+parse), and `--live` submits the catalogue queries to the tenants, which
+requires credentials; every vendor SDK ships with `pip install opentide`. A
+missing plan fails that check. Only the requested platform's engine is
+imported, so a Sentinel run never loads the CrowdStrike or HarfangLab modules.
+See [`validate`](../../cli/validate.md#query-validation).
 
 ## The `query` field
 

@@ -74,57 +74,52 @@ def test_validate_scoped_by_uuid(invoke_cli, corpus_rule_uuids) -> None:
 
 
 @pytest.mark.parametrize(
-    ("platform", "expects_supported"),
+    ("platform", "expected_exit"),
     [
-        ("sentinel", True),
-        ("defender_for_endpoint", True),
-        ("splunk", True),
-        ("sentinel_one", True),
-        ("carbon_black_cloud", True),
-        ("crowdstrike", False),
-        ("harfanglab", False),
+        ("sentinel", 0),
+        ("defender_for_endpoint", 0),
+        ("splunk", 0),
+        ("elastic", 0),
+        ("carbon_black_cloud", 0),
+        # S1QL has no offline engine: the tenant check, and the refusal says so.
+        ("sentinel_one", 2),
+        # Never validated, never faked.
+        ("crowdstrike", 1),
+        ("harfanglab", 1),
     ],
 )
-def test_validate_query_platform_matrix(
-    invoke_cli,
-    platform: str,
-    expects_supported: bool,
-) -> None:
-    """Bare ``validate query`` refuses and names ``--live``. It does not scan."""
-    result = invoke_cli(
-        "validate",
-        "query",
-        "--platform",
-        platform,
-        "--strategy",
-        "PREVIEW",
-        "--strategy",
-        "RELEASE",
-        "--wide",
-    )
-    # Without --live a supported platform is a usage error; an unsupported one fails.
-    assert result.exit_code == (2 if expects_supported else 1), result.stdout + result.stderr
-    if "{" in result.stdout:
-        body = parse_cli_json(result)
-        assert body.get("supported") is expects_supported
-        assert body.get("status") == "failed"
-        assert body.get("mode") != "offline-syntax"
-        if expects_supported:
-            assert "--live" in body.get("message", "")
-        else:
-            assert "not supported" in body.get("message", "")
+def test_validate_query_platform_matrix(invoke_cli, platform: str, expected_exit: int) -> None:
+    """Bare ``validate query`` checks the corpus queries offline with the analysis engine (#332)."""
+    result = invoke_cli("validate", "query", "--platform", platform)
+    assert result.exit_code == expected_exit, result.stdout + result.stderr
+    body = parse_cli_json(result)
+    if expected_exit == 0:
+        assert body["mode"] == "offline"
+        assert body["status"] == "passed"
+        assert body["queries_validated"] >= 1
+        assert {item["platform"] for item in body["queries"]} == {platform}
+    elif expected_exit == 2:
+        assert body["supported"] is True
+        assert "--live" in body["message"]
+    else:
+        assert body["supported"] is False
+        assert "not supported" in body["message"]
+
+
+def test_validate_query_strategy_and_wide_need_live(invoke_cli) -> None:
+    """They choose tenants: offline they are a usage error, not silently ignored."""
+    for flags in (("--strategy", "PREVIEW"), ("--wide",)):
+        result = invoke_cli("validate", "query", "--platform", "sentinel", *flags)
+        assert result.exit_code == 2, result.stdout + result.stderr
+        assert parse_cli_json(result)["failure"]["code"] == "usage_error"
 
 
 def test_validate_query_without_strategy_or_wide(invoke_cli) -> None:
     """No ``--strategy`` must not traceback on validate query (issue #164)."""
-    result = invoke_cli("validate", "query", "--platform", "sentinel")
-    assert result.exit_code == 2, result.stdout + result.stderr
-    payload = parse_cli_json(result)
-    assert payload["failure"]["code"] == "usage_missing_option"
-    assert payload["failure"]["argument"] == "--live"
-    assert payload.get("supported") is True
-    assert payload.get("status") == "failed"
-    assert "--live" in payload["message"]
+    payload = assert_json_ok(invoke_cli("validate", "query", "--platform", "sentinel"))
+    assert payload["mode"] == "offline"
+    assert payload["supported"] is True
+    assert payload["status"] == "passed"
 
 
 def test_validate_query_live_refuses_the_removed_deployment_plan(
@@ -148,14 +143,12 @@ def test_validate_query_live_refuses_the_removed_deployment_plan(
 
 
 def test_validate_query_bare_needs_no_vendor_sdk(invoke_cli) -> None:
-    """A stock install has no azure package. The refusal must not import it."""
+    """The offline check needs no vendor SDK: with azure hidden, it still runs."""
     with hidden_modules("azure"):
         result = invoke_cli("validate", "query", "--platform", "sentinel")
-    assert result.exit_code == 2, result.stdout + result.stderr
-    payload = parse_cli_json(result)
-    assert payload["status"] == "failed"
-    assert "--live" in payload["message"]
-    assert "mode" not in payload
+    payload = assert_json_ok(result)
+    assert payload["mode"] == "offline"
+    assert payload["status"] == "passed"
 
 
 @pytest.fixture

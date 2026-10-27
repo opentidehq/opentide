@@ -124,6 +124,20 @@ class ValidationIssueModel(DiagnosticFields):
     context: dict[str, Any] = Field(default_factory=dict)
 
 
+class EngineDiagnosticModel(DiagnosticFields):
+    """A finding of the analysis engine: a query or editor diagnostic."""
+
+    severity: Literal["error", "warning", "note"]
+    object_uuid: str | None = Field(None, description="The object the finding is about, if known")
+
+
+class EngineVersions(ResultModel):
+    """The analysis engine that ran."""
+
+    package: str = Field(description="Version of the opentide-analysis package")
+    engine: str = Field(description="Version of the Rust engine (opentidehq/language-server)")
+
+
 class ValidationReportModel(ResultModel):
     """A validation session: its issues, its warnings and its statistics."""
 

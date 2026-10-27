@@ -67,6 +67,11 @@ dependencies = [
     # walked boto3 back to 0.0.3, whose botocore fails on `six.moves`. The floor
     # makes the resolver keep a current boto3 and cap python-dateutil instead.
     "boto3>=1.35",
+    # The query and Tide object engine and the language server (`opentide
+    # validate query`, `validate --deep`, `opentide lsp`): Rust, built from
+    # analysis/ in this repository and published with each opentide release.
+    # A dependency, not an extra, so every install has the engine.
+    "opentide-analysis==0.6.0",
 ]
 
 [dependency-groups]
@@ -85,6 +90,20 @@ dev = [
     "ty>=0.0.65",
     "pre-commit>=4.0",
 ]
+
+[tool.uv.workspace]
+members = ["analysis"]
+
+[tool.uv]
+# `uv sync` builds the engine with analysis/'s `develop` profile: optimised,
+# without the release profile's link-time optimisation. Release wheels are
+# built by .github/workflows/publish-pypi.yml with the release profile.
+config-settings-package = { opentide-analysis = { build-args = "--profile develop" } }
+
+[tool.uv.sources]
+# Developers and CI build the engine from analysis/ (needs a Rust toolchain);
+# a release pins the wheel published from the same commit.
+opentide-analysis = { workspace = true }
 
 [project.urls]
 Homepage = "https://opentide.org"
@@ -113,6 +132,8 @@ source = "vcs"
 [tool.hatch.build.targets.sdist]
 # hatchling 1.32 defaults to Core Metadata 2.5; PyPI/twine still gate on 2.4.
 core-metadata-version = "2.4"
+# The engine is its own distribution (opentide-analysis), built from analysis/.
+exclude = ["/analysis"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opentide"]

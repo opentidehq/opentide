@@ -36,6 +36,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
+
       - name: Install dependencies
         run: uv sync --group dev
 
@@ -48,8 +58,23 @@ jobs:
       - name: Ty type check
         run: uv run ty check src/opentide --output-format github
 
+      - name: Engine bindings (rustfmt, clippy, cargo test)
+        run: |
+          rustup component add rustfmt clippy
+          cargo fmt --manifest-path analysis/Cargo.toml -- --check
+          cargo clippy --manifest-path analysis/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path analysis/Cargo.toml
+
+      - name: opentide and opentide-analysis versions agree
+        run: uv run python scripts/build/check_engine_pin.py
+
+      # A change to analysis/ under a version PyPI already has would publish
+      # nothing: say so on the pull request, not at release time.
+      - name: A changed engine has a new version
+        run: uv run python scripts/build/check_engine_published.py
+
       - name: Build sdist and wheel
-        run: uv build
+        run: uv build --package opentide
 
       - name: Twine check
         run: uvx twine check dist/*
@@ -144,6 +169,16 @@ jobs:
         uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: ${{ matrix.python-version }}
+
+      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -242,6 +277,16 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
+      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
+
       - name: Install dependencies
         run: uv sync --group dev
 
@@ -292,6 +337,16 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
+      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
+
       - name: Install dependencies
         run: uv sync --group dev
 
@@ -322,6 +377,16 @@ jobs:
         uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: "3.14"
+
+      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
 
       - name: Install dependencies
         run: uv sync --group dev

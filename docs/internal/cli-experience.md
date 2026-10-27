@@ -23,7 +23,7 @@ Resolved once per process by `opentide.cli.ui.mode.resolve_mode()`. The first ru
 
 | Order | Rule | Mode |
 |------:|------|------|
-| 1 | `opentide mcp start` | `mcp` |
+| 1 | `opentide mcp start` or `opentide lsp start` | `mcp` |
 | 2 | `--json` anywhere on the line | `json` |
 | 3 | `OPENTIDE_OUTPUT` is `json`, `agent`, `plain` or `human` | that mode |
 | 4 | An agent is detected | `agent` |
@@ -36,7 +36,7 @@ Resolved once per process by `opentide.cli.ui.mode.resolve_mode()`. The first ru
 | `plain` | No animation, no brand marks, `soft_wrap` so paths never break mid-word, colour only when `FORCE_COLOR`/`PY_COLORS` force it |
 | `agent` | `plain`, plus: never prompt (exit 2 at once, naming the flags that answer the prompt), and one `tip: add --json for machine-readable output` line on failure |
 | `json` | Exactly one JSON document on stdout. stderr carries logs at WARNING and above only (INFO with `--debug`), never findings. No CI annotations. |
-| `mcp` | Nothing but JSON-RPC on stdout. Once MCPServer owns the transport, `sys.stdout` points at stderr for everything else; `OPENTIDE_OUTPUT`, agent detection and the envelope do not apply |
+| `mcp` | Nothing but JSON-RPC on stdout: the MCP server, and the language server (`lsp start`), whose protocol the Rust engine writes to file descriptor 1 directly. Once MCPServer owns the transport, `sys.stdout` points at stderr for everything else; `OPENTIDE_OUTPUT`, agent detection and the envelope do not apply |
 
 **Agent detection** reads `AI_AGENT` (proposed standard, agentsmd/agents.md#136) first, then `CLAUDECODE`, `CURSOR_AGENT`, `GEMINI_CLI`, `CODEX_CI`, `COPILOT_AGENT`, `COPILOT_CLI`, `OPENCODE`, `AMP_CURRENT_THREAD_ID`, `AUGMENT_AGENT`, `CLINE_ACTIVE`. It is a hint: it never relaxes a confirmation, a `--yes` requirement or a strategy check. An agent running in CI (Copilot coding agent, claude-code-action) gets `agent` mode, and the CI annotation sinks still run.
 
@@ -199,6 +199,7 @@ Rules: only in `human` mode, and only when the stream encoding can encode the bl
 | MCP server | `mcp` mode; same codes and diagnostic fields; instructions carry the tagline |
 | Agent instruction files (`setup skills`) | Tell agents to run `opentide --json …`, read `fix` and `next_actions`, and branch on exit codes and `failure.code` |
 | Editor (schemas, snippets) | Vocabulary enums carry descriptions; schema titles use the tagline |
+| Editor (language server) | `opentide lsp start`: the same engine and codes as `validate query` and `lsp check`, on the workspace's generated catalogs |
 | Setup wizard | Branded welcome, visible validation, summary and next steps |
 | Help and completion | Grouped panels (Author, Ship, Workspace, Agents and integrations), an example per command |
 | Logs (`--debug`, JSON) | One level label, readable text, no duplicates of returned warnings |
@@ -229,6 +230,7 @@ One new runtime dependency, `textual`, for `opentide tui`.
 | stdlib | `difflib` (did you mean), `importlib` (lazy loading) |
 | syrupy, pexpect (dev, kept) | Snapshot tests of every renderer at fixed width; the wizard on a real PTY |
 | textual (new) | `opentide tui` only, imported lazily so it never affects start-up |
+| opentide-analysis (new, #332) | The Rust analysis engine and language server, built from `analysis/`; imported only through `opentide.analysis` when a command needs it, so start-up and `--help` never load it |
 | Not added | `agent-detector` (a dozen env checks), `sarif-om` (SARIF is a small dict), `trogon` (early-stage; the TUI is built on Textual directly), `watchfiles` (`--watch` polls modification times) |
 
 `src/opentide/cli/ui/` is inside ty's checked scope even while the rest of `src/opentide/cli` is excluded.
@@ -314,6 +316,7 @@ The whole CLI rework is merged: the output contract (#619), diagnostics and `exp
 | Colour in `plain` and `agent` | Off on a terminal too, unless `FORCE_COLOR` or `PY_COLORS` forces it; bold stays, as with `NO_COLOR`. Help screens follow. |
 | Recorded CLI demos | Recorded CLI GIFs/tapes (#633) dropped; a web animation may follow. |
 | Post-merge end-to-end run | Fixes from a full run of the merged rework, each with a test: object files that are empty, not UTF-8, hold an impossible date or a list where a reference belongs are findings, never `error[internal]`; a read-only workspace is a failure line (`new`: `path_not_writable`); a `--repo` that does not exist is `usage_invalid_value` (exit `2`, then `→ opentide --help`) except for `setup`; `path_not_writable` ends in `→ opentide explain path_not_writable`. `deploy` counts the blocks a status kept out (`Skipped: No rule has a status PREVIEW deploys · 4 rules in DESIGN`, `skipped` and `summary.skipped` in JSON; the `rule_skipped_for_strategy` log line is DEBUG when the caller collects them), and a rule whose compile fails is a `✗ would fail` row counted apart (`N would fail`, `summary.fail`, `"fails": true` on the change). Every frame ends in `╰─ help:` (`yaml_parse`, `schema_validation` and `platform_not_enabled` have default help, and a parse frame's step fits its problem: an empty file, an impossible date, a file that is not UTF-8); `duplicate_id` is framed at the UUID with an `also:` note for the other file. An underline label that would pass the terminal edge moves to the next row. Notes alone end `lint` on `✓ N notes in M files` (`_outcome_kind: ok`; JSON `status` stays `issues`). `share` prints plan rows by object name (planned words in a preview, short skip reasons such as `status not shared`) and `info` label and value columns, not boxed tables; `setup skills discover` lists slugs. Outside a workspace, `validate`, `lint` and `deploy` end with `→ opentide setup` (`NO_WORKSPACE_STEP`). A unique prefix (`defender`) or a known name (`gitlab` → `codequality`) is a `did you mean`. The MCP server reports opentide's version. Deprecations print `warning: … is deprecated`. The crash help line is a short OSC 8 link at a terminal (`OPENTIDE_LINKS=none` keeps the whole URL). `validate` no longer parses an object with no finding a second time, and shows a transient spinner at a terminal (`opentide.cli.ui.progress.busy`). |
+| Analysis engine (#332) | The engine is a dependency, `opentide-analysis`, pinned exactly; no extra. `validate query` checks offline by default (`--offline` says so; `--live` is the tenant check, and needs `--platform`); `--strict` fails it on warnings. `validate --deep` adds the `queries` check (`--check queries` alone), whose errors and warnings join the report with the engine's codes and positions (`context.position`), notes left out. `lsp check` prints the editor's diagnostics; its outcome follows `lint`'s grammar (`! 1 warning in 1 file · 1 file checked`). `lsp start` runs in `mcp` mode, serves on a thread without the GIL so Ctrl-C still exits `130`, and prints no document (`NO_DOCUMENT`). In `human` mode the source lines of a query finding's frame are coloured with the engine's own highlight tokens (`QueryHighlighter`, `QUERY_STYLES`: keywords and pipes magenta, functions cyan, tables bright cyan, strings green, numbers yellow, comments dim); `plain`, `agent`, CI and JSON get no colour, and a file the engine cannot read is shown plain. Engine findings without a suggestion get the language reference as `help`, else `opentide explain <code> describes it`, so every frame ends in `╰─ help:`. Engine codes have `explain` pages built from the engine's own sentence (`codes::describe`); a file page of the same name wins. A missing engine is `engine_unavailable` (exit 1) everywhere, an error issue under `--deep`, a failed `analysis_engine` check in `doctor`: never a skip. MCP `validate_query` checks its `query` offline instead of refusing; SentinelOne and an empty query still refuse. `generate schemas` writes the engine's catalogs to `.opentide/lsp/catalogs/generated/`; `doctor` checks them (`lsp_catalog`). |
 
 ## Code references
 
@@ -354,6 +357,13 @@ What is built, and the APIs the next changes extend.
 | `opentide.mcp_server.server` | `reserve_stdout()` keeps file descriptor 1 for JSON-RPC and sends `sys.stdout`, descriptor 1 and child processes to stderr while the server runs. `TAGLINE` and `INSTRUCTIONS`; tool docstrings are the descriptions agents read. |
 | `opentide.mcp_server.tools` | `next_action(tool, arguments, command=, reason=)` builds an MCP next action; `tool_explain()`. |
 | `opentide.cli.services.introspect` | `command_tree(root)` walks the root group into the `opentide commands` payload; `example(command, path)`; `tree_lines()` for the human tree. |
+| `opentide.analysis` | The one door to the engine: `engine()` (raises `EngineUnavailableError`, `code` `engine_unavailable`, `advice`), `engine_versions()`, `Finding` (CLI coordinates; `information`/`hint` become `note`), `QueryCheck`, `check_queries(files, root=, platforms=)`, `check_query(text, language=, platform=, stack=)`, `workspace(root, files)`, `check_file()`, `install_workspace_catalog(root)` → `CatalogState`, `object_files()`, `describe(code)`, `engine_codes()`, `serve_stdio()`; `OFFLINE_QUERY_LANGUAGES`. Imports nothing compiled at module level. |
+| `opentide.cli.ui.diagnostics` (engine) | `diagnostic_from_engine(finding, file_path=, workspace=)`; `engine_reference(code)` → `(language, url)`; `diagnostic_from_issue` frames an issue whose `context.position` the engine set. |
+| `opentide.cli.services.engine` | `engine_unavailable_result()`, `findings_summary()`, `findings_outcome()` → `(line, kind)`. |
+| `opentide.cli.services.lsp` | `serve()` (`lsp start`), `run_lsp_check()`. |
+| `opentide.cli.ui.codeframe` (engine) | `QueryHighlighter` (the engine's tokens per file, read once; a `LineStyles` callable), `QUERY_STYLES`; `diagnostic_lines(..., styles=)` colours query findings' source lines, `render_diagnostics` passes one in `human` mode. |
+| `opentide.validation.queries` | The `queries` check: `query_issues(objects, root=)` → `QueryIssues(errors, warnings, queries)`; `ENGINE_SOURCE`. |
+| `opentide.generation.lsp_catalog` | `write_catalog(root)`, `fields_catalog()`, `deprecations_catalog()`; `CATALOG_DIR`. Ported from the language server's `scripts/sync_opentide_schemas.py` (same output for the same models). |
 
 A service payload may also carry `_outcome_kind` (`plan`, `warning`) when its status alone does not say how the outcome line reads, and `_next_numbered` for next steps that form a sequence.
 

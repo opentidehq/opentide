@@ -1,0 +1,41 @@
+[package]
+name = "opentide-analysis-python"
+# The Python distribution's version is in pyproject.toml; this crate is never
+# published to crates.io.
+version = "0.6.0"
+edition = "2024"
+rust-version = "1.85"
+license = "EUPL-1.2"
+publish = false
+description = "Python bindings for the opentide analysis engine and language server"
+repository = "https://github.com/opentidehq/opentide"
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+# abi3: one wheel per platform serves CPython 3.10 and later. A free-threaded
+# interpreter (3.14t) has no stable ABI, so it builds from the sdist.
+pyo3 = { version = "0.30.1", features = ["abi3-py310"] }
+# The engine and the server, from opentidehq/language-server. Both come from one
+# commit: the engine crates share a version and pin each other to it. Until the
+# language server publishes the host API this binds (its next release), this is
+# a git revision; scripts/build/check_engine_pin.py refuses a git source when a
+# release is published, so a release always builds from crates.io.
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "26559c7a39c5245cf6c5165e5556fbff18dd70b5" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "26559c7a39c5245cf6c5165e5556fbff18dd70b5" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
+
+# What `uv sync` builds for development and CI (see `config-settings-package`
+# in the root pyproject.toml): optimised, so the engine runs at full speed in
+# the test suite, without the release profile's slow link-time optimisation.
+[profile.develop]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = "none"

@@ -13,7 +13,7 @@ The server's `instructions`, sent with the `initialize` response, open with the 
 
 ### Next actions
 
-`validate_rule`, `validation_report` and a refused `validate_query` add a `next_actions` list: the calls worth making next.
+`validate_rule`, `validation_report` and `validate_query` add a `next_actions` list: the calls worth making next.
 
 ```json
 {
@@ -290,35 +290,84 @@ One cause is one issue, here and in `validate_rule`: a dangling reference (`dete
 
 ## validate_query
 
-Tenant query check, the same path as `opentide validate query --platform <platform> --live`.
+Checks a query offline with the analysis engine, the same engine as `opentide validate query` and `opentide lsp`; with `live: true`, the catalogue's rules on the platform's tenants, the same path as `opentide validate query --platform <platform> --live`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `query` | string | | Unused. The live check reads catalogue rules, not this string |
-| `platform` | string | | Platform key |
+| `query` | string | | The query to check offline. The live check reads catalogue rules, not this string |
+| `platform` | string | | Platform key: picks the language and its profile (Defender tables for `defender_for_endpoint`, the Carbon Black dialect for `carbon_black_cloud`) |
 | `live` | boolean | `false` | `true` calls the tenant |
+| `language` | string | `""` | Elastic only: `esql`, `eql`, `kuery` (the default) or `lucene` |
+| `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, such as `9.5` or `serverless`. Empty: every supported stack |
 
-The default refuses and does not scan `query`. Pass `live: true` to check the
-catalogue rules for `platform`. A missing SDK, a missing plan or a tenant it
-cannot reach is a failed live check.
+Offline, the result has `valid` (`false` when the engine found an error), `status`, `language`, `errors`, `warnings`, every finding under `diagnostics` (`code`, `severity`, `message`, `line`, `column`, `end_line`, `end_column` in the query, 1-based, columns in code points; `suggestion`, the language's `reference` and `explain`), and the `engine` versions. Warnings (slow query shapes) leave `valid` true. `next_actions` names the first finding's `explain` page, then the live check.
 
 ```json
 {
-  "valid": null,
   "supported": true,
+  "mode": "offline",
+  "platform": "sentinel",
+  "language": "kql",
+  "valid": false,
   "status": "failed",
-  "message": "Query validation checks the tenant. Pass live: true.",
-  "query_preview": "SecurityEvent | where Account == \"oops",
+  "message": "1 error(s) in the kql query",
+  "errors": [
+    {
+      "code": "kql_unknown_operator",
+      "severity": "error",
+      "message": "unknown tabular operator 'wher'",
+      "line": 1,
+      "column": 17,
+      "end_line": 1,
+      "end_column": 37,
+      "suggestion": "where",
+      "reference": "https://learn.microsoft.com/kusto/query/",
+      "explain": "opentide explain kql_unknown_operator"
+    }
+  ],
+  "warnings": [],
+  "diagnostics": [
+    {
+      "code": "kql_unknown_operator",
+      "severity": "error",
+      "message": "unknown tabular operator 'wher'",
+      "line": 1,
+      "column": 17,
+      "end_line": 1,
+      "end_column": 37,
+      "suggestion": "where",
+      "reference": "https://learn.microsoft.com/kusto/query/",
+      "explain": "opentide explain kql_unknown_operator"
+    }
+  ],
+  "engine": {
+    "package": "0.6.0",
+    "engine": "0.6.0"
+  },
   "next_actions": [
     {
+      "tool": "explain",
+      "arguments": {
+        "code": "kql_unknown_operator"
+      },
+      "command": "opentide explain kql_unknown_operator",
+      "reason": "how to fix it"
+    },
+    {
       "tool": "validate_query",
-      "arguments": { "query": "SecurityEvent | where Account == \"oops", "platform": "sentinel", "live": true },
+      "arguments": {
+        "query": "SecurityEvent | wher EventID == 4688",
+        "platform": "sentinel",
+        "live": true
+      },
       "command": "opentide --json validate query --platform sentinel --live",
       "reason": "check the catalogue's sentinel rules: this contacts the sentinel tenant with the configured credentials, so ask a person first"
     }
   ]
 }
 ```
+
+SentinelOne's S1QL has no offline engine: the default refuses and names `live: true`, and an empty `query` is refused too. Neither scans anything (`valid: null`). A missing SDK, a missing plan or a tenant it cannot reach is a failed live check.
 
 **Unsupported platforms** return:
 
@@ -332,7 +381,7 @@ cannot reach is a failed live check.
 }
 ```
 
-Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set). The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `sentinel`, `sentinel_one`, `splunk` (`QUERY_VALIDATION_PLATFORMS`; the tool description lists the same set); offline, all but `sentinel_one`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 

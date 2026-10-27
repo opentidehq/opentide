@@ -66,7 +66,7 @@ gh pr create --base development --fill
 
 ## CI, coverage, CodeQL, stack comments
 
-**CI** (`.github/workflows/ci.yml`): lint (ruff + ty) and test matrix Python **3.10–3.14** in parallel; stale runs cancelled on new pushes.
+**CI** (`.github/workflows/ci.yml`): lint (ruff + ty, and rustfmt, clippy and cargo test for `analysis/`) and test matrix Python **3.10–3.14** in parallel; stale runs cancelled on new pushes. Every job builds the engine through `uv sync`, with a Rust cache.
 
 **Local parity:**
 
@@ -88,18 +88,34 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 ## Platform capability matrix
 
-| Platform | Deploy | Query validate |
-|----------|:------:|:--------------:|
-| Sentinel | ✅ | ✅ KQL |
-| Defender | ✅ | ✅ KQL |
-| Elastic | ✅ | ✅ Kuery, Lucene, EQL, ES\|QL |
-| Splunk | ✅ | ✅ SPL |
-| SentinelOne | ✅ | ✅ S1QL |
-| Carbon Black | ✅ | ✅ Lucene |
-| CrowdStrike | ✅ | ❌ |
-| HarfangLab | ✅ | ❌ |
+| Platform | Deploy | Query validate (`--live`) | Offline (engine) |
+|----------|:------:|:--------------:|:----------------:|
+| Sentinel | ✅ | ✅ KQL | ✅ KQL |
+| Defender | ✅ | ✅ KQL | ✅ KQL |
+| Elastic | ✅ | ✅ Kuery, Lucene, EQL, ES\|QL | ✅ Kuery, Lucene, EQL, ES\|QL |
+| Splunk | ✅ | ✅ SPL | ✅ SPL |
+| SentinelOne | ✅ | ✅ S1QL | ❌ |
+| Carbon Black | ✅ | ✅ Lucene | ✅ Lucene |
+| CrowdStrike | ✅ | ❌ | ❌ |
+| HarfangLab | ✅ | ❌ | ❌ |
 
 CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False`, never fake validation.
+
+## Analysis engine (`analysis/`)
+
+The offline query checks (`validate query`, `validate --deep`), `opentide lsp` and MCP
+`validate_query` run the Rust engine from
+[opentidehq/language-server](https://github.com/opentidehq/language-server), bound with PyO3
+in [`analysis/`](analysis/) and published as `opentide-analysis`, which `opentide` pins
+exactly. It is a uv workspace member, so `uv sync` builds it and needs a Rust toolchain
+(stable, 1.85+). Python reaches it only through `src/opentide/analysis.py`; a missing engine
+is `engine_unavailable`, never a skipped check.
+
+| Change | Do |
+|--------|----|
+| Rust binding (`analysis/src/lib.rs`) | Update `analysis/python/opentide_analysis/_native.pyi`; `cargo fmt`, `cargo clippy -D warnings` and `cargo test` in `analysis/` |
+| Engine crates | Bump the revision or version of both `opentide-analysis` and `opentide-lsp` in `analysis/Cargo.toml` together |
+| Release | `scripts/build/check_engine_pin.py --release` must pass: crates.io sources, and one version in the root pin, `analysis/pyproject.toml` and `analysis/Cargo.toml` |
 
 ## Code quality bar
 
@@ -128,6 +144,7 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`. Skills:
 
 ```
 src/opentide/     # PyPI package (models, CLI, MCP, platforms, bundled data)
+analysis/         # opentide-analysis: PyO3 bindings for the Rust engine and language server
 tests/
 docs/
 scripts/          # ci-local.sh, codeql-local.sh, validate-docs.sh

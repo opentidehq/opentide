@@ -38,6 +38,17 @@ Never tag a feature branch. Trunk is `development`.
 
 A GitHub Release whose `--target` is not the tagged commit is a failed release. Do not retag; fix the target and publish from the correct tag.
 
+## The engine package (`opentide-analysis`)
+
+`opentide` pins `opentide-analysis==X.Y.Z` (the Rust engine, built from `analysis/`). `publish-pypi.yml` builds its wheels and sdist and publishes them **before** `opentide`; a version already on PyPI is skipped.
+
+| Before tagging | Check |
+|----------------|-------|
+| The engine changed since the last release | Bump `version` in `analysis/pyproject.toml` and `analysis/Cargo.toml`, and the pin in `pyproject.toml`, together |
+| `analysis/Cargo.toml` takes `opentide-analysis` / `opentide-lsp` from git | Release the language server to crates.io first, then pin both to `"=<version>"`. `uv run python scripts/build/check_engine_pin.py --release` must pass, or the publish fails before building |
+| `analysis/` changed but its version is already on PyPI | `scripts/build/check_engine_published.py` fails (in CI's lint job and in the publish guard): bump the engine version |
+| First release with the engine | A pending trusted publisher for `opentide-analysis` ([pypi-trusted-publishing](../../../docs/internal/pypi-trusted-publishing.md#opentide-analysis-the-engine)) |
+
 ## Patch vs minor
 
 The package is pre-1.0, so the minor number carries breaking and behaviour changes. Cut a **minor** (`0.x+1.0`) when any shipped change does one of these:

@@ -29,7 +29,7 @@ Usage: scripts/ci-local.sh [OPTIONS]
 Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
-  --quick       Lint + type-check + package build (ruff, ty, uv build)
+  --quick       Lint + type-check + package build (ruff, ty, cargo clippy, uv build)
   --test        Lint + unit pytest (excludes cli_e2e/cli_smoke) — default
   --full        Lint + unit pytest + coverage gate + CLI E2E + GitLab CI lint — pre-push
   --coverage    Alias for --full
@@ -91,8 +91,17 @@ uv run ruff format --check src/opentide tests scripts
 echo "==> Ty type check"
 uv run ty check src/opentide
 
+echo "==> Engine bindings (rustfmt, clippy, cargo test)"
+cargo fmt --manifest-path analysis/Cargo.toml -- --check
+cargo clippy --manifest-path analysis/Cargo.toml --all-targets --quiet -- -D warnings
+cargo test --manifest-path analysis/Cargo.toml --quiet
+
+echo "==> opentide and opentide-analysis versions agree"
+uv run python scripts/build/check_engine_pin.py
+
 echo "==> uv build (sdist + wheel)"
-uv build
+rm -rf dist
+uv build --package opentide
 echo "==> twine check"
 uvx twine check dist/*
 

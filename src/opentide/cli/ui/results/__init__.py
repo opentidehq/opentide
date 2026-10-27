@@ -34,6 +34,7 @@ from opentide.cli.ui.results.catalogue import (
 )
 from opentide.cli.ui.results.deploy import DeployResult, MigrateStateResult
 from opentide.cli.ui.results.generate import DocsResult, ExportResult, ExtractResult, GenerateResult
+from opentide.cli.ui.results.lsp import LspCheckResult
 from opentide.cli.ui.results.migrate import MigrateObjectsResult, MigrateVocabScopeResult
 from opentide.cli.ui.results.setup import (
     SetupCiResult,
@@ -109,6 +110,7 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "new objective": NewResult,
     "new rule": NewResult,
     "doctor": DoctorResult,
+    "lsp check": LspCheckResult,
     # Refuses outside an interactive terminal, so --json only ever prints a usage error.
     "tui": CommandError,
     "migrate objects": MigrateObjectsResult,
@@ -131,7 +133,7 @@ PENDING_MODELS: dict[str, str] = {}
 
 #: Commands that never print a JSON document, not even for a usage error:
 #: stdout is JSON-RPC.
-NO_DOCUMENT = frozenset({"mcp start"})
+NO_DOCUMENT = frozenset({"mcp start", "lsp start"})
 
 
 def result_model(path: str) -> type[CommandDocument] | None:

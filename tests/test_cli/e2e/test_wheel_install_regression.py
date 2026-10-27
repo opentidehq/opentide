@@ -56,15 +56,7 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     skills_dest = tmp_path / "skills-repo"
     skills_dest.mkdir()
 
-    build = _run(
-        [uv, "build", "--wheel", "--out-dir", str(dist)],
-        cwd=str(ROOT),
-        timeout=180,
-    )
-    assert build.returncode == 0, build.stdout + build.stderr
-    wheels = list(dist.glob("opentide-*.whl"))
-    assert len(wheels) == 1, f"expected one wheel in {dist}: {wheels}"
-    wheel = wheels[0]
+    wheel = _build_wheel(uv, dist)
 
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
@@ -78,7 +70,7 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     assert venv.returncode == 0, venv.stdout + venv.stderr
     python = _venv_bin(env_dir, "python")
     install = _run(
-        [uv, "pip", "install", "--python", str(python), str(wheel)],
+        [uv, "pip", "install", "--python", str(python), "--find-links", str(dist), str(wheel)],
         timeout=180,
     )
     assert install.returncode == 0, install.stdout + install.stderr
@@ -212,18 +204,47 @@ def test_pip_installed_wheel_validate_generate_and_skills(
 
 
 def _build_wheel(uv: str, dist: Path) -> Path:
-    build = _run([uv, "build", "--wheel", "--out-dir", str(dist)], cwd=str(ROOT), timeout=300)
+    """opentide's wheel, beside the engine wheel it pins (not on PyPI before a release).
+
+    The engine builds with the ``develop`` profile ``uv sync`` already compiled,
+    so it reuses that build instead of a release one.
+    """
+    build = _run(
+        [uv, "build", "--package", "opentide", "--wheel", "--out-dir", str(dist)],
+        cwd=str(ROOT),
+        timeout=300,
+    )
     assert build.returncode == 0, build.stdout + build.stderr
+    engine = _run(
+        [
+            uv,
+            "build",
+            "--package",
+            "opentide-analysis",
+            "--wheel",
+            "--out-dir",
+            str(dist),
+            "-C",
+            "build-args=--profile develop",
+        ],
+        cwd=str(ROOT),
+        timeout=900,
+    )
+    assert engine.returncode == 0, engine.stdout + engine.stderr
+    assert len(list(dist.glob("opentide_analysis-*.whl"))) == 1
     wheels = list(dist.glob("opentide-*.whl"))
     assert len(wheels) == 1, f"expected one wheel in {dist}: {wheels}"
     return wheels[0]
 
 
 def _install(uv: str, env_dir: Path, spec: str) -> Path:
+    """Install *spec* from a wheel that :func:`_build_wheel` wrote, with its engine wheel."""
     venv = _run([uv, "venv", str(env_dir)], timeout=60)
     assert venv.returncode == 0, venv.stdout + venv.stderr
     python = _venv_bin(env_dir, "python")
-    install = _run([uv, "pip", "install", "--python", str(python), spec], timeout=300)
+    wheel = Path(spec.split("[", 1)[0])
+    links = ["--find-links", str(wheel.parent)] if wheel.is_file() else []
+    install = _run([uv, "pip", "install", "--python", str(python), *links, spec], timeout=300)
     assert install.returncode == 0, install.stdout + install.stderr
     return python
 
@@ -391,6 +412,32 @@ def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
     )
     metadata = _run([str(python), "-c", print_extras], timeout=60)
     assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr
+
+
+def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path) -> None:
+    """``pip install opentide`` brings the analysis engine: offline queries and the LSP (#332)."""
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is required to build and install the wheel")
+
+    wheel = _build_wheel(uv, tmp_path / "dist")
+    python = _install(uv, tmp_path / "engine-venv", str(wheel))
+    probe = _run(
+        [
+            str(python),
+            "-c",
+            "from opentide.analysis import check_query, engine_versions; "
+            "print(engine_versions()); "
+            "print([f.code for f in check_query('SecurityEvent | wher x', language='kql')])",
+        ],
+        timeout=120,
+    )
+    assert probe.returncode == 0, probe.stdout + probe.stderr
+    assert "kql_unknown_operator" in probe.stdout
+    opentide = _venv_bin(tmp_path / "engine-venv", "opentide")
+    lsp = _run([str(opentide), "lsp", "start"], input="", timeout=60)
+    assert lsp.returncode == 0, lsp.stdout + lsp.stderr
+    assert lsp.stdout == ""
 
 
 def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:

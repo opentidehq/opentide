@@ -6,6 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+The language server and its query engine ship with `pip install opentide` ([#332](https://github.com/opentidehq/opentide/issues/332)). There is no `opentide[lsp]` extra and no second install: opentide depends on `opentide-analysis`, the Rust engine from [opentidehq/language-server](https://github.com/opentidehq/language-server) compiled for each platform, at the exact version it was built with. After upgrading:
+
+- **Read `opentide validate query` again.** Without `--live` it now checks every rule query offline (exit `1` on an error) instead of refusing with exit `2`. A script that relied on the refusal, or on `--platform` being required without `--live`, changes behaviour; `--live` is unchanged.
+- **Run `opentide generate schemas`** to write the language server's catalogs, then point your editor at `opentide lsp start`.
+
+### Added
+
+- **`opentide validate query` checks queries offline.** The analysis engine parses each rule query in its platform's language, with the platform's profile: KQL with Sentinel or Defender tables, SPL, ES|QL (against the block's tenants' `setup.version`), EQL, Kibana KQL, Lucene, and Carbon Black's Lucene dialect. No tenant, no credentials. It is the default; `--offline` says so, `--live` is the tenant check. `--platform` is optional offline (every platform the engine parses), `--changed`, `--file` and `--uuid` narrow it, and `--strict` fails it on warnings (slow query shapes). Findings print as code frames at their place in the rule file, with CI annotations, and the document lists every query checked (`queries`) and finding (`diagnostics`). SentinelOne's S1QL is checked on the tenant only; CrowdStrike and HarfangLab are never validated.
+- **`opentide validate --deep`** runs the default checks and then the new `queries` check (`--check queries` alone): the engine's errors and warnings join the report with their codes, positions and `opentide explain` pages, and `summary.queries` counts the queries.
+- **`opentide lsp start`** serves the language server protocol on stdio for editors: diagnostics, hover, completion, signature help, definitions, references and semantic highlighting for Tide objects and the queries inside them, and for `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` and `.lucene` files. `--stdio` is accepted for editors that pass it. [Configuring an editor](docs/cli/lsp.md#configuring-an-editor) has Neovim and Helix samples.
+- **`opentide lsp check [PATH]...`** prints the diagnostics the editor shows, as code frames, for object files and query files; with no path, every object file. `--language`, `--strict`, and `--json` with `catalog` and `engine`.
+- **Query findings are highlighted.** At a terminal, the source lines of a query finding's code frame are coloured as the editor colours them (keywords, functions, tables, strings, comments), by the same engine; plain output, CI logs and `--json` are unchanged.
+- **`opentide generate schemas` writes the language server's catalogs** to `.opentide/lsp/catalogs/generated/` (`fields.json`, `deprecations.json`) from the workspace's models, so hover, completion and vocabulary checks follow its configuration; the catalog compiled into the engine is the fallback.
+- **MCP `validate_query` checks its `query` offline** in the platform's language, with `language` and `stack` for Elastic, and returns `valid`, `errors`, `warnings` and `diagnostics` with positions in the query. `live: true` is unchanged.
+- **`opentide explain` pages for every engine code** (`kql_unknown_table`, `spl_parse_error`, `esql_unavailable`, ...), from the engine's own descriptions, and for `engine_unavailable`, `analysis_engine` and `lsp_catalog`.
+- **`opentide doctor` checks the engine** (`analysis_engine`: it imports, and its versions) and the language-server catalogs (`lsp_catalog`: present, parseable, from this opentide version).
+
+### Changed
+
+- **A bare `opentide validate query` runs the offline check** instead of exiting `2` and naming `--live`. `--platform` is required only with `--live`. `--strategy` and `--wide` choose tenants, so they now need `--live` (exit `2` without it). `opentide validate --strict query` hands `--strict` to `query`, which takes it now.
+- **MCP `validate_query` without `live`** returns the offline check rather than a refusal (`valid` is `true` or `false` instead of `null`); it still refuses, with `valid: null`, a SentinelOne query and an empty one.
+- **opentide depends on `opentide-analysis`**, which has prebuilt wheels for CPython 3.10 and later on Linux (x86_64 and arm64, glibc and musl), macOS and Windows x64. Elsewhere, including free-threaded Python, pip builds it from source, which needs a Rust toolchain. A missing engine fails the commands that need it (`engine_unavailable`); it never skips them.
+
 ## [0.18.0] — 2026-10-27
 
 Minor release: configuration files are now validated, rule `severity` moves to the alert labels, and new commands arrive (`new`, `doctor`, `tui`, `explain`, `commands`, `info vocab`, `validate --fix` and `--watch`). It is a minor because files that loaded under 0.17.2 can now fail, and because the CLI's human and JSON output changed. After upgrading:

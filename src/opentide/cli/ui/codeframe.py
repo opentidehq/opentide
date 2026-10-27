@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import codecs
 import os
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote
@@ -34,7 +34,7 @@ from rich.console import Console
 from rich.style import Style
 from rich.text import Text
 
-from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, relative_path
+from opentide.cli.ui.diagnostics import Diagnostic, SourceFiles, engine_reference, relative_path
 from opentide.cli.ui.glyphs import glyph
 from opentide.cli.ui.mode import OutputMode, get_mode
 
@@ -44,6 +44,28 @@ if TYPE_CHECKING:
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
 _NOTE_STYLE = {"help": "bold cyan", "note": "bold blue", "expected": "bold", "fix": "bold cyan"}
 _GUTTER_STYLE = "blue"
+
+#: HighlightSpec capture → terminal style, for the query lines of a frame.
+#: Captures not listed (variables, properties, punctuation, Tide keys) keep
+#: the terminal's colour.
+QUERY_STYLES = {
+    "keyword": "bold magenta",
+    "operator": "magenta",
+    "operator.pipe": "bold magenta",
+    "function": "cyan",
+    "function.builtin": "cyan",
+    "macro": "cyan",
+    "type": "bright_cyan",
+    "string": "green",
+    "number": "yellow",
+    "boolean": "yellow",
+    "constant": "yellow",
+    "comment": "dim",
+    "error": "red",
+}
+
+#: ``(column, end_column, style)`` spans for one source line of a file.
+LineStyles = Callable[[Path, int], list[tuple[int, int, str]]]
 
 #: ``OPENTIDE_LINKS`` values, and the scheme each one writes.
 LINK_SCHEMES = ("file", "vscode", "cursor", "none")
@@ -186,8 +208,12 @@ def diagnostic_lines(
     cwd: Path | None = None,
     links: bool = False,
     columns: int | None = None,
+    styles: LineStyles | None = None,
 ) -> list[Text]:
     """The lines of one diagnostic's frame.
+
+    With *styles*, the source lines of a query finding are coloured as the
+    editor colours them (see :class:`QueryHighlighter`).
 
     With *columns* (the terminal's width), the message and notes wrap at word or
     path-segment boundaries and the location is shortened in the middle, so
@@ -243,12 +269,24 @@ def diagnostic_lines(
             if (diagnostic.file_path is not None)
             else None
         )
+        highlighted = styles if engine_reference(diagnostic.code) is not None else None
+
+        def source_text(text: str, number: int) -> Text:
+            shown = safe(text.rstrip())
+            line = Text(" " + shown)
+            if highlighted is None or diagnostic.file_path is None or shown != text.rstrip():
+                # A character the stream cannot encode moved the columns.
+                return line
+            for column, end_column, span_style in highlighted(diagnostic.file_path, number):
+                line.stylize(span_style, column, end_column)
+            return line
+
         if previous is not None and previous.strip():
             row = gutter(str(diagnostic.line - 1))
-            row.append(" " + safe(previous.rstrip()))
+            row.append_text(source_text(previous, diagnostic.line - 1))
             lines.append(row)
         row = gutter(str(diagnostic.line))
-        row.append(" " + safe(source.rstrip()))
+        row.append_text(source_text(source, diagnostic.line))
         lines.append(row)
         if diagnostic.column is not None:
             # Measured on the text as printed: a replaced character is one cell.
@@ -299,6 +337,44 @@ def diagnostic_lines(
     return lines
 
 
+class QueryHighlighter:
+    """The engine's highlight tokens for each file a frame shows, read once per file.
+
+    Callable as :data:`LineStyles`. A file the engine cannot read, or a run
+    whose engine does not load, is shown without colour: highlighting never
+    fails a command.
+    """
+
+    def __init__(self) -> None:
+        self._files: dict[Path, dict[int, list[tuple[int, int, str]]]] = {}
+
+    def __call__(self, path: Path, line: int) -> list[tuple[int, int, str]]:
+        if path not in self._files:
+            self._files[path] = self._read(path)
+        return self._files[path].get(line, [])
+
+    @staticmethod
+    def _read(path: Path) -> dict[int, list[tuple[int, int, str]]]:
+        from opentide.analysis import EngineUnavailableError, highlight, language_for_path
+
+        by_line: dict[int, list[tuple[int, int, str]]] = {}
+        try:
+            language = language_for_path(path)
+            if language is None:
+                return by_line
+            tokens = highlight(path.read_text(encoding="utf-8"), language)
+        except (EngineUnavailableError, OSError, UnicodeDecodeError, ValueError):
+            return by_line
+        for token in tokens:
+            style = QUERY_STYLES.get(token.capture)
+            if style is None or token.end_line != token.line:
+                continue
+            # Text positions: 1-based code points → 0-based offsets after the
+            # leading space the source row starts with.
+            by_line.setdefault(token.line, []).append((token.column, token.end_column, style))
+        return by_line
+
+
 def sort_diagnostics(diagnostics: Iterable[Diagnostic]) -> list[Diagnostic]:
     """Grouped by file (files first, in path order), then by line."""
     return sorted(
@@ -326,6 +402,8 @@ def render_diagnostics(
     shown = [item for item in diagnostics if not quiet or item.severity == "error"]
     # Only a terminal wraps a long line, and it breaks wherever the edge falls.
     columns = console.width if console.is_terminal else None
+    # Colour, so a person at a terminal only: plain output stays plain.
+    styles = QueryHighlighter() if mode is OutputMode.HUMAN else None
     for diagnostic in sort_diagnostics(shown):
         for line in diagnostic_lines(
             diagnostic,
@@ -334,6 +412,7 @@ def render_diagnostics(
             cwd=cwd,
             links=mode is OutputMode.HUMAN,
             columns=columns,
+            styles=styles,
         ):
             console.print(line, soft_wrap=True)
         console.print()

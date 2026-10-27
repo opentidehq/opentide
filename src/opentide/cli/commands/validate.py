@@ -77,6 +77,11 @@ def validate_group(
         None, "--type", help="Validate only this type: rule, threat or objective (repeatable)"
     ),
     strict: bool = typer.Option(False, "--strict", help="Fail on warnings too"),
+    deep: bool = typer.Option(
+        False,
+        "--deep",
+        help="Also check every query with the analysis engine, offline (the queries check)",
+    ),
     fix: bool = typer.Option(
         False, "--fix", help="Apply every safe fix (vocabulary typos), then validate again"
     ),
@@ -89,7 +94,7 @@ def validate_group(
     report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
     output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
 ) -> None:
-    """Validate detection objects (schema, UUID, uniqueness)."""
+    """Validate detection objects (schema, UUID, uniqueness); --deep checks queries too."""
     from opentide.cli.services.validation import (
         fix_phrase,
         run_validate,
@@ -118,11 +123,20 @@ def validate_group(
         emit_usage_error(
             cli, "--dry-run previews --fix. Pass both.", argument="--dry-run", code=USAGE_ERROR
         )
+    if deep and check is not None:
+        emit_usage_error(
+            cli,
+            "--deep runs every default check and the queries check; --check runs one. "
+            "Pass one of them (--check queries runs the query check alone).",
+            argument="--deep",
+            code=USAGE_ERROR,
+        )
     scope: dict[str, Any] = {
         "check": check,
         "strict": strict,
         "uuids": uuid,
         "object_types": object_type,
+        "deep": deep,
     }
     if watch:
         if fix:
@@ -201,6 +215,7 @@ def _watch(
     files: list[str] | None,
     uuids: list[str] | None,
     object_types: list[str] | None,
+    deep: bool = False,
 ) -> None:
     """``validate --watch``: a Live view in ``human`` mode, an outcome line per run in ``plain``."""
     from opentide.cli.services.validation import run_validate, validate_outcome_line
@@ -227,6 +242,7 @@ def _watch(
             files=targets,
             uuids=uuids if changed is None else None,
             object_types=object_types if changed is None else None,
+            deep=deep,
         )
         summary = cast(dict[str, int], result.get("_summary") or {})
         diagnostics = cast("list[Diagnostic]", result.get("_diagnostics") or [])
@@ -283,18 +299,28 @@ def _shown(roots: Sequence[Path]) -> str:
 @validate_app.command("query")
 def validate_query_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform = typer.Option(
-        ..., "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    platform: DetectionPlatform | None = typer.Option(
+        None,
+        "--platform",
+        metavar=PLATFORM_METAVAR,
+        help=platform_help(
+            "Check this platform's queries. Offline, default: every platform the engine parses"
+        ),
     ),
     strategy: list[str] | None = typer.Option(None, "--strategy", help=QUERY_STRATEGY_HELP),
     plan: str | None = typer.Option(None, "--plan", hidden=True, help=REMOVED_PLAN_HELP),
     wide: bool = typer.Option(
-        False, "--wide", help="Check every status strategy but DISABLEMENT and DELETION"
+        False, "--wide", help="Check every status strategy but DISABLEMENT and DELETION (--live)"
+    ),
+    offline: bool = typer.Option(
+        False,
+        "--offline",
+        help="Check each query with the analysis engine, without a tenant (the default)",
     ),
     live: bool = typer.Option(
         False,
         "--live",
-        help="Check the tenant (needs platform SDKs and credentials)",
+        help="Check the queries on the platform's tenants (needs credentials)",
     ),
     changed: bool = typer.Option(
         False,
@@ -310,24 +336,71 @@ def validate_query_cmd(
     uuid: list[str] | None = typer.Option(
         None, "--uuid", help="Check only the rule with this UUID (repeatable)"
     ),
+    strict: bool = typer.Option(
+        False, "--strict", help="Offline: fail on warnings too (slow query shapes, ...)"
+    ),
 ) -> None:
-    """Check rule queries on the platform's tenants (needs --live)."""
+    """Check rule queries offline with the analysis engine, or on the tenants (--live)."""
     from opentide.cli.services.validation import validate_query_platform
 
     refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
+    if offline and live:
+        emit_usage_error(
+            cli,
+            "--offline and --live are two checks: run one, then the other",
+            argument="--offline",
+            code=USAGE_ERROR,
+        )
+    if not live:
+        for flag, used in (("--strategy", bool(strategy)), ("--wide", wide)):
+            if used:
+                emit_usage_error(
+                    cli,
+                    f"{flag} chooses tenants, so it applies to --live; the offline check "
+                    "reads every query whatever its status",
+                    argument=flag,
+                    code=USAGE_ERROR,
+                )
+    elif strict:
+        emit_usage_error(
+            cli,
+            "--strict applies to the offline check: the tenant check has no warnings to fail on",
+            argument="--strict",
+            code=USAGE_ERROR,
+        )
     result = validate_query_platform(
         cli,
-        platform.value,
+        None if platform is None else platform.value,
         strategies=strategy or (),
         wide=wide,
         live=live,
         changed=changed,
         files=file or (),
         uuids=uuid or (),
+        strict=strict,
     )
+    if result.get("mode") == "offline":
+        _emit_offline_query_result(cli, result)
+        return
     from opentide.cli.ui.summary import query_summary
 
     publish_summary(cli, query_summary(result), command="validate query", payload=result)
     emit_success(cli, result)
+
+
+def _emit_offline_query_result(cli: CliContext, result: dict[str, Any]) -> None:
+    """Code frames, CI annotations and one outcome line, like ``validate``."""
+    diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
+    outcome = CommandResult.from_payload(result, default_message="Queries valid")
+    if not cli.json_output:
+        render_diagnostics(get_stdout_console(), diagnostics, mode=text_mode(cli), quiet=cli.quiet)
+        publish_findings(
+            cli,
+            diagnostics,
+            outcome,
+            command="validate query",
+            outcome=outcome.outcome or outcome.message,
+        )
+    emit_result(cli, outcome)

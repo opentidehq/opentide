@@ -16,6 +16,7 @@ from typing import TextIO
 from mcp.server.mcpserver import MCPServer
 
 import opentide
+from opentide.analysis import OFFLINE_QUERY_LANGUAGES
 from opentide.mcp_server import resources as res
 from opentide.mcp_server.constants import QUERY_VALIDATION_PLATFORMS
 from opentide.mcp_server.tools import (
@@ -53,7 +54,8 @@ Each issue has code, severity, message, object_uuid, path, line and column (1-ba
 help, and fix ({{safe, edits}}: each edit replaces the text from (line, column) up \
 to (end_line, end_column) with replacement). Apply safe edits as they are: they \
 only respell the same word; check the others against help. explain(code) says what \
-a code means. Repeat until ok is true.
+a code means. Repeat until ok is true. While drafting a query, validate_query \
+checks it offline in its platform's language, with no tenant.
 4. Preview. deploy_rule with dry_run true shows the deployment; nothing is sent.
 
 People review and merge changes and run real deployments. Call deploy_rule with \
@@ -172,20 +174,27 @@ def explain(code: str = "") -> dict:
 
 #: The platform list comes from the constant the tool checks, so the two cannot disagree.
 VALIDATE_QUERY_DESCRIPTION = f"""\
-Check the catalogue's rules for a platform against the tenant (live true only).
+Check one query offline with the analysis engine, or the catalogue's rules on the tenant.
 
-live false refuses without a check: {{valid: null, supported: true, status:
-"failed"}}. live true contacts the tenant with the configured credentials and
-validates the catalogue rules for platform, not query; ask a person first.
+live false (default) parses query in its platform's language, with the
+platform's profile (Defender tables for defender_for_endpoint, Carbon Black
+Lucene for carbon_black_cloud), and returns {{valid, status, language,
+errors, warnings, diagnostics}}; positions are in the query (1-based, code
+points). Elastic takes language: esql, eql, kuery (default) or lucene, and
+stack (such as "9.5") for ES|QL. Offline: {", ".join(sorted(OFFLINE_QUERY_LANGUAGES))}.
+live true contacts the tenant with the configured credentials and validates
+the catalogue rules for platform, not query; ask a person first.
 Platforms: {", ".join(sorted(QUERY_VALIDATION_PLATFORMS))}; others return
 supported false.\
 """
 
 
 @mcp.tool(description=VALIDATE_QUERY_DESCRIPTION)
-def validate_query(query: str, platform: str, live: bool = False) -> dict:
+def validate_query(
+    query: str, platform: str, live: bool = False, language: str = "", stack: str = ""
+) -> dict:
     """See :data:`VALIDATE_QUERY_DESCRIPTION`, the description agents read."""
-    return tool_validate_query(query, platform, live=live)
+    return tool_validate_query(query, platform, live=live, language=language, stack=stack)
 
 
 @mcp.tool()

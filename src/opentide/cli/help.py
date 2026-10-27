@@ -18,7 +18,9 @@ MAX_SUMMARY = 60
 SUMMARIES: dict[str, str] = {
     "mcp": "Run the opentide MCP server for editors and agents",
     "mcp start": "Serve MCP on stdio until the host closes stdin",
-    "validate query": "Check rule queries on the platforms' tenants (needs --live)",
+    "lsp start": "Serve LSP on stdio until the editor closes stdin",
+    "lsp check": "Print the diagnostics an editor shows",
+    "validate query": "Check rule queries offline, or on the tenants (--live)",
     "new threat": "Scaffold a threat",
     "new objective": "Scaffold a detection objective",
     "new rule": "Scaffold a detection rule",
@@ -75,6 +77,13 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "commands": ("opentide commands", "opentide --json commands"),
     "mcp": ("opentide mcp start",),
     "mcp start": ("opentide mcp start",),
+    "lsp": ("opentide lsp check", "opentide lsp start"),
+    "lsp start": ("opentide lsp start",),
+    "lsp check": (
+        "opentide lsp check",
+        "opentide lsp check objects/rules/suspicious-lsass-access.yaml",
+        "opentide --json lsp check hunting/lsass.kql",
+    ),
     "setup": (
         "opentide setup",
         'opentide setup --yes --name "Detections" --platform sentinel --ci github',
@@ -114,8 +123,16 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "generate extract elastic": ("opentide generate extract elastic --space default",),
     "generate inflight": ("opentide generate inflight",),
     "generate inflight prune": ("opentide generate inflight prune",),
-    "validate": ("opentide validate", "opentide validate --strict --type rule"),
-    "validate query": ("opentide validate query --platform sentinel --live",),
+    "validate": (
+        "opentide validate",
+        "opentide validate --strict --type rule",
+        "opentide validate --deep",
+    ),
+    "validate query": (
+        "opentide validate query",
+        "opentide validate query --platform splunk --changed",
+        "opentide validate query --platform sentinel --live",
+    ),
     "deploy": (
         "opentide deploy --strategy PREVIEW --all --dry-run",
         "opentide deploy --strategy RELEASE",

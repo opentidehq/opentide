@@ -10,6 +10,8 @@ from opentide.cli.ui.results.base import (
     CommandDocument,
     Counts,
     DiagnosticFields,
+    EngineDiagnosticModel,
+    EngineVersions,
     ResultModel,
     ValidationReportModel,
 )
@@ -45,6 +47,7 @@ class ValidateSummary(ResultModel):
     # From validate --fix (#646), declared ahead so either merge order stays green.
     fixable: int = Field(0, description="Findings a safe fix resolves")
     fixed: int = Field(0, description="With --fix: values replaced")
+    queries: int | None = Field(None, description="With --deep or --check queries: queries checked")
 
 
 class ValidateResult(CommandDocument):
@@ -67,11 +70,26 @@ class ValidateResult(CommandDocument):
     summary: ValidateSummary
 
 
+class QueryChecked(ResultModel):
+    """One query the offline check read."""
+
+    path: str = Field(description="Workspace-relative path of the rule file")
+    platform: str | None = Field(description="The configurations block the query is in")
+    language: Literal["kql", "spl", "esql", "eql", "kuery", "lucene"]
+    field_path: list[str] = Field(description="YAML path of the query")
+    line: int = Field(description="1-based line where the query starts")
+    column: int
+    errors: int
+    warnings: int
+
+
 class QueryValidationResult(CommandDocument):
-    """``opentide validate query``: one platform's queries checked on its tenants."""
+    """``opentide validate query``: rule queries checked offline, or on one platform's tenants."""
 
     platform: str | None = None
-    mode: Literal["live"] | None = None
+    mode: Literal["live", "offline"] | None = Field(
+        None, description="offline: the analysis engine; live: the tenants"
+    )
     supported: bool | None = Field(None, description="Whether the platform has query validation")
     valid: None = Field(None, description="null when the platform has no query validation")
     platform_enabled: bool | None = None
@@ -92,6 +110,17 @@ class QueryValidationResult(CommandDocument):
         default_factory=dict, description="Platform configuration files with no tenant"
     )
     advice: str | None = None
+    # Offline (the analysis engine).
+    platforms: list[str] = Field(
+        default_factory=list, description="Offline: the platforms whose queries were checked"
+    )
+    queries: list[QueryChecked] = Field(
+        default_factory=list, description="Offline: every query checked, with its counts"
+    )
+    diagnostics: list[EngineDiagnosticModel] = Field(
+        default_factory=list, description="Offline: what the engine found, in the rule files"
+    )
+    engine: EngineVersions | None = Field(None, description="Offline: the engine that ran")
 
 
 # --------------------------------------------------------------------------

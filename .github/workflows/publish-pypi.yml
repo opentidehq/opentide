@@ -28,6 +28,13 @@
 # The same dispatch is the retry after a PyPI 5xx or partial upload.
 # `skip-existing: true` makes it upload only the files PyPI does not have yet,
 # and the verify step fails the job unless PyPI lists every file in dist/.
+#
+# opentide pins opentide-analysis (the Rust engine, analysis/) exactly, so the
+# engine is published first: one abi3 wheel per platform (CPython 3.10+) and an
+# sdist, built from crates.io sources only (check_engine_pin.py --release). A
+# version already on PyPI is skipped, so a release that does not change the
+# engine uploads nothing for it. Its trusted publisher is configured like
+# opentide's: project opentide-analysis, this workflow, environment pypi.
 name: Publish to PyPI
 
 on:
@@ -47,8 +54,168 @@ permissions:
   id-token: write
 
 jobs:
+  # Nothing is built, let alone published, from a commit that is not the
+  # release tag, from git sources, or with an engine version PyPI already has
+  # for other sources.
+  engine-guard:
+    name: Engine release guard
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
+
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: The checkout is the release tag
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9] ]] || ! git tag --points-at HEAD | grep -qx "${RELEASE_TAG}"; then
+            echo "::error::Refusing to publish: HEAD is not the release tag ${RELEASE_TAG}. Checkout a v* tag." >&2
+            exit 1
+          fi
+
+      - name: Engine sources are crates.io releases
+        run: python scripts/build/check_engine_pin.py --release
+
+      - name: A version on PyPI is the one these sources build
+        run: python scripts/build/check_engine_published.py
+
+  engine-wheels:
+    name: Engine wheel (${{ matrix.os }}, ${{ matrix.target }}${{ matrix.manylinux && format(', {0}', matrix.manylinux) || '' }})
+    needs: engine-guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64, manylinux: auto }
+          - { os: ubuntu-latest, target: aarch64, manylinux: auto }
+          - { os: ubuntu-latest, target: x86_64, manylinux: musllinux_1_2 }
+          - { os: ubuntu-latest, target: aarch64, manylinux: musllinux_1_2 }
+          - { os: macos-latest, target: x86_64 }
+          - { os: macos-latest, target: aarch64 }
+          - { os: windows-latest, target: x64 }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
+
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad # v1.50.1
+        with:
+          working-directory: analysis
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --out dist
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: engine-wheel-${{ matrix.os }}-${{ matrix.target }}-${{ matrix.manylinux || 'native' }}
+          path: analysis/dist/*.whl
+          if-no-files-found: error
+
+  engine-sdist:
+    name: Engine sdist
+    needs: engine-guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
+
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@04ac600d27cdf7a9a280dadf7147097c42b757ad # v1.50.1
+        with:
+          working-directory: analysis
+          command: sdist
+          args: --out dist
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: engine-sdist
+          path: analysis/dist/*.tar.gz
+          if-no-files-found: error
+
+  engine-publish:
+    name: Publish opentide-analysis to PyPI
+    needs: [engine-wheels, engine-sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/opentide-analysis
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: engine-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      # The wheel this runner can install must import and serve its API.
+      - name: Smoke-test the Linux wheel
+        run: |
+          set -euo pipefail
+          ls -l dist
+          python -m pip install --no-index --find-links dist opentide-analysis
+          python -c "import opentide_analysis as engine; print(engine.__version__, engine.ENGINE_VERSION); assert engine.analyze_query('SecurityEvent | take 1', 'kql') == []"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+      # opentide publishes only once PyPI lists every engine file: a platform
+      # whose wheel is missing would build the engine from source.
+      - name: Verify PyPI lists every engine file
+        run: |
+          python3 - <<'PY'
+          import json, sys, time, urllib.error, urllib.request
+          from pathlib import Path
+
+          built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
+          version = next(n for n in built if n.endswith(".tar.gz")).removesuffix(".tar.gz").rsplit("-", 1)[1]
+          url = f"https://pypi.org/pypi/opentide-analysis/{version}/json"
+          deadline = time.monotonic() + 600
+          while True:
+              try:
+                  request = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      listed = {item["filename"] for item in json.load(response).get("urls", [])}
+              except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+                  listed, status = set(), str(exc)
+              missing = sorted(set(built) - listed)
+              if not missing:
+                  print(f"PyPI lists every engine file for {version}: {built}")
+                  sys.exit(0)
+              if time.monotonic() >= deadline:
+                  print(f"::error::PyPI is missing {missing} for opentide-analysis {version}. Re-run the workflow; skip-existing uploads only the missing files.")
+                  sys.exit(1)
+              print(f"Waiting for {missing}")
+              time.sleep(15)
+          PY
+
   publish:
     name: Publish to PyPI
+    needs: engine-publish
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -74,7 +241,7 @@ jobs:
           python-version: "3.12"
 
       - name: Build package
-        run: uv build
+        run: uv build --package opentide
 
       - name: Twine check
         run: uvx twine check dist/*

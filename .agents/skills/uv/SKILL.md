@@ -32,6 +32,10 @@ scripts/ci-local.sh --full       # lint + pytest + coverage gate — pre-push pa
 
 CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` on every job.
 
+## The engine workspace member
+
+The root `pyproject.toml` is a uv workspace with one member, `analysis/` (`opentide-analysis`, PyO3 + maturin). `uv sync` builds it from source with its `develop` cargo profile, so a Rust toolchain (stable, 1.85+) must be on `PATH`; `cache-keys` in `analysis/pyproject.toml` rebuild it when the Rust source changes. To force a rebuild: `uv sync --reinstall-package opentide-analysis`. `uv build --package opentide` builds the pure-Python package alone; `analysis/` is excluded from its sdist.
+
 ## Dependency groups
 
 | Group | Purpose |
