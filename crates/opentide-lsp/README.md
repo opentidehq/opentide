@@ -23,14 +23,14 @@ Each [GitHub Release](https://github.com/opentidehq/language-server/releases) al
 
 Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](CHANGELOG.md). Every crate shares the workspace version, and the internal crates pin each other to it. To cut a release:
 
-```bash
-python3 scripts/release.py bump 0.6.0     # workspace version, internal pins, Cargo.lock
-# write the 0.6.0 section of CHANGELOG.md; its first paragraph is the summary
-python3 scripts/release.py check v0.6.0
-git commit -am "chore: release 0.6.0" && git tag v0.6.0 && git push origin main v0.6.0
-```
+1. In a pull request, run `python3 scripts/release.py bump 0.6.0` (workspace version, internal pins, `Cargo.lock`) and write the `0.6.0` section of CHANGELOG.md; its first paragraph is the summary. `python3 scripts/release.py check v0.6.0` confirms they agree.
+2. Merge it, then run the **Release** workflow on `main` (Actions → Release → Run workflow). Pushing a `v0.6.0` tag does the same.
 
-The tag runs `.github/workflows/release.yml`: it checks the version, builds every target, opens the GitHub Release with the changelog notes, then publishes the crates to crates.io (`CARGO_REGISTRY_TOKEN`). The crates embed catalogs and grammars from the repository root; `scripts/release.py vendor` copies them into each crate first, and CI packages every crate on each pull request so a missing file fails there.
+The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release with the changelog notes, creating the tag. Then it publishes the crates to crates.io in dependency order (a re-run resumes where a failed one stopped).
+
+crates.io publishing uses [trusted publishing](https://crates.io/docs/trusted-publishing): the first release publishes with the `CARGO_REGISTRY_TOKEN` secret (scopes `publish-new`, `publish-update`, `trusted-publishing`) and registers `release.yml` as each crate's trusted publisher; later releases log in with the workflow's OIDC identity. The token is then needed only to publish a crate that does not exist yet.
+
+The crates embed catalogs and grammars from the repository root; `scripts/release.py vendor` copies them into each crate first, and CI packages every crate on each pull request so a missing file fails there.
 
 ## Quick start
 
