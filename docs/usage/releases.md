@@ -28,6 +28,7 @@ opentide generate
 - **New commands.** `opentide new` scaffolds a threat, objective or rule; `opentide doctor` checks the installation and the workspace; `opentide validate --fix` applies safe fixes and `--watch` re-validates on save; `opentide explain <code>` explains any diagnostic; `opentide tui` browses the catalogue; `opentide info vocab` reports a vocabulary's revisions; `opentide commands` lists the command tree for agents.
 - **Findings carry a location and a fix.** `validate` and `lint` print code frames; `--json` and the MCP tools add `path`, `line`, `column`, `help`, `fix` and `explain`. In CI they become annotations and a job summary, and `--format sarif|codequality` writes reports that regenerated pipelines keep.
 - **`lint.toml`** sets the metadata keys lint requires and each check's severity.
+- **Elastic tenants declare their stack version** with `[tenants.setup] version` (`"8.19"`, `"9.5"` or `"serverless"`, as a string).
 - **The MCP server needs `mcp` 2.x.** Move a pin of `mcp<2` to `mcp>=2.3,<3`.
 - **Deploy no longer stops on a rule without platform blocks,** the shape `opentide new rule` writes without `--platform`.
 - **Nested object files are ignored everywhere**, as deploy already did, and a rule promoted by the production deploy is shared on the same run.
