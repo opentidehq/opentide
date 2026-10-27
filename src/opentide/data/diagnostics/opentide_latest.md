@@ -7,7 +7,7 @@ Reported by `opentide doctor`. Warns when a newer release exists or PyPI did not
 ## Example
 
 ```text
-! opentide 0.18.0 is available; 0.17.2 is installed · opentide_latest
+! opentide 0.19.0 is available; 0.18.0 is installed · opentide_latest
   → pip install --upgrade opentide
 ```
 

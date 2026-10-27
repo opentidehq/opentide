@@ -7,6 +7,40 @@ description: Public package versions of opentide on PyPI.
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.18.0 — 27 October 2026
+
+Minor release. Configuration files are validated, rule `severity` uses the alert labels, and the CLI gains commands for authoring and for agents. Run `opentide validate` after upgrading: a file that loaded under 0.17.2 can fail now, and the error names the file and the key. Then regenerate your CI pipeline and run `opentide generate`.
+
+**Install**
+
+```bash
+pip install opentide==0.18.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+opentide setup ci <github|gitlab|azure> --yes
+opentide generate
+```
+
+**What changes**
+
+- **Configuration files are checked.** An unknown or misspelt key, or a wrong type, in `.opentide/configurations/` fails the command that reads the file: `deployment.toml is invalid: promotion.enabeld: unknown key`. `opentide validate` runs the same check. A Splunk `schedule_offset = "5"` must be `5`, and a `documentation.toml` carried over from CoreTIDE must drop `skip_vocabularies`, `model_cover_pages` and `[titles]`.
+- **Rule `severity` uses the alert labels**, `Informational` to `Critical`, like `response.alert_severity`. Replace an incident-scale value (`Substantial incident` → `High`).
+- **New commands.** `opentide new` scaffolds a threat, objective or rule; `opentide doctor` checks the installation and the workspace; `opentide validate --fix` applies safe fixes and `--watch` re-validates on save; `opentide explain <code>` explains any diagnostic; `opentide tui` browses the catalogue; `opentide info vocab` reports a vocabulary's revisions; `opentide commands` lists the command tree for agents.
+- **Findings carry a location and a fix.** `validate` and `lint` print code frames; `--json` and the MCP tools add `path`, `line`, `column`, `help`, `fix` and `explain`. In CI they become annotations and a job summary, and `--format sarif|codequality` writes reports that regenerated pipelines keep.
+- **`lint.toml`** sets the metadata keys lint requires and each check's severity.
+- **Elastic tenants declare their stack version** with `[tenants.setup] version` (`"8.19"`, `"9.5"` or `"serverless"`, as a string).
+- **The MCP server needs `mcp` 2.x.** Move a pin of `mcp<2` to `mcp>=2.3,<3`.
+- **Deploy no longer stops on a rule without platform blocks,** the shape `opentide new rule` writes without `--platform`.
+- **Nested object files are ignored everywhere**, as deploy already did, and a rule promoted by the production deploy is shared on the same run.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0180--2026-10-27) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.18.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.18.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.17.2 — 22 October 2026
 
 Patch release. Nothing to regenerate. `uv` installs resolve a current boto3 again, and a Splunk tenant behind a proxy that answers with an HTML page now fails with a message naming the proxy and the `NO_PROXY` entry to add. Delete any `verify=not ssl_enabled` patch of the Splunk client and set `NO_PROXY` instead.

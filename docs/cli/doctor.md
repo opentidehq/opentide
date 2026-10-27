@@ -71,7 +71,7 @@ One line per check, its fix under it, then the outcome line. `✓` is a pass, `!
 
 ```text illustrative
 ✓ Python 3.13.16 · python_version
-✓ opentide 0.17.2 · opentide_version
+✓ opentide 0.18.0 · opentide_version
 ○ Not checked: --offline · opentide_latest
 ✓ Workspace ./ has .opentide/ (found from the current directory) · workspace
 ✓ git 2.43.0 · git

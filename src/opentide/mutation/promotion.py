@@ -176,7 +176,7 @@ class PromoteMDR:
                     data = yaml.safe_load(mdr_file)
                 mdr_name = data["name"]
 
-                for system in (conf := data["configurations"]):
+                for system in (conf := data.get("configurations") or {}):
                     system_status = conf[system]["status"]
 
                     if system_status not in NON_PROMOTABLE_STATUSES:

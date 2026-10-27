@@ -6,7 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
-**Regenerate CI** with `opentide setup ci <github|gitlab|azure> --yes` if the pipeline was written with `--sharing`.
+## [0.18.0] — 2026-10-27
+
+Minor release: configuration files are now validated, rule `severity` moves to the alert labels, and new commands arrive (`new`, `doctor`, `tui`, `explain`, `commands`, `info vocab`, `validate --fix` and `--watch`). It is a minor because files that loaded under 0.17.2 can now fail, and because the CLI's human and JSON output changed. After upgrading:
+
+- **Run `opentide validate`.** An unknown key or a wrong type in `.opentide/configurations/` now fails every command that reads the file and names the file and the key. Two cases seen while preparing this release: a Splunk tenant's `schedule_offset = "5"` must be the number `5`, and a `documentation.toml` that `opentide migrate` carried over from CoreTIDE must drop `skip_vocabularies`, `model_cover_pages` and `[titles]`. A rule whose top-level `severity` is an incident-scale value (`Substantial incident`) must use an alert label (`High`).
+- **Regenerate CI** with `opentide setup ci <github|gitlab|azure> --yes`. The pipeline then keeps SARIF and Code Quality reports, and a pipeline written with `--sharing` shares a rule after the production deploy has promoted it.
+- **Run `opentide generate`** to refresh schemas and templates, and `opentide setup skills` to refresh agent instruction files.
+- **Move a pin of `mcp` 1.x** to `mcp>=2.3,<3`. `opentide mcp start` needs `mcp` 2.x.
 
 Every configuration file under `.opentide/configurations/` in the configuration specification now has a Pydantic model (`lint.toml` keeps its own loader), and the CLI validates the merged file against it when it reads the file (#374). A misspelt or unknown key that was silently ignored now fails the command that reads the file, naming the file and the key: `deployment.toml is invalid: promotion.enabeld: unknown key`. `opentide validate` runs the same check by default (`configuration`), so run it after upgrading to find any.
 
@@ -15,7 +22,7 @@ Every configuration file under `.opentide/configurations/` in the configuration 
 - **Configuration models and JSON Schema export.** `opentide.models.configuration` holds one model per file: `paths.toml` (and legacy `global.toml`), `deployment.toml`, `schema.toml`, `visibility.toml`, `documentation.toml`, `sharing.toml` (items are `sharing::misp::1.0`) and each `platforms/<id>.toml`. `opentide.generation.configuration_schemas.export_configuration_schemas(dir)`, or `python -m opentide.generation.configuration_schemas <dir>`, writes the JSON Schema of each file (`model_json_schema()`, with a description on every field) and `configurations.router.json`, which maps a file name to its schema. They are for editors and the language server; `.opentide/schemas/` is unchanged.
 - **`validate` check `configuration`**, on by default: every merged configuration file the CLI reads is checked against its model, so a file `deploy` or `generate docs` would refuse fails `validate` first. Issues carry `context.file` and a `field_path` into the file.
 - **`opentide.validation.configuration.configuration_file_issues`** returns `{code, field_path, severity}` issues for one configuration file, merged onto the layers before it so that a partial override is not reported for keys it inherits. It returns every `sharing-config` code, and `promotion_target_unknown`, `asset_unknown` and `identifier_mismatch` for the checks a schema cannot state.
-- **Elastic tenants declare their stack version** ([#661](https://github.com/opentidehq/opentide/issues/661)). `[tenants.setup] version` in `platforms/elastic.toml` takes `MAJOR.MINOR` (`8.19`, `9.5`) or `serverless`, as specifications#59 proposes; any other value is a `schema_validation` error. The language server already reads it to check ES|QL against the lowest version a rule targets; without this key the configuration check reported it as `unknown_key`.
+- **Elastic tenants declare their stack version** ([#661](https://github.com/opentidehq/opentide/issues/661)). `[tenants.setup] version` in `platforms/elastic.toml` takes `MAJOR.MINOR` (`8.19`, `9.5`) or `serverless`, as the Elastic platform specification defines ([specifications#61](https://github.com/opentidehq/specifications/pull/61)); any other value is a `schema_validation` error. The language server already reads it to check ES|QL against the lowest version a rule targets; without this key the configuration check reported it as `unknown_key`.
 - **`opentide info vocab <name>` reports a vocabulary's contract revisions** ([#523](https://github.com/opentidehq/opentide/issues/523)). A vocabulary file declares no top-level `version`, so nothing read back which revision a field validates against. The command lists each revision the `[[keys]]` lifecycle defines with the keys it introduces, removes and admits; each object schema field pinned to the vocabulary in `data/pins/`, with its revision, the keys it admits and whether the field is `scoped` (authored `<stage>::<key>`); whether the vocabulary is staged and its stage ids; and its entry and removed-key counts. `opentide info vocab` lists every vocabulary. An unknown name exits `2` as a usage error, lists the available ones and suggests the closest. A key whose `version` or `removed` does not parse exits `1` naming the vocabulary and key. `--json` returns the same data under `vocabulary` / `vocabularies`.
 - **`opentide lint` reads `lint.toml`** ([#489](https://github.com/opentidehq/opentide/issues/489)). opentide ships the defaults, and `.opentide/configurations/lint.toml` overrides them like any other configuration file. `[metadata].required` lists the `metadata` keys the metadata check demands (default `["author", "organisation"]`, so an unconfigured repository sees the same findings as before). Each check takes `enabled` and `severity` (`error`, `warning` or `info`, replacing the severity of every finding of that check). `--check` still wins: it runs a check that `lint.toml` disables. Each object is asked only for the `required` keys its schema accepts, so `reviewed` (rule::1.1 only) is not demanded of threats, objectives or rule::1.0 rules. A `required` entry that is not a metadata key, an unknown table or key, or a bad `severity`/`enabled` fails the command with exit `2` and names the key. `run_lint` takes an optional `config`.
 - **`opentide tui`**, a terminal UI: the catalogue as a tree (threats → objectives → rules, with counts), each object's YAML with the diagnostics from the last validate run, coverage by ATT&CK technique, and `validate`, `generate` and `deploy --dry-run` from the command palette (`ctrl+p`) or a key, with their results printed as the commands print them. It runs only at an interactive terminal; under `--json`, in a pipe, in CI or under a coding agent it exits `2` with `failure.code` `usage_tui_needs_tty`. See [opentide tui](docs/cli/tui.md). It needs [Textual](https://textual.textualize.io/), now a dependency of `opentide` (there are no extras); it loads only when the UI opens (not for `opentide tui --help` or a walk of the command tree), so start-up is unchanged. The header shows the tagline only where it fits whole, a long name ends in `…` and gives way before its counts (the detail pane shows it in full), and the tree never scrolls sideways.
@@ -112,6 +119,7 @@ Every configuration file under `.opentide/configurations/` in the configuration 
 
 ### Fixed
 
+- **A rule without platform blocks failed every deploy.** `opentide new rule` without `--platform` writes `configurations:` holding only a comment, which validates; `deploy` (and the status promotion of a `RELEASE` run) then stopped on it with `'NoneType' object is not iterable`, deploying none of the other rules. A rule whose `configurations` is empty or absent is now skipped, like a rule for a platform the workspace has not enabled.
 - **Object files in subfolders were still indexed, validated, documented and shared.** Workspace 1.3 defines an object as a YAML file placed directly in its family folder; `objects/rules/team/x.yaml` is not one. `deploy` and `share push --changed` already skipped such files, but the registry walked every subfolder, so `validate`, `lint`, docs, exports, `rules unreviewed` and a full `share push` treated them as objects, and a full push could publish a file `deploy` refused. One helper now defines the catalogue as the `.yaml`/`.yml` files directly in each configured object folder, for all of them. A file in a subfolder is reported once as a `nested_object_file` warning naming its path (in `validate`'s report, `lint`'s findings and the `warnings` of `share`, docs and exports), and `--file` naming it fails with `scope_no_match`. `validate --strict` fails on that warning: move the file up into its folder. Suffixes match as `deploy` spells them (`.yaml`, `.yml`), so `r.YAML` is not an object anywhere ([#584](https://github.com/opentidehq/opentide/issues/584)).
 - **A rule promoted by the production deploy was not shared until it changed again** ([#590](https://github.com/opentidehq/opentide/issues/590)). The generated share job ran beside the production deploy on the triggering commit, before promotion rewrote block statuses, so the rule was `skipped_status`; the `[skip ci]` write-back that promoted it was in no later `--changed` diff. The share job now runs after the production job (GitHub `needs: [generate, deploy_production]`, GitLab stage `share` after `deploy`, Azure stage `Share` with `dependsOn: [Generate, Deploy]`) and checks out the default branch's tip. It runs after a failed or no-op deploy too, but not after a failed generate or a cancel; GitLab, which cannot express that, runs it `when: always` behind `opentide validate --strict`.
 - `share push --changed` diffs from the triggering push's baseline (the triggering commit's first parent, or GitLab's `CI_COMMIT_BEFORE_SHA`) to the checkout's `HEAD`, so on the tip it covers both the push and the promotion write-back. In a checkout of the triggering commit nothing changes.
@@ -182,7 +190,6 @@ Every configuration file under `.opentide/configurations/` in the configuration 
 - **`validate` crashed on a `threat:` or `objective:` block whose keys are all commented out,** and on a YAML parse error recorded without an object type. Both are now reported as issues.
 - **A Defender block without `scope` passed validation, then broke loading of every rule.**
 - **The `uuid-format` check accepted any UUID** (v1, v5, nil, braced, unhyphenated). It now requires a hyphenated version-4 UUID.
-- **Duplicate signal UUIDs were never reported;** a copied objective silently took over its original's signals.
 - **An unreachable CVE lookup passed silently, even with `--strict`.** It is now a `cve_lookup_unavailable` warning.
 - **A small YAML file of nested aliases took seconds to minutes to validate, and a recursive alias crashed `validate`.** Parsing is linear and a recursive alias is a YAML error.
 - **The MCP `validate_rule` and `validation_report` tools validated the workspace as it was when the server started,** and one rule that failed to load broke `validate_rule` for all. They now reload and look rules up individually.
@@ -193,6 +200,14 @@ Every configuration file under `.opentide/configurations/` in the configuration 
 - **A rule without a `configurations` block failed deep in a deployer with `'NoneType' object has no attribute …`.** The error now names the rule.
 - **Generated schemas:** the visibility configuration schema rejected every valid configuration; a misspelled rule tenant passed and deployed nowhere (tenants are now an enum of the configured ones); a Splunk rule from the shipped template was flagged for missing `scheduling`; `metadata.tlp` ignored its vocabulary pin; a scoped vocabulary entry without stages crashed generation.
 - **ATT&CK groups present in several domains kept the Mobile entry** (`G0007` read `[Mobile] APT28`); the generator now keeps the Enterprise one. The bundled vocabulary is regenerated upstream in `opentidehq/specifications`.
+
+### Install
+
+```bash
+pip install opentide==0.18.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.17.2] — 2026-10-22
 
@@ -1298,7 +1313,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.17.2...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/opentidehq/opentide/releases/tag/v0.18.0
 [0.17.2]: https://github.com/opentidehq/opentide/releases/tag/v0.17.2
 [0.17.1]: https://github.com/opentidehq/opentide/releases/tag/v0.17.1
 [0.17.0]: https://github.com/opentidehq/opentide/releases/tag/v0.17.0

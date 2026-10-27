@@ -504,8 +504,7 @@ def keep_active_rules(rule_list: list[str]) -> list[str]:
             logger.error("could_not_retrieve_uuid_in_rule_index", detail=mdr)
             continue
         deprecated = False
-        for system in mdr_data["configurations"]:
-            system_data = mdr_data["configurations"][system]
+        for system_data in (mdr_data.get("configurations") or {}).values():
             if check_status(system_data["status"]) in DEPRECATED_STATUSES:
                 logger.info("skipping_rule_as_is_in_a_deprecated_status", detail=mdr)
                 deprecated = True
