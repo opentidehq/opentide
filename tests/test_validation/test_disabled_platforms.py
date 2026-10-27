@@ -122,3 +122,46 @@ def test_checks_without_schema_do_not_read_enabled_platforms() -> None:
         )
     enabled.assert_not_called()
     assert report.warnings == []
+
+
+def test_a_misspelled_enabled_key_is_named_in_the_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``enabeld = true`` left sentinel disabled, and the warning sent the author to
+    ``opentide setup platforms`` (post-merge end-to-end run, B08)."""
+    monkeypatch.setattr(
+        "opentide.validation.disabled_platforms.misspelled_enabled_key",
+        lambda platform: ("platform", "enabeld"),
+    )
+    monkeypatch.setattr(
+        "opentide.validation.disabled_platforms.platform_config_path",
+        lambda platform: f".opentide/configurations/platforms/{platform}.toml",
+    )
+    (warning,) = platform_not_enabled_warnings({"configurations": {"sentinel": {}}}, set())
+    assert warning.message == (
+        "this block will not deploy: .opentide/configurations/platforms/sentinel.toml sets "
+        "'enabeld' in [platform], not 'enabled', so sentinel is disabled; "
+        "rename the key to 'enabled'"
+    )
+    assert warning.context == {"platform": "sentinel", "key": "enabeld"}
+    assert "setup platforms" not in warning.message
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"platform": {"enabeld": True}}, ("platform", "enabeld")),
+        # The older [tide] table, after a [platform] value that is not a table.
+        ({"platform": "x", "tide": {"Enabled": True}}, ("tide", "Enabled")),
+        ({"platform": {"enabled": True, "name": "x"}}, None),
+        ({}, None),
+    ],
+)
+def test_misspelled_enabled_key(
+    monkeypatch: pytest.MonkeyPatch, config: dict[str, Any], expected: tuple[str, str] | None
+) -> None:
+    from opentide.platforms.enabled import misspelled_enabled_key
+
+    monkeypatch.setattr(
+        "opentide.platforms.enabled.resolve_configurations",
+        lambda: {"systems": {"sentinel": config}},
+    )
+    assert misspelled_enabled_key("sentinel") == expected

@@ -199,6 +199,14 @@ def test_initialize_handshake(mcp_stdio: StdioClient) -> None:
     assert "tools" in result["capabilities"]
 
 
+def test_server_info_reports_the_opentide_version(mcp_stdio: StdioClient) -> None:
+    """It reported the MCP SDK's version (1.30.0) as its own (post-merge end-to-end run)."""
+    from opentide import __version__
+
+    result = mcp_stdio.handshake()["result"]
+    assert result["serverInfo"]["version"] == __version__
+
+
 def test_tools_list_advertises_every_tool(mcp_stdio: StdioClient) -> None:
     mcp_stdio.handshake()
     tools = mcp_stdio.request("tools/list")["result"]["tools"]

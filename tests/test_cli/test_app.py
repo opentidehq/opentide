@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -70,6 +71,43 @@ def test_version_flag_exits_before_the_command_runs() -> None:
     assert result.stdout.startswith("opentide ")
     mock_validate.assert_not_called()
     mock_logging.assert_not_called()
+
+
+@pytest.mark.parametrize("command", [["validate"], ["lint"], ["info"], ["deploy", "--dry-run"]])
+def test_a_repo_that_does_not_exist_is_a_usage_error(tmp_path: Path, command: list[str]) -> None:
+    # A mistyped --repo read as an empty workspace: validate printed
+    # "Validation passed" and exited 0 (post-merge end-to-end run).
+    missing = tmp_path / "nope"
+    result = runner.invoke(app, ["--json", "--repo", str(missing), *command])
+    assert result.exit_code == 2, result.output
+    payload = json.loads(result.stdout)
+    assert payload["failure"]["code"] == "usage_invalid_value"
+    assert payload["failure"]["argument"] == "--repo"
+    assert payload["error"] == f"--repo {missing} does not exist"
+    # And a step to take, not the failure line alone (post-merge AFTER shots).
+    assert [action["command"] for action in payload["next_actions"]] == ["opentide --json --help"]
+
+
+@pytest.mark.parametrize("env", [{}, {"NO_COLOR": "1"}, {"OPENTIDE_OUTPUT": "json"}])
+def test_a_bare_opentide_prints_the_help_and_exits_0(env: dict[str, str]) -> None:
+    """A person at a terminal gets the home screen and 0; a pipe or NO_COLOR got the
+    same request's help with 2, a usage error (post-merge end-to-end run)."""
+    result = runner.invoke(app, [], env=env)
+    assert result.exit_code == 0, result.output
+    assert "Usage: opentide [OPTIONS] COMMAND [ARGS]..." in result.stdout
+    assert " Examples" in result.stdout
+
+
+def test_a_group_named_alone_is_still_a_usage_error() -> None:
+    assert runner.invoke(app, ["mcp"]).exit_code == 2
+
+
+def test_a_repo_that_is_a_file_is_a_usage_error(tmp_path: Path) -> None:
+    afile = tmp_path / "notes.txt"
+    afile.write_text("x\n")
+    result = runner.invoke(app, ["--json", "--repo", str(afile), "validate"])
+    assert result.exit_code == 2, result.output
+    assert json.loads(result.stdout)["error"] == f"--repo {afile} is not a directory"
 
 
 @pytest.mark.parametrize(

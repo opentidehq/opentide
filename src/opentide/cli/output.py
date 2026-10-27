@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import structlog
-from rich.markup import escape
 
 from opentide.cli.context import CliContext
 from opentide.cli.ui.contract import (
@@ -34,8 +33,9 @@ from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
 from opentide.cli.ui.render import (
     AGENT_TIP,
     OutcomeKind,
-    labelled_text,
     outcome_kind,
+    print_labelled,
+    render_agent_tip,
     render_error,
     render_next_actions,
     render_notes,
@@ -353,24 +353,25 @@ def render_result(
         # The findings are the error report; the outcome line counts them.
         render_outcome(stderr, "failed", line)
         render_notes(stderr, notes)
-        if mode is OutputMode.AGENT:
-            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
         if not quiet:
             render_next_actions(stderr, result.next_actions)
+        # Last, not between the outcome and its next steps (post-merge run).
+        render_agent_tip(stderr, mode)
     elif kind == "failed":
         suggestion = result.failure.suggestion if result.failure else None
         if suggestion and repr(suggestion) not in result.message:
             notes.append(("help", f"did you mean {suggestion!r}?"))
-        render_error(stderr, result.message, notes=notes, mode=mode)
+        render_error(stderr, result.message, notes=notes, mode=mode, tip=False)
         if not quiet:
             render_next_actions(stderr, result.next_actions)
+        render_agent_tip(stderr, mode)
     else:
         render_outcome(stdout, kind, line)
         if not quiet:
             render_notes(stdout, notes)
             render_next_actions(stdout, result.next_actions, numbered=result.numbered_next)
         if not result.ok and mode is OutputMode.AGENT:
-            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
+            print_labelled(stderr, "tip", AGENT_TIP)
 
 
 def emit_error(
@@ -457,6 +458,7 @@ def emit_usage_error(
     value: str | None = None,
     choices: Iterable[str] = (),
     code: str = USAGE_INVALID_CHOICE,
+    next_actions: Sequence[NextAction] = (),
 ) -> NoReturn:
     """A usage error the command itself found: exit 2, with the closest valid choice."""
     suggestion = did_you_mean(value, choices) if value is not None else None
@@ -467,6 +469,7 @@ def emit_usage_error(
         code=code,
         argument=argument,
         suggestion=suggestion,
+        next_actions=next_actions,
     )
 
 
@@ -480,4 +483,6 @@ def emit_deprecation(legacy: str, replacement: str) -> None:
     if is_json_output():
         logger.warning("cli_command_deprecated", legacy=legacy, use_instead=replacement)
         return
-    get_console().print(f"[yellow]DEPRECATED[/] {escape(legacy)}; use {escape(replacement)}.")
+    # A severity word, like every other line: "DEPRECATED x; use y." was a
+    # label of its own (post-merge end-to-end run).
+    render_warnings(get_console(), [f"{legacy} is deprecated; use {replacement}"])

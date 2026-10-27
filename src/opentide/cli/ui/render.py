@@ -2,18 +2,22 @@
 
 Every line is built as a Rich ``Text``, never as markup, so a bracket in a
 message or a path prints as written. Lines are printed with ``soft_wrap``: a
-long path stays whole (the terminal wraps it, so it can still be selected or
-clicked), and a pipe or CI log gets exactly the characters a program would
-match.
+pipe or CI log gets exactly the characters a program would match. At a
+terminal, a line wider than the window is broken between words, its
+continuation indented under the text, as a code frame's message is (the
+terminal broke ``$SPLUNK_TOKEN`` mid-word: post-merge AFTER shots). A word is
+never split: a long path stays whole, so it can still be selected or clicked.
 
 JSON and MCP modes never reach this module.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Sequence
 from typing import Literal
 
+from rich.cells import cell_len
 from rich.console import Console
 from rich.text import Text
 
@@ -103,21 +107,78 @@ def next_action_text(action: NextAction, *, encoding: str = "utf-8") -> Text:
     return line
 
 
+def print_line(console: Console, line: Text, *, hang: int) -> None:
+    """Print *line*; at a terminal narrower than it, wrap at words, *hang* cells in.
+
+    A pipe, a file or a CI log keeps the one line, unwrapped, as before.
+    """
+    width = console.width if console.is_terminal else 0
+    if not width or line.cell_len <= width or hang >= width // 2:
+        console.print(line, soft_wrap=True)
+        return
+    for part in word_wrap(line, width, hang):
+        console.print(part, soft_wrap=True)
+
+
+def print_block(console: Console, text: Text, *, hang: int = 2) -> None:
+    """Each line of *text* through :func:`print_line`, continued *hang* cells past its indent.
+
+    For rows (a plan, a check list, an index) wider than the terminal.
+    """
+    for line in text.split("\n", allow_blank=True):
+        lead = len(line.plain) - len(line.plain.lstrip(" "))
+        print_line(console, line, hang=lead + hang)
+
+
+def word_wrap(line: Text, width: int, hang: int) -> list[Text]:
+    """*line* broken at spaces into rows of *width* cells, rows after the first *hang* in.
+
+    Only between words: a word is never split, so a path or URL wider than a
+    row stays whole (the terminal wraps it and it can still be selected). The
+    first row keeps the label and the first word of the message together.
+    """
+    plain = line.plain
+    words = [(match.start(), match.end()) for match in re.finditer(r"\S+", plain)]
+    rows: list[tuple[int, int]] = []
+    start, end, count = 0, 0, 0
+    for word_start, word_end in words:
+        room = width if not rows else width - hang
+        too_wide = cell_len(plain[start:word_end]) > room
+        if too_wide and count >= (2 if not rows else 1):
+            rows.append((start, end))
+            start, count = word_start, 0
+        end, count = word_end, count + 1
+    rows.append((start, len(plain)))
+    pad = Text(" " * hang)
+    return [line[a:b] if index == 0 else pad + line[a:b] for index, (a, b) in enumerate(rows)]
+
+
+def print_labelled(console: Console, label: str, message: str, *, indent: int = 0) -> None:
+    """``label: message``, continued under the message when it wraps."""
+    print_line(
+        console,
+        labelled_text(label, message, indent=indent),
+        hang=indent + cell_len(label) + 2,
+    )
+
+
 def render_outcome(console: Console, kind: OutcomeKind, message: str) -> None:
     """Print the one outcome line a command ends with."""
-    console.print(outcome_text(kind, message, encoding=_encoding(console)), soft_wrap=True)
+    line = outcome_text(kind, message, encoding=_encoding(console))
+    lead = line.plain.find(" ") + 1
+    print_line(console, line, hang=lead if 0 < lead <= 10 else 2)
 
 
 def render_warnings(console: Console, warnings: Iterable[str]) -> None:
     """One ``warning:`` line each. Printed before the outcome line."""
     for warning in warnings:
-        console.print(labelled_text("warning", warning), soft_wrap=True)
+        print_labelled(console, "warning", warning)
 
 
 def render_notes(console: Console, notes: Sequence[tuple[str, str]]) -> None:
     """Indented ``note:`` / ``help:`` lines under an outcome or an error."""
     for label, text in notes:
-        console.print(labelled_text(label, text, indent=2), soft_wrap=True)
+        print_labelled(console, label, text, indent=2)
 
 
 def render_error(
@@ -126,13 +187,24 @@ def render_error(
     *,
     notes: Sequence[tuple[str, str]] = (),
     mode: OutputMode | None = None,
+    tip: bool = True,
 ) -> None:
-    """``error: message`` and its notes, plus the ``--json`` tip in ``agent`` mode."""
+    """``error: message`` and its notes, plus the ``--json`` tip in ``agent`` mode.
+
+    *tip* ``False`` leaves the tip to the caller, which prints it after the
+    next steps, as the last line.
+    """
     mode = mode or get_mode()
-    console.print(labelled_text("error", message), soft_wrap=True)
+    print_labelled(console, "error", message)
     render_notes(console, notes)
-    if mode is OutputMode.AGENT:
-        console.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
+    if tip:
+        render_agent_tip(console, mode)
+
+
+def render_agent_tip(console: Console, mode: OutputMode | None = None) -> None:
+    """``tip: add --json for machine-readable output``, in ``agent`` mode only."""
+    if (mode or get_mode()) is OutputMode.AGENT:
+        print_labelled(console, "tip", AGENT_TIP)
 
 
 def render_next_actions(
@@ -149,7 +221,7 @@ def render_next_actions(
         return
     if not numbered:
         for action in shown:
-            console.print(next_action_text(action, encoding=encoding), soft_wrap=True)
+            print_line(console, next_action_text(action, encoding=encoding), hang=2)
         return
     from opentide.cli.ui import brand
 
@@ -164,4 +236,4 @@ def render_next_actions(
         if action.reason:
             line.append(f" {glyph('separator', encoding=encoding)} ", style="dim")
             line.append(action.reason, style="dim")
-        console.print(line, soft_wrap=True)
+        print_line(console, line, hang=5)

@@ -48,6 +48,7 @@ from opentide.cli.tui_app import (
     masthead_brand,
     outcome_text,
     pill,
+    status_text,
 )
 from opentide.core.root import get_data_root
 
@@ -220,7 +221,7 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         assert f"╭─▶ {RULE_FILE}:8\n" in detail
         assert "help: did you mean 'clear'?" in detail
         assert "Sentinel KQL Rule  ✗ 1" in _labels(app.query_one("#tree", Tree).root)[-1]
-        assert "opentide validate: Validation failed" in _text(app, "#status")
+        assert "opentide validate: 1 error in 1 file · " in _text(app, "#status")
         # The cursor stays on the rule after the tree is rebuilt.
         assert app.selected == RULE
         log = await _results(app, pilot)
@@ -811,3 +812,15 @@ def test_walking_the_command_tree_does_not_import_textual() -> None:
     )
     assert "opentide.cli.commands.tui" in modules
     assert not _textual(modules)
+
+
+def test_the_status_line_and_toast_say_the_counted_outcome() -> None:
+    """They said the JSON message ("Validation passed") while the Results tab printed
+    "6 objects valid · 1.2s" (post-merge end-to-end run)."""
+    from opentide.cli.output import CommandResult
+
+    result = CommandResult(message="Validation passed", outcome="6 objects valid · 1.2s")
+    assert status_text(result) == "6 objects valid · 1.2s"
+    assert status_text(CommandResult(message="Deployment completed\nmore")) == (
+        "Deployment completed"
+    )

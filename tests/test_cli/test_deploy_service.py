@@ -651,3 +651,51 @@ def test_run_deploy_reports_selection_warnings_in_every_result(
     mock_plan.assert_called_once()
     assert result["status"] == status
     assert result["warnings"] == warnings
+
+
+def _plan_skipping(*blocks: tuple[str, str]):
+    """A make_deploy_plan stand-in that skips *blocks* (uuid, status) and returns *planned*."""
+
+    def plan(*args: object, skipped: list[dict[str, str]] | None = None, **kwargs: object):
+        assert skipped is not None, "the service must collect the skipped blocks"
+        for uuid, status in blocks:
+            skipped.append(
+                {
+                    "rule": f"Rule {uuid}",
+                    "uuid": uuid,
+                    "platform": "splunk",
+                    "status": status,
+                    "strategy": "INERT",
+                }
+            )
+        return {}
+
+    return plan
+
+
+def test_an_empty_plan_counts_the_rules_a_status_kept_out() -> None:
+    """``Skipped: No rule this run read has a status that maps to its strategies`` said
+    neither how many rules nor what to change (post-merge end-to-end run)."""
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch(
+            "opentide.deployment.make_deploy_plan",
+            side_effect=_plan_skipping(("u1", "DESIGN"), ("u2", "DESIGN"), ("u3", "DISABLED")),
+        ),
+        patch(
+            "opentide.deployment.utils.statuses_deployed_by",
+            return_value=["DEVELOPMENT", "STAGING"],
+        ),
+    ):
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, dry_run=True)
+    assert result["status"] == "skipped"
+    assert result["message"] == EMPTY_SELECTION
+    assert result["_outcome"] == (
+        "No rule has a status PREVIEW deploys · 3 rules left out: 2 in DESIGN, 1 in DISABLED"
+    )
+    assert result["advice"] == (
+        "set a platform block's status to DEVELOPMENT or STAGING for PREVIEW to deploy it"
+    )
+    assert result["_summary"] == {"skipped": 3}
+    assert [entry["uuid"] for entry in result["skipped"]] == ["u1", "u2", "u3"]

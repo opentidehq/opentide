@@ -369,7 +369,7 @@ def test_document_subcommand_warns_once(cli_runner, monkeypatch: pytest.MonkeyPa
     result = cli_runner.invoke(cli_module.app, ["document", "rules"])
     assert result.exit_code == 0, result.stdout + result.stderr
     output = result.stdout + result.stderr
-    assert output.count("DEPRECATED") == 1, output
+    assert output.count("is deprecated") == 1, output
     assert "generate docs rules" in output
 
 

@@ -19,7 +19,7 @@ from opentide.cli.ui.home import HomeFacts, gather, home_view, next_steps
 from opentide.cli.ui.layout import columns
 from opentide.cli.ui.mode import OutputMode, set_mode
 from opentide.cli.ui.plan import plan_view
-from opentide.cli.ui.progress import Checklist, Step, checklist_table, step_line
+from opentide.cli.ui.progress import Checklist, Step, busy, checklist_table, step_line
 from opentide.cli.ui.render import render_next_actions
 from opentide.cli.ui.setup import render_summary, setup_outcome, welcome
 
@@ -254,6 +254,32 @@ def test_plan_and_deploy_tallies() -> None:
     )
 
 
+def test_a_rule_that_would_fail_is_marked_and_counted_apart() -> None:
+    """A rule whose compile failed still read ``+ create or update`` and was counted
+    there (post-merge end-to-end run)."""
+    from opentide.cli.services.deploy_plan import (
+        PlannedChange,
+        mark_failures,
+        plan_message,
+        plan_summary,
+    )
+
+    changes = [PlannedChange(**change) for change in _CHANGES]  # type: ignore[arg-type]
+    failing = {(changes[0].platform, changes[0].uuid)}
+    marked = mark_failures(changes, failing)
+    assert [change.fails for change in marked] == [True, False, False]
+    assert plan_message(marked) == (
+        "Plan: 0 to create, 1 to update, 0 to disable, 1 to delete, 1 would fail"
+    )
+    assert plan_summary(marked, ["sentinel"], 1)["fail"] == 1
+    assert marked[0].to_dict()["fails"] is True
+    assert "fails" not in marked[1].to_dict()
+    console = _console(OutputMode.PLAIN)
+    console.print(plan_view([change.to_dict() for change in marked]))
+    row = next(line for line in console.export_text().splitlines() if "would fail" in line)
+    assert row.lstrip().startswith("✗ would fail")
+
+
 def test_plan_outcome_line_has_no_glyph() -> None:
     from opentide.cli.ui.render import outcome_text
 
@@ -341,10 +367,31 @@ def test_home_next_steps_follow_the_workspace() -> None:
     fresh = HomeFacts("1", Path("."), schemas=False, platforms={})
     assert [step.command for step in next_steps(fresh)] == [
         "opentide generate",
-        "opentide validate",
+        "opentide new threat",
         "opentide setup platforms --sentinel",
     ]
     assert len(next_steps(_FACTS)) <= 3
+
+
+def test_an_empty_catalogue_suggests_its_first_object_not_a_deploy() -> None:
+    """After `setup`, the home screen suggested `validate` and a deploy dry run with
+    nothing to validate or deploy (post-merge end-to-end run)."""
+    empty = HomeFacts(
+        "1", Path("."), schemas=True, platforms={"sentinel": 0},
+        catalogue={"rules": 0, "threats": 0, "objectives": 0},
+    )  # fmt: skip
+    assert [step.command for step in next_steps(empty)] == [
+        "opentide new threat",
+        "opentide new rule",
+    ]
+    no_rules = HomeFacts(
+        "1", Path("."), schemas=True, platforms={"sentinel": 0},
+        catalogue={"rules": 0, "threats": 1, "objectives": 1},
+    )  # fmt: skip
+    assert [step.command for step in next_steps(no_rules)] == [
+        "opentide validate",
+        "opentide new rule",
+    ]
     assert all(isinstance(step, NextAction) for step in next_steps(_FACTS))
 
 
@@ -369,3 +416,25 @@ def test_checklist_rows_are_cut_not_wrapped_on_a_narrow_terminal() -> None:
     assert len(lines) == len(_STEPS)
     assert all(len(line) <= 30 for line in lines)
     assert lines[2].startswith("  ✓  schemas") and lines[2].endswith("…")
+
+
+@pytest.mark.parametrize(
+    ("mode", "quiet", "terminal", "drawn"),
+    [
+        (OutputMode.HUMAN, False, True, True),
+        (OutputMode.HUMAN, True, True, False),
+        (OutputMode.HUMAN, False, False, False),
+        (OutputMode.PLAIN, False, True, False),
+        (OutputMode.AGENT, False, True, False),
+        (OutputMode.JSON, False, True, False),
+    ],
+)
+def test_busy_spins_only_for_a_person_at_a_terminal(
+    mode: OutputMode, quiet: bool, terminal: bool, drawn: bool
+) -> None:
+    """validate on 300 rules was seconds of nothing; the spinner is transient (post-merge run)."""
+    stream = io.StringIO()
+    console = Console(file=stream, force_terminal=terminal, width=80)
+    with busy("Validating objects", console=console, mode=mode, quiet=quiet):
+        pass
+    assert ("Validating objects" in stream.getvalue()) is drawn

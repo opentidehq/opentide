@@ -158,6 +158,20 @@ def test_a_diagnostic_prints_its_code_file_and_help_once(tmp_path: Path, monkeyp
     assert "00000000" not in text and "Rule" not in text
 
 
+def test_a_compile_frame_quotes_names_like_every_other_frame() -> None:
+    """``error[compile_empty_block]: `response` is empty…`` printed Markdown code spans
+    where other frames quote 'names' (post-merge end-to-end run). JSON keeps them."""
+    diagnostic = _plan_ui.plan_diagnostic(
+        {
+            "code": "compile_empty_block",
+            "message": "`response` is empty, so Sentinel cannot read `alert_severity`",
+            "help": "set `response.alert_severity`",
+        }
+    )
+    assert diagnostic.message == "'response' is empty, so Sentinel cannot read 'alert_severity'"
+    assert diagnostic.help == "set 'response.alert_severity'"
+
+
 def test_a_diagnostic_without_a_file_names_its_rule(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     diagnostic = _plan_ui.plan_diagnostic(
@@ -226,6 +240,11 @@ def test_a_dry_run_defers_unset_variables_to_one_warning(caplog, monkeypatch) ->
     )
     assert _deploy_service.unset_variables_warning(["A", "B", "C"]) == (
         "a real deploy would need $A, $B and $C, which are unset"
+    )
+    # 13 names in one sentence broke mid-name at 100 columns (post-merge run).
+    assert _deploy_service.unset_variables_warning([f"V{i}" for i in range(13)]) == (
+        "a real deploy would need 13 variables that are unset: $V0, $V1, $V2 and 10 more; "
+        "opentide doctor lists them by tenant"
     )
 
 
@@ -375,6 +394,42 @@ def test_help_ends_with_one_newline_and_single_spaced_examples(argv, monkeypatch
     examples = text[text.index(" Examples") :].splitlines()[1:]
     assert examples and all(line.startswith("   $ opentide") for line in examples)
     assert "Disable Rich" not in text
+
+
+def _command_tree() -> list[dict]:
+    from opentide.cli.root import app
+
+    result = CliRunner().invoke(app, ["--json", "commands"])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)["commands"]
+
+
+def test_help_reads_as_text_not_markup() -> None:
+    """Four help screens printed docstring markup (``.env.example``), and eight of 55
+    summaries ended in a period where the rest do not (post-merge end-to-end run)."""
+    commands = _command_tree()
+    markup = [c["path"] for c in commands if "``" in (c["help"] or "") + (c["summary"] or "")]
+    assert markup == []
+    periods = [c["path"] for c in commands if (c["summary"] or "").endswith(".")]
+    assert periods == []
+
+
+def test_a_long_list_of_choices_gets_a_short_metavar() -> None:
+    """``<sentinel|splunk|…>`` broke mid-word in ``new rule --help`` (``defender_for_endpo``)
+    and ``setup --help`` (``<github|gitlab|azure|no`` / ``ne>``) (post-merge run)."""
+    from opentide.cli.root import app
+
+    root = typer.main.get_group(app)
+    crowded = [
+        f"{path} {param.opts[0]}"
+        for path, command in _visible(root)
+        for param in command.params
+        if param.param_type_name == "option"
+        and not getattr(param, "hidden", False)
+        and len("|".join(getattr(param.type, "choices", None) or ())) > 24
+        and param.metavar is None
+    ]
+    assert crowded == []
 
 
 def test_root_help_names_no_library() -> None:

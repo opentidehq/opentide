@@ -59,6 +59,11 @@ class NextAction:
         return {"command": self.command, "reason": self.reason}
 
 
+#: The next step of a command that found no workspace (no ``.opentide/`` or
+#: ``objects/`` here or above), whose empty pass says nothing about a catalogue.
+NO_WORKSPACE_STEP = NextAction("opentide setup", "no workspace here: create one")
+
+
 @dataclass(frozen=True)
 class Failure:
     """Why a command failed, for a program to branch on.
@@ -92,6 +97,10 @@ class Failure:
 _SEPARATORS = re.compile(r"[\s_-]+")
 
 
+#: Folded spellings that name a choice by what it is for (post-merge end-to-end run).
+_ALIASES = {"gitlab": "codequality", "codeclimate": "codequality"}
+
+
 def _fold(text: str) -> str:
     """*text* without case or separators, so ``RULE`` and ``rule`` compare equal."""
     return _SEPARATORS.sub("", text).casefold()
@@ -109,6 +118,16 @@ def did_you_mean(value: str, choices: Iterable[str]) -> str | None:
     for choice in options:
         if folded and _fold(choice) == folded:
             return choice
+    # The name a person knows the choice by (`--format gitlab`).
+    alias = _ALIASES.get(folded)
+    if alias in options:
+        return alias
+    # The start of one choice only (`--platform defender`), which difflib
+    # scores too low against a long name.
+    if len(folded) >= 3:
+        started = [choice for choice in options if _fold(choice).startswith(folded)]
+        if len(started) == 1:
+            return started[0]
     lowered = {choice.casefold(): choice for choice in reversed(options)}
     matches = difflib.get_close_matches(value.casefold(), list(lowered), n=1, cutoff=0.6)
     return lowered[matches[0]] if matches else None

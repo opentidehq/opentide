@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import datetime as dt
+import errno
 import os
 import re
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -383,6 +385,32 @@ def test_a_file_that_appears_while_filling_is_not_overwritten(
     assert target.read_text(encoding="utf-8") == "theirs\n"
 
 
+def test_a_folder_it_cannot_write_is_a_failure_not_a_crash(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A read-only checkout made `opentide new` crash with error[internal]
+    # (post-merge end-to-end run). Patched, because root writes anyway.
+    real_open = Path.open
+
+    def refuse(self: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        if mode == "x":
+            raise PermissionError(errno.EACCES, "Permission denied", str(self))
+        return real_open(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", refuse)
+    result = _new(workspace, "threat", "--name", "Read Only")
+    assert result.exit_code == 1, result.stdout
+    payload = parse_cli_json(result)
+    assert payload["failure"]["code"] == "path_not_writable"
+    assert payload["error"].startswith("Could not write ")
+    assert payload["error"].endswith("objects/threats/read-only.yaml: Permission denied")
+    assert not (workspace / "objects" / "threats" / "read-only.yaml").exists()
+    # And a step to take, not the failure line alone (post-merge AFTER shots).
+    assert [action["command"] for action in payload["next_actions"]] == [
+        "opentide --json explain path_not_writable"
+    ]
+
+
 def test_path_folder_and_existing_file(workspace: Path, tmp_path: Path) -> None:
     folder = tmp_path / "elsewhere"
     folder.mkdir()
@@ -443,13 +471,19 @@ def test_human_mode_prompts_for_name_and_platforms(
         "opentide.cli.services.setup.interactive.ask_text",
         lambda message, **_: asked.append(message) or "Prompted Rule",
     )
+    hints: list[object] = []
     monkeypatch.setattr(
         "opentide.cli.services.setup.interactive.ask_checkbox",
-        lambda message, choices, **_: asked.append(message) or [choices[0][1]],
+        lambda message, choices, **kwargs: (
+            asked.append(message) or hints.append(kwargs.get("instruction")) or [choices[0][1]]
+        ),
     )
     result = _new(workspace, "rule", json_output=False)
     assert result.exit_code == 0, result.stdout + result.stderr
-    assert asked == ["Rule name", "Platform blocks (space to select, enter for none)"]
+    # One hint, as questionary's instruction: the message held a second one,
+    # printed beside questionary's own (post-merge end-to-end run).
+    assert asked == ["Rule name", "Platform blocks"]
+    assert hints == ["(space selects, enter for none, arrows move)"]
     data = parse_yaml((workspace / "objects" / "rules" / "prompted-rule.yaml").read_text())
     assert list(data["configurations"]) == ["sentinel"]
 
@@ -466,9 +500,24 @@ def test_no_git_author_is_a_warning(workspace: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setattr("opentide.cli.services.new.git_author", lambda workspace: None)
     payload = parse_cli_json(_new(workspace, "threat", "--name", "Anonymous"))
     assert payload["author"] is None
-    assert "No git user.name is set, so metadata.author is left out" in payload["warnings"]
+    (left_out,) = [line for line in payload["warnings"] if "left out" in line]
+    assert left_out.startswith("metadata.author")
+    assert "no git user.name is set" in left_out
     data = parse_yaml(Path(payload["file_path"]).read_text(encoding="utf-8"))
     assert "author" not in data["metadata"]
+
+
+def test_optional_metadata_left_out_is_one_warning(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two warnings on every `new` for two optional fields (post-merge end-to-end run)."""
+    monkeypatch.setattr("opentide.cli.services.new.git_author", lambda workspace: None)
+    monkeypatch.setattr("opentide.cli.services.new.catalogue_organisation", lambda root: None)
+    payload = parse_cli_json(_new(workspace, "threat", "--name", "Nobody's"))
+    assert payload["warnings"] == [
+        "metadata.author and metadata.organisation left out: no git user.name is set; "
+        "no catalogue object names one"
+    ]
 
 
 def test_no_catalogue_organisation_leaves_the_block_out(workspace: Path) -> None:

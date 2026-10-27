@@ -14,7 +14,7 @@ import structlog
 import yaml
 
 from opentide.cli.enums import LintCheck
-from opentide.cli.ui.contract import ISSUES_FOUND, NextAction
+from opentide.cli.ui.contract import ISSUES_FOUND, NO_WORKSPACE_STEP, NextAction
 from opentide.cli.ui.diagnostics import (
     LINT_CODES,
     SourceFiles,
@@ -23,7 +23,12 @@ from opentide.cli.ui.diagnostics import (
 )
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.errors import UserFileError
-from opentide.core.io import describe_yaml_error, parse_yaml
+from opentide.core.io import (
+    describe_yaml_error,
+    not_utf8_problem,
+    parse_yaml,
+    root_mapping_problem,
+)
 from opentide.core.lint_config import LintConfig, Severity, load_lint_config
 from opentide.documentation.markdown.links import slugify
 from opentide.registry.catalogue import NESTED_OBJECT_FILE, nested_file_message, scan_object_dir
@@ -199,13 +204,18 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
         if problem.line is not None and problem.column is not None:
             record.parse_position = (problem.line, problem.column)
         return record
-    except (UnicodeDecodeError, OSError) as exc:
+    except UnicodeDecodeError as exc:
+        record.parse_error = not_utf8_problem(exc)
+        return record
+    except OSError as exc:
         record.parse_error = str(exc)
         return record
     record.key_lines = _top_level_key_lines(text)
     record.placeholder_lines = _placeholder_lines(text)
-    if not isinstance(data, dict):
-        record.parse_error = "object YAML is not a mapping"
+    if (problem := root_mapping_problem(data)) is not None:
+        # The same words validate uses: "expected a mapping at the top of the
+        # file, found an empty file".
+        record.parse_error = problem
         return record
     record.name = _as_str(data.get("name"))
     metadata = data.get("metadata")
@@ -566,6 +576,15 @@ def run_lint(
     }
     if status == "failed":
         result["_failure_code"] = ISSUES_FOUND
+    elif left and all(item.get("severity") == "info" for item in left):
+        # Notes only: nothing to warn about, so the line takes ✓, not the ``!``
+        # of a warning (post-merge end-to-end run). JSON status stays "issues".
+        result["_outcome_kind"] = "ok"
+    if not files:
+        from opentide.core.root import is_workspace_root
+
+        if not is_workspace_root(target):
+            result["_next_actions"] = [NO_WORKSPACE_STEP]
     if renamable:
         result["_next_actions"] = [
             NextAction(
@@ -592,6 +611,21 @@ def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+def _shown(root: Path) -> str:
+    """*root* as validate shows it: ``./`` or ``./sub`` from inside, ``..`` above, else absolute."""
+    import os
+
+    cwd = Path.cwd().resolve()
+    target = root.resolve()
+    if target == cwd:
+        return "./"
+    if target.is_relative_to(cwd):
+        return f"./{target.relative_to(cwd).as_posix()}"
+    if cwd.is_relative_to(target):
+        return os.path.relpath(target, cwd) + "/"
+    return target.as_posix()
+
+
 def _outcome_line(left: list[dict[str, object]], *, files: int, fixed: int, root: Path) -> str:
     """``3 files clean`` or ``3 findings in 2 files · 1 warning, 2 notes · 1 fixed``.
 
@@ -602,10 +636,11 @@ def _outcome_line(left: list[dict[str, object]], *, files: int, fixed: int, root
     done = f"{sep}{fixed} fixed" if fixed else ""
     if not left:
         if not files:
-            return f"Catalogue lint passed, but found no object files under {root}"
+            return f"Catalogue lint passed, but found no object files under {_shown(root)}"
         return f"{_plural(files, 'file')} clean{done}"
     touched = len({str(item.get("path")) for item in left})
-    line = f"{_plural(len(left), 'finding')} in {_plural(touched, 'file')}"
+    noun = "note" if all(item.get("severity") == "info" for item in left) else "finding"
+    line = f"{_plural(len(left), noun)} in {_plural(touched, 'file')}"
     kinds = [
         _plural(count, noun)
         for severity, noun in _SEVERITY_NOUNS

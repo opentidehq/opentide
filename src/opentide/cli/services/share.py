@@ -51,6 +51,11 @@ _RUN_FAILURE_CODES = {1: "share_failed", 2: "share_unreachable", 3: "share_parti
 #: The ``share`` subcommands; ``targets`` lists destinations and calls no engine.
 ShareMode = Literal["push", "preview", "status", "retract", "targets"]
 _NO_ENABLED_TARGET = "No enabled sharing target"
+#: When sharing.toml holds no target at all: what to add, and where.
+_NO_TARGET = "No sharing target is configured"
+_ADD_TARGET = (
+    "add a [[misp]] block to .opentide/configurations/sharing.toml (see docs/cli/share.md)"
+)
 _NO_CHANGED_OBJECTS = "No changed objects to share"
 
 
@@ -149,6 +154,12 @@ def run_share(
     if problem is not None or selected is None:
         if changed and mode == "push" and not targets and problem == "scope_no_match":
             return _redact(_quiet(_NO_ENABLED_TARGET, config), secrets)
+        if not config.blocks:
+            # "No sharing target matched the request" said nothing about the
+            # file to write when there is none (post-merge end-to-end run).
+            payload = _preflight("scope_no_match", config, message=_NO_TARGET)
+            payload["advice"] = _ADD_TARGET
+            return _redact(payload, secrets)
         return _redact(_preflight(problem or "scope_no_match", config), secrets)
     documents = _catalogue()
     # Files in subfolders are not objects (#584): never shared, named once.
@@ -183,45 +194,112 @@ def run_share(
     return _redact(_with_warnings(_from_run(outcome, config, mode=effective), nested), secrets)
 
 
-def render_share(payload: dict[str, Any]) -> None:
-    """Print the share table. JSON mode skips this and uses the payload."""
-    from rich.table import Table
+#: Record action → (glyph name, label in a preview, label after a push, style).
+_SHARE_ROWS: dict[str, tuple[str, str, str, str]] = {
+    "created": ("create", "create", "created", "bold green"),
+    "updated": ("update", "update", "updated", "bold yellow"),
+    "unchanged": ("skip", "unchanged", "unchanged", "dim"),
+    "retracted": ("delete", "retract", "retracted", "bold red"),
+    "skipped_tlp": ("skip", "skip", "skipped", "dim"),
+    "skipped_status": ("skip", "skip", "skipped", "dim"),
+    "skipped_type": ("skip", "skip", "skipped", "dim"),
+    "failed": ("failed", "fail", "failed", "bold red"),
+}
 
+#: Why an object was skipped, in words (the record keeps the code).
+#: Short, so a row fits 100 columns beside a long name (a sentence wrapped mid-word).
+_SKIP_REASONS = {
+    "max_tlp": "TLP above max_tlp",
+    "object_type": "type not shared",
+    "rule_status": "status not shared",
+}
+
+
+def _object_names() -> dict[str, str]:
+    """Object names by UUID, from the registry the run has already loaded."""
+    try:
+        objects = Opentide.Index.get("objects") or {}
+    except Exception:
+        return {}
+    names: dict[str, str] = {}
+    for family in objects.values():
+        if not isinstance(family, dict):
+            continue
+        for uuid, body in family.items():
+            name = body.get("name") if isinstance(body, dict) else None
+            if isinstance(name, str) and name:
+                names[str(uuid)] = name
+    return names
+
+
+def render_share(payload: dict[str, Any]) -> None:
+    """Print the targets, or what a share did or would do, as plan rows. JSON skips this.
+
+    The table this replaces dumped the records: snake_case actions
+    (``skipped_status``), raw keys as headers, an empty ``remote_event_id``
+    column, full UUIDs, and ``created`` for a preview that sent nothing.
+    """
+    from rich.text import Text
+
+    from opentide.cli.ui.glyphs import glyph
+    from opentide.cli.ui.layout import columns
+    from opentide.cli.ui.plan import short_uuid
+    from opentide.cli.ui.render import print_block
     from opentide.core.logging.config import get_stdout_console
 
     console = get_stdout_console()
+    encoding = console.encoding or "utf-8"
+    separator = f" {glyph('separator', encoding=encoding)} "
     rows = payload.get("targets")
     if isinstance(rows, list):
-        table = Table(title="Sharing targets")
-        for column in ("integration", "name", "enabled", "max_tlp", "url"):
-            table.add_column(column)
-        for row in rows:
-            if isinstance(row, dict):
-                table.add_row(
-                    *(
-                        str(row.get(column, ""))
-                        for column in ("integration", "name", "enabled", "max_tlp", "url")
-                    )
-                )
-        console.print(table)
+        listed = [
+            (
+                Text(str(row.get("name", "")), style="bold"),
+                Text(str(row.get("integration", "")), style="dim"),
+                Text("enabled" if row.get("enabled") else "disabled", style="dim"),
+                Text(f"max TLP {row.get('max_tlp')}" if row.get("max_tlp") else "", style="dim"),
+                Text(str(row.get("url") or ""), style="dim"),
+            )
+            for row in rows
+            if isinstance(row, dict)
+        ]
+        if listed:
+            print_block(console, columns(listed))
         return
     records = payload.get("records")
     if not isinstance(records, list) or not records:
         return
-    table = Table(title="Share")
-    for column in ("object_uuid", "target", "action", "remote_event_id", "reason"):
-        table.add_column(column)
+    preview = payload.get("_outcome_kind") == "plan"
+    names = _object_names()
+    targets: dict[str, list[dict[str, Any]]] = {}
     for record in records:
-        if not isinstance(record, dict):
-            continue
-        table.add_row(
-            str(record.get("object_uuid", "")),
-            str(record.get("target", "")),
-            str(record.get("action", "")),
-            "" if record.get("remote_event_id") is None else str(record.get("remote_event_id")),
-            str(record.get("reason") or ""),
-        )
-    console.print(table)
+        if isinstance(record, dict):
+            targets.setdefault(str(record.get("target", "")), []).append(record)
+    for target, members in targets.items():
+        title = Text(target, style="bold")
+        if preview:
+            title.append(separator + "dry run, nothing is sent", style="dim")
+        console.print(title, soft_wrap=True)
+        lines = []
+        for record in members:
+            action = str(record.get("action", ""))
+            mark, planned, done, style = _SHARE_ROWS.get(action, ("skip", action, action, "dim"))
+            uuid = str(record.get("object_uuid", ""))
+            reason = record.get("reason")
+            why = _SKIP_REASONS.get(str(reason), str(reason).replace("_", " ")) if reason else ""
+            lines.append(
+                (
+                    Text(
+                        f"{glyph(mark, encoding=encoding)} {planned if preview else done}",
+                        style=style,
+                    ),
+                    Text(names.get(uuid, uuid), style="bold"),
+                    Text(short_uuid(uuid, encoding), style="dim"),
+                    Text(why, style="dim"),
+                )
+            )
+        print_block(console, columns(lines, indent=2), hang=4)
+        console.print()
 
 
 def _catalogue() -> list[TideDocument]:
@@ -580,13 +658,19 @@ def _targets_payload(config: SharingConfig) -> dict[str, Any]:
         }
         for block in config.blocks
     ]
-    return _result(
+    payload = _result(
         f"{len(rows)} sharing target{'' if len(rows) == 1 else 's'}",
         exit_code=0,
         status="completed",
         targets=rows,
         warnings=tuple(issue.message for issue in config.issues if issue.severity == "warning"),
     )
+    if not rows:
+        # Not "✓ 0 sharing targets" under an empty table: nothing is set up yet.
+        payload["status"] = "skipped"
+        payload["_outcome"] = _NO_TARGET
+        payload["advice"] = _ADD_TARGET
+    return payload
 
 
 def _result(

@@ -64,6 +64,34 @@ def seconds_text(seconds: float) -> str:
     return f"{minutes}m{rest:02d}s"
 
 
+@contextmanager
+def busy(
+    message: str,
+    *,
+    console: Console | None = None,
+    mode: OutputMode | None = None,
+    quiet: bool | None = None,
+) -> Generator[None, None, None]:
+    """A transient spinner on stderr while one unit of work runs, in ``human`` mode only.
+
+    For a command with no steps to list, such as ``validate``: a 300-rule
+    catalogue otherwise showed nothing for seconds. The line is gone when the
+    work ends, so the outcome line is the first thing left on screen. Nothing
+    is drawn in any other mode, under ``--quiet``, or when stderr is not a
+    terminal.
+    """
+    from opentide.core.logging.config import current_config, get_console
+
+    console = console or get_console()
+    mode = mode or get_mode()
+    quiet = current_config().quiet if quiet is None else quiet
+    if quiet or mode is not OutputMode.HUMAN or not console.is_terminal:
+        yield
+        return
+    with console.status(Text(message), spinner="dots", spinner_style=_STYLE["running"]):
+        yield
+
+
 @dataclass
 class Step:
     """One unit of work in a :class:`Checklist`, and what it produced."""

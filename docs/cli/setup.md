@@ -27,7 +27,7 @@ Every `setup` command, scripted or interactive, ends the same way: the files it 
   .opentide/configurations/platforms/sentinel.toml   platform configuration
   .github/workflows/opentide.yml                     GitHub Actions pipeline
 
-warning: Found no origin/HEAD, checked-out branch or init.defaultBranch; the pipeline targets 'main', which is not a branch of this repository. Re-run with --default-branch <branch>.
+warning: This folder is not a git repository yet, so the pipeline targets 'main'; create it on that branch with 'git init -b main', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'.
 ✓ Created Tutorial Detections in ./tutorial-detections
 
 Next steps

@@ -60,6 +60,8 @@ A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_W
 
 Setup commands honour `--repo` when `--path` is `.` (default).
 
+A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `setup` is the exception, since it may name the folder it is about to create.
+
 ## Proxy
 
 `--proxy http://[user:pass@]host:port`, or `OPENTIDE_PROXY` when the flag is omitted, sets `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings for the `opentide` process only, overriding any value it inherited. Platform clients and the CVE lookup then use the proxy. Without either, opentide uses whatever `HTTP_PROXY` and `HTTPS_PROXY` (or their lowercase spellings) the environment already holds.

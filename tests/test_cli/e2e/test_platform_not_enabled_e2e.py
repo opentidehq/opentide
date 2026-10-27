@@ -178,3 +178,23 @@ def test_live_query_validation_of_a_disabled_platform_names_a_working_flag(
     assert payload["status"] == "skipped"
     assert payload["platform_enabled"] is False
     assert payload["advice"] == "enable it with 'opentide setup platforms --defender-for-endpoint'"
+
+
+@pytest.mark.parametrize("typo", ["enabeld", "Enabled", "enable"])
+def test_a_misspelled_enabled_key_is_named_instead_of_setup_platforms(
+    invoke_cli, tide_corpus_repo: Path, typo: str
+) -> None:
+    """``enabeld = true`` left splunk disabled, and the warning sent the author to
+    ``opentide setup platforms --splunk`` (post-merge end-to-end run)."""
+    config = tide_corpus_repo / SPLUNK_CONFIG
+    text = config.read_text(encoding="utf-8")
+    config.write_text(
+        text.replace("[tide]\nenabled = true\n", f"[tide]\n{typo} = true\n"), encoding="utf-8"
+    )
+    payload = assert_json_ok(invoke_cli("validate"))
+    (warning,) = _platform_warnings(payload)
+    assert warning["context"] == {"platform": "splunk", "key": typo}
+    assert warning["message"] == (
+        f"this block will not deploy: {SPLUNK_CONFIG} sets '{typo}' in [tide], not "
+        "'enabled', so splunk is disabled; rename the key to 'enabled'"
+    )

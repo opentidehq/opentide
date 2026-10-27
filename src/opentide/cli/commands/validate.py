@@ -55,11 +55,18 @@ QUERY_STRATEGY_HELP = (
     "accept it. Default: PREVIEW and RELEASE"
 )
 
+CHECK_HELP = "Run one check only: " + ", ".join(item.value for item in ValidateCheck)
+
 
 @validate_app.callback(invoke_without_command=True)
 def validate_group(
     ctx: typer.Context,
-    check: ValidateCheck | None = typer.Option(None, "--check", help="Run one check only"),
+    check: ValidateCheck | None = typer.Option(
+        None,
+        "--check",
+        metavar="CHECK",
+        help=CHECK_HELP,
+    ),
     file: list[str] | None = typer.Option(
         None, "--file", help="Validate only this file (repeatable)"
     ),
@@ -135,10 +142,14 @@ def validate_group(
             )
         _watch(cli, files=file, **scope)
         return
-    if fix:
-        result = run_validate_fix(cli, dry_run=dry_run, files=file, **scope)
-    else:
-        result = run_validate(cli, files=file, **scope)
+    from opentide.cli.ui.progress import busy
+
+    # A report on stdout is whole: no spinner then either (it draws on stderr).
+    with busy("Validating objects", quiet=cli.quiet or report_format is not ReportFormat.text):
+        if fix:
+            result = run_validate_fix(cli, dry_run=dry_run, files=file, **scope)
+        else:
+            result = run_validate(cli, files=file, **scope)
     diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
     plan = cast("FixPlan | None", result.pop("_fix_plan", None))
     fixed = cast("FixPlan | None", result.pop("_fixed", None))

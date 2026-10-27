@@ -28,6 +28,7 @@ class ShareResult(CommandDocument):
         None, description="The check that stopped the run before any request"
     )
     issues: list[str] | None = Field(None, description="Why sharing.toml failed validation")
+    advice: str | None = Field(None, description="What to set up when no target is configured")
 
 
 class ShareTarget(ResultModel):
@@ -44,3 +45,4 @@ class ShareTargetsResult(CommandDocument):
     targets: list[ShareTarget] | None = None
     preflight: str | None = None
     issues: list[str] | None = Field(None, description="Why sharing.toml failed validation")
+    advice: str | None = Field(None, description="What to set up when no target is configured")

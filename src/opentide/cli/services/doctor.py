@@ -987,6 +987,8 @@ _GLYPHS: dict[str, tuple[str, str]] = {
 
 def render_checks(console: Console, checks: Sequence[Mapping[str, Any]]) -> None:
     """One line per check, with its fix underneath when there is something to do."""
+    from opentide.cli.ui.render import print_line
+
     encoding = console.encoding or "utf-8"
     for check in checks:
         name, style = _GLYPHS.get(str(check["status"]), ("warning", "yellow"))
@@ -995,9 +997,9 @@ def render_checks(console: Console, checks: Sequence[Mapping[str, Any]]) -> None
         line.append(" ")
         line.append(str(check["message"]))
         line.append(f" {glyph('separator', encoding=encoding)} {check['code']}", style="dim")
-        console.print(line, soft_wrap=True)
+        print_line(console, line, hang=2)
         if check.get("fix") and check["status"] in ("warn", "fail", "skip"):
             hint = Text("  ")
             hint.append(f"{glyph('next', encoding=encoding)} ", style="bold cyan")
             hint.append(str(check["fix"]), style="dim" if check["status"] == "skip" else "")
-            console.print(hint, soft_wrap=True)
+            print_line(console, hint, hang=4)

@@ -275,8 +275,10 @@ def _info_expectations(payload: dict[str, Any]) -> list[Expectation]:
     sections = [key for key in ("rules", "threats", "objectives") if key in payload]
     if sections:
         return [uuid for key in sections for uuid in payload[key]]
+    # The counts are the outcome line's ("4 rules · 1 threat"), not table rows.
     expected: list[Expectation] = [
-        (family.capitalize(), str(count)) for family, count in payload["counts"].items()
+        f"{count} {family if count != 1 else family[:-1]}"
+        for family, count in payload["counts"].items()
     ]
     for plat in payload["platforms"]:
         caps = [name for name in ("deploy", "validate") if plat[f"can_{name}"]]
@@ -324,7 +326,13 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     )
     summary = payload.get("summary") or {}
     if framed and "findings" in summary:
-        expected.append(f"{summary['findings']} finding" if summary["findings"] else "clean")
+        # Notes alone are counted as notes, not findings.
+        noun = (
+            "note"
+            if summary["findings"] and summary["findings"] == summary.get("notes")
+            else "finding"
+        )
+        expected.append(f"{summary['findings']} {noun}" if summary["findings"] else "clean")
     if framed and "objects" in summary:
         expected.append(f"{summary['objects']} object")
     if "counts" in payload and "platforms" in payload:

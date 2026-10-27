@@ -260,7 +260,20 @@ def diagnostic_lines(
             row.append(" " + underline_offset(shown, diagnostic.column))
             row.append(glyph("underline", encoding=encoding) * length, style=style)
             if diagnostic.label:
-                row.append(" " + safe(diagnostic.label), style=style)
+                label = safe(diagnostic.label)
+                if columns and row.cell_len + 1 + cell_len(label) > columns:
+                    # Past the edge the terminal broke the label mid-word
+                    # ("n" / "o object has this id"): it goes on the next row,
+                    # under the underline when it fits there.
+                    lines.append(row)
+                    row = gutter()
+                    offset = underline_offset(shown, diagnostic.column)
+                    if row.cell_len + 1 + cell_len(offset) + cell_len(label) > columns:
+                        offset = ""
+                    row.append(" " + offset)
+                    row.append(label, style=style)
+                else:
+                    row.append(" " + label, style=style)
             lines.append(row)
         if notes:
             lines.append(gutter())

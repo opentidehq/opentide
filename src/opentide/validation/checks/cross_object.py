@@ -25,7 +25,9 @@ def check_references_for_object(
     if object_type == "rule":
         parent = body.get("detection_model")
         known_parents = graph.enum_values("objective") | graph.enum_values("signal")
-        if parent and parent not in known_parents:
+        # A list or mapping here is a schema error the schema check reports;
+        # only a scalar can name a parent.
+        if parent and isinstance(parent, str | int) and parent not in known_parents:
             message, suggestion = _invalid_detection_model(graph, str(parent))
             issues.append(
                 ValidationIssue(

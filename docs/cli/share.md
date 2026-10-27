@@ -60,6 +60,8 @@ Block statuses are the ones deploy uses and promotion rewrites, so once promotio
 
 `push --publish` (or a block with `publish = true`) publishes an event whose content is unchanged but which is still unpublished, and reports it as `updated`; `preview` predicts the same from the ledger.
 
+At a terminal, each target lists one row per object, like a deploy plan: `+ create`, `~ update`, `○ unchanged`, `× retract`, `○ skip` with a short reason (`TLP above max_tlp`, `type not shared`, `status not shared`), or `✗ fail`. A preview says `dry run, nothing is sent` beside the target and uses the planned words; `push` uses `created`, `updated`, … The JSON `action` values are the sharing spec's and do not change. With no `sharing.toml` target at all, `share targets` ends in `Skipped: No sharing target is configured` and `preview` and `push` fail with that message (`scope_no_match`); both add `help: add a [[misp]] block to .opentide/configurations/sharing.toml`.
+
 `push` and `preview` validate each object that passes the type, status, and TLP filters. `sharing-config` runs as part of loading `sharing.toml`. A literal API key is a warning and is replaced with `[REDACTED]` if it would otherwise appear.
 
 ## State

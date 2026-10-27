@@ -253,6 +253,22 @@ def test_both_entry_points_print_the_same_warnings(
     assert printed == {entry: [expected] for entry in ENTRY_POINTS}
 
 
+def test_a_folder_outside_git_is_told_how_to_start_the_repository(
+    tmp_path: Path, git_home: Path
+) -> None:
+    """The wizard in a new folder warned "'main', which is not a branch of this repository.
+    Re-run with --default-branch": there was no repository, and the wizard has no such
+    flag (post-merge end-to-end run)."""
+    workdir = tmp_path / "new-detections"
+    workdir.mkdir()
+    printed = _printed_warnings("setup --ci", "github", workdir, "--platform", "sentinel")
+    assert printed == [
+        "This folder is not a git repository yet, so the pipeline targets 'main'; create it "
+        "on that branch with 'git init -b main', or write the pipeline for another one with "
+        "'opentide setup ci <provider> --default-branch <branch>'."
+    ]
+
+
 def _command(*names: str) -> click.Command:
     """Walked by attribute, not ``isinstance``: Typer bundles its own Click copy."""
     command: Any = get_command(app)

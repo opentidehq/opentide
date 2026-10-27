@@ -153,9 +153,15 @@ def next_steps(facts: HomeFacts) -> list[NextAction]:
     steps: list[NextAction] = []
     if not facts.schemas:
         steps.append(NextAction("opentide generate", "schemas, templates and editor snippets"))
-    steps.append(NextAction("opentide validate", "check every object before you commit"))
+    if not any(facts.catalogue.values()):
+        # Nothing to validate or deploy yet: the first object is the next step.
+        steps.append(NextAction("opentide new threat", "scaffold the first object"))
+    else:
+        steps.append(NextAction("opentide validate", "check every object before you commit"))
     if not facts.platforms:
         steps.append(NextAction("opentide setup platforms --sentinel", "enable a platform"))
+    elif not facts.catalogue.get("rules"):
+        steps.append(NextAction("opentide new rule", "a rule for an enabled platform"))
     elif any(count == 0 for count in facts.platforms.values()):
         steps.append(
             NextAction(

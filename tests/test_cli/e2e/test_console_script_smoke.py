@@ -92,7 +92,7 @@ def test_opentide_console_script_redirect_has_no_ansi(
     """
     result = script_runner.run(["opentide", *flags, "info"], env=_terminal_env(colour_env))
     assert result.returncode == 0, result.stderr
-    assert "opentide Info" in result.stdout
+    assert "platforms  " in result.stdout
     assert "\x1b[" not in result.stdout
     assert "\x1b[" not in result.stderr
 

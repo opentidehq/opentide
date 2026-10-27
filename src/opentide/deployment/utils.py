@@ -156,6 +156,19 @@ def _report_nested_rules(nested: tuple[str, ...], warnings: list[str] | None) ->
     warnings.append(_nested_rules_warning(nested))
 
 
+def statuses_deployed_by(strategies: RunStrategies) -> list[str]:
+    """The ``[[statuses]]`` names, in order, whose strategy one of *strategies* deploys."""
+    names: list[str] = []
+    for status in registry.Opentide.Configurations.Deployment.statuses:
+        try:
+            strategy = check_status(status.name)
+        except ValueError:
+            continue
+        if any(deploys(strategy, run) for run in strategies):
+            names.append(status.name)
+    return names
+
+
 def make_deploy_plan(
     strategies: RunStrategies,
     wide_scope: bool = False,
@@ -164,6 +177,7 @@ def make_deploy_plan(
     warnings: list[str] | None = None,
     scope: RuleScope | None = None,
     all_files: bool = False,
+    skipped: list[dict[str, str]] | None = None,
 ) -> dict[str, list[str]]:
     """Assemble MDR UUIDs to deploy, organized per system.
 
@@ -187,6 +201,11 @@ def make_deploy_plan(
     marks the run as failed (RFC 0010). If that leaves nothing to deploy, the
     plan raises :class:`ExternalIdInRuleError` so the run cannot end as an
     empty success.
+
+    A block whose status no run strategy deploys is left out. With *skipped*,
+    each one is appended there (``rule``, ``uuid``, ``platform``, ``status``,
+    ``strategy``) for the caller to count, and logged at DEBUG only; without
+    it, it is logged as a warning, one line per block.
     """
     systems_deployment = enabled_systems()
     run_names = ", ".join(strategy.name for strategy in strategies) or "none"
@@ -263,14 +282,28 @@ def make_deploy_plan(
                     rule=name,
                 )
             else:
-                logger.warning(
-                    "rule_skipped_for_strategy",
-                    system=system.upper(),
-                    status=platform_status,
-                    strategy=strategy.name,
-                    run_strategies=run_names,
-                    deployed_by=", ".join(r.name for r in deployed_by(strategy)) or "no run",
-                    rule=name,
+                fields = {
+                    "system": system.upper(),
+                    "status": platform_status,
+                    "strategy": strategy.name,
+                    "run_strategies": run_names,
+                    "deployed_by": ", ".join(r.name for r in deployed_by(strategy)) or "no run",
+                    "rule": name,
+                }
+                if skipped is None:
+                    logger.warning("rule_skipped_for_strategy", **fields)
+                    continue
+                # The caller counts these in one line: a warning per block was
+                # a wall of key=value log lines on a first dry run.
+                logger.debug("rule_skipped_for_strategy", **fields)
+                skipped.append(
+                    {
+                        "rule": str(name),
+                        "uuid": str(mdr_uuid),
+                        "platform": system,
+                        "status": str(platform_status),
+                        "strategy": strategy.name,
+                    }
                 )
 
         if selected and _refuse_external_ids(data, rule=rule, uuid=mdr_uuid, warnings=warnings):

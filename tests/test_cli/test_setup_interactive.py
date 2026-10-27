@@ -119,6 +119,24 @@ def test_ask_checkbox_optional_builds_questionary_prompt(monkeypatch) -> None:
     ) == ["staging"]
 
 
+def test_ask_checkbox_replaces_the_key_hint_when_given_one(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    real_checkbox = interactive.questionary.checkbox
+
+    def wrap(*args, **kwargs):
+        captured.update(kwargs)
+        built = real_checkbox(*args, **kwargs)
+        built.unsafe_ask = MagicMock(return_value=[])
+        return built
+
+    monkeypatch.setattr(interactive.questionary, "checkbox", wrap)
+    interactive.ask_checkbox("Blocks", [("One", "one")], instruction="(space selects)")
+    assert captured["instruction"] == "(space selects)"
+    captured.clear()
+    interactive.ask_checkbox("Blocks", [("One", "one")])
+    assert "instruction" not in captured
+
+
 def test_ask_checkbox_required_constructs_with_callable_validator(monkeypatch) -> None:
     captured: dict[str, object] = {}
     real_checkbox = interactive.questionary.checkbox
@@ -175,3 +193,25 @@ def test_prompt_style_inherits_no_questionary_colour(token: str) -> None:
     attrs = merged.get_attrs_for_style_str(f"class:{token}")
     assert attrs.color.lower() not in {"ff9d00", "5f819d"}
     assert attrs.color in ("", "8b949e"), (token, attrs.color)
+
+
+def test_the_wizard_says_where_the_organisation_goes(monkeypatch, tmp_path) -> None:
+    """The answer only reaches the README; `opentide new` then warned that no object
+    names an organisation (post-merge end-to-end run). The prompt says so."""
+    from opentide.cli.context import CliContext
+    from opentide.cli.services.setup import orchestrator
+
+    asked: list[str] = []
+
+    def answer(message: str, **_kwargs: object) -> str:
+        asked.append(message)
+        if len(asked) == 2:
+            raise KeyboardInterrupt
+        return "Demo"
+
+    monkeypatch.setattr(orchestrator, "require_interactive", lambda: None)
+    monkeypatch.setattr(orchestrator, "ask_text", answer)
+    monkeypatch.setattr("opentide.cli.ui.setup.welcome", lambda *args, **kwargs: None)
+    with pytest.raises(KeyboardInterrupt):
+        orchestrator.run_interactive_setup(CliContext(), tmp_path)
+    assert asked[1] == "Organisation / team for the README (optional)"

@@ -29,6 +29,7 @@ def lint_cmd(
     check: list[LintCheck] = typer.Option(
         [],
         "--check",
+        metavar="CHECK",
         help=(
             "Limit to one check: filenames, metadata or placeholders (repeatable). "
             "Runs it even when lint.toml disables it"

@@ -47,9 +47,25 @@ def _tenant_targets(
     }
 
 
+#: Beyond this many unset variables the warning names the first ones and counts the rest.
+UNSET_SHOWN = 3
+
+
 def unset_variables_warning(names: list[str]) -> str:
-    """``a real deploy would need $A and $B, which are unset``."""
+    """``a real deploy would need $A and $B, which are unset``.
+
+    Four platforms' tenants made it one sentence of 13 names that the terminal
+    broke mid-name (post-merge end-to-end run); past :data:`UNSET_SHOWN` it
+    counts the rest and points at ``opentide doctor``, which lists them by tenant.
+    """
     shown = [f"${name}" for name in names]
+    if len(shown) > UNSET_SHOWN:
+        rest = len(shown) - UNSET_SHOWN
+        return (
+            f"a real deploy would need {len(shown)} variables that are unset: "
+            f"{', '.join(shown[:UNSET_SHOWN])} and {rest} more; opentide doctor lists "
+            "them by tenant"
+        )
     listed = shown[0] if len(shown) == 1 else f"{', '.join(shown[:-1])} and {shown[-1]}"
     which = "which is unset" if len(shown) == 1 else "which are unset"
     return f"a real deploy would need {listed}, {which}"
@@ -213,6 +229,8 @@ def run_deploy(
     from opentide.registry.builder import parse_errors_reported_by_caller
 
     plan_warnings: list[str] = []
+    # Blocks whose status no run strategy deploys: counted, not logged per rule.
+    plan_skipped: list[dict[str, str]] = []
     # Nothing live runs in a dry run: an unset credential is what a real deploy
     # would need, said once as a warning, not an error.
     unset: list[str]
@@ -227,6 +245,7 @@ def run_deploy(
             result = _deploy(
                 ctx,
                 plan_warnings,
+                plan_skipped,
                 strategies=strategies,
                 all_files=all_files,
                 platform=platform,
@@ -247,7 +266,61 @@ def run_deploy(
         plan_warnings.append(unset_variables_warning(unset))
     if plan_warnings:
         result["warnings"] = [*plan_warnings, *cast(list[str], result.get("warnings", []))]
+    if plan_skipped:
+        _report_skipped(result, plan_skipped)
+    if result.get("status") == "skipped" and not result.get("_next_actions"):
+        from opentide.cli.ui.contract import NO_WORKSPACE_STEP
+        from opentide.core.root import get_repo_root, is_workspace_root
+
+        if not is_workspace_root(get_repo_root()):
+            result["_next_actions"] = [NO_WORKSPACE_STEP]
     return result
+
+
+def _report_skipped(result: dict[str, object], skipped: list[dict[str, str]]) -> None:
+    """Count the blocks a status kept out of the plan, and say which statuses deploy.
+
+    They used to print as one ``warning: Rule skipped for strategy · system: …``
+    log line per block, and a run that skipped them all ended on
+    ``Skipped: No rule this run read has a status that maps to its strategies``.
+    """
+    from collections import Counter
+
+    from opentide.cli.ui.glyphs import glyph
+    from opentide.cli.ui.progress import plural
+    from opentide.deployment.utils import statuses_deployed_by
+    from opentide.models.deployment_enums import StatusStrategy
+
+    rules = len({entry["uuid"] for entry in skipped})
+    statuses = Counter(entry["status"] for entry in skipped)
+    if len(statuses) == 1:
+        in_status = f"{plural(rules, 'rule')} in {next(iter(statuses))}"
+    else:
+        listed = ", ".join(f"{count} in {status}" for status, count in statuses.most_common())
+        in_status = f"{plural(rules, 'rule')} left out: {listed}"
+    names = cast(list[str], result.get("strategies") or [])
+    run = tuple(StatusStrategy[name] for name in names if name in StatusStrategy.__members__)
+    run_names = " or ".join(strategy.name for strategy in run) or "this run"
+    result["skipped"] = skipped
+    summary = cast(dict[str, object], result.get("_summary") or {})
+    result["_summary"] = {**summary, "skipped": rules}
+    deployable = statuses_deployed_by(run) if run else []
+    if len(deployable) > 1:
+        listed = ", ".join(deployable[:-1]) + f" or {deployable[-1]}"
+    else:
+        listed = deployable[0] if deployable else ""
+    advice = (
+        f"set a platform block's status to {listed} for {run_names} to deploy it"
+        if listed
+        else f"no configured status deploys with {run_names}"
+    )
+    if result.get("status") == "skipped" and not result.get("plan"):
+        result["_outcome"] = (
+            f"No rule has a status {run_names} deploys {glyph('separator')} {in_status}"
+        )
+        result.setdefault("advice", advice)
+    else:
+        result.setdefault("detail", f"not in the plan: {in_status}; {advice}")
 
 
 def _unread_object_files(
@@ -303,6 +376,7 @@ STRATEGY_REQUIRED = (
 def _deploy(
     ctx: CliContext,
     plan_warnings: list[str],
+    plan_skipped: list[dict[str, str]],
     *,
     strategies: list[str] | tuple[str, ...],
     all_files: bool,
@@ -381,6 +455,7 @@ def _deploy(
             keep_deprecated=keeps_deprecated(all_files, keep_deprecated),
             warnings=plan_warnings,
             all_files=all_files,
+            skipped=plan_skipped,
         )
     except MissingGitCheckout as exc:
         return {
@@ -406,7 +481,9 @@ def _deploy(
 
             # A run-level annotation on GitHub and Azure; nothing elsewhere.
             emit_warning(_NO_RULES_MATCHED)
-        return _nothing_to_deploy(_NO_RULES_MATCHED, dry_run=dry_run)
+        return _nothing_to_deploy(
+            _NO_RULES_MATCHED, dry_run=dry_run, strategies=[strategy.name for strategy in run]
+        )
     deployed: list[str] = []
     plan_payload: dict[str, list[str]] = {
         system: list(uuids) for system, uuids in deployment_list.items()
@@ -477,6 +554,7 @@ def _deploy(
             logger.warning("tenant_targets_failed", system=system, detail=str(exc))
     from opentide.cli.services.deploy_plan import (
         deployed_message,
+        mark_failures,
         plan_changes,
         plan_message,
         plan_summary,
@@ -546,6 +624,11 @@ def _deploy(
 
     outcome = deployment_outcome()
     tenant_count = sum(len(tenants) for tenants in targets.values())
+    diagnostics = compile_diagnostics(payloads) if dry_run else []
+    if diagnostics:
+        # A rule that would fail is not a "create or update" (post-merge run).
+        failing = {(str(item["platform"]), str(item["uuid"])) for item in diagnostics}
+        changes = mark_failures(changes, failing)
     if dry_run:
         message = plan_message(changes)
     elif outcome.failed:
@@ -567,7 +650,6 @@ def _deploy(
         # The tally is a plan even when a rule would fail: the diagnostics say
         # so above it, and the exit code carries the failure.
         result["_outcome_kind"] = "plan"
-        diagnostics = compile_diagnostics(payloads)
         if diagnostics:
             result["diagnostics"] = diagnostics
             result["error"] = f"{plural(len(diagnostics), 'rule')} would fail to deploy"

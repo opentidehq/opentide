@@ -327,6 +327,111 @@ def test_a_uuid_finding_closes_its_frame_with_a_step(workspace: Path, code: str)
     assert lines[-1].lstrip().startswith("╰─ help: ")
 
 
+@pytest.mark.parametrize(
+    ("code", "field_path", "message", "message_shown", "help_shown"),
+    [
+        (
+            "schema_validation",
+            ("description",),
+            "Field required",
+            "missing required field 'description'",
+            "the template in .opentide/templates/ shows the field and its values",
+        ),
+        (
+            "platform_not_enabled",
+            ("configurations", "sentinel"),
+            "this block will not deploy while sentinel is disabled in this workspace; "
+            "enable sentinel with 'opentide setup platforms --sentinel'",
+            "this block will not deploy while sentinel is disabled in this workspace",
+            "enable sentinel with 'opentide setup platforms --sentinel'",
+        ),
+    ],
+)
+def test_every_frame_ends_in_a_step_to_take(
+    workspace: Path,
+    code: str,
+    field_path: tuple[str, ...],
+    message: str,
+    message_shown: str,
+    help_shown: str,
+) -> None:
+    """A missing field, a YAML error and a disabled platform's frames ended on the
+    underline, the last with its step inside the message (post-merge end-to-end run)."""
+    issue = ValidationIssue(
+        code=code,
+        severity="warning" if code == "platform_not_enabled" else "error",
+        file_path=_rule(workspace),
+        field_path=field_path,
+        message=message,
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    assert (diagnostic.message, diagnostic.help) == (message_shown, help_shown)
+
+
+@pytest.mark.parametrize(
+    ("content", "message", "help_shown"),
+    [
+        (b"", "expected a mapping at the top of the file, found an empty file", "fill it in"),
+        (
+            RULE.replace("created: 2026-01-01", "created: 2026-13-45").encode(),
+            "Could not parse object YAML: '2026-13-45' is not a valid date",
+            "YYYY-MM-DD",
+        ),
+        (
+            "name: Équipe\n".encode("latin-1"),
+            "the file is not UTF-8 text (byte 0xc9 at offset 6); save it as UTF-8",
+            "re-save it as UTF-8",
+        ),
+        (b"- name: A list\n", "expected a mapping at the top of the file, found a list", None),
+        (b"name: x\n  bad: : y\n", "Could not parse object YAML", "indentation"),
+    ],
+)
+def test_a_parse_frame_has_one_help_that_fits_the_problem(
+    workspace: Path, content: bytes, message: str, help_shown: str | None
+) -> None:
+    """The indentation hint ended frames for an empty file, an impossible date and a
+    Latin-1 file, and came second after a list root's own help (post-merge AFTER shots)."""
+    path = _rule(workspace)
+    path.write_bytes(content)
+    issue = ValidationIssue(code="yaml_parse", severity="error", file_path=path, message=message)
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    helps = [text for kind, text in diagnostic.notes if kind == "help"]
+    if diagnostic.help:
+        helps.append(diagnostic.help)
+    assert len(helps) == 1, helps
+    assert help_shown is None or help_shown in helps[0]
+
+
+def test_a_duplicate_uuid_names_the_other_object_and_both_places(workspace: Path) -> None:
+    """``Duplicated ID … on 'A' @ a.yaml; already used by 'B' @ b.yaml`` had no line, no
+    frame and no place for the other file (post-merge end-to-end run)."""
+    copy = _rule(workspace, "copy.yaml")
+    copy.write_text(RULE.replace("Sentinel KQL Rule", "Copied Rule"), encoding="utf-8")
+    issue = ValidationIssue(
+        code="duplicate_id",
+        severity="error",
+        object_uuid=UUID,
+        object_type="rule",
+        file_path=copy,
+        field_path=("metadata", "uuid"),
+        message=f"Duplicated ID {UUID} on 'Copied Rule' @ copy.yaml; already used by ...",
+        context={
+            "value": UUID,
+            "original": {
+                "name": "Sentinel KQL Rule",
+                "file_name": "sentinel-kql-rule.yaml",
+                "file_path": str(_rule(workspace)),
+                "field_path": ["metadata", "uuid"],
+            },
+        },
+    )
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles())
+    assert diagnostic.message == f"UUID {UUID} is also used by 'Sentinel KQL Rule'"
+    assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (3, 9, 45)
+    assert diagnostic.notes == (("also", "objects/rules/sentinel-kql-rule.yaml:3:9"),)
+    assert diagnostic.help and "one of them" in diagnostic.help
+
+
 def test_no_fix_when_the_file_says_something_else(workspace: Path) -> None:
     issue = _typo(workspace).model_copy(update={"context": {"value": "other"}})
     assert diagnostic_from_issue(issue, workspace=workspace, sources=SourceFiles()).fix is None
@@ -848,6 +953,29 @@ def test_a_narrow_terminal_never_breaks_a_word(
     words = set(" ".join(lines).split())
     assert set(issue.message.split()) <= words
     assert set(str(issue.suggestion).split()) <= words
+
+
+def test_an_underline_label_past_the_edge_moves_to_the_next_row(workspace: Path) -> None:
+    """At 60 columns ``no object has this id`` ran past the edge after a long underline
+    and the terminal broke it mid-word (post-merge end-to-end run)."""
+    issue = ValidationIssue(
+        code="invalid_ref",
+        file_path=_rule(workspace),
+        field_path=("detection_model",),
+        message=f"Unknown objective or signal reference '{DANGLING}'",
+        context={"value": DANGLING},
+    )
+    sources = SourceFiles()
+    diagnostic = diagnostic_from_issue(issue, workspace=workspace, sources=sources)
+    console = Console(file=io.StringIO(), force_terminal=True, width=60, record=True)
+    render_diagnostics(console, [diagnostic], sources=sources, mode=OutputMode.HUMAN, cwd=workspace)
+    lines = console.export_text().splitlines()
+    underline = next(index for index, line in enumerate(lines) if "━" in line)
+    # The source line stays whole; the rows opentide draws fit.
+    assert cell_len(lines[underline]) <= 60
+    assert "no object has this id" not in lines[underline]
+    assert lines[underline + 1].rstrip().endswith("│                  no object has this id")
+    assert cell_len(lines[underline + 1]) <= 60
 
 
 def test_a_pipe_keeps_lines_whole(workspace: Path) -> None:

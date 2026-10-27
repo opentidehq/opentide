@@ -38,7 +38,7 @@ _ROWS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def _short_uuid(uuid: str, encoding: str = "utf-8") -> str:
+def short_uuid(uuid: str, encoding: str = "utf-8") -> str:
     """The UUID's tail, after ``…`` (``...`` on a stream that cannot encode it)."""
     if len(uuid) <= 12:
         return uuid
@@ -89,11 +89,14 @@ def plan_view(
             rows = []
             for row in members:
                 name, label, style = _ROWS.get(str(row["action"]), _ROWS["upsert"])
+                if row.get("fails"):
+                    # Its frame prints below; the row must not promise a create.
+                    name, label, style = "failed", "would fail", "bold red"
                 rows.append(
                     (
                         Text(f"{glyph(name, encoding=encoding)} {label}", style=style),
                         Text(str(row.get("name") or row["uuid"]), style="bold"),
-                        Text(_short_uuid(str(row["uuid"]), encoding), style="dim"),
+                        Text(short_uuid(str(row["uuid"]), encoding), style="dim"),
                         Text(f"status {row['status']}" if row.get("status") else "", style="dim"),
                     )
                 )
@@ -113,16 +116,32 @@ def render_plan(console: Console, payload: Mapping[str, Any]) -> None:
         from opentide.cli.services.deploy_plan import plan_scope
 
         scope = plan_scope(int(summary["platforms"]), int(summary["tenants"]))
-    console.print(
-        plan_view(
-            changes,
-            strategies=[str(item) for item in payload.get("strategies") or ()],
-            tenants=payload.get("tenants") if isinstance(payload.get("tenants"), dict) else None,
-            scope=scope,
-            encoding=console.encoding or "utf-8",
-        ),
-        soft_wrap=True,
+    from rich.text import Text
+
+    from opentide.cli.ui.render import print_block
+
+    view = plan_view(
+        changes,
+        strategies=[str(item) for item in payload.get("strategies") or ()],
+        tenants=payload.get("tenants") if isinstance(payload.get("tenants"), dict) else None,
+        scope=scope,
+        encoding=console.encoding or "utf-8",
     )
+    # A row wider than the terminal continues under itself, between words (B44).
+    from rich.console import Group
+
+    for part in view.renderables if isinstance(view, Group) else [view]:
+        if isinstance(part, Text):
+            print_block(console, part, hang=4)
+        else:
+            console.print(part, soft_wrap=True)
+
+
+def _quoted(text: str) -> str:
+    """Markdown code spans (`response`) as every other frame quotes a name ('response')."""
+    import re
+
+    return re.sub(r"`([^`]+)`", r"'\1'", text)
 
 
 def plan_diagnostic(diagnostic: Mapping[str, Any]) -> Diagnostic:
@@ -143,10 +162,10 @@ def plan_diagnostic(diagnostic: Mapping[str, Any]) -> Diagnostic:
     return Diagnostic(
         code=str(diagnostic.get("code") or "compile_failed"),
         severity="warning" if severity == "warning" else "error",
-        message=str(diagnostic.get("message") or ""),
+        message=_quoted(str(diagnostic.get("message") or "")),
         path=str(where) if where else None,
         file_path=Path(str(source)) if source else None,
-        help=str(diagnostic["help"]) if diagnostic.get("help") else None,
+        help=_quoted(str(diagnostic["help"])) if diagnostic.get("help") else None,
         notes=notes,
         object_uuid=str(diagnostic["uuid"]) if diagnostic.get("uuid") else None,
     )

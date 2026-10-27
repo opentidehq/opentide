@@ -136,8 +136,13 @@ def ask_checkbox(
     *,
     defaults: Sequence[T] = (),
     require_selection: bool = False,
+    instruction: str | None = None,
 ) -> list[T]:
-    """Select zero or more values with a checkbox menu."""
+    """Select zero or more values with a checkbox menu.
+
+    *instruction* replaces questionary's own key hint; passing a hint in the
+    message as well printed two of them side by side.
+    """
     selected = set(defaults)
     entries = [Choice(label, value=value, checked=value in selected) for label, value in choices]
     prompt_kwargs: dict[str, Any] = {
@@ -145,6 +150,8 @@ def ask_checkbox(
         "style": PROMPT_STYLE,
         "qmark": QMARK,
     }
+    if instruction is not None:
+        prompt_kwargs["instruction"] = instruction
     if require_selection:
         prompt_kwargs["validate"] = lambda values: bool(values) or "Select at least one option"
     return _ask(questionary.checkbox(message, **prompt_kwargs))

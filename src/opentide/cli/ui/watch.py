@@ -361,8 +361,12 @@ class LiveView:
         frames: list[Text] = []
         shown = [item for item in run.diagnostics if not self.quiet or item.severity == "error"]
         for diagnostic in shown:
+            # columns: the frame's own wrapping, as validate prints it, with the
+            # continuation indent; the terminal broke the header without it.
             frames.extend(
-                diagnostic_lines(diagnostic, sources=sources, encoding=encoding, cwd=self.cwd)
+                diagnostic_lines(
+                    diagnostic, sources=sources, encoding=encoding, cwd=self.cwd, columns=width
+                )
             )
             frames.append(Text(""))
         heights = [self._height(line, width) for line in frames]

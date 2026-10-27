@@ -22,7 +22,7 @@ def rules_unreviewed(
 ) -> None:
     """List rules with no review date, or a review older than the window.
 
-    ``rule::1.0`` is always listed. ``rule::1.1`` is listed when ``metadata.reviewed``
+    `rule::1.0` is always listed. `rule::1.1` is listed when `metadata.reviewed`
     is absent or strictly earlier than now minus the window. This command does not
     modify rules.
     """

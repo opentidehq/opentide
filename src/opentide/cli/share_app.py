@@ -219,7 +219,7 @@ def share_retract(
     yes: bool = typer.Option(False, "--yes", help="Confirm --delete."),
     workers: int = typer.Option(1, "--workers", help=_WORKERS_HELP),
 ) -> None:
-    """Unpublish a shared event, or delete it when ``--delete --yes`` is set."""
+    """Unpublish a shared event, or delete it when `--delete --yes` is set."""
     _dispatch(
         ctx,
         "retract",

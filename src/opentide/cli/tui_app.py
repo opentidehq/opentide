@@ -211,6 +211,13 @@ def diagnostic_text(diagnostic: Diagnostic, root: Path) -> Text:
 _UNWRAPPED = 10_000
 
 
+def status_text(result: Any) -> str:
+    """The first line of what the CLI prints as *result*'s outcome: its counted line
+    when it has one, else its message, else its status."""
+    line = result.outcome or result.message or result.status
+    return str(line).splitlines()[0] if line else ""
+
+
 def outcome_text(outcome: ActionOutcome, root: Any) -> Text:
     """The command line, its diagnostics and plan, then the result as the CLI prints it.
 
@@ -455,9 +462,11 @@ class OpentideTui(App[None]):
         self._log(outcome_text(outcome, root))
         result = outcome.result
         severity = "error" if not result.ok else "warning" if result.warnings else "information"
-        first = result.message.splitlines()[0] if result.message else result.status
-        self._status(f"{outcome.action.command}: {first}")
-        self.notify(result.message, title=outcome.action.command, severity=severity)
+        # The counted outcome the Results tab prints ("6 objects valid · 1.2s"),
+        # not the JSON message ("Validation passed") (post-merge end-to-end run).
+        said = status_text(result)
+        self._status(f"{outcome.action.command}: {said}")
+        self.notify(said, title=outcome.action.command, severity=severity)
 
     def _show_catalogue(self, catalogue: Catalogue) -> None:
         self.catalogue = catalogue

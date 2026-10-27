@@ -9,7 +9,7 @@ from typing import NoReturn
 import typer
 
 from opentide.cli.context import CliContext, get_context
-from opentide.cli.enums import DetectionPlatform
+from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
 from opentide.cli.output import CommandResult, emit_error, emit_result
 from opentide.cli.ui.contract import USAGE_EXIT_CODE, USAGE_NEEDS_INPUT, NextAction
 
@@ -73,7 +73,11 @@ def _ask_platforms(platforms: list[DetectionPlatform]) -> list[str]:
     if not enabled:
         return []
     choices = [(platform_label(DetectionPlatform(key)), key) for key in enabled]
-    return ask_checkbox("Platform blocks (space to select, enter for none)", choices)
+    return ask_checkbox(
+        "Platform blocks",
+        choices,
+        instruction="(space selects, enter for none, arrows move)",
+    )
 
 
 def _run(
@@ -147,12 +151,22 @@ def _run(
             organisation=catalogue_organisation(objects_root),
         )
     except NewError as error:
+        from opentide.cli.services.new import PATH_NOT_WRITABLE
+        from opentide.cli.ui.diagnostics import explain_command
+
+        # A folder it cannot write ended on the error line alone (post-merge AFTER shots).
+        steps = (
+            (NextAction(explain_command(error.code), "how to fix it"),)
+            if error.code == PATH_NOT_WRITABLE
+            else ()
+        )
         emit_error(
             cli,
             str(error),
             exit_code=error.exit_code,
             code=error.code,
             argument=error.argument,
+            next_actions=steps,
         )
     warnings: list[str] = list(payload.pop("warnings", []))
     if generated:
@@ -168,12 +182,20 @@ def _run(
             for platform in options.platforms
             if platform not in enabled
         )
-    if not payload.get("author"):
-        warnings.append("No git user.name is set, so metadata.author is left out")
-    if not payload.get("organisation"):
-        warnings.append(
-            "No object in the catalogue names an organisation, so metadata.organisation is left out"
+    # One line for what was left out, not one warning per field on every run
+    # (post-merge end-to-end run printed both on each `new`).
+    left_out = [
+        (field, reason)
+        for field, reason in (
+            ("metadata.author", "no git user.name is set"),
+            ("metadata.organisation", "no catalogue object names one"),
         )
+        if not payload.get(field.split(".")[1])
+    ]
+    if left_out:
+        fields = " and ".join(field for field, _ in left_out)
+        reasons = "; ".join(reason for _, reason in left_out)
+        warnings.append(f"{fields} left out: {reasons}")
     if warnings:
         payload["warnings"] = warnings
     emit_result(cli, CommandResult.from_payload(payload))
@@ -207,7 +229,10 @@ def new_rule(
     ctx: typer.Context,
     name: str | None = typer.Option(None, "--name", help=_NAME_HELP),
     platform: list[DetectionPlatform] | None = typer.Option(
-        None, "--platform", help="Add a configuration block for this platform (repeatable)"
+        None,
+        "--platform",
+        metavar=PLATFORM_METAVAR,
+        help=platform_help("Add a configuration block for this platform (repeatable)"),
     ),
     objective: str | None = typer.Option(
         None, "--objective", help="UUID of the objective this rule implements (detection_model)"

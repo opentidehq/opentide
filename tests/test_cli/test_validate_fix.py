@@ -385,6 +385,23 @@ def test_a_file_that_cannot_be_replaced_is_reported_and_left_out(
     assert _leftovers(tmp_path) == []
 
 
+def test_a_folder_that_refuses_the_temporary_file_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A read-only workspace: creating the temporary file next to the object
+    # raised PermissionError out of `validate --fix` (post-merge end-to-end run).
+    path = _write(tmp_path, "tlp: Clear\n")
+
+    def refuse(*args: object, **kwargs: object) -> tuple[int, str]:
+        raise PermissionError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(fixes.tempfile, "mkstemp", refuse)
+    written, failed = plan_fixes([_diagnostic(path, 1, 6, 11, "clear")]).write()
+    assert failed == ["threat.yaml: Permission denied"]
+    assert not written
+    assert path.read_text() == "tlp: Clear\n"
+
+
 def test_a_symlinked_object_keeps_its_link_and_mode(tmp_path: Path) -> None:
     store = tmp_path / "store"
     store.mkdir()

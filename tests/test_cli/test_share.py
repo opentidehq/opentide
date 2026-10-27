@@ -235,17 +235,29 @@ def test_human_tables_and_retract(
     listed = invoke_cli("share", "targets", repo=tide_corpus_repo, json_output=False)
     assert listed.exit_code == 0, listed.stdout
     rendered = listed.stdout + listed.stderr
-    assert "Sharing targets" in listed.stdout
-    assert "lab" in listed.stdout
+    assert "lab  misp  enabled  max TLP green  https://misp.example/base" in listed.stdout
+    # No Python repr (True) and no table of raw keys.
+    assert "True" not in listed.stdout
+    assert "max_tlp" not in listed.stdout
     assert KEY not in rendered
     assert "literal" in rendered.lower()
+
+    previewed = invoke_cli(
+        "share", "preview", "--type", "objective", repo=tide_corpus_repo, json_output=False
+    )
+    assert previewed.exit_code == 0, previewed.stdout
+    # A preview sent nothing: it says so, and never "created" (post-merge run).
+    assert "lab · dry run, nothing is sent" in previewed.stdout
+    assert "+ create  " in previewed.stdout
+    assert "created" not in previewed.stdout
+    assert "object_uuid" not in previewed.stdout
 
     pushed = invoke_cli(
         "share", "push", "--type", "objective", repo=tide_corpus_repo, json_output=False
     )
     assert pushed.exit_code == 0, pushed.stdout
-    assert "Share" in pushed.stdout
-    assert "created" in pushed.stdout
+    assert "+ created  " in pushed.stdout
+    assert "dry run" not in pushed.stdout
 
     empty = invoke_cli(
         "share", "status", "--target", "missing", repo=tide_corpus_repo, json_output=False
@@ -822,3 +834,67 @@ def test_share_runs_inside_terminal_progress(
     listed = invoke_cli("share", "targets", repo=tide_corpus_repo)
     assert listed.exit_code == 0, listed.stdout
     assert seen == ["enter", "exit"]
+
+
+def test_no_target_says_which_file_to_write(invoke_cli, tide_corpus_repo: Path) -> None:
+    """Without sharing.toml, preview said "No sharing target matched the request" and
+    targets printed an empty table and "✓ 0 sharing targets" (post-merge run)."""
+    config = tide_corpus_repo / ".opentide" / "configurations" / "sharing.toml"
+    config.unlink(missing_ok=True)
+    listed = invoke_cli("share", "targets", repo=tide_corpus_repo)
+    payload = json.loads(listed.stdout)
+    assert listed.exit_code == 0
+    assert payload["status"] == "skipped"
+    assert payload["targets"] == []
+    assert "[[misp]]" in payload["advice"]
+    human = invoke_cli("share", "targets", repo=tide_corpus_repo, json_output=False)
+    assert human.stdout.startswith("Skipped: No sharing target is configured\n")
+    preview = invoke_cli("share", "preview", repo=tide_corpus_repo)
+    assert preview.exit_code == 1
+    payload = json.loads(preview.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["message"] == "No sharing target is configured"
+    assert "sharing.toml" in payload["advice"]
+
+
+def test_a_skipped_row_fits_100_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``its status is not one the target shares`` beside a long rule name wrapped
+    mid-word at 100 columns (post-merge AFTER shots)."""
+    import io
+
+    from rich.cells import cell_len
+    from rich.console import Console
+
+    from opentide.cli.services import share
+
+    console = Console(file=io.StringIO(), width=100, color_system=None)
+    monkeypatch.setattr("opentide.core.logging.config.get_stdout_console", lambda: console)
+    long_name = "LSASS access on defender_for_endpoint"
+    reasons = ("rule_status", "max_tlp", "object_type")
+    uuids = [f"00000000-0000-4000-8003-00000000000{n}" for n in range(len(reasons))]
+    monkeypatch.setattr(share, "_object_names", lambda: dict.fromkeys(uuids, long_name))
+    records = [
+        {"target": "misp-lab", "action": "skipped", "object_uuid": uuid, "reason": reason}
+        for uuid, reason in zip(uuids, reasons, strict=True)
+    ]
+    share.render_share({"records": records, "_outcome_kind": "plan"})
+    lines = console.file.getvalue().splitlines()
+    assert sum(long_name in line for line in lines) == len(reasons)
+    assert max(cell_len(line) for line in lines) <= 100, lines
+
+
+def test_object_names_survive_an_index_that_is_not_loaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rows fall back to UUIDs, never a crash, when the registry is missing or odd."""
+    from types import SimpleNamespace
+
+    from opentide.cli.services import share
+
+    class _Broken:
+        def get(self, key: str) -> None:
+            raise RuntimeError("not initialised")
+
+    monkeypatch.setattr(share, "Opentide", SimpleNamespace(Index=_Broken()))
+    assert share._object_names() == {}
+    index = {"objects": {"rules": ["not", "a", "mapping"], "threats": {"u1": {"name": "T"}}}}
+    monkeypatch.setattr(share, "Opentide", SimpleNamespace(Index=index))
+    assert share._object_names() == {"u1": "T"}

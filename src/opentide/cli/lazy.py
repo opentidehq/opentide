@@ -139,8 +139,13 @@ class LazyTyperGroup(TyperGroup):
         )
 
     def parse_args(self, ctx: _click.Context, args: list[str]) -> list[str]:
-        if not args and not ctx.resilient_parsing and _show_home():
-            ctx.exit(0)
+        if not args and not ctx.resilient_parsing:
+            if _show_home():
+                ctx.exit(0)
+            # A bare `opentide` is a request for help, not a usage error: a
+            # person at a terminal got the home screen and 0, a pipe or
+            # NO_COLOR got the help and 2 (post-merge end-to-end run).
+            args = ["--help"]
         args = hoist_root_flags(self, ctx, args)
         ctx.meta[COMMAND_WORDS_KEY] = _leading_words(self, args)
         ctx.meta[ROOT_ARGS_KEY] = tuple(args)

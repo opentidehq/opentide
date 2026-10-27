@@ -48,6 +48,19 @@ class PlannedChange(ResultModel):
     name: str
     status: str
     action: Literal["create", "update", "upsert", "disable", "delete"]
+    fails: bool | None = Field(
+        None, description="Dry run: true when the rule could not compile, so it is not counted"
+    )
+
+
+class SkippedBlock(ResultModel):
+    """A platform block left out of the plan because no run strategy deploys its status."""
+
+    rule: str
+    uuid: str
+    platform: str
+    status: str = Field(description="The block's status, such as DESIGN")
+    strategy: str = Field(description="The strategy that status maps to, such as INERT")
 
 
 class DeployResult(CommandDocument):
@@ -68,6 +81,10 @@ class DeployResult(CommandDocument):
     )
     platform: str | None = Field(None, description="The platform selected with --platform")
     advice: str | None = None
+    detail: str | None = Field(None, description="A note on the plan, such as the rules left out")
+    skipped: list[SkippedBlock] | None = Field(
+        None, description="Blocks left out because no run strategy deploys their status"
+    )
     # Added by #643 (flow), declared ahead so either merge order stays green.
     changes: list[PlannedChange] | None = Field(None, description="One entry per rule and tenant")
     diagnostics: list[CompileDiagnostic] | None = Field(
