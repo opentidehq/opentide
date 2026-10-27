@@ -65,6 +65,7 @@ def _render_page(markdown: str, *, human: bool) -> None:
 def _render_index(pages: list) -> None:
     from rich.text import Text
 
+    from opentide.cli.ui.render import print_line
     from opentide.core.logging.config import get_stdout_console
 
     console = get_stdout_console()
@@ -72,4 +73,5 @@ def _render_index(pages: list) -> None:
     for page in pages:
         line = Text(f"{page.code:<{width}}  ", style="bold")
         line.append(page.summary, style="")
-        console.print(line, soft_wrap=True)
+        # The summary continues under itself, between words (B44).
+        print_line(console, line, hang=width + 2)

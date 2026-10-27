@@ -120,6 +120,16 @@ def print_line(console: Console, line: Text, *, hang: int) -> None:
         console.print(part, soft_wrap=True)
 
 
+def print_block(console: Console, text: Text, *, hang: int = 2) -> None:
+    """Each line of *text* through :func:`print_line`, continued *hang* cells past its indent.
+
+    For rows (a plan, a check list, an index) wider than the terminal.
+    """
+    for line in text.split("\n", allow_blank=True):
+        lead = len(line.plain) - len(line.plain.lstrip(" "))
+        print_line(console, line, hang=lead + hang)
+
+
 def word_wrap(line: Text, width: int, hang: int) -> list[Text]:
     """*line* broken at spaces into rows of *width* cells, rows after the first *hang* in.
 

@@ -244,6 +244,7 @@ def render_share(payload: dict[str, Any]) -> None:
     from opentide.cli.ui.glyphs import glyph
     from opentide.cli.ui.layout import columns
     from opentide.cli.ui.plan import short_uuid
+    from opentide.cli.ui.render import print_block
     from opentide.core.logging.config import get_stdout_console
 
     console = get_stdout_console()
@@ -263,7 +264,7 @@ def render_share(payload: dict[str, Any]) -> None:
             if isinstance(row, dict)
         ]
         if listed:
-            console.print(columns(listed), soft_wrap=True)
+            print_block(console, columns(listed))
         return
     records = payload.get("records")
     if not isinstance(records, list) or not records:
@@ -297,7 +298,7 @@ def render_share(payload: dict[str, Any]) -> None:
                     Text(why, style="dim"),
                 )
             )
-        console.print(columns(lines, indent=2), soft_wrap=True)
+        print_block(console, columns(lines, indent=2), hang=4)
         console.print()
 
 

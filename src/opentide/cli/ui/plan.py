@@ -116,16 +116,25 @@ def render_plan(console: Console, payload: Mapping[str, Any]) -> None:
         from opentide.cli.services.deploy_plan import plan_scope
 
         scope = plan_scope(int(summary["platforms"]), int(summary["tenants"]))
-    console.print(
-        plan_view(
-            changes,
-            strategies=[str(item) for item in payload.get("strategies") or ()],
-            tenants=payload.get("tenants") if isinstance(payload.get("tenants"), dict) else None,
-            scope=scope,
-            encoding=console.encoding or "utf-8",
-        ),
-        soft_wrap=True,
+    from rich.text import Text
+
+    from opentide.cli.ui.render import print_block
+
+    view = plan_view(
+        changes,
+        strategies=[str(item) for item in payload.get("strategies") or ()],
+        tenants=payload.get("tenants") if isinstance(payload.get("tenants"), dict) else None,
+        scope=scope,
+        encoding=console.encoding or "utf-8",
     )
+    # A row wider than the terminal continues under itself, between words (B44).
+    from rich.console import Group
+
+    for part in view.renderables if isinstance(view, Group) else [view]:
+        if isinstance(part, Text):
+            print_block(console, part, hang=4)
+        else:
+            console.print(part, soft_wrap=True)
 
 
 def _quoted(text: str) -> str:
