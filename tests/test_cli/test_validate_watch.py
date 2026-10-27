@@ -256,8 +256,10 @@ def test_changes_between_snapshots() -> None:
 
 
 def test_the_real_file_listing_reads_yaml_but_not_debug_files(tmp_path: Path) -> None:
-    rules = tmp_path / "rules" / "team"
-    rules.mkdir(parents=True)
+    rules = tmp_path / "rules"
+    (rules / "team").mkdir(parents=True)
+    # A file in a subfolder is not an object (#584), so a watch ignores it.
+    (rules / "team" / "nested.yaml").write_text("x: 1\n")
     rule = rules / "rule.yaml"
     rule.write_text(
         "metadata:\n  uuid: 00000000-0000-4000-8003-00000000000A\n"

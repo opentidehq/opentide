@@ -8,9 +8,15 @@ from pathlib import Path
 from typing import Any, Literal
 
 from opentide.cli.context import CliContext
-from opentide.cli.ui.contract import USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, did_you_mean
+from opentide.cli.ui.contract import (
+    USAGE_INVALID_CHOICE,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+    did_you_mean,
+)
 from opentide.core.logging import get_logger
 from opentide.core.registry import Opentide
+from opentide.registry.catalogue import is_object_file_name, report_nested_object_files
 from opentide.sharing.config import MispBlock, SharingConfig, load_sharing
 from opentide.sharing.constants import (
     INTEGRATION_MISP,
@@ -42,11 +48,8 @@ _PREFLIGHT = {
 
 #: ``failure.code`` for a run that reached the destination, by exit code.
 _RUN_FAILURE_CODES = {1: "share_failed", 2: "share_unreachable", 3: "share_partial"}
-
-_OBJECT_SUFFIXES = frozenset({".yaml", ".yml"})
 #: The ``share`` subcommands; ``targets`` lists destinations and calls no engine.
 ShareMode = Literal["push", "preview", "status", "retract", "targets"]
-
 _NO_ENABLED_TARGET = "No enabled sharing target"
 #: When sharing.toml holds no target at all: what to add, and where.
 _NO_TARGET = "No sharing target is configured"
@@ -70,8 +73,23 @@ def run_share(
     delete: bool = False,
     confirmed: bool = False,
     changed: bool = False,
+    since: str | None = None,
 ) -> dict[str, Any]:
     """Run one share command and return a CLI payload, including ``_exit_code``."""
+    if since is not None and not changed:
+        return _failed(
+            "--since needs --changed",
+            exit_code=2,
+            code=USAGE_MISSING_OPTION,
+            argument="--changed",
+        )
+    if since is not None and not since.strip():
+        return _failed(
+            "--since needs a commit SHA or ref",
+            exit_code=2,
+            code=USAGE_INVALID_VALUE,
+            argument="--since",
+        )
     if workers < 1:
         return _failed(
             "workers must be at least 1",
@@ -109,7 +127,7 @@ def run_share(
         return _redact(_targets_payload(config), secrets)
 
     if changed and mode == "push":
-        problem = _changed_context()
+        problem = _changed_context(explicit_base=since is not None)
         if problem is not None:
             return _redact(_preflight(problem, config), secrets)
 
@@ -144,13 +162,19 @@ def run_share(
             return _redact(payload, secrets)
         return _redact(_preflight(problem or "scope_no_match", config), secrets)
     documents = _catalogue()
+    # Files in subfolders are not objects (#584): never shared, named once.
+    nested: list[str] = []
+    report_nested_object_files(warnings=nested)
     filters = _filters(cli.repo, uuids, types, files)
     if changed and mode == "push":
-        filters, stop = _changed_files(cli.repo, filters)
+        filters, stop = _changed_files(cli.repo, filters, since=since)
         if stop == "empty":
-            return _redact(_quiet(_NO_CHANGED_OBJECTS, config), secrets)
+            return _redact(_with_warnings(_quiet(_NO_CHANGED_OBJECTS, config), nested), secrets)
         if stop is not None:
-            return _redact(_preflight("changed_diff", config, message=stop), secrets)
+            return _redact(
+                _with_warnings(_preflight("changed_diff", config, message=stop), nested),
+                secrets,
+            )
     validate = _validator(documents) if effective in {"push", "preview"} else None
     outcome = run_misp(
         documents,
@@ -167,7 +191,7 @@ def run_share(
     log.info(
         "share.completed", mode=effective, exit_code=outcome.exit_code, records=len(outcome.records)
     )
-    return _redact(_from_run(outcome, config, mode=effective), secrets)
+    return _redact(_with_warnings(_from_run(outcome, config, mode=effective), nested), secrets)
 
 
 #: Record action → (glyph name, label in a preview, label after a push, style).
@@ -334,30 +358,36 @@ def _select_blocks(
     return enabled, None
 
 
-def _changed_context() -> str | None:
-    """Preflight for ``--changed`` before any git diff or HTTP call."""
+def _changed_context(*, explicit_base: bool = False) -> str | None:
+    """Preflight for ``--changed`` before any git diff or HTTP call.
+
+    Outside CI there is no push to diff, unless ``--since`` names the base.
+    """
     from opentide.deployment.ci import CIEnvironment, is_change_request
 
     environment = CIEnvironment().environment
     if environment is CIEnvironment.CIPlatforms.LocalDebug:
-        return "changed_outside_ci"
+        return None if explicit_base else "changed_outside_ci"
     if is_change_request(environment):
         return "changed_on_pull_request"
     return None
 
 
 def _changed_files(
-    workspace: Path, filters: ShareFilters | None
+    workspace: Path, filters: ShareFilters | None, *, since: str | None = None
 ) -> tuple[ShareFilters | None, str | None]:
-    """Narrow *filters* to the production diff.
+    """Narrow *filters* to the push's diff, read up to the checkout's ``HEAD``.
 
-    The second value is ``None`` when *filters* is ready, ``"empty"`` when the
-    diff selects nothing, or the diff error text.
+    The diff starts where the production deploy's starts, or at *since*, and
+    ends at ``HEAD``. The generated share job checks out the default branch
+    after the production write-back, so a rule that deploy promoted is in the
+    diff (#590). The second value is ``None`` when *filters* is ready,
+    ``"empty"`` when the diff selects nothing, or the diff error text.
     """
-    from opentide.deployment.git_repo import DiffSource, diff_calculation
+    from opentide.deployment.git_repo import changed_through_head
 
     try:
-        changed = diff_calculation(DiffSource.PUSH)
+        changed = changed_through_head(since)
     except Exception as exc:
         text = str(exc).strip()
         return None, text or _PREFLIGHT["changed_diff"]
@@ -407,7 +437,8 @@ def _direct_object_files(workspace: Path, changed: object) -> list[Path]:
             resolved = path.resolve()
         except OSError:
             continue
-        if resolved.suffix.lower() not in _OBJECT_SUFFIXES:
+        # The catalogue's names: no ``*.debug.yaml``, suffixes as deploy spells them.
+        if not is_object_file_name(resolved.name):
             continue
         if resolved.parent not in allowed:
             continue
@@ -653,6 +684,12 @@ def _result(
     if warnings:
         payload["warnings"] = list(warnings)
     payload.update(data)
+    return payload
+
+
+def _with_warnings(payload: dict[str, Any], extra: list[str]) -> dict[str, Any]:
+    if extra:
+        payload["warnings"] = [*payload.get("warnings", []), *extra]
     return payload
 
 

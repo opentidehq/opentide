@@ -22,11 +22,6 @@ updates:
       test-toolchain:
         dependency-type: "development"
         patterns: ["pytest*", "coverage", "syrupy", "pexpect", "pre-commit"]
-    ignore:
-      # mcp 2.x moved FastMCP to mcp.server.mcpserver; the server still uses
-      # the 1.x import. Remove once the migration (#581) lands.
-      - dependency-name: "mcp"
-        update-types: ["version-update:semver-major"]
 
   # Actions in .github/workflows are pinned by commit SHA with a version
   # comment; Dependabot updates both.

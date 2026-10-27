@@ -30,7 +30,10 @@ def lint_cmd(
         [],
         "--check",
         metavar="CHECK",
-        help="Limit to one check: filenames, metadata or placeholders (repeatable)",
+        help=(
+            "Limit to one check: filenames, metadata or placeholders (repeatable). "
+            "Runs it even when lint.toml disables it"
+        ),
     ),
     report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
     output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),

@@ -542,6 +542,34 @@ def fill_template(
         if entry.commented and live(entry):
             uncomment(entry)
 
+    def below(entry: _Line) -> list[_Line]:
+        found: list[_Line] = []
+        for other in entries:
+            if other.index <= entry.index:
+                continue
+            if other.indent <= entry.indent:
+                break
+            found.append(other)
+        return found
+
+    # A key the template writes live although this object neither requires nor
+    # answers it (one ``lint.toml`` requires, #489) is commented back out: left
+    # empty it loads as null, and an empty ``organisation`` fails validation.
+    for entry in entries:
+        if entry.role != "key" or entry.commented or entry.path in fields:
+            continue
+        if len(entry.path) > 1 and entry.path[:-1] not in fields:
+            continue
+        block = [entry, *below(entry)]
+        if any(other.value for other in block):
+            continue
+        for other in block:
+            if not other.commented:
+                raw = lines[other.index]
+                lines[other.index] = f"{raw[: other.indent]}#{raw[other.indent :]}"
+                other.commented = True
+                other.column += 1
+
     def set_value(entry: _Line, value: Any) -> None:
         raw = lines[entry.index]
         head = raw[: entry.column]

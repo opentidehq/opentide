@@ -152,7 +152,10 @@ _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
 #: requires an ``opentide explain`` page for each, and fails on a code emitted
 #: in the source but missing here.
 VALIDATION_CODES: frozenset[str] = frozenset(
-    {"scope_no_match"}.union(*_CHECK_ISSUE_CODES.values(), *_CHECK_WARNING_CODES.values())
+    # ``nested_object_file`` (#584) belongs to no check: every run reports it.
+    {"scope_no_match", "nested_object_file"}.union(
+        *_CHECK_ISSUE_CODES.values(), *_CHECK_WARNING_CODES.values()
+    )
 )
 
 _OBJECT_CHECKS = frozenset({ValidateCheck.uuid_format.value, ValidateCheck.schema.value})

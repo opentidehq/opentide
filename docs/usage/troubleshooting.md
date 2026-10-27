@@ -532,6 +532,10 @@ Through **0.5.0**, `deploy` required `objects/rules/` to exist. A fresh clone ha
 
 A rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. **0.6.0** warns and names the files it skipped ([#300](https://github.com/opentidehq/opentide/issues/300)). Move a rule up into `objects/rules/` to deploy it.
 
+### `nested_object_file`: an object file in a subfolder is skipped
+
+The same rule holds for every object folder and every command. A threat, objective or rule file in a subfolder of its folder is not an object: `validate`, `share`, `lint`, docs and exports skip it and name it in a `nested_object_file` warning ([#584](https://github.com/opentidehq/opentide/issues/584)). Through 0.17.2 those commands still read subfolders, so a full `share push` could publish a file `deploy` skipped. Move the file up into its object folder.
+
 ### `--promotion` or `--promotion-target` does not change what `deploy` promotes
 
 Through **0.5.0** those flags were accepted and ignored, so `deploy` kept promoting to `PRODUCTION`. **0.6.0** writes them when the same command also generates CI ([#307](https://github.com/opentidehq/opentide/issues/307)). A plain `opentide setup --no-promotion` or `--promotion-target`, without `--ci`, still ignored them. **0.6.1** writes the `[promotion]` table on that command too ([#325](https://github.com/opentidehq/opentide/issues/325)). Omitting the flags keeps the file as it is. An explicit flag that disagrees with an existing table exits `2` and writes nothing.

@@ -5,9 +5,10 @@ description: Change opentide's MCP server (`opentide mcp start`, src/opentide/mc
 
 # MCP server — opentide
 
-`opentide mcp start` serves the detection catalogue over MCP stdio, built on the `mcp` 1.x
-SDK's `FastMCP`. `mcp` is pinned `<2`: 2.x moved FastMCP (`mcp.server.fastmcp` became a stub),
-and the migration is tracked in #581. `launcher.py` turns a missing or wrong-major `mcp` into
+`opentide mcp start` serves the detection catalogue over MCP stdio, built on the `mcp` 2.x
+SDK's `MCPServer` (`mcp.server.mcpserver`). `mcp` is pinned `>=2.3,<3`; 2.x turned
+`mcp.server.fastmcp` into a stub that raises (#581). Pass `version=` to `MCPServer`, or
+`serverInfo.version` is empty. `launcher.py` turns a missing or wrong-major `mcp` into
 one install hint before any JSON-RPC is written.
 
 ## Layout
@@ -34,8 +35,10 @@ one install hint before any JSON-RPC is written.
 - **Freshness.** The server is long-lived. Anything answering "is this valid now?" must see
   the files on disk, not the index from start-up; resources may serve the start-up snapshot
   as documented in `docs/mcp/resources.md`.
-- Tool signatures use plain types (`str`, `bool`, `int`) with defaults; FastMCP builds the
+- Tool signatures use plain types (`str`, `bool`, `int`) with defaults; MCPServer builds the
   JSON schema from them.
+- Resource templates are matched as RFC 6570: a simple `{name}` does not admit reserved
+  characters such as `&`. Use `{+name}` when a value can hold one (`att&ck` vocabularies).
 
 ## Adding or changing a tool
 

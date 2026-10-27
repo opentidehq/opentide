@@ -1,4 +1,4 @@
-"""opentide MCP server — FastMCP entry point.
+"""opentide MCP server — MCPServer (mcp 2.x) entry point.
 
 Tool docstrings are the descriptions an agent reads in ``tools/list``: each
 says what the tool returns, which keys to branch on, and what to call next.
@@ -13,9 +13,9 @@ from contextlib import contextmanager
 from io import TextIOWrapper
 from typing import TextIO
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
-from opentide import __version__
+import opentide
 from opentide.mcp_server import resources as res
 from opentide.mcp_server.constants import QUERY_VALIDATION_PLATFORMS
 from opentide.mcp_server.tools import (
@@ -66,10 +66,12 @@ call to make (command is the same step as an opentide command line). Read the \
 reason before following one.\
 """
 
-mcp = FastMCP("opentide", instructions=INSTRUCTIONS)
-# FastMCP takes no version, and the low-level server then reports the MCP SDK's
-# (``serverInfo.version`` read 1.30.0): a host shows the version of opentide.
-mcp._mcp_server.version = __version__
+mcp = MCPServer(
+    "opentide",
+    # Without it mcp 2.x reports serverInfo.version as "".
+    version=opentide.__version__,
+    instructions=INSTRUCTIONS,
+)
 
 
 @mcp.tool()
@@ -267,7 +269,10 @@ def vocabularies_resource() -> str:
     return res.resource_vocabularies()
 
 
-@mcp.resource("opentide://vocabularies/{name}")
+# `{+name}`, not `{name}`: mcp 2.x matches RFC 6570, where a simple expansion
+# rejects a literal `&`, and the index advertises `opentide://vocabularies/att&ck`.
+# Reserved expansion accepts that and the percent-encoded `att%26ck` alike.
+@mcp.resource("opentide://vocabularies/{+name}")
 def vocabulary_resource(name: str) -> str:
     return res.resource_vocabulary(name)
 
@@ -302,14 +307,14 @@ def reserve_stdout() -> Generator[TextIO, None, None]:
 
 
 async def serve_stdio() -> None:
-    """``FastMCP.run_stdio_async``, writing frames to :func:`reserve_stdout`'s stream."""
+    """``MCPServer.run_stdio_async``, writing frames to :func:`reserve_stdout`'s stream."""
     import anyio
     from mcp.server.stdio import stdio_server
 
-    # Mirrors FastMCP.run_stdio_async (mcp 1.30), with our stdout stream passed in.
+    # Mirrors MCPServer.run_stdio_async (mcp 2.3), with our stdout stream passed in.
     with reserve_stdout() as rpc:
         async with stdio_server(stdout=anyio.wrap_file(rpc)) as (read_stream, write_stream):
-            server = mcp._mcp_server
+            server = mcp._lowlevel_server
             await server.run(read_stream, write_stream, server.create_initialization_options())
 
 

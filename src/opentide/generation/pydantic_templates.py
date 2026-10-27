@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,8 @@ def load_core_template_source(model_key: str) -> dict[str, Any]:
 def generate_core_template(
     model_key: str,
     template_path: Path,
+    *,
+    required_metadata: Iterable[str] | None = None,
 ) -> None:
     """Generate a YAML template for a core object model from FieldInfo."""
     models = core_schema_models()
@@ -33,6 +36,7 @@ def generate_core_template(
         template_path,
         model,
         schema_id=model.schema_identifier(),
+        required_metadata=required_metadata,
     )
 
 

@@ -55,6 +55,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`name_invalid`](#name_invalid) | A `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`. |
 | [`name_missing`](#name_missing) | An object has no `name`, so lint cannot derive its file name. |
 | [`needs_human_decision`](#needs_human_decision) | `migrate vocab-scope` left values that only a person can place. |
+| [`nested_object_file`](#nested_object_file) | A YAML file sits in a subfolder of an object folder, so it is not an object and no command reads it. |
 | [`no_tenant_reached`](#no_tenant_reached) | `validate query --live` sent no query, because no configured tenant takes the rules. |
 | [`not_implemented`](#not_implemented) | The command is reserved and does nothing yet. |
 | [`not_run`](#not_run) | The command was skipped, and says why in its message. |
@@ -832,6 +833,22 @@ opentide migrate vocab-scope
 
 Edit each listed value by hand, then run the migration again.
 
+## nested_object_file
+
+A YAML file sits in a subfolder of an object folder, so it is not an object and no command reads it.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint`, and named in the `warnings` of `share`, `generate docs` and `export`. `validate --strict` and `lint --strict` fail on it. Only files placed directly in `objects/rules/`, `objects/threats/` and `objects/objectives/` (or the configured folders) are objects: a file one folder down is not indexed, validated, shared, documented or deployed ([#584](https://github.com/opentidehq/opentide/issues/584)).
+
+### Example
+
+```text illustrative
+objects/rules/team-a/rule.yaml is in a subfolder of objects/rules and is not an object instance
+```
+
+### How to fix
+
+Move the file up into its object folder (`git mv objects/rules/team-a/rule.yaml objects/rules/`), or delete it if it is a stale copy.
+
 ## no_tenant_reached
 
 `validate query --live` sent no query, because no configured tenant takes the rules.
@@ -1402,7 +1419,7 @@ Read the message, then run `opentide <command> --help` for the options and how t
 
 An option or argument has a value outside the ones it accepts.
 
-Exit 2, as `failure.code`. Raised for `--platform`, `--type`, `--target`, `--strategy`, an `info` section and a `generate` phase. `failure.suggestion` names the closest valid value.
+Exit 2, as `failure.code`. Raised for `--platform`, `--type`, `--target`, `--strategy`, an `info` section, an `info vocab` name and a `generate` phase. `failure.suggestion` names the closest valid value.
 
 ### Example
 

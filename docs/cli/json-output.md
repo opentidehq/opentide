@@ -90,10 +90,10 @@ opentide info rulez
 
 ```json output-of="opentide --json info rulez" exit=2
 {
-  "error": "Unknown info section: rulez. Choose rules, threats, objectives, coverage.",
+  "error": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.",
   "ok": false,
   "status": "failed",
-  "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage.",
+  "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.",
   "schema_version": 1,
   "command": "info",
   "duration_ms": "...",
@@ -102,7 +102,7 @@ opentide info rulez
   "next_actions": [],
   "failure": {
     "code": "usage_invalid_choice",
-    "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage.",
+    "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.",
     "argument": "section",
     "suggestion": "rules",
     "crash_log": null
@@ -113,7 +113,7 @@ opentide info rulez
 Without `--json` the same error is one line on stderr, with the suggestion under it:
 
 ```text output-of="opentide info rulez" exit=2
-error: Unknown info section: rulez. Choose rules, threats, objectives, coverage.
+error: Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.
   help: did you mean 'rules'?
 ```
 

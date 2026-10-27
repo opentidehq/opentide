@@ -6,8 +6,13 @@ import typer
 
 from opentide.cli.context import get_context
 from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, platform_help
-from opentide.cli.output import CommandResult, emit_result, emit_usage_error
-from opentide.cli.ui.contract import ISSUES_FOUND, USAGE_MISSING_OPTION, NextAction
+from opentide.cli.output import CommandResult, emit_error, emit_result, emit_usage_error
+from opentide.cli.ui.contract import (
+    ISSUES_FOUND,
+    USAGE_INVALID_VALUE,
+    USAGE_MISSING_OPTION,
+    NextAction,
+)
 
 
 # ``info`` has no subcommands: the command index mounts it as a plain command,
@@ -19,6 +24,9 @@ def info_cmd(
         None, "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
     ),
     section: str | None = typer.Argument(None),
+    name: str | None = typer.Argument(
+        None, help="Vocabulary to inspect, with the vocab section (e.g. surface)"
+    ),
     technique: str | None = typer.Option(
         None, "--technique", help="ATT&CK technique ID for the coverage section (T1059)"
     ),
@@ -27,10 +35,17 @@ def info_cmd(
     ),
 ) -> None:
     """Show repository and platform information"""
-    from opentide.cli.services.info import collect_info, info_outcome, info_summary, render_info
+    from opentide.cli.services.info import (
+        InvalidVocabularyLifecycleError,
+        UnknownVocabularyError,
+        collect_info,
+        info_outcome,
+        info_summary,
+        render_info,
+    )
 
     cli = get_context(ctx)
-    sections = ("rules", "threats", "objectives", "coverage")
+    sections = ("rules", "threats", "objectives", "coverage", "vocab")
     if section is not None and section not in sections:
         emit_usage_error(
             cli,
@@ -46,7 +61,21 @@ def info_cmd(
             argument="--technique",
             code=USAGE_MISSING_OPTION,
         )
-    result = collect_info(cli, platform=platform, section=section, technique=technique)
+    if name is not None and section != "vocab":
+        emit_usage_error(
+            cli,
+            f"Only the vocab section takes a name; got {name!r} after {section!r}",
+            argument="name",
+            code=USAGE_INVALID_VALUE,
+        )
+    try:
+        result = collect_info(
+            cli, platform=platform, section=section, technique=technique, vocab=name
+        )
+    except UnknownVocabularyError as exc:
+        emit_usage_error(cli, str(exc), argument="name", value=exc.name, choices=exc.available)
+    except InvalidVocabularyLifecycleError as exc:
+        emit_error(cli, str(exc))
     summary = info_summary(result)
     result["_summary"] = summary
     result["_outcome"] = info_outcome(summary)

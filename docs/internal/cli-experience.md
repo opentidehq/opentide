@@ -36,7 +36,7 @@ Resolved once per process by `opentide.cli.ui.mode.resolve_mode()`. The first ru
 | `plain` | No animation, no brand marks, `soft_wrap` so paths never break mid-word, colour only when `FORCE_COLOR`/`PY_COLORS` force it |
 | `agent` | `plain`, plus: never prompt (exit 2 at once, naming the flags that answer the prompt), and one `tip: add --json for machine-readable output` line on failure |
 | `json` | Exactly one JSON document on stdout. stderr carries logs at WARNING and above only (INFO with `--debug`), never findings. No CI annotations. |
-| `mcp` | Nothing but JSON-RPC on stdout. Once FastMCP owns the transport, `sys.stdout` points at stderr for everything else; `OPENTIDE_OUTPUT`, agent detection and the envelope do not apply |
+| `mcp` | Nothing but JSON-RPC on stdout. Once MCPServer owns the transport, `sys.stdout` points at stderr for everything else; `OPENTIDE_OUTPUT`, agent detection and the envelope do not apply |
 
 **Agent detection** reads `AI_AGENT` (proposed standard, agentsmd/agents.md#136) first, then `CLAUDECODE`, `CURSOR_AGENT`, `GEMINI_CLI`, `CODEX_CI`, `COPILOT_AGENT`, `COPILOT_CLI`, `OPENCODE`, `AMP_CURRENT_THREAD_ID`, `AUGMENT_AGENT`, `CLINE_ACTIVE`. It is a hint: it never relaxes a confirmation, a `--yes` requirement or a strategy check. An agent running in CI (Copilot coding agent, claude-code-action) gets `agent` mode, and the CI annotation sinks still run.
 

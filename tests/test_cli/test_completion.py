@@ -236,12 +236,12 @@ def test_bash_gets_spaces_and_metacharacters_escaped(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Typer's bash script inserts candidates verbatim; zsh and fish quote them themselves."""
-    _object(workspace / "objects/rules/team a/my rule: v2 (old)&$x.yaml", RULE_A, "Spaced")
+    _object(workspace / "objects/rules/team a my rule: v2 (old)&$x.yaml", RULE_A, "Spaced")
     (workspace / "objects/rules/sentinel-rule.yaml").unlink()
     words = "validate --file objects/rules/team"
-    assert _values(words) == ["objects/rules/team a/my rule: v2 (old)&$x.yaml"]
+    assert _values(words) == ["objects/rules/team a my rule: v2 (old)&$x.yaml"]
     monkeypatch.setenv("_OPENTIDE_COMPLETE", "complete_bash")
-    assert _values(words) == ["objects/rules/team\\ a/my\\ rule:\\ v2\\ \\(old\\)\\&\\$x.yaml"]
+    assert _values(words) == ["objects/rules/team\\ a\\ my\\ rule:\\ v2\\ \\(old\\)\\&\\$x.yaml"]
     # Plain candidates are unchanged.
     assert set(_values("validate --type rule --uuid ")) == {RULE_A, RULE_B}
     assert completion.bash_word("T1059.001") == "T1059.001"

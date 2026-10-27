@@ -30,7 +30,7 @@ scope = ValidationScope.narrow(
 report = run_validation(scope=scope)
 ```
 
-`files` follows the [`validate --file`](../cli/validate.md#selecting-a-file) rules: a path matches only the file it names, a bare file name matches that name in every subfolder. Relative paths resolve against the working directory and the workspace root; `roots=` replaces the workspace root with the directories you pass.
+`files` follows the [`validate --file`](../cli/validate.md#selecting-a-file) rules: a path matches only the file it names, a bare file name matches that name in every object folder. Files in subfolders are not objects and match nothing; the report carries a `nested_object_file` warning for each one in scope. Relative paths resolve against the working directory and the workspace root; `roots=` replaces the workspace root with the directories you pass.
 
 ## Check selection
 

@@ -320,6 +320,14 @@ def run_generate_docs(
                         "scopes": flagged,
                         "counts": counts,
                     }
+                    # Each scoped run names the same nested files (#584): keep one copy.
+                    warnings: dict[str, None] = {}
+                    for scoped in results:
+                        listed = scoped.get("warnings")
+                        if isinstance(listed, list):
+                            warnings.update(dict.fromkeys(str(item) for item in listed))
+                    if warnings:
+                        result["warnings"] = list(warnings)
             if result.get("status") == "failed":
                 step.status = "failed"
     except GenerationPhaseError as exc:
@@ -371,6 +379,12 @@ def run_generate_all(checklist: Checklist | None = None) -> None:
     finally:
         if owned:
             checklist.__exit__(None, None, None)
+    # Files in subfolders are not objects (#584): every phase skipped them,
+    # so the pipeline names them once, after the phases built the index (an
+    # index loaded before them would log its own errors outside any phase).
+    from opentide.registry.catalogue import report_nested_object_files
+
+    report_nested_object_files()
     total = time.monotonic() - started
     logger.info(
         "generation_complete",

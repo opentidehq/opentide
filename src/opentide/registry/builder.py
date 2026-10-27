@@ -16,11 +16,9 @@ from opentide.core.io import (
     root_mapping_problem,
 )
 from opentide.core.logging import get_logger
-from opentide.registry.paths import (
-    legacy_path_aliases,
-    object_yaml_files,
-    resolve_workspace_paths,
-)
+from opentide.registry.catalogue import NESTED_INDEX_KEY, scan_object_dir
+from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
+from opentide.registry.signals import index_objective_signals
 
 logger = get_logger(__name__)
 
@@ -133,6 +131,9 @@ class RegistryBuilder:
         # UUID -> the YAML file the object was read from. ``files`` keeps only
         # the basename, which is ambiguous once object folders are nested.
         self.file_paths: dict[str, str] = {}
+        # YAML files in subfolders of an object folder: not object instances
+        # (workspace 1.3, #584), so they are listed here instead of indexed.
+        self.nested_object_files: list[dict[str, str]] = []
 
     def build(self) -> dict[str, Any]:
         configs = resolve_configurations()
@@ -164,6 +165,7 @@ class RegistryBuilder:
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
         index["parse_errors"] = self.parse_errors
+        index[NESTED_INDEX_KEY] = self.nested_object_files
         from opentide.indexing.inflight import apply_inflight_overlay, inflight_preview_enabled
 
         # Shards are other pull requests' unreviewed objects. Deploy and
@@ -335,12 +337,23 @@ class RegistryBuilder:
                 _log_missing_object_folder(object_dir, error=True, reason="not_a_directory")
                 continue
             try:
-                model_paths = object_yaml_files(object_dir)
+                scan = scan_object_dir(object_dir)
             except OSError as exc:
                 _log_missing_object_folder(object_dir, error=True, reason=str(exc))
                 continue
-            for model_path in model_paths:
+            for model_path in scan.files:
                 yaml_files.append((meta_name, str(model_path)))
+            self.nested_object_files.extend(
+                {"path": str(path), "folder": str(object_dir), "object_type": meta_name}
+                for path in scan.nested
+            )
+
+        if self.nested_object_files:
+            logger.info(
+                "nested_object_files_skipped",
+                count=len(self.nested_object_files),
+                files=[row["path"] for row in self.nested_object_files],
+            )
 
         if not yaml_files:
             return objects_index, files_index
@@ -382,25 +395,9 @@ class RegistryBuilder:
         files_index[identifier] = model_path.name
         self.file_paths[identifier] = str(model_path)
         if meta_name == "objective":
-            objective = body.get("objective")
-            if not isinstance(objective, dict):
-                return
-            signals = objective.get("signals") or []
-            if not isinstance(signals, list):
-                return
-            for signal in signals:
-                if not isinstance(signal, dict):
-                    continue
-                signal_uuid = signal.get("uuid")
-                if not signal_uuid:
-                    logger.error(
-                        "signal_missing_uuid_in_objective",
-                        objective=model_path.name,
-                    )
-                    continue
-                signal_copy = signal.copy()
-                signal_copy["parent"] = identifier
-                objects_index["signal"][str(signal_uuid)] = signal_copy
+            index_objective_signals(
+                objects_index["signal"], identifier, body, source=model_path.name
+            )
 
     def _load_object_files(
         self,

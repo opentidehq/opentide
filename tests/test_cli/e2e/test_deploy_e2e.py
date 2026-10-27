@@ -580,7 +580,12 @@ def test_full_dry_run_accounts_for_every_indexed_rule(
     assert scope["silent"] == set()
     assert set(CORPUS_RULE_UUIDS.values()) <= scope["planned"]
     assert scope["status"] == {INERT_RULE_UUID}
-    assert scope["warned"] == set(SUBFOLDER_RULE_UUIDS.values())
+    # Rules in subfolders are not object instances (#584): not indexed, still named.
+    assert scope["warned"] == set()
+    assert set(SUBFOLDER_RULE_UUIDS.values()).isdisjoint(indexed)
+    named = " ".join(payload.get("warnings", []))
+    for relative in SUBFOLDER_RULE_UUIDS:
+        assert f"/{relative}" in named
 
 
 def _sentinel_tenants(repo: Path, *tenants: tuple[str, str]) -> None:

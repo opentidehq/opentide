@@ -135,7 +135,7 @@ class PreflightGraph:
             threats = objective.get("threats") or []
             return [str(value) for value in threats] if isinstance(threats, list) else []
         if ref.object_type == "signal":
-            parent = body.get("parent")
+            parent = body.get("owner")
             return [str(parent)] if parent else []
         if ref.object_type == "rule":
             parent = body.get("detection_model")

@@ -520,6 +520,19 @@ def test_optional_metadata_left_out_is_one_warning(
     ]
 
 
+def test_no_catalogue_organisation_leaves_the_block_out(workspace: Path) -> None:
+    # The template writes ``organisation`` live because lint requires it (#489);
+    # without an answer, new comments it back out rather than leave it empty,
+    # which ``validate`` rejects.
+    seed = workspace / "objects" / "threats" / "seed-threat.yaml"
+    seed.write_text(THREAT.split("  organisation:")[0], encoding="utf-8")
+    payload = parse_cli_json(_new(workspace, "threat", "--name", "No Organisation"))
+    assert payload["organisation"] is None
+    text = Path(payload["file_path"]).read_text(encoding="utf-8")
+    assert "  #organisation:\n    #uuid: \n    #name: \n" in text
+    assert "organisation" not in parse_yaml(text)["metadata"]
+
+
 def test_missing_template_is_generated_first(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
