@@ -1,4 +1,4 @@
 {
   "title": "Internal",
-  "pages": ["cli-experience", "test-plan", "pypi-trusted-publishing", "behaviour-inventory", "vocab-upstream"]
+  "pages": ["cli-experience", "test-plan", "pypi-trusted-publishing", "behaviour-inventory", "vocab-upstream", "search"]
 }
