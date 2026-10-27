@@ -9,6 +9,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from opentide.core.index_manager import IndexManager
+from opentide.models.configuration.base import SSL_FALSE_WORDS, SSL_TRUE_WORDS
+from opentide.models.configuration.platforms import PlatformConfigurationBase
 from opentide.models.system_config import ConfigurationModels, SystemConfig
 
 
@@ -79,15 +81,10 @@ def _tenant_targeting(data: dict[str, Any], *, where: str) -> dict[str, Any]:
     return targeting
 
 
+#: The same words the `platforms/<id>.toml` models and schemas accept.
 _SSL_WORDS = {
-    "true": True,
-    "yes": True,
-    "on": True,
-    "1": True,
-    "false": False,
-    "no": False,
-    "off": False,
-    "0": False,
+    **dict.fromkeys(SSL_TRUE_WORDS, True),
+    **dict.fromkeys(SSL_FALSE_WORDS, False),
 }
 
 
@@ -437,9 +434,37 @@ def _identity_platform(system: str, payload: dict[str, Any]) -> SystemConfig.Pla
     )
 
 
+def validate_platform_config(system: str, raw: dict[str, Any]) -> PlatformConfigurationBase | None:
+    """Validate a merged `platforms/<system>.toml` against its model.
+
+    Values are checked as written: a `$NAME` placeholder is valid for any
+    setup key, so no secret is resolved or repeated here. A platform plugin
+    (an `opentide.platforms` entry point) owns its file, so only the built-in
+    platforms are validated; the call returns `None` for any other.
+    """
+    from opentide.models.configuration.loading import validate_configuration
+    from opentide.models.configuration.platforms import PLATFORM_CONFIGURATION_MODELS
+
+    model = PLATFORM_CONFIGURATION_MODELS.get(system)
+    if model is None:
+        return None
+    return validate_configuration(model, raw, file_key=f"platforms/{system}.toml")
+
+
 def build_system_config(system: str, raw: dict[str, Any] | None = None) -> Any:
-    """Build typed platform configuration for a detection system."""
+    """Build typed platform configuration for a detection system.
+
+    The tenant loaders run first and report a retired or missing key in the
+    words they always have; the platform model then rejects whatever they
+    do not read (an unknown key, a wrong type).
+    """
     raw = dict(systems_raw_index()[system]) if raw is None else dict(raw)
+    built = _build_system_config(system, raw)
+    validate_platform_config(system, raw)
+    return built
+
+
+def _build_system_config(system: str, raw: dict[str, Any]) -> Any:
     if system == "splunk":
         return _build_splunk_config(raw)
     if system == "carbon_black_cloud":

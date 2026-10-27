@@ -54,7 +54,7 @@ def test_opentide_lookup_returns_none_for_missing() -> None:
 def test_opentide_configuration_schema_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
     Opentide._index = {
         "configurations": {
-            "schema": {"version": "1"},
+            "schema": {"templates": {"rule::description": "Describe the rule."}},
             "sharing": {"enabled": True},
             "global": {"objects": [], "metaschemas": {}, "templates": {}, "indexes": {}},
             "systems": {},
@@ -65,7 +65,7 @@ def test_opentide_configuration_schema_sharing(monkeypatch: pytest.MonkeyPatch) 
         "objects": {"rule": {}, "threat": {}, "objective": {}},
     }
     Opentide._initialised = True
-    assert Opentide.Configuration.Schema["version"] == "1"
+    assert Opentide.Configuration.Schema["templates"] == {"rule::description": "Describe the rule."}
     assert Opentide.Configuration.Sharing["enabled"] is True
 
 

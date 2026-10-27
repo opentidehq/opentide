@@ -13,3 +13,4 @@ class ValidateCheck(str, Enum):
     schema = "schema"
     cve = "cve"
     sharing_config = "sharing-config"
+    configuration = "configuration"

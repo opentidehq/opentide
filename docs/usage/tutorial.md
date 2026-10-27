@@ -199,7 +199,8 @@ opentide --json validate
   "checks": {
     "id-uniqueness": { "check": "id-uniqueness", "status": "passed" },
     "uuid-format": { "check": "uuid-format", "status": "passed" },
-    "schema": { "check": "schema", "status": "passed" }
+    "schema": { "check": "schema", "status": "passed" },
+    "configuration": { "check": "configuration", "status": "passed" }
   },
   "report": {
     "ok": true,

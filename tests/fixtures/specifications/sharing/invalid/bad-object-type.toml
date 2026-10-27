@@ -1,0 +1,8 @@
+# Families are threat, objective, and rule. tvm was a pre-1.0 opentide-type token.
+
+[[misp]]
+name = "misp-internal"
+url = "https://misp.internal.example.org"
+api_key = "${MISP_INTERNAL_API_KEY}"
+max_tlp = "amber"
+object_types = ["tvm"]

@@ -29,15 +29,16 @@ def _configured_statuses() -> list[str]:
 
     Deploy maps a platform block's ``status`` to its strategy by exact name
     (``check_status``), so ``validate`` checks the same set: a status deploy
-    would reject, such as ``design`` for ``DESIGN``, fails here first.
+    would reject, such as ``design`` for ``DESIGN``, fails here first. The
+    names are read without validating ``deployment.toml``: a typo there is the
+    ``configuration`` check's finding, not a crash of this one.
     """
     from opentide.core.registry import Opentide
 
     try:
-        configured = Opentide.Configurations.Deployment.statuses or []
+        return list(Opentide.Configurations.Deployment.status_names)
     except (KeyError, AttributeError):
         return []
-    return [str(name) for status in configured if (name := getattr(status, "name", None))]
 
 
 def walk_vocab_fields(

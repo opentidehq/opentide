@@ -12,6 +12,7 @@
     "documentation",
     "---Models---",
     "models",
-    "platforms"
+    "platforms",
+    "configuration"
   ]
 }

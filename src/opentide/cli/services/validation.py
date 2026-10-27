@@ -31,6 +31,7 @@ from opentide.cli.ui.fixes import FixPlan, plan_fixes
 from opentide.cli.ui.glyphs import glyph
 from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
+from opentide.validation.configuration import CONFIGURATION_OBJECT_TYPE
 from opentide.validation.issues import ValidationIssue, ValidationReport
 from opentide.validation.scope import ValidationScope
 from opentide.validation.session import run_validation
@@ -70,6 +71,7 @@ def _checks_for(check: ValidateCheck | None) -> frozenset[ValidateCheck]:
                 ValidateCheck.id_uniqueness,
                 ValidateCheck.uuid_format,
                 ValidateCheck.schema,
+                ValidateCheck.configuration,
             }
         )
     return frozenset({check})
@@ -139,12 +141,26 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "rule_status_unknown",
         }
     ),
+    # Shares codes with sharing-config; `_issues_for_check` tells them apart by
+    # object type. The responder variants of these codes are warnings.
+    ValidateCheck.configuration.value: frozenset(
+        {
+            "missing_field",
+            "unknown_key",
+            "schema_validation",
+            "promotion_target_unknown",
+            "config_parse",
+            # Reported by the per-file helper an editor calls, not by `validate`.
+            "identifier_mismatch",
+        }
+    ),
 }
 
 #: Warning codes each check can report. They never fail the check's status.
 _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
     ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
-    ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_integration"}),
+    ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_connector"}),
+    ValidateCheck.configuration.value: frozenset({"asset_unknown", "not_a_configuration_file"}),
     ValidateCheck.cve.value: frozenset({"cve_lookup_unavailable"}),
 }
 
@@ -162,8 +178,16 @@ _OBJECT_CHECKS = frozenset({ValidateCheck.uuid_format.value, ValidateCheck.schem
 
 
 def _issues_for_check(issues: list[ValidationIssue], check_name: str) -> list[ValidationIssue]:
+    # Configuration findings share codes (`unknown_key`, `missing_field`) with
+    # sharing-config; the object type tells them apart.
+    if check_name == ValidateCheck.configuration.value:
+        return [issue for issue in issues if issue.object_type == CONFIGURATION_OBJECT_TYPE]
     codes = _CHECK_ISSUE_CODES.get(check_name, frozenset())
-    matched = [issue for issue in issues if issue.code in codes]
+    matched = [
+        issue
+        for issue in issues
+        if issue.code in codes and issue.object_type != CONFIGURATION_OBJECT_TYPE
+    ]
     if check_name in _OBJECT_CHECKS and any(issue.code == "scope_no_match" for issue in issues):
         matched.extend(issue for issue in issues if issue.code == "scope_no_match")
     return matched
@@ -184,6 +208,7 @@ DEFAULT_CHECK_NAMES: tuple[str, ...] = (
     ValidateCheck.id_uniqueness.value,
     ValidateCheck.uuid_format.value,
     ValidateCheck.schema.value,
+    ValidateCheck.configuration.value,
 )
 
 
@@ -223,7 +248,12 @@ def run_validate_all(*, scope: ValidationScope | None = None) -> dict[str, objec
     _reset_validation_env()
     report = run_validation(scope=scope or ValidationScope.full())
     results: dict[str, object] = {}
-    for check in (ValidateCheck.id_uniqueness, ValidateCheck.uuid_format, ValidateCheck.schema):
+    for check in (
+        ValidateCheck.id_uniqueness,
+        ValidateCheck.uuid_format,
+        ValidateCheck.schema,
+        ValidateCheck.configuration,
+    ):
         check_issues = _issues_for_check(report.issues, check.value)
         results[check.value] = {
             "check": check.value,

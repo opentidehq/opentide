@@ -10,6 +10,9 @@ from typing import Any, cast
 from opentide.core import index_manager as index_mod
 from opentide.core import runtime
 from opentide.core.types import IndexSnapshot
+from opentide.models.configuration.deployment import DeploymentConfiguration
+from opentide.models.configuration.loading import validate_configuration
+from opentide.models.configuration.schema import SchemaConfiguration
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
@@ -238,7 +241,9 @@ class _ConfigurationAccessor:
 
     @property
     def Schema(self) -> dict[str, Any]:
-        return dict(self._index["configurations"].get("schema", {}))
+        document = dict(self._index["configurations"].get("schema", {}))
+        validate_configuration(SchemaConfiguration, document, file_key="schema.toml")
+        return document
 
     @property
     def Sharing(self) -> dict[str, Any]:
@@ -303,6 +308,35 @@ class _DeploymentConfig:
         return dict(self._index["configurations"].get("deployment", {}))
 
     @property
+    def model(self) -> DeploymentConfiguration:
+        """Merged ``deployment.toml``, validated by ``DeploymentConfiguration``.
+
+        ``[[responders]]`` entries are validated one by one and a malformed
+        entry is skipped (see ``responders``), so one bad team does not fail
+        every reader of the statuses.
+        """
+        from opentide.loading.config_loader import ConfigurationsLoader
+
+        return ConfigurationsLoader.load_deployment(self.Index)
+
+    @property
+    def status_names(self) -> list[str]:
+        """Names of the ``[[statuses]]`` entries, read without validating the file.
+
+        ``validate`` checks a rule's status against these names; whether
+        ``deployment.toml`` itself is valid is the ``configuration`` check's
+        finding, which must not turn into a crash of the object checks.
+        """
+        statuses = self.Index.get("statuses")
+        if not isinstance(statuses, list):
+            return []
+        return [
+            entry["name"]
+            for entry in statuses
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str) and entry["name"]
+        ]
+
+    @property
     def statuses(self) -> list[Any]:
         import sys
 
@@ -313,11 +347,11 @@ class _DeploymentConfig:
             sys.path.append(root)
         from opentide.loading.config_loader import ConfigurationsLoader
 
-        return cast(list[Any], ConfigurationsLoader.load_statuses(self.Index["statuses"]))
+        return cast(list[Any], ConfigurationsLoader.statuses_from(self.model.statuses))
 
     @property
     def debug(self) -> dict[str, Any]:
-        return dict(self.Index.get("debug", {}))
+        return self.model.debug.model_dump()
 
     @property
     def responders(self) -> list[Any]:

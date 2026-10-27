@@ -48,6 +48,7 @@ _DEFAULT_CHECKS = frozenset(
         ValidateCheck.id_uniqueness,
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
+        ValidateCheck.configuration,
     }
 )
 
@@ -174,6 +175,15 @@ def run_validation(
         sharing_issues, sharing_warnings = _sharing_config_issues()
         issues.extend(sharing_issues)
         warnings.extend(sharing_warnings)
+
+    # Workspace-wide, so a run narrowed to some objects skips it unless asked for.
+    if ValidateCheck.configuration in checks and (
+        scope.mode == "full" or checks == {ValidateCheck.configuration}
+    ):
+        from opentide.validation.configuration import workspace_configuration_issues
+
+        for issue in workspace_configuration_issues():
+            (warnings if issue.severity == "warning" else issues).append(issue)
 
     if object_checks:
         enabled_platforms = _enabled_platforms(work_items, object_checks)

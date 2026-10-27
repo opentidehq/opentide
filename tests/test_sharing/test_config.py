@@ -82,7 +82,7 @@ def test_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         ({"targets": {"misp": {"url": "https://example.org"}}}, "unknown_key"),
         ({"misp": [_block(), _block()]}, "duplicate_name"),
         ({"misp": [_block(name="Bad Name")]}, "name_invalid"),
-        ({"misp": [_block(name="")]}, "missing_field"),
+        ({"misp": [_block(name="")]}, "name_invalid"),
         ({"misp": [{"name": "misp-internal"}]}, "missing_field"),
         ({"misp": [_block(max_tlp="purple")]}, "max_tlp_unknown"),
         ({"misp": [_block(organisation_uuid="not-a-uuid")]}, "organisation_uuid_invalid"),
@@ -112,10 +112,10 @@ def test_duplicate_name_across_integrations() -> None:
         }
     )
     assert any(issue.code == "duplicate_name" for issue in merged.errors)
-    assert any(issue.code == "unknown_integration" for issue in merged.warnings)
+    assert any(issue.code == "unknown_connector" for issue in merged.warnings)
 
 
-def test_unknown_integration_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unknown_connector_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MISP_KEY", "one")
     merged = _merge(
         {"misp": [_block()], "opencti": [{"name": "sector", "url": "https://x.example"}]}

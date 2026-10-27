@@ -1,17 +1,17 @@
 # unknown_key
 
-`sharing.toml` has a key opentide does not read.
+A configuration file has a key opentide does not read, usually a misspelling.
 
-Severity: error. Reported by `opentide validate --check sharing-config` and `opentide share`.
+Severity: error. Reported by `opentide validate` (check `configuration`) for the files under `.opentide/configurations/`, by every command that reads the file, and by `opentide validate --check sharing-config` and `opentide share` for `sharing.toml`. The message names the file and the key, never its value.
 
 ## Example
 
 ```toml
-[[misp]]
-name = "misp-prod"
-verify_tls = false     # the key is verify_ssl
+# deployment.toml
+[promotion]
+enabeld = false        # the key is enabled
 ```
 
 ## How to fix
 
-Remove the key or correct its spelling. The only sharing integration is `[[misp]]`.
+Remove the key or correct its spelling. The JSON Schema of each file (`python -m opentide.generation.configuration_schemas <dir>`) lists the keys it takes.
