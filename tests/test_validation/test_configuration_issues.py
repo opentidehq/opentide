@@ -295,6 +295,27 @@ def test_platform_identifier_matches_the_file_stem(tmp_path: Path) -> None:
     ]
 
 
+def _elastic_tenant(**setup: Any) -> dict[str, Any]:
+    base = {"url": "https://kibana", "elasticsearch_url": "https://es", "api_key": "$KEY"}
+    return {"tenants": [{"name": "prod", "setup": {**base, **setup}}]}
+
+
+@pytest.mark.parametrize("version", ["8.19", "9.5", "serverless"])
+def test_elastic_tenant_declares_its_stack_version(version: str) -> None:
+    # specifications#59; the language server reads `setup.version` to gate ES|QL.
+    assert (
+        configuration_file_issues("platforms/elastic.toml", _elastic_tenant(version=version)) == []
+    )
+
+
+@pytest.mark.parametrize("version", ["9", "9.5.1", "latest", "nine"])
+def test_elastic_tenant_version_is_major_minor_or_serverless(version: str) -> None:
+    issues = configuration_file_issues("platforms/elastic.toml", _elastic_tenant(version=version))
+    assert [(issue.code, issue.field_path) for issue in issues] == [
+        ("schema_validation", ("tenants", "0", "setup", "version"))
+    ]
+
+
 def test_tenant_missing_setup_key_names_the_key() -> None:
     issues = configuration_file_issues(
         "platforms/sentinel.toml",
