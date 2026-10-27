@@ -81,7 +81,7 @@ Errors fail the run with exit `1` (`failure.code` `issues_found`); warnings only
 
 Each finding has a stable code; `opentide explain <code>` prints what it means and links the language's reference ([Diagnostic codes](./diagnostics.md) lists them). Columns count Unicode code points, as in every opentide diagnostic.
 
-`lsp check` and `opentide validate` read the same objects but are not the same check. [`opentide validate`](./validate.md) is the authority for objects: its schema, vocabulary and reference checks decide whether a rule deploys. The language server reports similar findings, sometimes with its own code (`filename_slug`, `missing_author`), for the editor. To check every rule's query on top of `validate`, run `opentide validate --deep`.
+`lsp check` and `opentide validate` read the same objects but are not the same check. [`opentide validate`](./validate.md) is the authority for objects: its schema, vocabulary and reference checks decide whether a rule deploys. The language server reports similar findings, sometimes with its own code (`filename_slug`, `missing_author`), for the editor. To check every rule's query on top of `validate`, run `opentide validate --deep`. [`opentide tui`](./tui.md#the-language-server) shows these findings for each object as you browse, with the file coloured as the editor colours it.
 
 With `--json`:
 

@@ -64,6 +64,27 @@ QUERY_STYLES = {
     "error": "red",
 }
 
+#: HighlightSpec capture → terminal style, for a whole object file (the
+#: ``opentide tui`` source pane): the query styles, plus Tide keys, UUIDs,
+#: schemas, punctuation and the Markdown in descriptions.
+SOURCE_STYLES = {
+    **QUERY_STYLES,
+    "tide.keyword": "bold magenta",
+    "tide.property": "bold",
+    "tide.schema": "bright_cyan",
+    "tide.uuid": "yellow",
+    "punctuation": "dim",
+    "punctuation.bracket": "dim",
+    "punctuation.delimiter": "dim",
+    "markdown.heading": "bold",
+    "markdown.strong": "bold",
+    "markdown.emphasis": "italic",
+    "markdown.code": "green",
+    "markdown.link": "underline cyan",
+    "markdown.list": "dim",
+    "markdown.quote": "dim italic",
+}
+
 #: ``(column, end_column, style)`` spans for one source line of a file.
 LineStyles = Callable[[Path, int], list[tuple[int, int, str]]]
 
@@ -391,10 +412,13 @@ def render_diagnostics(
     mode: OutputMode | None = None,
     quiet: bool = False,
     cwd: Path | None = None,
+    highlight: bool | None = None,
 ) -> None:
     """Print each diagnostic as a code frame, a blank line after each one.
 
-    ``quiet`` keeps errors only. JSON and MCP modes never reach this function.
+    ``quiet`` keeps errors only. *highlight* colours the query lines of a
+    frame; by default only in the human mode. JSON and MCP modes never reach
+    this function.
     """
     mode = mode or get_mode()
     sources = sources or SourceFiles()
@@ -403,7 +427,9 @@ def render_diagnostics(
     # Only a terminal wraps a long line, and it breaks wherever the edge falls.
     columns = console.width if console.is_terminal else None
     # Colour, so a person at a terminal only: plain output stays plain.
-    styles = QueryHighlighter() if mode is OutputMode.HUMAN else None
+    if highlight is None:
+        highlight = mode is OutputMode.HUMAN
+    styles = QueryHighlighter() if highlight else None
     for diagnostic in sort_diagnostics(shown):
         for line in diagnostic_lines(
             diagnostic,

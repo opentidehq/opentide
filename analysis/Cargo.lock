@@ -277,7 +277,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opentide-analysis"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -305,7 +305,7 @@ dependencies = [
 [[package]]
 name = "opentide-core"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "serde",
  "thiserror",
@@ -314,7 +314,7 @@ dependencies = [
 [[package]]
 name = "opentide-ecs"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "serde",
  "serde_json",
@@ -323,7 +323,7 @@ dependencies = [
 [[package]]
 name = "opentide-eql"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -338,7 +338,7 @@ dependencies = [
 [[package]]
 name = "opentide-esql"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -352,7 +352,7 @@ dependencies = [
 [[package]]
 name = "opentide-highlight"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "regex",
@@ -365,7 +365,7 @@ dependencies = [
 [[package]]
 name = "opentide-kql"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -380,7 +380,7 @@ dependencies = [
 [[package]]
 name = "opentide-kuery"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-ecs",
@@ -393,7 +393,7 @@ dependencies = [
 [[package]]
 name = "opentide-lsp"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "anyhow",
  "clap",
@@ -413,7 +413,7 @@ dependencies = [
 [[package]]
 name = "opentide-lucene"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -424,7 +424,7 @@ dependencies = [
 [[package]]
 name = "opentide-spl"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-highlight",
@@ -437,7 +437,7 @@ dependencies = [
 [[package]]
 name = "opentide-syntax"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "cc",
  "opentide-core",
@@ -447,7 +447,7 @@ dependencies = [
 [[package]]
 name = "opentide-tide"
 version = "0.5.0"
-source = "git+https://github.com/opentidehq/language-server?rev=26559c7a39c5245cf6c5165e5556fbff18dd70b5#26559c7a39c5245cf6c5165e5556fbff18dd70b5"
+source = "git+https://github.com/opentidehq/language-server?rev=8533fa83edf0a806b6b75e2f539dd1efdf21c97f#8533fa83edf0a806b6b75e2f539dd1efdf21c97f"
 dependencies = [
  "opentide-core",
  "opentide-eql",

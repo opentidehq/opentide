@@ -2,6 +2,7 @@
 
 The catalogue comes from the registry (:func:`collect_info` reloads it), the
 coverage table from the same lookup as ``opentide info --technique … coverage``,
+the language server's findings from the engine behind ``opentide lsp check``,
 and the actions call the service functions behind ``validate``, ``generate``
 and ``deploy --dry-run``, so the terminal UI cannot disagree with the CLI.
 Textual is imported only by :mod:`opentide.cli.tui_app`.
@@ -66,6 +67,26 @@ class LoadError:
 
 
 @dataclass(frozen=True)
+class LanguageServerReport:
+    """What the language server reports for each object file, as an editor shows it."""
+
+    #: Resolved object file → its findings, in file order.
+    findings: Mapping[Path, tuple[Diagnostic, ...]] = dataclasses.field(default_factory=dict)
+    #: Why the engine did not load, when it did not: nothing was checked.
+    unavailable: str | None = None
+    #: What to do about it.
+    advice: str | None = None
+
+    def for_path(self, path: Path | None) -> tuple[Diagnostic, ...]:
+        if path is None:
+            return ()
+        try:
+            return self.findings.get(path.resolve(), ())
+        except OSError:
+            return ()
+
+
+@dataclass(frozen=True)
 class Catalogue:
     """A snapshot of the workspace. Built off the UI thread, read on it."""
 
@@ -73,6 +94,7 @@ class Catalogue:
     entries: Mapping[str, CatalogueEntry]
     coverage: tuple[TechniqueCoverage, ...] = ()
     load_errors: tuple[LoadError, ...] = ()
+    language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
 
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
@@ -152,8 +174,75 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         for entry in IndexManager.load().get("parse_errors") or []
     )
     return Catalogue(
-        repo=Path(ctx.repo).resolve(), entries=entries, coverage=coverage, load_errors=load_errors
+        repo=Path(ctx.repo).resolve(),
+        entries=entries,
+        coverage=coverage,
+        load_errors=load_errors,
+        language_server=_language_server_report(),
     )
+
+
+def _language_server_report() -> LanguageServerReport:
+    """:func:`language_server_report`, or why it failed: the tree does not depend on it."""
+    try:
+        return language_server_report()
+    except Exception as exc:
+        return LanguageServerReport(
+            unavailable=f"The language server failed: {type(exc).__name__}: {exc}",
+            advice="opentide lsp check shows the same failure on the command line",
+        )
+
+
+def language_server_report() -> LanguageServerReport:
+    """What ``opentide lsp check`` reports for every object file of the workspace.
+
+    The workspace's catalogs are used when ``opentide generate schemas``
+    wrote them. A file that cannot be read has no findings here: the
+    catalogue lists it under the files that failed to load.
+    """
+    from opentide.analysis import (
+        EngineUnavailableError,
+        check_file,
+        install_workspace_catalog,
+        object_files,
+        workspace,
+    )
+    from opentide.cli.ui.diagnostics import diagnostic_from_engine
+    from opentide.registry.discovery import discover_workspace
+
+    root = discover_workspace()
+    findings: dict[Path, tuple[Diagnostic, ...]] = {}
+    try:
+        install_workspace_catalog(root)
+        objects = object_files(root)
+        space = workspace(root, objects)
+        for path in objects:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            found = [
+                diagnostic_from_engine(finding, file_path=path, workspace=root)
+                for finding in check_file(space, path, text)
+            ]
+            findings[path.resolve()] = tuple(
+                Diagnostic(
+                    code=item.code,
+                    severity=item.severity,
+                    message=item.message,
+                    path=path,
+                    line=item.line,
+                    column=item.column,
+                    end_column=item.end_column,
+                    field_path=tuple(item.field_path),
+                    help=item.help,
+                    source=LANGUAGE_SERVER,
+                )
+                for item in found
+            )
+    except EngineUnavailableError as exc:
+        return LanguageServerReport(unavailable=str(exc), advice=exc.advice)
+    return LanguageServerReport(findings=findings)
 
 
 def _name(body: Mapping[str, Any], uuid: str) -> str:
@@ -201,9 +290,18 @@ def _parents(
 VALUE_SUGGESTION_CODES = frozenset({"invalid_ref", "vocab_unknown", "chaining_relation_unknown"})
 
 
+#: :attr:`Diagnostic.source` of a finding from a validate run.
+VALIDATE = "validate"
+#: :attr:`Diagnostic.source` of a finding from the language server.
+LANGUAGE_SERVER = "language server"
+#: :attr:`Diagnostic.source` of a validate finding the engine made: ``validate
+#: --deep``'s query findings, which the language server reports too.
+ENGINE = "engine"
+
+
 @dataclass(frozen=True)
 class Diagnostic:
-    """A validation issue as the detail pane shows it. ``line`` is 1-based."""
+    """A finding as the detail pane shows it. ``line`` and ``column`` are 1-based."""
 
     code: str
     severity: str
@@ -213,12 +311,23 @@ class Diagnostic:
     line: int | None = None
     field_path: tuple[str, ...] = ()
     help: str | None = None
+    column: int | None = None
+    #: Exclusive, on ``line``.
+    end_column: int | None = None
+    #: Who reported it: :data:`VALIDATE`, :data:`ENGINE` or :data:`LANGUAGE_SERVER`.
+    source: str = VALIDATE
 
     @classmethod
     def from_issue(cls, issue: Mapping[str, Any]) -> Diagnostic:
         """From one entry of ``report.issues`` or ``report.warnings`` in the validate payload."""
         yaml_line = issue.get("yaml_line")
         file_path = issue.get("file_path")
+        context = issue.get("context") or {}
+        position = context.get("position") or {}
+        column = position.get("column")
+        end_column = (
+            position.get("end_column") if position.get("end_line") == position.get("line") else None
+        )
         return cls(
             code=str(issue.get("code") or "invalid"),
             severity=str(issue.get("severity") or "error"),
@@ -228,6 +337,9 @@ class Diagnostic:
             line=None if yaml_line is None else int(yaml_line) + 1,
             field_path=tuple(str(part) for part in issue.get("field_path") or ()),
             help=issue.get("suggestion") or None,
+            column=None if column is None else int(column),
+            end_column=None if end_column is None else int(end_column),
+            source=ENGINE if context.get("source") == "engine" else VALIDATE,
         )
 
     def help_text(self) -> str | None:
@@ -238,7 +350,7 @@ class Diagnostic:
         """
         if not self.help:
             return None
-        if self.code in VALUE_SUGGESTION_CODES:
+        if self.source == VALIDATE and self.code in VALUE_SUGGESTION_CODES:
             return f"did you mean {self.help!r}?"
         return self.help
 
@@ -279,11 +391,22 @@ class Action:
     run: Callable[[CliContext], dict[str, Any]]
     default_message: str = "Completed successfully"
 
+    @property
+    def validates(self) -> bool:
+        """Whether it is a validate run, whose findings the detail pane shows."""
+        return self.name in VALIDATE_ACTIONS
+
 
 def _validate(ctx: CliContext) -> dict[str, Any]:
     from opentide.cli.services.validation import run_validate
 
     return dict(run_validate(ctx))
+
+
+def _validate_deep(ctx: CliContext) -> dict[str, Any]:
+    from opentide.cli.services.validation import run_validate
+
+    return dict(run_validate(ctx, deep=True))
 
 
 def _generate(ctx: CliContext) -> dict[str, Any]:
@@ -301,12 +424,22 @@ def _deploy_dry_run(strategy: str) -> Callable[[CliContext], dict[str, Any]]:
     return run
 
 
+#: The actions that are validate runs.
+VALIDATE_ACTIONS = frozenset({"validate", "validate-deep"})
+
 ACTIONS: tuple[Action, ...] = (
     Action(
         "validate",
         "opentide validate",
         "Validate every object: schema, UUIDs and uniqueness",
         _validate,
+        default_message="Validation passed",
+    ),
+    Action(
+        "validate-deep",
+        "opentide validate --deep",
+        "Validate every object, and check every rule's query offline with the analysis engine",
+        _validate_deep,
         default_message="Validation passed",
     ),
     Action(
@@ -385,7 +518,7 @@ def run_action(ctx: CliContext, action: Action) -> ActionOutcome:
             for item in result.next_actions
         ),
     )
-    if action.name != "validate":
+    if not action.validates:
         return ActionOutcome(action=action, result=result, plan=plan)
     from opentide.cli.services.validation import validate_outcome_line
 

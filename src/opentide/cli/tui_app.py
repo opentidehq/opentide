@@ -36,6 +36,7 @@ from opentide.cli.output import render_result
 from opentide.cli.services.tui import (
     ACTIONS,
     ACTIONS_BY_NAME,
+    ENGINE,
     Action,
     ActionOutcome,
     Catalogue,
@@ -77,6 +78,9 @@ _TAB_FOCUS = {"catalogue": "#tree", "coverage": "#coverage-table", "results": "#
 
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
 _FRAME_STYLE = "blue"
+#: How a finding's span is marked in the source pane, as an editor underlines it.
+#: The tokens keep their colours; the line's marker in the gutter says how bad.
+_SPAN_STYLE = {"error": "underline bold", "warning": "underline", "note": "underline"}
 
 
 def pill() -> Text:
@@ -191,6 +195,8 @@ def diagnostic_text(diagnostic: Diagnostic, root: Path) -> Text:
         where = relative(diagnostic.path, root)
     if where and diagnostic.line is not None:
         where = f"{where}:{diagnostic.line}"
+        if diagnostic.column is not None:
+            where = f"{where}:{diagnostic.column}"
     elif diagnostic.field_path:
         field = ".".join(diagnostic.field_path)
         where = f"{where} · {field}" if where else field
@@ -237,8 +243,9 @@ def outcome_text(outcome: ActionOutcome, root: Any) -> Text:
     if outcome.frames:
         from opentide.cli.ui.codeframe import render_diagnostics
 
-        # The CLI's code frames (#641); PLAIN keeps them free of OSC 8 links.
-        render_diagnostics(console, outcome.frames, mode=OutputMode.PLAIN)
+        # The CLI's code frames (#641); PLAIN keeps them free of OSC 8 links,
+        # and the query lines are coloured as at a terminal.
+        render_diagnostics(console, outcome.frames, mode=OutputMode.PLAIN, highlight=True)
     if outcome.plan is not None:
         from opentide.cli.ui.plan import render_plan, render_plan_diagnostics
 
@@ -273,6 +280,7 @@ class OpentideTui(App[None]):
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("v", "run('validate')", "Validate"),
+        Binding("V", "run('validate-deep')", "Validate --deep", show=False),
         Binding("g", "run('generate')", "Generate"),
         Binding("d", "run('deploy-preview')", "Deploy dry run"),
         Binding("r", "reload", "Reload"),
@@ -422,7 +430,8 @@ class OpentideTui(App[None]):
         result = event.worker.result
         if isinstance(result, Catalogue):
             self._show_catalogue(result)
-            self._status("")
+            unavailable = result.language_server.unavailable
+            self._status(unavailable or "")
             return
         outcome, catalogue = cast("tuple[ActionOutcome, Catalogue | None]", result)
         self._show_outcome(outcome)
@@ -454,7 +463,7 @@ class OpentideTui(App[None]):
 
     def _show_outcome(self, outcome: ActionOutcome) -> None:
         self.outcomes.append(outcome)
-        if outcome.action.name == "validate":
+        if outcome.action.validates:
             self.diagnostics = outcome.diagnostics
             self.validated = True
         root = self.cli.repo
@@ -477,13 +486,34 @@ class OpentideTui(App[None]):
         self._fill_coverage(catalogue)
         self._show_detail(self.selected)
 
+    def findings(self, entry: CatalogueEntry) -> tuple[list[Diagnostic], list[Diagnostic]]:
+        """What the language server reports for *entry*, and what the last validate run found.
+
+        A validate finding the language server reports too (the same code on
+        the same line) is shown once, as validate's: its help is the one
+        ``opentide validate`` prints. ``validate --deep``'s query findings come
+        from the same engine as the language server's, so they are left to it.
+        """
+        report = self.catalogue.language_server if self.catalogue else None
+        validated = [
+            item
+            for item in self.diagnostics
+            if item.concerns(entry)
+            and not (item.source == ENGINE and report is not None and not report.unavailable)
+        ]
+        seen = {(item.code, item.line) for item in validated}
+        live = [] if report is None else list(report.for_path(entry.path))
+        return [item for item in live if (item.code, item.line) not in seen], validated
+
     def _counts(self, uuid: str) -> Text:
-        """``✗ 2 ! 1`` after an object the last validate run found issues in."""
+        """``✗ 2 ! 1`` after an object with errors or warnings, from the language
+        server or the last validate run. Notes are not counted."""
         mark = Text()
         if self.catalogue is None:
             return mark
         entry = self.catalogue.entries[uuid]
-        found = [item for item in self.diagnostics if item.concerns(entry)]
+        live, validated = self.findings(entry)
+        found = [item for item in (*live, *validated) if item.severity != "note"]
         errors = sum(1 for item in found if item.severity == "error")
         warnings = len(found) - errors
         if errors:
@@ -628,18 +658,36 @@ class OpentideTui(App[None]):
                 relative(entry.path, catalogue.repo),
             )
         )
-        diagnostics = [item for item in self.diagnostics if item.concerns(entry)]
-        found.update(self._diagnostics_view(diagnostics, catalogue))
-        source.update(_yaml(entry.path, {item.line for item in diagnostics if item.line}))
+        live, validated = self.findings(entry)
+        found.update(self._diagnostics_view(live, validated, catalogue))
+        source.update(_yaml(entry.path, [*live, *validated]))
 
     def _diagnostics_view(
-        self, diagnostics: list[Diagnostic], catalogue: Catalogue
+        self, live: list[Diagnostic], validated: list[Diagnostic], catalogue: Catalogue
     ) -> RenderableType:
+        parts: list[RenderableType] = [Text("Language server", style="bold underline")]
+        report = catalogue.language_server
+        if report.unavailable:
+            unavailable = Text(report.unavailable, style="dim")
+            if report.advice:
+                unavailable.append("\n  ╰─", style=_FRAME_STYLE)
+                unavailable.append(" help:", style="bold cyan")
+                unavailable.append(f" {report.advice}")
+            parts.append(unavailable)
+        elif live:
+            parts.extend(diagnostic_text(item, catalogue.repo) for item in live)
+        else:
+            parts.append(Text.assemble(("✓", "bold green"), " Nothing to report"))
+        parts.append(Text("\nLast validate run", style="bold underline"))
         if not self.validated:
-            return Text("Not validated yet: press v to run opentide validate.", style="dim")
-        if not diagnostics:
-            return Text.assemble(("✓", "bold green"), " No diagnostics from the last validate run")
-        return Group(*(diagnostic_text(item, catalogue.repo) for item in diagnostics))
+            parts.append(Text("Not validated yet: press v to run opentide validate.", style="dim"))
+        elif validated:
+            parts.extend(diagnostic_text(item, catalogue.repo) for item in validated)
+        else:
+            parts.append(
+                Text.assemble(("✓", "bold green"), " No diagnostics from the last validate run")
+            )
+        return Group(*parts)
 
     def _fill_coverage(self, catalogue: Catalogue) -> None:
         table = self.query_one("#coverage-table", DataTable)
@@ -673,19 +721,60 @@ class OpentideTui(App[None]):
                 return
 
 
-def _yaml(path: Any, highlight: set[int] | None = None) -> RenderableType:
-    """The object's file with line numbers; diagnostic lines are marked."""
+def _yaml(path: Any, diagnostics: Iterable[Diagnostic] = ()) -> RenderableType:
+    """The object's file with line numbers, coloured as the editor colours it.
+
+    The language server's tokens colour the YAML and the queries inside it.
+    Lines with a finding are marked, and a finding with a column is underlined
+    where the editor would underline it. Without the engine the file is
+    coloured as plain YAML.
+    """
     if path is None:
         return Text("The index does not record this object's file.", style="dim")
     try:
         code = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         return Text(f"Cannot read {path}: {exc}", style="red")
-    return Syntax(
+    diagnostics = list(diagnostics)
+    tokens = _tokens(path, code)
+    syntax = Syntax(
         code,
-        "yaml",
+        "yaml" if tokens is None else "text",
         line_numbers=True,
-        highlight_lines=highlight or set(),
+        highlight_lines={item.line for item in diagnostics if item.line},
         background_color="default",
         word_wrap=True,
     )
+    for line, column, end_line, end_column, style in tokens or ():
+        syntax.stylize_range(style, (line, column - 1), (end_line, end_column - 1))
+    for item in diagnostics:
+        if item.line is not None and item.column is not None and item.end_column is not None:
+            syntax.stylize_range(
+                _SPAN_STYLE.get(item.severity, "underline"),
+                (item.line, item.column - 1),
+                (item.line, item.end_column - 1),
+            )
+    return syntax
+
+
+def _tokens(path: Path, code: str) -> list[tuple[int, int, int, int, str]] | None:
+    """The engine's tokens for *code* as ``(line, column, end_line, end_column, style)``.
+
+    ``None`` when the engine does not load or does not know the file's
+    language: the caller falls back to plain YAML colours.
+    """
+    from opentide.analysis import EngineUnavailableError, highlight, language_for_path
+    from opentide.cli.ui.codeframe import SOURCE_STYLES
+
+    try:
+        language = language_for_path(path)
+        if language is None:
+            return None
+        found = highlight(code, language)
+    except (EngineUnavailableError, ValueError):
+        return None
+    return [
+        (token.line, token.column, token.end_line, token.end_column, style)
+        for token in found
+        if (style := SOURCE_STYLES.get(token.capture))
+    ]
