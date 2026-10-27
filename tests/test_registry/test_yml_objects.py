@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from opentide.registry.builder import build_registry
-from opentide.registry.paths import object_yaml_files
+from opentide.registry.catalogue import NESTED_INDEX_KEY, scan_object_dir
 
 
 def _object(uuid: str, schema: str) -> dict[str, object]:
@@ -25,11 +25,13 @@ def test_registry_indexes_yml_object_files(tmp_path: Path, monkeypatch: pytest.M
     """
     layout = {
         "objects/rules/short.yml": ("rule", str(uuid4())),
-        "objects/rules/team-a/nested.yml": ("rule", str(uuid4())),
         "objects/rules/long.yaml": ("rule", str(uuid4())),
         "objects/threats/threat.yml": ("threat", str(uuid4())),
         "objects/objectives/objective.yml": ("objective", str(uuid4())),
     }
+    nested = tmp_path / "objects/rules/team-a/nested.yml"
+    nested.parent.mkdir(parents=True)
+    nested.write_text(yaml.safe_dump(_object(str(uuid4()), "rule::1.0")), encoding="utf-8")
     for relative, (family, uuid) in layout.items():
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -41,16 +43,16 @@ def test_registry_indexes_yml_object_files(tmp_path: Path, monkeypatch: pytest.M
     for relative, (family, uuid) in layout.items():
         assert uuid in index["objects"][family], relative
         assert Path(index["file_paths"][uuid]) == (tmp_path / relative).resolve()
+    # A ``.yml`` file in a subfolder is not an object either (#584).
+    assert [Path(row["path"]).name for row in index[NESTED_INDEX_KEY]] == ["nested.yml"]
 
 
-def test_object_yaml_files_lists_both_spellings_without_debug_dumps(tmp_path: Path) -> None:
+def test_catalogue_lists_both_spellings_without_debug_dumps(tmp_path: Path) -> None:
     for name in ("b.yaml", "a.yml", "sub/c.yml", "x.debug.yaml", "y.debug.yml", "notes.md"):
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{}\n", encoding="utf-8")
 
-    assert object_yaml_files(tmp_path) == [
-        tmp_path / "a.yml",
-        tmp_path / "b.yaml",
-        tmp_path / "sub" / "c.yml",
-    ]
+    scan = scan_object_dir(tmp_path)
+    assert list(scan.files) == [tmp_path / "a.yml", tmp_path / "b.yaml"]
+    assert list(scan.nested) == [tmp_path / "sub" / "c.yml"]

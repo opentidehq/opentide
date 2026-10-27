@@ -1,5 +1,7 @@
 """SDK: loaded objects point at the file they were read from (issue #297).
 
+Files in subfolders are not object instances (#584) and are not loaded at all.
+
 ``Opentide.Rules`` built each rule's ``file`` as ``<rules folder>/<basename>``,
 so a rule in ``objects/rules/team-a/x.yaml`` pointed at ``objects/rules/x.yaml``:
 another rule's file, or one that does not exist.
@@ -21,8 +23,13 @@ from opentide import Opentide
 from opentide.core.registry import OpentideRegistry
 
 
-def _twins(object_type: str) -> set[str]:
-    return {uuid for kind, uuid in NESTED_TWIN_LAYOUT.values() if kind == object_type}
+def _twins(object_type: str, *, direct: bool) -> set[str]:
+    """Twins of *object_type* directly in their folder, or in a subfolder (#584)."""
+    return {
+        uuid
+        for relative, (kind, uuid) in NESTED_TWIN_LAYOUT.items()
+        if kind == object_type and (relative.count("/") == 2) is direct
+    }
 
 
 @pytest.mark.parametrize("accessor", ["Opentide.Rules", "Opentide.Models.Rules"])
@@ -33,12 +40,14 @@ def test_every_loaded_object_points_at_the_file_that_declares_it(
 
     rules = Opentide.Rules if accessor == "Opentide.Rules" else Opentide.Models.Rules
 
-    assert _twins("rule") <= set(rules)
+    assert _twins("rule", direct=True) <= set(rules)
+    assert _twins("rule", direct=False).isdisjoint(rules)
     assert assert_objects_point_at_their_files(rules) == len(rules)
-    for uuid in _twins("rule"):
+    for uuid in _twins("rule", direct=True):
         assert Path(rules[uuid].file or "").resolve() == real_paths[uuid]
     for object_type, loaded in (("threat", Opentide.Threats), ("objective", Opentide.Objectives)):
-        assert _twins(object_type) <= set(loaded)
+        assert _twins(object_type, direct=True) <= set(loaded)
+        assert _twins(object_type, direct=False).isdisjoint(loaded)
         assert_objects_point_at_their_files(loaded)
 
 

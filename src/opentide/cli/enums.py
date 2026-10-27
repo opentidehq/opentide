@@ -24,6 +24,18 @@ class DetectionPlatform(str, Enum):
     elastic = "elastic"
 
 
+#: ``--platform`` shows this in help instead of eight values run together.
+PLATFORM_METAVAR = "PLATFORM"
+
+#: The values ``--platform`` takes, for its help text.
+PLATFORM_CHOICES = ", ".join(platform.value for platform in DetectionPlatform)
+
+
+def platform_help(text: str = "Detection platform") -> str:
+    """``--platform`` help naming every value it takes."""
+    return f"{text}: {PLATFORM_CHOICES}"
+
+
 #: Re-exported so CLI callers keep a stable import path.
 QUERY_VALIDATION_PLATFORMS = _QUERY_VALIDATION_PLATFORMS
 
@@ -87,6 +99,7 @@ class LintCheck(str, Enum):
 
     filenames = "filenames"
     metadata = "metadata"
+    placeholders = "placeholders"
 
 
 def platform_label(platform: DetectionPlatform) -> str:

@@ -479,3 +479,22 @@ def test_run_vscode_setup_empty_object_dirs_still_quiet(
     payload = assert_json_ok(result)
     assert payload["status"] == "completed"
     assert "error" not in _object_folder_log_levels(result.stderr)
+
+
+def test_the_deprecation_is_a_warning_line_not_an_event_slug(capsys, monkeypatch) -> None:
+    """It printed "warning: Vscode setup deprecated · detail: opentide setup vscode is
+    deprecated …", the log event's slug (post-merge end-to-end run)."""
+    from opentide.cli.services.setup import vscode
+    from opentide.cli.ui.mode import OutputMode, set_mode
+
+    set_mode(OutputMode.PLAIN)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            vscode.emit_vscode_deprecation()
+    finally:
+        set_mode(None)
+    err = capsys.readouterr().err
+    assert err.startswith("warning: opentide setup vscode is deprecated and will be removed")
+    assert "Vscode setup deprecated" not in err
+    assert "detail:" not in err

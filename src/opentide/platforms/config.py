@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
@@ -109,6 +110,10 @@ def _tenant_ssl(value: Any, *, where: str) -> bool | str:
     raise ValueError(f"{where} setup: ssl must be true or false, got {value!r}")
 
 
+# platform::elastic::1.0: a tenant api_key MUST be `$VAR` or `${VAR}`.
+_ENV_REFERENCE = re.compile(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})")
+
+
 _PROXY_RETIRED = (
     "The proxy key is retired. Pass the URL with `opentide --proxy http://[user:pass@]host:port`."
 )
@@ -158,13 +163,15 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
             raise ValueError(f"{where}: {_PROXY_RETIRED}")
         if system == "elastic":
             raw_key = supplied_setup.get("api_key")
-            if raw_key is not None and (
-                not isinstance(raw_key, str) or not raw_key.startswith("$")
-            ):
-                raise ValueError(
-                    f"{where} setup: api_key must be an environment variable reference (e.g. "
-                    "$ELASTIC_API_KEY)"
-                )
+            if raw_key is not None:
+                reference = _ENV_REFERENCE.fullmatch(raw_key) if isinstance(raw_key, str) else None
+                if reference is None:
+                    raise ValueError(
+                        f"{where} setup: api_key must be an environment variable reference "
+                        "($VAR or ${VAR}, e.g. $ELASTIC_API_KEY)"
+                    )
+                # The resolver reads `$NAME`; hand it the braced form that way.
+                supplied_setup["api_key"] = f"${reference.group(1) or reference.group(2)}"
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)

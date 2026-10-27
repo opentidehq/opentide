@@ -43,29 +43,33 @@ def test_run_deploy_skips_when_platform_has_no_rules() -> None:
     assert result["status"] == "skipped"
 
 
+@pytest.mark.parametrize(
+    ("provider", "expected"),
+    [
+        ("GITHUB_ACTIONS", f"::warning::{EMPTY_SELECTION}\n"),
+        ("TF_BUILD", f"##vso[task.logissue type=warning;]{EMPTY_SELECTION}\n"),
+        ("GITLAB_CI", ""),
+    ],
+)
 @pytest.mark.parametrize("json_output", [False, True])
-def test_run_deploy_empty_selection_github_actions_warning(
-    monkeypatch: pytest.MonkeyPatch, json_output: bool
+def test_run_deploy_empty_selection_ci_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    json_output: bool,
+    provider: str,
+    expected: str,
 ) -> None:
     ctx = CliContext(json_output=json_output)
-    monkeypatch.setattr(
-        CIEnvironment,
-        "_check_ci_environment",
-        lambda self: CIEnvironment.CIPlatforms.GitHubActions,
-    )
+    monkeypatch.setenv(provider, "true")
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={}),
-        patch.object(deploy_service.get_stdout_console(), "print") as mock_print,
     ):
         result = deploy_service.run_deploy(ctx, strategies=PREVIEW)
     assert result["status"] == "skipped"
     assert result["message"] == EMPTY_SELECTION
-    if json_output:
-        # The annotation would corrupt the single-document JSON contract.
-        mock_print.assert_not_called()
-    else:
-        assert mock_print.call_args.args[0] == f"::warning::{EMPTY_SELECTION}"
+    # Under --json the annotation would corrupt the single JSON document.
+    assert capsys.readouterr().out == ("" if json_output else expected)
 
 
 def test_run_deploy_empty_selection_gitlab_exits_cleanly(
@@ -277,6 +281,8 @@ def test_run_deploy_requires_a_strategy() -> None:
         "status": "failed",
         "message": deploy_service.STRATEGY_REQUIRED,
         "_exit_code": 2,
+        "_failure_code": "usage_missing_option",
+        "_failure_argument": "--strategy",
     }
     assert deploy_service.STRATEGY_REQUIRED.startswith("Pass --strategy: PREVIEW deploys")
 
@@ -645,3 +651,51 @@ def test_run_deploy_reports_selection_warnings_in_every_result(
     mock_plan.assert_called_once()
     assert result["status"] == status
     assert result["warnings"] == warnings
+
+
+def _plan_skipping(*blocks: tuple[str, str]):
+    """A make_deploy_plan stand-in that skips *blocks* (uuid, status) and returns *planned*."""
+
+    def plan(*args: object, skipped: list[dict[str, str]] | None = None, **kwargs: object):
+        assert skipped is not None, "the service must collect the skipped blocks"
+        for uuid, status in blocks:
+            skipped.append(
+                {
+                    "rule": f"Rule {uuid}",
+                    "uuid": uuid,
+                    "platform": "splunk",
+                    "status": status,
+                    "strategy": "INERT",
+                }
+            )
+        return {}
+
+    return plan
+
+
+def test_an_empty_plan_counts_the_rules_a_status_kept_out() -> None:
+    """``Skipped: No rule this run read has a status that maps to its strategies`` said
+    neither how many rules nor what to change (post-merge end-to-end run)."""
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch(
+            "opentide.deployment.make_deploy_plan",
+            side_effect=_plan_skipping(("u1", "DESIGN"), ("u2", "DESIGN"), ("u3", "DISABLED")),
+        ),
+        patch(
+            "opentide.deployment.utils.statuses_deployed_by",
+            return_value=["DEVELOPMENT", "STAGING"],
+        ),
+    ):
+        result = deploy_service.run_deploy(ctx, strategies=PREVIEW, dry_run=True)
+    assert result["status"] == "skipped"
+    assert result["message"] == EMPTY_SELECTION
+    assert result["_outcome"] == (
+        "No rule has a status PREVIEW deploys · 3 rules left out: 2 in DESIGN, 1 in DISABLED"
+    )
+    assert result["advice"] == (
+        "set a platform block's status to DEVELOPMENT or STAGING for PREVIEW to deploy it"
+    )
+    assert result["_summary"] == {"skipped": 3}
+    assert [entry["uuid"] for entry in result["skipped"]] == ["u1", "u2", "u3"]

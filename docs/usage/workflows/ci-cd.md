@@ -37,7 +37,7 @@ Hand-written examples below pin `pip install 'opentide==0.17.2'` so a pipeline c
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--staging` / `--no-staging` | staging on | Include the staging deploy stage |
-| `--sharing` / `--no-sharing` | sharing off | On the default branch, after generate, run `opentide share push --changed` |
+| `--sharing` / `--no-sharing` | sharing off | On the default branch, after the production deploy, run `opentide share push --changed` on the branch tip |
 | `--promotion` / `--no-promotion` | omit (keep the repository's setting) | Whether `opentide deploy` promotes rules; `--no-promotion` writes `[promotion] enabled = false` to `.opentide/configurations/deployment.toml` |
 | `--promotion-target` | omit (keep the repository's setting) | Status `deploy` promotes rules to; another status is written to the same `[promotion]` table |
 | `--python-version` | `3.12` | CI Python version |
@@ -45,13 +45,21 @@ Hand-written examples below pin `pip install 'opentide==0.17.2'` so a pipeline c
 
 The one-shot `opentide setup --ci <github|gitlab|azure>` accepts the same flags. On a repository without `origin/HEAD` whose deploying branch is not checked out, pass `--default-branch`; the result warns when the detected branch is only a guess.
 
-`--sharing` is off unless you pass it or tick "Sharing on the default branch" in the wizard. The generated job checks out full history and runs only:
+`--sharing` is off unless you pass it or tick "Sharing on the default branch" in the wizard. The generated job runs after the production deploy job, checks out the default branch's tip with full history (not the commit that triggered the run), and runs:
 
 ```bash
 opentide share push --changed
 ```
 
-GitHub runs that job when `github.event_name == 'push'` and the ref is the default branch. GitLab runs it when `CI_COMMIT_BRANCH` is `CI_DEFAULT_BRANCH` and the pipeline is not a merge request. Azure runs it when `Build.SourceBranch` is the default branch and `Build.Reason` is not `PullRequest`. The job needs generate. Deploy still needs only generate, so a share failure does not block deploy and deploy does not block share. Setup does not write `.opentide/configurations/sharing.toml`.
+The tip holds the production job's `ci: record production deployment [skip ci]` commit, which records the statuses [promotion](#production-write-back) rewrote. `--changed` diffs from where the triggering push's diff starts (the triggering commit's first parent; on GitLab `CI_COMMIT_BEFORE_SHA` when it is set and not all zeros) to that tip, so a rule merged in `STAGING` and promoted to `PRODUCTION` by this run's deploy is shared in this run. With promotion off the write-back holds only deployment state, and when the deploy has nothing to write back the tip is the triggering commit (or a later push); either way the job shares the push's own changes. A tip that already holds a later push also shares that push's changes; its own run shares them again, as an update.
+
+| CI | Share job ordering | Runs when |
+|----|--------------------|-----------|
+| GitHub | `needs: [generate, deploy_production]`; checkout `ref: <default branch>` | `!cancelled() && needs.generate.result == 'success'`, `github.event_name == 'push'` and the ref is the default branch |
+| GitLab | stage `share` after `deploy`; `needs: [generate, deploy_production]`; script fetches `$CI_DEFAULT_BRANCH` and checks out `FETCH_HEAD` | `CI_COMMIT_BRANCH` is `CI_DEFAULT_BRANCH`, the pipeline is not a merge request, `when: always` |
+| Azure | stage `Share` after `Deploy`, `dependsOn: [Generate, Deploy]`; `persistCredentials: true`, script fetches the default branch and checks out `FETCH_HEAD` | `not(canceled())`, `dependencies.Generate.result` is `Succeeded`, `Build.SourceBranch` is the default branch and `Build.Reason` is not `PullRequest` |
+
+The share job waits for the deploy but not for its success: a failed deploy still commits what it recorded, and a share it skipped would never come back, because the next push diffs only its own commits. GitLab cannot ask for "generate passed and deploy finished", so its job runs `when: always` and starts with `opentide validate --strict` on the checkout: a broken catalogue fails the job and shares nothing. A share failure does not affect deploy. Setup does not write `.opentide/configurations/sharing.toml`. Through 0.17.2 the share job ran beside the deploy on the triggering commit, so a rule promoted by that deploy was shared only after a later push changed it; regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`, and share rules promoted before then once with `opentide share push --changed --since <commit>` or a `share push` without `--changed`.
 
 `opentide setup ci` writes the gate from the diagram: `opentide validate --strict`, `opentide lint --strict`, and query validation for each supported platform. A generated live job guards only the `$VAR` names in that platform's enabled file under `.opentide/configurations/platforms/` (comments and literal values do not count). If one of those variables is unset the step prints the names and exits 2. The step runs `opentide validate query --platform <platform> --live --changed`: it checks only the rule files the pull request, merge request or push changed, the files the deploy job of the same run reads ([which rules are checked](../../cli/validate.md#which-rules-are-checked)), so the jobs check out full history. Each changed rule whose status maps to `PREVIEW`, `RELEASE` or `UNIVERSAL` is checked on the tenants a deploy sends it to ([which tenants are checked](../../cli/validate.md#which-tenants-are-checked)), so a pull request that edits a rule in `PRODUCTION` status checks it on the tenants accepting `RELEASE` before it merges; rules that map to `INERT`, `DISABLEMENT` or `DELETION` send no query. Through 0.16.1 the step checked every rule in the catalogue on every run; regenerate the pipeline with `opentide setup ci <github|gitlab|azure> --yes`. The CLI also exits 2 when the platform has rules but none reaches a configured tenant, so no query was sent. Exit 0 means queries were sent and passed, no changed rule has a block for the platform, or the default branch has no `.opentide/configurations` or no tenant for the platform yet, so nothing was sent ([tenant configuration on pull requests](#tenant-configuration-on-pull-requests)). Exit 1 is the check's own failure. On GitLab, `generate` needs the object validate job and every query-validation job, so deploy cannot start after a failed `opentide validate query`. Deploy jobs preview with `--dry-run`, then run `opentide deploy --strategy PREVIEW` or `--strategy RELEASE` with `--skip-unconfigured`, so a repository whose `[[tenants]]` block is still commented out exits 0 instead of failing the pipeline. The header lists every credential variable the bundled platform files reference. GitHub deploy jobs map those names from `secrets`. GitLab and Azure read the same names from the project variable store. There is no `OPENTIDE_SECRETS` variable.
 
@@ -301,9 +309,42 @@ steps:
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
 ```
 
+## Annotations, summaries and reports
+
+In a GitHub Actions, GitLab CI or Azure Pipelines job (`GITHUB_ACTIONS`, `GITLAB_CI` or `TF_BUILD` is set), opentide adds to its usual output. Nothing has to be configured; `--json` turns all of it off, because stdout then holds the JSON document.
+
+| Provider | Each finding of `validate` and `lint` | Job summary |
+|----------|----------------------------------------|-------------|
+| GitHub Actions | A workflow command on stdout, which GitHub shows on the line of the pull request's diff: `::error file=objects/rules/sentinel-kql-rule.yaml,line=8,endLine=8,col=8,endColumn=13,title=vocab_unknown::Value 'clearr' is not a valid 'tlp::1.0' vocabulary entry%0Ahelp: did you mean 'clear'?` | Markdown appended to `$GITHUB_STEP_SUMMARY` |
+| GitLab CI | None inline: GitLab shows the Code Quality report in the merge request widget on every tier, and on the lines of the diff on GitLab Ultimate | Markdown appended to `opentide-reports/summary.md` in the checkout, kept as an artifact |
+| Azure Pipelines | `##vso[task.logissue type=error;sourcepath=…;linenumber=8;columnnumber=8;code=vocab_unknown;]…` (notes have no Azure level and are not sent) | A Markdown file attached with `##vso[task.uploadsummary]` |
+
+On GitHub, which shows 10 annotations of each level per step, opentide writes the errors first, then the warnings, then the notices, 10 of each, and one notice counting the rest; the job summary and code scanning have them all.
+
+The summary of `validate` and `lint` is the outcome line and a table of findings (severity, code linked to its [explanation](../../cli/diagnostics.md), location, message), at most 100 rows. `deploy` adds its plan: the strategies, the rules per platform and tenant, and the rule names. `validate query` adds the queries sent per tenant. A `deploy` that found no rule to deploy adds a run warning on GitHub and Azure. Paths are relative to the checkout (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`, `BUILD_SOURCESDIRECTORY`), so they stay right when the workspace is a folder of the repository.
+
+`validate` and `lint` also write their findings as a report file for the provider's code-quality view:
+
+```bash
+opentide validate --strict --format sarif --output opentide-reports/validate.sarif
+opentide lint --strict --format codequality --output opentide-reports/lint.codequality.json
+```
+
+`--format sarif` is SARIF 2.1.0 for GitHub code scanning; each code is a rule whose help is its `opentide explain` page, and a vocabulary typo carries its fix. `--format codequality` is the Code Climate JSON GitLab reads from `artifacts:reports:codequality`. The report is written whatever the outcome, an empty one included, so a fixed finding closes its alert. Findings that name no file (two objects with the same id, for example) are left out of both formats, which need one; the log and the summary still show them. Without `--output` the report is the whole of stdout, with no code frames or annotations. With `--json`, `--output` is required.
+
+`opentide setup ci` writes these into the validate job:
+
+| Provider | Validate job |
+|----------|--------------|
+| GitHub Actions | `--format sarif` reports, uploaded as the `opentide-reports` artifact, and on a public repository sent to code scanning by a `code_scanning` job that needs `validate`, downloads the artifact and runs `github/codeql-action/upload-sarif@v4`. That job holds only `security-events: write`, so the token that writes alerts never sits next to the platform secrets. The alerts are in the categories `opentide/validate/` and `opentide/lint/` (each SARIF run's `automationDetails.id`); a failed upload never fails the run. Code scanning on a private repository needs GitHub Advanced Security: once it is on, remove `!github.event.repository.private` from the job's `if` |
+| GitLab CI | `--format codequality` reports under `artifacts:reports:codequality`, and `opentide-reports/` exposed in the merge request as "opentide reports". The query, staging and production jobs keep `opentide-reports/summary.md` |
+| Azure Pipelines | `--format sarif` reports published as the `CodeAnalysisLogs` artifact, which the SARIF SAST Scans Tab extension reads |
+
+Regenerate an existing pipeline with `opentide setup ci <github|gitlab|azure> --yes` to get them.
+
 ## JSON output for gates
 
-Every command accepts `--json` and writes exactly one JSON document to stdout — successes carry `"ok": true`, failures carry `"ok": false` plus `status`, `message`, and the full report. Diagnostics go to stderr. Gate on the process exit code, the `ok`/`status` fields, or both.
+Every command accepts `--json` and writes exactly one JSON document to stdout — successes carry `"ok": true`, failures carry `"ok": false` plus `status`, `message`, and the full report. Diagnostics go to stderr. Gate on the process exit code, the `ok`/`status` fields, or both. Under `--json` opentide writes no annotation and no job summary.
 
 ```bash
 opentide --json validate --strict

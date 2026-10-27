@@ -5,21 +5,37 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import structlog
 from rich.console import Console
-from rich.logging import RichHandler
+from rich.segment import Segment
 
-from opentide.core.logging.render import OpentideConsoleRenderer
+from opentide.core.logging.render import ConsoleLogHandler, OpentideConsoleRenderer
 
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
 
+
+class EncodingSafeConsole(Console):
+    """A console that never raises ``UnicodeEncodeError`` on a narrow stream.
+
+    What it writes goes through :func:`opentide.cli.ui.glyphs.encodable`, so on
+    an ASCII stream (``PYTHONIOENCODING=ascii``) ``·`` prints as ``-`` and ``…``
+    as ``...``. Text the stream can encode is written unchanged.
+    """
+
+    def _render_buffer(self, buffer: Iterable[Segment]) -> str:
+        from opentide.cli.ui.glyphs import encodable
+
+        return encodable(super()._render_buffer(buffer), self.file)
+
+
 _config: LoggingConfig | None = None
-_console = Console(stderr=True, highlight=False)
-_stdout_console = Console(highlight=False)
+_console: Console = EncodingSafeConsole(stderr=True, highlight=False)
+_stdout_console: Console = EncodingSafeConsole(highlight=False)
 
 
 @dataclass(frozen=True)
@@ -29,6 +45,12 @@ class LoggingConfig:
     debug: bool = False
     json_output: bool = False
     plain: bool = False
+    #: ``--quiet``: errors only.
+    quiet: bool = False
+    #: Print log lines unwrapped (every mode but ``human``).
+    soft_wrap: bool = False
+    #: No colour, the rest unchanged: ``plain`` and ``agent`` mode on a terminal.
+    no_color: bool = False
 
     @classmethod
     def from_env(cls) -> LoggingConfig:
@@ -43,11 +65,16 @@ class LoggingConfig:
     @classmethod
     def from_cli_context(cls, ctx: CliContext) -> LoggingConfig:
         """Build configuration from an active CLI context."""
+        from opentide.cli.ui.mode import OutputMode, get_mode
+
         no_color = bool(os.getenv("NO_COLOR")) or os.getenv("FORCE_COLOR") == "0"
         return cls(
             debug=ctx.debug,
             json_output=ctx.json_output,
             plain=ctx.no_color or no_color,
+            quiet=ctx.quiet,
+            soft_wrap=get_mode() is not OutputMode.HUMAN,
+            no_color=colourless_mode(),
         )
 
 
@@ -101,14 +128,27 @@ def forced_terminal(variable: str = "FORCE_COLOR") -> bool | None:
     return force_color.strip().lower() not in _FORCE_COLOR_OFF
 
 
+def colourless_mode() -> bool:
+    """Whether the output mode is ``plain`` or ``agent`` and nothing forces colour.
+
+    Those modes colour only when ``FORCE_COLOR`` or ``PY_COLORS`` asks for it,
+    a terminal or not: CI logs and agent transcripts get no escapes.
+    """
+    from opentide.cli.ui.mode import OutputMode, get_mode
+
+    if get_mode() not in (OutputMode.PLAIN, OutputMode.AGENT):
+        return False
+    return not (forced_terminal() or forced_terminal("PY_COLORS"))
+
+
 def _make_console(*, stderr: bool, config: LoggingConfig) -> Console:
     """Create a stream-aware console without forcing ANSI into redirects."""
     plain = config.plain or config.json_output
     forced = forced_terminal()
-    return Console(
+    return EncodingSafeConsole(
         stderr=stderr,
         highlight=False,
-        no_color=plain,
+        no_color=plain or config.no_color,
         force_terminal=None if forced is None else forced and not plain,
     )
 
@@ -124,6 +164,15 @@ def _shared_pre_chain() -> list[Any]:
     ]
 
 
+def log_level(config: LoggingConfig) -> int:
+    """DEBUG with ``--debug``, ERROR with ``--quiet``, WARNING otherwise (JSON included)."""
+    if config.debug:
+        return logging.DEBUG
+    if config.quiet:
+        return logging.ERROR
+    return logging.WARNING
+
+
 def init_logging(config: LoggingConfig | None = None, *, force: bool = False) -> None:
     """Initialise structlog and stdlib logging once per process."""
     global _config, _console, _stdout_console
@@ -131,15 +180,13 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
         return
 
     _config = config or LoggingConfig.from_env()
-    log_level = (
-        logging.DEBUG if _config.debug else logging.INFO if _config.json_output else logging.WARNING
-    )
+    level = log_level(_config)
     _console = _make_console(stderr=True, config=_config)
     _stdout_console = _make_console(stderr=False, config=_config)
 
     root = logging.getLogger()
     root.handlers.clear()
-    root.setLevel(log_level)
+    root.setLevel(level)
 
     if _config.json_output:
         import orjson
@@ -156,14 +203,8 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
             ],
         )
     else:
-        handler = RichHandler(
-            console=_console,
-            rich_tracebacks=not _config.plain,
-            show_path=_config.debug,
-            markup=False,
-            show_level=True,
-            show_time=False,
-        )
+        # One label per line: the renderer writes it, the handler only styles it.
+        handler = ConsoleLogHandler(_console, soft_wrap=_config.soft_wrap, show_time=_config.debug)
         formatter = structlog.stdlib.ProcessorFormatter(
             foreign_pre_chain=_shared_pre_chain(),
             processors=[
@@ -173,7 +214,7 @@ def init_logging(config: LoggingConfig | None = None, *, force: bool = False) ->
         )
 
     handler.setFormatter(formatter)
-    handler.setLevel(log_level)
+    handler.setLevel(level)
     root.addHandler(handler)
 
     structlog.configure(

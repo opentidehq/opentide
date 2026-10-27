@@ -417,9 +417,10 @@ def test_make_deploy_plan_names_the_rule_files_in_subfolders(
         "files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): "
         + ", ".join(nested)
     ]
+    # Returned in `warnings`, so logged once more only at DEBUG.
     assert _skipped_subfolder_logs(plan_log) == [
         (
-            "info",
+            "debug",
             {
                 "count": 2,
                 "files": nested,
@@ -566,7 +567,11 @@ def test_ci_rule_selection_keeps_top_level_files_out_of_the_subfolder_list(
 
 @pytest.mark.parametrize("catalogue", ["plain", "symlinked"], indirect=True)
 def test_every_rule_run_accounts_for_every_indexed_rule(catalogue: Path) -> None:
-    """#312 guard: an indexed rule is planned, excluded by status, or named in a warning."""
+    """#312 guard: an indexed rule is planned, excluded by status, or named in a warning.
+
+    Rules in subfolders are not object instances (#584): the registry does
+    not index them, and deploy still names each one in its warning.
+    """
     from opentide.core.registry import Opentide
     from opentide.deployment import make_deploy_plan
 
@@ -582,7 +587,11 @@ def test_every_rule_run_accounts_for_every_indexed_rule(catalogue: Path) -> None
     assert scope["silent"] == set()
     assert set(CORPUS_RULE_UUIDS.values()) <= scope["planned"]
     assert scope["status"] == {INERT_RULE_UUID}
-    assert scope["warned"] == set(SUBFOLDER_RULE_UUIDS.values())
+    assert scope["warned"] == set()
+    assert set(SUBFOLDER_RULE_UUIDS.values()).isdisjoint(Opentide.Models.rules)
+    named = " ".join(warnings)
+    for relative in SUBFOLDER_RULE_UUIDS:
+        assert f"/{relative}" in named
 
 
 GATED_RULE_UUID = "00000000-0000-4000-8003-000000000414"
@@ -739,7 +748,7 @@ def test_make_deploy_plan_selects_by_the_strategy_a_status_maps_to(
     _write_gated_rule(local_workspace, status=status, splunk_enabled=True)
     planned = make_deploy_plan(strategies, all_files=True)
     assert planned == ({"splunk": [GATED_RULE_UUID]} if selected else {})
-    skipped = [fields for _, event, fields in plan_log if event == "mdr_skipped_for_strategy"]
+    skipped = [fields for _, event, fields in plan_log if event == "rule_skipped_for_strategy"]
     if selected:
         assert skipped == []
         return
@@ -754,6 +763,32 @@ def test_make_deploy_plan_selects_by_the_strategy_a_status_maps_to(
             "rule": "Gated Rule",
         }
     ]
+
+
+def test_a_caller_that_collects_skips_gets_them_counted_not_warned(
+    local_workspace: Path, plan_log: list[LoggedEvent]
+) -> None:
+    """The CLI counts skipped blocks in one line; a warning per block was log noise."""
+    from opentide.deployment import make_deploy_plan
+    from opentide.deployment.utils import statuses_deployed_by
+
+    _write_gated_rule(local_workspace, status="DESIGN", splunk_enabled=True)
+    skipped: list[dict[str, str]] = []
+    assert make_deploy_plan((S.PREVIEW,), all_files=True, skipped=skipped) == {}
+    assert skipped == [
+        {
+            "rule": "Gated Rule",
+            "uuid": GATED_RULE_UUID,
+            "platform": "splunk",
+            "status": "DESIGN",
+            "strategy": "INERT",
+        }
+    ]
+    levels = [level for level, event, _ in plan_log if event == "rule_skipped_for_strategy"]
+    assert levels == ["debug"]
+    assert "DEVELOPMENT" in statuses_deployed_by((S.PREVIEW,))
+    assert "DESIGN" not in statuses_deployed_by((S.PREVIEW,))
+    assert "PRODUCTION" in statuses_deployed_by((S.RELEASE,))
 
 
 def test_make_deploy_plan_drops_retired_rules_only_when_asked(

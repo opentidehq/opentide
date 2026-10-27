@@ -63,6 +63,7 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 `opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
 
 - Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
+- Optional `metadata` keys that [`opentide lint`](./lint.md#configuration) requires are uncommented too: `author` and `organisation` by default, or the `[metadata].required` list in `lint.toml`.
 - Optional fields are the same YAML with `#` hugging each key (`#references:` / `  #public:`). Nested optionals inside that block are not commented again. Spacer blank lines stay blank (they are not turned into a lone `#`). Uncomment a block and it is valid YAML.
 - Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
 - Vocabulary fields are empty scalars (no enum dump).
@@ -70,6 +71,8 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 - Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
 
 JSON Schema generation (`generate schemas`) stays a separate pipeline. It writes one schema per registered revision (`rule.1.0.schema.json`, `rule.1.1.schema.json`, …) and the router `opentide.schema.json`, which applies the revision named in each object's `metadata.schema`. Map the router in your editor; see [Schema revision](../usage/concepts/schema-revision.md). VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
+
+Generated schemas are written for editor hovers and completions. Every field carries a `title` and a `description`, taken from the docstring under the model field; a description that uses Markdown also gets a `markdownDescription`. Vocabulary enums carry one description per value: the full entry in `markdownEnumDescriptions`, and its name and first sentence in `enumDescriptions` (VS Code) and `x-enumDescriptions` (the same list, for other editors). Configuration enums (statuses, log sources, detectors, tenants) carry their whole description as plain text in the same two keys. Each schema's `$comment` names opentide and its tagline. These are annotation keywords: they change what an editor shows, never what validates. Each snippet carries a description naming the object or platform block it inserts.
 
 ## generate docs
 
@@ -111,7 +114,7 @@ Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--out
 - **Rules:**
   - `Status`, `ATT&CK Techniques`, `Detection model` (relative backlink), `Response`, `Platform configurations`, `Coverage`, `Related objects`
 - **Objectives:**
-  - `Objective metadata` (priority is the author string — not looked up in `criticality::1.0`), `Signals`, `Signal MDR coverage` (rule backlinks), `Coverage`, `Related objects`
+  - `Objective metadata` (priority is the author string — not looked up in `criticality::1.0`), `Signals`, `Signal rule coverage` (rule backlinks), `Coverage`, `Related objects`
 - **Threats:**
   - `Criticality`, `Terrain`, `Threat Assessment`, `Actors`, `CVE` (Vulnerability-Lookup links; optional API enrichment), `ATT&CK Techniques` (when present), `Chaining`, `Chaining details`, `Coverage`, `Related objects`
 
@@ -250,4 +253,4 @@ Schema and template phases reload `IndexManager` and `Opentide` registry caches.
 
 ## Source
 
-`src/opentide/cli/__init__.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`
+`src/opentide/cli/commands/generate.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`

@@ -123,9 +123,17 @@ def test_unknown_target_and_unconfirmed_delete_are_preflight(
     _write_sharing(tide_corpus_repo)
     monkeypatch.setenv("MISP_LAB_KEY", KEY)
     monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
-    unknown = invoke_cli("share", "push", "--target", "missing", repo=tide_corpus_repo)
-    assert unknown.exit_code == 1
-    assert "No sharing target matched" in unknown.stdout
+    unknown = invoke_cli("share", "push", "--target", "labb", repo=tide_corpus_repo)
+    assert unknown.exit_code == 2
+    payload = json.loads(unknown.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["records"] == []
+    assert payload["error"] == payload["message"]
+    failure = payload["failure"]
+    assert failure["code"] == "usage_invalid_choice"
+    assert failure["argument"] == "--target"
+    assert failure["suggestion"] == "lab"
+    assert "Unknown sharing target 'labb'" in failure["message"]
     assert _Persistent.events == []
     unconfirmed = invoke_cli(
         "share", "retract", "--delete", "--type", "objective", repo=tide_corpus_repo
@@ -227,22 +235,35 @@ def test_human_tables_and_retract(
     listed = invoke_cli("share", "targets", repo=tide_corpus_repo, json_output=False)
     assert listed.exit_code == 0, listed.stdout
     rendered = listed.stdout + listed.stderr
-    assert "Sharing targets" in listed.stdout
-    assert "lab" in listed.stdout
+    assert "lab  misp  enabled  max TLP green  https://misp.example/base" in listed.stdout
+    # No Python repr (True) and no table of raw keys.
+    assert "True" not in listed.stdout
+    assert "max_tlp" not in listed.stdout
     assert KEY not in rendered
     assert "literal" in rendered.lower()
+
+    previewed = invoke_cli(
+        "share", "preview", "--type", "objective", repo=tide_corpus_repo, json_output=False
+    )
+    assert previewed.exit_code == 0, previewed.stdout
+    # A preview sent nothing: it says so, and never "created" (post-merge run).
+    assert "lab · dry run, nothing is sent" in previewed.stdout
+    assert "+ create  " in previewed.stdout
+    assert "created" not in previewed.stdout
+    assert "object_uuid" not in previewed.stdout
 
     pushed = invoke_cli(
         "share", "push", "--type", "objective", repo=tide_corpus_repo, json_output=False
     )
     assert pushed.exit_code == 0, pushed.stdout
-    assert "Share" in pushed.stdout
-    assert "created" in pushed.stdout
+    assert "+ created  " in pushed.stdout
+    assert "dry run" not in pushed.stdout
 
     empty = invoke_cli(
         "share", "status", "--target", "missing", repo=tide_corpus_repo, json_output=False
     )
-    assert empty.exit_code == 1
+    assert empty.exit_code == 2
+    assert "error: Unknown sharing target 'missing'" in empty.stderr
 
     removed = invoke_cli(
         "share",
@@ -420,13 +441,13 @@ _OBJECTIVE_UUID = "00000000-0000-4000-8002-000000000001"
 
 
 def _forbid_diff(_plan: object) -> list[str]:
-    raise AssertionError("diff_calculation must not run")
+    raise AssertionError("changed_through_head must not run")
 
 
 def test_changed_stops_before_git_or_http(
     invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _forbid_diff)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _forbid_diff)
     monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
     _write_sharing(tide_corpus_repo)
     monkeypatch.setenv("MISP_LAB_KEY", KEY)
@@ -474,8 +495,11 @@ def test_changed_stops_before_git_or_http(
         repo=tide_corpus_repo,
         extra_env=_GITHUB_PUSH,
     )
-    assert unknown.exit_code == 1
-    assert json.loads(unknown.stdout)["preflight"] == "scope_no_match"
+    assert unknown.exit_code == 2
+    payload = json.loads(unknown.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["records"] == []
+    assert payload["failure"]["code"] == "usage_invalid_choice"
 
     _write_sharing(tide_corpus_repo, enabled=False)
     idle = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
@@ -508,7 +532,7 @@ def test_changed_uses_the_production_diff(
             "objects/objectives/notes.txt",
         ]
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _diff)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _diff)
     pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
     assert pushed.exit_code == 0, pushed.stdout
     records = json.loads(pushed.stdout)["records"]
@@ -522,7 +546,7 @@ def test_changed_uses_the_production_diff(
     def _empty(_plan: object) -> list[str]:
         return []
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _empty)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _empty)
     empty = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
     assert empty.exit_code == 0, empty.stdout
     assert "No changed objects to share" in empty.stdout
@@ -546,7 +570,7 @@ def test_changed_uses_the_production_diff(
     assert gitlab.exit_code == 0, gitlab.stdout
     assert "No changed objects to share" in gitlab.stdout
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _diff)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _diff)
     narrowed = invoke_cli(
         "share",
         "push",
@@ -563,7 +587,7 @@ def test_changed_uses_the_production_diff(
     def _boom(_plan: object) -> list[str]:
         raise Exception("Could not find git commit abc")
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _boom)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _boom)
     missing = invoke_cli(
         "share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH
     )
@@ -639,7 +663,238 @@ def test_changed_path_filter_keeps_direct_yaml_children(
     def _blank(_plan: object) -> list[str]:
         raise Exception("   ")
 
-    monkeypatch.setattr("opentide.deployment.git_repo.diff_calculation", _blank)
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _blank)
     narrowed, stop = _changed_files(tmp_path, None)
     assert narrowed is None
     assert stop == _PREFLIGHT["changed_diff"]
+
+
+_NESTED_OBJECTIVE = "objects/objectives/team/nested-objective.yaml"
+_NESTED_OBJECTIVE_UUID = "00000000-0000-4000-8002-0000000005a4"
+
+
+def _write_nested_objective(repo: Path) -> Path:
+    """A valid objective one folder down: not an object instance (#584)."""
+    nested = repo / _NESTED_OBJECTIVE
+    nested.parent.mkdir(parents=True, exist_ok=True)
+    text = (repo / _OBJECTIVE).read_text(encoding="utf-8")
+    nested.write_text(text.replace(_OBJECTIVE_UUID, _NESTED_OBJECTIVE_UUID), encoding="utf-8")
+    return nested
+
+
+def _shared_uuids() -> set[str]:
+    return {uuid for event in _Persistent.events for uuid in event.opentide_uuids}
+
+
+def test_full_push_never_publishes_a_nested_object_file(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    _write_sharing(tide_corpus_repo)
+    _write_nested_objective(tide_corpus_repo)
+
+    pushed = invoke_cli("share", "push", repo=tide_corpus_repo)
+    assert pushed.exit_code == 0, pushed.stdout
+    body = json.loads(pushed.stdout)
+    uuids = {record["object_uuid"] for record in body["records"]}
+    assert _OBJECTIVE_UUID in uuids
+    assert _NESTED_OBJECTIVE_UUID not in uuids
+    assert _NESTED_OBJECTIVE_UUID not in _shared_uuids()
+    assert len(_Persistent.events) == 1
+    assert any("team/nested-objective.yaml" in warning for warning in body["warnings"])
+
+    named = invoke_cli("share", "push", "--file", _NESTED_OBJECTIVE, repo=tide_corpus_repo)
+    named_body = json.loads(named.stdout)
+    assert _NESTED_OBJECTIVE_UUID not in {r["object_uuid"] for r in named_body["records"]}
+    assert _NESTED_OBJECTIVE_UUID not in _shared_uuids()
+
+
+def test_changed_push_never_publishes_a_nested_object_file(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    _write_sharing(tide_corpus_repo)
+    _write_nested_objective(tide_corpus_repo)
+
+    def _both(_plan: object) -> list[str]:
+        return [_OBJECTIVE, _NESTED_OBJECTIVE]
+
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _both)
+    pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
+    assert pushed.exit_code == 0, pushed.stdout
+    body = json.loads(pushed.stdout)
+    assert {record["object_uuid"] for record in body["records"]} == {_OBJECTIVE_UUID}
+    assert _NESTED_OBJECTIVE_UUID not in _shared_uuids()
+    assert any("team/nested-objective.yaml" in warning for warning in body["warnings"])
+
+    _Persistent.events = []
+
+    def _nested_only(_plan: object) -> list[str]:
+        return [_NESTED_OBJECTIVE]
+
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _nested_only)
+    only = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
+    assert only.exit_code == 0, only.stdout
+    assert "No changed objects to share" in only.stdout
+    assert _Persistent.events == []
+
+
+@pytest.mark.parametrize("name", ["scratch.debug.yaml", "upper.YAML"])
+def test_changed_push_skips_a_changed_file_outside_the_catalogue(
+    name: str, invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A changed file the catalogue does not read is no changed object (#584).
+
+    ``--changed`` selected ``*.debug.yaml`` and ``*.YAML`` files beside the
+    objects, which the registry never indexes, so a push touching only one of
+    them failed with ``scope_no_match`` instead of having nothing to share.
+    """
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    _write_sharing(tide_corpus_repo)
+    source = tide_corpus_repo / _OBJECTIVE
+    (source.parent / name).write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    def _diff(_plan: object) -> list[str]:
+        return [f"objects/objectives/{name}"]
+
+    monkeypatch.setattr("opentide.deployment.git_repo.changed_through_head", _diff)
+    pushed = invoke_cli("share", "push", "--changed", repo=tide_corpus_repo, extra_env=_GITHUB_PUSH)
+    assert pushed.exit_code == 0, pushed.stdout
+    assert "No changed objects to share" in pushed.stdout
+    assert _Persistent.events == []
+
+
+@pytest.mark.parametrize(
+    ("actions", "exit_code", "code"),
+    [
+        pytest.param(
+            [("failed", "authentication"), ("failed", "connectivity")],
+            2,
+            "share_unreachable",
+            id="unreachable",
+        ),
+        pytest.param([("created", None), ("failed", "server")], 3, "share_partial", id="partial"),
+        pytest.param([("failed", "server")], 1, "share_failed", id="failed"),
+    ],
+)
+def test_a_failed_run_names_its_failure_code(
+    invoke_cli,
+    tide_corpus_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    actions: list[tuple[str, str | None]],
+    exit_code: int,
+    code: str,
+) -> None:
+    """``failure.code`` tells share's exit 1, 2 and 3 apart."""
+    from opentide.sharing.report import ShareRecord, ShareRun
+
+    _write_sharing(tide_corpus_repo)
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    records = tuple(
+        ShareRecord(object_uuid=f"uuid-{index}", target="lab", action=action, kind=kind)
+        for index, (action, kind) in enumerate(actions)
+    )
+    monkeypatch.setattr(
+        "opentide.cli.services.share.run_misp", lambda *args, **kwargs: ShareRun(records)
+    )
+    result = invoke_cli("share", "push", "--type", "objective", repo=tide_corpus_repo)
+    assert result.exit_code == exit_code, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["exit_code"] == exit_code
+    assert payload["failure"]["code"] == code
+
+
+def test_share_runs_inside_terminal_progress(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A share run sits inside one tab or taskbar progress block; listing targets does not."""
+    from opentide.cli.ui import terminal_progress
+
+    seen: list[str] = []
+
+    class _Recorder(terminal_progress.TerminalProgress):
+        def __enter__(self) -> terminal_progress.TerminalProgress:
+            seen.append("enter")
+            return super().__enter__()
+
+        def __exit__(self, *exc: object) -> None:
+            seen.append("exit")
+            super().__exit__(None, None, None)
+
+    monkeypatch.setattr(terminal_progress, "TerminalProgress", _Recorder)
+    _write_sharing(tide_corpus_repo)
+    monkeypatch.setenv("MISP_LAB_KEY", KEY)
+    monkeypatch.setattr("opentide.sharing.engine.PyMispClient", _Persistent)
+    preview = invoke_cli("share", "preview", "--type", "objective", repo=tide_corpus_repo)
+    assert preview.exit_code == 0, preview.stdout
+    assert seen == ["enter", "exit"]
+    listed = invoke_cli("share", "targets", repo=tide_corpus_repo)
+    assert listed.exit_code == 0, listed.stdout
+    assert seen == ["enter", "exit"]
+
+
+def test_no_target_says_which_file_to_write(invoke_cli, tide_corpus_repo: Path) -> None:
+    """Without sharing.toml, preview said "No sharing target matched the request" and
+    targets printed an empty table and "✓ 0 sharing targets" (post-merge run)."""
+    config = tide_corpus_repo / ".opentide" / "configurations" / "sharing.toml"
+    config.unlink(missing_ok=True)
+    listed = invoke_cli("share", "targets", repo=tide_corpus_repo)
+    payload = json.loads(listed.stdout)
+    assert listed.exit_code == 0
+    assert payload["status"] == "skipped"
+    assert payload["targets"] == []
+    assert "[[misp]]" in payload["advice"]
+    human = invoke_cli("share", "targets", repo=tide_corpus_repo, json_output=False)
+    assert human.stdout.startswith("Skipped: No sharing target is configured\n")
+    preview = invoke_cli("share", "preview", repo=tide_corpus_repo)
+    assert preview.exit_code == 1
+    payload = json.loads(preview.stdout)
+    assert payload["preflight"] == "scope_no_match"
+    assert payload["message"] == "No sharing target is configured"
+    assert "sharing.toml" in payload["advice"]
+
+
+def test_a_skipped_row_fits_100_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``its status is not one the target shares`` beside a long rule name wrapped
+    mid-word at 100 columns (post-merge AFTER shots)."""
+    import io
+
+    from rich.cells import cell_len
+    from rich.console import Console
+
+    from opentide.cli.services import share
+
+    console = Console(file=io.StringIO(), width=100, color_system=None)
+    monkeypatch.setattr("opentide.core.logging.config.get_stdout_console", lambda: console)
+    long_name = "LSASS access on defender_for_endpoint"
+    reasons = ("rule_status", "max_tlp", "object_type")
+    uuids = [f"00000000-0000-4000-8003-00000000000{n}" for n in range(len(reasons))]
+    monkeypatch.setattr(share, "_object_names", lambda: dict.fromkeys(uuids, long_name))
+    records = [
+        {"target": "misp-lab", "action": "skipped", "object_uuid": uuid, "reason": reason}
+        for uuid, reason in zip(uuids, reasons, strict=True)
+    ]
+    share.render_share({"records": records, "_outcome_kind": "plan"})
+    lines = console.file.getvalue().splitlines()
+    assert sum(long_name in line for line in lines) == len(reasons)
+    assert max(cell_len(line) for line in lines) <= 100, lines
+
+
+def test_object_names_survive_an_index_that_is_not_loaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rows fall back to UUIDs, never a crash, when the registry is missing or odd."""
+    from types import SimpleNamespace
+
+    from opentide.cli.services import share
+
+    class _Broken:
+        def get(self, key: str) -> None:
+            raise RuntimeError("not initialised")
+
+    monkeypatch.setattr(share, "Opentide", SimpleNamespace(Index=_Broken()))
+    assert share._object_names() == {}
+    index = {"objects": {"rules": ["not", "a", "mapping"], "threats": {"u1": {"name": "T"}}}}
+    monkeypatch.setattr(share, "Opentide", SimpleNamespace(Index=index))
+    assert share._object_names() == {"u1": "T"}

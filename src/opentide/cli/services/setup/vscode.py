@@ -98,7 +98,17 @@ RECOMMENDED_EXTENSIONS: tuple[str, ...] = ("redhat.vscode-yaml",)
 
 def emit_vscode_deprecation() -> None:
     warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=3)
-    logger.warning("vscode_setup_deprecated", detail=DEPRECATION_MESSAGE)
+    from opentide.cli.ui.mode import OutputMode, get_mode
+
+    if get_mode() in (OutputMode.JSON, OutputMode.MCP):
+        logger.warning("vscode_setup_deprecated", detail=DEPRECATION_MESSAGE)
+        return
+    # Printed through the log it read "warning: Vscode setup deprecated · detail:
+    # opentide setup vscode is deprecated …", an event slug (post-merge run).
+    from opentide.cli.ui.render import render_warnings
+    from opentide.core.logging.config import get_console
+
+    render_warnings(get_console(), [DEPRECATION_MESSAGE.rstrip(".")])
 
 
 def _paths_config() -> dict[str, Any]:

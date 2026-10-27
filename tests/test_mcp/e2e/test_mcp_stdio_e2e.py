@@ -2,7 +2,7 @@
 
 Everything else under ``tests/test_mcp/`` calls tool functions in-process. This
 module spawns the published console script and speaks the newline-delimited
-JSON-RPC that FastMCP actually implements, so transport regressions (framing,
+JSON-RPC that the mcp SDK actually implements, so transport regressions (framing,
 log bleed onto stdout, missing ``mcp`` dependency) surface in CI.
 """
 
@@ -27,6 +27,8 @@ from tests.corpus_support import (
     materialise_corpus,
 )
 
+import opentide
+
 pytestmark = pytest.mark.cli_smoke
 
 PROTOCOL_VERSION = "2024-11-05"
@@ -38,6 +40,7 @@ EXPECTED_TOOLS = {
     "coverage",
     "validate_rule",
     "validation_report",
+    "explain",
     "validate_query",
     "run_query",
     "deploy_rule",
@@ -116,6 +119,16 @@ class StdioClient:
             if envelope.get("id") == request_id:
                 return envelope
 
+    def close_and_drain(self) -> list[str]:
+        """Close stdin, let the server exit, and return every stdout line it still wrote."""
+        assert self._process.stdin is not None
+        self._process.stdin.close()
+        self._process.wait(timeout=READ_TIMEOUT)
+        lines: list[str] = []
+        while (line := self._lines.get(timeout=READ_TIMEOUT)) is not None:
+            lines.append(line)
+        return lines
+
     def handshake(self) -> dict[str, Any]:
         response = self.request(
             "initialize",
@@ -138,7 +151,7 @@ class StdioClient:
         result = self.raw_tool_call(name, arguments)
         structured = result.get("structuredContent")
         if isinstance(structured, dict):
-            # FastMCP wraps non-object returns (our list-shaped tools) in "result".
+            # MCPServer wraps non-object returns (our list-shaped tools) in "result".
             return structured["result"] if set(structured) == {"result"} else structured
         blocks = [json.loads(block["text"]) for block in result["content"]]
         return blocks[0] if len(blocks) == 1 else blocks
@@ -181,7 +194,17 @@ def test_initialize_handshake(mcp_stdio: StdioClient) -> None:
     result = mcp_stdio.handshake()["result"]
     assert result["protocolVersion"] == PROTOCOL_VERSION
     assert result["serverInfo"]["name"] == "opentide"
+    # mcp 2.x reports "" unless the server passes version= explicitly.
+    assert result["serverInfo"]["version"] == opentide.__version__
     assert "tools" in result["capabilities"]
+
+
+def test_server_info_reports_the_opentide_version(mcp_stdio: StdioClient) -> None:
+    """It reported the MCP SDK's version (1.30.0) as its own (post-merge end-to-end run)."""
+    from opentide import __version__
+
+    result = mcp_stdio.handshake()["result"]
+    assert result["serverInfo"]["version"] == __version__
 
 
 def test_tools_list_advertises_every_tool(mcp_stdio: StdioClient) -> None:
@@ -229,6 +252,30 @@ def test_resource_vocabularies_over_stdio_is_json(mcp_stdio: StdioClient) -> Non
     assert len(detail["entries"]) == payload["actors"]["entry_count"]
 
 
+def test_every_advertised_vocabulary_uri_is_readable(mcp_stdio: StdioClient) -> None:
+    """The index's ``uri`` values must resolve, ``att&ck`` included.
+
+    mcp 2.x matches ``{name}`` as an RFC 6570 simple expansion, which does not
+    admit a literal ``&``: ``opentide://vocabularies/att&ck`` was "Unknown
+    resource" even though the index advertises it.
+    """
+    mcp_stdio.handshake()
+    index = mcp_stdio.read_resource("opentide://vocabularies")
+    assert "att&ck" in index
+    unreadable = {}
+    for name, entry in index.items():
+        response = mcp_stdio.request("resources/read", {"uri": entry["uri"]})
+        if "error" in response:
+            unreadable[name] = response["error"]["message"]
+            continue
+        detail = json.loads(response["result"]["contents"][0]["text"])
+        assert "error" not in detail, (name, detail)
+    assert not unreadable, unreadable
+    # A client that percent-encodes the name per RFC 6570 reaches it too.
+    encoded = mcp_stdio.read_resource("opentide://vocabularies/att%26ck")
+    assert "error" not in encoded
+
+
 def test_resource_rule_body_over_stdio(mcp_stdio: StdioClient) -> None:
     mcp_stdio.handshake()
     uuid = CORPUS_RULE_UUIDS["sentinel"]
@@ -244,6 +291,92 @@ def test_logs_never_bleed_onto_the_jsonrpc_stream(mcp_stdio: StdioClient) -> Non
     mcp_stdio.read_resource("opentide://index")
 
 
+def test_stdout_holds_only_jsonrpc_while_tools_run(mcp_stdio: StdioClient) -> None:
+    """``mcp start`` runs in ``mcp`` mode: every byte on stdout is a JSON-RPC frame.
+
+    ``validate_query`` drives the CLI's query service with a non-JSON context,
+    the path most likely to print a human line. Everything the server writes
+    until it exits is read back, not only the frames a request waited for.
+    """
+    mcp_stdio.handshake()
+    payload = mcp_stdio.call_tool(
+        "validate_query", {"query": "SecurityEvent", "platform": "sentinel", "live": True}
+    )
+    assert isinstance(payload, dict)
+    assert "_failure_code" not in payload
+    mcp_stdio.call_tool("validation_report", {})
+    mcp_stdio.call_tool("explain", {"code": "vocab_unknown"})
+    for line in mcp_stdio.close_and_drain():
+        if line.strip():
+            assert json.loads(line)["jsonrpc"] == "2.0", line
+
+
+def test_initialize_carries_the_tagline_and_workflow(mcp_stdio: StdioClient) -> None:
+    instructions = mcp_stdio.handshake()["result"]["instructions"]
+    assert instructions.startswith(
+        "opentide: Spec-driven development for agentic detection engineering."
+    )
+    assert "validation_report" in instructions
+    assert "dry_run true" in instructions
+
+
+def test_every_tool_describes_itself(mcp_stdio: StdioClient) -> None:
+    mcp_stdio.handshake()
+    tools = mcp_stdio.request("tools/list")["result"]["tools"]
+    for tool in tools:
+        assert len(tool["description"].split()) >= 8, tool["name"]
+
+
+def test_explain_over_stdio(mcp_stdio: StdioClient) -> None:
+    mcp_stdio.handshake()
+    page = mcp_stdio.call_tool("explain", {"code": "invalid_ref"})
+    assert page["found"] is True
+    assert page["code"] == "invalid_ref"
+    assert page["markdown"].startswith("# invalid_ref")
+    listing = mcp_stdio.call_tool("explain", {})
+    assert "invalid_ref" in {entry["code"] for entry in listing["codes"]}
+
+
+def test_validation_report_over_stdio_carries_diagnostic_fields(tmp_path: Path) -> None:
+    """A typo on disk comes back with its position, a fix and next actions."""
+    repo = materialise_corpus(tmp_path / "corpus")
+    rule = repo / "objects" / "rules" / "rule-0001-sentinel-kql.yaml"
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("  tlp: clear\n", "  tlp: clearr\n", 1),
+        encoding="utf-8",
+    )
+    env = {**os.environ, **corpus_env(repo), "CI": "true"}
+    process = subprocess.Popen(
+        _server_argv(),
+        cwd=repo,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+    client = StdioClient(process)
+    try:
+        client.handshake()
+        report = client.call_tool(
+            "validation_report", {"file": "objects/rules/rule-0001-sentinel-kql.yaml"}
+        )
+        issue = next(item for item in report["issues"] if item["code"] == "vocab_unknown")
+        assert issue["line"] == issue["yaml_line"] + 1
+        assert issue["fix"]["safe"] is False
+        assert issue["fix"]["edits"][0]["replacement"] == "clear"
+        assert issue["explain"] == "opentide explain vocab_unknown"
+        assert report["next_actions"][0]["tool"] == "explain"
+        for line in client.close_and_drain():
+            if line.strip():
+                assert json.loads(line)["jsonrpc"] == "2.0", line
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=15)
+
+
 def test_text_blocks_agree_with_structured_content(mcp_stdio: StdioClient) -> None:
     """A list-returning tool emits one text block per hit plus structuredContent."""
     mcp_stdio.handshake()
@@ -252,11 +385,14 @@ def test_text_blocks_agree_with_structured_content(mcp_stdio: StdioClient) -> No
     assert result["structuredContent"]["result"] == blocks
 
 
-def test_content_length_headers_are_reported_as_protocol_errors(tmp_path: Path) -> None:
-    """MCP stdio is newline-delimited: LSP-style headers are rejected frames.
+def test_content_length_headers_are_skipped_and_the_body_is_answered(tmp_path: Path) -> None:
+    """MCP stdio is newline-delimited: LSP-style headers are not frames.
 
-    The body still parses because it is a newline-terminated JSON object, so a
-    Content-Length client sees error notifications rather than silence.
+    mcp 2.x drops a line that does not parse as JSON-RPC (it logs it at debug
+    and sends nothing; 1.x answered with an error notification). The body still
+    parses because it is a line of its own, so a Content-Length client gets its
+    ``initialize`` answer, and the header lines leave nothing but JSON-RPC on
+    stdout.
     """
     repo = materialise_corpus(tmp_path / "corpus")
     env = {**os.environ, **corpus_env(repo), "CI": "true"}
@@ -283,13 +419,7 @@ def test_content_length_headers_are_reported_as_protocol_errors(tmp_path: Path) 
         timeout=READ_TIMEOUT,
     )
     frames = [json.loads(line) for line in process.stdout.splitlines() if line.strip()]
-    assert frames, "expected diagnostics on the NDJSON stream"
+    assert frames, "expected the initialize response on the NDJSON stream"
     assert all(frame["jsonrpc"] == "2.0" for frame in frames)
-    errors = [
-        frame
-        for frame in frames
-        if frame.get("method") == "notifications/message" and frame["params"]["level"] == "error"
-    ]
-    assert errors, "header frames should be reported as protocol errors"
     responses = [frame for frame in frames if frame.get("id") == 1]
     assert responses and responses[0]["result"]["serverInfo"]["name"] == "opentide"

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from pydantic import Field
 
 from opentide.models.base import TideField, TideModel
 
@@ -12,39 +11,46 @@ from opentide.models.base import TideField, TideModel
 class VisibilityAsset(TideModel):
     """One `[[assets]]` entry: a system in the environment that generates logs."""
 
-    name: str = Field(description="Asset name that log sources and detectors refer to.")
-    description: str = Field(description="What the asset is.")
-    criticality: str = Field(description="How critical the asset is to the organisation.")
-    custom_details: dict[str, str | bool | int | float] | None = Field(
-        default=None, description="Free-form details shown with the asset."
-    )
-    surface: list[str] | None = Field(default=None, description="Technologies the asset exposes.")
+    name: str
+    """Asset name, referenced by log sources and detectors."""
+    description: str
+    """What the asset is."""
+    criticality: str
+    """Criticality vocabulary value."""
+    custom_details: dict[str, str | bool | int | float] | None = None
+    """Free-form key and value details."""
+    surface: list[str] | None = None
+    """Threat surface vocabulary values the asset exposes."""
 
 
 class VisibilityLogSource(TideModel):
     """One `[[logsources]]` entry: a log source a rule's signals can name."""
 
-    name: str = Field(description="Log source name a signal refers to.")
-    description: str = Field(description="What the log source collects.")
-    system: str = Field(description="Platform identifier the log source is searched on.")
-    assets: list[str] | None = Field(
-        default=None, description="Names of the [[assets]] the log source collects from."
-    )
-    tenants: list[str] | None = Field(
-        default=None, description="Tenants of the platform the log source is available on."
-    )
-    references: list[str] | None = Field(default=None, description="Reference links.")
+    name: str
+    """Log source name. Signals reference it in `data.logsources`."""
+    description: str
+    """What the log source records."""
+    system: str
+    """Detection system that holds the logs."""
+    assets: list[str] | None = None
+    """Names of the assets that produce these logs."""
+    tenants: list[str] | None = None
+    """Tenants of `system` that hold the logs."""
+    references: list[str] | None = None
+    """Reference links."""
 
 
 class VisibilityDetector(TideModel):
     """One `[[detectors]]` entry: an external detector an objective can name."""
 
-    name: str = Field(description="Detector name an objective refers to.")
-    description: str = Field(description="What the detector detects.")
-    references: list[str] | None = Field(default=None, description="Reference links.")
-    assets: list[str] | None = Field(
-        default=None, description="Names of the [[assets]] the detector covers."
-    )
+    name: str
+    """Detector name."""
+    description: str
+    """What the detector covers."""
+    references: list[str] | None = None
+    """Reference links."""
+    assets: list[str] | None = None
+    """Names of the assets the detector monitors."""
 
 
 # ``logsources`` and ``detectors`` declare the objects themselves, so they
@@ -58,18 +64,16 @@ class VisibilityConfig(TideModel):
 
     assets: list[VisibilityAsset] | None = TideField(
         default=None,
-        schema_extra={
-            "title": "Assets",
-            "description": "List of assets that generate logs in the environment",
-        },
+        schema_extra={"title": "Assets"},
     )
+    """Assets that generate logs in the environment."""
     logsources: list[VisibilityLogSource] = TideField(
         ...,
         schema_extra={"title": "Log Sources"},
-        description="Log sources available in the environment",
     )
+    """Log sources available to detection signals."""
     detectors: list[VisibilityDetector] | None = TideField(
         default=None,
         schema_extra={"title": "External Detectors"},
-        description="Detectors outside opentide that cover the environment",
     )
+    """External detectors that already cover parts of the environment."""

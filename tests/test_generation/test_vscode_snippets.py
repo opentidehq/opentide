@@ -131,7 +131,10 @@ def test_run_uses_legacy_subschemas_when_platform_templates_missing(tmp_path: Pa
     entry = payload["Detection Rules Template"]
     assert entry["prefix"] == "tide-rule"
     assert entry["scope"] == "yaml"
-    assert entry["description"] == "Detection Rules Template"
+    assert entry["description"] == (
+        "Detection Rules: a new object from the generated template, "
+        "with a tabstop on every field to fill."
+    )
 
 
 def test_run_uses_platform_templates_when_subschemas_missing(tmp_path: Path) -> None:
@@ -193,12 +196,16 @@ def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
     with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
         vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
-    key = "MDR Systems Deployment : Microsoft Sentinel Template"
+    key = "Platform configuration : Microsoft Sentinel Template"
     assert key in payload
     assert payload[key]["prefix"] == "tide-sentinel"
     assert payload[key]["scope"] == "yaml"
     assert payload[key]["body"][0] == ""
     assert "query: ${1:query}" in payload[key]["body"]
+    assert payload[key]["description"] == (
+        "Microsoft Sentinel: the platform block for a detection rule's "
+        "configurations, from the generated template."
+    )
 
 
 def test_run_honors_snippets_path_override(tmp_path: Path) -> None:
@@ -252,7 +259,8 @@ def test_run_completes_on_fresh_setup_repo(tmp_path: Path, monkeypatch) -> None:
     assert payload["Detection Objectives Template"]["prefix"] == "tide-objective"
     rule_body = "\n".join(payload["Detection Rules Template"]["body"])
     assert "${1:name}" in rule_body or "name: ${" in rule_body
-    assert "#author:" in rule_body
+    assert "  author: " in rule_body
+    assert "#contributors:" in rule_body
     assert "configurations:" in rule_body
     assert "configurations: ${" not in rule_body
     assert "${" not in "".join(

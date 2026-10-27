@@ -48,7 +48,23 @@ def test_vocabulary_resolver_visibility_missing_asset() -> None:
     assert "Warning" in formatted
 
 
-def test_refresh_runtime_context_rebinds_globals() -> None:
+#: The module globals ``_refresh_runtime_context()`` rebinds.
+_RUNTIME_GLOBALS = (
+    "_runtime_ready",
+    "GLOBAL_CONFIG",
+    "VOCAB_INDEX",
+    "CONFIG_INDEX",
+    "JSON_SCHEMA_FOLDER",
+    "ICONS",
+    "OBJECT_TYPES",
+)
+
+
+def test_refresh_runtime_context_rebinds_globals(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Bound to the mock, they outlived this test: a later schema generation in
+    # the same worker read CONFIG_INDEX without "systems" (KeyError).
+    for name in _RUNTIME_GLOBALS:
+        monkeypatch.setattr(sp, name, getattr(sp, name))
     with patch("opentide.generation.schema_pipeline.Opentide") as mock_ot:
         mock_ot.Configurations.Global.objects = ["rule"]
         mock_ot.Vocabularies.Index = {}

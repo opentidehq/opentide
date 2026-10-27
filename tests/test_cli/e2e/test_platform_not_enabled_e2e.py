@@ -77,10 +77,12 @@ def test_human_output_names_the_disabled_platform(invoke_cli) -> None:
     result = invoke_cli("validate", "--strict", json_output=False)
     assert result.exit_code == 0, result.stdout + result.stderr
     output = " ".join((result.stdout + result.stderr).split())
-    assert "OK Validation passed" in output
-    assert "WARNING" in output
-    assert "configurations.splunk:" in output
+    assert "warning[platform_not_enabled]: this block will not deploy while splunk" in output
+    assert "rule-0003-splunk-spl.yaml:23:3" in output
     assert "opentide setup platforms --splunk" in output
+    assert " valid · 1 warning · " in output
+    # The frame is the warning; it is not printed a second time as a warning line.
+    assert "warning: " not in output
 
 
 @pytest.mark.parametrize(
@@ -176,3 +178,23 @@ def test_live_query_validation_of_a_disabled_platform_names_a_working_flag(
     assert payload["status"] == "skipped"
     assert payload["platform_enabled"] is False
     assert payload["advice"] == "enable it with 'opentide setup platforms --defender-for-endpoint'"
+
+
+@pytest.mark.parametrize("typo", ["enabeld", "Enabled", "enable"])
+def test_a_misspelled_enabled_key_is_named_instead_of_setup_platforms(
+    invoke_cli, tide_corpus_repo: Path, typo: str
+) -> None:
+    """``enabeld = true`` left splunk disabled, and the warning sent the author to
+    ``opentide setup platforms --splunk`` (post-merge end-to-end run)."""
+    config = tide_corpus_repo / SPLUNK_CONFIG
+    text = config.read_text(encoding="utf-8")
+    config.write_text(
+        text.replace("[tide]\nenabled = true\n", f"[tide]\n{typo} = true\n"), encoding="utf-8"
+    )
+    payload = assert_json_ok(invoke_cli("validate"))
+    (warning,) = _platform_warnings(payload)
+    assert warning["context"] == {"platform": "splunk", "key": typo}
+    assert warning["message"] == (
+        f"this block will not deploy: {SPLUNK_CONFIG} sets '{typo}' in [tide], not "
+        "'enabled', so splunk is disabled; rename the key to 'enabled'"
+    )

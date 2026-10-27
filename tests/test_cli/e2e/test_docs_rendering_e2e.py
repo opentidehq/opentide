@@ -130,3 +130,39 @@ def test_generate_docs_on_the_corpus_writes_no_python_reprs(
 
     found = {str(page.relative_to(tide_corpus_repo)): _reprs(page) for page in pages}
     assert {page: reprs for page, reprs in found.items() if reprs} == {}
+
+
+_NESTED_RULE = "objects/rules/team/nested-team-rule.yaml"
+_NESTED_RULE_UUID = "00000000-0000-4000-8003-000000000584"
+
+
+def test_generate_docs_and_export_skip_a_nested_object_file(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """A file in a subfolder is not an object instance (#584): no page, one warning."""
+    source = tide_corpus_repo / "objects" / "rules" / "rule-0001-sentinel-kql.yaml"
+    nested = tide_corpus_repo / _NESTED_RULE
+    nested.parent.mkdir(parents=True, exist_ok=True)
+    nested.write_text(
+        source.read_text(encoding="utf-8")
+        .replace("00000000-0000-4000-8003-000000000001", _NESTED_RULE_UUID)
+        .replace("name: Sentinel KQL Rule", "name: Nested Team Rule"),
+        encoding="utf-8",
+    )
+
+    payload = assert_json_ok(invoke_cli("generate", "docs"))
+    assert any("team/nested-team-rule.yaml" in warning for warning in payload["warnings"])
+    pages = sorted((tide_corpus_repo / "docs").rglob("*.md"))
+    assert pages
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        assert _NESTED_RULE_UUID not in text, page
+        assert "Nested Team Rule" not in text, page
+    assert not any("nested-team-rule" in page.name for page in pages)
+
+    exported = assert_json_ok(invoke_cli("export", "objects"))
+    assert any("team/nested-team-rule.yaml" in warning for warning in exported["warnings"])
+    exports = [p for p in (tide_corpus_repo / ".opentide" / "exports").rglob("*") if p.is_file()]
+    assert exports
+    for path in exports:
+        assert _NESTED_RULE_UUID not in path.read_text(encoding="utf-8", errors="replace"), path
