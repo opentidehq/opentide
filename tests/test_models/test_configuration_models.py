@@ -17,7 +17,6 @@ else:
 from opentide.loading.config_loader import ConfigurationsLoader
 from opentide.models.configuration import (
     DeploymentConfiguration,
-    MispIntegration,
     configuration_files,
 )
 from opentide.models.configuration.loading import ConfigurationError
@@ -227,17 +226,24 @@ def test_visibility_unknown_asset_is_logged_not_fatal() -> None:
 # --- sharing.toml ----------------------------------------------------------------------
 
 
-def test_misp_model_constants_match_the_sharing_package() -> None:
-    from opentide.models.configuration import sharing as model
+def test_misp_keys_are_the_sharing_spec_keys() -> None:
+    """The `[[misp]]` keys and required keys of sharing::misp::1.0, written out from the spec."""
     from opentide.sharing import constants
 
-    assert model.NAME_PATTERN == constants.NAME_PATTERN
-    assert model.DEFAULT_OBJECT_TYPES == constants.DEFAULT_OBJECT_TYPES
-    assert model.DEFAULT_RULE_STATUSES == constants.DEFAULT_RULE_STATUSES
-    assert model.ORGANISATION_UUID_PATTERN == constants.ORGANISATION_UUID_PATTERN
-    assert set(MispIntegration.model_fields) == constants.MISP_BLOCK_KEYS
-    required = {name for name, field in MispIntegration.model_fields.items() if field.is_required()}
-    assert required == constants.REQUIRED_MISP_KEYS
+    assert {
+        "name",
+        "enabled",
+        "url",
+        "api_key",
+        "max_tlp",
+        "object_types",
+        "rule_statuses",
+        "organisation_uuid",
+        "publish",
+        "verify_ssl",
+    } == constants.MISP_BLOCK_KEYS
+    assert {"name", "url", "api_key", "max_tlp"} == constants.REQUIRED_MISP_KEYS
+    assert constants.OBJECT_FAMILIES == ("threat", "objective", "rule")
 
 
 # --- Review follow-ups: tolerance where the loader was tolerant, no secret anywhere ----

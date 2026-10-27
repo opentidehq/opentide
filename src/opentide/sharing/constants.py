@@ -4,20 +4,8 @@ from __future__ import annotations
 
 from typing import get_args
 
-# The sharing 1.0 rules live on the `sharing::misp::1.0` model; re-exported here.
-from opentide.models.configuration.sharing import (
-    DEFAULT_OBJECT_TYPES as DEFAULT_OBJECT_TYPES,
-)
-from opentide.models.configuration.sharing import (
-    DEFAULT_RULE_STATUSES as DEFAULT_RULE_STATUSES,
-)
-from opentide.models.configuration.sharing import (
-    NAME_PATTERN as NAME_PATTERN,
-)
-from opentide.models.configuration.sharing import (
-    ORGANISATION_UUID_PATTERN as ORGANISATION_UUID_PATTERN,
-)
-from opentide.models.configuration.sharing import MispIntegration, TlpName
+# The sharing 1.0 rules live on the `sharing::misp::1.0` model.
+from opentide.models.configuration.sharing import DEFAULT_OBJECT_TYPES, MispIntegration, TlpName
 
 REDACTION_MARKER = "[REDACTED]"
 

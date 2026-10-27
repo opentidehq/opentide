@@ -24,12 +24,15 @@ else:
 
 from opentide.core.files import resolve_configurations
 from opentide.core.root import get_data_root, get_repo_root
-from opentide.models.configuration.sharing import MispIntegration, is_table_array
+from opentide.models.configuration.sharing import (
+    DEFAULT_OBJECT_TYPES,
+    DEFAULT_RULE_STATUSES,
+    MispIntegration,
+    is_table_array,
+)
 from opentide.registry.discovery import client_configurations_dir, discover_workspace
 from opentide.sharing.constants import (
     API_KEY_ENV_PATTERN,
-    DEFAULT_OBJECT_TYPES,
-    DEFAULT_RULE_STATUSES,
     INTEGRATION_MISP,
     KNOWN_INTEGRATIONS,
     REDACTION_MARKER,
