@@ -93,6 +93,20 @@
           "default": true,
           "description": "Apply alert suppression settings.",
           "title": "Suppression"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "pattern": "^(?:[0-9]+\\.[0-9]+|serverless)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stack version the tenant runs, MAJOR.MINOR (8.19, 9.5) or serverless. Editors check ES|QL against the lowest version a rule targets; unset means the 8.19 floor.",
+          "title": "Version"
         }
       },
       "required": [
