@@ -28,7 +28,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | `--query-file` | Read the query from this file |
 | `--since` | Look back this far from `--to` or now: `15m`, `24h`, `7d`, `PT1H`. Default `24h` |
 | `--from`, `--to` | An explicit window, ISO-8601. A time without an offset is UTC. `--since` and `--from` exclude each other |
-| `--limit` | Rows per tenant, 1–10000. Default `100` |
+| `--limit` | Rows per tenant, 1–5000. Default `100` |
 | `--language` | Elastic only: `esql` (default), `eql`, `lucene` or `kuery` |
 | `--index` | Elastic index pattern, or CrowdStrike repository (repeatable) |
 | `--timeout` | Seconds to wait for an asynchronous search (SentinelOne, Carbon Black, CrowdStrike). Default `120` |
@@ -79,10 +79,11 @@ Sources: `processes`, `binary`, `network`, `eventlog`, `dns`, `windows_authentic
 
 `--rule` and `--file` send the query `deploy` would send:
 
+- Sentinel and Defender: the query with the `exclusions` that apply to each tenant, compiled as deploy compiles them; `sent` shows the result.
 - Splunk: the query with the MDR mapping macro deploy appends.
 - SentinelOne correlation rules: each sub-query, as its own result labelled `sub-query 1`, `sub-query 2`… The correlation itself is not applied, and each result says so.
 - Carbon Black: the lines of a multiline query joined with spaces.
-- Elastic: the rule's language (`esql`, `eql`, or `kuery`/`lucene` for the other types) and its index or data view. For `threshold`, `new_terms` and `threat_match` rules only the event query runs, and the result says so; `machine_learning` rules have no query.
+- Elastic: the rule's language (`esql`, `eql`, or `kuery`/`lucene` for the other types) and its index or data view. For `threshold`, `new_terms` and `threat_match` rules only the event query runs, and a rule's `filters` are not applied; the result says so in both cases; `machine_learning` rules have no query.
 
 `--language` and `--index` override the rule's own.
 
@@ -146,7 +147,7 @@ A failed tenant has `status: "failed"`, `error` and, when the platform gave one,
 
 ## Safety
 
-The command only reads. No saved search, rule or job outlives the call: Splunk runs a one-shot job, CrowdStrike's job is stopped when the command stops waiting, and Elastic's preview writes only to the preview index. Credentials come from the platform file, as for `deploy`; an unset `$VAR` refuses the tenant before anything is sent. Rows are telemetry: nothing is written to disk unless you redirect stdout.
+The command reads telemetry and saves no search or rule. Splunk runs a one-shot job. CrowdStrike's job is stopped when the command stops waiting. SentinelOne PowerQuery and Carbon Black process searches have no cancel call: a search that outlives `--timeout` finishes on the tenant and expires there. An Elastic `kuery` query writes its preview alerts to `.preview.alerts-security.alerts-<space>`, as a preview in Kibana does; Kibana cleans that index up itself. Credentials come from the platform file, as for `deploy`; an unset `$VAR` refuses the tenant before anything is sent. Rows are telemetry: nothing is written to disk unless you redirect stdout.
 
 ## Related
 

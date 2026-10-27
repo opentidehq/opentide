@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from opentide.models.rule import DetectionRule
 
@@ -21,6 +23,16 @@ class RuleQuery:
     label: str | None = None
     #: Said with the result: what the rows are not (a threshold the query omits).
     note: str | None = None
+    #: KQL exclusions deploy compiles into the query per tenant (Sentinel, Defender).
+    exclusions: tuple[Any, ...] = ()
+
+    def text_for(self, tenant: str) -> str:
+        """The query as deploy sends it to *tenant*: with that tenant's exclusions."""
+        if not self.exclusions:
+            return self.text
+        from opentide.platforms.kql import compile_kql_query
+
+        return compile_kql_query(self.text, self.exclusions, tenant)
 
 
 def rule_queries(rule: DetectionRule, platform: str) -> list[RuleQuery]:
@@ -35,7 +47,12 @@ def rule_queries(rule: DetectionRule, platform: str) -> list[RuleQuery]:
     if config is None:
         raise RuleQueryError(f"rule {rule.name!r} has no {platform} configuration")
     match platform:
-        case "sentinel" | "defender_for_endpoint" | "crowdstrike":
+        case "sentinel" | "defender_for_endpoint":
+            exclusions: Sequence[Any] = config.exclusions or ()
+            return [
+                RuleQuery(_required(config.query, rule, platform), exclusions=tuple(exclusions))
+            ]
+        case "crowdstrike":
             return [RuleQuery(_required(config.query, rule, platform))]
         case "carbon_black_cloud":
             # Deploy joins the lines of a multiline Lucene query with spaces.
@@ -72,6 +89,8 @@ def _sentinel_one_queries(config: object, rule: DetectionRule) -> list[RuleQuery
         return [RuleQuery(_required(condition.single_event.query, rule, "sentinel_one"))]
     if kind == "Correlation" and condition is not None and condition.correlation:
         sub_queries = condition.correlation.sub_queries
+        if not sub_queries:
+            raise RuleQueryError(f"rule {rule.name!r} has no SentinelOne sub-queries")
         return [
             RuleQuery(
                 _required(sub.query, rule, "sentinel_one"),
@@ -92,10 +111,16 @@ def _elastic_query(config: object, rule: DetectionRule) -> RuleQuery:
     text = _required(getattr(config, "query", None), rule, "elastic")
     index = tuple(getattr(config, "index", None) or ())
     data_view = getattr(config, "data_view_id", None)
-    if kind in ("esql", "eql"):
+    if kind == "esql":
         return RuleQuery(text, language=kind, index=index, data_view=data_view)
+    if kind == "eql":
+        note = "the rule's filters are not applied" if getattr(config, "filters", None) else None
+        return RuleQuery(text, language=kind, index=index, data_view=data_view, note=note)
     language = getattr(config, "language", None) or "kuery"
-    note = None
+    notes = []
     if kind != "query":
-        note = f"the {kind} rule's event query only: the {kind} logic is not applied"
+        notes.append(f"the {kind} rule's event query only: the {kind} logic is not applied")
+    if getattr(config, "filters", None):
+        notes.append("the rule's filters are not applied")
+    note = "; ".join(notes) or None
     return RuleQuery(text, language=language, index=index, data_view=data_view, note=note)

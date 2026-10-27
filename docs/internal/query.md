@@ -30,7 +30,7 @@ Black only parse. MCP `run_query` was an explicit stub.
 | Platforms | All eight. CrowdStrike runs on Next-Gen SIEM; HarfangLab, which has no telemetry query language, takes a source and field filters and refuses `--rule`. |
 | Failure | Per tenant: one tenant's refusal or outage is its outcome; the rest still run. Exit `1` if any failed, `2` if nothing could run. |
 | Gate | The CLI command is the explicit act. MCP `run_query` refuses until `live: true`, like `validate_query`. |
-| Row cap | `--limit` default 100 (`MAX_QUERY_ROWS`), at most 10 000; runners ask for one row more to report `truncated`. |
+| Row cap | `--limit` default 100 (`MAX_QUERY_ROWS`), at most 5 000; runners ask for one row more to report `truncated`, which stays under the 10 000-row caps of Elasticsearch and Carbon Black. |
 | Window | Sent natively to each API, never spliced into the query text. |
 
 ## Layout
@@ -89,7 +89,7 @@ Nothing goes through environment flags.
   service behaviour with a stand-in runner.
 - `tests/test_platforms/test_query_runners.py` — every runner against
   stand-in vendor answers: request shape, column mapping, truncation, partial
-  results, refusals, polling, time-outs and cancellation.
+  results, refusals, polling, time-outs and CrowdStrike's job stop.
 - `tests/test_cli/test_query_cli.py` — the command on the corpus with two
   configured tenants: JSON envelope against its result model, tenant
   selection, per-tenant failure, rule and file sources, stdin, table, jsonl,

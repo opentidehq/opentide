@@ -171,10 +171,13 @@ def _load_rule(
 
     assert rule_uuid is not None
     rules = Opentide.Rules
-    if rule_uuid not in rules:
+    # UUIDs compare case-insensitively (RFC 9562); one pasted from a console may be upper case.
+    wanted = rule_uuid.strip().lower()
+    match = next((key for key in rules if str(key).lower() == wanted), None)
+    if match is None:
         suggestion = did_you_mean(rule_uuid, rules)
         return _refusal(f"no rule with UUID {rule_uuid}", argument="--rule", suggestion=suggestion)
-    return rules[rule_uuid]
+    return rules[match]
 
 
 def _refusal(message: str, *, argument: str, suggestion: str | None = None) -> dict[str, Any]:

@@ -81,7 +81,11 @@ class HarfangLabQueryRunner(QueryRunner):
 def parse_telemetry_query(text: str) -> tuple[str, dict[str, str]]:
     """``(source, filters)`` of ``SOURCE field=value ...``; values may be quoted."""
     try:
-        words = shlex.split(text)
+        # Not POSIX escapes: a backslash is part of a Windows path, not an escape.
+        lexer = shlex.shlex(text, posix=True)
+        lexer.whitespace_split = True
+        lexer.escape = ""
+        words = list(lexer)
     except ValueError as exc:
         raise QueryRefused(f"cannot read the telemetry query: {exc}") from None
     sources = ", ".join(TELEMETRY_SOURCES)

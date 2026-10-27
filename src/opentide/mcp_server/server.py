@@ -198,6 +198,7 @@ def run_query(
     since: str = "24h",
     limit: int = 100,
     language: str = "",
+    index: str = "",
 ) -> dict:
     """Run a read-only query on a platform's tenants and return the rows (live true only).
 
@@ -207,7 +208,8 @@ def run_query(
     since (15m, 24h, 7d) and returns {status, results: [{tenant, status,
     columns, rows, row_count, truncated, warnings, error}], row_count}, at
     most limit rows per tenant. It uses the configured credentials: ask a
-    person first. language is Elastic's: esql, eql, lucene or kuery.
+    person first. language is Elastic's: esql, eql, lucene or kuery. index
+    names Elastic index patterns (comma-separated) or a CrowdStrike repository.
     """
     return tool_run_query(
         query,
@@ -218,6 +220,7 @@ def run_query(
         since=since,
         limit=limit,
         language=language,
+        index=index,
     )
 
 

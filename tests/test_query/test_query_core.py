@@ -338,7 +338,7 @@ def test_a_raw_query_takes_the_platforms_default_language(tenants: None) -> None
         ({"platform": "splunk"}, "QUERY"),
         ({"platform": "splunk", "query": "   "}, "QUERY"),
         ({"platform": "splunk", "query": "x", "limit": 0}, "--limit"),
-        ({"platform": "splunk", "query": "x", "limit": 10_001}, "--limit"),
+        ({"platform": "splunk", "query": "x", "limit": 5_001}, "--limit"),
         ({"platform": "splunk", "query": "x", "language": "kql"}, "--language"),
         ({"platform": "splunk", "query": "x", "since": "nope"}, "--since"),
         ({"platform": "splunk", "query": "x", "tenants": ["nope"]}, "--tenant"),
@@ -396,3 +396,69 @@ def test_the_package_exports_resolve_lazily() -> None:
         assert getattr(package, name) is not None
     with pytest.raises(AttributeError):
         _ = package.nothing_here
+
+
+# --------------------------------------------------------------------------
+# Review regressions (PR #674)
+# --------------------------------------------------------------------------
+
+
+def _rule_with(name: str, platform: str, **block: Any) -> DetectionRule:
+    path = RULES / name
+    data = load_yaml(path)
+    data["configurations"][platform].update(block)
+    return load_rule_from_dict(data, file=path)
+
+
+def test_a_kql_rule_carries_each_tenants_exclusions(tenants: None) -> None:
+    rule = _rule_with(
+        "rule-0001-sentinel-kql.yaml",
+        "sentinel",
+        exclusions=[
+            {"query": "| where Account != svc", "reason": "service", "tenant": "prod"},
+            {"query": "| where Computer != lab", "reason": "everywhere"},
+        ],
+    )
+
+    class Kql(FakeRunner):
+        languages: ClassVar[tuple[str, ...]] = ("kql",)
+
+    runner = Kql()
+    run = run_query("sentinel", rule=rule, tenants=["lab", "prod"], runner=runner)
+    sent = {name: request.text for name, request in runner.requests}
+    assert "Account != svc" not in sent["lab"] and "Computer != lab" in sent["lab"]
+    assert "Account != svc" in sent["prod"] and "Computer != lab" in sent["prod"]
+    # The result shows the compiled query each tenant received.
+    assert [o.to_dict()["sent"] for o in run.outcomes] == [sent["lab"], sent["prod"]]
+
+
+def test_an_elastic_rule_says_its_filters_are_not_applied() -> None:
+    rule = _rule_with(
+        "rule-0009-elastic-kql.yaml", "elastic", filters=[{"field": "user.name", "value": "x"}]
+    )
+    (item,) = rule_queries(rule, "elastic")
+    assert item.note == "the rule's filters are not applied"
+
+
+def test_a_correlation_rule_without_sub_queries_has_no_query() -> None:
+    path = RULES / "rule-0004-sentinel-one-s1ql.yaml"
+    data = load_yaml(path)
+    data["configurations"]["sentinel_one"]["condition"]["correlation"]["sub_queries"] = []
+    with pytest.raises(RuleQueryError, match="no SentinelOne sub-queries"):
+        rule_queries(load_rule_from_dict(data, file=path), "sentinel_one")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "flag"),
+    [
+        ({"end": "garbage"}, "--to"),
+        ({"start": "garbage"}, "--from"),
+        ({"since": "garbage"}, "--since"),
+    ],
+)
+def test_a_window_error_names_the_flag_at_fault(
+    tenants: None, kwargs: dict[str, str], flag: str
+) -> None:
+    with pytest.raises(QueryUsageError) as refused:
+        run_query("splunk", query="x", tenants=["lab"], runner=FakeRunner(), **kwargs)
+    assert refused.value.argument == flag

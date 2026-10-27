@@ -346,8 +346,9 @@ Run a read-only query on a platform's tenants and return the rows: the MCP face 
 | `live` | boolean | `false` | Send the query; without it nothing is sent |
 | `rule` | string | `""` | Run the query this rule (UUID) deploys, instead of `query` |
 | `since` | string | `"24h"` | Look-back: `15m`, `24h`, `7d`, `PT1H` |
-| `limit` | integer | `100` | Rows per tenant (`MAX_QUERY_ROWS`), at most 10000 |
+| `limit` | integer | `100` | Rows per tenant (`MAX_QUERY_ROWS`), at most 5000 |
 | `language` | string | `""` | Elastic only: `esql`, `eql`, `lucene` or `kuery` |
+| `index` | string | `""` | Elastic index patterns (comma-separated), or a CrowdStrike repository |
 
 Without `live`:
 

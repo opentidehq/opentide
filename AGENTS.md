@@ -100,8 +100,9 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | HarfangLab | ✅ | ❌ | ✅ telemetry filters (no `--rule`) |
 
 CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False`, never fake validation.
-`opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they only read, and
-cancel an asynchronous search they stop waiting for.
+`opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
+search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
+`kuery` is the one write: its rule preview's alerts, in the preview index.
 
 ## Code quality bar
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import structlog
 
@@ -138,7 +138,7 @@ def run_query(
     try:
         window = resolve_window(since, start, end)
     except WindowError as exc:
-        raise QueryUsageError(str(exc), argument="--since") from None
+        raise QueryUsageError(str(exc), argument=exc.flag) from None
     queries = _queries(platform, query, rule, language=language, index=index)
     try:
         selected = select_tenants(platform, tenants)
@@ -168,7 +168,7 @@ def run_query(
         for item in queries:
             request = QueryRequest(
                 platform=platform,
-                text=item.text,
+                text=item.text_for(tenant.name),
                 window=window,
                 limit=limit,
                 language=item.language,
@@ -178,6 +178,10 @@ def run_query(
                 timeout=timeout,
             )
             outcome = run_on_tenant(runner, request, tenant)
+            result = outcome.result
+            if result is not None and result.sent is None and request.text != item.text:
+                # The tenant's exclusions changed the query: show what was sent.
+                outcome.result = replace(result, sent=request.text)
             if item.note:
                 outcome.warnings.insert(0, item.note)
             run.outcomes.append(outcome)
@@ -207,6 +211,7 @@ def _queries(
                     data_view=None if index else item.data_view,
                     label=item.label,
                     note=item.note,
+                    exclusions=item.exclusions,
                 )
                 for item in found
             ]

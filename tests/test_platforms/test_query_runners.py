@@ -213,8 +213,11 @@ def _defender_tenant() -> C.Systems.DefenderForEndpoint.Tenant:
 @pytest.fixture
 def graph(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
     import opentide.platforms.defender_for_endpoint.client as client
+    import opentide.platforms.defender_for_endpoint.runner as runner
 
     session = FakeSession()
+    # "Now" is the end of the test window, so the 30-day retention check is stable.
+    monkeypatch.setattr(runner, "utc_now", lambda: WINDOW.end)
 
     class Service:
         HUNTING_QUERY_ENDPOINT = "https://graph.example/runHuntingQuery"
@@ -263,11 +266,23 @@ def test_defender_names_the_missing_permission_on_403(graph: FakeSession) -> Non
     assert refused.value.detail == "Forbidden"
 
 
-def test_defender_refuses_a_window_past_thirty_days(graph: FakeSession) -> None:
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        # Longer than 30 days.
+        (datetime(2026, 1, 1, tzinfo=timezone.utc), WINDOW.end),
+        # One day, but older than the 30 days advanced hunting keeps.
+        (datetime(2026, 9, 1, tzinfo=timezone.utc), datetime(2026, 9, 2, tzinfo=timezone.utc)),
+    ],
+)
+def test_defender_refuses_a_window_starting_past_retention(
+    graph: FakeSession, start: datetime, end: datetime
+) -> None:
     from opentide.platforms.defender_for_endpoint.runner import DefenderQueryRunner
 
-    wide = TimeWindow(datetime(2026, 1, 1, tzinfo=timezone.utc), WINDOW.end)
-    request = QueryRequest(platform="defender_for_endpoint", text="T", window=wide)
+    request = QueryRequest(
+        platform="defender_for_endpoint", text="T", window=TimeWindow(start, end)
+    )
     with pytest.raises(QueryRefused, match="30 days"):
         DefenderQueryRunner().run(request, _defender_tenant())
     assert graph.calls == []
@@ -321,8 +336,9 @@ def test_splunk_runs_a_oneshot_search_over_the_window(splunk: dict[str, Any]) ->
     query, params = splunk["calls"][0]
     assert query == "search index=main"
     assert params == {
-        "earliest_time": "2026-10-26T08:00:00.000Z",
-        "latest_time": "2026-10-27T08:00:00.000Z",
+        # Epoch seconds, which Splunk reads whatever its time_format.
+        "earliest_time": f"{WINDOW.start.timestamp():.3f}",
+        "latest_time": f"{WINDOW.end.timestamp():.3f}",
         "count": 2,
         "output_mode": "json",
     }
@@ -410,7 +426,7 @@ def test_sentinel_one_polls_until_the_powerquery_finishes(s1: FakeSession) -> No
     method, url, kwargs = s1.calls[0]
     assert (method, url) == ("POST", "https://s1.example/web/api/v2.1/dv/events/pq")
     assert kwargs["json"] == {
-        "query": 'event.type = "Process Creation" | limit 101',
+        "query": 'event.type = "Process Creation"\n| limit 101',
         "fromDate": "2026-10-26T08:00:00.000Z",
         "toDate": "2026-10-27T08:00:00.000Z",
         "limit": 101,
@@ -897,3 +913,85 @@ def test_a_runner_refuses_another_platforms_tenant() -> None:
 
     with pytest.raises(TypeError, match="Splunk tenant"):
         SplunkQueryRunner().run(_request("splunk", "x"), _sentinel_tenant())
+
+
+# --------------------------------------------------------------------------
+# Review regressions (PR #674)
+# --------------------------------------------------------------------------
+
+
+def test_harfanglab_keeps_backslashes_in_windows_paths(harfanglab: FakeSession) -> None:
+    from opentide.platforms.harfanglab.runner import HarfangLabQueryRunner
+
+    harfanglab.responses.append(FakeResponse(body={"count": 0, "results": []}))
+    HarfangLabQueryRunner().run(
+        _request(
+            "harfanglab",
+            r"processes image_name=C:\Windows\System32\cmd.exe "
+            r"'parent_image=C:\Program Files\x.exe'",
+        ),
+        _harfanglab_tenant(),
+    )
+    params = harfanglab.calls[0][2]["params"]
+    assert params["image_name"] == r"C:\Windows\System32\cmd.exe"
+    assert params["parent_image"] == r"C:\Program Files\x.exe"
+
+
+@pytest.mark.parametrize(
+    ("query", "sent"),
+    [
+        # A trailing comment cannot swallow the limit: it goes on its own line.
+        ("a = 1 // noisy", "a = 1 // noisy\n| limit 11"),
+        # A `| limit` inside a string or a comment is not a stage.
+        ("x contains '| limit 5'", "x contains '| limit 5'\n| limit 11"),
+        ("x = 1 // | limit 5", "x = 1 // | limit 5\n| limit 11"),
+        ("x = 1 | limit 5", "x = 1 | limit 5"),
+    ],
+)
+def test_sentinel_one_limit_stage(query: str, sent: str) -> None:
+    from opentide.platforms.sentinel_one.runner import powerquery_with_limit
+
+    assert powerquery_with_limit(query, 10) == sent
+
+
+def test_crowdstrike_refuses_several_repositories(falcon: FakeSession) -> None:
+    from opentide.platforms.crowdstrike.runner import CrowdstrikeQueryRunner
+
+    with pytest.raises(QueryRefused, match="one repository"):
+        CrowdstrikeQueryRunner().run(
+            _request("crowdstrike", "x", index=("search-all", "investigate_view")),
+            _crowdstrike_tenant(),
+        )
+    assert falcon.calls == []
+
+
+def test_elastic_kuery_at_the_preview_cap_is_truncated(elastic: FakeSession) -> None:
+    from opentide.platforms.elastic.runner import MAX_PREVIEW_ALERTS, ElasticQueryRunner
+
+    hits = [{"_source": {"n": n}} for n in range(MAX_PREVIEW_ALERTS)]
+    elastic.responses += [
+        FakeResponse(body={"previewId": "p", "logs": []}),
+        FakeResponse(body={"hits": {"hits": hits}}),
+    ]
+    result = ElasticQueryRunner().run(
+        _request("elastic", "a: b", language="kuery", limit=MAX_PREVIEW_ALERTS),
+        _elastic_tenant(index=["logs-*"]),
+    )
+    assert len(result.rows) == MAX_PREVIEW_ALERTS
+    assert result.truncated is True
+
+
+def test_elastic_kuery_on_a_data_view_skips_the_lookup(elastic: FakeSession) -> None:
+    from opentide.platforms.elastic.runner import ElasticQueryRunner
+
+    elastic.responses += [
+        FakeResponse(body={"previewId": "p", "logs": []}),
+        FakeResponse(body={"hits": {"hits": []}}),
+    ]
+    ElasticQueryRunner().run(
+        _request("elastic", "a: b", language="kuery", data_view="dv-1"), _elastic_tenant()
+    )
+    _, url, preview = elastic.calls[0]
+    assert url == "preview"  # no data_view GET first
+    assert preview["json"]["data_view_id"] == "dv-1"
+    assert "index" not in preview["json"]

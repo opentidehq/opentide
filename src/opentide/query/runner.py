@@ -31,8 +31,8 @@ _RUNNER_PACKAGES = {"carbon_black_cloud": "carbon_black"}
 class QueryRunner(ABC):
     """Runs one query on one tenant and returns at most ``request.limit`` rows.
 
-    A runner only reads: it never saves a search or a rule, and it cancels an
-    asynchronous search it started when it stops waiting.
+    A runner never saves a search or a rule, and stops an asynchronous search
+    it no longer waits for where the platform's API can.
     """
 
     #: The languages ``--language`` takes; the first is the default.

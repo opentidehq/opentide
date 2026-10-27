@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, ClassVar
 
-from opentide.core.time import format_utc_z
+from opentide.core.time import format_utc_z, utc_now
 from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner, kql_with_limit
@@ -25,9 +26,11 @@ class DefenderQueryRunner(QueryRunner):
 
         if not isinstance(tenant, ConfigurationModels.Systems.DefenderForEndpoint.Tenant):
             raise TypeError(f"expected a Defender tenant, got {type(tenant).__qualname__}")
-        if request.window.seconds > MAX_LOOKBACK_DAYS * 86400:
+        oldest = utc_now() - timedelta(days=MAX_LOOKBACK_DAYS)
+        if request.window.start < oldest:
             raise QueryRefused(
-                f"advanced hunting keeps {MAX_LOOKBACK_DAYS} days of data: shorten the window"
+                f"advanced hunting keeps {MAX_LOOKBACK_DAYS} days of data: start the window "
+                f"after {format_utc_z(oldest)}"
             )
         setup = tenant.setup
         reject_unsubstituted_placeholders(

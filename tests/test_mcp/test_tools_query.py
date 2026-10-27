@@ -99,6 +99,32 @@ def test_run_query_names_the_rule_in_its_next_action() -> None:
     assert action["command"].endswith("--rule 00000000-0000-4000-8003-000000000003")
 
 
+def test_run_query_next_action_keeps_every_choice() -> None:
+    """Following the next action must run what the agent asked, not the defaults."""
+    result = tools.tool_run_query(
+        "process where true",
+        "elastic",
+        since="7d",
+        limit=5,
+        language="eql",
+        index="logs-*,winlogbeat-*",
+    )
+    (action,) = result["next_actions"]
+    assert action["arguments"] == {
+        "query": "process where true",
+        "platform": "elastic",
+        "live": True,
+        "since": "7d",
+        "limit": 5,
+        "language": "eql",
+        "index": "logs-*,winlogbeat-*",
+    }
+    assert action["command"] == (
+        "opentide --json query --platform elastic --since 7d --limit 5 --language eql "
+        "--index 'logs-*' --index 'winlogbeat-*' 'process where true'"
+    )
+
+
 def test_run_query_refuses_an_unknown_platform() -> None:
     result = tools.tool_run_query("index=*", "qradar", live=True)
     assert result["supported"] is False
@@ -130,6 +156,7 @@ def test_run_query_live_runs_the_cli_service(monkeypatch: pytest.MonkeyPatch) ->
         "since": "7d",
         "limit": 5,
         "language": None,
+        "index": [],
     }
     # The CLI envelope's private keys stay out of the tool payload.
     assert result == {

@@ -15,6 +15,7 @@ from opentide.models.metadata import ObjectMetadata, ObjectReferences, RuleMetad
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
 from opentide.models.results import DeploymentResult, ValidationResult
+from opentide.query.models import DEFAULT_LIMIT
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -201,7 +202,7 @@ class DetectionRule(TideModel):
         *,
         tenants: Sequence[str] = (),
         since: str | None = None,
-        limit: int = 100,
+        limit: int = DEFAULT_LIMIT,
     ) -> QueryRun:
         """Run the query this rule deploys to *platform* on its tenants, read-only.
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any, ClassVar
 
-from opentide.core.time import format_utc_z
 from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner
@@ -33,8 +32,9 @@ class SplunkQueryRunner(QueryRunner):
         try:
             stream = service.jobs.oneshot(
                 sent,
-                earliest_time=format_utc_z(request.window.start),
-                latest_time=format_utc_z(request.window.end),
+                # Epoch seconds: Splunk reads them whatever the server's time_format.
+                earliest_time=f"{request.window.start.timestamp():.3f}",
+                latest_time=f"{request.window.end.timestamp():.3f}",
                 count=request.limit + 1,
                 output_mode="json",
             )

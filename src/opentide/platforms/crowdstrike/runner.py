@@ -39,6 +39,11 @@ class CrowdstrikeQueryRunner(QueryRunner):
 
         if not isinstance(tenant, ConfigurationModels.Systems.Crowdstrike.Tenant):
             raise TypeError(f"expected a CrowdStrike tenant, got {type(tenant).__qualname__}")
+        if len(request.index) > 1:
+            raise QueryRefused(
+                "a Next-Gen SIEM search reads one repository: pass --index once",
+                detail=f"got {', '.join(request.index)}",
+            )
         setup = tenant.setup
         reject_unsubstituted_placeholders(
             setup.client_id, setup.client_secret, client="CrowdStrike"

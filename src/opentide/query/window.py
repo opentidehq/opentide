@@ -12,7 +12,11 @@ DEFAULT_SINCE = "24h"
 
 
 class WindowError(ValueError):
-    """A window the caller gave cannot be used; the message names the flag."""
+    """A window the caller gave cannot be used; ``flag`` is the option at fault."""
+
+    def __init__(self, message: str, *, flag: str) -> None:
+        super().__init__(message)
+        self.flag = flag
 
 
 def parse_instant(value: str, *, flag: str) -> datetime:
@@ -24,7 +28,7 @@ def parse_instant(value: str, *, flag: str) -> datetime:
         moment = datetime.fromisoformat(text)
     except ValueError:
         raise WindowError(
-            f"{flag} {value!r} is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+            f"{flag} {value!r} is not an ISO-8601 time, such as 2026-10-27T08:00:00Z", flag=flag
         ) from None
     if moment.tzinfo is None:
         return moment.replace(tzinfo=timezone.utc)
@@ -44,7 +48,7 @@ def resolve_window(
     ends a ``since`` window there instead of now. Neither: the last 24 hours.
     """
     if since and start:
-        raise WindowError("--since cannot be combined with --from")
+        raise WindowError("--since cannot be combined with --from", flag="--since")
     finish = parse_instant(end, flag="--to") if end else (now or utc_now())
     if start:
         begin = parse_instant(start, flag="--from")
@@ -54,9 +58,10 @@ def resolve_window(
             seconds = duration_seconds(lookback)
         except ValueError:
             raise WindowError(
-                f"--since {lookback!r} is not a duration, such as 15m, 24h, 7d or PT1H"
+                f"--since {lookback!r} is not a duration, such as 15m, 24h, 7d or PT1H",
+                flag="--since",
             ) from None
         begin = finish - timedelta(seconds=seconds)
     if begin >= finish:
-        raise WindowError("--from must be earlier than --to")
+        raise WindowError("--from must be earlier than --to", flag="--from")
     return TimeWindow(begin, finish)

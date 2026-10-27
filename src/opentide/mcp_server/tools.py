@@ -303,6 +303,7 @@ def tool_run_query(
     since: str = "24h",
     limit: int = MAX_QUERY_ROWS,
     language: str = "",
+    index: str = "",
 ) -> dict[str, Any]:
     """Run a read-only query on *platform*'s tenants; the default refuses without contacting one.
 
@@ -313,6 +314,7 @@ def tool_run_query(
     from opentide.query.runner import QUERY_PLATFORMS
 
     tenants = [name.strip() for name in tenant.split(",") if name.strip()]
+    indices = [name.strip() for name in index.split(",") if name.strip()]
     if platform not in QUERY_PLATFORMS:
         return {
             "supported": False,
@@ -331,7 +333,21 @@ def tool_run_query(
         if rule:
             arguments["rule"] = rule
             command += ["--rule", rule]
-        else:
+        # The live call keeps every choice the agent made, so it runs what was asked.
+        if since and since != "24h":
+            arguments["since"] = since
+            command += ["--since", since]
+        if limit != MAX_QUERY_ROWS:
+            arguments["limit"] = limit
+            command += ["--limit", str(limit)]
+        if language:
+            arguments["language"] = language
+            command += ["--language", language]
+        if index:
+            arguments["index"] = index
+            for name in indices:
+                command += ["--index", name]
+        if not rule:
             command.append(query)
         return {
             "supported": True,
@@ -363,6 +379,7 @@ def tool_run_query(
         since=since or None,
         limit=limit,
         language=language or None,
+        index=indices,
     )
     # The CLI envelope's fields; the tool payload keeps its shape.
     for key in [key for key in result if key.startswith("_")]:

@@ -151,6 +151,11 @@ def test_rule_runs_the_query_deploy_sends(query: Callable[..., Result], splunk: 
     assert payload["rule"]["queries"] == [sent]
 
 
+def test_rule_matches_an_upper_case_uuid(query: Callable[..., Result], splunk: StandIn) -> None:
+    payload = assert_json_ok(query("--tenant", "lab", "--rule", f" {SPLUNK_RULE.upper()} "))
+    assert payload["rule"]["uuid"] == SPLUNK_RULE
+
+
 def test_file_reads_the_rule_from_disk(
     query: Callable[..., Result], splunk: StandIn, tide_corpus_repo: Path
 ) -> None:

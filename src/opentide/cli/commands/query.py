@@ -76,8 +76,8 @@ def query_cmd(
     """Run a read-only query on platform tenants and show rows
 
     Sends the query, or a rule's query, to each selected tenant over the
-    window and prints at most --limit rows per tenant. Nothing is saved on
-    the tenant.
+    window and prints at most --limit rows per tenant. No search or rule is
+    saved on the tenant.
     """
     from opentide.cli.services.query import query_platform
 

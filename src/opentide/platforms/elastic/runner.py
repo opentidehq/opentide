@@ -58,6 +58,9 @@ class ElasticQueryRunner(QueryRunner):
         language = request.language or self.languages[0]
         if language == "esql":
             return _esql(client, request, tenant.name)
+        if language == "kuery" and request.data_view and not request.index:
+            # The preview names the data view itself; its title is not needed.
+            return _kuery_preview(client, request, "", tenant.name)
         indices = _indices(client, request, tenant)
         if language == "eql":
             return _eql(client, request, indices, tenant.name)
@@ -228,7 +231,8 @@ def _kuery_preview(
     return QueryResult(
         columns=columns_of(rows[: request.limit]),
         rows=tuple(rows[: request.limit]),
-        truncated=len(rows) > request.limit or (len(rows) >= alerts and alerts < request.limit),
+        # At the preview's cap (alerts <= limit), a full page may hide more matches.
+        truncated=len(rows) > request.limit or (len(rows) >= alerts and alerts <= request.limit),
         partial=bool(preview.get("isAborted")),
         warnings=tuple(warnings),
         vendor_query_id=preview_id,

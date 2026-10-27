@@ -14,7 +14,9 @@ from opentide.core.time import format_utc_z
 #: Rows returned when the caller names no limit (also the MCP ``run_query`` default).
 DEFAULT_LIMIT = 100
 #: The most rows one query may return per tenant; protects the terminal and the quota.
-MAX_LIMIT = 10_000
+#: Runners ask for one row more, which must stay under the 10 000-row caps of
+#: Elasticsearch's result window and Carbon Black's process search.
+MAX_LIMIT = 5_000
 #: Seconds an asynchronous platform search (S1, CBC, CrowdStrike) may run.
 DEFAULT_TIMEOUT = 120.0
 

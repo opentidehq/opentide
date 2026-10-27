@@ -79,10 +79,14 @@ class SentinelOneQueryRunner(QueryRunner):
 
 def powerquery_with_limit(query: str, limit: int) -> str:
     """*query* with ``| limit limit+1`` appended, unless it already has a ``limit`` stage."""
+    from opentide.query.runner import kql_code
+
     text = query.strip()
-    if _LIMIT_STAGE.search(text):
+    # Strings and `//` comments are blanked first: a `| limit` in either is not a stage.
+    if _LIMIT_STAGE.search(kql_code(text)):
         return text
-    return f"{text} | limit {limit + 1}"
+    # A line of its own, so a trailing `//` comment cannot swallow it.
+    return f"{text}\n| limit {limit + 1}"
 
 
 def _finished(data: dict[str, Any]) -> bool:
