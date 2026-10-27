@@ -397,8 +397,6 @@ def test_help_ends_with_one_newline_and_single_spaced_examples(argv, monkeypatch
 
 
 def _command_tree() -> list[dict]:
-    import json
-
     from opentide.cli.root import app
 
     result = CliRunner().invoke(app, ["--json", "commands"])

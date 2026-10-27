@@ -328,9 +328,7 @@ def test_a_person_at_a_terminal_gets_a_short_issue_link(
 ) -> None:
     """The pre-filled link was about 800 characters, 8 rows of the terminal
     (post-merge end-to-end run). Elsewhere it stays whole, to copy or open."""
-    import opentide.cli.ui.crash as crash_module
-
-    monkeypatch.setattr(crash_module, "get_mode", lambda: mode)
+    monkeypatch.setattr("opentide.cli.ui.crash.get_mode", lambda: mode)
     out, err = _Capture(), _Capture(terminal=terminal)
     handle_crash(
         ValueError("boom"), argv=["info"], command="info", log_dir=tmp_path / "logs",
