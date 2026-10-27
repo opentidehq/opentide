@@ -33,8 +33,8 @@ from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
 from opentide.cli.ui.render import (
     AGENT_TIP,
     OutcomeKind,
-    labelled_text,
     outcome_kind,
+    print_labelled,
     render_agent_tip,
     render_error,
     render_next_actions,
@@ -371,7 +371,7 @@ def render_result(
             render_notes(stdout, notes)
             render_next_actions(stdout, result.next_actions, numbered=result.numbered_next)
         if not result.ok and mode is OutputMode.AGENT:
-            stderr.print(labelled_text("tip", AGENT_TIP), soft_wrap=True)
+            print_labelled(stderr, "tip", AGENT_TIP)
 
 
 def emit_error(

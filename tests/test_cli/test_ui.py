@@ -256,3 +256,38 @@ def test_ascii_console_gets_fallback_glyphs() -> None:
     render_outcome(console, "ok", "done")
     render_next_actions(console, [NextAction("opentide generate", "why")])
     assert stream.getvalue() == "ok done\n-> opentide generate - why\n"
+
+
+WRAPPED = (
+    "a real deploy would need 13 variables that are unset: $SPLUNK_URL, $SPLUNK_PORT, "
+    "$SPLUNK_TOKEN and 10 more; opentide doctor lists them by tenant"
+)
+
+
+@pytest.mark.parametrize("width", [60, 100])
+def test_a_warning_wider_than_the_terminal_wraps_at_words_under_its_text(width: int) -> None:
+    """``$SPLUNK_TO`` / ``KEN`` and ``Permission d`` / ``enied``: the terminal broke
+    warning lines mid-word at 100 columns (post-merge AFTER shots, B44)."""
+    from rich.cells import cell_len
+
+    from opentide.cli.ui.render import render_notes, render_warnings
+
+    console = Console(file=io.StringIO(), width=width, force_terminal=True, color_system=None)
+    render_warnings(console, [WRAPPED])
+    render_notes(console, [("help", WRAPPED)])
+    lines = console.file.getvalue().splitlines()
+    split = next(index for index, line in enumerate(lines) if line.startswith("  help:"))
+    warning = lines[:split]
+    assert len(lines) > 2
+    assert all(cell_len(line) <= width for line in lines), lines
+    # Every break falls between words: the pieces rejoin into the message.
+    assert " ".join(line.strip() for line in warning).removeprefix("warning: ") == WRAPPED
+    assert all(line.startswith(" " * len("warning: ")) for line in warning[1:])
+
+
+def test_a_pipe_keeps_a_long_warning_on_one_line() -> None:
+    from opentide.cli.ui.render import render_warnings
+
+    console = Console(file=io.StringIO(), width=60, force_terminal=False, color_system=None)
+    render_warnings(console, [WRAPPED])
+    assert console.file.getvalue() == f"warning: {WRAPPED}\n"

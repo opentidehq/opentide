@@ -268,7 +268,7 @@ def _ci_feature_choices(ci: CiPlatform | None) -> list[tuple[str, str]]:
 def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]:
     """Launch the full interactive setup wizard."""
     from opentide import __version__
-    from opentide.cli.ui.render import labelled_text
+    from opentide.cli.ui.render import print_labelled
     from opentide.cli.ui.setup import welcome
 
     require_interactive()
@@ -336,7 +336,7 @@ def run_interactive_setup(ctx: CliContext, base_path: Path) -> dict[str, object]
 
     _print_setup_plan(options)
     for warning in options.warnings:
-        console.print(labelled_text("warning", warning), soft_wrap=True)
+        print_labelled(console, "warning", warning)
     if not ask_confirm("Apply this setup plan?", default=True):
         return {
             "message": "Setup cancelled; no files were written",
