@@ -141,12 +141,26 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "rule_status_unknown",
         }
     ),
+    # Shares codes with sharing-config; `_issues_for_check` tells them apart by
+    # object type. The responder variants of these codes are warnings.
+    ValidateCheck.configuration.value: frozenset(
+        {
+            "missing_field",
+            "unknown_key",
+            "schema_validation",
+            "promotion_target_unknown",
+            "config_parse",
+            # Reported by the per-file helper an editor calls, not by `validate`.
+            "identifier_mismatch",
+        }
+    ),
 }
 
 #: Warning codes each check can report. They never fail the check's status.
 _CHECK_WARNING_CODES: dict[str, frozenset[str]] = {
     ValidateCheck.schema.value: frozenset({"deprecated_field", "platform_not_enabled"}),
-    ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_integration"}),
+    ValidateCheck.sharing_config.value: frozenset({"api_key_literal", "unknown_connector"}),
+    ValidateCheck.configuration.value: frozenset({"asset_unknown", "not_a_configuration_file"}),
     ValidateCheck.cve.value: frozenset({"cve_lookup_unavailable"}),
 }
 

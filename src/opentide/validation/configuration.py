@@ -13,8 +13,9 @@ from __future__ import annotations
 import copy
 import sys
 from collections.abc import Iterable, Mapping, Sequence
+from functools import cache
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -29,9 +30,14 @@ from opentide.models.configuration import (
     configuration_files,
 )
 from opentide.models.configuration.deployment import DeploymentConfiguration
-from opentide.models.configuration.loading import model_errors
+from opentide.models.configuration.loading import describe_error, model_errors
 from opentide.models.visibility import VisibilityConfig
 from opentide.validation.issues import ValidationIssue
+
+if TYPE_CHECKING:
+    from opentide.sharing.config import SharingIssue
+
+Severity = Literal["error", "warning"]
 
 #: `ValidationIssue.object_type` of every configuration finding.
 CONFIGURATION_OBJECT_TYPE = "configuration"
@@ -45,20 +51,22 @@ ASSET_UNKNOWN = "asset_unknown"
 IDENTIFIER_MISMATCH = "identifier_mismatch"
 NOT_A_CONFIGURATION_FILE = "not_a_configuration_file"
 CONFIG_PARSE = "config_parse"
+SHARING_DIRECTORY = "sharing_directory"
 
 
 def _issue(
+    *,
     code: str,
     field_path: Sequence[str],
     message: str,
-    *,
-    severity: str = "error",
+    severity: Severity = "error",
     file_path: Path | None = None,
     context: dict[str, Any] | None = None,
 ) -> ValidationIssue:
+    """A configuration finding. *code* is a keyword so `opentide explain`'s scan sees it."""
     return ValidationIssue(
         code=code,
-        severity="warning" if severity == "warning" else "error",
+        severity=severity,
         object_type=CONFIGURATION_OBJECT_TYPE,
         file_path=file_path,
         field_path=tuple(field_path),
@@ -71,16 +79,16 @@ def issues_from_configuration_error(
     exc: ValidationError, document: Mapping[str, Any], *, file_path: Path | None = None
 ) -> list[ValidationIssue]:
     """One issue per model error on *document*. The offending value is never repeated."""
-    issues: list[ValidationIssue] = []
-    for field_path, kind, message in model_errors(exc, document):
-        if kind == "missing":
-            code, message = MISSING_FIELD, "Required key is missing."
-        elif kind == "extra_forbidden":
-            code, message = UNKNOWN_KEY, "Unknown key."
-        else:
-            code, message = SCHEMA_VALIDATION, message or "Invalid value."
-        issues.append(_issue(code, field_path, message, file_path=file_path))
-    return issues
+    codes = {"missing": MISSING_FIELD, "extra_forbidden": UNKNOWN_KEY}
+    return [
+        _issue(
+            code=codes.get(kind, SCHEMA_VALIDATION),
+            field_path=field_path,
+            message=describe_error(kind, message),
+            file_path=file_path,
+        )
+        for field_path, kind, message in model_errors(exc, document)
+    ]
 
 
 # --- Cross-field checks ----------------------------------------------------------------
@@ -95,9 +103,9 @@ def deployment_cross_issues(
         return []
     return [
         _issue(
-            PROMOTION_TARGET_UNKNOWN,
-            ("promotion", "promotion_target"),
-            f"promotion_target {target!r} is not a [[statuses]] name.",
+            code=PROMOTION_TARGET_UNKNOWN,
+            field_path=("promotion", "promotion_target"),
+            message=f"promotion_target {target!r} is not a [[statuses]] name.",
             file_path=file_path,
             context={"value": target},
         )
@@ -111,28 +119,21 @@ def visibility_cross_issues(
 
     A warning: the loader logs an unknown asset and goes on.
     """
-    known = {asset.name for asset in config.assets or []}
-    issues: list[ValidationIssue] = []
-    for table, entry, items in (
-        ("logsources", "logsource", config.logsources or []),
-        ("detectors", "detector", config.detectors or []),
-    ):
-        for index, item in enumerate(items):
-            for position, asset in enumerate(item.assets or []):
-                if asset in known:
-                    continue
-                issues.append(
-                    _issue(
-                        ASSET_UNKNOWN,
-                        (table, str(index), "assets", str(position)),
-                        f"{entry} {item.name!r} names asset {asset!r}, which [[assets]] "
-                        "does not declare.",
-                        severity="warning",
-                        file_path=file_path,
-                        context={"entry": entry, "name": item.name, "asset": asset},
-                    )
-                )
-    return issues
+    entries = {"logsources": "logsource", "detectors": "detector"}
+    return [
+        _issue(
+            code=ASSET_UNKNOWN,
+            field_path=(table, str(index), "assets", str(position)),
+            message=(
+                f"{entries[table]} {name!r} names asset {asset!r}, which [[assets]] "
+                "does not declare."
+            ),
+            severity="warning",
+            file_path=file_path,
+            context={"entry": entries[table], "name": name, "asset": asset},
+        )
+        for table, index, name, position, asset in config.unknown_assets()
+    ]
 
 
 def platform_identifier_issues(
@@ -147,9 +148,9 @@ def platform_identifier_issues(
         return []
     return [
         _issue(
-            IDENTIFIER_MISMATCH,
-            ("platform", "identifier"),
-            f"identifier {identifier!r} does not match the file name {file_stem}.toml.",
+            code=IDENTIFIER_MISMATCH,
+            field_path=("platform", "identifier"),
+            message=f"identifier {identifier!r} does not match the file name {file_stem}.toml.",
             file_path=file_path,
             context={"value": identifier, "file_stem": file_stem},
         )
@@ -188,17 +189,7 @@ def sharing_issues(
         status_names=frozenset(status_names),
         tlp_names=tuple(tlp_names or TLP_ORDER),
     )
-    issues: list[ValidationIssue] = []
-    if sharing_directory:
-        issues.append(
-            _issue(
-                "sharing_directory",
-                (),
-                "configurations/sharing/ is not a sharing configuration. "
-                "Use a single sharing.toml file.",
-                file_path=file_path,
-            )
-        )
+    issues = [_sharing_directory(file_path)] if sharing_directory else []
     for finding in merged.issues:
         if partial and finding.code == MISSING_FIELD and finding.field_name != "name":
             continue
@@ -211,9 +202,9 @@ def sharing_issues(
             context["layer"], context["index"] = finding.location
         issues.append(
             _issue(
-                finding.code,
-                _sharing_field_path(finding, checked_layer),
-                finding.message,
+                code=finding.code,
+                field_path=_sharing_field_path(finding, checked_layer),
+                message=finding.message,
                 severity=finding.severity,
                 file_path=file_path,
                 context=context,
@@ -222,7 +213,17 @@ def sharing_issues(
     return issues
 
 
-def _sharing_field_path(finding: Any, checked_layer: int | None) -> tuple[str, ...]:
+def _sharing_directory(file_path: Path | None) -> ValidationIssue:
+    return _issue(
+        code=SHARING_DIRECTORY,
+        field_path=(),
+        message="configurations/sharing/ is not a sharing configuration. "
+        "Use a single sharing.toml file.",
+        file_path=file_path,
+    )
+
+
+def _sharing_field_path(finding: SharingIssue, checked_layer: int | None) -> tuple[str, ...]:
     if checked_layer is None:
         return tuple(
             part
@@ -232,12 +233,14 @@ def _sharing_field_path(finding: Any, checked_layer: int | None) -> tuple[str, .
     location = finding.location
     if location is not None and location[1] is None:
         # A top-level key.
-        return (finding.field_name,) if location[0] == checked_layer else ()
+        if location[0] != checked_layer or finding.field_name is None:
+            return ()
+        return (finding.field_name,)
     candidates = [location] if location is not None else []
     candidates.extend(reversed(finding.occurrences))
     for layer, index in candidates:
         if layer == checked_layer and index is not None:
-            path = [finding.integration, str(index)]
+            path = [finding.integration or "", str(index)]
             if finding.field_name is not None:
                 path.append(finding.field_name)
             return tuple(path)
@@ -247,44 +250,44 @@ def _sharing_field_path(finding: Any, checked_layer: int | None) -> tuple[str, .
 # --- One configuration file ------------------------------------------------------------
 
 
-def _deep_merge(target: dict[str, Any], layer: Mapping[str, Any]) -> None:
-    """Scalars replace, tables merge, arrays replace (configuration spec)."""
-    for key, value in layer.items():
-        current = target.get(key)
-        if isinstance(current, dict) and isinstance(value, Mapping):
-            _deep_merge(current, value)
-        else:
-            target[key] = copy.deepcopy(value)
-
-
 def merge_layers(layers: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Merge configuration layers in order, as `resolve_configurations` does."""
+    """Merge configuration layers in order with `resolve_configurations`' own merge."""
+    from opentide.core.files import deep_merge
+
     merged: dict[str, Any] = {}
     for layer in layers:
-        _deep_merge(merged, layer)
+        deep_merge(merged, copy.deepcopy(dict(layer)))
     return merged
+
+
+@cache
+def _bundled_text(file_key: str) -> str | None:
+    from opentide.core.root import get_data_root
+
+    path = get_data_root() / "configurations" / file_key
+    return path.read_text(encoding="utf-8") if path.is_file() else None
 
 
 def bundled_layer(file_key: str) -> dict[str, Any]:
     """The bundled document for a router key, or `{}` when none ships."""
-    from opentide.core.root import get_data_root
+    text = None if "*" in file_key else _bundled_text(file_key)
+    return tomllib.loads(text) if text is not None else {}
 
-    if "*" in file_key:
-        return {}
-    path = get_data_root() / "configurations" / file_key
-    if not path.is_file():
-        return {}
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+def _status_names(deployment: Mapping[str, Any]) -> frozenset[str]:
+    statuses = deployment.get("statuses", [])
+    if not isinstance(statuses, list):
+        return frozenset()
+    return frozenset(
+        entry["name"]
+        for entry in statuses
+        if isinstance(entry, Mapping) and isinstance(entry.get("name"), str)
+    )
 
 
 def bundled_status_names() -> frozenset[str]:
     """Status names of the bundled `deployment.toml`."""
-    statuses = bundled_layer("deployment.toml").get("statuses", [])
-    return frozenset(
-        str(entry["name"])
-        for entry in statuses
-        if isinstance(entry, Mapping) and isinstance(entry.get("name"), str)
-    )
+    return _status_names(bundled_layer("deployment.toml"))
 
 
 def _model_issues(
@@ -303,8 +306,9 @@ def _model_issues(
         return None, issues
 
 
-#: Bundled files opentide reads that have no model (out of the configuration spec).
-_UNMODELLED_FILES = frozenset({"resources.toml"})
+#: Bundled files opentide reads that have no model here. `lint.toml` is
+#: validated by its own loader (`opentide.core.lint_config`).
+_UNMODELLED_FILES = frozenset({"resources.toml", "lint.toml"})
 _RESPONDERS = "responders"
 
 
@@ -340,14 +344,7 @@ def _workspace_status_names(path: PurePosixPath) -> frozenset[str] | None:
             layers.append(tomllib.loads(client.read_text(encoding="utf-8")))
     except (OSError, ValueError, RecursionError):
         return None
-    statuses = merge_layers(layers).get("statuses", [])
-    if not isinstance(statuses, list):
-        return None
-    return frozenset(
-        str(entry["name"])
-        for entry in statuses
-        if isinstance(entry, Mapping) and isinstance(entry.get("name"), str)
-    )
+    return _status_names(merge_layers(layers)) or None
 
 
 def configuration_file_issues(
@@ -389,7 +386,12 @@ def configuration_file_issues(
 
 
 def _too_deep(file_path: Path) -> ValidationIssue:
-    return _issue(CONFIG_PARSE, (), "The document is nested too deeply.", file_path=file_path)
+    return _issue(
+        code=CONFIG_PARSE,
+        field_path=(),
+        message="The document is nested too deeply.",
+        file_path=file_path,
+    )
 
 
 def _file_issues(
@@ -405,15 +407,7 @@ def _file_issues(
 ) -> list[ValidationIssue]:
     parts = posix.parts
     if len(parts) >= 3 and parts[-2] == "sharing" and parts[-3] == "configurations":
-        return [
-            _issue(
-                "sharing_directory",
-                (),
-                "configurations/sharing/ is not a sharing configuration. "
-                "Use a single sharing.toml file.",
-                file_path=file_path,
-            )
-        ]
+        return [_sharing_directory(file_path)]
     file_key = configuration_file_key(posix)
     if file_key is not None and file_key.startswith("platforms/"):
         file_key = _platform_key(document, posix.stem)
@@ -421,9 +415,9 @@ def _file_issues(
         known = posix.name in _UNMODELLED_FILES
         return [
             _issue(
-                NOT_A_CONFIGURATION_FILE,
-                (),
-                f"{posix.name} has no configuration model; it is not checked."
+                code=NOT_A_CONFIGURATION_FILE,
+                field_path=(),
+                message=f"{posix.name} has no configuration model; it is not checked."
                 if known
                 else f"{posix.name} is not a configuration file opentide reads.",
                 severity="warning",
@@ -484,20 +478,37 @@ def _deployment_without_responders(merged: Mapping[str, Any]) -> DeploymentConfi
         return None
 
 
-def configuration_text_issues(path: str | Path, text: str, **kwargs: Any) -> list[ValidationIssue]:
+def configuration_text_issues(
+    path: str | Path,
+    text: str,
+    *,
+    earlier_layers: Sequence[Mapping[str, Any]] | None = None,
+    later_layers: Sequence[Mapping[str, Any]] = (),
+    status_names: Iterable[str] | None = None,
+    sharing_directory: bool = False,
+    partial: bool = False,
+) -> list[ValidationIssue]:
     """`configuration_file_issues` for unparsed TOML text, as an editor buffer holds it."""
     try:
         document = tomllib.loads(text)
     except (tomllib.TOMLDecodeError, ValueError, RecursionError) as exc:
         return [
             _issue(
-                CONFIG_PARSE,
-                (),
-                f"Not valid TOML: {exc.__class__.__name__}.",
+                code=CONFIG_PARSE,
+                field_path=(),
+                message=f"Not valid TOML: {exc.__class__.__name__}.",
                 file_path=Path(path),
             )
         ]
-    return configuration_file_issues(path, document, **kwargs)
+    return configuration_file_issues(
+        path,
+        document,
+        earlier_layers=earlier_layers,
+        later_layers=later_layers,
+        status_names=status_names,
+        sharing_directory=sharing_directory,
+        partial=partial,
+    )
 
 
 # --- Every merged file of a workspace (validate --check configuration) -----------------
@@ -542,9 +553,9 @@ def workspace_configuration_issues(
         if not isinstance(document, Mapping):
             issues.append(
                 _issue(
-                    SCHEMA_VALIDATION,
-                    (),
-                    f"{file_key}: the file must be a TOML table.",
+                    code=SCHEMA_VALIDATION,
+                    field_path=(),
+                    message=f"{file_key}: the file must be a TOML table.",
                     context={"file": file_key},
                 )
             )
@@ -578,9 +589,11 @@ def _workspace_document_issues(
 
 
 def _named(issue: ValidationIssue, file_key: str) -> ValidationIssue:
+    """Name the file and the key in the message: a merged document has no single path."""
+    where = ".".join((file_key, *issue.field_path)) if issue.field_path else file_key
     return issue.model_copy(
         update={
-            "message": f"{file_key}: {issue.message}",
+            "message": f"{where}: {issue.message}",
             "context": {**issue.context, "file": file_key},
             "file_path": None,
         }

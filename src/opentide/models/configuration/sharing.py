@@ -15,8 +15,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from opentide.models.configuration.base import ConfigurationModel, ObjectFamily
 
-# Kept equal to `opentide.sharing.constants` by a test. Importing that package
-# here would import the sharing loader, which imports this module.
+# The sharing 1.0 rules. `opentide.sharing.constants` re-exports them.
 NAME_PATTERN = r"^[a-z0-9_-]{1,64}$"
 DEFAULT_OBJECT_TYPES = ("threat", "objective", "rule")
 DEFAULT_RULE_STATUSES = ("PRODUCTION",)
@@ -42,7 +41,7 @@ class MispIntegration(ConfigurationModel):
 
     __schema_identifier__: ClassVar[str] = MISP_SCHEMA_ID
     model_config = ConfigDict(
-        title="sharing::misp::1.0", json_schema_extra={SCHEMA_ID_KEYWORD: MISP_SCHEMA_ID}
+        title=MISP_SCHEMA_ID, json_schema_extra={SCHEMA_ID_KEYWORD: MISP_SCHEMA_ID}
     )
 
     name: str = Field(
@@ -93,7 +92,8 @@ class MispIntegration(ConfigurationModel):
     verify_ssl: bool = Field(default=True, description="Verify the instance's TLS certificate.")
 
 
-def _is_table_array(value: object) -> bool:
+def is_table_array(value: object) -> bool:
+    """A TOML array of tables, as every top-level `sharing.toml` value must be."""
     return isinstance(value, list) and all(isinstance(item, Mapping) for item in value)
 
 
@@ -120,12 +120,8 @@ class SharingConfiguration(ConfigurationModel):
     def _only_connector_arrays(cls, data: Any) -> Any:
         if isinstance(data, Mapping):
             for key, value in data.items():
-                if key != "misp" and not _is_table_array(value):
+                if key != "misp" and not is_table_array(value):
                     raise ValueError(
                         f"{key!r} is not a connector array; the top level holds [[misp]] blocks"
                     )
         return data
-
-    def unknown_connectors(self) -> list[str]:
-        """Top-level arrays naming a connector opentide does not know."""
-        return sorted((self.model_extra or {}).keys())

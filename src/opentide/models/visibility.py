@@ -76,3 +76,22 @@ class VisibilityConfig(TideModel):
         schema_extra={"title": "External Detectors"},
     )
     """External detectors that already cover parts of the environment."""
+
+    def unknown_assets(self) -> list[tuple[str, int, str, int, str]]:
+        """Asset names a log source or detector uses that `[[assets]]` does not declare.
+
+        Each is `(table, index, entry name, position, asset)`, with `table`
+        `"logsources"` or `"detectors"`.
+        """
+        known = {asset.name for asset in self.assets or []}
+        found: list[tuple[str, int, str, int, str]] = []
+        tables: tuple[tuple[str, list[VisibilityLogSource] | list[VisibilityDetector]], ...] = (
+            ("logsources", self.logsources or []),
+            ("detectors", self.detectors or []),
+        )
+        for table, items in tables:
+            for index, item in enumerate(items):
+                for position, asset in enumerate(item.assets or []):
+                    if asset not in known:
+                        found.append((table, index, item.name, position, asset))
+        return found

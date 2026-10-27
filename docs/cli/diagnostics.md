@@ -14,6 +14,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 |------|---------|
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
+| [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
 | [`chaining_relation_unknown`](#chaining_relation_unknown) | A threat's chaining relation is not a known relation. |
 | [`changed_diff`](#changed_diff) | `share push --changed` could not calculate which objects changed. |
 | [`changed_on_pull_request`](#changed_on_pull_request) | `share push --changed` does not run on a pull request. |
@@ -41,6 +42,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`filename_mismatch`](#filename_mismatch) | An object file's name is not `slugify(name)`. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
+| [`identifier_mismatch`](#identifier_mismatch) | A platform file's `[platform] identifier` differs from its file name. |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
 | [`invalid_cve`](#invalid_cve) | A threat lists CVE identifiers Vulnerability-Lookup does not know. |
 | [`invalid_ref`](#invalid_ref) | A reference names an object that does not exist. |
@@ -50,13 +52,14 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`max_tlp_unknown`](#max_tlp_unknown) | A `sharing.toml` block's `max_tlp` is not a TLP value. |
 | [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. |
 | [`metadata_recommended`](#metadata_recommended) | An object has no `metadata.author` or `metadata.organisation`. |
-| [`missing_field`](#missing_field) | A `sharing.toml` block is missing a required field. |
+| [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
 | [`missing_uuid`](#missing_uuid) | An object file has no UUID, so it cannot be indexed. |
 | [`name_invalid`](#name_invalid) | A `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`. |
 | [`name_missing`](#name_missing) | An object has no `name`, so lint cannot derive its file name. |
 | [`needs_human_decision`](#needs_human_decision) | `migrate vocab-scope` left values that only a person can place. |
 | [`nested_object_file`](#nested_object_file) | A YAML file sits in a subfolder of an object folder, so it is not an object and no command reads it. |
 | [`no_tenant_reached`](#no_tenant_reached) | `validate query --live` sent no query, because no configured tenant takes the rules. |
+| [`not_a_configuration_file`](#not_a_configuration_file) | The file is not one opentide reads as configuration, or it has no configuration model to check it against. |
 | [`not_implemented`](#not_implemented) | The command is reserved and does nothing yet. |
 | [`not_run`](#not_run) | The command was skipped, and says why in its message. |
 | [`object_type_unknown`](#object_type_unknown) | A `sharing.toml` block lists an object type opentide cannot share. |
@@ -70,6 +73,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`platform_not_enabled`](#platform_not_enabled) | A rule has a block for a platform this workspace has not enabled, so it will not deploy there. |
 | [`platform_sdk`](#platform_sdk) | Each enabled platform's SDK imports. |
 | [`platforms_enabled`](#platforms_enabled) | Which platforms the workspace enables. |
+| [`promotion_target_unknown`](#promotion_target_unknown) | `deployment.toml` `[promotion] promotion_target` is not the name of a `[[statuses]]` entry. |
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
@@ -86,8 +90,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`sharing_directory`](#sharing_directory) | A `sharing/` configuration directory exists; sharing is configured in one `sharing.toml` file. |
 | [`template_missing`](#template_missing) | `opentide new` found no generated template or schema for the object type it was asked for. |
 | [`templates_fresh`](#templates_fresh) | Every template this opentide version generates exists and matches what it would write. |
-| [`unknown_integration`](#unknown_integration) | `sharing.toml` names a sharing integration opentide does not have; it was skipped. |
-| [`unknown_key`](#unknown_key) | `sharing.toml` has a key opentide does not read. |
+| [`unknown_connector`](#unknown_connector) | `sharing.toml` has a top-level array that names a sharing connector opentide does not have; it was skipped. |
+| [`unknown_key`](#unknown_key) | A configuration file has a key opentide does not read, usually a misspelling. |
 | [`url_invalid`](#url_invalid) | A `sharing.toml` block's `url` is not an http(s) URL. |
 | [`usage_error`](#usage_error) | The command line cannot be used as written, for a reason no other usage code covers. |
 | [`usage_invalid_choice`](#usage_invalid_choice) | An option or argument has a value outside the ones it accepts. |
@@ -136,6 +140,31 @@ opentide share push --target misp-prod
 ### How to fix
 
 Set the environment variable the target's `api_key` names in `sharing.toml`.
+
+## asset_unknown
+
+A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare.
+
+Severity: warning. Reported by `opentide validate` (check `configuration`); the loaders log it and go on.
+
+### Example
+
+```toml
+[[assets]]
+name = "domain-controllers"
+description = "Active Directory"
+criticality = "high"
+
+[[logsources]]
+name = "Security events"
+description = "Windows security log"
+system = "splunk"
+assets = ["domain-controller"]   # declared as domain-controllers
+```
+
+### How to fix
+
+Correct the asset name, or declare the asset under `[[assets]]`.
 
 ## chaining_relation_unknown
 
@@ -593,6 +622,24 @@ Reported by `opentide doctor`. Warns when it is not a repository, or `origin/HEA
 
 Run the command it prints: `git init` for a new repository, or `git remote set-head origin --auto` when `origin/HEAD` is unset.
 
+## identifier_mismatch
+
+A platform file's `[platform] identifier` differs from its file name.
+
+Severity: error. Reported for `platforms/<id>.toml` by the configuration file check an editor runs (`configuration_file_issues`).
+
+### Example
+
+```toml
+# platforms/sentinel.toml
+[platform]
+identifier = "splunk"
+```
+
+### How to fix
+
+Make `identifier` match the file name stem, or remove it: the file name is used when it is absent.
+
 ## internal
 
 opentide stopped on an exception it did not handle: a bug in opentide, not in your input.
@@ -747,9 +794,9 @@ Add the missing keys under `metadata`. They are recommended, not required: lint 
 
 ## missing_field
 
-A `sharing.toml` block is missing a required field.
+A configuration file is missing a required key, once it is merged with the bundled file and the parent instance.
 
-Severity: error. Reported by `opentide validate --check sharing-config` and `opentide share`.
+Severity: error. Reported by `opentide validate` (check `configuration`) for the files under `.opentide/configurations/`, and by `opentide validate --check sharing-config` and `opentide share` for a `sharing.toml` block. A file that only overrides some keys is not reported for the keys it inherits.
 
 ### Example
 
@@ -761,7 +808,7 @@ name = "misp-prod"
 
 ### How to fix
 
-Add the field the message names to the block.
+Add the key the message names. `context.file` names the file and `field_path` the table it belongs to.
 
 ## missing_uuid
 
@@ -864,6 +911,22 @@ opentide validate query --live --platform sentinel
 ### How to fix
 
 Add a tenant for the platform in `.opentide/configurations/platforms/<platform>.toml`, or pass the `--strategy` the tenants deploy.
+
+## not_a_configuration_file
+
+The file is not one opentide reads as configuration, or it has no configuration model to check it against.
+
+Severity: warning. Reported by the configuration file check an editor runs (`configuration_file_issues`) for a file under `.opentide/configurations/` that no model covers, such as `resources.toml` or `lint.toml` (which `opentide lint` checks itself), and for a file under `.opentide/schemas/`, which holds generated artifacts.
+
+### Example
+
+```text illustrative
+.opentide/configurations/deployement.toml   # misspelt: opentide reads deployment.toml
+```
+
+### How to fix
+
+Rename a misspelt file to the name opentide reads. A file opentide does not read can be removed.
 
 ## not_implemented
 
@@ -1084,6 +1147,24 @@ Reported by `opentide doctor`. Warns when none is: rules validate but nothing de
 ### How to fix
 
 Enable one with `opentide setup platforms --<platform>` (`--sentinel`, `--splunk`, …).
+
+## promotion_target_unknown
+
+`deployment.toml` `[promotion] promotion_target` is not the name of a `[[statuses]]` entry.
+
+Severity: error. Reported by `opentide validate` (check `configuration`).
+
+### Example
+
+```toml
+[promotion]
+enabled = true
+promotion_target = "LIVE"   # no [[statuses]] entry is named LIVE
+```
+
+### How to fix
+
+Set `promotion_target` to a status name declared in the merged `deployment.toml`, or declare the status.
 
 ## proxy
 
@@ -1348,11 +1429,11 @@ Reported by `opentide doctor`. Warns when a template is missing or differs, usua
 
 Run `opentide generate templates`.
 
-## unknown_integration
+## unknown_connector
 
-`sharing.toml` names a sharing integration opentide does not have; it was skipped.
+`sharing.toml` has a top-level array that names a sharing connector opentide does not have; it was skipped.
 
-Severity: warning. Reported by `opentide validate --check sharing-config` and `opentide share`.
+Severity: warning. Reported by `opentide validate --check sharing-config` and `opentide share`. The exported `sharing.toml` schema accepts the array, so an editor does not flag it as an error.
 
 ### Example
 
@@ -1363,25 +1444,25 @@ name = "cti"
 
 ### How to fix
 
-Remove the block. The only sharing integration is `[[misp]]`.
+Remove the block. The only sharing connector is `[[misp]]`.
 
 ## unknown_key
 
-`sharing.toml` has a key opentide does not read.
+A configuration file has a key opentide does not read, usually a misspelling.
 
-Severity: error. Reported by `opentide validate --check sharing-config` and `opentide share`.
+Severity: error. Reported by `opentide validate` (check `configuration`) for the files under `.opentide/configurations/`, by every command that reads the file, and by `opentide validate --check sharing-config` and `opentide share` for `sharing.toml`. The message names the file and the key, never its value.
 
 ### Example
 
 ```toml
-[[misp]]
-name = "misp-prod"
-verify_tls = false     # the key is verify_ssl
+# deployment.toml
+[promotion]
+enabeld = false        # the key is enabled
 ```
 
 ### How to fix
 
-Remove the key or correct its spelling. The only sharing integration is `[[misp]]`.
+Remove the key or correct its spelling. The JSON Schema of each file (`python -m opentide.generation.configuration_schemas <dir>`) lists the keys it takes.
 
 ## url_invalid
 

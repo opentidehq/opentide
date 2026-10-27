@@ -1,8 +1,8 @@
 # missing_field
 
-A `sharing.toml` block is missing a required field.
+A configuration file is missing a required key, once it is merged with the bundled file and the parent instance.
 
-Severity: error. Reported by `opentide validate --check sharing-config` and `opentide share`.
+Severity: error. Reported by `opentide validate` (check `configuration`) for the files under `.opentide/configurations/`, and by `opentide validate --check sharing-config` and `opentide share` for a `sharing.toml` block. A file that only overrides some keys is not reported for the keys it inherits.
 
 ## Example
 
@@ -14,4 +14,4 @@ name = "misp-prod"
 
 ## How to fix
 
-Add the field the message names to the block.
+Add the key the message names. `context.file` names the file and `field_path` the table it belongs to.

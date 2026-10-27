@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 **Regenerate CI** with `opentide setup ci <github|gitlab|azure> --yes` if the pipeline was written with `--sharing`.
 
-Every file under `.opentide/configurations/` now has a Pydantic model, and the CLI validates the merged file against it when it reads the file (#374). A misspelt or unknown key that was silently ignored now fails the command that reads the file, naming the file and the key: `deployment.toml is invalid: promotion.enabeld: unknown key`. `opentide validate` runs the same check by default (`configuration`), so run it after upgrading to find any.
+Every configuration file under `.opentide/configurations/` in the configuration specification now has a Pydantic model (`lint.toml` keeps its own loader), and the CLI validates the merged file against it when it reads the file (#374). A misspelt or unknown key that was silently ignored now fails the command that reads the file, naming the file and the key: `deployment.toml is invalid: promotion.enabeld: unknown key`. `opentide validate` runs the same check by default (`configuration`), so run it after upgrading to find any.
 
 ### Added
 

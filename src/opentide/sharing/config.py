@@ -1,6 +1,6 @@
 """Load ``sharing.toml`` and merge integration blocks by name.
 
-``_deep_merge`` replaces every list. A later layer that only restates ``name``
+``deep_merge`` replaces every list. A later layer that only restates ``name``
 and ``enabled`` would drop ``url``, ``api_key``, and ``max_tlp``. Sharing
 therefore loads its own file and merges each integration array by ``name``.
 """
@@ -24,7 +24,7 @@ else:
 
 from opentide.core.files import resolve_configurations
 from opentide.core.root import get_data_root, get_repo_root
-from opentide.models.configuration.sharing import MispIntegration
+from opentide.models.configuration.sharing import MispIntegration, is_table_array
 from opentide.registry.discovery import client_configurations_dir, discover_workspace
 from opentide.sharing.constants import (
     API_KEY_ENV_PATTERN,
@@ -142,7 +142,7 @@ def merge_sharing_documents(
     for layer_index, layer in enumerate(layers):
         arrays: dict[str, list[_Located]] = {}
         for key, value in layer.items():
-            if not _is_table_array(value):
+            if not is_table_array(value):
                 issues.append(
                     SharingIssue(
                         code="unknown_key",
@@ -303,10 +303,6 @@ def _tlp_names() -> tuple[str, ...]:
     return names or TLP_ORDER
 
 
-def _is_table_array(value: object) -> bool:
-    return isinstance(value, list) and all(isinstance(item, Mapping) for item in value)
-
-
 def _reject_duplicate_names(
     arrays: Mapping[str, Sequence[_Located]], issues: list[SharingIssue]
 ) -> set[str]:
@@ -382,6 +378,11 @@ _FIELD_CODES = {
 }
 
 
+def _spec_code(field_name: str) -> str:
+    """Code of an invalid value on *field_name*."""
+    return _FIELD_CODES.get(field_name, "invalid_value")
+
+
 def _misp_block(
     merged: _Merged,
     *,
@@ -435,31 +436,34 @@ def _misp_block(
     )
 
 
+#: Message of each finding code. Values (other than list entries) are never shown.
+_MESSAGES = {
+    "missing_field": "{where} is missing {field}.",
+    "unknown_key": "Unknown key '{field}' in {where}.",
+    "name_invalid": (
+        "Block name must be 1–64 characters of lowercase letters, digits, hyphen, and underscore."
+    ),
+    "url_invalid": "{where} url must be an http(s) URL.",
+    "max_tlp_unknown": "{where} max_tlp is not a tlp vocabulary name.",
+    "organisation_uuid_invalid": (
+        "{where} organisation_uuid must be a 36-character hex UUID (8-4-4-4-12)."
+    ),
+    "object_type_unknown": "{where} object_types entry {entry} is unknown.",
+    "rule_status_unknown": "{where} rule_statuses entry {entry} is unknown.",
+    "api_key_literal": (
+        "{where} api_key is a literal. Use ${{ENV_VAR}}. "
+        f"The value was replaced with {REDACTION_MARKER}."
+    ),
+}
+
+
 def _issue(
     code: str, field_name: str, block: str | None, merged: _Merged, entry: object = None
 ) -> SharingIssue:
     """A finding on *field_name*. *entry* is a list item, never a secret."""
     where = f"[[{INTEGRATION_MISP}]] block {block!r}"
-    messages = {
-        "missing_field": f"{where} is missing {field_name}.",
-        "unknown_key": f"Unknown key {field_name!r} in {where}.",
-        "name_invalid": (
-            "Block name must be 1–64 characters of lowercase letters, "
-            "digits, hyphen, and underscore."
-        ),
-        "url_invalid": f"{where} url must be an http(s) URL.",
-        "max_tlp_unknown": f"{where} max_tlp is not a tlp vocabulary name.",
-        "organisation_uuid_invalid": (
-            f"{where} organisation_uuid must be a 36-character hex UUID (8-4-4-4-12)."
-        ),
-        "object_type_unknown": f"{where} object_types entry {entry!r} is unknown.",
-        "rule_status_unknown": f"{where} rule_statuses entry {entry!r} is unknown.",
-        "api_key_literal": (
-            f"{where} api_key is a literal. "
-            f"Use ${{ENV_VAR}}. The value was replaced with {REDACTION_MARKER}."
-        ),
-    }
-    message = messages.get(code, f"{where} {field_name} has an invalid value.")
+    template = _MESSAGES.get(code, "{where} {field} has an invalid value.")
+    message = template.format(where=where, field=field_name, entry=repr(entry))
     return SharingIssue(
         code=code,
         message=message,
@@ -492,7 +496,7 @@ def _model_findings(exc: ValidationError, raw: Mapping[str, Any]) -> list[tuple[
         elif kind == "missing" or (raw.get(field_name) == "" and field_name != "name"):
             code = "missing_field"
         else:
-            code = _FIELD_CODES.get(field_name, "invalid_value")
+            code = _spec_code(field_name)
         entry = None
         items = raw.get(field_name)
         if (

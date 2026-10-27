@@ -25,7 +25,6 @@ from opentide.models.configuration.platforms import (
     PLATFORM_CONFIGURATION_MODELS,
     PlatformConfiguration,
     PlatformConfigurationBase,
-    platform_configuration_model,
 )
 from opentide.models.configuration.schema import SchemaConfiguration
 from opentide.models.configuration.sharing import MispIntegration, SharingConfiguration
@@ -109,5 +108,4 @@ __all__ = [
     "configuration_file_key",
     "configuration_files",
     "configuration_model_for",
-    "platform_configuration_model",
 ]

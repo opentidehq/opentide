@@ -11,7 +11,6 @@ from opentide.core import index_manager as index_mod
 from opentide.core import runtime
 from opentide.core.types import IndexSnapshot
 from opentide.models.configuration.deployment import DeploymentConfiguration
-from opentide.models.configuration.documentation import DocumentationConfiguration
 from opentide.models.configuration.loading import validate_configuration
 from opentide.models.configuration.schema import SchemaConfiguration
 from opentide.models.objective import DetectionObjective
@@ -280,13 +279,6 @@ class _DocumentationConfig:
         return dict(self._index["configurations"].get("documentation", {}))
 
     @property
-    def model(self) -> DocumentationConfiguration:
-        """Merged ``documentation.toml``, validated by ``DocumentationConfiguration``."""
-        return validate_configuration(
-            DocumentationConfiguration, self.Index, file_key="documentation.toml"
-        )
-
-    @property
     def cve(self) -> dict[str, Any]:
         return dict(self.Index.get("cve", {}))
 
@@ -326,6 +318,23 @@ class _DeploymentConfig:
         from opentide.loading.config_loader import ConfigurationsLoader
 
         return ConfigurationsLoader.load_deployment(self.Index)
+
+    @property
+    def status_names(self) -> list[str]:
+        """Names of the ``[[statuses]]`` entries, read without validating the file.
+
+        ``validate`` checks a rule's status against these names; whether
+        ``deployment.toml`` itself is valid is the ``configuration`` check's
+        finding, which must not turn into a crash of the object checks.
+        """
+        statuses = self.Index.get("statuses")
+        if not isinstance(statuses, list):
+            return []
+        return [
+            entry["name"]
+            for entry in statuses
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str) and entry["name"]
+        ]
 
     @property
     def statuses(self) -> list[Any]:

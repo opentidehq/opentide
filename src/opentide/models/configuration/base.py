@@ -94,11 +94,13 @@ EnvPlaceholder = Annotated[
 ]
 
 #: The object families a configuration can scope.
-OBJECT_FAMILY_NAMES = ("threat", "objective", "rule")
 ObjectFamily = Literal["threat", "objective", "rule"]
 
-#: Words a tenant `ssl` may be written as, in any case (the loader's `_SSL_WORDS`).
-SSL_WORDS = ("true", "false", "yes", "no", "on", "off", "1", "0")
+#: Words a tenant `ssl` may be written as, in any case. The platform loader reads
+#: them from here.
+SSL_TRUE_WORDS = ("true", "yes", "on", "1")
+SSL_FALSE_WORDS = ("false", "no", "off", "0")
+SSL_WORDS = SSL_TRUE_WORDS + SSL_FALSE_WORDS
 
 
 #: A tenant `ssl`: a boolean, a boolean word, or a `$NAME` placeholder.
@@ -108,7 +110,7 @@ SslValue = (
     | Annotated[
         str,
         Field(
-            pattern="^(" + "|".join(_any_case(word) for word in SSL_WORDS) + ")$",
+            pattern=r"^\s*(" + "|".join(_any_case(word) for word in SSL_WORDS) + r")\s*$",
             description="A boolean written as a word: true/false, yes/no, on/off, 1/0.",
         ),
     ]

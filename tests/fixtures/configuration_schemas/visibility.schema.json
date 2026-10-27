@@ -6,7 +6,7 @@
       "description": "One `[[assets]]` entry: a system in the environment that generates logs.",
       "properties": {
         "name": {
-          "description": "Asset name that log sources and detectors refer to.",
+          "description": "Asset name, referenced by log sources and detectors.",
           "title": "Name",
           "type": "string"
         },
@@ -16,7 +16,7 @@
           "type": "string"
         },
         "criticality": {
-          "description": "How critical the asset is to the organisation.",
+          "description": "Criticality vocabulary value.",
           "title": "Criticality",
           "type": "string"
         },
@@ -46,7 +46,7 @@
             }
           ],
           "default": null,
-          "description": "Free-form details shown with the asset.",
+          "description": "Free-form key and value details.",
           "title": "Custom Details"
         },
         "surface": {
@@ -62,7 +62,7 @@
             }
           ],
           "default": null,
-          "description": "Technologies the asset exposes.",
+          "description": "Threat surface vocabulary values the asset exposes.",
           "title": "Surface"
         }
       },
@@ -79,12 +79,12 @@
       "description": "One `[[detectors]]` entry: an external detector an objective can name.",
       "properties": {
         "name": {
-          "description": "Detector name an objective refers to.",
+          "description": "Detector name.",
           "title": "Name",
           "type": "string"
         },
         "description": {
-          "description": "What the detector detects.",
+          "description": "What the detector covers.",
           "title": "Description",
           "type": "string"
         },
@@ -117,7 +117,7 @@
             }
           ],
           "default": null,
-          "description": "Names of the [[assets]] the detector covers.",
+          "description": "Names of the assets the detector monitors.",
           "title": "Assets"
         }
       },
@@ -133,17 +133,17 @@
       "description": "One `[[logsources]]` entry: a log source a rule's signals can name.",
       "properties": {
         "name": {
-          "description": "Log source name a signal refers to.",
+          "description": "Log source name. Signals reference it in `data.logsources`.",
           "title": "Name",
           "type": "string"
         },
         "description": {
-          "description": "What the log source collects.",
+          "description": "What the log source records.",
           "title": "Description",
           "type": "string"
         },
         "system": {
-          "description": "Platform identifier the log source is searched on.",
+          "description": "Detection system that holds the logs.",
           "title": "System",
           "type": "string"
         },
@@ -160,7 +160,7 @@
             }
           ],
           "default": null,
-          "description": "Names of the [[assets]] the log source collects from.",
+          "description": "Names of the assets that produce these logs.",
           "title": "Assets"
         },
         "tenants": {
@@ -176,7 +176,7 @@
             }
           ],
           "default": null,
-          "description": "Tenants of the platform the log source is available on.",
+          "description": "Tenants of `system` that hold the logs.",
           "title": "Tenants"
         },
         "references": {
@@ -221,11 +221,11 @@
         }
       ],
       "default": null,
-      "description": "List of assets that generate logs in the environment",
+      "description": "Assets that generate logs in the environment.",
       "title": "Assets"
     },
     "logsources": {
-      "description": "Log sources available in the environment",
+      "description": "Log sources available to detection signals.",
       "items": {
         "$ref": "#/$defs/VisibilityLogSource"
       },
@@ -245,7 +245,7 @@
         }
       ],
       "default": null,
-      "description": "Detectors outside opentide that cover the environment",
+      "description": "External detectors that already cover parts of the environment.",
       "title": "External Detectors"
     }
   },

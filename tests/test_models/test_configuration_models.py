@@ -91,7 +91,7 @@ def test_registry_deployment_accessors_read_the_model() -> None:
     from opentide.core.registry import _DeploymentConfig
 
     accessor = _DeploymentConfig(
-        {"configurations": {"deployment": {"statuses": [_STATUS], "debug": {}}}}  # type: ignore[arg-type]
+        {"configurations": {"deployment": {"statuses": [_STATUS], "debug": {}}}}  # ty: ignore[invalid-argument-type]  # a plain dict stands in for the index snapshot
     )
     assert [status.name for status in accessor.statuses] == ["LIVE"]
     assert accessor.debug == {"mdr_test_uuids": [], "ssl_enabled": True, "proxy_enabled": False}
@@ -309,4 +309,21 @@ def test_visibility_error_never_repeats_values() -> None:
     with pytest.raises(ValueError, match="Failed to load visibility") as raised:
         ConfigurationsLoader.load_visibility({"logsources": [{"name": "SEKRET", "x": ["SEKRET"]}]})
     assert "SEKRET" not in str(raised.value)
-    assert raised.value.__context__ is None
+    # Only opentide's own, value-free error may be chained; never pydantic's.
+    from pydantic import ValidationError
+
+    chained = raised.value.__context__
+    assert chained is None or not isinstance(chained, ValidationError)
+    assert raised.value.__cause__ is None
+
+
+def test_status_names_do_not_validate_the_file() -> None:
+    """`validate`'s status check reads names only; a typo is the configuration check's finding."""
+    from opentide.core.registry import _DeploymentConfig
+
+    accessor = _DeploymentConfig(
+        {"configurations": {"deployment": {"statuses": [_STATUS], "promotion": {"enabeld": 1}}}}  # ty: ignore[invalid-argument-type]  # a plain dict stands in for the index snapshot
+    )
+    assert accessor.status_names == ["LIVE"]
+    with pytest.raises(ConfigurationError):
+        _ = accessor.statuses

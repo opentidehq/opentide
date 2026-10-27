@@ -238,7 +238,7 @@ def test_bundled_files_have_no_issue() -> None:
 
     root = get_data_root() / "configurations"
     for path in sorted(root.rglob("*.toml")):
-        if path.name in {"resources.toml", "__init__.py"}:
+        if path.name in {"resources.toml", "lint.toml", "__init__.py"}:
             continue
         rel = path.relative_to(root).as_posix()
         assert configuration_file_issues(rel, _load(path)) == [], rel
@@ -485,8 +485,10 @@ def test_generated_schemas_folder_is_not_configuration() -> None:
     assert _codes(issues) == {"not_a_configuration_file"}
 
 
-def test_resources_toml_message_says_it_is_not_checked() -> None:
-    (issue,) = configuration_file_issues("resources.toml", {})
+@pytest.mark.parametrize("name", ["resources.toml", "lint.toml"])
+def test_unmodelled_bundled_file_says_it_is_not_checked(name: str) -> None:
+    (issue,) = configuration_file_issues(name, {})
+    assert issue.severity == "warning"
     assert "not checked" in issue.message
 
 

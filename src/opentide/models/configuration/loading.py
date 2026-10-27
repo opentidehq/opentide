@@ -96,16 +96,20 @@ def _branch_rank(item: tuple[tuple[str, ...], str, str, bool]) -> int:
     return 2 if kind.endswith(_TYPE_MISMATCH) else 1
 
 
+def describe_error(kind: str, message: str) -> str:
+    """The message a configuration error shows: plain words for a key, pydantic's otherwise."""
+    if kind == "extra_forbidden":
+        return "unknown key"
+    if kind == "missing":
+        return "required key is missing"
+    return message or "invalid value"
+
+
 def error_locations(exc: ValidationError, data: Any = None) -> list[tuple[tuple[str, ...], str]]:
     """`(key path, message)` for each error, without the offending input."""
-    located: list[tuple[tuple[str, ...], str]] = []
-    for path, kind, message in model_errors(exc, data):
-        if kind == "extra_forbidden":
-            message = "unknown key"
-        elif kind == "missing":
-            message = "required key is missing"
-        located.append((path, message or "invalid value"))
-    return located
+    return [
+        (path, describe_error(kind, message)) for path, kind, message in model_errors(exc, data)
+    ]
 
 
 def validate_configuration(model: type[M], data: Mapping[str, Any], *, file_key: str) -> M:

@@ -34,8 +34,9 @@ _EMITTERS = (
 _LITERAL = re.compile(r"""\bcode\s*=\s*"([a-z_]+)"|"code":\s*"([a-z_]+)\"""")
 _NAMED = re.compile(r"\bcode\s*=\s*([A-Z_]+)\b")
 _STATE_ERROR = re.compile(r"""DeploymentStateError\(\s*"([a-z_]+)\"""")
-#: ``_string_list(..., "object_type_unknown", ...)`` passes the code positionally.
-_UNKNOWN_CODE = re.compile(r"""^\s*"([a-z_]+_unknown)",$""", re.MULTILINE)
+#: ``sharing/config.py`` maps a key to its code in a table
+#: (``"object_types": "object_type_unknown",``), not through ``code=``.
+_UNKNOWN_CODE = re.compile(r"""^\s*(?:"[a-z_]+":\s*)?"([a-z_]+_unknown)",$""", re.MULTILINE)
 
 runner = CliRunner()
 

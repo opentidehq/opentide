@@ -17,7 +17,7 @@
             },
             {
               "description": "A boolean written as a word: true/false, yes/no, on/off, 1/0.",
-              "pattern": "^([tT][rR][uU][eE]|[fF][aA][lL][sS][eE]|[yY][eE][sS]|[nN][oO]|[oO][nN]|[oO][fF][fF]|1|0)$",
+              "pattern": "^\\s*([tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|1|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF]|0)\\s*$",
               "type": "string"
             }
           ],

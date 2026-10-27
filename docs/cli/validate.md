@@ -306,6 +306,7 @@ When no `--check` is specified, the pipeline runs:
 - `id-uniqueness`
 - `uuid-format`
 - `schema` (includes vocabulary and cross-object references)
+- `configuration` (the merged files under `.opentide/configurations/`, against their models)
 
 CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI pipeline so offline `opentide validate` stays deterministic.
 

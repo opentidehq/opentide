@@ -18,6 +18,8 @@ Every file under `.opentide/configurations/` has one Pydantic model in `opentide
 | `platforms/<id>.toml` | `SentinelConfiguration`, `SplunkConfiguration`, … | `platforms.<id>.schema.json` |
 | any other `platforms/*.toml` | `PlatformConfiguration` | `platforms.schema.json` |
 
+`resources.toml` and `lint.toml` have no model here: `lint.toml` is checked by `opentide lint`'s own loader.
+
 Unknown keys are rejected everywhere except the retired `[vocabulary]` table of `schema.toml` and a top-level `sharing.toml` array that names a connector opentide does not know (`[[opencti]]`), which is skipped with an `unknown_connector` warning.
 
 A `$NAME` placeholder is a valid value for any tenant `setup` key; the models check the file as written, and the variable is read when the tenant loads. An error never repeats the offending value, since `setup` tables hold credentials.
@@ -73,7 +75,7 @@ issues = configuration_text_issues("sharing.toml", buffer_text, status_names={"P
 | `asset_unknown` | warning | A visibility log source or detector names an undeclared asset |
 | `identifier_mismatch` | error | `[platform] identifier` differs from the file name stem |
 | `config_parse` | error | The text is not valid TOML |
-| `not_a_configuration_file` | warning | The path is not a file opentide reads |
+| `not_a_configuration_file` | warning | The path is not a file opentide reads, or has no model (`resources.toml`, `lint.toml`) |
 
 A `[[responders]]` entry that does not match its model is a warning: the loader keeps an entry that has a name and skips one that has none. A platform file is checked with the model of the platform the loader files it under (`[platform] identifier`, then `[tide] identifier`, then the file name). A platform plugin's file is open: only `[platform]`, `[[modifiers]]` and the tenant `name`, `strategies`, `manual` and `ssl` are checked. A path under `configurations/sharing/` returns `sharing_directory`, and one under `.opentide/schemas/` is not a configuration file.
 

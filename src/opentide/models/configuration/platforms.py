@@ -433,8 +433,3 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "harfanglab": HarfangLabConfiguration,
     "elastic": ElasticConfiguration,
 }
-
-
-def platform_configuration_model(identifier: str) -> type[PlatformConfigurationBase]:
-    """The model of `platforms/<identifier>.toml`."""
-    return PLATFORM_CONFIGURATION_MODELS.get(identifier, PlatformConfiguration)

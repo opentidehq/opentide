@@ -6,7 +6,8 @@ file's Pydantic model, then hands callers the dataclasses they already use.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -29,7 +30,7 @@ logger = get_logger(__name__)
 
 class ConfigurationsLoader:
     @staticmethod
-    def load_deployment(deployment_configuration: dict) -> DeploymentConfiguration:
+    def load_deployment(deployment_configuration: Mapping[str, Any]) -> DeploymentConfiguration:
         """Validate merged `deployment.toml` against `DeploymentConfiguration`.
 
         `[[responders]]` go through `load_responders`, which skips a malformed
@@ -114,29 +115,17 @@ class ConfigurationsLoader:
         if not config:
             return None
 
-        failure: ConfigurationError | None = None
         try:
             visibility = validate_configuration(
                 VisibilityConfig, config, file_key="visibility.toml"
             )
         except ConfigurationError as exc:
-            failure = exc
-        if failure is not None:
-            logger.critical("visibility_config_load_failed", detail=str(failure))
+            logger.critical("visibility_config_load_failed", detail=str(exc))
             raise ConfigurationError(
-                "visibility.toml",
-                failure.errors,
-                prefix="Failed to load visibility configuration: ",
-            )
+                "visibility.toml", exc.errors, prefix="Failed to load visibility configuration: "
+            ) from None
 
-        from opentide.validation.configuration import visibility_cross_issues
-
-        events = {"logsource": "logsource_invalid_assets", "detector": "detector_invalid_assets"}
-        for issue in visibility_cross_issues(visibility):
-            entry = issue.context["entry"]
-            logger.error(
-                events[entry],
-                **{entry: issue.context["name"]},
-                invalid_assets=issue.context["asset"],
-            )
+        events = {"logsources": "logsource_invalid_assets", "detectors": "detector_invalid_assets"}
+        for table, _index, name, _position, asset in visibility.unknown_assets():
+            logger.error(events[table], **{table.removesuffix("s"): name}, invalid_assets=asset)
         return visibility

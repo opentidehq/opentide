@@ -20,14 +20,15 @@ from opentide.core.root import get_data_root, get_repo_root
 from opentide.registry.discovery import client_configurations_dir, discover_workspace
 
 
-def _deep_merge(source: dict, merge: dict) -> None:
+def deep_merge(source: dict, merge: dict) -> None:
+    """Merge *merge* into *source*: tables merge, scalars and arrays replace."""
     for key, value in merge.items():
         if (
             key in source
             and isinstance(source[key], MutableMapping)
             and isinstance(value, MutableMapping)
         ):
-            _deep_merge(source[key], value)  # type: ignore[arg-type]
+            deep_merge(source[key], value)  # type: ignore[arg-type]
         else:
             source[key] = value
 
@@ -40,7 +41,7 @@ def _load_toml(path: Path) -> dict:
         raise ConfigFileError.from_toml(path, exc) from exc
 
 
-# ``sharing.toml`` merges arrays of tables by block name. ``_deep_merge``
+# ``sharing.toml`` merges arrays of tables by block name. ``deep_merge``
 # replaces lists wholesale, so the sharing loader owns that file.
 _SKIPPED_CONFIG_FILES = frozenset({"sharing.toml"})
 
@@ -120,20 +121,20 @@ def resolve_configurations(workspace: Path | None = None) -> dict[str, dict]:
         unified["platforms"] = unified.get("systems", {})
     bundled = _bundled_platform_configs()
     if bundled:
-        _deep_merge(unified["platforms"], bundled)
+        deep_merge(unified["platforms"], bundled)
     unified.setdefault("systems", unified["platforms"])
 
     workspace = workspace or discover_workspace()
     client_configs = client_configurations_dir(workspace)
     if client_configs.is_dir():
-        _deep_merge(unified, _fetch_configs(client_configs))
+        deep_merge(unified, _fetch_configs(client_configs))
 
     root = get_repo_root()
     workspace_env = os.environ.get("OPENTIDE_TIDE_WORKSPACE")
     if workspace_env:
         fixture_configs = root / "tests/fixtures/generation/configurations"
         if fixture_configs.is_dir():
-            _deep_merge(unified, _fetch_configs(fixture_configs))
+            deep_merge(unified, _fetch_configs(fixture_configs))
 
     parent_configs = workspace.parent / ".opentide" / "configurations"
     if (
@@ -142,7 +143,7 @@ def resolve_configurations(workspace: Path | None = None) -> dict[str, dict]:
         and not workspace_env
         and parent_configs != client_configs
     ):
-        _deep_merge(unified, _fetch_configs(parent_configs))
+        deep_merge(unified, _fetch_configs(parent_configs))
 
     _reject_retired_proxy(unified)
     return unified
