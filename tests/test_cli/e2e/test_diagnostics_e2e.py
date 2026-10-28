@@ -132,7 +132,7 @@ def test_a_dangling_reference_is_one_framed_finding(tutorial: Path) -> None:
         "   ╰─ help: opentide info objectives lists the ones that exist\n"
     ) in text
     assert "vocab_unknown" not in text
-    assert re.search(r"✗ 1 error in 1 file · 3 objects checked · \d+\.\ds\n", text)
+    assert re.search(r"✗ 1 error in 1 file · 3 objects checked · 1 query · \d+\.\ds\n", text)
 
     payload = json.loads(_run(tutorial, "validate", json_output=True).stdout)
     (issue,) = payload["report"]["issues"]
@@ -151,6 +151,7 @@ def test_a_dangling_reference_is_one_framed_finding(tutorial: Path) -> None:
     assert payload["message"] == "Validation failed"
     assert payload["summary"] == {
         "objects": 3,
+        "queries": 1,
         "errors": 1,
         "warnings": 0,
         "files": 1,
@@ -207,7 +208,9 @@ def test_a_yaml_error_is_reported_once_with_its_position(tutorial: Path) -> None
 
 
 def test_a_clean_workspace_counts_what_it_checked(tutorial: Path) -> None:
-    assert re.fullmatch(r"✓ 3 objects valid · \d+\.\ds\n", _text(_run(tutorial, "validate")))
+    assert re.fullmatch(
+        r"✓ 3 objects valid · 1 query · \d+\.\ds\n", _text(_run(tutorial, "validate"))
+    )
     assert _text(_run(tutorial, "lint")) == "✓ 3 files clean\n"
     info = _text(_run(tutorial, "info"))
     assert info.endswith("✓ 1 rule · 1 threat · 1 objective · 0 load errors\n")

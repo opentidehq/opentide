@@ -243,8 +243,14 @@ def run_validation(
             root=discover_workspace(),
             as_warnings=queries_as_warnings,
         )
-        issues.extend(found.errors)
-        warnings.extend(found.warnings)
+        # A query the schema check rejects (an empty one) is its finding, once.
+        rejected = {
+            (issue.file_path, tuple(issue.field_path))
+            for issue in issues
+            if issue.field_path and issue.field_path[-1] == "query"
+        }
+        issues.extend(_not_in(found.errors, rejected))
+        warnings.extend(_not_in(found.warnings, rejected))
         stats["queries_checked"] = found.queries
         if not object_checks:
             stats["objects_checked"] = len(work_items)
@@ -267,6 +273,13 @@ def run_validation(
         os.environ["VALIDATION_WARNING_RAISED"] = "1"
 
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
+
+
+def _not_in(
+    found: list[ValidationIssue], rejected: set[tuple[Path | None, tuple[str, ...]]]
+) -> list[ValidationIssue]:
+    """*found*, without the issues on a query another check already rejected."""
+    return [item for item in found if (item.file_path, tuple(item.field_path)) not in rejected]
 
 
 def _enabled_platforms(

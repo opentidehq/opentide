@@ -31,8 +31,6 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from opentide.validation.queries import REPORTED_AS_WARNING
-
 if TYPE_CHECKING:
     from opentide.analysis import Finding as EngineFinding
     from opentide.core.io import YamlProblem
@@ -636,6 +634,8 @@ def diagnostic_from_issue(
             suggestion=issue.suggestion,
         )
         diagnostic = diagnostic_from_engine(finding, file_path=file_path, workspace=workspace)
+        from opentide.validation.queries import REPORTED_AS_WARNING
+
         notes = diagnostic.notes
         if issue.context.get(REPORTED_AS_WARNING):
             notes = (*notes, ("note", REPORTED_AS_WARNING_NOTE))

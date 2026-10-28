@@ -23,6 +23,12 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Literal
 
 from opentide.core.logging import get_logger
+from opentide.validation.query_platforms import (
+    OFFLINE_QUERY_LANGUAGES as OFFLINE_QUERY_LANGUAGES,
+)
+from opentide.validation.query_platforms import (
+    OFFLINE_QUERY_PLATFORMS as OFFLINE_QUERY_PLATFORMS,
+)
 
 if TYPE_CHECKING:
     from opentide._native import Diagnostic as EngineDiagnostic
@@ -33,18 +39,6 @@ logger = get_logger(__name__)
 #: ``failure.code`` (and ``opentide explain`` page) when the engine does not import.
 ENGINE_UNAVAILABLE = "engine_unavailable"
 REINSTALL_COMMAND = "pip install --force-reinstall opentide"
-
-#: Platforms whose rule queries the engine checks offline, and their languages.
-#: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
-#: CrowdStrike and HarfangLab are never checked: no fake validation.
-OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
-    "sentinel": ("kql",),
-    "defender_for_endpoint": ("kql",),
-    "splunk": ("spl",),
-    "elastic": ("esql", "eql", "kuery", "lucene"),
-    "carbon_black_cloud": ("lucene",),
-}
-OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)
 
 #: The engine's advisories on an Elastic rule block's settings (elastic-1.0):
 #: style, which ``opentide lint`` reports with the query warnings.

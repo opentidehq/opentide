@@ -152,7 +152,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "lsp",
         "opentide.cli.lsp_app",
         "lsp_app",
-        "Run the opentide language server for editors",
+        "Serve the language server for editors",
         rich_help_panel=AGENTS,
     ),
     CommandSpec(

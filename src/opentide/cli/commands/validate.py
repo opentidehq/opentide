@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import typer
 
-from opentide.analysis import OFFLINE_QUERY_PLATFORMS
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import CliContext, get_context
 from opentide.cli.enums import (
@@ -51,6 +50,7 @@ from opentide.cli.ui.render import render_warnings
 from opentide.cli.ui.reports import ReportFormat
 from opentide.cli.ui.watch import LiveView, PlainView, Watcher, WatchRun
 from opentide.core.logging.config import get_console, get_stdout_console
+from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
 
 if TYPE_CHECKING:
     from opentide.cli.ui.fixes import FixPlan
