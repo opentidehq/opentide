@@ -4,7 +4,9 @@
 
 - ``fields.json``: every field of every registered revision of each object
   family (``rule::1.0`` and ``rule::1.1`` each have their own rows), with its
-  title, description, type, whether it is required, enum values and their
+  title, description, type, whether validation requires it (``required``,
+  from the model) or only the templates ask for it (``recommended``), enum
+  values and their
   docs, whether an object field forbids keys it does not define
   (``closed``; ``schemas`` says the same of each revision's root), and the
   legacy keys a mapping also accepts (``legacy``: key → the field it fills). The engine
@@ -170,8 +172,9 @@ def fields_catalog(version: str) -> dict[str, Any]:
     roots: dict[str, dict[str, Any]] = {}
     for schema_id, schema in schemas.items():
         family = schema_id.split("::", 1)[0]
-        extras, defaults, legacy = _model_facts(resolve_model(schema_id))
-        flattened = _flatten(schema, schema_id, extras, defaults, ref_leaves)
+        facts = _model_facts(resolve_model(schema_id))
+        legacy = facts.legacy
+        flattened = _flatten(schema, schema_id, facts, ref_leaves)
         for node in flattened:
             if node["path"] in legacy:
                 node["legacy"] = legacy[node["path"]]
@@ -241,10 +244,19 @@ def _revision_key(revision: str) -> tuple[int, ...]:
     return tuple(int(part) for part in revision.split(".") if part.isdigit())
 
 
-def _model_facts(
-    model: type[TideModel],
-) -> tuple[dict[str, dict[str, Any]], dict[str, str], dict[str, dict[str, str | None]]]:
-    """``json_schema_extra`` flags, string defaults, and legacy keys, by dotted path.
+class ModelFacts(typing.NamedTuple):
+    """What the models say that the JSON Schema does not, by dotted path."""
+
+    extras: dict[str, dict[str, Any]]
+    defaults: dict[str, str]
+    legacy: dict[str, dict[str, str | None]]
+    #: Whether validation requires the field: the model's word, which the
+    #: schema's ``required`` (template guidance included) can overstate.
+    required: dict[str, bool]
+
+
+def _model_facts(model: type[TideModel]) -> ModelFacts:
+    """``json_schema_extra`` flags, string defaults, legacy keys and requiredness, by path.
 
     The schema emitter drops ``tide.template.multiline`` and ``hide``, a
     Pydantic default is not always in the schema, and the keys a model's
@@ -259,6 +271,7 @@ def _model_facts(
     extras: dict[str, dict[str, Any]] = {}
     defaults: dict[str, str] = {}
     legacy: dict[str, dict[str, str | None]] = {}
+    required: dict[str, bool] = {}
 
     def is_tide_model(annotation: object) -> TypeGuard[type[TideModel]]:
         return isinstance(annotation, type) and issubclass(annotation, TideModel)
@@ -277,6 +290,7 @@ def _model_facts(
         for name, field in current.model_fields.items():
             key = field.alias or name
             child = f"{path}.{key}" if path else key
+            required[child] = field.is_required()
             extra = field.json_schema_extra
             if isinstance(extra, dict) and extra:
                 extras[child] = dict(extra)
@@ -294,7 +308,7 @@ def _model_facts(
                     walk(inner, child)
 
     walk(model, "")
-    return extras, defaults, legacy
+    return ModelFacts(extras, defaults, legacy, required)
 
 
 def _unwrap_optional(annotation: Any) -> Any:
@@ -308,8 +322,7 @@ def _unwrap_optional(annotation: Any) -> Any:
 def _flatten(
     schema: dict[str, Any],
     schema_id: str,
-    extras: dict[str, dict[str, Any]],
-    defaults: dict[str, str],
+    facts: ModelFacts,
     ref_leaves: dict[str, str],
 ) -> list[dict[str, Any]]:
     nodes: list[dict[str, Any]] = []
@@ -331,12 +344,15 @@ def _flatten(
                 child,
                 key,
                 spec,
-                required=key in required,
-                extra=extras.get(child, {}),
-                default=defaults.get(child),
+                required=facts.required.get(child, key in required),
+                extra=facts.extras.get(child, {}),
+                default=facts.defaults.get(child),
                 schema=schema,
                 ref_leaves=ref_leaves,
             )
+            if key in required and not node["required"]:
+                # Templates ask for it, validation does not require it.
+                node["recommended"] = True
             nodes.append(node)
             target = _unwrap(schema, spec) or {}
             if target.get("properties"):

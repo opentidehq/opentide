@@ -192,3 +192,15 @@ def test_legacy_keys_reach_the_catalog(fields: dict) -> None:
     assert splunk["legacy"]["search"] == "query"
     scheduling = _field(fields, "rule::1.1", "configurations.splunk.scheduling")
     assert scheduling["legacy"]["frequency"] == "schedule"
+
+
+def test_required_is_what_validation_requires(fields: dict) -> None:
+    """The schema marks a rule's configurations and response required for the
+    templates; the model, which validation runs, does not. The language server
+    follows validation and only recommends them."""
+    for schema in ("rule::1.0", "rule::1.1"):
+        for path in ("configurations", "response"):
+            row = _field(fields, schema, path)
+            assert (row["required"], row.get("recommended")) == (False, True), (schema, path)
+        assert _field(fields, schema, "description")["required"] is True
+        assert "recommended" not in _field(fields, schema, "description")
