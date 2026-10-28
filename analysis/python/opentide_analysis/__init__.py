@@ -26,6 +26,8 @@ from opentide_analysis._native import (
     install_catalog,
     language_for_path,
     serve_stdio,
+    set_default_catalog,
+    use_host_catalogs,
 )
 
 try:
@@ -49,4 +51,6 @@ __all__ = [
     "install_catalog",
     "language_for_path",
     "serve_stdio",
+    "set_default_catalog",
+    "use_host_catalogs",
 ]

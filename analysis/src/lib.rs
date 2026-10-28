@@ -221,6 +221,27 @@ fn install_catalog(fields: Option<String>, deprecations: Option<String>) -> PyRe
     .map_err(PyValueError::new_err)
 }
 
+/// Use these catalogs wherever the engine would use its bundled ones (no
+/// workspace catalog installed), for the whole process: the catalogs opentide
+/// generates from its own models. `None` goes back to the bundled one. Raises
+/// `ValueError`, and changes nothing, when a part does not parse.
+#[pyfunction]
+#[pyo3(signature = (fields=None, deprecations=None))]
+fn set_default_catalog(fields: Option<String>, deprecations: Option<String>) -> PyResult<()> {
+    opentide_analysis::set_default_catalog(&Catalog {
+        fields,
+        deprecations,
+    })
+    .map_err(PyValueError::new_err)
+}
+
+/// Keep the catalogs set here when the language server initializes: it does
+/// not read the workspace's `.opentide/lsp/catalogs/`. Process-wide.
+#[pyfunction]
+fn use_host_catalogs() {
+    opentide_lsp::use_host_catalogs();
+}
+
 /// The opentide version the Tide field catalog in use was generated from.
 #[pyfunction]
 fn catalog_version() -> &'static str {
@@ -356,6 +377,7 @@ mod _native {
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, catalog_is_workspace, catalog_version,
         describe_code, highlight, install_catalog, language_for_path, serve_stdio,
+        set_default_catalog, use_host_catalogs,
     };
 
     #[pymodule_init]

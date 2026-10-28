@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from opentide.analysis import engine, install_workspace_catalog
+from opentide.analysis import engine, install_workspace_catalog, reset_catalog
 from opentide.generation.lsp_catalog import (
     CATALOG_DIR,
     DEPRECATIONS_FILE,
@@ -86,7 +86,7 @@ def test_the_deprecations_name_root_and_platform_fields() -> None:
 @pytest.fixture
 def bundled_catalog() -> Iterator[None]:
     yield
-    install_workspace_catalog(None)
+    reset_catalog()
 
 
 def test_the_written_catalogs_are_what_the_engine_installs(
@@ -100,8 +100,9 @@ def test_the_written_catalogs_are_what_the_engine_installs(
     import opentide
 
     assert json.loads(written[0].read_text(encoding="utf-8"))["opentide"] == opentide.__version__
+    # opentide installs what it generates, the same catalog as the files.
     state = install_workspace_catalog(tmp_path)
-    assert state.source == "workspace", state.problem
+    assert state.source == "opentide", state.problem
     assert engine().catalog_version() == opentide.__version__
 
 

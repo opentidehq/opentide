@@ -39,6 +39,7 @@ def serve() -> int:
         return 1
     if sys.stdin.isatty():
         print(TERMINAL_HINT, file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
+    _supply_catalogs()
     failure: list[BaseException] = []
 
     def run() -> None:
@@ -57,6 +58,32 @@ def serve() -> int:
         print(f"error: the language server stopped: {failure[0]}", file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
         return 1
     return 0
+
+
+def _supply_catalogs() -> None:
+    """Hand the server this opentide's catalogs for the workspace it starts in.
+
+    The server would otherwise read the workspace's committed catalogs at
+    ``initialize``, which may come from an older opentide, or fall back to
+    the snapshot compiled into the engine. When they cannot be generated, the
+    server does as before, and stderr says why.
+    """
+    from opentide.analysis import engine, own_catalog
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        catalogs = own_catalog(discover_workspace())
+        module = engine()
+        module.set_default_catalog(
+            fields=catalogs["fields.json"], deprecations=catalogs["deprecations.json"]
+        )
+        module.use_host_catalogs()
+    except Exception as exc:  # the server still starts, on the workspace's catalogs
+        print(  # noqa: T201 -- stderr, outside the protocol
+            f"warning: opentide's catalogs could not be generated ({type(exc).__name__}: {exc}); "
+            "using the workspace's, or the engine's bundled ones",
+            file=sys.stderr,
+        )
 
 
 #: Extensions ``lsp check`` reads in a folder: object files and query files.
@@ -203,10 +230,10 @@ def run_lsp_check(
         result["_outcome_kind"] = outcome_kind
     warnings = [f"Could not read {line}" for line in unreadable]
     if catalog.problem:
-        warnings.append(
-            f"Using the bundled catalogs: the workspace's are unusable ({catalog.problem}); "
-            "run opentide generate schemas"
+        used = (
+            "the workspace's catalogs" if catalog.source == "workspace" else "the bundled catalogs"
         )
+        warnings.append(f"Using {used}: {catalog.problem}; opentide doctor says more")
     if warnings:
         result["warnings"] = warnings
     if not targets:
