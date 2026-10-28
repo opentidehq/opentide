@@ -39,7 +39,7 @@ def test_validate_query_checks_the_query_offline(platform: str) -> None:
     assert result["valid"] is True, result
     assert result["status"] == "passed"
     assert result["errors"] == []
-    assert set(result["engine"]) == {"package", "engine"}
+    assert set(result["engine"]) == {"engine"}
 
 
 def test_validate_query_finds_the_error_in_a_broken_query() -> None:
