@@ -1514,7 +1514,9 @@ impl ShapeCheck<'_> {
     /// scalar or for each item of a list: every enum the catalog has, not a
     /// hand-picked few.
     fn values(&mut self, path: &[String], field: &TideField, value: &serde_yaml::Value) {
-        if field.enum_values.is_empty() {
+        // A reference is checked against the workspace index (invalid_ref),
+        // never against a list of UUIDs a catalog may carry.
+        if field.enum_values.is_empty() || field.ref_kind.is_some() {
             return;
         }
         let items: Vec<&str> = match value {
