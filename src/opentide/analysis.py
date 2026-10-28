@@ -480,10 +480,20 @@ def is_query_file(path: Path | str) -> bool:
     return Path(path).suffix.lower() in QUERY_FILE_SUFFIXES
 
 
-def check_query_file(path: Path) -> QueryCheck | UnreadableFile:
+def query_file_language(path: Path | str) -> str | None:
+    """The language a query file's extension names (``.KQL`` as ``.kql``), else ``None``."""
+    path = Path(path)
+    if not is_query_file(path):
+        return None
+    return language_for_path(path.with_suffix(path.suffix.lower()))
+
+
+def check_query_file(path: Path, *, platform: str | None = None) -> QueryCheck | UnreadableFile:
     """The query in a query file, checked in the language its extension names.
 
-    No platform profile applies: the file says only its language.
+    With *platform*, whose languages include it, with that platform's profile
+    (Defender's tables, Carbon Black's Lucene); without, the language alone.
+    A file with no query is unreadable: there is nothing to pass.
     """
     try:
         text = path.read_text(encoding="utf-8")
@@ -493,17 +503,21 @@ def check_query_file(path: Path) -> QueryCheck | UnreadableFile:
         return UnreadableFile(path, not_utf8_problem(exc))
     except OSError as exc:
         return UnreadableFile(path, exc.strerror or str(exc))
-    language = language_for_path(path)
+    language = query_file_language(path)
     if language is None:  # an extension the engine does not know: a bug in the list above
         return UnreadableFile(path, f"no query language for {path.suffix}")
+    if not text.strip():
+        return UnreadableFile(path, "it holds no query")
+    if platform is not None and language not in OFFLINE_QUERY_LANGUAGES.get(platform, ()):
+        platform = None
     return QueryCheck(
         file_path=path,
-        platform=None,
+        platform=platform,
         language=language,
         field_path=(),
         line=1,
         column=1,
-        findings=tuple(check_query(text, language=language)),
+        findings=tuple(check_query(text, language=language, platform=platform)),
     )
 
 

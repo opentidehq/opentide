@@ -65,15 +65,21 @@ def validate_all_objects(
     ``Opentide.Index["objects"]`` does, and replaces the registry's objects for
     this run. Configuration and vocabularies come from the registry, and the
     checks that read the workspace (ID uniqueness, unreadable files) still read
-    it.
+    it. The queries check is left out: it reads each object's file, not the
+    body given here, so it would check what is on disk instead.
     """
     if not any(registry for registry in objects_index.values()):
         return {}
 
     from opentide.core.registry import Opentide
+    from opentide.validation.checks.kinds import ValidateCheck
     from opentide.validation.scope import ValidationScope
-    from opentide.validation.session import run_validation
+    from opentide.validation.session import DEFAULT_CHECKS, run_validation
 
     index = {**Opentide.Index, "objects": objects_index}
-    report = run_validation(scope=scope or ValidationScope.full(), index=index)
+    report = run_validation(
+        scope=scope or ValidationScope.full(),
+        checks=DEFAULT_CHECKS - {ValidateCheck.queries},
+        index=index,
+    )
     return report.legacy_errors_by_uuid()

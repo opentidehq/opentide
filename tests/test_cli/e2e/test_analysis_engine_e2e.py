@@ -519,3 +519,80 @@ def test_next_actions_keep_the_scope_mode_and_strictness(invoke_cli, tutorial: P
     assert result.exit_code == 1
     again = parse_cli_json(result)["next_actions"][-1]["command"]
     assert again == f"opentide --json validate query --file {RULE.name} --queries warn --strict"
+
+
+# --------------------------------------------------------------------------
+# Scope review: query files, the SDK, legacy query keys
+# --------------------------------------------------------------------------
+
+
+def test_a_query_file_takes_the_profile_of_its_platform(invoke_cli, tutorial: Path) -> None:
+    """Defender's tables are Defender's: without its profile, a valid query failed."""
+    query = tutorial / "hunting" / "DFE.KQL"
+    query.parent.mkdir()
+    query.write_text('DeviceProcessEvents | where FileName == "x.exe"\n', encoding="utf-8")
+    payload = assert_json_ok(
+        invoke_cli(
+            "validate",
+            "query",
+            "--platform",
+            "defender_for_endpoint",
+            "--file",
+            str(query),
+            repo=tutorial,
+        )
+    )
+    (checked,) = payload["queries"]
+    assert (checked["platform"], checked["language"]) == ("defender_for_endpoint", "kql")
+    # The upper-case extension is a query file too, and without a platform the
+    # language alone does not know Defender's tables.
+    plain = parse_cli_json(invoke_cli("validate", "query", "--file", str(query), repo=tutorial))
+    assert [item["code"] for item in plain["diagnostics"]] == ["kql_unknown_table"]
+
+    other = invoke_cli(
+        "validate", "query", "--platform", "splunk", "--file", str(query), repo=tutorial
+    )
+    assert other.exit_code == 2, other.output
+    failure = parse_cli_json(other)["failure"]
+    assert failure["argument"] == "--file"
+
+
+def test_an_empty_query_file_is_not_a_valid_query(invoke_cli, tutorial: Path) -> None:
+    query = tutorial / "empty.kql"
+    query.write_text("  \n", encoding="utf-8")
+    result = invoke_cli("validate", "query", "--file", str(query), repo=tutorial)
+    assert result.exit_code == 1, result.output
+    assert parse_cli_json(result)["error"] == f"Cannot check {query}: it holds no query"
+
+
+def test_the_sdk_validates_the_objects_it_is_given_not_the_queries_on_disk(
+    invoke_cli, tutorial: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """validate_all_objects replaces the registry's objects: the queries check read
+    the files instead, so a fixed in-memory rule failed on its broken file."""
+    from tests.corpus_support import clear_runtime_caches
+
+    from opentide.core.registry import Opentide
+    from opentide.validation.pipeline import validate_all_objects
+
+    _set_query(tutorial / RULE, BROKEN)
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(tutorial))
+    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(tutorial))
+    monkeypatch.chdir(tutorial)
+    clear_runtime_caches()
+    Opentide.initialise()
+    objects = Opentide.Index["objects"]
+    assert validate_all_objects(objects) == {}
+
+
+def test_an_empty_legacy_search_is_reported_once(invoke_cli, tutorial: Path) -> None:
+    rule = _new_rule(invoke_cli, tutorial, "splunk", "index=main")
+    text = rule.read_text(encoding="utf-8")
+    start = text.index("    query: |")
+    end = text.index("\n", text.index("index=main", start)) + 1
+    rule.write_text(text[:start] + '    search: ""\n' + text[end:], encoding="utf-8")
+    result = invoke_cli("validate", "--file", rule.name, repo=tutorial)
+    assert result.exit_code == 1, result.output
+    codes = [issue["code"] for issue in parse_cli_json(result)["report"]["issues"]]
+    assert "spl_parse_error" not in codes, codes
+    assert codes.count("schema_validation") >= 1

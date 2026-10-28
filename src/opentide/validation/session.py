@@ -43,7 +43,8 @@ from opentide.validation.parallel import resolve_worker_count, sort_issues
 from opentide.validation.preflight import PreflightGraph
 from opentide.validation.scope import ValidationScope
 
-_DEFAULT_CHECKS = frozenset(
+#: The checks a run performs when none are named: ``opentide validate``'s defaults.
+DEFAULT_CHECKS = frozenset(
     {
         ValidateCheck.id_uniqueness,
         ValidateCheck.uuid_format,
@@ -105,7 +106,7 @@ def run_validation(
     """
     started = time.perf_counter()
     scope = scope or ValidationScope.full()
-    checks = checks or _DEFAULT_CHECKS
+    checks = checks or DEFAULT_CHECKS
 
     Opentide.initialise()
     if index is None:
@@ -245,7 +246,7 @@ def run_validation(
         )
         # A query the schema check rejects (an empty one) is its finding, once.
         rejected = {
-            (issue.file_path, tuple(issue.field_path))
+            _query_place(issue)
             for issue in issues
             if issue.field_path and issue.field_path[-1] == "query"
         }
@@ -275,11 +276,20 @@ def run_validation(
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
 
 
+def _query_place(issue: ValidationIssue) -> tuple[Path | None, tuple[str, ...]]:
+    """Which query *issue* is about: a platform block (whose query a legacy key such as
+    splunk's ``search`` may hold), or the query's own path elsewhere (a hunt)."""
+    path = tuple(issue.field_path)
+    if len(path) == 3 and path[0] == "configurations":
+        path = path[:2]
+    return issue.file_path, path
+
+
 def _not_in(
     found: list[ValidationIssue], rejected: set[tuple[Path | None, tuple[str, ...]]]
 ) -> list[ValidationIssue]:
     """*found*, without the issues on a query another check already rejected."""
-    return [item for item in found if (item.file_path, tuple(item.field_path)) not in rejected]
+    return [item for item in found if _query_place(item) not in rejected]
 
 
 def _enabled_platforms(

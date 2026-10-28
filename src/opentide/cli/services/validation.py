@@ -984,6 +984,7 @@ def validate_query_offline(
         check_query_file,
         engine_versions,
         is_query_file,
+        query_file_language,
     )
     from opentide.cli.services.engine import (
         engine_unavailable_result,
@@ -1007,6 +1008,23 @@ def validate_query_offline(
         )
         result["unmatched"] = missing
         return result
+    if platform is not None:
+        from opentide.analysis import OFFLINE_QUERY_LANGUAGES
+
+        languages = OFFLINE_QUERY_LANGUAGES[platform]
+        other = [
+            f"{path} ({query_file_language(path)})"
+            for path in query_files
+            if query_file_language(path) not in languages
+        ]
+        if other:
+            message = (
+                f"--platform {platform} checks {', '.join(languages)}: "
+                f"not {', '.join(other)}"
+            )
+            refused = _query_scope_refused(platform, message, exit_code=2, mode="offline")
+            refused["_failure_argument"] = "--file"
+            return refused
     workspace = discover_workspace()
     platforms = sorted([platform] if platform else OFFLINE_QUERY_PLATFORMS)
     base: dict[str, object] = {"platform": platform, "mode": "offline", "supported": True}
@@ -1021,14 +1039,14 @@ def validate_query_offline(
         rule_files = list((rule_scope or local_rule_scope()).files)
     try:
         run = check_queries(rule_files, root=workspace, platforms=platforms)
-        from_files = [check_query_file(path) for path in query_files]
+        from_files = [check_query_file(path, platform=platform) for path in query_files]
         engine = engine_versions()
     except EngineUnavailableError as exc:
         return engine_unavailable_result(exc, **base)
     cannot_read = [item for item in from_files if isinstance(item, UnreadableFile)]
     if cannot_read:
         listed = "; ".join(f"{item.file_path}: {item.problem}" for item in cannot_read)
-        return {**base, "status": "failed", "message": f"Cannot read {listed}", "_exit_code": 1}
+        return {**base, "status": "failed", "message": f"Cannot check {listed}", "_exit_code": 1}
     from opentide.validation.queries import is_placeholder_query
 
     # A placeholder query is lint's finding; a query file has no marker.
