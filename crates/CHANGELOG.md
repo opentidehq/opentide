@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- `opentide_analysis::bundled_catalog()` returns the Tide catalogs compiled into the engine, as their files hold them, so a host can tell whether the engine it bundles matches its own models ([#99](https://github.com/opentidehq/language-server/issues/99)). opentide's CI fails when it does not.
 - Each Tide object is checked against the schema revision its `metadata.schema` names ([#98](https://github.com/opentidehq/language-server/issues/98)). The field catalog has rows per revision (`rule::1.0`, `rule::1.1`); required fields come from it rather than three checks hard-coded for `rule::1.0`, so a `rule::1.1` without `description` is reported; and a key the object's revision does not define is a `schema_validation` error where it is (`field 'metadata.reviewed' is not defined in rule::1.0`), except the legacy spellings opentide accepts (a splunk block's `search`). Catalogs keyed by family, from an older `opentide generate schemas`, still load.
 - `opentide-analysis` re-exports every type its functions take and return, so a host (the `opentide` Python package, an editor) depends on it alone. Its crates.io page shows a usage example, run as a doctest.
 - `cargo binstall opentide-lsp` downloads the release binary for the target instead of compiling the workspace.

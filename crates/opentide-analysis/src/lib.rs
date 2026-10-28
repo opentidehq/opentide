@@ -283,6 +283,19 @@ pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
     Ok(())
 }
 
+/// The Tide catalogs compiled into the engine, as their files hold them.
+///
+/// A host that generates its own catalogs (the `opentide` package, with
+/// `opentide.generation.lsp_catalog`) compares them with these to know
+/// whether the engine it bundles is current: labels such as the opentide
+/// version aside, the same models generate the same text.
+pub fn bundled_catalog() -> Catalog {
+    Catalog {
+        fields: Some(opentide_highlight::TIDE_FIELDS_JSON.to_string()),
+        deprecations: Some(opentide_tide::DEPRECATIONS_JSON.to_string()),
+    }
+}
+
 /// The opentide version the Tide field catalog in use was generated from.
 pub fn catalog_version() -> &'static str {
     opentide_highlight::tide_catalog_version()

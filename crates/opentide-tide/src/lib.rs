@@ -1208,7 +1208,8 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
     }
 }
 
-const DEPRECATIONS_JSON: &str = include_str!(concat!(
+/// The bundled `deprecations.json`, as compiled into the engine.
+pub const DEPRECATIONS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/catalogs/tide/generated/deprecations.json"
 ));

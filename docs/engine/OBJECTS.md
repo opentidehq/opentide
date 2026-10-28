@@ -56,7 +56,7 @@ Snapshot from `opentide generate schemas` into `catalogs/tide/`. That is the fal
 - `fields.json` replaces `catalogs/tide/generated/fields.json`: hover, completion and the enum checks follow the workspace's schemas, custom vocabulary included.
 - `deprecations.json` adds `deprecated_field` warnings on top of `catalogs/tide/generated/deprecations.json`.
 
-A file that does not parse is reported on stderr, and the bundled catalogs are used. Hosts embedding the engine call `opentide_analysis::install_catalog`.
+A file that does not parse is reported on stderr, and the bundled catalogs are used. Hosts embedding the engine call `opentide_analysis::install_catalog`, and `opentide_analysis::bundled_catalog` returns the bundled catalogs so a host can check they match its own models.
 
 Snippets come from the same templates `opentide generate` writes (`catalogs/tide/templates/`).
 

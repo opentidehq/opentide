@@ -138,3 +138,25 @@ fn analysis_with_a_prebuilt_index_matches_analyze() {
         "{indexed:?}"
     );
 }
+
+#[test]
+fn the_bundled_catalogs_are_the_files_compiled_in() {
+    let bundled = opentide_analysis::bundled_catalog();
+    let root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../catalogs/tide/generated");
+    let read = |name: &str| std::fs::read_to_string(root.join(name)).expect(name);
+    assert_eq!(
+        bundled.fields.as_deref(),
+        Some(read("fields.json").as_str())
+    );
+    assert_eq!(
+        bundled.deprecations.as_deref(),
+        Some(read("deprecations.json").as_str())
+    );
+    let fields: serde_json::Value =
+        serde_json::from_str(bundled.fields.as_deref().unwrap_or_default()).expect("fields.json");
+    assert_eq!(
+        fields["opentide"].as_str(),
+        Some(opentide_analysis::catalog_version())
+    );
+}
