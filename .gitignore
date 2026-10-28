@@ -101,4 +101,5 @@ workshop/
 analysis/target/
 src/opentide/_native.*.so
 src/opentide/_native.pyd
+src/opentide/_native.*.pyd
 src/opentide/_native.so

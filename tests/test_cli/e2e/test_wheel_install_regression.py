@@ -412,11 +412,16 @@ def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path) -> None:
         [
             str(python),
             "-c",
-            "import importlib.metadata as m; "
-            "from opentide.analysis import check_query, engine_versions; "
-            "print(engine_versions()); "
-            "print([f.code for f in check_query('SecurityEvent | wher x', language='kql')]); "
-            "print(sorted(d.metadata['Name'] for d in m.distributions()))",
+            "; ".join(
+                [
+                    "import importlib.metadata as m",
+                    "from opentide.analysis import check_query, engine_versions",
+                    "print(engine_versions())",
+                    "found = check_query('SecurityEvent | wher x', language='kql')",
+                    "print([f.code for f in found])",
+                    "print(sorted(d.metadata['Name'] for d in m.distributions()))",
+                ]
+            ),
         ],
         timeout=120,
     )
