@@ -445,7 +445,7 @@ CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query sy
 
 ### MCP `validate_query` refuses
 
-The default checks the `query` string offline. It refuses, without scanning, an empty query and a SentinelOne query: S1QL has no offline engine, so pass `live: true` to check the catalogue rules against the tenant. A missing plan fails that check. `run_query` is not implemented and returns `stub: true` with `rows: null`.
+The default checks the `query` string offline. It refuses, without scanning, an empty query and a SentinelOne query: S1QL has no offline engine, so pass `live: true` to check the catalogue rules against the tenant. A missing plan fails that check. `run_query` refuses until `live: true`, then returns rows.
 See [Agentic setup](./workflows/agentic-setup.md).
 
 ### `opentide validate query` fails with `engine_unavailable`

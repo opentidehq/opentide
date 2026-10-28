@@ -61,6 +61,12 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "": ("opentide setup", "opentide validate", "opentide --json validate"),
     "lint": ("opentide lint", "opentide lint --fix"),
     "info": ("opentide info", "opentide info --platform sentinel"),
+    "query": (
+        "opentide query --platform sentinel 'SecurityEvent | take 10'",
+        "opentide query --platform splunk --rule <rule-uuid> --tenant all --since 7d",
+        "opentide query --platform elastic --language eql --index 'logs-*' --format jsonl "
+        "'process where process.name == \"cmd.exe\"'",
+    ),
     "new": ('opentide new threat --name "Credential Dumping"',),
     "new threat": ('opentide new threat --name "Credential Dumping"',),
     "new objective": (

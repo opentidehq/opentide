@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from opentide.core.io import dump_json_text
 from opentide.core.registry import Opentide
 from opentide.mcp_server.catalog import ensure_initialised, get_object
+from opentide.query.runner import QUERY_PLATFORMS
 
 _FAMILY_ALIASES = {
     "rules": "rule",
@@ -201,6 +202,7 @@ def resource_platforms() -> str:
             "enabled": plat.enabled,
             "can_deploy": plat.can_deploy,
             "can_validate": plat.can_validate,
+            "can_query": name in QUERY_PLATFORMS,
         }
         for name, plat in Opentide.Platforms.items()
     ]

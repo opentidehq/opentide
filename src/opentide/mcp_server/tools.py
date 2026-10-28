@@ -423,30 +423,98 @@ def _offline_query_check(query: str, platform: str, *, language: str, stack: str
     return payload
 
 
-def tool_run_query(query: str, platform: str, tenant: str = "") -> dict[str, Any]:
-    """Not implemented. Never returns a row payload that looks like a real run."""
-    if platform not in QUERY_VALIDATION_PLATFORMS:
+def tool_run_query(
+    query: str,
+    platform: str,
+    tenant: str = "",
+    live: bool = False,
+    rule: str = "",
+    since: str = "24h",
+    limit: int = MAX_QUERY_ROWS,
+    language: str = "",
+    index: str = "",
+) -> dict[str, Any]:
+    """Run a read-only query on *platform*'s tenants; the default refuses without contacting one.
+
+    ``live=True`` sends *query*, or the query of the rule whose UUID is
+    *rule*, to the tenants *tenant* names (comma-separated, or ``all``) and
+    returns the payload of ``opentide --json query``.
+    """
+    from opentide.query.runner import QUERY_PLATFORMS
+
+    tenants = [name.strip() for name in tenant.split(",") if name.strip()]
+    indices = [name.strip() for name in index.split(",") if name.strip()]
+    if platform not in QUERY_PLATFORMS:
         return {
             "supported": False,
-            "stub": True,
-            "rows": None,
+            "status": "failed",
             "platform": platform,
-            "tenant": tenant or None,
             "message": f"query execution not supported for {platform}",
-            "query_preview": query[:200],
+            "choices": sorted(QUERY_PLATFORMS),
         }
-    return {
-        "supported": True,
-        "stub": True,
-        "rows": None,
-        "platform": platform,
-        "tenant": tenant or None,
-        "message": (
-            "Read-only query execution is not implemented; no query was sent to "
-            f"{platform}. The live path would cap results at {MAX_QUERY_ROWS} rows."
-        ),
-        "query_preview": query[:200],
-    }
+    if not live:
+        arguments: dict[str, Any] = {"query": query, "platform": platform, "live": True}
+        command = ["opentide", "--json", "query", "--platform", platform]
+        if tenant:
+            arguments["tenant"] = tenant
+            for name in tenants:
+                command += ["--tenant", name]
+        if rule:
+            arguments["rule"] = rule
+            command += ["--rule", rule]
+        # The live call keeps every choice the agent made, so it runs what was asked.
+        if since and since != "24h":
+            arguments["since"] = since
+            command += ["--since", since]
+        if limit != MAX_QUERY_ROWS:
+            arguments["limit"] = limit
+            command += ["--limit", str(limit)]
+        if language:
+            arguments["language"] = language
+            command += ["--language", language]
+        if index:
+            arguments["index"] = index
+            for name in indices:
+                command += ["--index", name]
+        if not rule:
+            command.append(query)
+        return {
+            "supported": True,
+            "status": "failed",
+            "platform": platform,
+            "message": "run_query sends the query to the tenant. Pass live: true.",
+            "query_preview": query[:200],
+            "next_actions": [
+                next_action(
+                    "run_query",
+                    arguments,
+                    command=shlex.join(command),
+                    reason=(
+                        f"run it on {platform}: this contacts the tenant with the configured "
+                        "credentials, so ask a person first"
+                    ),
+                )
+            ],
+        }
+    from opentide.cli.context import CliContext
+    from opentide.cli.services.query import query_platform
+
+    result = query_platform(
+        CliContext(),
+        platform,
+        query=None if rule else query,
+        rule_uuid=rule or None,
+        tenants=tenants,
+        since=since or None,
+        limit=limit,
+        language=language or None,
+        index=indices,
+    )
+    # The CLI envelope's fields; the tool payload keeps its shape.
+    for key in [key for key in result if key.startswith("_")]:
+        result.pop(key)
+    result["supported"] = True
+    return result
 
 
 def _unknown_platform(uuid: str, platform: str, *, dry_run: bool) -> dict[str, Any]:

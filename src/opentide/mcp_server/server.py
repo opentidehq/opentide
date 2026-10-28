@@ -60,8 +60,8 @@ checks it offline in its platform's language, with no tenant.
 
 People review and merge changes and run real deployments. Call deploy_rule with \
 dry_run false only when a person asks for it. validate_query with live true \
-contacts the tenant with the configured credentials: ask first. run_query is not \
-implemented and never returns rows.
+contacts the tenant with the configured credentials: ask first. run_query with live \
+true runs a read-only query on a tenant and returns its rows: ask first as well.
 
 Results may carry next_actions: [{{tool, arguments, command, reason}}], the next \
 call to make (command is the same step as an opentide command line). Read the \
@@ -202,12 +202,39 @@ def validate_query(
 
 
 @mcp.tool()
-def run_query(query: str, platform: str, tenant: str = "") -> dict:
-    """Not implemented: returns stub true and rows null, and never contacts a tenant.
+def run_query(
+    query: str,
+    platform: str,
+    tenant: str = "",
+    live: bool = False,
+    rule: str = "",
+    since: str = "24h",
+    limit: int = 100,
+    language: str = "",
+    index: str = "",
+) -> dict:
+    """Run a read-only query on a platform's tenants and return the rows (live true only).
 
-    Use validate_query with live true for the tenant check.
+    live false refuses without contacting a tenant. live true sends query, or
+    the query of the rule whose UUID is rule, to the tenant named by tenant
+    (comma-separated names, "all", or empty for the only one) over the last
+    since (15m, 24h, 7d) and returns {status, results: [{tenant, status,
+    columns, rows, row_count, truncated, warnings, error}], row_count}, at
+    most limit rows per tenant. It uses the configured credentials: ask a
+    person first. language is Elastic's: esql, eql, lucene or kuery. index
+    names Elastic index patterns (comma-separated) or a CrowdStrike repository.
     """
-    return tool_run_query(query, platform, tenant=tenant)
+    return tool_run_query(
+        query,
+        platform,
+        tenant=tenant,
+        live=live,
+        rule=rule,
+        since=since,
+        limit=limit,
+        language=language,
+        index=index,
+    )
 
 
 @mcp.tool()

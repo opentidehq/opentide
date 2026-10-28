@@ -46,6 +46,13 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         rich_help_panel=AUTHOR,
     ),
     CommandSpec(
+        "query",
+        "opentide.cli.commands.query",
+        "query_cmd",
+        "Run a read-only query on platform tenants and show rows",
+        rich_help_panel=AUTHOR,
+    ),
+    CommandSpec(
         "lint",
         "opentide.cli.commands.lint",
         "lint_cmd",
