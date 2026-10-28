@@ -28,6 +28,7 @@ from opentide.cli.ui.results.catalogue import (
     ExplainResult,
     InfoResult,
     LintResult,
+    QueryCommandResult,
     QueryValidationResult,
     UnreviewedResult,
     ValidateResult,
@@ -71,6 +72,7 @@ _IMPORTERS = (" sentinel", " defender", " elastic")
 RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "validate": ValidateResult,
     "validate query": QueryValidationResult,
+    "query": QueryCommandResult,
     "lint": LintResult,
     "info": InfoResult,
     "explain": ExplainResult,
