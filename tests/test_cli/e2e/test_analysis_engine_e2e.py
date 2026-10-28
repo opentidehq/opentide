@@ -317,7 +317,7 @@ def test_validate_query_refuses_a_query_file_it_cannot_read(invoke_cli, tutorial
     latin.write_bytes("index=main Règle".encode("latin-1"))
     unreadable = invoke_cli("validate", "query", "--file", str(latin), repo=tutorial)
     assert unreadable.exit_code == 1
-    assert parse_cli_json(unreadable)["error"].startswith(f"Cannot read {latin}")
+    assert parse_cli_json(unreadable)["error"].startswith(f"Cannot check {latin}")
 
 
 # --------------------------------------------------------------------------
@@ -596,3 +596,25 @@ def test_an_empty_legacy_search_is_reported_once(invoke_cli, tutorial: Path) -> 
     codes = [issue["code"] for issue in parse_cli_json(result)["report"]["issues"]]
     assert "spl_parse_error" not in codes, codes
     assert codes.count("schema_validation") >= 1
+
+
+def test_a_query_that_starts_with_search_validates(invoke_cli, tutorial: Path) -> None:
+    """Valid KQL the engine read as a parse error: validate failed a valid rule."""
+    _set_query(tutorial / RULE, 'search in (SecurityEvent) "mimikatz"\n| take 10')
+    payload = assert_json_ok(invoke_cli("validate", repo=tutorial))
+    assert payload["summary"]["queries"] == 1
+    _set_query(tutorial / RULE, 'search "mimikatz"')
+    linted = parse_cli_json(invoke_cli("lint", "--check", "queries", repo=tutorial))
+    assert [item["code"] for item in linted["findings"]] == ["kql_unscoped_search"]
+
+
+def test_a_quoted_query_key_is_checked(invoke_cli, tutorial: Path) -> None:
+    """``"query": |`` is the query to YAML and to the schema check: it was not checked."""
+    rule = tutorial / RULE
+    _set_query(rule, BROKEN)
+    text = rule.read_text(encoding="utf-8")
+    rule.write_text(text.replace("    query: |", '    "query": |', 1), encoding="utf-8")
+    result = invoke_cli("validate", repo=tutorial)
+    assert result.exit_code == 1, result.output
+    codes = [issue["code"] for issue in parse_cli_json(result)["report"]["issues"]]
+    assert codes == ["kql_unknown_operator"]
