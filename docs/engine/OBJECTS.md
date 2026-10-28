@@ -8,9 +8,9 @@ There is **no YAML formatter**. The LSP does not rename object `name`.
 
 | schema | refs |
 | --- | --- |
-| `rule::1.0`, `rule::1.1` | `detection_model` → objective UUID (optional; not schema-required). The field catalog is built from the newest revision, and `metadata.schema` offers both |
+| `rule::1.0`, `rule::1.1` | `detection_model` → objective UUID (optional; not schema-required). Each revision has its own fields: an object is checked against the revision its `metadata.schema` names (required fields, keys the revision does not define, enums). A revision the catalog does not know takes the newest one's fields, without the unknown-key check. `metadata.schema` offers both |
 | `objective::1.0` | `objective.threats[]` → threat UUIDs |
-| `threat::1.0` | `threat.impact` / `threat.leverage` are non-empty lists. `threat.chaining[].vector` / `relation` are not schema properties in 0.18.0 |
+| `threat::1.0` | `threat.impact` / `threat.leverage` are non-empty lists. `threat.chaining[].vector` / `relation` are not schema properties |
 
 ## Diagnostic codes (CLI-compatible)
 

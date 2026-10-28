@@ -33,6 +33,10 @@ fn a_workspace_catalog_replaces_the_bundled_one_until_reset() {
     let tlp = tide_field_at("rule", "metadata.tlp").expect("workspace tlp");
     assert!(tlp.enum_values.iter().any(|value| value == "house"));
     assert!(tide_field_at("rule", "description").is_none());
+    // A catalog keyed by family (an older `opentide generate schemas`)
+    // answers for every revision of the family.
+    assert!(tide_field_at("rule::1.0", "metadata.tlp").is_some());
+    assert!(tide_field_at("rule::1.1", "metadata.tlp").is_some());
 
     // The same text again reuses the catalog it built.
     install_tide_fields(Some(WORKSPACE)).expect("reinstall");

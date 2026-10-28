@@ -286,17 +286,139 @@ pub fn uuid_span(source: &str, uuid: &str) -> Option<ByteSpan> {
 }
 
 /// Schema id from `metadata.schema` (`rule::1.0` → `rule`).
-pub fn object_schema_kind(source: &str) -> String {
+/// The object's schema id (`rule::1.1`) from its first `schema:` line, or an
+/// empty string. Catalog lookups resolve it to its revision's fields.
+pub fn document_schema_id(source: &str) -> String {
     for raw in source.lines() {
         let t = raw.trim();
         if let Some(rest) = t.strip_prefix("schema:") {
-            let v = rest.trim();
-            if let Some(family) = v.split_once("::").map(|(family, _)| family) {
-                return family.to_string();
+            let v = rest.split_whitespace().next().unwrap_or("");
+            let v = v.trim_matches(|c| c == '"' || c == '\'');
+            if v.contains("::") {
+                return v.to_string();
             }
         }
     }
     String::new()
+}
+
+/// The span of the key at mapping `path` (`["metadata", "reviewed"]`), in
+/// block-style YAML. Comment lines and block scalars are skipped, so a
+/// commented-out template key (`#reviewed:`) is never taken for the real one.
+/// List items do not count in the path: the first item holding the key wins.
+/// [`key_span_in`] names the item.
+pub fn key_span(source: &str, path: &[&str]) -> Option<ByteSpan> {
+    let steps: Vec<(&str, Option<usize>)> = path.iter().map(|key| (*key, None)).collect();
+    key_span_in(source, &steps)
+}
+
+/// [`key_span`], where a step can name the item of the list its key holds:
+/// `[("objective", None), ("signals", Some(1)), ("severity", None)]` is the
+/// `severity` of the second signal. A step with `None` takes any item.
+///
+/// Keys are plain (any character, non-ASCII included) or quoted; a key in a
+/// flow mapping (`{a: 1}`) has no span.
+pub fn key_span_in(source: &str, path: &[(&str, Option<usize>)]) -> Option<ByteSpan> {
+    if path.is_empty() {
+        return None;
+    }
+    // Each open key: its column, its name, and how many items of the list it
+    // holds have started (`None` before the first).
+    let mut stack: Vec<(usize, String, Option<usize>)> = Vec::new();
+    let mut block: Option<usize> = None;
+    let mut offset = 0;
+    for raw in source.split_inclusive('\n') {
+        let start = offset;
+        offset += raw.len();
+        let line = raw.trim_end_matches(['\n', '\r']);
+        let indent = line_indent(line);
+        let body = &line[indent..];
+        if body.is_empty() {
+            continue;
+        }
+        if let Some(owner) = block {
+            if indent > owner {
+                continue;
+            }
+            block = None;
+        }
+        if body.starts_with('#') {
+            continue;
+        }
+        // `- key: value` puts the key after the dash; each dash starts an item
+        // of the list the nearest key at or left of it holds.
+        let mut column = indent;
+        let mut content = body;
+        while let Some(rest) = content.strip_prefix('-') {
+            if !(rest.is_empty() || rest.starts_with(' ')) {
+                break;
+            }
+            while stack.last().is_some_and(|(depth, _, _)| *depth > column) {
+                stack.pop();
+            }
+            if let Some((_, _, items)) = stack.last_mut() {
+                *items = Some(items.map_or(0, |n| n + 1));
+            }
+            let trimmed = rest.trim_start();
+            column += content.len() - trimmed.len();
+            content = trimmed;
+        }
+        let Some((key, key_start, key_len, after)) = mapping_key(content) else {
+            continue;
+        };
+        while stack.last().is_some_and(|(depth, _, _)| *depth >= column) {
+            stack.pop();
+        }
+        if stack.len() + 1 == path.len()
+            && stack
+                .iter()
+                .zip(path)
+                .all(|((_, name, items), (want, item))| {
+                    name == want && item.is_none_or(|item| *items == Some(item))
+                })
+            && key == path[path.len() - 1].0
+        {
+            let from = start + column + key_start;
+            return Some(ByteSpan::new(from, from + key_len));
+        }
+        let value = strip_comment(after).trim();
+        if value.starts_with('|') || value.starts_with('>') {
+            block = Some(column);
+        }
+        stack.push((column, key, None));
+    }
+    None
+}
+
+/// The mapping key `content` starts with: its name (unquoted), where its
+/// token starts and how long it is, and the text after the colon.
+fn mapping_key(content: &str) -> Option<(String, usize, usize, &str)> {
+    let first = content.chars().next()?;
+    if first == '"' || first == '\'' {
+        let close = content[1..].find(first)? + 1;
+        let rest = &content[close + 1..];
+        let after = rest.strip_prefix(':')?;
+        if !(after.is_empty() || after.starts_with(' ')) {
+            return None;
+        }
+        return Some((content[1..close].to_string(), 0, close + 1, after));
+    }
+    // A flow collection, an alias, a tag or a block scalar is not a key.
+    if matches!(
+        first,
+        '[' | '{' | '*' | '!' | '|' | '>' | '?' | '%' | '@' | '`' | '#'
+    ) {
+        return None;
+    }
+    let colon = content
+        .char_indices()
+        .find(|(i, c)| *c == ':' && matches!(content[i + 1..].chars().next(), None | Some(' ')))
+        .map(|(i, _)| i)?;
+    let key = content[..colon].trim_end();
+    if key.is_empty() {
+        return None;
+    }
+    Some((key.to_string(), 0, key.len(), &content[colon + 1..]))
 }
 
 #[cfg(test)]
@@ -403,5 +525,28 @@ configurations:
         let off = src.find("purpose:").unwrap();
         let c = yaml_cursor(src, off);
         assert_eq!(c.field_path(), "response.procedure.searches.purpose");
+    }
+
+    #[test]
+    fn key_span_finds_the_real_key_by_path() {
+        let source = "a:\n  #b: commented\n  c: |\n    b: inside a block\n  b: real\nlist:\n  - x: 1\n    b: item\n";
+        let at = |path: &[&str]| key_span(source, path).map(|span| &source[span.start..span.end]);
+        let span = key_span(source, &["a", "b"]).expect("a.b");
+        assert_eq!(&source[span.start..span.end], "b");
+        assert_eq!(source[..span.start].matches('\n').count(), 4);
+        assert_eq!(at(&["list", "b"]), Some("b"));
+        assert_eq!(at(&["list", "x"]), Some("x"));
+        assert_eq!(at(&["b"]), None);
+        assert_eq!(at(&[]), None);
+    }
+
+    #[test]
+    fn the_document_schema_id_is_the_whole_id() {
+        assert_eq!(document_schema_id(RULE), "rule::1.0");
+        assert_eq!(
+            document_schema_id("metadata:\n  schema: \"rule::1.1\"  # note\n"),
+            "rule::1.1"
+        );
+        assert_eq!(document_schema_id("name: x\n"), "");
     }
 }
