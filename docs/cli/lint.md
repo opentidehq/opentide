@@ -1,15 +1,16 @@
 ---
 title: opentide lint
-description: Catalogue hygiene — filename slugs and recommended metadata, distinct from schema validation.
+description: Catalogue hygiene — filename slugs, recommended metadata, placeholders and query style, distinct from validation.
 ---
 
 # opentide lint
 
-Convention checks that `opentide validate` does not cover. Lint does **not** replace `--strict` schema/graph validation.
+Convention and style checks that `opentide validate` does not cover: is the catalogue clean? `validate` decides whether it deploys. Lint does **not** replace `--strict` schema/graph validation.
 
 ```bash
 opentide lint
 opentide lint --check filenames
+opentide lint --check queries
 opentide lint --fix
 opentide lint --strict
 ```
@@ -21,8 +22,9 @@ opentide lint --strict
 | `filenames` | Object YAML stem must equal `slugify(name)` | Renames files. On a collision in the same folder, appends `{uuid[:8]}` |
 | `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty. By default `author` and `organisation` | Not auto-fixed |
 | `placeholders` | Reports each value [`opentide new`](./new.md) filled in for you, marked `# opentide:placeholder` | Not auto-fixed |
+| `queries` | Reports the analysis engine's warnings and notes on each query (slow shapes, deprecated commands) and Elastic block settings (see [Queries](#queries)) | Not auto-fixed |
 
-Default (no `--check`) runs every check that [`lint.toml`](#configuration) leaves enabled, which out of the box is all three. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
+Default (no `--check`) runs every check that [`lint.toml`](#configuration) leaves enabled, which out of the box is all four. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
 
 Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives,rules}/` and does not rebuild the object registry. A file in a subfolder is not an object: the `filenames` check reports it once as a `warning` with `code: nested_object_file` and checks nothing else in it.
 
@@ -30,7 +32,7 @@ Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives
 
 | Flag | Purpose |
 |------|---------|
-| `--check` | Repeatable. `filenames`, `metadata` or `placeholders`. Runs only the named checks, including one `lint.toml` disables |
+| `--check` | Repeatable. `filenames`, `metadata`, `placeholders` or `queries`. Runs only the named checks, including one `lint.toml` disables |
 | `--fix` | Apply safe filename renames |
 | `--strict` | Exit `1` when any finding exists (CI gate). Default is report-only |
 | `--format` | `text` (code frames, the default), `sarif` or `codequality`: the findings as a SARIF 2.1.0 or GitLab Code Quality report, as for [`validate`](./validate.md#reports-and-ci-annotations) |
@@ -76,15 +78,15 @@ When more than one severity is left, the count splits them. Notes alone are no w
 
 | Key | Value |
 |-----|-------|
-| `check` | `filenames`, `metadata` or `placeholders` |
+| `check` | `filenames`, `metadata`, `placeholders` or `queries` |
 | `severity` | `error`, `warning` or `info` (table below) |
 | `path` | Object file, relative to the workspace |
 | `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
 | `uuid` | The object's `metadata.uuid`. `null` when the file did not parse or has no UUID |
 | `message` | What is wrong |
-| `code` | `filename_mismatch`, `name_missing`, `metadata_recommended`, `placeholder`, or `yaml_parse`. `opentide explain <code>` describes it |
-| `field_path` | The key the finding is about (`["metadata"]`), or `[]` |
-| `line`, `column`, `end_column` | One-based position of that key, or of the YAML error. `null` when unknown |
+| `code` | `filename_mismatch`, `name_missing`, `metadata_recommended`, `placeholder`, `yaml_parse`, or the engine's code for a `queries` finding (`kql_where_not_first`, `spl_wildcard`, `lookback_zero`, ...). `opentide explain <code>` describes it |
+| `field_path` | The key the finding is about (`["metadata"]`, `["configurations", "sentinel", "query"]`), or `[]` |
+| `line`, `column`, `end_column` | One-based position of that key, of the YAML error, or of the engine's finding in the query. `null` when unknown |
 | `help` | What to do, or `null` |
 | `fix` | Always `null`: a rename is not a text edit. `opentide lint --fix` renames |
 | `explain` | `opentide explain <code>` |
@@ -100,6 +102,8 @@ A placeholder's `help` is the step that clears it. A filename mismatch adds `exp
 | Filename is not `slugify(name)` | `warning` | `null` |
 | A `metadata.required` key missing or empty | `info` | The `metadata:` key, or `null` when there is no `metadata` block |
 | A value marked `# opentide:placeholder` | `warning` | The marked line |
+| An engine warning on a query or an Elastic block | `warning` | The finding's line |
+| An engine note (a hint) on a query | `info` | The finding's line |
 
 These are the defaults; a check's `severity` in `lint.toml` replaces them for every finding of that check. Severity is for sorting and triage only. `--strict` exits `1` on any finding, whatever its severity.
 
@@ -118,12 +122,15 @@ required = ["author", "organisation"]
 
 [placeholders]
 enabled = true
+
+[queries]
+enabled = true
 ```
 
 | Key | Tables | Value |
 |-----|--------|-------|
-| `enabled` | `[filenames]`, `[metadata]`, `[placeholders]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
-| `severity` | `[filenames]`, `[metadata]`, `[placeholders]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included |
+| `enabled` | `[filenames]`, `[metadata]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
+| `severity` | `[filenames]`, `[metadata]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included |
 | `required` | `[metadata]` | The `metadata` keys every object must fill. It replaces the default list rather than adding to it, and `[]` turns the metadata check into a no-op |
 
 `required` takes any key a `metadata` block can hold: `uuid`, `schema`, `version`, `created`, `modified`, `tlp`, `author`, `contributors`, `organisation`, `reviewed`. A key counts as missing when it is absent, `null`, a blank string or an empty list; `organisation` needs a `name` (or the `organization` spelling). Each object is asked only for the keys its own schema accepts: `reviewed` exists on `rule::1.1` metadata alone, so it is never demanded of a threat, an objective or a `rule::1.0` rule, whose schemas reject it.
@@ -173,7 +180,24 @@ warning[placeholder]: mitre_attack[0] holds a placeholder value written by opent
    ╰─ help: replace the value, then delete the '# opentide:placeholder' comment
 ```
 
-Plain `lint` and `validate` still pass, so a draft can be committed: the commit hook runs `validate --strict` only. The CI pipeline from `opentide setup ci` also runs `lint --strict`, which fails until every marked value is replaced and its marker deleted. A placeholder looks like a real choice, so until then `generate` exports it like one (an ATT&CK technique in the coverage layer, for instance).
+Plain `lint` and `validate` still pass, so a draft can be committed (a placeholder query, `...`, is not sent to the analysis engine: neither `validate` nor the `queries` check reports it as a query): the commit hook runs `validate --strict` only. The CI pipeline from `opentide setup ci` also runs `lint --strict`, which fails until every marked value is replaced and its marker deleted. A placeholder looks like a real choice, so until then `generate` exports it like one (an ATT&CK technique in the coverage layer, for instance).
+
+### Queries
+
+The `queries` check runs the analysis engine that [`opentide validate`](./validate.md#queries) runs, and reports what `validate` leaves out: the engine's warnings and notes. A query the platform would reject is an error, and `validate`'s; what lint reports would deploy, but reads as a slow query shape (`kql_where_not_first`, `spl_wildcard`), a deprecated command, or an Elastic block setting that misses events (`lookback_zero`, `risk_band`). Each finding prints as the engine frames it, at its place in the rule file, with the query coloured at a terminal; its help links the language's reference, and `opentide explain <code>` describes it.
+
+```text illustrative
+warning[kql_where_not_first]: `where` is not the first operator after the table reference; filter before later operators
+   ╭─▶ objects/rules/sentinel-kql-rule.yaml:33:9
+   │
+32 │       | summarize count() by Account
+33 │       | where Account != ""
+   │         ━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+```
+
+A warning is `warning`, a note `info`; `[queries] severity` replaces both. A placeholder query is left to the `placeholders` check. When the engine does not load, lint fails with exit `1` and `failure.code` `engine_unavailable`, as `validate` does; `--check` without `queries` does not need it.
 
 ## Source
 

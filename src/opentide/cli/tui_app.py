@@ -280,7 +280,6 @@ class OpentideTui(App[None]):
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("v", "run('validate')", "Validate"),
-        Binding("V", "run('validate-deep')", "Validate --deep", show=False),
         Binding("g", "run('generate')", "Generate"),
         Binding("d", "run('deploy-preview')", "Deploy dry run"),
         Binding("r", "reload", "Reload"),
@@ -491,7 +490,7 @@ class OpentideTui(App[None]):
 
         A validate finding the language server reports too (the same code on
         the same line) is shown once, as validate's: its help is the one
-        ``opentide validate`` prints. ``validate --deep``'s query findings come
+        ``opentide validate`` prints. The queries check's findings come
         from the same engine as the language server's, so they are left to it.
         """
         report = self.catalogue.language_server if self.catalogue else None

@@ -100,6 +100,19 @@ class LintCheck(str, Enum):
     filenames = "filenames"
     metadata = "metadata"
     placeholders = "placeholders"
+    #: The analysis engine's warnings and notes on rule queries (style, not validity).
+    queries = "queries"
+
+
+class QueriesMode(str, Enum):
+    """How ``opentide validate`` reports a query the engine rejects (``--queries``)."""
+
+    #: An error: validation fails.
+    error = "error"
+    #: A warning: validation passes, unless ``--strict``.
+    warn = "warn"
+    #: The queries check does not run.
+    off = "off"
 
 
 def platform_label(platform: DetectionPlatform) -> str:
@@ -127,6 +140,7 @@ __all__ = [
     "GeneratePhase",
     "LintCheck",
     "McpHost",
+    "QueriesMode",
     "SkillTarget",
     "ValidateCheck",
     "platform_label",

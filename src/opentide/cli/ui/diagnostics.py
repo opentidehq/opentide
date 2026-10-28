@@ -619,7 +619,7 @@ def diagnostic_from_issue(
     file_path = issue.file_path
     position = issue.context.get("position")
     if file_path is not None and isinstance(position, Mapping):
-        # The queries check (`validate --deep`): the engine named the place.
+        # The queries check: the engine named the place.
         from opentide.analysis import Finding
 
         finding = Finding(
@@ -634,7 +634,12 @@ def diagnostic_from_issue(
             suggestion=issue.suggestion,
         )
         diagnostic = diagnostic_from_engine(finding, file_path=file_path, workspace=workspace)
-        return replace(diagnostic, object_uuid=issue.object_uuid or None)
+        from opentide.validation.queries import REPORTED_AS_WARNING
+
+        notes = diagnostic.notes
+        if issue.context.get(REPORTED_AS_WARNING):
+            notes = (*notes, ("note", REPORTED_AS_WARNING_NOTE))
+        return replace(diagnostic, object_uuid=issue.object_uuid or None, notes=notes)
     value = _issue_value(issue)
     message = issue.message
     notes: list[tuple[str, str]] = []
@@ -763,6 +768,11 @@ def annotate_report(
 _LINT_SEVERITY: dict[str, Severity] = {"error": "error", "warning": "warning", "info": "note"}
 
 
+def lint_severity(severity: str) -> Severity:
+    """A lint severity (``error``, ``warning``, ``info``) as a diagnostic's."""
+    return _LINT_SEVERITY.get(severity, "warning")
+
+
 def diagnostic_from_lint_finding(
     finding: Mapping[str, Any], *, root: Path, sources: SourceFiles
 ) -> Diagnostic:
@@ -806,7 +816,7 @@ def diagnostic_from_lint_finding(
         notes.append(("note", str(note)))
     return Diagnostic(
         code=code,
-        severity=_LINT_SEVERITY.get(str(finding.get("severity")), "warning"),
+        severity=lint_severity(str(finding.get("severity"))),
         message=message,
         path=path,
         file_path=file_path,
@@ -823,6 +833,9 @@ def diagnostic_from_lint_finding(
 # --------------------------------------------------------------------------
 # Engine findings (opentide.analysis)
 # --------------------------------------------------------------------------
+
+#: The note on a query error ``validate --queries warn`` reports as a warning.
+REPORTED_AS_WARNING_NOTE = "the platform rejects this query; --queries warn reports it as a warning"
 
 #: Words in an engine message that make its ``suggestion`` a replacement name.
 _ENGINE_UNKNOWN = ("unknown", "deprecated")

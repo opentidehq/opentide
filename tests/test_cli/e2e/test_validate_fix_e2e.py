@@ -123,7 +123,7 @@ def test_validate_points_at_fix_when_safe_fixes_exist(tutorial: Path) -> None:
     assert result.exit_code == 1
     text = _text(result)
     assert re.search(
-        rf"✗ 3 errors in 2 files · 2 fixable with --fix · 3 objects checked · {_TIME}\n"
+        rf"✗ 3 errors in 2 files · 2 fixable with --fix · 3 objects checked · 1 query · {_TIME}\n"
         r"→ opentide validate --fix · apply 2 safe fixes\n",
         text,
     ), text
@@ -131,6 +131,7 @@ def test_validate_points_at_fix_when_safe_fixes_exist(tutorial: Path) -> None:
     payload = json.loads(_run(tutorial, "validate", json_output=True).stdout)
     assert payload["summary"] == {
         "objects": 3,
+        "queries": 1,
         "errors": 3,
         "warnings": 0,
         "files": 2,
@@ -162,7 +163,9 @@ def test_fix_applies_only_the_safe_fixes_and_keeps_every_other_byte(
     assert f"error[invalid_ref]: Unknown objective or signal reference '{_DANGLING}'" in text
     assert text.count("error[") == 1
     assert re.search(
-        rf"✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · {_TIME}\n", text
+        r"✗ 1 error in 1 file · fixed 2 values in 2 files · 3 objects checked · 1 query · "
+        rf"{_TIME}\n",
+        text,
     )
     assert "→ opentide validate --fix" not in text
 
@@ -176,7 +179,7 @@ def test_fix_applies_only_the_safe_fixes_and_keeps_every_other_byte(
     again = _run(tutorial, "validate", "--fix")
     assert again.exit_code == 1
     assert re.search(
-        rf"✗ 1 error in 1 file · no safe fix to apply · 3 objects checked · {_TIME}\n",
+        rf"✗ 1 error in 1 file · no safe fix to apply · 3 objects checked · 1 query · {_TIME}\n",
         _text(again),
     )
     assert _files(tutorial) == after
@@ -206,6 +209,7 @@ def test_fix_reports_each_value_in_json(tutorial: Path) -> None:
     ]
     assert payload["summary"] == {
         "objects": 3,
+        "queries": 1,
         "errors": 1,
         "warnings": 0,
         "files": 1,
@@ -231,10 +235,12 @@ def test_fix_with_nothing_left_passes(tutorial: Path) -> None:
     result = _run(tutorial, "validate", "--fix")
     assert result.exit_code == 0, result.output
     assert re.search(
-        rf"^✓ Fixed 1 value in 1 file · 3 objects valid · {_TIME}$", _text(result), re.MULTILINE
+        rf"^✓ Fixed 1 value in 1 file · 3 objects valid · 1 query · {_TIME}$",
+        _text(result),
+        re.MULTILINE,
     )
     clean = _run(tutorial, "validate", "--fix")
-    assert re.fullmatch(rf"✓ 3 objects valid · {_TIME}\n", _text(clean))
+    assert re.fullmatch(rf"✓ 3 objects valid · 1 query · {_TIME}\n", _text(clean))
 
 
 def test_dry_run_prints_the_diff_and_changes_nothing(tutorial: Path) -> None:
@@ -259,7 +265,8 @@ def test_dry_run_prints_the_diff_and_changes_nothing(tutorial: Path) -> None:
     assert text.count("error[") == 1
     assert "error[invalid_ref]" in text
     assert re.search(
-        rf"✗ 3 errors in 2 files · would fix 2 values in 2 files · 3 objects checked · {_TIME}\n"
+        r"✗ 3 errors in 2 files · would fix 2 values in 2 files · 3 objects checked · 1 query · "
+        rf"{_TIME}\n"
         r"→ opentide validate --fix · apply 2 safe fixes\n",
         text,
     ), text

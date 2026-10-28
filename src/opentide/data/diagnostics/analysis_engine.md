@@ -1,6 +1,6 @@
 # analysis_engine
 
-The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind `opentide validate query`, `opentide validate --deep` and `opentide lsp`.
+The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind the `queries` checks of `opentide validate` and `opentide lint`, `opentide validate query` and `opentide lsp`.
 
 Reported by `opentide doctor`, with the version of the language-server crates compiled in. Fails when the engine does not load (`engine_unavailable`).
 

@@ -71,8 +71,8 @@ dependencies = [
     # walked boto3 back to 0.0.3, whose botocore fails on `six.moves`. The floor
     # makes the resolver keep a current boto3 and cap python-dateutil instead.
     "boto3>=1.35",
-    # The query and Tide object engine and the language server (`opentide
-    # validate query`, `validate --deep`, `opentide lsp`) are not a dependency:
+    # The query and Tide object engine and the language server (the queries
+    # checks of `validate` and `lint`, `validate query`, `opentide lsp`) are not a dependency:
     # they are Rust, compiled from analysis/ into this package (opentide._native)
     # by hatch_build.py.
 ]

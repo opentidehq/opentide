@@ -140,12 +140,15 @@ def validation_report(
     file: str = "",
     uuid: str = "",
     object_type: str = "",
+    queries: str = "error",
 ) -> dict:
     """Validate objects and return every issue with its position and fix. Call after each edit.
 
     Narrow with file (repository-relative or absolute path; a bare file name
     matches every object file of that name), uuid, or object_type (rule |
-    threat | objective). No argument validates the whole catalogue.
+    threat | objective). No argument validates the whole catalogue. Every
+    rule query is checked offline: queries is error (a query the platform
+    would reject is an issue), warn (a warning) or off (not checked).
     Returns {ok, issues, warnings, stats, next_actions}. Each issue: code,
     severity, message, object_uuid, field_path, path, line, column, end_column
     (1-based Unicode code points; end_column exclusive), help, fix ({safe,
@@ -158,6 +161,7 @@ def validation_report(
         file=file or None,
         uuid=uuid or None,
         object_type=object_type or None,
+        queries=queries,
     )
 
 

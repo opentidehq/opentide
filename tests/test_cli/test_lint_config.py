@@ -50,7 +50,7 @@ def test_check_names_match_the_cli_enum() -> None:
 def test_bundled_defaults_reproduce_unconfigured_lint(tmp_path: Path) -> None:
     config = load_lint_config(tmp_path)
     assert config.required_metadata == DEFAULT_REQUIRED_METADATA == ("author", "organisation")
-    assert config.enabled_checks() == ["filenames", "metadata", "placeholders"]
+    assert config.enabled_checks() == ["filenames", "metadata", "placeholders", "queries"]
     assert all(config.check(name).severity is None for name in CHECK_NAMES)
 
 
@@ -70,7 +70,7 @@ def test_empty_required_silences_the_metadata_check(tmp_path: Path) -> None:
     _write_lint_toml(tmp_path, "[metadata]\nrequired = []\n")
     result = run_lint(tmp_path)
     assert result["count"] == 0
-    assert result["checks"] == ["filenames", "metadata", "placeholders"]
+    assert result["checks"] == ["filenames", "metadata", "placeholders", "queries"]
 
 
 def test_required_counts_empty_lists_and_strings_as_missing(tmp_path: Path) -> None:
@@ -85,7 +85,7 @@ def test_disabled_check_does_not_run(tmp_path: Path) -> None:
     _write_object(tmp_path, "Simulated Actor.yaml")
     _write_lint_toml(tmp_path, "[metadata]\nenabled = false\n")
     result = run_lint(tmp_path)
-    assert result["checks"] == ["filenames", "placeholders"]
+    assert result["checks"] == ["filenames", "placeholders", "queries"]
     assert [item["check"] for item in result["findings"]] == ["filenames"]
 
 
@@ -102,7 +102,7 @@ def test_every_check_disabled_passes(tmp_path: Path) -> None:
     _write_lint_toml(
         tmp_path,
         "[metadata]\nenabled = false\n[filenames]\nenabled = false\n"
-        "[placeholders]\nenabled = false\n",
+        "[placeholders]\nenabled = false\n[queries]\nenabled = false\n",
     )
     result = run_lint(tmp_path, strict=True)
     assert result["checks"] == []

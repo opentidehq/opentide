@@ -23,6 +23,12 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Literal
 
 from opentide.core.logging import get_logger
+from opentide.validation.query_platforms import (
+    OFFLINE_QUERY_LANGUAGES as OFFLINE_QUERY_LANGUAGES,
+)
+from opentide.validation.query_platforms import (
+    OFFLINE_QUERY_PLATFORMS as OFFLINE_QUERY_PLATFORMS,
+)
 
 if TYPE_CHECKING:
     from opentide._native import Diagnostic as EngineDiagnostic
@@ -34,17 +40,17 @@ logger = get_logger(__name__)
 ENGINE_UNAVAILABLE = "engine_unavailable"
 REINSTALL_COMMAND = "pip install --force-reinstall opentide"
 
-#: Platforms whose rule queries the engine checks offline, and their languages.
-#: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
-#: CrowdStrike and HarfangLab are never checked: no fake validation.
-OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
-    "sentinel": ("kql",),
-    "defender_for_endpoint": ("kql",),
-    "splunk": ("spl",),
-    "elastic": ("esql", "eql", "kuery", "lucene"),
-    "carbon_black_cloud": ("lucene",),
-}
-OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)
+#: The engine's advisories on an Elastic rule block's settings (elastic-1.0):
+#: style, which ``opentide lint`` reports with the query warnings.
+ELASTIC_ADVISORY_CODES = frozenset(
+    {
+        "lookback_zero",
+        "lookback_long",
+        "threshold_lookback",
+        "risk_band",
+        "technique_not_enterprise",
+    }
+)
 
 #: Where the Elastic tenants' stack versions are read from; the engine matches
 #: this path's ending, so it is passed as written here.
@@ -463,6 +469,56 @@ def check_query(
         Finding.from_engine(item)
         for item in engine().analyze_query(text, language, platform=platform, stack=stack)
     ]
+
+
+#: Extensions of a query file: one query in the language its extension names.
+QUERY_FILE_SUFFIXES = (".kql", ".spl", ".esql", ".eql", ".kuery", ".lucene")
+
+
+def is_query_file(path: Path | str) -> bool:
+    """Whether *path* names a query file (by extension), rather than an object file."""
+    return Path(path).suffix.lower() in QUERY_FILE_SUFFIXES
+
+
+def query_file_language(path: Path | str) -> str | None:
+    """The language a query file's extension names (``.KQL`` as ``.kql``), else ``None``."""
+    path = Path(path)
+    if not is_query_file(path):
+        return None
+    return language_for_path(path.with_suffix(path.suffix.lower()))
+
+
+def check_query_file(path: Path, *, platform: str | None = None) -> QueryCheck | UnreadableFile:
+    """The query in a query file, checked in the language its extension names.
+
+    With *platform*, whose languages include it, with that platform's profile
+    (Defender's tables, Carbon Black's Lucene); without, the language alone.
+    A file with no query is unreadable: there is nothing to pass.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        from opentide.core.io import not_utf8_problem
+
+        return UnreadableFile(path, not_utf8_problem(exc))
+    except OSError as exc:
+        return UnreadableFile(path, exc.strerror or str(exc))
+    language = query_file_language(path)
+    if language is None:  # an extension the engine does not know: a bug in the list above
+        return UnreadableFile(path, f"no query language for {path.suffix}")
+    if not text.strip():
+        return UnreadableFile(path, "it holds no query")
+    if platform is not None and language not in OFFLINE_QUERY_LANGUAGES.get(platform, ()):
+        platform = None
+    return QueryCheck(
+        file_path=path,
+        platform=platform,
+        language=language,
+        field_path=(),
+        line=1,
+        column=1,
+        findings=tuple(check_query(text, language=language, platform=platform)),
+    )
 
 
 def check_file(

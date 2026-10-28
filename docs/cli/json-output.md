@@ -70,8 +70,8 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `path_not_writable` | 1 | `new`: the folder or the file it would write cannot be written (read-only checkout, permissions) |
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
 | `doctor_checks_failed` | 1 | `doctor`: at least one check failed. Read `checks` for which |
-| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `validate query` and `lsp check` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
-| `engine_unavailable` | 1 | The analysis engine compiled into opentide does not load: `validate query` offline, `lsp check`. `advice` names the reinstall command |
+| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `validate query` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
+| `engine_unavailable` | 1 | The analysis engine compiled into opentide does not load: `validate query` offline, `lint` (its `queries` check). In `validate`, an `engine_unavailable` issue instead. `advice` names the reinstall command |
 | `config_parse` | 1 | A configuration TOML file does not parse. `diagnostics` holds the file, line and column |
 | `yaml_parse` | 1 | `deploy` read a rule file whose YAML is not one mapping. `diagnostics` holds the file and line |
 | `not_run` | non-zero | The command was skipped and says why in `message` |

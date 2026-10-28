@@ -450,7 +450,7 @@ See [Agentic setup](./workflows/agentic-setup.md).
 
 ### `opentide validate query` fails with `engine_unavailable`
 
-The offline check, `validate --deep` and `opentide lsp` run the analysis engine, which is compiled into the opentide package. When it does not import, they fail rather than skip, and say so:
+The offline check, `validate` (its `queries` check), `lint` (its `queries` check) and `opentide lsp` run the analysis engine, which is compiled into the opentide package. When it does not import, they fail rather than skip, and say so:
 
 ```text illustrative
 error: The opentide analysis engine does not load: No module named 'opentide._native'

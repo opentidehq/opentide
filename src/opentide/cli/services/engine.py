@@ -1,8 +1,9 @@
 """Shared pieces of the commands that run the analysis engine.
 
-``validate query`` (offline), ``validate --deep``, ``lsp check``, ``doctor`` and
-MCP ``validate_query`` call :mod:`opentide.analysis`; this module turns what it
-returns, and its one failure, into results the CLI renders.
+``validate`` (its queries check), ``validate query``, ``lint`` (its queries
+check), ``doctor`` and MCP ``validate_query`` call :mod:`opentide.analysis`;
+this module turns what it returns, and its one failure, into results the CLI
+renders.
 """
 
 from __future__ import annotations

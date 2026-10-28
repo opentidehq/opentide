@@ -35,7 +35,6 @@ from opentide.cli.ui.results.catalogue import (
 )
 from opentide.cli.ui.results.deploy import DeployResult, MigrateStateResult
 from opentide.cli.ui.results.generate import DocsResult, ExportResult, ExtractResult, GenerateResult
-from opentide.cli.ui.results.lsp import LspCheckResult
 from opentide.cli.ui.results.migrate import MigrateObjectsResult, MigrateVocabScopeResult
 from opentide.cli.ui.results.setup import (
     SetupCiResult,
@@ -112,7 +111,6 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "new objective": NewResult,
     "new rule": NewResult,
     "doctor": DoctorResult,
-    "lsp check": LspCheckResult,
     # Refuses outside an interactive terminal, so --json only ever prints a usage error.
     "tui": CommandError,
     "migrate objects": MigrateObjectsResult,

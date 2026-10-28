@@ -17,3 +17,10 @@ required = ["author", "organisation"]
 [placeholders]
 enabled = true
 # severity = "warning"
+
+[queries]
+# The analysis engine's warnings and notes on rule queries (slow shapes,
+# deprecated commands) and Elastic block settings. A query the platform would
+# reject is opentide validate's error, not lint's.
+enabled = true
+# severity = "warning"

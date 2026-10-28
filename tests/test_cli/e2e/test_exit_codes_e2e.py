@@ -35,7 +35,8 @@ EMPTY_CATALOGUE_COMMANDS: tuple[tuple[tuple[str, ...], int], ...] = (
     # Without --live: the offline check, which finds no query (skipped, exit 0).
     (("validate", "query"), 0),
     (("validate", "query", "--platform", "sentinel"), 0),
-    (("validate", "--deep"), 0),
+    (("validate", "--queries", "warn"), 0),
+    (("validate", "--queries", "off"), 0),
     (("validate", "query", "--platform", "sentinel", "--live"), 0),
     *(
         (("deploy", "--dry-run", *EVERY_RULE, "--platform", platform), 0)

@@ -32,8 +32,7 @@ Run them with their key, or from the command palette (`ctrl+p`), which lists the
 
 | Key | Palette entry | Same as |
 |-----|---------------|---------|
-| `v` | `opentide validate` | `opentide validate` |
-| `V` | `opentide validate --deep` | `opentide validate --deep`: also checks every rule's query offline |
+| `v` | `opentide validate` | `opentide validate`: every object, and every rule's query offline |
 | `g` | `opentide generate` | `opentide generate` (the full pipeline; it writes docs and exports into the repository) |
 | `d` | `opentide deploy --dry-run --strategy PREVIEW --all` | The same command: the payloads a PREVIEW deploy of every rule file would send. No platform is called |
 | | `opentide deploy --dry-run --strategy RELEASE --all` | The same command, for a RELEASE run |
@@ -44,7 +43,7 @@ A command runs in the background, one at a time, so the UI stays responsive. Whe
 
 ## The language server
 
-Each time the catalogue is read (at start, after `r`, after each command), the TUI checks every object file the way [`opentide lsp check`](./lsp.md#lsp-check) does, with the workspace's catalogs when [`opentide generate schemas`](./generate.md) wrote them. So you see what your editor would show, the queries inside rules included, before running validate:
+Each time the catalogue is read (at start, after `r`, after each command), the TUI checks every object file the way your editor's [`opentide lsp start`](./lsp.md#lsp-start) does, with the catalog this opentide generates for the workspace. So you see what your editor would show, the queries inside rules included, before running validate:
 
 ```text illustrative
 Language server
@@ -56,7 +55,7 @@ Last validate run
 Not validated yet: press v to run opentide validate.
 ```
 
-A finding both report (the same code on the same line, such as a TLP value that is not in the vocabulary) is shown and counted once, as validate's. The query findings of `validate --deep` come from the same engine, so they are shown once, under the language server. Notes (hints) are shown, but are not counted in the tree. [`opentide validate`](./validate.md) stays the authority on whether an object deploys.
+A finding both report (the same code on the same line, such as a TLP value that is not in the vocabulary) is shown and counted once, as validate's. The query findings of validate's `queries` check come from the same engine, so they are shown once, under the language server. Notes (hints) are shown, but are not counted in the tree. [`opentide validate`](./validate.md) stays the authority on whether an object deploys.
 
 When the analysis engine does not load, the status line and the pane say why and how to reinstall it, nothing is checked, and the file is coloured as plain YAML (see [`engine_unavailable`](./diagnostics.md#engine_unavailable)).
 

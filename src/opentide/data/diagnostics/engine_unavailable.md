@@ -2,7 +2,7 @@
 
 The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server.
 
-Exit 1, as `failure.code`, from `opentide validate query` (offline), `opentide lsp check` and `opentide lsp start`; an error issue of the `queries` check in `opentide validate --deep`; and the `analysis_engine` check of `opentide doctor`. The check is never skipped: a missing engine fails the command.
+Exit 1, as `failure.code`, from `opentide validate query` (offline), `opentide lint` (its `queries` check) and `opentide lsp start`; an error issue of the `queries` check in `opentide validate`, whatever `--queries` says but `off`; and the `analysis_engine` check of `opentide doctor`. The check is never skipped: a missing engine fails the command.
 
 ## Example
 

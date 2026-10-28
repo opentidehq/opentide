@@ -1,6 +1,6 @@
 ---
 title: opentide lsp
-description: The opentide language server for editors, and the diagnostics it shows, on the command line.
+description: The opentide language server, for editors.
 ---
 
 # opentide lsp
@@ -9,10 +9,9 @@ description: The opentide language server for editors, and the diagnostics it sh
 
 ```bash
 opentide lsp start
-opentide lsp check
-opentide lsp check objects/rules/suspicious-lsass-access.yaml
-opentide --json lsp check hunting/lsass.kql
 ```
+
+`opentide lsp` serves editors. On the command line, opentide's own verbs report what the engine finds: [`opentide validate`](./validate.md#queries) the queries a platform would reject, [`opentide validate query`](./validate.md#query-validation) the same for a rule or a query file (`--file hunting/lsass.kql`), and [`opentide lint`](./lint.md#queries) their style. [`opentide tui`](./tui.md#the-language-server) shows the editor's findings for each object as you browse.
 
 ## lsp start
 
@@ -53,45 +52,6 @@ args = ["lsp", "start"]
 ```
 
 Then add `opentide` to the `language-servers` of the languages you edit. Zed and VS Code take the same command; the language server repository has [samples for each](https://github.com/opentidehq/language-server/tree/main/editors).
-
-## lsp check
-
-Prints what the language server reports for each file, as code frames, then one outcome line: the diagnostics your editor shows, without an editor. At a terminal, the query lines of a frame are coloured as the editor colours them. With no path it checks every object file of the workspace. In a folder it checks the query files (the extensions above) and the YAML files that are objects of the workspace, and skips hidden files and folders, so `opentide lsp check .` leaves CI workflows and templates alone; a file you name is always checked. A file's language comes from its extension; `--language` reads every file as one language.
-
-| Flag | Purpose |
-|------|---------|
-| `PATH`… | Files or folders to check. Default: every object file |
-| `--language` | Read every file as `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene` or `opentide-yaml` |
-| `--strict` | Fail on warnings too |
-
-```text illustrative
-warning[kql_where_not_first]: `where` is not the first operator after the table reference; filter before later operators
-  ╭─▶ hunting/lsass.kql:3:3
-  │
-2 │ | summarize count() by Account
-3 │ | where Account != ""
-  │   ━━━━━━━━━━━━━━━━━━━
-  │
-  ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
-
-! 1 warning in 1 file · 1 file checked
-```
-
-Errors fail the run with exit `1` (`failure.code` `issues_found`); warnings only under `--strict`. Notes (hints such as a Lucene term without a field) never fail it. A path that does not exist, or a file whose language its name does not say, exits `2` (`usage_invalid_value`). In CI the findings become annotations, as for [`validate`](./validate.md#reports-and-ci-annotations).
-
-Each finding has a stable code; `opentide explain <code>` prints what it means and links the language's reference ([Diagnostic codes](./diagnostics.md) lists them). Columns count Unicode code points, as in every opentide diagnostic.
-
-`lsp check` and `opentide validate` read the same objects but are not the same check. [`opentide validate`](./validate.md) is the authority for objects: its schema, vocabulary and reference checks decide whether a rule deploys. The language server reports similar findings, sometimes with its own code (`filename_slug`, `missing_author`), for the editor. To check every rule's query on top of `validate`, run `opentide validate --deep`. [`opentide tui`](./tui.md#the-language-server) shows these findings for each object as you browse, with the file coloured as the editor colours it.
-
-With `--json`:
-
-| Key | Value |
-|-----|-------|
-| `files_checked` | Files read |
-| `diagnostics` | Each finding with `code`, `severity` (`error`, `warning`, `note`), `message`, `path`, `line`, `column`, `end_column`, `field_path`, `help` and `explain` |
-| `catalog` | `{source, opentide, path, problem}`: `opentide` when this opentide generated it, `workspace` (the committed copy) or `bundled` (the engine's) when it could not, and why |
-| `engine` | `{engine}`: the version of the language-server crates compiled into opentide |
-| `summary` | `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files` |
 
 ## Supported languages and platforms
 

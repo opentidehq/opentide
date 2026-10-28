@@ -57,21 +57,11 @@ def load_page(code: str) -> ExplainPage | None:
 
 #: Engine codes that are about a Tide object, not a query, and where they show.
 _OBJECT_CODES = frozenset({"filename_slug", "missing_author", "missing_organisation"})
-#: Elastic block advisories (elastic-1.0): about the rule block's settings.
-_ELASTIC_ADVISORIES = frozenset(
-    {
-        "lookback_zero",
-        "lookback_long",
-        "threshold_lookback",
-        "risk_band",
-        "technique_not_enterprise",
-    }
-)
 
 
 def engine_page(code: str) -> ExplainPage | None:
     """A page for an analysis-engine code, from the engine's sentence; ``None`` for another code."""
-    from opentide.analysis import describe
+    from opentide.analysis import ELASTIC_ADVISORY_CODES, describe
     from opentide.cli.ui.diagnostics import engine_reference
 
     sentence = describe(code)
@@ -82,32 +72,39 @@ def engine_page(code: str) -> ExplainPage | None:
         language, url = reference
         where = (
             f"Reported by the analysis engine in a {language} query, at the place in the query: "
-            "`opentide validate query`, `opentide validate --deep`, `opentide lsp check` and "
-            "an editor running `opentide lsp start` show it."
+            "as an error, a query the platform would reject, by `opentide validate` (its "
+            "`queries` check) and `opentide validate query`; as a warning or a note, style, by "
+            "`opentide lint` (its `queries` check). An editor running `opentide lsp start` "
+            "shows both."
         )
         example = "opentide validate query"
         fix = (
-            "Change the query where the frame points, then run `opentide validate query` again "
-            f"(`--file` for one rule). The [{language} reference]({url}) describes the syntax "
-            "and the commands the engine checks against."
+            "Change the query where the frame points, then run `opentide validate query` "
+            "(`--file` for one rule or query file) or `opentide lint --check queries` again. "
+            f"The [{language} reference]({url}) describes the syntax and the commands the "
+            "engine checks against."
         )
-    elif code in _ELASTIC_ADVISORIES:
+    elif code in ELASTIC_ADVISORY_CODES:
         where = (
             "Reported by the analysis engine on an Elastic rule block (elastic-1.0): "
-            "`opentide lsp check` and an editor running `opentide lsp start` show it, and "
-            "`opentide validate query --platform elastic --live` checks the same settings."
+            "`opentide lint` (its `queries` check) and an editor running `opentide lsp start` "
+            "show it, and `opentide validate query --platform elastic --live` checks the same "
+            "settings."
         )
-        example = "opentide lsp check objects/rules"
-        fix = "Change the block's setting the frame points at, then run `opentide lsp check` again."
+        example = "opentide lint --check queries"
+        fix = (
+            "Change the block's setting the frame points at, then run "
+            "`opentide lint --check queries` again."
+        )
     else:
         scope = "a Tide object" if code in _OBJECT_CODES else "an object file"
         where = (
-            f"Reported by the analysis engine for {scope}: `opentide lsp check` and an editor "
-            "running `opentide lsp start` show it. `opentide validate` and `opentide lint` "
-            "are the authority for objects and may name the same problem with their own code."
+            f"Reported by the analysis engine for {scope}: an editor running "
+            "`opentide lsp start` shows it. `opentide validate` and `opentide lint` are the "
+            "authority for objects and name the same problem with their own code."
         )
-        example = "opentide lsp check objects/rules"
-        fix = "Change the file where the frame points, then run `opentide lsp check` again."
+        example = "opentide validate"
+        fix = "Change the file where the frame points, then run `opentide validate` again."
     markdown = (
         f"# {code}\n\n{sentence}\n\n{where}\n\n## Example\n\n```text\n{example}\n```\n\n"
         f"## How to fix\n\n{fix}\n"

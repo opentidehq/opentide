@@ -108,8 +108,8 @@ search or rule, and stop an asynchronous search they stop waiting for where the 
 
 ## Analysis engine (`analysis/`)
 
-The offline query checks (`validate query`, `validate --deep`), `opentide lsp` and MCP
-`validate_query` run the Rust engine from
+The offline query checks (`validate`'s and `lint`'s `queries` checks, `validate query`),
+`opentide lsp start`, `opentide tui` and MCP `validate_query` run the Rust engine from
 [opentidehq/language-server](https://github.com/opentidehq/language-server), bound with PyO3
 in [`analysis/`](analysis/) and compiled into the opentide package as `opentide._native` by
 [`hatch_build.py`](hatch_build.py): there is no separate engine distribution. `uv sync` builds
