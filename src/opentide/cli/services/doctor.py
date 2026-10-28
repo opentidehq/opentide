@@ -543,7 +543,7 @@ def check_analysis_engine(ctx: DoctorContext) -> list[Check]:
         Check(
             "analysis_engine",
             "pass",
-            f"opentide-analysis {versions['package']} (engine {versions['engine']}) imports",
+            f"The analysis engine (language server {versions['engine']}) loads",
         )
     ]
 

@@ -450,14 +450,14 @@ See [Agentic setup](./workflows/agentic-setup.md).
 
 ### `opentide validate query` fails with `engine_unavailable`
 
-The offline check, `validate --deep` and `opentide lsp` run the analysis engine, the `opentide-analysis` package that `pip install opentide` installs. When it does not import, they fail rather than skip, and say so:
+The offline check, `validate --deep` and `opentide lsp` run the analysis engine, which is compiled into the opentide package. When it does not import, they fail rather than skip, and say so:
 
 ```text illustrative
-error: The opentide analysis engine does not load: No module named 'opentide_analysis'
+error: The opentide analysis engine does not load: No module named 'opentide._native'
   help: reinstall opentide: pip install --force-reinstall opentide
 ```
 
-Reinstall opentide. `opentide doctor` reports the engine (`analysis_engine`). pip downloads a prebuilt wheel for Linux (x86_64 and arm64, glibc and musl), macOS and Windows x64; elsewhere it builds `opentide-analysis` from source, which needs a Rust toolchain ([rustup.rs](https://rustup.rs)). See `opentide explain engine_unavailable`.
+Reinstall opentide. `opentide doctor` reports the engine (`analysis_engine`). pip downloads opentide's wheel for Linux (x86_64 and arm64, glibc and musl), macOS and Windows x64, engine included; elsewhere it builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)). See `opentide explain engine_unavailable`.
 
 ### `opentide validate query --live` fails before it reaches the tenant
 

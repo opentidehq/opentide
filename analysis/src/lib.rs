@@ -1,5 +1,6 @@
-//! Python bindings for the opentide engine (`opentide-analysis`) and its
-//! language server (`opentide-lsp`), imported as `opentide_analysis._native`.
+//! Python bindings for the opentide engine (the `opentide-analysis` crate) and
+//! its language server (`opentide-lsp`), compiled into the opentide package as
+//! `opentide._native` (hatch_build.py).
 //!
 //! Positions follow the `opentide` CLI, not LSP: lines and columns are
 //! 1-based, columns count Unicode code points, and `end_column` is exclusive.
@@ -13,7 +14,7 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
 /// One finding, in the CLI's coordinates.
-#[pyclass(frozen, get_all, module = "opentide_analysis")]
+#[pyclass(frozen, get_all, module = "opentide._native")]
 #[derive(Clone)]
 struct Diagnostic {
     /// Stable snake_case code (`kql_unknown_table`).
@@ -42,7 +43,7 @@ impl Diagnostic {
 }
 
 /// One query a Tide object carries, analyzed in its language.
-#[pyclass(frozen, get_all, module = "opentide_analysis")]
+#[pyclass(frozen, get_all, module = "opentide._native")]
 #[derive(Clone)]
 struct QueryReport {
     /// `kql`, `spl`, `esql`, `eql`, `kuery` or `lucene`.
@@ -70,7 +71,7 @@ impl QueryReport {
 }
 
 /// The files of one workspace, indexed once for many analyses.
-#[pyclass(frozen, module = "opentide_analysis")]
+#[pyclass(frozen, module = "opentide._native")]
 struct Workspace {
     host: MemoryWorkspace,
     index: Vec<IndexedObject>,

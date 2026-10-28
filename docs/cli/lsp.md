@@ -5,7 +5,7 @@ description: The opentide language server for editors, and the diagnostics it sh
 
 # opentide lsp
 
-`pip install opentide` installs the opentide language server: the analysis engine from [opentidehq/language-server](https://github.com/opentidehq/language-server), compiled into the `opentide-analysis` package that opentide depends on. There is no second install and no extra. It understands KQL (Sentinel and Defender), SPL, ES|QL, EQL, Kibana KQL (`kuery`), Lucene and Tide YAML objects, including the queries inside a rule.
+`pip install opentide` installs the opentide language server: the analysis engine from [opentidehq/language-server](https://github.com/opentidehq/language-server), compiled into the opentide package. There is no second package and no extra. It understands KQL (Sentinel and Defender), SPL, ES|QL, EQL, Kibana KQL (`kuery`), Lucene and Tide YAML objects, including the queries inside a rule.
 
 ```bash
 opentide lsp start
@@ -90,7 +90,7 @@ With `--json`:
 | `files_checked` | Files read |
 | `diagnostics` | Each finding with `code`, `severity` (`error`, `warning`, `note`), `message`, `path`, `line`, `column`, `end_column`, `field_path`, `help` and `explain` |
 | `catalog` | `{source, opentide, path, problem}`: `opentide` when this opentide generated it, `workspace` (the committed copy) or `bundled` (the engine's) when it could not, and why |
-| `engine` | `{package, engine}`: the `opentide-analysis` and Rust engine versions |
+| `engine` | `{engine}`: the version of the language-server crates compiled into opentide |
 | `summary` | `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files` |
 
 ## Supported languages and platforms

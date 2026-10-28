@@ -14,12 +14,6 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'win32'",
 ]
 
-[manifest]
-members = [
-    "opentide",
-    "opentide-analysis",
-]
-
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -1521,7 +1515,6 @@ dependencies = [
     { name = "dulwich" },
     { name = "mcp" },
     { name = "openpyxl" },
-    { name = "opentide-analysis" },
     { name = "orjson" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1569,7 +1562,6 @@ requires-dist = [
     { name = "dulwich", specifier = ">=1.2.12" },
     { name = "mcp", specifier = ">=2.3,<3" },
     { name = "openpyxl", specifier = ">=3.1" },
-    { name = "opentide-analysis", editable = "analysis" },
     { name = "orjson", specifier = ">=3.9" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "platformdirs", specifier = ">=4.0" },
@@ -1603,11 +1595,6 @@ dev = [
     { name = "tomli", specifier = ">=2.0" },
     { name = "ty", specifier = ">=0.0.65" },
 ]
-
-[[package]]
-name = "opentide-analysis"
-version = "0.6.0"
-source = { editable = "analysis" }
 
 [[package]]
 name = "orjson"

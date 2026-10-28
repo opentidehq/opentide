@@ -134,8 +134,7 @@ class EngineDiagnosticModel(DiagnosticFields):
 class EngineVersions(ResultModel):
     """The analysis engine that ran."""
 
-    package: str = Field(description="Version of the opentide-analysis package")
-    engine: str = Field(description="Version of the Rust engine (opentidehq/language-server)")
+    engine: str = Field(description="Version of the language-server crates compiled into opentide")
 
 
 class ValidationReportModel(ResultModel):

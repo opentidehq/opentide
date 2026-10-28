@@ -19,7 +19,7 @@ if ! command -v uv >/dev/null 2>&1; then
   fi
 fi
 
-# `uv sync` builds the analysis engine (analysis/, Rust) with maturin, so the
+# `uv sync` compiles the analysis engine (analysis/, Rust) into opentide, so the
 # session needs cargo. rustup installs a minimal stable toolchain once.
 if ! command -v cargo >/dev/null 2>&1; then
   if [[ -x "$HOME/.cargo/bin/cargo" ]]; then
