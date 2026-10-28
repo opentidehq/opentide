@@ -22,6 +22,7 @@ from opentide.analysis import (
     engine_versions,
     install_workspace_catalog,
     language_for_path,
+    reset_catalog,
 )
 from opentide.generation.lsp_catalog import CATALOG_DIR
 
@@ -56,7 +57,7 @@ def no_engine() -> Iterator[None]:
 def bundled_catalog() -> Iterator[None]:
     """The catalog install is process-wide: leave the bundled one behind."""
     yield
-    install_workspace_catalog(None)
+    reset_catalog()
 
 
 def test_the_engine_loads_and_names_its_versions() -> None:
@@ -141,11 +142,65 @@ def test_a_query_on_its_own_takes_its_platform_profile() -> None:
     ]
 
 
+@pytest.fixture
+def no_own_catalog(monkeypatch: pytest.MonkeyPatch) -> None:
+    """opentide cannot generate its catalog: the committed one, then the bundled one."""
+
+    def fail(root: Path | None) -> dict[str, str]:
+        raise RuntimeError("no registry")
+
+    monkeypatch.setattr(analysis, "own_catalog", fail)
+
+
+def test_opentides_own_catalog_comes_first_and_is_cached(
+    tmp_path: Path, bundled_catalog: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#677: the engine checks objects with what this opentide generates, not a
+    committed copy that may be from an older opentide."""
+    import opentide
+    from opentide.generation import lsp_catalog
+
+    catalogs = tmp_path / CATALOG_DIR
+    catalogs.mkdir(parents=True)
+    stale = {"opentide": "0.0.1", "fields": [{"schema": "rule", "path": "name", "name": "name"}]}
+    (catalogs / "fields.json").write_text(json.dumps(stale), encoding="utf-8")
+    monkeypatch.setenv("OPENTIDE_CACHE_DIR", str(tmp_path / "cache"))
+    state = install_workspace_catalog(tmp_path)
+    assert (state.source, state.version, state.problem) == ("opentide", opentide.__version__, None)
+    assert state.files == ("fields.json",)
+    [cached] = (tmp_path / "cache" / "lsp-catalogs").iterdir()
+    assert sorted(path.name for path in cached.iterdir()) == ["deprecations.json", "fields.json"]
+
+    # Cached: the next install generates nothing.
+    def no_generation() -> dict[str, str]:
+        raise AssertionError("generated again")
+
+    monkeypatch.setattr(lsp_catalog, "catalog_texts", no_generation)
+    assert install_workspace_catalog(tmp_path).source == "opentide"
+    # The workspace's configuration is part of the key: a change regenerates.
+    configuration = tmp_path / ".opentide" / "configurations"
+    configuration.mkdir(parents=True)
+    (configuration / "visibility.toml").write_text("# changed\n", encoding="utf-8")
+    state = install_workspace_catalog(tmp_path)
+    assert state.source == "workspace"
+    assert state.problem is not None and "generated again" in state.problem
+
+
+def test_an_unwritable_cache_still_gives_the_catalog(
+    tmp_path: Path, bundled_catalog: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    blocker = tmp_path / "cache"
+    blocker.write_text("a file where the cache folder would be", encoding="utf-8")
+    monkeypatch.setenv("OPENTIDE_CACHE_DIR", str(blocker))
+    assert install_workspace_catalog(tmp_path).source == "opentide"
+
+
 def test_the_workspace_catalog_is_used_when_it_parses(
-    tmp_path: Path, bundled_catalog: None
+    tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
     state = install_workspace_catalog(tmp_path)
-    assert (state.source, state.problem, state.files) == ("bundled", None, ())
+    assert (state.source, state.files) == ("bundled", ())
+    assert state.problem == "opentide's catalog could not be generated: RuntimeError: no registry"
     assert state.path == tmp_path / CATALOG_DIR
 
     catalogs = tmp_path / CATALOG_DIR
@@ -162,7 +217,7 @@ def test_the_workspace_catalog_is_used_when_it_parses(
     (catalogs / "deprecations.json").write_text("not json", encoding="utf-8")
     state = install_workspace_catalog(tmp_path)
     assert state.source == "bundled"
-    assert state.problem is not None and state.problem.startswith("deprecations.json")
+    assert state.problem is not None and "; deprecations.json" in state.problem
 
 
 def test_file_names_imply_their_language() -> None:
@@ -178,7 +233,9 @@ def test_the_module_imports_nothing_compiled() -> None:
     assert not [line for line in module_level if "_native" in line]
 
 
-def test_deprecations_alone_are_a_workspace_catalog(tmp_path: Path, bundled_catalog: None) -> None:
+def test_deprecations_alone_are_a_workspace_catalog(
+    tmp_path: Path, bundled_catalog: None, no_own_catalog: None
+) -> None:
     catalogs = tmp_path / CATALOG_DIR
     catalogs.mkdir(parents=True)
     (catalogs / "deprecations.json").write_text(json.dumps({"fields": []}), encoding="utf-8")
@@ -236,10 +293,7 @@ def test_the_language_server_checks_the_revision_an_object_names(
     """#676: what validate reports, the language server reports, with this
     opentide's catalog: a rule::1.1 without description, a rule::1.0 carrying
     the 1.1-only metadata.reviewed."""
-    from opentide.generation.lsp_catalog import write_catalog
-
-    write_catalog(tmp_path)
-    assert install_workspace_catalog(tmp_path).source == "workspace"
+    assert install_workspace_catalog(tmp_path).source == "opentide"
     assert _shape(tmp_path, REVISION_RULE) == []
     assert _shape(tmp_path, REVISION_RULE.replace("description: |\n  test\n", "")) == [
         ("missing required field 'description'", ("description",), 1)

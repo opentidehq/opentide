@@ -34,7 +34,7 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `configuration` | The workspace configuration TOMLs (`.opentide/configurations/`, and a parent instance's) load | One does not parse: the message names the file and line | | |
 | `templates_fresh` | Every template this version generates exists and matches what it would write | | A template is missing or differs | |
 | `schemas_fresh` | Every schema this version generates exists | | A schema is missing | |
-| `lsp_catalog` | The language server's catalogs `opentide generate schemas` writes (`.opentide/lsp/catalogs/generated/`) exist and come from this opentide version | | They are missing, do not parse, or come from another version | No workspace |
+| `lsp_catalog` | opentide generates the language server's catalog for this workspace, and a committed copy (`.opentide/lsp/catalogs/generated/`, for editors that run `opentide-lsp` on its own) comes from this opentide version | | It cannot be generated, or the committed copy does not parse or comes from another version | No workspace |
 | `platforms_enabled` | Which platforms are enabled | | None is | |
 | `platform_sdk` | Each enabled platform's SDK imports | It does not | | |
 | `analysis_engine` | The analysis engine compiled into opentide loads, and the language-server version it was built from: what `validate query`, `validate --deep` and `opentide lsp` run | It does not | | |

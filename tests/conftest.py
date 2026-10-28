@@ -144,6 +144,18 @@ def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     reset_mode()
 
 
+@pytest.fixture(scope="session")
+def _catalog_cache(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("opentide-cache")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_catalog_cache(monkeypatch: pytest.MonkeyPatch, _catalog_cache: Path) -> None:
+    """The language-server catalogs opentide generates are cached for the
+    session, never in the user's cache directory."""
+    monkeypatch.setenv("OPENTIDE_CACHE_DIR", str(_catalog_cache))
+
+
 @pytest.fixture(autouse=True)
 def _no_terminal_progress(monkeypatch: pytest.MonkeyPatch) -> None:
     """No OSC 9;4 in captured output when the suite runs inside Ghostty, kitty, tmux, ...

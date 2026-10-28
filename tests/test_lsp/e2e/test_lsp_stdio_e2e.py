@@ -125,3 +125,69 @@ def test_closing_stdin_ends_the_server() -> None:
     process = subprocess.run(_server(), input=b"", capture_output=True, timeout=30)
     assert process.returncode == 0
     assert process.stdout == b""
+
+
+def test_the_server_checks_with_opentides_catalog_not_a_committed_copy(tmp_path: Path) -> None:
+    """#677: a catalog committed by an older opentide (here, one whose TLP
+    vocabulary is only `house`) does not replace the one this opentide
+    generates for the workspace."""
+    rule = tmp_path / "objects" / "rules" / "suspicious-process.yaml"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(RULE, encoding="utf-8")
+    committed = tmp_path / ".opentide" / "lsp" / "catalogs" / "generated"
+    committed.mkdir(parents=True)
+    stale = {
+        "opentide": "0.0.1",
+        "fields": [
+            {"schema": "rule", "path": "metadata", "name": "metadata", "type": "object"},
+            {"schema": "rule", "path": "metadata.tlp", "name": "tlp", "enum": ["house"]},
+        ],
+    }
+    (committed / "fields.json").write_text(json.dumps(stale), encoding="utf-8")
+    process = subprocess.Popen(
+        _server(),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=tmp_path,
+    )
+    assert process.stdin is not None and process.stdout is not None
+    try:
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"capabilities": {}, "rootUri": tmp_path.as_uri()},
+            },
+        )
+        _read(process.stdout)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "initialized", "params": {}})
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": rule.as_uri(),
+                        "languageId": "opentide-yaml",
+                        "version": 1,
+                        "text": RULE,
+                    }
+                },
+            },
+        )
+        published = _read(process.stdout)
+        messages = [item["message"] for item in published["params"]["diagnostics"]]
+        assert not [message for message in messages if "tlp" in message], messages
+        _send(process.stdin, {"jsonrpc": "2.0", "id": 2, "method": "shutdown"})
+        _read(process.stdout)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "exit"})
+        process.stdin.close()
+        assert process.wait(timeout=60) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
