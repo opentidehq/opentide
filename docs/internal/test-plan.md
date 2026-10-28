@@ -120,3 +120,4 @@ Final tree: `tests/{test_core,test_models,test_platforms,test_validation,test_ge
 2. Phase 4+: behaviour inventory is the generator contract.
 3. Phase 9+: pytest primary gate; ≥80% core coverage.
 4. Capability invariants block merge at any phase.
+5. Validate ↔ language-server parity (`tests/test_lsp/test_parity.py`, #678): for every registered schema revision, one-fault variants of a valid object (a required field missing, an unknown key, a field of another revision, a value outside its vocabulary, a malformed UUID). Every object-schema error `opentide validate` reports, `opentide lsp check` reports on the same field. An intended difference goes in `KNOWN_DIFFERENCES` with its reason; one that disappears fails the test too.
