@@ -132,13 +132,26 @@ source = "vcs"
 core-metadata-version = "2.4"
 # The sdist carries the engine's Rust sources (analysis/) and the hook that
 # compiles them, so it builds wherever a Rust toolchain is installed.
-exclude = ["/analysis/target", "/src/opentide/_native.*"]
+# An editable install's compiled module is left out; its stub (_native.pyi) ships.
+exclude = [
+    "/analysis/target",
+    "/src/opentide/_native.so",
+    "/src/opentide/_native.*.so",
+    "/src/opentide/_native.pyd",
+    "/src/opentide/_native.*.pyd",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opentide"]
 core-metadata-version = "2.4"
 # An editable install's compiled module, in src/; a wheel gets its own build.
-exclude = ["src/opentide/_native.*"]
+# The stub (_native.pyi) ships, for type checkers.
+exclude = [
+    "src/opentide/_native.so",
+    "src/opentide/_native.*.so",
+    "src/opentide/_native.pyd",
+    "src/opentide/_native.*.pyd",
+]
 
 # Compiles analysis/ (Rust) into opentide/_native: see hatch_build.py.
 [tool.hatch.build.targets.wheel.hooks.custom]
@@ -160,6 +173,11 @@ test-command = [
     "opentide --version",
     "python -c \"from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']\"",
 ]
+
+[tool.cibuildwheel.macos]
+# rustc's floor for x86_64-apple-darwin is 10.12; cibuildwheel's default (10.9)
+# makes delocate reject the extension. arm64 starts at 11.0 regardless.
+environment = { MACOSX_DEPLOYMENT_TARGET = "10.12" }
 
 [tool.cibuildwheel.linux]
 # The manylinux and musllinux images have no Rust toolchain.
