@@ -71,9 +71,10 @@ sentinel · 0 tenants
 warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+dry run, nothing sent
 ```
 
-Defender for Endpoint, SentinelOne and CrowdStrike keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A real run ends with a counted outcome line, `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 12.4s`. Those counts are the plan: they are predicted from `.opentide/states/deployment/` and each rule's status before anything is sent, not reported back by the vendor. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
+Defender for Endpoint, SentinelOne and CrowdStrike keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A dry run ends with `dry run, nothing sent` after the tally and any next steps. A real run reports each rule as it is sent and ends with a counted outcome line; see [A real run](#a-real-run). Which rules were created and which updated is the plan: it is predicted from `.opentide/states/deployment/` and each rule's status before anything is sent, not reported back by the vendor. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
 
 ```bash
 opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -114,6 +115,7 @@ error[compile_empty_block]: 'response' is empty, so Sentinel cannot read 'alert_
   ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
 
 Plan: 0 to create, 0 to update, 0 to disable, 0 to delete, 1 would fail
+dry run, nothing sent
 ```
 
 The rule's row in the plan reads `✗ would fail` instead of its action, and the tally counts it apart (`N would fail`, `summary.fail`; each such entry of `changes` has `"fails": true`), since a rule that cannot compile is created or updated nowhere.
@@ -121,6 +123,90 @@ The rule's row in the plan reads `✗ would fail` instead of its action, and the
 The codes are `compile_missing_field`, `compile_empty_block`, `compile_invalid_value`, `compile_invalid_rule` and `compile_failed`. A dry run sends nothing, so an unset `$VARIABLE` in a tenant's setup is a warning there (`a real deploy would need $AZURE_CLIENT_SECRET, which is unset`), not an error. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
 When no rule the run read has a status mapping to its strategies, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
+
+## A real run
+
+A real run prints the plan's header and tally, then one line for each rule as the platform answers, so a CI log shows progress while a platform is slow, and the last line says which rule it is waiting on. The lines are append-only: no spinner and no carriage return unless stdout is a terminal, where the running rule is also shown on a live row that its result line replaces. The samples below are illustrative, not captured output: a real run needs a live tenant.
+
+```text illustrative
+Deploy plan · strategy PREVIEW · 1 platform, 1 tenant
+Plan: 0 to create, 0 to update, 14 to create or update, 0 to disable, 0 to delete
+
+Deploying to sentinel / contoso · 14 rules
+  [ 1/14] ✓ deployed  Sentinel KQL Rule                           0.4s
+  [ 2/14] ✓ deployed  Staging Promote Rule                        0.4s
+  [ 3/14] ✗ failed    Password spray from a single source IP      HTTP 400: Failed to parse query: syntax error near '|'
+  [ 4/14] · skipped   New service installed on domain controller  not attempted after a failure
+  ...
+✗ sentinel · 2 deployed, 1 failed, 11 not attempted · 1.2s
+✗ Deployment failed · 2 created or updated, 1 failed, 11 not attempted · 1.2s
+```
+
+| Line | Meaning |
+|------|---------|
+| `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. The word is the planned action. A platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update |
+| `✗ failed` | The platform, or planning, refused the rule. The line carries the platform's own message and its HTTP status when it has one, so the cause is readable without a traceback. A long message continues on the lines below it on a terminal and stays on one line in a log |
+| `· skipped` | The rule was not sent, with the reason: an `INERT` status, a Sigma rule on a YARA tenant, a retirement of a rule that never reached the tenant (`external_id_missing`) |
+| `· skipped … not attempted after a failure` | An earlier rule failed and the run stopped before this one. Every rule and platform the run never reached is listed |
+
+When a deployer stops at the first rejected rule (Sentinel, Splunk, Carbon Black, Defender for Endpoint, SentinelOne, CrowdStrike and HarfangLab all do), the rules before it are deployed, it is `failed` and the rules after it are `not attempted`. Elastic fails a rule and carries on with the next, except for an authentication error, which fails the tenant. The run exits `1` after any failed rule, with `failure.code` `issues_found`. An error before any rule is sent, such as a tenant's credentials, has no rule to blame: every rule is `not attempted`, and the outcome line is the error.
+
+Every run ends with the platform's counts and one outcome line, passed or failed. The outcome line always counts `failed` and `not attempted` and ends with the elapsed time; it counts an action only when some rule had it:
+
+```text illustrative
+✓ Deployed 91 rules to 1 tenant · 91 created or updated · 0 failed, 0 not attempted · 1m56s
+```
+
+`--quiet` hides the lines of rules that were deployed or skipped, never a failure. With `--json`, stdout is still one document and nothing is printed for each rule: the document carries `results`, one entry for each rule and tenant of the plan, in the order they were sent, with the rules a failure never reached last, so a pipeline can post a job summary or retry only what failed:
+
+```bash
+opentide --json deploy --strategy PREVIEW --platform sentinel
+```
+
+```json illustrative
+{
+  "status": "failed",
+  "message": "Deployment failed · 2 created or updated, 1 failed, 11 not attempted · 1.2s",
+  "error": "Deployment to sentinel failed on Password spray from a single source IP: HTTP 400: Failed to parse query: syntax error near '|'",
+  "results": [
+    {
+      "id": "00000000-0000-4000-8003-000000000001",
+      "name": "Sentinel KQL Rule",
+      "platform": "sentinel",
+      "tenant": "contoso",
+      "action": "upsert",
+      "status": "deployed",
+      "seconds": 0.412,
+      "error": null,
+      "reason": null
+    },
+    {
+      "id": "00000000-0000-4000-8003-000000000402",
+      "name": "Password spray from a single source IP",
+      "platform": "sentinel",
+      "tenant": "contoso",
+      "action": "upsert",
+      "status": "failed",
+      "seconds": 0.353,
+      "error": "HTTP 400: Failed to parse query: syntax error near '|'",
+      "reason": null
+    },
+    {
+      "id": "00000000-0000-4000-8003-000000000403",
+      "name": "New service installed on domain controller",
+      "platform": "sentinel",
+      "tenant": "contoso",
+      "action": "upsert",
+      "status": "not_attempted",
+      "seconds": 0,
+      "error": null,
+      "reason": "not attempted after a failure"
+    }
+  ]
+}
+```
+
+`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`). `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `failed`, `skipped`, `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
 
 ## Subcommands
 

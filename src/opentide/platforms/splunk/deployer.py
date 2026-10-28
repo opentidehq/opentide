@@ -6,6 +6,7 @@ from typing import Any
 
 import structlog
 
+from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.core.responders import resolve_responders
@@ -469,7 +470,8 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             )
             for mdr in tenant_deployment.rules:
                 logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
-                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant)
+                with deploy_events.deploying("splunk", tenant.name, mdr.metadata.uuid, mdr.name):
+                    self.deploy_mdr(data=mdr, service=service, tenant_config=tenant)
 
 
 def declare():

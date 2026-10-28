@@ -10,6 +10,7 @@ from typing import Any
 import requests
 import structlog
 
+from opentide.core import deploy_events
 from opentide.core.registry import Opentide
 from opentide.deployment import TideDeployment, check_status
 from opentide.deployment.external_ids import without_legacy_external_ids
@@ -36,6 +37,10 @@ logger = structlog.get_logger(__name__)
 def _deployment_error(event: str, **kwargs: Any) -> None:
     logger.error(event, **kwargs)
     os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+    # The rule being sent says why it failed on its own line.
+    status_code = kwargs.get("status_code")
+    message = str(kwargs.get("error") or event.replace("_", " "))
+    deploy_events.note_failure(f"HTTP {status_code}: {message}" if status_code else message)
 
 
 def _deployment_warning(event: str, **kwargs: Any) -> None:
@@ -152,149 +157,158 @@ class ElasticDeploy:
     ) -> None:
         """Process rules for one tenant: delete, disable, create, or update."""
         suppression_warned: set[str] = set()
-        setup = tenant_config.setup
-
         for rule in batch.rules:
-            cfg = getattr(rule.configurations, "elastic", None) if rule.configurations else None
-            if not cfg:
-                continue
-
             rule_id = rule.metadata.uuid if rule.metadata else ""
-            status = cfg.status
-            strategy = check_status(status)
+            with deploy_events.deploying("elastic", tenant_config.name, rule_id, rule.name):
+                self._deploy_rule(rule, client, tenant_config, suppression_warned)
 
-            if strategy is StatusStrategy.INERT:
-                continue
+    def _deploy_rule(
+        self,
+        rule: Any,
+        client: ElasticClient,
+        tenant_config: ConfigurationModels.Systems.Elastic.Tenant,
+        suppression_warned: set[str],
+    ) -> None:
+        """Delete, disable, create or update one rule; a rule that fails returns, auth raises."""
+        setup = tenant_config.setup
+        cfg = getattr(rule.configurations, "elastic", None) if rule.configurations else None
+        if not cfg:
+            deploy_events.note_skip("no Elastic configuration")
+            return
 
-            if strategy is StatusStrategy.DELETION:
-                logger.info("deleting_elastic_rule", rule_id=rule_id, name=rule.name)
-                try:
-                    resp = client.delete_rule(rule_id)
-                    if resp.status_code not in (200, 404):
-                        resp.raise_for_status()
-                except Exception as exc:
-                    status_code = getattr(getattr(exc, "response", None), "status_code", None)
-                    if status_code == 404:
-                        logger.info("delete_elastic_rule_not_found_success", rule_id=rule_id)
-                    elif status_code in (401, 403):
-                        raise
-                    else:
-                        _deployment_error(
-                            "delete_elastic_rule_failed", rule_id=rule_id, error=str(exc)
-                        )
-                continue
+        rule_id = rule.metadata.uuid if rule.metadata else ""
+        status = cfg.status
+        strategy = check_status(status)
 
-            # Active deployment: PREVIEW, RELEASE, or DISABLEMENT
-            if (
-                setup.suppression is False
-                and cfg.suppression is not None
-                and rule_id not in suppression_warned
-            ):
-                _deployment_warning(
-                    "suppression_omitted_basic_license",
-                    rule=rule.name,
-                    rule_id=rule_id,
-                    tenant=tenant_config.name,
-                )
-                suppression_warned.add(rule_id)
+        if strategy is StatusStrategy.INERT:
+            deploy_events.note_skip(f"status {status} is inert")
+            return
 
-            block_dict = cfg.model_dump(by_alias=True, exclude_none=False)
-            if not _check_rule(
-                client,
-                block_dict,
-                list(setup.index or []),
-                rule_id=rule_id,
-                rule_name=rule.name,
-            ):
-                continue
-
-            compiled = self.compile_deployment(rule, tenant_config=tenant_config)
-            if strategy is StatusStrategy.DISABLEMENT:
-                compiled["enabled"] = False
-            else:
-                compiled["enabled"] = True
-
-            # GET existing rule by rule_id
+        if strategy is StatusStrategy.DELETION:
+            logger.info("deleting_elastic_rule", rule_id=rule_id, name=rule.name)
             try:
-                get_resp = client.get_rule(rule_id)
+                resp = client.delete_rule(rule_id)
+                if resp.status_code not in (200, 404):
+                    resp.raise_for_status()
             except Exception as exc:
                 status_code = getattr(getattr(exc, "response", None), "status_code", None)
-                if status_code in (401, 403):
+                if status_code == 404:
+                    logger.info("delete_elastic_rule_not_found_success", rule_id=rule_id)
+                elif status_code in (401, 403):
                     raise
-                _deployment_error("get_elastic_rule_failed", rule_id=rule_id, error=str(exc))
-                continue
+                else:
+                    _deployment_error("delete_elastic_rule_failed", rule_id=rule_id, error=str(exc))
+            return
 
-            if get_resp.status_code in (401, 403):
-                raise ElasticTenantError(
-                    f"Tenant {tenant_config.name} auth error: HTTP {get_resp.status_code}"
-                )
+        # Active deployment: PREVIEW, RELEASE, or DISABLEMENT
+        if (
+            setup.suppression is False
+            and cfg.suppression is not None
+            and rule_id not in suppression_warned
+        ):
+            _deployment_warning(
+                "suppression_omitted_basic_license",
+                rule=rule.name,
+                rule_id=rule_id,
+                tenant=tenant_config.name,
+            )
+            suppression_warned.add(rule_id)
 
-            if get_resp.status_code == 404:
-                # Rule not found: POST. 401/403 fails the tenant; any other
-                # error fails this rule only (RFC 0007 §5).
-                logger.info("creating_elastic_rule", rule_id=rule_id, name=rule.name)
-                try:
-                    create_resp = client.create_rule(compiled)
-                except requests.RequestException as exc:
-                    _deployment_error("create_elastic_rule_failed", rule_id=rule_id, error=str(exc))
-                    continue
-                _write_failed(
-                    create_resp, "create_elastic_rule_failed", rule_id, tenant_config.name
-                )
-                continue
+        block_dict = cfg.model_dump(by_alias=True, exclude_none=False)
+        if not _check_rule(
+            client,
+            block_dict,
+            list(setup.index or []),
+            rule_id=rule_id,
+            rule_name=rule.name,
+        ):
+            return
 
-            if get_resp.status_code != 200:
-                # 429 and 5xx were already retried by the client. Anything else
-                # fails this rule, never silently (RFC 0007 §5).
-                _deployment_error(
-                    "get_elastic_rule_failed",
-                    rule_id=rule_id,
-                    status_code=get_resp.status_code,
-                    error=get_resp.text,
-                )
-                continue
+        compiled = self.compile_deployment(rule, tenant_config=tenant_config)
+        if strategy is StatusStrategy.DISABLEMENT:
+            compiled["enabled"] = False
+        else:
+            compiled["enabled"] = True
 
-            remote = get_resp.json()
-            if _is_prebuilt_rule(remote):
-                _deployment_error(
-                    "refusing_to_modify_prebuilt_rule",
-                    rule_id=rule_id,
-                    name=rule.name,
-                )
-                continue
+        # GET existing rule by rule_id
+        try:
+            get_resp = client.get_rule(rule_id)
+        except Exception as exc:
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code in (401, 403):
+                raise
+            _deployment_error("get_elastic_rule_failed", rule_id=rule_id, error=str(exc))
+            return
 
-            # Preserve remote fields when not set in authored block
-            for key in PRESERVED_FIELDS:
-                if key not in compiled and key in remote:
-                    compiled[key] = copy.deepcopy(remote[key])
+        if get_resp.status_code in (401, 403):
+            raise ElasticTenantError(
+                f"Tenant {tenant_config.name} auth error: HTTP {get_resp.status_code}"
+            )
 
-            remote_type = remote.get("type")
-            compiled_type = compiled.get("type")
+        if get_resp.status_code == 404:
+            # Rule not found: POST. 401/403 fails the tenant; any other
+            # error fails this rule only (RFC 0007 §5).
+            logger.info("creating_elastic_rule", rule_id=rule_id, name=rule.name)
+            try:
+                create_resp = client.create_rule(compiled)
+            except requests.RequestException as exc:
+                _deployment_error("create_elastic_rule_failed", rule_id=rule_id, error=str(exc))
+                return
+            _write_failed(create_resp, "create_elastic_rule_failed", rule_id, tenant_config.name)
+            return
 
-            if remote_type != compiled_type:
-                # PUT cannot change type: DELETE then POST with the same rule_id
-                # and the preserved fields (RFC 0007 §5, Type changes).
-                logger.info(
-                    "type_change_recreating_elastic_rule",
-                    rule_id=rule_id,
-                    remote_type=remote_type,
-                    new_type=compiled_type,
-                )
-                del_resp = client.delete_rule(rule_id)
-                if del_resp.status_code != 404 and _write_failed(
-                    del_resp, "recreate_elastic_rule_delete_failed", rule_id, tenant_config.name
-                ):
-                    continue
-                post_resp = client.create_rule(compiled)
-                if _write_failed(
-                    post_resp, "recreate_elastic_rule_failed", rule_id, tenant_config.name
-                ):
-                    # The old rule is already gone. Say so, so the operator can redeploy.
-                    logger.error("elastic_rule_deleted_not_recreated", rule_id=rule_id)
-            else:
-                logger.info("updating_elastic_rule", rule_id=rule_id, name=rule.name)
-                put_resp = client.update_rule(compiled)
-                _write_failed(put_resp, "update_elastic_rule_failed", rule_id, tenant_config.name)
+        if get_resp.status_code != 200:
+            # 429 and 5xx were already retried by the client. Anything else
+            # fails this rule, never silently (RFC 0007 §5).
+            _deployment_error(
+                "get_elastic_rule_failed",
+                rule_id=rule_id,
+                status_code=get_resp.status_code,
+                error=get_resp.text,
+            )
+            return
+
+        remote = get_resp.json()
+        if _is_prebuilt_rule(remote):
+            _deployment_error(
+                "refusing_to_modify_prebuilt_rule",
+                rule_id=rule_id,
+                name=rule.name,
+            )
+            return
+
+        # Preserve remote fields when not set in authored block
+        for key in PRESERVED_FIELDS:
+            if key not in compiled and key in remote:
+                compiled[key] = copy.deepcopy(remote[key])
+
+        remote_type = remote.get("type")
+        compiled_type = compiled.get("type")
+
+        if remote_type != compiled_type:
+            # PUT cannot change type: DELETE then POST with the same rule_id
+            # and the preserved fields (RFC 0007 §5, Type changes).
+            logger.info(
+                "type_change_recreating_elastic_rule",
+                rule_id=rule_id,
+                remote_type=remote_type,
+                new_type=compiled_type,
+            )
+            del_resp = client.delete_rule(rule_id)
+            if del_resp.status_code != 404 and _write_failed(
+                del_resp, "recreate_elastic_rule_delete_failed", rule_id, tenant_config.name
+            ):
+                return
+            post_resp = client.create_rule(compiled)
+            if _write_failed(
+                post_resp, "recreate_elastic_rule_failed", rule_id, tenant_config.name
+            ):
+                # The old rule is already gone. Say so, so the operator can redeploy.
+                logger.error("elastic_rule_deleted_not_recreated", rule_id=rule_id)
+        else:
+            logger.info("updating_elastic_rule", rule_id=rule_id, name=rule.name)
+            put_resp = client.update_rule(compiled)
+            _write_failed(put_resp, "update_elastic_rule_failed", rule_id, tenant_config.name)
 
     def deploy(
         self,

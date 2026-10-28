@@ -219,3 +219,40 @@ def test_an_org_without_any_watchlist_names_the_missing_watchlist(
 
     with pytest.raises(RuntimeError, match="nonexistent Watchlist"):
         _deploy(console, _rule(metadata))
+
+
+def test_the_deploy_loop_reports_each_rule_and_a_failed_one_stops_it(
+    console: _Console, metadata: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rule that raises is that rule's failure, with the error as the platform says it (#675)."""
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+    from opentide.platforms.carbon_black import deployer as module
+    from opentide.platforms.carbon_black.deployer import CarbonBlackCloudDeploy
+
+    tenant = _tenant("Org", WATCHLIST)
+    rules = [_rule({**metadata, "uuid": f"00000000-0000-4000-8000-00000000000{n}"}) for n in (1, 2)]
+    batch = SimpleNamespace(tenant=tenant, rules=rules)
+    monkeypatch.setattr(
+        module, "TideDeployment", lambda **_kwargs: SimpleNamespace(rule_deployment=[batch])
+    )
+    monkeypatch.setattr(module, "without_legacy_external_ids", lambda rules, platform: rules)
+    monkeypatch.setattr(
+        module, "CarbonBlackCloudService", lambda _tenant: SimpleNamespace(service=None)
+    )
+
+    def deploy_mdr(
+        self: object, *, data: DetectionRule, service: object, tenant_config: object
+    ) -> None:
+        if data.metadata.uuid.endswith("1"):
+            raise RuntimeError("watchlist is full")
+
+    monkeypatch.setattr(CarbonBlackCloudDeploy, "deploy_mdr", deploy_mdr)
+    recorder = Recorder()
+    with deploy_events.listen(recorder), pytest.raises(RuntimeError, match="watchlist is full"):
+        CarbonBlackCloudDeploy().deploy(rules, (StatusStrategy.RELEASE,))
+    assert recorder.outcomes() == [(rules[0].metadata.uuid, "failed")]
+    assert recorder.results[0].platform == "carbon_black_cloud"
+    assert recorder.results[0].tenant == "Org"
+    assert recorder.results[0].error == "RuntimeError: watchlist is full"

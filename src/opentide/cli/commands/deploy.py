@@ -112,7 +112,15 @@ def deploy_cmd(
     from opentide.cli.ui.summary import deploy_summary
 
     publish_summary(cli, deploy_summary(result, dry_run=dry_run), command="deploy", payload=result)
-    emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
+    try:
+        emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
+    finally:
+        # Last, after the tally and any next steps, also when the plan has failures.
+        if dry_run and not cli.json_output and not cli.quiet:
+            from opentide.cli.ui.plan import render_dry_run_note
+            from opentide.core.logging.config import get_stdout_console
+
+            render_dry_run_note(get_stdout_console())
 
 
 @deploy_app.command("migrate-state")

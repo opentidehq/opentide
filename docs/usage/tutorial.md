@@ -294,6 +294,7 @@ sentinel · 0 tenants
 warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+dry run, nothing sent
 ```
 
 `--dry-run` selects the rules without touching the platform. In CI, the pull request job runs `--strategy PREVIEW` and the default-branch job `--strategy RELEASE`; see [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md). This scaffold still has `[[tenants]]` commented out, so the dry-run warns that a real deploy would stop and leaves Sentinel out of `deployed` until you uncomment a tenant. The plan lists each rule with what a deploy would do to it: Sentinel writes a rule by its UUID, so opentide cannot tell a create from an update without asking Sentinel and says `create or update`. `opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all` returns the selected rules, the tenants each would reach, and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.

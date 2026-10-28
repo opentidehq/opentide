@@ -53,6 +53,34 @@ class PlannedChange(ResultModel):
     )
 
 
+class RuleOutcome(ResultModel):
+    """How one rule on one tenant went in a real run (#675)."""
+
+    id: str = Field(description="The rule's UUID")
+    name: str
+    platform: str
+    tenant: str | None = Field(description="null when the platform has no tenant configured")
+    action: Literal["create", "update", "upsert", "disable", "delete"] | None = Field(
+        description="What the plan said the run would do to the rule"
+    )
+    status: Literal["deployed", "failed", "skipped", "not_attempted"] = Field(
+        description=(
+            "deployed: the platform accepted it. failed: it was refused, see error. skipped: "
+            "the engine chose not to send it, see reason. not_attempted: an earlier rule failed"
+        )
+    )
+    seconds: float | None = Field(
+        description=(
+            "How long the rule took; 0 when nothing was sent, null when the platform's engine "
+            "does not report its rules one at a time"
+        )
+    )
+    error: str | None = Field(
+        description="The platform's own message, with its HTTP status when it has one"
+    )
+    reason: str | None = Field(None, description="Why a skipped or not attempted rule was not sent")
+
+
 class SkippedBlock(ResultModel):
     """A platform block left out of the plan because no run strategy deploys its status."""
 
@@ -84,6 +112,13 @@ class DeployResult(CommandDocument):
     detail: str | None = Field(None, description="A note on the plan, such as the rules left out")
     skipped: list[SkippedBlock] | None = Field(
         None, description="Blocks left out because no run strategy deploys their status"
+    )
+    results: list[RuleOutcome] | None = Field(
+        None,
+        description=(
+            "A real run: one entry per rule and tenant in the plan, in the order they were "
+            "sent, with the rules an early failure never reached last. Absent on a dry run"
+        ),
     )
     # Added by #643 (flow), declared ahead so either merge order stays green.
     changes: list[PlannedChange] | None = Field(None, description="One entry per rule and tenant")

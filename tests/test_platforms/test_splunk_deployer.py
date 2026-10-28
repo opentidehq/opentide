@@ -434,3 +434,22 @@ def test_the_first_tenant_warns_once_across_setup_and_deploy(
     assert [seen[name][2] for name in ("First", "Second")] == ["current", "random"]
     warnings = [call.args[0] for call in captured.calls if call.method_name == "warning"]
     assert warnings == ["frequency_scheduling_is_not_valid"]
+
+
+def test_each_tenant_reports_the_rule_it_sends(
+    monkeypatch: pytest.MonkeyPatch, splunk_rule_payload: dict
+) -> None:
+    """One result per rule and tenant, so a pipeline can tell which tenant failed (#675)."""
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+
+    staging = _configured_tenant("Staging", actions=[], frequency="current", allow_skew=None)
+    prod = _configured_tenant("Prod", actions=[], frequency="current", allow_skew=None)
+    recorder = Recorder()
+    with deploy_events.listen(recorder):
+        _deploy_to_tenants(monkeypatch, splunk_rule_payload, staging, prod)
+    assert [(r.platform, r.tenant, r.status) for r in recorder.results] == [
+        ("splunk", "Staging", "deployed"),
+        ("splunk", "Prod", "deployed"),
+    ]

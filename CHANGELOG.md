@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide deploy` reports each rule as it is sent, and counts every run, failed ones too** ([#675](https://github.com/opentidehq/opentide/issues/675)). A real run printed nothing between the plan and one summary line, so a Sentinel deploy of about 90 rules sat for two minutes and a CI log looked hung; when the platform rejected one rule the log showed a traceback and nothing about the rules before or after it. Each platform's deployer now reports every rule it sends (`opentide.core.deploy_events`), and the CLI prints one append-only line per rule as it finishes, with no spinner and no carriage return when stdout is not a terminal: `[ 3/91] ✓ deployed  <rule>  0.9s`, `✗ failed` followed by the platform's own message and HTTP status, and `· skipped` for a rule the engine left out. A run that stops early prints every rule it never reached as `not attempted after a failure`, and a platform it never reached as a skipped step. On a terminal the live row names the rule being sent. The run ends with the platform's counts (`✗ sentinel · 2 deployed, 1 failed, 88 not attempted · 14s`) and an outcome line that always carries `failed` and `not attempted` and the elapsed time, whether the run passed or failed, and exits `1` on a failure with `failure.code` `issues_found`. With `--json`, the document gains `results` (one entry per rule and tenant with `id`, `name`, `platform`, `tenant`, `action`, `status`, `seconds`, `error` and `reason`) and `summary` counts every action, `failed`, `skipped` and `not_attempted`; stdout stays one document. A dry run now ends with `dry run, nothing sent`.
+
+### Changed
+
+- **A real `opentide deploy` prints the plan's header and tally before it sends anything**, where only `--dry-run` printed the plan. The outcome line of a pass reads `✓ Deployed 91 rules to 1 tenant · 91 created or updated · 0 failed, 0 not attempted · 1m56s`, and a run that failed on a rule reads `✗ Deployment failed · 2 created or updated, 1 failed, 88 not attempted · 14s` instead of `error: Deployment to sentinel failed: HttpResponseError: …` followed by the exception text; an error before any rule is sent (a tenant's credentials, say) keeps that message. Elastic's per-rule failures are now attributed to the rule they happened on.
+
 ## [0.18.0] — 2026-10-27
 
 Minor release: configuration files are now validated, rule `severity` moves to the alert labels, and new commands arrive (`new`, `doctor`, `tui`, `explain`, `commands`, `info vocab`, `validate --fix` and `--watch`). It is a minor because files that loaded under 0.17.2 can now fail, and because the CLI's human and JSON output changed. After upgrading:

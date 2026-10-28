@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from opentide.core import deploy_events
 from opentide.core.logging import get_logger, is_json_output
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.states.deployment import (
@@ -302,6 +303,9 @@ def report_failure(
         _warn(error.code, error.message, **fields)
         return
     os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+    # Inside a rule's block (the vendor accepted it, the state write failed) the
+    # rule's own line carries the error.
+    deploy_events.note_failure(error.message)
     log = logger.debug if reported and not is_json_output() else logger.error
     log(error.code, detail=error.message, code=error.code, **fields)
 
@@ -337,6 +341,11 @@ def screen_tenant(
             report_failure(
                 error, object_uuid=object_uuid, platform=platform, tenant_name=tenant_name
             )
+            name = str(getattr(rule, "name", "") or object_uuid)
+            if error.code in WARNING_CODES:
+                deploy_events.skipped(platform, tenant_name, object_uuid, name, error.message)
+            else:
+                deploy_events.refused(platform, tenant_name, object_uuid, name, error.message)
             continue
         planned.append((rule, action))
     return planned
