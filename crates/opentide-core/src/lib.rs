@@ -452,6 +452,8 @@ pub mod codes {
     pub const FILENAME_SLUG: &str = "filename_slug";
     pub const MISSING_AUTHOR: &str = "missing_author";
     pub const MISSING_ORGANISATION: &str = "missing_organisation";
+    /// A field the templates ask for and validation does not require.
+    pub const RECOMMENDED_FIELD_MISSING: &str = "recommended_field_missing";
     pub const DEFENDER_OUTPUT_COLUMNS: &str = "defender_output_columns";
     /// `::type` names no Elasticsearch release can cast to.
     pub const ESQL_UNKNOWN_TYPE: &str = "esql_unknown_type";
@@ -537,6 +539,7 @@ pub mod codes {
         FILENAME_SLUG,
         MISSING_AUTHOR,
         MISSING_ORGANISATION,
+        RECOMMENDED_FIELD_MISSING,
         DEFENDER_OUTPUT_COLUMNS,
         ESQL_UNKNOWN_TYPE,
         ESQL_GROUP_BY_COLUMN,
@@ -694,6 +697,9 @@ pub mod codes {
             FILENAME_SLUG => "The file name is not the slug of the object's name.",
             MISSING_AUTHOR => "The recommended metadata.author field is missing.",
             MISSING_ORGANISATION => "The recommended metadata.organisation field is missing.",
+            RECOMMENDED_FIELD_MISSING => {
+                "A field the templates ask for is missing; opentide validate accepts the object without it."
+            }
             DEFENDER_OUTPUT_COLUMNS => {
                 "A Defender custom detection must return the columns Defender requires."
             }

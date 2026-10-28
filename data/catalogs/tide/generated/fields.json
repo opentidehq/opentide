@@ -1,5 +1,5 @@
 {
-  "opentide": "0.18.1.dev4+g579e42465",
+  "opentide": "0.18.1.dev7+gfe8c43058",
   "generator": "opentide.generation.lsp_catalog",
   "ref_leaves": {
     "threats": "threat",
@@ -2963,7 +2963,7 @@
       "title": "Detection System Technical Setup",
       "description": "Typed per-platform configuration blocks.",
       "type": "object",
-      "required": true,
+      "required": false,
       "markdown": false,
       "hidden": false,
       "capture": "tide.property",
@@ -2972,6 +2972,7 @@
       "ref": null,
       "const": null,
       "array": false,
+      "recommended": true,
       "closed": true
     },
     {
@@ -9744,7 +9745,7 @@
       "title": "Response",
       "description": "Alert and response configuration.",
       "type": "object",
-      "required": true,
+      "required": false,
       "markdown": false,
       "hidden": false,
       "capture": "tide.property",
@@ -9753,6 +9754,7 @@
       "ref": null,
       "const": null,
       "array": false,
+      "recommended": true,
       "closed": true
     },
     {
@@ -11937,7 +11939,7 @@
       "title": "Detection System Technical Setup",
       "description": "Typed per-platform configuration blocks.",
       "type": "object",
-      "required": true,
+      "required": false,
       "markdown": false,
       "hidden": false,
       "capture": "tide.property",
@@ -11946,6 +11948,7 @@
       "ref": null,
       "const": null,
       "array": false,
+      "recommended": true,
       "closed": true
     },
     {
@@ -18735,7 +18738,7 @@
       "title": "Response",
       "description": "Alert and response configuration.",
       "type": "object",
-      "required": true,
+      "required": false,
       "markdown": false,
       "hidden": false,
       "capture": "tide.property",
@@ -18744,6 +18747,7 @@
       "ref": null,
       "const": null,
       "array": false,
+      "recommended": true,
       "closed": true
     },
     {
