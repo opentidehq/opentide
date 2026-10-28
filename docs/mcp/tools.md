@@ -336,30 +336,41 @@ Supported: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `sentinel`,
 
 ## run_query
 
-> **Not implemented.** The tool never contacts a tenant and never returns rows.
-> It exists so an agent that reaches for query execution gets an explicit
-> refusal instead of a plausible empty result set.
+Run a read-only query on a platform's tenants and return the rows: the MCP face of the [query command](../cli/query.md). Without `live: true` it refuses and contacts nothing; its next action is the live call. `live: true` uses the configured credentials: ask a person first.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `query` | string | required | Query text |
-| `platform` | string | required | Platform key |
-| `tenant` | string | `""` | Optional tenant scope |
+| `query` | string | required | Query text in the platform's language (empty with `rule`) |
+| `platform` | string | required | Platform key; every platform has a runner |
+| `tenant` | string | `""` | A tenant name, several comma-separated, or `all`; empty for the only tenant |
+| `live` | boolean | `false` | Send the query; without it nothing is sent |
+| `rule` | string | `""` | Run the query this rule (UUID) deploys, instead of `query` |
+| `since` | string | `"24h"` | Look-back: `15m`, `24h`, `7d`, `PT1H` |
+| `limit` | integer | `100` | Rows per tenant (`MAX_QUERY_ROWS`), at most 5000 |
+| `language` | string | `""` | Elastic only: `esql`, `eql`, `lucene` or `kuery` |
+| `index` | string | `""` | Elastic index patterns (comma-separated), or a CrowdStrike repository |
+
+Without `live`:
 
 ```json
 {
   "supported": true,
-  "stub": true,
-  "rows": null,
+  "status": "failed",
   "platform": "sentinel",
-  "tenant": null,
-  "message": "Read-only query execution is not implemented; no query was sent to sentinel. The live path would cap results at 100 rows."
+  "message": "run_query sends the query to the tenant. Pass live: true.",
+  "query_preview": "SecurityEvent | take 10",
+  "next_actions": [
+    {
+      "tool": "run_query",
+      "arguments": {"query": "SecurityEvent | take 10", "platform": "sentinel", "live": true},
+      "command": "opentide --json query --platform sentinel 'SecurityEvent | take 10'",
+      "reason": "run it on sentinel: this contacts the tenant with the configured credentials, so ask a person first"
+    }
+  ]
 }
 ```
 
-`rows: null` and `stub: true` are the contract: there is no `results` key to
-mistake for data. The live path, when it lands, will cap at **100 rows**
-(`MAX_QUERY_ROWS`).
+With `live: true` the result is the query command's `--json` payload without its envelope, plus `supported: true`: `status` (`completed` or `failed`), `message`, `window`, `tenants`, `row_count`, and `results`, one per tenant (and per sub-query of a SentinelOne correlation rule) with `tenant`, `status` (`ok` or `failed`), `columns`, `rows`, `row_count`, `truncated`, `partial`, `warnings`, and on a failure `error` and `detail`. A call that cannot run (an unknown tenant, no query) has `status: "failed"` and a `message` naming the problem, and sends nothing. An unknown platform returns `supported: false`.
 
 ## deploy_rule
 
@@ -475,7 +486,7 @@ get_chaining(uuid=<rule>)                 → inspect related objects in chainin
 2. Apply `fix.edits` from the issue rather than guessing; `safe: true` edits need no review, the others need a look at `help`. Call `explain` for a code you do not know.
 3. Use `search` before `get_chaining` when the UUID is unknown.
 4. Default to `dry_run=true` for `deploy_rule`; require explicit human approval for a real deploy. People review and merge changes.
-5. Never claim query validation for unsupported platforms. `validate_query` refuses unless `live` is true, and that call checks catalogue rules against the tenant; `run_query` is not implemented at all.
+5. Never claim query validation for unsupported platforms. `validate_query` refuses unless `live` is true, and that call checks catalogue rules against the tenant. Ask a person before `run_query` with `live: true`, which queries a tenant with real credentials.
 6. Do not assume `coverage(tactic=…)` filters results — pass `technique` for a filtered answer.
 
 ## Troubleshooting

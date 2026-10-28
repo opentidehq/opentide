@@ -88,18 +88,21 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 ## Platform capability matrix
 
-| Platform | Deploy | Query validate |
-|----------|:------:|:--------------:|
-| Sentinel | ✅ | ✅ KQL |
-| Defender | ✅ | ✅ KQL |
-| Elastic | ✅ | ✅ Kuery, Lucene, EQL, ES\|QL |
-| Splunk | ✅ | ✅ SPL |
-| SentinelOne | ✅ | ✅ S1QL |
-| Carbon Black | ✅ | ✅ Lucene |
-| CrowdStrike | ✅ | ❌ |
-| HarfangLab | ✅ | ❌ |
+| Platform | Deploy | Query validate | `opentide query` |
+|----------|:------:|:--------------:|:----------------:|
+| Sentinel | ✅ | ✅ KQL | ✅ KQL |
+| Defender | ✅ | ✅ KQL | ✅ KQL |
+| Elastic | ✅ | ✅ Kuery, Lucene, EQL, ES\|QL | ✅ ES\|QL, EQL, Lucene; Kuery via rule preview |
+| Splunk | ✅ | ✅ SPL | ✅ SPL |
+| SentinelOne | ✅ | ✅ S1QL | ✅ PowerQuery |
+| Carbon Black | ✅ | ✅ Lucene | ✅ Lucene |
+| CrowdStrike | ✅ | ❌ | ✅ CQL (Next-Gen SIEM) |
+| HarfangLab | ✅ | ❌ | ✅ telemetry filters (no `--rule`) |
 
 CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False`, never fake validation.
+`opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
+search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
+`kuery` is the one write: its rule preview's alerts, in the preview index.
 
 ## Code quality bar
 
