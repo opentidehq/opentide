@@ -72,9 +72,7 @@ def main() -> int:
         print(f"error: {exc}\n  help: {exc.advice}", file=sys.stderr)
         return 1
     if not found:
-        print(
-            f"the engine's bundled catalogs (language server {versions['engine']}) are current"
-        )
+        print(f"the engine's bundled catalogs (language server {versions['engine']}) are current")
         return 0
     for name, difference in found:
         print(f"error: the engine's bundled {name} is stale: {difference}", file=sys.stderr)
