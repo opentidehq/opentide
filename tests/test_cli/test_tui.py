@@ -873,12 +873,12 @@ def test_without_the_engine_nothing_is_checked_and_the_ui_says_so(
     from opentide import analysis
 
     def unavailable() -> Any:
-        raise analysis.EngineUnavailableError("No module named 'opentide_analysis._native'")
+        raise analysis.EngineUnavailableError("No module named 'opentide._native'")
 
     monkeypatch.setattr(analysis, "engine", unavailable)
     catalogue = load_catalogue(CliContext(repo=tutorial_repo))
     assert catalogue.language_server.findings == {}
-    assert "opentide_analysis" in (catalogue.language_server.unavailable or "")
+    assert "opentide._native" in (catalogue.language_server.unavailable or "")
     assert (
         catalogue.language_server.advice
         == "reinstall opentide: pip install --force-reinstall opentide"

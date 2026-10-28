@@ -356,7 +356,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 
 ### Offline: the analysis engine
 
-The engine is [opentidehq/language-server](https://github.com/opentidehq/language-server), compiled into the `opentide-analysis` package that `pip install opentide` installs; there is no extra. It reads every rule file directly in the rules folder, or those `--changed`, `--file` and `--uuid` select, and checks every query of the platform's block, whatever the rule's status or whether the platform is enabled:
+The engine is [opentidehq/language-server](https://github.com/opentidehq/language-server), compiled into the opentide package that `pip install opentide` installs; there is no extra and no second package. It reads every rule file directly in the rules folder, or those `--changed`, `--file` and `--uuid` select, and checks every query of the platform's block, whatever the rule's status or whether the platform is enabled:
 
 | Platform | Language and profile |
 |----------|----------------------|

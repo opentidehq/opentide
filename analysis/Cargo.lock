@@ -294,15 +294,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentide-analysis-python"
-version = "0.6.0"
-dependencies = [
- "opentide-analysis",
- "opentide-lsp",
- "pyo3",
-]
-
-[[package]]
 name = "opentide-core"
 version = "0.5.0"
 source = "git+https://github.com/opentidehq/language-server?rev=bfa63f295cb88ec28e30ab648e92263731842630#bfa63f295cb88ec28e30ab648e92263731842630"
@@ -419,6 +410,16 @@ dependencies = [
  "opentide-highlight",
  "opentide-syntax",
  "tree-sitter",
+]
+
+[[package]]
+name = "opentide-native"
+version = "0.0.0"
+dependencies = [
+ "opentide-analysis",
+ "opentide-lsp",
+ "pyo3",
+ "pyo3-build-config",
 ]
 
 [[package]]

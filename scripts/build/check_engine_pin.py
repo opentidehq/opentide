@@ -1,13 +1,13 @@
-"""Check that opentide and its engine package agree, and that a release builds from crates.io.
+"""``check_engine_pin.py``: the engine crates come from one source, and a release from crates.io.
 
-``opentide`` pins ``opentide-analysis`` exactly, and ``analysis/`` builds it from
-the language server's Rust crates. Three versions must agree: the pin in the root
-``pyproject.toml``, ``analysis/pyproject.toml`` and ``analysis/Cargo.toml``.
+``analysis/`` binds two crates of opentidehq/language-server,
+``opentide-analysis`` and ``opentide-lsp``, which pin each other: both must
+come from the same git revision, path or version.
 
-``--release`` also refuses a ``git`` or ``path`` source for the engine crates:
-between language-server releases ``analysis/Cargo.toml`` may build from a git
-revision, but a published wheel and sdist build from crates.io, so anyone can
-rebuild them.
+``--release`` also refuses a ``git`` or ``path`` source: between
+language-server releases ``analysis/Cargo.toml`` may build from a git
+revision, but a published opentide wheel and sdist build from crates.io, so
+anyone can rebuild them from the sdist.
 
     uv run python scripts/build/check_engine_pin.py
     uv run python scripts/build/check_engine_pin.py --release
@@ -16,7 +16,6 @@ rebuild them.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
@@ -27,31 +26,12 @@ else:  # pragma: no cover - Python 3.10
 
 ROOT = Path(__file__).resolve().parents[2]
 ENGINE_CRATES = ("opentide-analysis", "opentide-lsp")
-PACKAGE = "opentide-analysis"
 
 
 def problems(root: Path, *, release: bool) -> list[str]:
     """What is wrong, one sentence each; empty when everything agrees."""
     found: list[str] = []
-    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    pins = [
-        dependency
-        for dependency in project["dependencies"]
-        if re.match(rf"{PACKAGE}\b", dependency)
-    ]
-    analysis = tomllib.loads((root / "analysis" / "pyproject.toml").read_text(encoding="utf-8"))
     cargo = tomllib.loads((root / "analysis" / "Cargo.toml").read_text(encoding="utf-8"))
-    version = analysis["project"]["version"]
-    if pins != [f"{PACKAGE}=={version}"]:
-        found.append(
-            f"pyproject.toml must pin {PACKAGE}=={version} (analysis/pyproject.toml), "
-            f"found {pins or 'no pin'}"
-        )
-    if cargo["package"]["version"] != version:
-        found.append(
-            f"analysis/Cargo.toml says {cargo['package']['version']}, "
-            f"analysis/pyproject.toml says {version}"
-        )
     sources = {name: cargo["dependencies"].get(name) for name in ENGINE_CRATES}
     for name, spec in sources.items():
         if spec is None:
@@ -88,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     for problem in found:
         print(f"error: {problem}", file=sys.stderr)
     if not found:
-        print("opentide and opentide-analysis agree")
+        print("the engine crates come from one source")
     return 1 if found else 0
 
 

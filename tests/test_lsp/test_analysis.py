@@ -48,7 +48,7 @@ configurations:
 @pytest.fixture
 def no_engine() -> Iterator[None]:
     engine.cache_clear()
-    with hidden_modules("opentide_analysis", purge=("opentide_analysis",)):
+    with hidden_modules("opentide._native", purge=("opentide._native",)):
         yield
     engine.cache_clear()
 
@@ -62,7 +62,7 @@ def bundled_catalog() -> Iterator[None]:
 
 def test_the_engine_loads_and_names_its_versions() -> None:
     versions = engine_versions()
-    assert set(versions) == {"package", "engine"}
+    assert set(versions) == {"engine"}
     assert all(versions.values())
     assert "kql_parse_error" in engine_codes()
     assert describe("kql_parse_error") == "The KQL query does not parse."
@@ -230,7 +230,7 @@ def test_the_module_imports_nothing_compiled() -> None:
     """``opentide --help`` and completion must never load the engine."""
     source = Path(analysis.__file__).read_text(encoding="utf-8")
     module_level = [line for line in source.splitlines() if line.startswith(("import ", "from "))]
-    assert not [line for line in module_level if "opentide_analysis" in line]
+    assert not [line for line in module_level if "_native" in line]
 
 
 def test_deprecations_alone_are_a_workspace_catalog(

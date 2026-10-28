@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
-The language server and its query engine ship with `pip install opentide` ([#332](https://github.com/opentidehq/opentide/issues/332)). There is no `opentide[lsp]` extra and no second install: opentide depends on `opentide-analysis`, the Rust engine from [opentidehq/language-server](https://github.com/opentidehq/language-server) compiled for each platform, at the exact version it was built with. After upgrading:
+The language server and its query engine ship with `pip install opentide` ([#332](https://github.com/opentidehq/opentide/issues/332)). There is no `opentide[lsp]` extra and no second package: the Rust engine from [opentidehq/language-server](https://github.com/opentidehq/language-server) is compiled into opentide itself, so each opentide wheel is built for its platform. After upgrading:
 
 - **Read `opentide validate query` again.** Without `--live` it now checks every rule query offline (exit `1` on an error) instead of refusing with exit `2`. A script that relied on the refusal, or on `--platform` being required without `--live`, changes behaviour; `--live` is unchanged.
 - **Run `opentide generate schemas`** to write the language server's catalogs, then point your editor at `opentide lsp start`.
@@ -30,7 +30,7 @@ The language server and its query engine ship with `pip install opentide` ([#332
 
 - **A bare `opentide validate query` runs the offline check** instead of exiting `2` and naming `--live`. `--platform` is required only with `--live`. `--strategy` and `--wide` choose tenants, so they now need `--live` (exit `2` without it). `opentide validate --strict query` hands `--strict` to `query`, which takes it now.
 - **MCP `validate_query` without `live`** returns the offline check rather than a refusal (`valid` is `true` or `false` instead of `null`); it still refuses, with `valid: null`, a SentinelOne query and an empty one.
-- **opentide depends on `opentide-analysis`**, which has prebuilt wheels for CPython 3.10 and later on Linux (x86_64 and arm64, glibc and musl), macOS and Windows x64. Elsewhere, including free-threaded Python, pip builds it from source, which needs a Rust toolchain. A missing engine fails the commands that need it (`engine_unavailable`); it never skips them.
+- **opentide wheels are per platform**: one wheel per platform serves CPython 3.10 and later on Linux (x86_64 and arm64, glibc and musl), macOS (Intel and Apple silicon) and Windows x64. Elsewhere, including free-threaded Python, pip builds opentide from its sdist, which compiles the engine and needs a Rust toolchain. A missing engine fails the commands that need it (`engine_unavailable`); it never skips them.
 
 ## [0.18.0] — 2026-10-27
 
