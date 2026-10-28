@@ -16,9 +16,8 @@ use opentide_highlight::{
 use opentide_kql::Profile;
 use regex::Regex;
 use serde::Deserialize;
-use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 use uuid::Uuid;
 
 pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
@@ -267,22 +266,26 @@ fn parse_query_block(
             break;
         }
         let strip = *content_indent.get_or_insert(ind);
-        if inner.is_empty() {
-            host_start = b;
-        }
         let body = if l.len() >= strip {
             &l[strip..]
         } else {
             l.trim_start()
         };
+        // Where the body starts in the line: `trim_start` may cut fewer bytes.
+        let cut = l.len() - body.len();
+        if inner.is_empty() {
+            // The query starts at its text, not at the line's indentation.
+            host_start = b + cut;
+        }
         let body = body.strip_suffix('\n').unwrap_or(body);
         if !inner.is_empty() {
             inner.push('\n');
             host_map.push(b.saturating_sub(1));
         }
-        for (k, ch) in body.char_indices() {
-            host_map.push(b + strip + k);
-            let _ = ch;
+        // One entry per byte: `host_map` maps inner *byte* offsets, so a
+        // multi-byte character takes as many entries as it has bytes.
+        for k in 0..body.len() {
+            host_map.push(b + cut + k);
         }
         inner.push_str(body);
         host_end = b + l.len();
@@ -754,91 +757,14 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let injections = extract_injections(input.source);
     let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
     let mut tokens = highlight_tide(&spec, input.source, &skip);
-    for inj in &injections {
-        match inj.language {
-            LanguageId::Kql => {
-                let profile = if inj.field_path.iter().any(|p| p == "defender_for_endpoint") {
-                    Profile::Defender
-                } else {
-                    Profile::Sentinel
-                };
-                let result = opentide_kql::analyze(&inj.inner, profile);
-                for d in result.diagnostics {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in result.tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::Spl => {
-                let result = opentide_spl::analyze(&inj.inner);
-                for d in result.diagnostics {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in result.tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
-                let (found, query_tokens) = match inj.language {
-                    LanguageId::Esql => {
-                        // Hunts have no tenants; only the rule block is targeted.
-                        let target = (inj.field_path.first().map(String::as_str)
-                            == Some("configurations"))
-                        .then(|| {
-                            elastic::stack_target(
-                                object
-                                    .configurations
-                                    .as_ref()
-                                    .and_then(|c| c.get("elastic")),
-                                input.elastic_tenants,
-                            )
-                        })
-                        .flatten();
-                        let r = opentide_esql::analyze_for(&inj.inner, target);
-                        (r.diagnostics, r.tokens)
-                    }
-                    LanguageId::Eql => {
-                        let r = opentide_eql::analyze(&inj.inner);
-                        // Hunts have no schedule; only the rule query is compared.
-                        if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                            diagnostics.extend(elastic::maxspan_advisories(
-                                input.source,
-                                object.configurations.as_ref(),
-                                inj,
-                            ));
-                        }
-                        (r.diagnostics, r.tokens)
-                    }
-                    LanguageId::Kuery => {
-                        let r = opentide_kuery::analyze(&inj.inner);
-                        (r.diagnostics, r.tokens)
-                    }
-                    _ => {
-                        let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
-                            opentide_lucene::Dialect::CarbonBlack
-                        } else {
-                            opentide_lucene::Dialect::Elastic
-                        };
-                        let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
-                        (r.diagnostics, r.tokens)
-                    }
-                };
-                for d in found {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in query_tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::TideYaml => {}
-        }
+    for query in analyze_injections(
+        input.source,
+        object.configurations.as_ref(),
+        input.elastic_tenants,
+        injections,
+    ) {
+        diagnostics.extend(query.diagnostics);
+        tokens.extend(query.tokens);
     }
 
     tokens.sort_by_key(|t| (t.span.start, t.span.end));
@@ -848,6 +774,108 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         tokens,
         symbols,
     }
+}
+
+/// One query injected into a Tide object, analyzed in its language. Ranges and
+/// token spans are in the object file's coordinates.
+#[derive(Debug, Clone)]
+pub struct QueryAnalysis {
+    pub query: InjectedQuery,
+    pub diagnostics: Vec<Diagnostic>,
+    pub tokens: Vec<HighlightToken>,
+}
+
+/// Every query injected into a Tide object, each analyzed in its language,
+/// including queries with no diagnostic (so a host can count what it checked).
+/// The object's other fields are not checked. A file that is not YAML has no
+/// queries.
+pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
+    let configurations = serde_yaml::from_str::<TideObject>(source)
+        .ok()
+        .and_then(|object| object.configurations);
+    analyze_injections(
+        source,
+        configurations.as_ref(),
+        elastic_tenants,
+        extract_injections(source),
+    )
+}
+
+fn analyze_injections(
+    source: &str,
+    configurations: Option<&serde_yaml::Value>,
+    elastic_tenants: &[ElasticTenant],
+    injections: Vec<InjectedQuery>,
+) -> Vec<QueryAnalysis> {
+    let mut out = Vec::with_capacity(injections.len());
+    for inj in injections {
+        let mut extra = Vec::new();
+        let (found, query_tokens) = match inj.language {
+            LanguageId::Kql => {
+                let profile = if inj.field_path.iter().any(|p| p == "defender_for_endpoint") {
+                    Profile::Defender
+                } else {
+                    Profile::Sentinel
+                };
+                let r = opentide_kql::analyze(&inj.inner, profile);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Spl => {
+                let r = opentide_spl::analyze(&inj.inner);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Esql => {
+                // Hunts have no tenants; only the rule block is targeted.
+                let target = (inj.field_path.first().map(String::as_str) == Some("configurations"))
+                    .then(|| {
+                        elastic::stack_target(
+                            configurations.and_then(|c| c.get("elastic")),
+                            elastic_tenants,
+                        )
+                    })
+                    .flatten();
+                let r = opentide_esql::analyze_for(&inj.inner, target);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Eql => {
+                let r = opentide_eql::analyze(&inj.inner);
+                // Hunts have no schedule; only the rule query is compared.
+                if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    extra = elastic::maxspan_advisories(source, configurations, &inj);
+                }
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Kuery => {
+                let r = opentide_kuery::analyze(&inj.inner);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Lucene => {
+                let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
+                    opentide_lucene::Dialect::CarbonBlack
+                } else {
+                    opentide_lucene::Dialect::Elastic
+                };
+                let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::TideYaml => (Vec::new(), Vec::new()),
+        };
+        let mut diagnostics: Vec<Diagnostic> = found
+            .into_iter()
+            .map(|d| remap_diagnostic(source, &inj, d))
+            .collect();
+        diagnostics.extend(extra);
+        let tokens = query_tokens
+            .iter()
+            .filter_map(|t| remap_token(source, &inj, t))
+            .collect();
+        out.push(QueryAnalysis {
+            query: inj,
+            diagnostics,
+            tokens,
+        });
+    }
+    out
 }
 
 fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
@@ -1227,13 +1255,17 @@ struct DeprecationRow {
     deprecated: Option<String>,
 }
 
-thread_local! {
-    static DEPRECATION_OVERLAY: RefCell<Vec<FieldDeprecation>> = const { RefCell::new(Vec::new()) };
+fn deprecation_overlay() -> &'static RwLock<Vec<FieldDeprecation>> {
+    static OVERLAY: OnceLock<RwLock<Vec<FieldDeprecation>>> = OnceLock::new();
+    OVERLAY.get_or_init(|| RwLock::new(Vec::new()))
 }
 
-/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for this thread.
+/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for the
+/// whole process, so a host that analyzes on several threads sees one overlay.
 pub fn install_deprecation_overlay(items: Vec<FieldDeprecation>) {
-    DEPRECATION_OVERLAY.with(|cell| *cell.borrow_mut() = items);
+    *deprecation_overlay()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
 }
 
 /// Parse `deprecations.json` or a `fields.json` that carries `deprecated` messages.
@@ -1284,7 +1316,10 @@ fn diagnose_deprecations(object_type: &str, source: &str, diagnostics: &mut Vec<
     };
     let mut present = Vec::new();
     collect_mapping_paths(&value, &[], &mut present);
-    let overlay = DEPRECATION_OVERLAY.with(|cell| cell.borrow().clone());
+    let overlay = deprecation_overlay()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
     for path in present {
         let dotted = path.join(".");
         let message = overlay
@@ -1552,7 +1587,7 @@ metadata:
 description: |
   test
 status: STAGING
-severity: Substantial incident
+severity: High
 detection_model: 00000000-0000-4000-8002-000000000001
 response:
   alert_severity: High
@@ -1592,6 +1627,41 @@ meta:
             Some(["meta".to_string()].as_slice())
         );
         assert!(diag.message.contains("metadata"));
+    }
+
+    #[test]
+    fn non_ascii_text_keeps_later_query_positions_exact() {
+        // `🔥` is four bytes and two UTF-16 units; `é` is two bytes and one unit.
+        for prefix in ["\"ab\"", "\"é\"", "\"🔥🔥\""] {
+            let src = format!(
+                "name: Rule\nmetadata:\n  schema: rule::1.0\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | where Account == {prefix} | wher EventID == 1\n"
+            );
+            let (query,) = match extract_injections(&src).as_slice() {
+                [query] => (query.clone(),),
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(query.host_map.len(), query.inner.len());
+            assert_eq!(
+                &src[query.host_span.start..query.host_span.start + 13],
+                "SecurityEvent"
+            );
+            let r = analyze(AnalyzeInput {
+                path: "objects/rules/rule.yaml",
+                source: &src,
+                workspace: &[],
+                elastic_tenants: &[],
+            });
+            let d = r
+                .diagnostics
+                .iter()
+                .find(|d| d.code == codes::KQL_UNKNOWN_OPERATOR)
+                .expect("wher");
+            let line = src.lines().nth(d.range.start.line as usize).unwrap();
+            let units: Vec<u16> = line.encode_utf16().collect();
+            let at = String::from_utf16(&units[d.range.start.character as usize..]).unwrap();
+            assert!(at.starts_with("wher"), "{prefix}: {at:?}");
+            assert_eq!(d.range.start.line, d.range.end.line, "{prefix}");
+        }
     }
 
     #[test]
@@ -1805,6 +1875,27 @@ threat:
     }
 
     #[test]
+    fn rule_severity_is_an_alert_severity() {
+        // opentide 0.18.0: a rule's `severity` takes alert_severity values
+        // (`High`), not the threat severity scale (`Substantial incident`).
+        let check = |severity: &str| {
+            let source = RULE.replace("severity: High", &format!("severity: {severity}"));
+            analyze(AnalyzeInput {
+                path: "objects/rules/sentinel-kql-rule.yaml",
+                source: &source,
+                workspace: &[],
+                elastic_tenants: &[],
+            })
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == "vocab_unknown" && d.message.contains("severity"))
+            .count()
+        };
+        assert_eq!(check("High"), 0);
+        assert_eq!(check("Substantial incident"), 1);
+    }
+
+    #[test]
     fn tide_values_use_legend_captures() {
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
@@ -1821,7 +1912,7 @@ threat:
         assert!(schema_vals.contains(&"rule::1.0"), "{schema_vals:?}");
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"STAGING"));
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"clear"));
-        assert!(token_text(RULE, &r.tokens, "constant").contains(&"Substantial incident"));
+        assert!(token_text(RULE, &r.tokens, "constant").contains(&"High"));
         let uuid_keys = token_text(RULE, &r.tokens, "tide.property");
         assert!(uuid_keys.contains(&"uuid"), "{uuid_keys:?}");
         let starts: Vec<usize> = r.tokens.iter().map(|t| t.span.start).collect();

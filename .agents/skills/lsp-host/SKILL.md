@@ -14,6 +14,8 @@ Read `references/wire-format.md` before adding a method.
 
 ## Two protocols, one binary
 
+The server is also a library: `opentide_lsp::run_stdio()` is what the `opentide` Python package calls for `opentide lsp start`. Keep it free of process-wide side effects beyond stdin, stdout and the catalog install, and never print to stdout outside the protocol.
+
 | Invocation | Bytes on stdout |
 | --- | --- |
 | `--stdio` | LSP `Content-Length` frames |
@@ -30,7 +32,7 @@ Read `references/wire-format.md` before adding a method.
 
 The analysis crate sees a `MemoryWorkspace` built from open documents plus YAML files under the workspace `objects/` directory. The engine still does not call `std::fs`. The host does.
 
-`initialize` reads `rootUri` and installs the Tide deprecation overlay from `.opentide/lsp/catalogs/generated/deprecations.json` when that file exists. `Session::host` also hands the analysis layer `.opentide/configurations/platforms/elastic.toml` (`opentide_analysis::ELASTIC_CONFIGURATION`) when it exists: its tenants' `setup.version` decides the stack Elastic queries are checked against. The CLI `analyze` does the same. This reads one key; it is not the configuration engine (#64). Capabilities are the JSON object in the `initialize` arm. When you add a provider, advertise it there and handle the method in the same change. An unhandled request that still has an `id` hits the `_` arm and returns `-32601`, so the client unblocks with a failure instead of waiting.
+`initialize` reads `rootUri` and installs the workspace catalogs from `.opentide/lsp/catalogs/generated/` (`fields.json`, `deprecations.json`) when they exist, through `opentide_analysis::install_catalog`; the install is process-wide. `Session::host` also hands the analysis layer `.opentide/configurations/platforms/elastic.toml` (`opentide_analysis::ELASTIC_CONFIGURATION`) when it exists: its tenants' `setup.version` decides the stack Elastic queries are checked against. The CLI `analyze` does the same. This reads one key; it is not the configuration engine (#64). Capabilities are the JSON object in the `initialize` arm. When you add a provider, advertise it there and handle the method in the same change. An unhandled request that still has an `id` hits the `_` arm and returns `-32601`, so the client unblocks with a failure instead of waiting.
 
 Current providers: incremental sync (`textDocumentSync: 2`), hover, completion (resolve, trigger characters), signature help, definition, references, document symbol, workspace symbol, document highlight, code action, folding, selection range, inlay hints, pull diagnostics, semantic tokens (full).
 

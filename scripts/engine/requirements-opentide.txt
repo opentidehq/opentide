@@ -1,1 +1,1 @@
-opentide==0.16.1
+opentide==0.18.0

@@ -6,7 +6,7 @@ opentide's own JSON Schema export (``generate_schema_for_identifier``) plus
 Pydantic ``json_schema_extra`` flags that the schema emitter drops
 (``tide.template.multiline``, ``hide``, ``required``).
 
-Pin: opentide==0.16.1 (see scripts/requirements-opentide.txt).
+Pin: opentide==0.18.0 (see scripts/requirements-opentide.txt).
 
     python3 scripts/sync_opentide_schemas.py
 """
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = ROOT / "catalogs" / "tide" / "schemas"
 GENERATED = ROOT / "catalogs" / "tide" / "generated" / "fields.json"
 HIGHLIGHTS = ROOT / "highlights" / "queries" / "tide" / "highlights.scm"
-EXPECTED_VERSION = "0.16.1"
+EXPECTED_VERSION = "0.18.0"
 
 REF_LEAVES = dict(_REF_LEAF_TO_TYPE)
 
@@ -59,7 +59,7 @@ def main() -> None:
     visibility = SCHEMA_DIR / "visibility.1.0.schema.json"
     if visibility.exists():
         visibility.unlink()
-        print("removed visibility.1.0.schema.json (not registered in opentide 0.16.1)")
+        print("removed visibility.1.0.schema.json (not registered in opentide 0.18.0)")
 
     # The field catalog is keyed by family, so a family with several revisions
     # contributes its newest one: a superset of the older shapes.
@@ -94,7 +94,7 @@ def main() -> None:
         "generator": "scripts/sync_opentide_schemas.py",
         "ref_leaves": REF_LEAVES,
         "gaps": [
-            "threat.chaining items are untyped maps in opentide 0.16.1, so relation and vector are not schema properties. Chaining-relation diagnostics still use catalogs/tide/vocabs/chaining_relations.toml.",
+            "threat.chaining items are untyped maps in opentide 0.18.0, so relation and vector are not schema properties. Chaining-relation diagnostics still use catalogs/tide/vocabs/chaining_relations.toml.",
             "Root status is a free string with default STAGING. Lifecycle values are deployment configuration, not a schema enum, so they are not offered as completions.",
             "enum:[\"\"] sentinels (empty vocabulary, including detection_model) are dropped and are not completions.",
         ],
@@ -523,7 +523,7 @@ def write_highlights(nodes: list[dict[str, Any]]) -> None:
 def write_deprecations(version: str) -> None:
     """``tide.meta.deprecation`` lives on the metaschema, not on JSON Schema nodes.
 
-    Root ``meta`` and Splunk ``advanced`` / ``security_domain`` are the markers that exist in opentide 0.16.1.
+    Root ``meta`` and Splunk ``advanced`` / ``security_domain`` are the markers that exist in opentide 0.18.0.
     """
     from opentide.generation.pydantic_metaschema import CORE_ROOT_EXTRAS
     from opentide.models.platform_schema import _PLATFORM_EXTRAS
