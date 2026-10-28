@@ -25,6 +25,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - An injected query's span starts at its text, not at the indentation of its first line.
 - The shape check reads YAML as opentide does: a `<<` merge key fills the fields it merges instead of being an unknown key; a key that is not a string (`1: x`) is not a field; a value outside its enum in the second item of a list is reported on that item, and each bad item once; an unknown key that is quoted, non-ASCII or in a flow mapping is placed on its key, or on the nearest key above it, never at the top of the file.
 - A quoted query key (`"query": |`, `'sentinel':`) is still a query: it was left unchecked.
+- A KQL query may start with `search` or `find` (`search "mimikatz"`, `search in (SecurityEvent) "x"`, `find in (T) where ...`): it was a `kql_parse_error`, and only `T | search ...` parsed.
 - A block-scalar query with an indentation indicator (`query: |2`) whose later line is indented less than the first and holds a multi-byte character no longer panics.
 - `scripts/sync_opentide_schemas.py --check` reports a reference schema opentide no longer registers, which writing removes.
 - `rootUri` and document URIs are percent-decoded, and a Windows drive (`file:///c%3A/...`) becomes `c:/...`, so a workspace whose path has a space or a drive letter finds its objects and catalogs. Locations the server returns are percent-encoded.
