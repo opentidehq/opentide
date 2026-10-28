@@ -1,0 +1,219 @@
+"""Units behind ``opentide lsp``, ``doctor``'s engine checks and the protocol output mode."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from tests.test_cli.e2e.helpers import hidden_modules
+
+from opentide.analysis import Finding, engine
+from opentide.cli.services import lsp
+from opentide.cli.services.doctor import DoctorContext, check_analysis_engine, check_lsp_catalog
+from opentide.cli.services.engine import findings_outcome, findings_summary
+from opentide.cli.ui.diagnostics import Diagnostic, diagnostic_from_engine, engine_reference
+from opentide.cli.ui.mode import OutputMode, resolve_mode
+
+
+@pytest.fixture
+def no_engine() -> Iterator[None]:
+    engine.cache_clear()
+    with hidden_modules("opentide._native", purge=("opentide._native",)):
+        yield
+    engine.cache_clear()
+
+
+# lsp start --------------------------------------------------------------------
+
+
+def test_lsp_start_owns_stdout_like_mcp_start() -> None:
+    for command in (("lsp", "start"), ("mcp", "start")):
+        assert resolve_mode(command=command, json_flag=True, env={}) is OutputMode.MCP
+    assert resolve_mode(command=("lsp", "check"), json_flag=True, env={}) is OutputMode.JSON
+
+
+def test_serve_says_on_stderr_when_the_engine_does_not_load(
+    no_engine: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert lsp.serve() == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.startswith("error: The opentide analysis engine does not load")
+    assert "help: reinstall opentide" in captured.err
+
+
+def test_serve_returns_when_the_server_ends(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr("opentide.analysis.serve_stdio", lambda: calls.append("served"))
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False, raising=False)
+    assert lsp.serve() == 0
+    assert calls == ["served"]
+
+
+def test_serve_reports_a_server_that_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom() -> None:
+        raise RuntimeError("stdin is gone")
+
+    monkeypatch.setattr("opentide.analysis.serve_stdio", boom)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False, raising=False)
+    assert lsp.serve() == 1
+    assert "the language server stopped: stdin is gone" in capsys.readouterr().err
+
+
+# doctor -----------------------------------------------------------------------
+
+
+def test_doctor_reports_the_engine_and_its_versions(tmp_path: Path) -> None:
+    (check,) = check_analysis_engine(DoctorContext(workspace=tmp_path))
+    assert check.code == "analysis_engine"
+    assert check.status == "pass"
+    assert check.message.startswith("The analysis engine (language server ")
+
+
+def test_doctor_fails_when_the_engine_does_not_load(tmp_path: Path, no_engine: None) -> None:
+    (check,) = check_analysis_engine(DoctorContext(workspace=tmp_path))
+    assert (check.status, check.fix) == ("fail", "pip install --force-reinstall opentide")
+
+
+def test_doctor_checks_the_language_server_catalogs(tmp_path: Path) -> None:
+    import opentide
+    from opentide.generation.lsp_catalog import CATALOG_DIR
+
+    ctx = DoctorContext(workspace=tmp_path)
+    assert check_lsp_catalog(ctx)[0].status == "skip"
+    (tmp_path / ".opentide").mkdir()
+    missing = check_lsp_catalog(ctx)[0]
+    assert (missing.status, missing.fix) == ("warn", "opentide generate schemas")
+    fields = tmp_path / CATALOG_DIR / "fields.json"
+    fields.parent.mkdir(parents=True)
+    fields.write_text("{", encoding="utf-8")
+    assert "does not parse" in check_lsp_catalog(ctx)[0].message
+    fields.write_text(json.dumps({"opentide": "0.0.1", "fields": []}), encoding="utf-8")
+    stale = check_lsp_catalog(ctx)[0]
+    assert stale.status == "warn" and "0.0.1" in stale.message
+    fields.write_text(json.dumps({"opentide": opentide.__version__}), encoding="utf-8")
+    assert check_lsp_catalog(ctx)[0].status == "pass"
+
+
+# diagnostics ------------------------------------------------------------------
+
+
+def _finding(code: str, message: str, suggestion: str | None = None) -> Finding:
+    return Finding(code, "error", message, 3, 5, 3, 9, ("configurations",), suggestion)
+
+
+@pytest.mark.parametrize(
+    ("code", "message", "suggestion", "expected"),
+    [
+        (
+            "kql_unknown_operator",
+            "unknown tabular operator 'wher'",
+            "where",
+            "did you mean 'where'?",
+        ),
+        ("esql_metadata_id", "no METADATA _id", "METADATA _id", "try: METADATA _id"),
+        (
+            "spl_parse_error",
+            "SPL syntax error",
+            None,
+            "the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference",
+        ),
+        (
+            "missing_author",
+            "metadata.author is missing",
+            None,
+            "opentide explain missing_author describes it",
+        ),
+    ],
+)
+def test_every_engine_frame_ends_in_a_help_line(
+    tmp_path: Path, code: str, message: str, suggestion: str | None, expected: str
+) -> None:
+    diagnostic = diagnostic_from_engine(
+        _finding(code, message, suggestion), file_path=tmp_path / "a.yaml", workspace=tmp_path
+    )
+    assert diagnostic.help == expected
+    assert (diagnostic.path, diagnostic.line, diagnostic.column, diagnostic.end_column) == (
+        "a.yaml",
+        3,
+        5,
+        9,
+    )
+
+
+def test_engine_references_cover_every_query_language() -> None:
+    for prefix in ("kql_", "spl_", "esql_", "eql_", "kuery_", "lucene_"):
+        assert engine_reference(f"{prefix}parse_error") is not None
+    assert engine_reference("lookback_zero") is None
+
+
+def test_findings_outcome_follows_the_lint_grammar() -> None:
+    def summary(*severities: str) -> dict[str, int]:
+        items = [Diagnostic(code="c", severity=s, message="m", path="a.yaml") for s in severities]  # type: ignore[arg-type]
+        return findings_summary(items)
+
+    clean = findings_outcome(summary(), checked="3 queries", failed=False, clean="3 queries valid")
+    assert clean == ("3 queries valid", None)
+    notes = findings_outcome(
+        summary("note"), checked="3 queries", failed=False, clean="3 queries valid"
+    )
+    assert notes == ("3 queries valid · 1 note", None)
+    warned = findings_outcome(summary("warning"), checked="3 queries", failed=False, clean="x")
+    assert warned == ("1 warning in 1 file · 3 queries checked", "warning")
+    failed = findings_outcome(
+        summary("error", "warning"), checked="3 queries", failed=True, clean="x"
+    )
+    assert failed == ("1 error in 1 file · 3 queries checked", None)
+
+
+# query highlighting -------------------------------------------------------------
+
+RULE_WITH_QUERY = """\
+name: Rule
+configurations:
+  sentinel:
+    query: |
+      SecurityEvent
+      | wher EventID == 4688 // note
+"""
+
+
+def _query_frame(tmp_path: Path, styles: object) -> list:
+    from opentide.cli.ui.codeframe import diagnostic_lines
+    from opentide.cli.ui.diagnostics import SourceFiles
+
+    rule = tmp_path / "rule.yaml"
+    rule.write_text(RULE_WITH_QUERY, encoding="utf-8")
+    finding = Finding("kql_unknown_operator", "error", "unknown operator", 6, 9, 6, 13)
+    diagnostic = diagnostic_from_engine(finding, file_path=rule, workspace=tmp_path)
+    return diagnostic_lines(diagnostic, sources=SourceFiles(), styles=styles)  # type: ignore[arg-type]
+
+
+def test_query_lines_are_coloured_as_the_editor_colours_them(tmp_path: Path) -> None:
+    from opentide.cli.ui.codeframe import QueryHighlighter
+
+    lines = _query_frame(tmp_path, QueryHighlighter())
+    row = next(line for line in lines if "wher EventID" in line.plain)
+    styled = {row.plain[span.start : span.end]: str(span.style) for span in row.spans}
+    assert styled["|"] == "bold magenta"
+    assert styled["4688"] == "yellow"
+    assert styled["// note"] == "dim"
+    previous = next(line for line in lines if line.plain.endswith("SecurityEvent"))
+    assert any(str(span.style) == "bright_cyan" for span in previous.spans)
+
+
+def test_without_styles_the_frame_is_plain(tmp_path: Path) -> None:
+    lines = _query_frame(tmp_path, None)
+    row = next(line for line in lines if "wher EventID" in line.plain)
+    assert {str(span.style) for span in row.spans} <= {"blue"}, "only the gutter is styled"
+
+
+def test_highlighting_never_fails_a_frame(tmp_path: Path, no_engine: None) -> None:
+    from opentide.cli.ui.codeframe import QueryHighlighter
+
+    lines = _query_frame(tmp_path, QueryHighlighter())
+    assert any("wher EventID" in line.plain for line in lines)

@@ -128,7 +128,9 @@ def run_validation(
     parse_errors = index.get("parse_errors", [])
     # yaml_parse belongs to schema. A named check such as cve must not fail
     # because an unrelated object file failed to parse.
-    parse_issues = _yaml_parse_issues(parse_errors, scope) if ValidateCheck.schema in checks else []
+    # So does the queries check: a file it cannot parse has no query it could check.
+    reads_files = bool(checks & {ValidateCheck.schema, ValidateCheck.queries})
+    parse_issues = _yaml_parse_issues(parse_errors, scope) if reads_files else []
     issues.extend(parse_issues)
     indexed_parse_failures = frozenset(
         _resolved_str(entry["path"]) for entry in parse_errors if entry.get("path")
@@ -138,9 +140,11 @@ def run_validation(
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
     }
-    if _scope_has_narrow_filter(scope) and object_checks and not work_items and not parse_issues:
+    # Checks that read the selected objects: a target that selects none checked nothing.
+    scoped_checks = object_checks | (checks & {ValidateCheck.queries})
+    if _scope_has_narrow_filter(scope) and scoped_checks and not work_items and not parse_issues:
         issues.append(_scope_no_match_issue(scope))
-    elif object_checks and scope.file_targets:
+    elif scoped_checks and scope.file_targets:
         # One matching target must not let another, unmatched one pass: the
         # production write-back validates exactly the files it is about to
         # commit, and a target that matches nothing validated nothing.
@@ -219,6 +223,24 @@ def run_validation(
                 issues.extend(item_issues)
                 warnings.extend(item_warnings)
         stats["objects_checked"] = len(work_items)
+
+    if ValidateCheck.queries in checks:
+        from opentide.registry.discovery import discover_workspace
+        from opentide.validation.queries import QueryObject, query_issues
+
+        found = query_issues(
+            (
+                QueryObject(item.file_path, item.uuid, item.object_type)
+                for item in work_items
+                if item.file_path is not None
+            ),
+            root=discover_workspace(),
+        )
+        issues.extend(found.errors)
+        warnings.extend(found.warnings)
+        stats["queries_checked"] = found.queries
+        if not object_checks:
+            stats["objects_checked"] = len(work_items)
 
     if ValidateCheck.schema in checks and scope.mode == "full":
         # Shards outlive their rules: an orphan is still the only handle on a

@@ -19,13 +19,16 @@ opentide validate --check schema
 opentide validate --fix
 opentide validate --fix --dry-run
 opentide validate --watch
+opentide validate --deep
+opentide validate --check queries
 ```
 
 ### Options
 
 | Flag | Purpose |
 |------|---------|
-| `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `configuration`, `cve`, `sharing-config` |
+| `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `configuration`, `cve`, `sharing-config`, `queries` |
+| `--deep` | Run the default checks, then the `queries` check: every query of every object, through the analysis engine (see [Queries: `--deep`](#queries---deep)). Cannot be combined with `--check` |
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
@@ -299,6 +302,19 @@ Accepted identifiers:
 
 The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are skipped (logged) rather than reported as invalid.
 
+### Queries: `--deep`
+
+```bash
+opentide validate --deep
+opentide validate --check queries --file objects/rules/example.yaml
+```
+
+`--deep` runs the default checks and then the `queries` check, which reads every query the selected objects carry (each platform block's `query`, and hunts) and checks it offline with the analysis engine, in its own language: the check [`validate query`](#offline-the-analysis-engine) runs, inside `validate`. `--check queries` runs it alone. It honours `--file`, `--uuid`, `--type`, `--strict`, `--watch` and `--fix` (no query finding has a safe fix).
+
+The engine's errors and warnings join `report.issues` and `report.warnings` with their codes (`kql_parse_error`, `spl_unknown_command`, ...), at their place in the file, and print as code frames with the rest. `context` names the `language`, the `platform` and the engine's `position`. Its notes (hints) are left to `validate query` and [`lsp check`](./lsp.md). `summary.queries` counts the queries checked, and the outcome line says it: `✓ 6 objects valid · 4 queries · 1.2s`. `checks` gains a `queries` verdict.
+
+When the engine does not load, the check reports one `engine_unavailable` error and the run fails: `--deep` never skips its queries. The engine ships with `pip install opentide`; there is no extra to install.
+
 ### Default checks
 
 When no `--check` is specified, the pipeline runs:
@@ -308,45 +324,87 @@ When no `--check` is specified, the pipeline runs:
 - `schema` (includes vocabulary and cross-object references)
 - `configuration` (the merged files under `.opentide/configurations/`, against their models)
 
-CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI pipeline so offline `opentide validate` stays deterministic.
+CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI pipeline so offline `opentide validate` stays deterministic. The `queries` check is opt-in too: `--deep`, or `--check queries`.
 
 ## Query validation
 
 ```bash
-opentide validate query --platform sentinel
+opentide validate query
+opentide validate query --platform splunk --changed
+opentide validate query --platform sentinel --file objects/rules/example.yaml --strict
 opentide validate query --platform sentinel --live
 opentide validate query --platform splunk --live --changed
 opentide validate query --platform splunk --live --file objects/rules/example.yaml
 opentide validate query --platform splunk --live --strategy RELEASE --wide
 ```
 
+`validate query` checks rule queries in two ways. **Offline**, the default, the analysis engine that ships with opentide parses each query in its platform's language: no tenant, no credentials, no network. **`--live`** sends one platform's queries to its tenants.
+
 | Flag | Purpose |
 |------|---------|
-| `--platform` | **Required.** Platform enum value |
-| `--live` | Check the catalogue queries against the tenant (needs SDKs + credentials) |
-| `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) — `--live` only |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). Repeatable — `--live` only |
-| `--uuid` | Check only the rule with this UUID. Repeatable — `--live` only |
-| `--strategy` | Check only the rules a run with this strategy deploys, on the tenants that accept it: `PREVIEW` or `RELEASE`, repeatable. Default: both — `--live` only |
-| `--wide` | Ignore each rule's status: check every status except `DISABLEMENT` and `DELETION`, `INERT` included — `--live` only |
+| `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
+| `--offline` | Check with the analysis engine (the default, so the flag only says so) |
+| `--live` | Check the queries on the platform's tenants (needs credentials). Cannot be combined with `--offline` |
+| `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). Repeatable |
+| `--uuid` | Check only the rule with this UUID. Repeatable |
+| `--strict` | Offline: fail on warnings too. Refused with `--live` |
+| `--strategy` | `--live`: check only the rules a run with this strategy deploys, on the tenants that accept it: `PREVIEW` or `RELEASE`, repeatable. Default: both |
+| `--wide` | `--live`: ignore each rule's status: check every status except `DISABLEMENT` and `DELETION`, `INERT` included |
 
-### The tenant check is `--live`
+`--strategy` and `--wide` choose tenants, so offline they exit `2` (`usage_error`). Through 0.18.0 a bare `validate query` refused and named `--live`; it now runs the offline check.
 
-Query validation is tenant-only. A bare `validate query` is not an offline check and does not scan query text. It exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. `--live` fails when a credential is still an unsubstituted `$VARIABLE` placeholder:
+### Offline: the analysis engine
+
+The engine is [opentidehq/language-server](https://github.com/opentidehq/language-server), compiled into the opentide package that `pip install opentide` installs; there is no extra and no second package. It reads every rule file directly in the rules folder, or those `--changed`, `--file` and `--uuid` select, and checks every query of the platform's block, whatever the rule's status or whether the platform is enabled:
+
+| Platform | Language and profile |
+|----------|----------------------|
+| `sentinel` | KQL, Sentinel tables |
+| `defender_for_endpoint` | KQL, Defender tables |
+| `splunk` | SPL |
+| `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
+| `carbon_black_cloud` | Lucene, Carbon Black dialect |
+
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike and HarfangLab are never validated (see [Supported platforms](#supported-platforms)).
 
 ```bash
-opentide --json validate query --platform sentinel
+opentide --json validate query --platform sentinel_one
 ```
 
-```json output-of="opentide --json validate query --platform sentinel" exit=2
+```json output-of="opentide --json validate query --platform sentinel_one" exit=2
 {
-  "platform": "sentinel",
+  "platform": "sentinel_one",
+  "mode": "offline",
   "supported": true,
   "ok": false,
   "status": "failed",
-  "message": "Query validation checks the tenant. Re-run with --live."
+  "message": "sentinel_one queries are checked on the tenant only; the offline engine does not parse them. Re-run with --live."
 }
 ```
+
+Each finding prints as a code frame at its place in the rule file, with the query coloured as your editor colours it when you run it at a terminal, then one outcome line. A rule file that is not UTF-8 or not YAML is an error (`yaml_parse`), never a file silently passed over. A finding's code (`kql_unknown_table`, `spl_parse_error`, `esql_unavailable`, ...) has an `opentide explain` page and its help line links the language's reference. The sample is illustrative, because it needs a rule with a broken query:
+
+```text illustrative
+error[kql_unknown_operator]: unknown tabular operator 'wher'
+   ╭─▶ objects/rules/sentinel-kql-rule.yaml:31:23
+   │
+30 │     query: |
+31 │       SecurityEvent | wher EventID == 4688
+   │                       ━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: did you mean 'where'?
+
+✗ 1 error in 1 file · 3 queries checked
+→ opentide explain kql_unknown_operator · how to fix it
+→ opentide validate query · check again
+```
+
+Errors fail the run with exit `1` (`failure.code` `issues_found`). Warnings, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), print and exit `0`, unless `--strict`. Notes (hints) never fail it. A passing run ends `✓ 3 queries valid`; one with warnings `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
+
+`--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`, `warnings`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the package and engine versions), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
+
+To check the queries together with the objects, run `opentide validate --deep`. To see everything the editor shows for a file, run [`opentide lsp check`](./lsp.md).
 
 ### `--live`
 
@@ -435,16 +493,16 @@ there is nothing to check.
 
 ### Supported platforms
 
-Query validation works on **six platforms** only:
+Live query validation works on **six platforms**; the offline engine on five of them:
 
-- `sentinel` (KQL)
-- `defender_for_endpoint` (KQL)
-- `elastic` (Kuery, Lucene, EQL, ES|QL)
-- `splunk` (SPL)
-- `sentinel_one` (S1QL)
-- `carbon_black_cloud` (Lucene)
-
-There is no offline syntax check for any of these languages, including Elastic. A bare `validate query` refuses and names `--live`.
+| Platform | `--live` | Offline |
+|----------|:--------:|:-------:|
+| `sentinel` (KQL) | ✅ | ✅ |
+| `defender_for_endpoint` (KQL) | ✅ | ✅ |
+| `elastic` (Kuery, Lucene, EQL, ES\|QL) | ✅ | ✅ |
+| `splunk` (SPL) | ✅ | ✅ |
+| `sentinel_one` (S1QL) | ✅ | ❌ |
+| `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 
 ### Elastic live validation and deploy
 

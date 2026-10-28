@@ -19,7 +19,10 @@ __all__ = ["TideSchemaGenerator", "model_json_schema", "run"]
 
 
 def run() -> None:
-    """Generate JSON schemas from Pydantic models into ``.opentide/schemas/``."""
+    """Generate JSON schemas from Pydantic models into ``.opentide/schemas/``.
+
+    Also writes the language server's catalogs to ``.opentide/lsp/catalogs/``.
+    """
     configs = resolve_configurations()
     paths = resolve_workspace_paths(configs)
     cfg = configs.get("paths") or configs["global"]
@@ -43,3 +46,9 @@ def run() -> None:
     router_name = schema_map.get("router", "opentide.schema.json")
     export_opentide_router(schema_dir / router_name)
     logger.info("exported_opentide_router_schema", path=str(schema_dir / router_name))
+
+    # The language server's catalogs come from the same models, so hover,
+    # completion and enum checks in `opentide lsp` follow this workspace.
+    from opentide.generation.lsp_catalog import write_catalog
+
+    write_catalog(paths["_workspace_root"])

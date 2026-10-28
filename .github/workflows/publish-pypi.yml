@@ -28,6 +28,13 @@
 # The same dispatch is the retry after a PyPI 5xx or partial upload.
 # `skip-existing: true` makes it upload only the files PyPI does not have yet,
 # and the verify step fails the job unless PyPI lists every file in dist/.
+#
+# opentide compiles its analysis engine (analysis/, Rust) into the package
+# (hatch_build.py), so a release is one wheel per platform and an sdist, all
+# of opentide: cibuildwheel builds the wheels ([tool.cibuildwheel] in
+# pyproject.toml), each tagged cp310-abi3-<platform> for every CPython from
+# 3.10. A platform without a wheel builds the sdist, which needs Rust. The
+# engine builds from crates.io sources only (check_engine_pin.py --release).
 name: Publish to PyPI
 
 on:
@@ -47,8 +54,100 @@ permissions:
   id-token: write
 
 jobs:
+  # Nothing is built, let alone published, from a commit that is not the
+  # release tag, or with the engine from git sources.
+  guard:
+    name: Release guard
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
+
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      - name: The checkout is the release tag
+        id: version
+        run: |
+          set -euo pipefail
+          if [[ ! "${RELEASE_TAG}" =~ ^v[0-9] ]] || ! git tag --points-at HEAD | grep -qx "${RELEASE_TAG}"; then
+            echo "::error::Refusing to publish: HEAD is not the release tag ${RELEASE_TAG}. Checkout a v* tag." >&2
+            exit 1
+          fi
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Engine sources are crates.io releases
+        run: python scripts/build/check_engine_pin.py --release
+
+  wheels:
+    name: Wheel (${{ matrix.os }})
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        # Native runners: the engine is compiled for the machine that builds it.
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest, windows-latest]
+    env:
+      # The version of the tag; the Linux containers build from a copy of the checkout.
+      SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
+
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+
+      # manylinux and musllinux on Linux, the runner's architecture on macOS
+      # and Windows; each wheel is installed and run before it is kept.
+      - name: Build wheels
+        run: |
+          python -m pip install cibuildwheel==4.3.5
+          python -m cibuildwheel --output-dir wheelhouse
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: Sdist
+    needs: guard
+    runs-on: ubuntu-latest
+    env:
+      SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
+
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
+
+      - name: Build sdist
+        run: uv build --sdist
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
   publish:
     name: Publish to PyPI
+    needs: [wheels, sdist]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -59,41 +158,49 @@ jobs:
       HAS_WEBSITE_APP: ${{ secrets.GH_APP_ID != '' && secrets.GH_APP_KEY != '' }}
       RELEASE_TAG: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.event.release.tag_name || github.ref_name }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          fetch-depth: 0
-          fetch-tags: true
-          ref: ${{ github.event.client_payload.checkout_ref || github.event.inputs.checkout_ref || github.sha }}
-
-      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
-        with:
-          enable-cache: true
+          path: dist
+          merge-multiple: true
 
       - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: "3.12"
 
-      - name: Build package
-        run: uv build
-
       - name: Twine check
-        run: uvx twine check dist/*
+        run: |
+          python -m pip install twine
+          python -m twine check dist/*
 
-      - name: Reject untagged / dev versions
+      # Every platform's wheel and the sdist, of one release version.
+      - name: Reject untagged / dev versions, and missing platforms
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          wheels=(dist/opentide-*.whl)
-          if [[ ${#wheels[@]} -ne 1 ]]; then
-            echo "Expected exactly one wheel in dist/, found: ${wheels[*]-}" >&2
-            exit 1
-          fi
-          wheel="${wheels[0]}"
-          echo "Built ${wheel}"
-          if [[ "${wheel}" == *dev* ]]; then
-            echo "Refusing to publish a hatch-vcs local/dev version. Checkout a v* tag." >&2
-            exit 1
-          fi
+          ls -l dist
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+
+          built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
+          wheels = [name for name in built if name.endswith(".whl")]
+          sdists = [name for name in built if name.endswith(".tar.gz")]
+          versions = {name.split("-")[1] for name in wheels} | {
+              name.removesuffix(".tar.gz").rsplit("-", 1)[1] for name in sdists
+          }
+          problems = []
+          if len(sdists) != 1:
+              problems.append(f"expected one sdist, found {sdists}")
+          if len(versions) != 1 or any("dev" in v or "+" in v for v in versions):
+              problems.append(f"expected one release version, found {sorted(versions)}")
+          for platform in ("manylinux", "musllinux", "macosx", "win_amd64"):
+              if not any(platform in name for name in wheels):
+                  problems.append(f"no {platform} wheel")
+          if not all("-cp310-abi3-" in name for name in wheels):
+              problems.append(f"a wheel is not cp310-abi3: {wheels}")
+          for problem in problems:
+              print(f"::error::Refusing to publish: {problem}")
+          sys.exit(1 if problems else 0)
+          PY
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
@@ -121,8 +228,8 @@ jobs:
           built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
           wheels = [name for name in built if name.endswith(".whl")]
           sdists = [name for name in built if name.endswith(".tar.gz")]
-          if len(wheels) != 1 or len(sdists) != 1:
-              print(f"::error::Expected one wheel and one sdist in dist/, found {built}")
+          if not wheels or len(sdists) != 1:
+              print(f"::error::Expected wheels and one sdist in dist/, found {built}")
               sys.exit(1)
           project, version = wheels[0].split("-")[:2]
           expected = set(wheels + sdists)

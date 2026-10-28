@@ -1,8 +1,8 @@
 """CLI E2E: first-user opentide workflow without Python setup helpers.
 
 Replays the published tutorial console path in order, asserting each
-``opentide`` invocation exits 0 (or 1 on the dangling reference and on a bare
-``validate query``, which names ``--live``):
+``opentide`` invocation exits 0 (or 1 on the dangling reference). A bare
+``validate query`` checks the tutorial's query offline with the analysis engine:
 
 setup → generate (empty) → author → generate (populated) → validate → lint →
 dangling ``detection_model`` (must fail) → restore → info → coverage →
@@ -143,10 +143,9 @@ def test_first_user_cli_workflow(
         "sentinel",
         repo=fresh,
     )
-    assert query.exit_code == 2, query.stdout + query.stderr
-    query_payload = parse_cli_json(query)
-    assert query_payload.get("supported") is True
-    assert "--live" in query_payload["message"]
+    query_payload = assert_json_ok(query)
+    assert query_payload["mode"] == "offline"
+    assert query_payload["queries_validated"] == 1
 
     deployer = MagicMock()
 

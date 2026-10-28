@@ -53,7 +53,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `usage_unknown_option` | 2 | No such option for that command |
 | `usage_invalid_choice` | 2 | A value outside the accepted ones: `--platform`, `--type`, `--target`, an `info` section, a `generate` phase, a `--strategy` |
 | `usage_invalid_value` | 2 | A value that cannot be used, such as the removed `--plan` or a `rules unreviewed --older-than` that is not a window |
-| `usage_missing_option` | 2 | A required option or argument is missing (`--platform`, `--strategy`, `--technique`, `validate query` without `--live`) |
+| `usage_missing_option` | 2 | A required option or argument is missing (`--platform`, `--strategy`, `--technique`; `validate query --live` without `--platform`; `validate query --platform sentinel_one` without `--live`) |
 | `usage_needs_input` | 2 | The command would prompt, but nobody can answer: `--json`, no terminal, or a coding agent. The message names the flags that answer the prompt |
 | `usage_tui_needs_tty` | 2 | `opentide tui` ran outside the `human` mode or without a terminal on stdin and stdout |
 | `usage_error` | 2 | Another usage error, such as options that cannot be combined, or a command group named without its subcommand (`opentide --json mcp`) |
@@ -70,7 +70,8 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `path_not_writable` | 1 | `new`: the folder or the file it would write cannot be written (read-only checkout, permissions) |
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
 | `doctor_checks_failed` | 1 | `doctor`: at least one check failed. Read `checks` for which |
-| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
+| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `validate query` and `lsp check` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
+| `engine_unavailable` | 1 | The analysis engine compiled into opentide does not load: `validate query` offline, `lsp check`. `advice` names the reinstall command |
 | `config_parse` | 1 | A configuration TOML file does not parse. `diagnostics` holds the file, line and column |
 | `yaml_parse` | 1 | `deploy` read a rule file whose YAML is not one mapping. `diagnostics` holds the file and line |
 | `not_run` | non-zero | The command was skipped and says why in `message` |

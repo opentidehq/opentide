@@ -85,13 +85,22 @@ def test_retry_triggers_and_checkout_ref_stay_wired() -> None:
     assert triggers["repository_dispatch"]["types"] == ["publish-pypi"]
     assert workflow["permissions"] == {"contents": "read", "id-token": "write"}
 
-    checkout = next(
-        step for step in _steps() if str(step.get("uses", "")).startswith("actions/checkout@")
-    )
-    ref = checkout["with"]["ref"]
-    assert "github.event.client_payload.checkout_ref" in ref
-    assert "github.event.inputs.checkout_ref" in ref
-    assert checkout["with"]["fetch-depth"] == 0
+    # The publish job uploads what the build jobs built: every checkout, in
+    # the guard and the wheel and sdist builds, takes the retry's tag.
+    checkouts = {
+        name: step
+        for name, job in workflow["jobs"].items()
+        for step in job["steps"]
+        if str(step.get("uses", "")).startswith("actions/checkout@")
+    }
+    assert set(checkouts) == {"guard", "wheels", "sdist"}
+    for checkout in checkouts.values():
+        ref = checkout["with"]["ref"]
+        assert "github.event.client_payload.checkout_ref" in ref
+        assert "github.event.inputs.checkout_ref" in ref
+    # The guard compares the checkout with the tag, so it needs the tags.
+    assert checkouts["guard"]["with"]["fetch-depth"] == 0
+    assert workflow["jobs"]["publish"]["needs"] == ["wheels", "sdist"]
 
 
 def test_publish_job_does_not_run_scripts_from_the_checkout() -> None:
@@ -281,5 +290,5 @@ def test_verify_rejects_a_dist_without_an_sdist(dist: Path) -> None:
     with _FakePyPI([(200, [WHEEL])]) as pypi:
         result = _run_verify(dist, pypi.base)
     assert result.returncode == 1
-    assert "Expected one wheel and one sdist" in result.stdout
+    assert "Expected wheels and one sdist" in result.stdout
     assert pypi.requests == []

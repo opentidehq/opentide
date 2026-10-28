@@ -27,7 +27,7 @@ flowchart TD
 
 - **Start with the CLI.** For onboarding, daily authoring, and CI, the CLI is the shortest path. Everything in the [tutorial](./tutorial.md) uses it.
 - **Reach for the SDK when you need to compose.** Building a custom report, a bespoke gate, or integrating opentide into another tool? The [SDK](../sdk/index.md) gives you the objects and results as Python.
-- **Use MCP for agents, not automation.** MCP is for interactive AI assistance in an editor. For unattended pipelines, use the CLI — and remember MCP's `validate_query` and `run_query` contact a tenant only with `live: true` ([agentic setup](./workflows/agentic-setup.md)).
+- **Use MCP for agents, not automation.** MCP is for interactive AI assistance in an editor. For unattended pipelines, use the CLI — and remember MCP's `validate_query` and `run_query` contact a tenant only with `live: true`, and an offline `validate_query` proves a query parses, not that it matches ([agentic setup](./workflows/agentic-setup.md)).
 
 ## The same operation, three ways
 

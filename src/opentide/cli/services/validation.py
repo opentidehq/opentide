@@ -64,16 +64,16 @@ def _build_scope(
     )
 
 
-def _checks_for(check: ValidateCheck | None) -> frozenset[ValidateCheck]:
+def _checks_for(check: ValidateCheck | None, *, deep: bool = False) -> frozenset[ValidateCheck]:
+    """The checks a run performs: one named check, or the defaults (plus ``queries`` when deep)."""
     if check is None:
-        return frozenset(
-            {
-                ValidateCheck.id_uniqueness,
-                ValidateCheck.uuid_format,
-                ValidateCheck.schema,
-                ValidateCheck.configuration,
-            }
-        )
+        defaults = {
+            ValidateCheck.id_uniqueness,
+            ValidateCheck.uuid_format,
+            ValidateCheck.schema,
+            ValidateCheck.configuration,
+        }
+        return frozenset(defaults | {ValidateCheck.queries} if deep else defaults)
     return frozenset({check})
 
 
@@ -125,6 +125,10 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
         }
     ),
     ValidateCheck.cve.value: frozenset({"invalid_cve"}),
+    # The engine's own codes (kql_parse_error, ...) come from the engine, not
+    # from this table: `_issues_for_check` selects them by source, and
+    # `opentide explain` pages them from the engine's descriptions.
+    ValidateCheck.queries.value: frozenset({"engine_unavailable", "yaml_parse", "scope_no_match"}),
     ValidateCheck.sharing_config.value: frozenset(
         {
             "missing_field",
@@ -182,6 +186,16 @@ def _issues_for_check(issues: list[ValidationIssue], check_name: str) -> list[Va
     # sharing-config; the object type tells them apart.
     if check_name == ValidateCheck.configuration.value:
         return [issue for issue in issues if issue.object_type == CONFIGURATION_OBJECT_TYPE]
+    if check_name == ValidateCheck.queries.value:
+        from opentide.validation.queries import ENGINE_SOURCE
+
+        # Its own findings, and the files and targets it could not read.
+        shared = _CHECK_ISSUE_CODES[check_name]
+        return [
+            issue
+            for issue in issues
+            if issue.context.get("source") == ENGINE_SOURCE or issue.code in shared
+        ]
     codes = _CHECK_ISSUE_CODES.get(check_name, frozenset())
     matched = [
         issue
@@ -210,6 +224,8 @@ DEFAULT_CHECK_NAMES: tuple[str, ...] = (
     ValidateCheck.schema.value,
     ValidateCheck.configuration.value,
 )
+#: ``validate --deep``: the defaults, then every query through the analysis engine.
+DEEP_CHECK_NAMES: tuple[str, ...] = (*DEFAULT_CHECK_NAMES, ValidateCheck.queries.value)
 
 
 def _validate_payload(report: ValidationReport, check_names: Sequence[str]) -> dict[str, object]:
@@ -272,8 +288,9 @@ def run_validate(
     files: list[str] | None = None,
     uuids: list[str] | None = None,
     object_types: list[str] | None = None,
+    deep: bool = False,
 ) -> dict[str, object]:
-    """Entry point for validate command.
+    """Entry point for validate command. *deep* adds the ``queries`` check to the defaults.
 
     Besides the JSON document, the result carries ``_diagnostics`` (one
     :class:`Diagnostic` per issue and warning, for the code frames) and
@@ -283,7 +300,7 @@ def run_validate(
     if file:
         file_list.append(file)
     scope = _build_scope(files=file_list or None, uuids=uuids, object_types=object_types)
-    checks = _checks_for(check)
+    checks = _checks_for(check, deep=deep)
     # The schema check turns each unreadable object file into a yaml_parse or
     # missing_uuid diagnostic, so the registry need not also log it. Any other
     # check would not report the file at all: then the log line stays.
@@ -301,7 +318,10 @@ def run_validate(
     # `checks`; it used to relocate the report to `issues` (so consumers read
     # `issues.issues`) and bolt on a legacy `errors` map, which meant one
     # command emitted two incompatible shapes.
-    names = DEFAULT_CHECK_NAMES if check is None else (check.value,)
+    if check is not None:
+        names: tuple[str, ...] = (check.value,)
+    else:
+        names = DEEP_CHECK_NAMES if deep else DEFAULT_CHECK_NAMES
     result: dict[str, object] = _validate_payload(report, names)
     if check is not None:
         result["check"] = check.value
@@ -337,7 +357,7 @@ def run_validate(
     result["_exit_code"] = outcome.exit_code
     if outcome.failed:
         result["_failure_code"] = ISSUES_FOUND
-        result["_next_actions"] = _failure_next_actions(ctx, diagnostics)
+        result["_next_actions"] = _failure_next_actions(ctx, diagnostics, deep=deep)
     plan = plan_fixes(diagnostics)
     result["_summary"] = {**_summary(report, diagnostics), "fixable": len(plan.changes)}
     result["_diagnostics"] = diagnostics
@@ -364,6 +384,7 @@ def run_validate_fix(
     files: list[str] | None = None,
     uuids: list[str] | None = None,
     object_types: list[str] | None = None,
+    deep: bool = False,
 ) -> dict[str, object]:
     """``validate --fix``: apply every safe fix, then validate again.
 
@@ -377,6 +398,7 @@ def run_validate_fix(
         "files": files,
         "uuids": uuids,
         "object_types": object_types,
+        "deep": deep,
     }
     result = run_validate(ctx, **scope)
     plan = cast(FixPlan, result["_fix_plan"])
@@ -458,7 +480,9 @@ def _shown_directory(path: Path) -> str:
     return shown
 
 
-def _failure_next_actions(ctx: CliContext, diagnostics: Sequence[Diagnostic]) -> list[NextAction]:
+def _failure_next_actions(
+    ctx: CliContext, diagnostics: Sequence[Diagnostic], *, deep: bool = False
+) -> list[NextAction]:
     """What to run after a failed validation: the first finding's page, then validate again.
 
     The same two steps MCP's ``validation_report`` gives. Errors come before
@@ -470,7 +494,7 @@ def _failure_next_actions(ctx: CliContext, diagnostics: Sequence[Diagnostic]) ->
         code = ordered[0].code
         actions.append(NextAction(explain_command(code), "how to fix it"))
     rerun = "opentide --json validate" if ctx.json_output else "opentide validate"
-    actions.append(NextAction(rerun, "check again"))
+    actions.append(NextAction(rerun + (" --deep" if deep else ""), "check again"))
     return actions
 
 
@@ -485,7 +509,8 @@ def _summary(report: ValidationReport, diagnostics: Sequence[Diagnostic]) -> dic
     """Counts behind the outcome line.
 
     ``files`` counts the files with an error; ``warning_files`` those with a
-    warning (a file can be in both).
+    warning (a file can be in both). ``queries`` is there when the queries
+    check ran.
     """
 
     def files_with(severity: str) -> int:
@@ -497,13 +522,16 @@ def _summary(report: ValidationReport, diagnostics: Sequence[Diagnostic]) -> dic
             }
         )
 
-    return {
+    summary = {
         "objects": int(report.stats.get("objects_checked") or 0),
         "errors": len(report.errors),
         "warnings": len(report.warnings),
         "files": files_with("error"),
         "warning_files": files_with("warning"),
     }
+    if "queries_checked" in report.stats:
+        summary["queries"] = int(report.stats["queries_checked"])
+    return summary
 
 
 def plural(count: int, noun: str) -> str:
@@ -533,8 +561,12 @@ def validate_outcome_line(
         # A check that reads no object (id-uniqueness, cve, sharing-config).
         return f"Validation passed{sep}{took}"
     hint = f"{sep}{fixable} fixable with --fix" if fixable and fix is None else ""
+    queries = ""
+    if "queries" in summary:
+        count = summary["queries"]
+        queries = f"{sep}{count} {'query' if count == 1 else 'queries'}"
     if not failed:
-        line = f"{objects} valid"
+        line = f"{objects} valid{queries}"
         if warnings:
             line += f"{sep}{plural(warnings, 'warning')}"
         line += hint
@@ -549,7 +581,7 @@ def validate_outcome_line(
     where = f" in {plural(files, 'file')}" if files else ""
     done = f"{sep}{fix[0].lower()}{fix[1:]}" if fix else ""
     checked = f"{sep}{objects} checked" if summary.get("objects") else ""
-    return f"{counted}{where}{done}{hint}{checked}{sep}{took}"
+    return f"{counted}{where}{done}{hint}{checked}{queries}{sep}{took}"
 
 
 def fix_phrase(count: int, files: int, *, dry_run: bool = False, unwritten: int = 0) -> str:
@@ -626,23 +658,29 @@ def _unreachable_tenant_result(exc: TenantUnreachableError) -> dict[str, object]
     }
 
 
-def _live_required_result(platform: str) -> dict[str, object]:
-    """Bare ``validate query`` does not scan. The tenant check is ``--live``."""
+def _offline_unsupported_result(platform: str) -> dict[str, object]:
+    """A platform whose query language the engine does not parse (S1QL): the check is ``--live``."""
     return {
         "platform": platform,
+        "mode": "offline",
         "supported": True,
         "status": "failed",
-        "message": "Query validation checks the tenant. Re-run with --live.",
+        "message": (
+            f"{platform} queries are checked on the tenant only; the offline engine does not "
+            "parse them. Re-run with --live."
+        ),
         "_exit_code": 2,
         "_failure_code": USAGE_MISSING_OPTION,
         "_failure_argument": "--live",
     }
 
 
-def _query_scope_refused(platform: str, message: str, *, exit_code: int) -> dict[str, object]:
+def _query_scope_refused(
+    platform: str | None, message: str, *, exit_code: int, mode: str = "live"
+) -> dict[str, object]:
     return {
         "platform": platform,
-        "mode": "live",
+        "mode": mode,
         "status": "failed",
         "supported": True,
         "message": message,
@@ -684,7 +722,12 @@ def _selected_rule_scope(files: Sequence[str], uuids: Sequence[str]) -> tuple[Ru
 
 
 def _query_rule_scope(
-    platform: str, *, changed: bool, files: Sequence[str], uuids: Sequence[str]
+    platform: str | None,
+    *,
+    changed: bool,
+    files: Sequence[str],
+    uuids: Sequence[str],
+    mode: str = "live",
 ) -> tuple[RuleScope | None, str | None, dict[str, object] | None]:
     """``(scope, label, refusal)`` for ``--changed``, ``--file`` and ``--uuid``.
 
@@ -695,7 +738,7 @@ def _query_rule_scope(
         return None, None, None
     if changed and (files or uuids):
         message = "--changed cannot be combined with --file or --uuid"
-        return None, None, _query_scope_refused(platform, message, exit_code=2)
+        return None, None, _query_scope_refused(platform, message, exit_code=2, mode=mode)
     if changed:
         from opentide.deployment.git_repo import MissingGitCheckout, changed_rule_scope
 
@@ -703,10 +746,10 @@ def _query_rule_scope(
             scope, diff = changed_rule_scope()
         except MissingGitCheckout as exc:
             message = f"--changed needs a git checkout; no .git was found from {exc.searched}"
-            return None, None, _query_scope_refused(platform, message, exit_code=1)
+            return None, None, _query_scope_refused(platform, message, exit_code=1, mode=mode)
         except Exception as exc:
             message = str(exc).strip() or f"{type(exc).__name__} while computing the changed rules"
-            return None, None, _query_scope_refused(platform, message, exit_code=1)
+            return None, None, _query_scope_refused(platform, message, exit_code=1, mode=mode)
         logger.info("query_scope_changed", diff=diff.name, rules=len(scope.files))
         return scope, "changed", None
     scope, unmatched = _selected_rule_scope(files, uuids)
@@ -716,7 +759,7 @@ def _query_rule_scope(
         message = (
             f"No rule file directly in {rules_folder_in_repo()} matched: {', '.join(unmatched)}"
         )
-        result = _query_scope_refused(platform, message, exit_code=1)
+        result = _query_scope_refused(platform, message, exit_code=1, mode=mode)
         result["unmatched"] = unmatched
         return None, None, result
     return scope, "selected", None
@@ -724,7 +767,7 @@ def _query_rule_scope(
 
 def validate_query_platform(
     ctx: CliContext,
-    platform: str,
+    platform: str | None,
     *,
     strategies: Sequence[str] = (),
     wide: bool = False,
@@ -732,11 +775,13 @@ def validate_query_platform(
     changed: bool = False,
     files: Sequence[str] = (),
     uuids: Sequence[str] = (),
+    strict: bool = False,
 ) -> dict[str, object]:
-    """Validate queries for a single platform.
+    """Validate rule queries: offline with the analysis engine, or on the tenants.
 
-    Without ``live`` the command refuses and names ``--live``. ``live=True``
-    runs the platform engine against the tenant.
+    Without ``live`` the engine checks each query in its platform's language
+    (:func:`validate_query_offline`); *platform* ``None`` checks every platform
+    it parses. ``live=True`` sends the queries of one platform to its tenants.
 
     A rule is checked on the tenants a deploy would send it to: those
     accepting a run strategy that deploys its status's strategy. *strategies*
@@ -747,7 +792,7 @@ def validate_query_platform(
     rules they select; without them every rule file is read.
     """
     ctx.apply_environment()
-    if platform not in QUERY_VALIDATION_PLATFORMS:
+    if platform is not None and platform not in QUERY_VALIDATION_PLATFORMS:
         # Returned rather than emitted directly: a raw `emit` skips the
         # ok/status envelope every other command promises, so a caller parsing
         # `--json` got a differently-shaped document for this one branch.
@@ -760,7 +805,20 @@ def validate_query_platform(
             "_exit_code": 1,
         }
     if not live:
-        return _live_required_result(platform)
+        return validate_query_offline(
+            ctx, platform, changed=changed, files=files, uuids=uuids, strict=strict
+        )
+    if platform is None:
+        return {
+            "platform": None,
+            "mode": "live",
+            "status": "failed",
+            "supported": True,
+            "message": "--live checks one platform's tenants: pass --platform",
+            "_exit_code": 2,
+            "_failure_code": USAGE_MISSING_OPTION,
+            "_failure_argument": "--platform",
+        }
     from opentide.cli.services.deploy import removed_plan_error, resolve_run_strategies
     from opentide.deployment import make_deploy_plan
     from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
@@ -861,6 +919,138 @@ def validate_query_platform(
             _run_live_validator(ctx, platform, deployment_list[platform], run, reach),
             scope_label,
         )
+
+
+def validate_query_offline(
+    ctx: CliContext,
+    platform: str | None,
+    *,
+    changed: bool = False,
+    files: Sequence[str] = (),
+    uuids: Sequence[str] = (),
+    strict: bool = False,
+) -> dict[str, object]:
+    """Check rule queries with the analysis engine: no tenant, no credentials.
+
+    Every query of every rule file directly in the rules folder (or the files
+    ``--changed``, ``--file`` and ``--uuid`` select), whatever its status, for
+    *platform* or every platform the engine parses. Errors fail the run;
+    warnings fail it under *strict*.
+    """
+    from opentide.analysis import (
+        OFFLINE_QUERY_PLATFORMS,
+        EngineUnavailableError,
+        check_queries,
+        engine_versions,
+    )
+    from opentide.cli.services.engine import (
+        engine_unavailable_result,
+        findings_outcome,
+        findings_summary,
+    )
+    from opentide.cli.ui.diagnostics import diagnostic_from_engine
+    from opentide.deployment.git_repo import local_rule_scope
+
+    if platform is not None and platform not in OFFLINE_QUERY_PLATFORMS:
+        return _offline_unsupported_result(platform)
+    rule_scope, scope_label, refusal = _query_rule_scope(
+        platform, changed=changed, files=files, uuids=uuids, mode="offline"
+    )
+    if refusal is not None:
+        return refusal
+    workspace = discover_workspace()
+    rule_files = (rule_scope or local_rule_scope()).files
+    platforms = sorted([platform] if platform else OFFLINE_QUERY_PLATFORMS)
+    base: dict[str, object] = {"platform": platform, "mode": "offline", "supported": True}
+    try:
+        run = check_queries(rule_files, root=workspace, platforms=platforms)
+        engine = engine_versions()
+    except EngineUnavailableError as exc:
+        return engine_unavailable_result(exc, **base)
+    checks = run.checks
+    unreadable = [
+        Diagnostic(
+            code="yaml_parse",
+            severity="error",
+            message=f"cannot check this file's queries: {item.problem}",
+            path=relative_path(item.file_path, workspace),
+            file_path=item.file_path,
+            line=item.line,
+            column=item.column,
+            end_column=None if item.column is None else item.column + 1,
+            help="opentide validate reports the file; fix it, then check its queries again",
+        )
+        for item in run.unreadable
+    ]
+    if not checks and not unreadable:
+        target = f"{platform} " if platform else ""
+        where = {None: "", "changed": "changed ", "selected": "selected "}[scope_label]
+        return _scoped(
+            {
+                **base,
+                "status": "skipped",
+                "queries_validated": 0,
+                "message": f"No {where}rule has a {target}query the engine checks",
+                "_summary": {"queries": 0, "files": 0},
+            },
+            scope_label,
+        )
+    diagnostics = unreadable + [
+        diagnostic_from_engine(finding, file_path=check.file_path, workspace=workspace)
+        for check in checks
+        for finding in check.findings
+    ]
+    counts = findings_summary(diagnostics)
+    summary = {
+        "queries": len(checks),
+        "files": len({check.file_path for check in checks}),
+        **counts,
+    }
+    failed = bool(counts["errors"] or (strict and counts["warnings"]))
+    queries = len(checks)
+    checked = f"{queries} {'query' if queries == 1 else 'queries'}"
+    outcome_line, outcome_kind = findings_outcome(
+        summary, checked=checked, failed=failed, clean=f"{checked} valid"
+    )
+    result: dict[str, object] = {
+        **base,
+        "status": "failed" if failed else "passed",
+        "message": "Queries rejected offline" if failed else f"{checked} valid",
+        "platforms": sorted({check.platform for check in checks if check.platform}),
+        "queries_validated": queries,
+        "queries": [
+            {
+                "path": relative_path(check.file_path, workspace),
+                "platform": check.platform,
+                "language": check.language,
+                "field_path": list(check.field_path),
+                "line": check.line,
+                "column": check.column,
+                "errors": check.errors,
+                "warnings": check.warnings,
+            }
+            for check in checks
+        ],
+        "diagnostics": [item.to_dict() for item in diagnostics],
+        "engine": engine,
+        "_summary": summary,
+        "_diagnostics": diagnostics,
+        "_outcome": outcome_line,
+    }
+    if outcome_kind is not None:
+        result["_outcome_kind"] = outcome_kind
+    if failed:
+        rerun = ["opentide", "validate", "query"]
+        if platform:
+            rerun += ["--platform", platform]
+        rerun += ["--changed"] if changed else []
+        rerun += [word for target in files for word in ("--file", target)]
+        rerun += [word for target in uuids for word in ("--uuid", target)]
+        rerun += ["--strict"] if strict else []
+        actions = _failure_next_actions(ctx, diagnostics)[:1]
+        actions.append(NextAction(shlex.join(rerun), "check again"))
+        result.update({"_exit_code": 1, "_failure_code": ISSUES_FOUND, "_next_actions": actions})
+    return _scoped(result, scope_label)
 
 
 #: The skip message when no rule is checked for the platform, by scope label.

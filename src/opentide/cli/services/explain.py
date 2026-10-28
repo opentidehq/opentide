@@ -4,6 +4,10 @@ One Markdown page per diagnostic code and per ``failure.code`` lives in
 ``opentide/data/diagnostics/``: a ``# <code>`` heading, a one-sentence summary,
 then ``## Example`` and ``## How to fix``. ``docs/cli/diagnostics.md`` is generated from them by
 :func:`reference_markdown` (``scripts/build/render_diagnostics_docs.py``).
+
+The analysis engine's codes (``kql_parse_error``, ...) get a page too, built
+from the engine's own sentence (:func:`engine_page`), so a code the engine
+adds is explained without a file here. A file of the same name wins.
 """
 
 from __future__ import annotations
@@ -33,8 +37,10 @@ class ExplainPage:
 
 
 def diagnostic_codes() -> list[str]:
-    """Every code that has a page, sorted."""
-    return sorted(path.stem for path in pages_root().glob("*.md"))
+    """Every code that has a page, the engine's included, sorted."""
+    from opentide.analysis import engine_codes
+
+    return sorted({path.stem for path in pages_root().glob("*.md")} | set(engine_codes()))
 
 
 def load_page(code: str) -> ExplainPage | None:
@@ -44,9 +50,69 @@ def load_page(code: str) -> ExplainPage | None:
         return None
     path = pages_root() / f"{code}.md"
     if not path.is_file():
-        return None
+        return engine_page(code)
     markdown = path.read_text(encoding="utf-8")
     return ExplainPage(code=code, summary=_summary(markdown), markdown=markdown)
+
+
+#: Engine codes that are about a Tide object, not a query, and where they show.
+_OBJECT_CODES = frozenset({"filename_slug", "missing_author", "missing_organisation"})
+#: Elastic block advisories (elastic-1.0): about the rule block's settings.
+_ELASTIC_ADVISORIES = frozenset(
+    {
+        "lookback_zero",
+        "lookback_long",
+        "threshold_lookback",
+        "risk_band",
+        "technique_not_enterprise",
+    }
+)
+
+
+def engine_page(code: str) -> ExplainPage | None:
+    """A page for an analysis-engine code, from the engine's sentence; ``None`` for another code."""
+    from opentide.analysis import describe
+    from opentide.cli.ui.diagnostics import engine_reference
+
+    sentence = describe(code)
+    if sentence is None:
+        return None
+    reference = engine_reference(code)
+    if reference is not None:
+        language, url = reference
+        where = (
+            f"Reported by the analysis engine in a {language} query, at the place in the query: "
+            "`opentide validate query`, `opentide validate --deep`, `opentide lsp check` and "
+            "an editor running `opentide lsp start` show it."
+        )
+        example = "opentide validate query"
+        fix = (
+            "Change the query where the frame points, then run `opentide validate query` again "
+            f"(`--file` for one rule). The [{language} reference]({url}) describes the syntax "
+            "and the commands the engine checks against."
+        )
+    elif code in _ELASTIC_ADVISORIES:
+        where = (
+            "Reported by the analysis engine on an Elastic rule block (elastic-1.0): "
+            "`opentide lsp check` and an editor running `opentide lsp start` show it, and "
+            "`opentide validate query --platform elastic --live` checks the same settings."
+        )
+        example = "opentide lsp check objects/rules"
+        fix = "Change the block's setting the frame points at, then run `opentide lsp check` again."
+    else:
+        scope = "a Tide object" if code in _OBJECT_CODES else "an object file"
+        where = (
+            f"Reported by the analysis engine for {scope}: `opentide lsp check` and an editor "
+            "running `opentide lsp start` show it. `opentide validate` and `opentide lint` "
+            "are the authority for objects and may name the same problem with their own code."
+        )
+        example = "opentide lsp check objects/rules"
+        fix = "Change the file where the frame points, then run `opentide lsp check` again."
+    markdown = (
+        f"# {code}\n\n{sentence}\n\n{where}\n\n## Example\n\n```text\n{example}\n```\n\n"
+        f"## How to fix\n\n{fix}\n"
+    )
+    return ExplainPage(code=code, summary=sentence, markdown=markdown)
 
 
 def _summary(markdown: str) -> str:

@@ -32,8 +32,10 @@ EMPTY_CATALOGUE_COMMANDS: tuple[tuple[tuple[str, ...], int], ...] = (
     (("generate",), 0),
     (("generate", "docs"), 0),
     (("generate", "exports"), 0),
-    # Without --live: a usage error (usage_missing_option), exit 2.
-    (("validate", "query", "--platform", "sentinel"), 2),
+    # Without --live: the offline check, which finds no query (skipped, exit 0).
+    (("validate", "query"), 0),
+    (("validate", "query", "--platform", "sentinel"), 0),
+    (("validate", "--deep"), 0),
     (("validate", "query", "--platform", "sentinel", "--live"), 0),
     *(
         (("deploy", "--dry-run", *EVERY_RULE, "--platform", platform), 0)
@@ -131,7 +133,7 @@ def test_catalogue_commands_in_an_empty_workspace(
         assert marker not in output, output
     assert refuse_deployment_engines == []
     if argv[:2] == ("validate", "query") and "--live" not in argv:
-        assert "--live" in output
+        assert "query the engine checks" in output, output
     if not json_output:
         if expected_exit == 0:
             assert "FATAL" not in output, output

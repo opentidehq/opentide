@@ -441,18 +441,27 @@ pip install 'opentide==0.18.0'
 
 ### `supported: false` for a platform
 
-CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and opentide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
+CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and opentide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, Elastic, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
 
 ### MCP `validate_query` refuses
 
-The default does not scan the query string. Pass `live: true` to check the
-catalogue rules against the tenant. A missing plan fails that check. `run_query` refuses the same way until `live: true`, then returns rows.
+The default checks the `query` string offline. It refuses, without scanning, an empty query and a SentinelOne query: S1QL has no offline engine, so pass `live: true` to check the catalogue rules against the tenant. A missing plan fails that check. `run_query` refuses until `live: true`, then returns rows.
 See [Agentic setup](./workflows/agentic-setup.md).
 
-### `opentide validate query` fails before it reaches the tenant
+### `opentide validate query` fails with `engine_unavailable`
 
-A bare `validate query` exits `1` and tells you to re-run with `--live`. That
-flag needs tenant credentials; the vendor SDKs ship with `pip install opentide`.
+The offline check, `validate --deep` and `opentide lsp` run the analysis engine, which is compiled into the opentide package. When it does not import, they fail rather than skip, and say so:
+
+```text illustrative
+error: The opentide analysis engine does not load: No module named 'opentide._native'
+  help: reinstall opentide: pip install --force-reinstall opentide
+```
+
+Reinstall opentide. `opentide doctor` reports the engine (`analysis_engine`). pip downloads opentide's wheel for Linux (x86_64 and arm64, glibc and musl), macOS and Windows x64, engine included; elsewhere it builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)). See `opentide explain engine_unavailable`.
+
+### `opentide validate query --live` fails before it reaches the tenant
+
+`--live` needs tenant credentials; the vendor SDKs ship with `pip install opentide`.
 
 Through 0.15.0 the SDKs were extras, so a pipeline that installed only
 `opentide==<version>` failed `--live` with `needs a vendor SDK: No module named

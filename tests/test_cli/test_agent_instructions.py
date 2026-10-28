@@ -129,7 +129,7 @@ def test_the_parser_rejects_what_an_agent_would_trip_on(root: object) -> None:
         "opentide deploy --dry-run --strategy PREVIEW --all --platform nowhere",
         "opentide info vocab surface extra",
         "opentide validate --nope",
-        "opentide validate query --live",
+        "opentide validate query --platform nowhere --live",
         "opentide setup skills discover --query",
         "opentide explain a b",
     ):

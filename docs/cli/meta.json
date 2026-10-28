@@ -23,6 +23,7 @@
     "info",
     "tui",
     "new",
-    "doctor"
+    "doctor",
+    "lsp"
   ]
 }

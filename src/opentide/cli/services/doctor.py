@@ -530,6 +530,62 @@ def check_schemas(ctx: DoctorContext) -> list[Check]:
     ]
 
 
+def check_analysis_engine(ctx: DoctorContext) -> list[Check]:
+    """The compiled engine behind validate query, validate --deep and opentide lsp imports."""
+    del ctx
+    from opentide.analysis import EngineUnavailableError, engine_versions
+
+    try:
+        versions = engine_versions()
+    except EngineUnavailableError as exc:
+        return [Check("analysis_engine", "fail", str(exc), REINSTALL_COMMAND)]
+    return [
+        Check(
+            "analysis_engine",
+            "pass",
+            f"The analysis engine (language server {versions['engine']}) loads",
+        )
+    ]
+
+
+def check_lsp_catalog(ctx: DoctorContext) -> list[Check]:
+    """The workspace's language-server catalogs exist, parse and match this version."""
+    from opentide import __version__
+    from opentide.core.root import OPENTIDE_DIR
+    from opentide.generation.lsp_catalog import CATALOG_DIR, FIELDS_FILE
+
+    if not (ctx.workspace / OPENTIDE_DIR).is_dir():
+        return [Check("lsp_catalog", "skip", "Not checked: no workspace")]
+    path = ctx.workspace / CATALOG_DIR / FIELDS_FILE
+    shown = shown_path(path.parent, ctx.workspace)
+    fix = "opentide generate schemas"
+    if not path.is_file():
+        return [
+            Check(
+                "lsp_catalog",
+                "warn",
+                f"No language-server catalog in {shown}: the editor and lsp check use the "
+                "bundled one, which does not know this workspace's vocabulary",
+                fix,
+            )
+        ]
+    try:
+        generated = str(json.loads(path.read_text(encoding="utf-8")).get("opentide") or "")
+    except (OSError, UnicodeDecodeError, ValueError, AttributeError) as exc:
+        return [Check("lsp_catalog", "warn", f"{shown}/{FIELDS_FILE} does not parse: {exc}", fix)]
+    if generated != __version__:
+        return [
+            Check(
+                "lsp_catalog",
+                "warn",
+                f"The language-server catalog in {shown} is from opentide {generated or '?'}, "
+                f"not {__version__}",
+                fix,
+            )
+        ]
+    return [Check("lsp_catalog", "pass", f"Language-server catalog in {shown} is current")]
+
+
 def check_platforms(ctx: DoctorContext) -> list[Check]:
     enabled = _enabled_platforms(_configurations(ctx))
     if not enabled:
@@ -850,8 +906,10 @@ CHECKS: tuple[Callable[[DoctorContext], list[Check]], ...] = (
     check_configuration,
     check_templates,
     check_schemas,
+    check_lsp_catalog,
     check_platforms,
     check_platform_sdks,
+    check_analysis_engine,
     check_credentials,
     check_proxy,
     check_vscode,
@@ -870,6 +928,8 @@ CHECK_CODES: dict[Callable[[DoctorContext], list[Check]], tuple[str, ...]] = {
     check_schemas: ("schemas_fresh",),
     check_platforms: ("platforms_enabled",),
     check_platform_sdks: ("platform_sdk",),
+    check_analysis_engine: ("analysis_engine",),
+    check_lsp_catalog: ("lsp_catalog",),
     check_credentials: ("credentials",),
     check_proxy: ("proxy",),
     check_vscode: ("vscode_settings", "vscode_snippets"),
