@@ -115,23 +115,103 @@ def test_validate_query_truncates_the_preview() -> None:
     assert len(result["query_preview"]) == 200
 
 
-@pytest.mark.parametrize(("platform", "supported"), [("sentinel", True), ("crowdstrike", False)])
-def test_run_query_is_an_explicit_stub(platform: str, supported: bool) -> None:
+@pytest.mark.parametrize("platform", ["sentinel", "crowdstrike", "harfanglab"])
+def test_run_query_refuses_without_live(platform: str) -> None:
+    """Without live true no tenant is contacted: an agent must ask a person first."""
     result = tools.tool_run_query("index=*", platform, tenant="prod")
-    assert result["stub"] is True
-    assert result["rows"] is None
-    assert result["supported"] is supported
-    assert result["tenant"] == "prod"
-    # An agent must not be able to read this as an executed, empty result.
+    assert result["supported"] is True
+    assert result["status"] == "failed"
+    assert "live: true" in result["message"]
     assert "results" not in result
-    assert result.get("truncated") is None
+    (action,) = result["next_actions"]
+    assert action["tool"] == "run_query"
+    assert action["arguments"] == {
+        "query": "index=*",
+        "platform": platform,
+        "live": True,
+        "tenant": "prod",
+    }
+    assert action["command"] == (
+        f"opentide --json query --platform {platform} --tenant prod 'index=*'"
+    )
 
 
-def test_run_query_says_it_did_not_run() -> None:
-    assert "not implemented" in tools.tool_run_query("index=*", "sentinel")["message"]
+def test_run_query_names_the_rule_in_its_next_action() -> None:
+    result = tools.tool_run_query("", "splunk", rule="00000000-0000-4000-8003-000000000003")
+    (action,) = result["next_actions"]
+    assert action["arguments"]["rule"] == "00000000-0000-4000-8003-000000000003"
+    assert action["command"].endswith("--rule 00000000-0000-4000-8003-000000000003")
 
 
-def test_run_query_mentions_the_row_cap_the_live_path_would_apply() -> None:
-    result = tools.tool_run_query("index=*", "splunk")
-    assert str(MAX_QUERY_ROWS) in result["message"]
-    assert result["tenant"] is None
+def test_run_query_next_action_keeps_every_choice() -> None:
+    """Following the next action must run what the agent asked, not the defaults."""
+    result = tools.tool_run_query(
+        "process where true",
+        "elastic",
+        since="7d",
+        limit=5,
+        language="eql",
+        index="logs-*,winlogbeat-*",
+    )
+    (action,) = result["next_actions"]
+    assert action["arguments"] == {
+        "query": "process where true",
+        "platform": "elastic",
+        "live": True,
+        "since": "7d",
+        "limit": 5,
+        "language": "eql",
+        "index": "logs-*,winlogbeat-*",
+    }
+    assert action["command"] == (
+        "opentide --json query --platform elastic --since 7d --limit 5 --language eql "
+        "--index 'logs-*' --index 'winlogbeat-*' 'process where true'"
+    )
+
+
+def test_run_query_refuses_an_unknown_platform() -> None:
+    result = tools.tool_run_query("index=*", "qradar", live=True)
+    assert result["supported"] is False
+    assert "qradar" in result["message"]
+
+
+def test_run_query_live_runs_the_cli_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def _fake(ctx: object, platform: str, **kwargs: object) -> dict[str, object]:
+        seen.update(platform=platform, **kwargs)
+        return {
+            "platform": platform,
+            "status": "completed",
+            "results": [],
+            "_summary": {"rows": 0},
+            "_exit_code": 0,
+        }
+
+    monkeypatch.setattr("opentide.cli.services.query.query_platform", _fake)
+    result = tools.tool_run_query(
+        "SecurityEvent", "sentinel", tenant="prod, lab", live=True, since="7d", limit=5
+    )
+    assert seen == {
+        "platform": "sentinel",
+        "query": "SecurityEvent",
+        "rule_uuid": None,
+        "tenants": ["prod", "lab"],
+        "since": "7d",
+        "limit": 5,
+        "language": None,
+        "index": [],
+    }
+    # The CLI envelope's private keys stay out of the tool payload.
+    assert result == {
+        "platform": "sentinel",
+        "status": "completed",
+        "results": [],
+        "supported": True,
+    }
+
+
+def test_run_query_default_limit_is_the_row_cap() -> None:
+    import inspect
+
+    assert inspect.signature(tools.tool_run_query).parameters["limit"].default == MAX_QUERY_ROWS
