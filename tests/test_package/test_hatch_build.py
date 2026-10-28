@@ -129,3 +129,10 @@ def test_macos_wheels_target_rustcs_floor() -> None:
     build = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     environment = build["tool"]["cibuildwheel"]["macos"]["environment"]
     assert environment["MACOSX_DEPLOYMENT_TARGET"] == "10.12"
+
+
+def test_the_engine_crate_is_its_own_workspace() -> None:
+    """Inside another Cargo workspace (language-server's canary checks opentide out in
+    its tree), cargo took the crate for a member of that one and refused to build it."""
+    manifest = tomllib.loads((ROOT / "analysis" / "Cargo.toml").read_text(encoding="utf-8"))
+    assert manifest.get("workspace") == {}

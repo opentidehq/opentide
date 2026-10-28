@@ -43,3 +43,8 @@ inherits = "release"
 lto = false
 codegen-units = 16
 strip = "none"
+
+# Its own workspace: built from an sdist or a checkout inside another Cargo
+# workspace (language-server's canary checks opentide out in its tree), cargo
+# would otherwise take this crate for a member of that one.
+[workspace]
