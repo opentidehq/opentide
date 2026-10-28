@@ -34,7 +34,7 @@ CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` on every job.
 
 ## The engine workspace member
 
-The root `pyproject.toml` is a uv workspace with one member, `analysis/` (`opentide-analysis`, PyO3 + maturin). `uv sync` builds it from source with its `develop` cargo profile, so a Rust toolchain (stable, 1.85+) must be on `PATH`; `cache-keys` in `analysis/pyproject.toml` rebuild it when the Rust source changes. To force a rebuild: `uv sync --reinstall-package opentide-analysis`. `uv build --package opentide` builds the pure-Python package alone; `analysis/` is excluded from its sdist.
+opentide compiles its analysis engine (`analysis/`, Rust with PyO3) into the package: `hatch_build.py`, a hatchling build hook, runs cargo and adds `opentide/_native`. `uv sync` builds the editable install with the `develop` cargo profile and puts the module in `src/opentide/`, so a Rust toolchain (stable, 1.85+) must be on `PATH`; the root `cache-keys` rebuild it when a file under `analysis/` changes. To force a rebuild: `uv sync --reinstall-package opentide`. `uv build` builds the sdist (with `analysis/`) and a `cp310-abi3-<platform>` wheel from it with the `release` profile (`OPENTIDE_ENGINE_PROFILE=develop` for a faster local one).
 
 ## Dependency groups
 

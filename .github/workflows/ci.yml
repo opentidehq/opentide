@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
       # The runner's rustup provides the toolchain; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -65,7 +65,7 @@ jobs:
           cargo clippy --manifest-path analysis/Cargo.toml --all-targets -- -D warnings
           cargo test --manifest-path analysis/Cargo.toml
 
-      - name: opentide and opentide-analysis versions agree
+      - name: The engine crates come from one source
         run: uv run python scripts/build/check_engine_pin.py
 
       # The engine ships a Tide catalog for editors that run opentide-lsp on
@@ -74,13 +74,8 @@ jobs:
       - name: The engine's bundled catalogs match the models
         run: uv run python scripts/build/check_engine_catalog.py
 
-      # A change to analysis/ under a version PyPI already has would publish
-      # nothing: say so on the pull request, not at release time.
-      - name: A changed engine has a new version
-        run: uv run python scripts/build/check_engine_published.py
-
       - name: Build sdist and wheel
-        run: uv build --package opentide
+        run: uv build
 
       - name: Twine check
         run: uvx twine check dist/*
@@ -176,7 +171,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
       # The runner's rustup provides the toolchain; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -283,7 +278,7 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
       # The runner's rustup provides the toolchain; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -343,7 +338,7 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
       # The runner's rustup provides the toolchain; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust
@@ -384,7 +379,7 @@ jobs:
         with:
           python-version: "3.14"
 
-      # `uv sync` builds the analysis engine (analysis/, Rust) with maturin.
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
       # The runner's rustup provides the toolchain; the cache keeps the
       # compiled engine crates between runs.
       - name: Set up Rust

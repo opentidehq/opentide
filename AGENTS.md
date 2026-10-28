@@ -108,17 +108,18 @@ CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False
 The offline query checks (`validate query`, `validate --deep`), `opentide lsp` and MCP
 `validate_query` run the Rust engine from
 [opentidehq/language-server](https://github.com/opentidehq/language-server), bound with PyO3
-in [`analysis/`](analysis/) and published as `opentide-analysis`, which `opentide` pins
-exactly. It is a uv workspace member, so `uv sync` builds it and needs a Rust toolchain
-(stable, 1.85+). Python reaches it only through `src/opentide/analysis.py`; a missing engine
-is `engine_unavailable`, never a skipped check.
+in [`analysis/`](analysis/) and compiled into the opentide package as `opentide._native` by
+[`hatch_build.py`](hatch_build.py): there is no separate engine distribution. `uv sync` builds
+it (develop profile) and needs a Rust toolchain (stable, 1.85+); release wheels are one
+`cp310-abi3` wheel per platform. Python reaches it only through `src/opentide/analysis.py`; a
+missing engine is `engine_unavailable`, never a skipped check.
 
 | Change | Do |
 |--------|----|
-| Rust binding (`analysis/src/lib.rs`) | Update `analysis/python/opentide_analysis/_native.pyi`; `cargo fmt`, `cargo clippy -D warnings` and `cargo test` in `analysis/` |
-| Engine crates | Bump the revision or version of both `opentide-analysis` and `opentide-lsp` in `analysis/Cargo.toml` together |
+| Rust binding (`analysis/src/lib.rs`) | Update `src/opentide/_native.pyi`; `cargo fmt`, `cargo clippy -D warnings` and `cargo test` in `analysis/` |
+| Engine crates | Bump the revision or version of both language-server crates, `opentide-analysis` and `opentide-lsp`, in `analysis/Cargo.toml` together |
 | Object models, vocabulary or pins | The engine's bundled Tide catalog goes stale (`scripts/build/check_engine_catalog.py`, in CI): regenerate it in language-server with this checkout (`uv run --project <opentide> python scripts/sync_opentide_schemas.py`), then pin that engine. opentide checks objects with the catalog it generates; the gate keeps the engine it ships, which editors running `opentide-lsp` on its own use, from going out stale |
-| Release | `scripts/build/check_engine_pin.py --release` must pass: crates.io sources, and one version in the root pin, `analysis/pyproject.toml` and `analysis/Cargo.toml` |
+| Release | `scripts/build/check_engine_pin.py --release` must pass: the engine crates come from crates.io |
 
 ## Code quality bar
 
@@ -147,7 +148,7 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`. Skills:
 
 ```
 src/opentide/     # PyPI package (models, CLI, MCP, platforms, bundled data)
-analysis/         # opentide-analysis: PyO3 bindings for the Rust engine and language server
+analysis/         # the Rust engine and language server, compiled into opentide (hatch_build.py)
 tests/
 docs/
 scripts/          # ci-local.sh, codeql-local.sh, validate-docs.sh

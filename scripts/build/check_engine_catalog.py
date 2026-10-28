@@ -73,7 +73,7 @@ def main() -> int:
         return 1
     if not found:
         print(
-            f"the engine's bundled catalogs (opentide-analysis {versions['package']}) are current"
+            f"the engine's bundled catalogs (language server {versions['engine']}) are current"
         )
         return 0
     for name, difference in found:

@@ -96,7 +96,7 @@ cargo fmt --manifest-path analysis/Cargo.toml -- --check
 cargo clippy --manifest-path analysis/Cargo.toml --all-targets --quiet -- -D warnings
 cargo test --manifest-path analysis/Cargo.toml --quiet
 
-echo "==> opentide and opentide-analysis versions agree"
+echo "==> The engine crates come from one source"
 uv run python scripts/build/check_engine_pin.py
 
 echo "==> The engine's bundled catalogs match the models"
@@ -104,7 +104,7 @@ uv run python scripts/build/check_engine_catalog.py
 
 echo "==> uv build (sdist + wheel)"
 rm -rf dist
-uv build --package opentide
+uv build
 echo "==> twine check"
 uvx twine check dist/*
 

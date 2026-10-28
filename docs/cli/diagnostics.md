@@ -12,7 +12,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 
 | Code | Meaning |
 |------|---------|
-| [`analysis_engine`](#analysis_engine) | The analysis engine imports: the compiled `opentide-analysis` package behind `opentide validate query`, `opentide validate --deep` and `opentide lsp`. |
+| [`analysis_engine`](#analysis_engine) | The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind `opentide validate query`, `opentide validate --deep` and `opentide lsp`. |
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
@@ -40,7 +40,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`doctor_checks_failed`](#doctor_checks_failed) | At least one `opentide doctor` check failed. |
 | [`duplicate_id`](#duplicate_id) | Two object files carry the same UUID. |
 | [`duplicate_name`](#duplicate_name) | Two `sharing.toml` blocks share a name. |
-| [`engine_unavailable`](#engine_unavailable) | The analysis engine (the `opentide-analysis` package) does not import, so the command cannot check queries or serve the language server. |
+| [`engine_unavailable`](#engine_unavailable) | The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server. |
 | [`eql_argument_type`](#eql_argument_type) | A literal has a type the EQL verifier rejects in this position. |
 | [`eql_case_sensitive`](#eql_case_sensitive) | The comparison is case-sensitive; the case-insensitive form may be meant. |
 | [`eql_expression_depth`](#eql_expression_depth) | The expression nests deeper than Elasticsearch accepts. |
@@ -189,20 +189,20 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 
 ## analysis_engine
 
-The analysis engine imports: the compiled `opentide-analysis` package behind `opentide validate query`, `opentide validate --deep` and `opentide lsp`.
+The analysis engine loads: the Rust module compiled into opentide (`opentide._native`) behind `opentide validate query`, `opentide validate --deep` and `opentide lsp`.
 
-Reported by `opentide doctor`, with the package's and the Rust engine's versions. Fails when the engine does not import (`engine_unavailable`).
+Reported by `opentide doctor`, with the version of the language-server crates compiled in. Fails when the engine does not load (`engine_unavailable`).
 
 ### Example
 
 ```text illustrative
-✗ The opentide analysis engine does not load: No module named 'opentide_analysis' · analysis_engine
+✗ The opentide analysis engine does not load: cannot import name '_native' from 'opentide' · analysis_engine
   → pip install --force-reinstall opentide
 ```
 
 ### How to fix
 
-Reinstall opentide with the command it prints. `opentide-analysis` is a dependency of opentide with a prebuilt wheel for each supported platform, so a failed import means a broken or mixed environment, or a platform with no wheel: see `opentide explain engine_unavailable`.
+Reinstall opentide with the command it prints. The engine is part of the opentide package, in the wheel for each supported platform, so a failed import means a broken or mixed environment, or an install from source that did not compile it: see `opentide explain engine_unavailable`.
 
 ## api_key_literal
 
@@ -668,20 +668,20 @@ Give each block a unique `name`; `share --target` selects blocks by it.
 
 ## engine_unavailable
 
-The analysis engine (the `opentide-analysis` package) does not import, so the command cannot check queries or serve the language server.
+The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server.
 
 Exit 1, as `failure.code`, from `opentide validate query` (offline), `opentide lsp check` and `opentide lsp start`; an error issue of the `queries` check in `opentide validate --deep`; and the `analysis_engine` check of `opentide doctor`. The check is never skipped: a missing engine fails the command.
 
 ### Example
 
 ```text illustrative
-error: The opentide analysis engine does not load: No module named 'opentide_analysis._native'
+error: The opentide analysis engine does not load: cannot import name '_native' from 'opentide'
   help: reinstall opentide: pip install --force-reinstall opentide
 ```
 
 ### How to fix
 
-The engine is a dependency of opentide, compiled for each platform: `pip install opentide` installs it, and there is no extra to add. Reinstall opentide with the command it prints, in a clean environment (`uv tool install --reinstall opentide` for a uv tool install). When pip builds `opentide-analysis` from source instead of downloading a wheel, your platform has no prebuilt wheel: install a Rust toolchain (https://rustup.rs) and reinstall, or report the platform at https://github.com/opentidehq/opentide/issues.
+The engine is part of the opentide package: each opentide wheel carries it, compiled for its platform, and there is nothing else to install. Reinstall opentide with the command it prints, in a clean environment (`uv tool install --reinstall opentide` for a uv tool install). When pip builds opentide from source instead of downloading a wheel, your platform has no prebuilt wheel and the build compiles the engine: install a Rust toolchain (https://rustup.rs) and reinstall, or report the platform at https://github.com/opentidehq/opentide/issues.
 
 ## eql_argument_type
 

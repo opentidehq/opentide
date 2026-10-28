@@ -96,7 +96,9 @@ workshop/
 .claude/settings.local.json
 .claude/worktrees/
 
-# The engine bindings (analysis/): cargo output and the built extension.
+# The engine (analysis/): cargo output, and the module an editable install
+# compiles into the package (hatch_build.py).
 analysis/target/
-analysis/python/opentide_analysis/*.so
-analysis/python/opentide_analysis/*.pyd
+src/opentide/_native.*.so
+src/opentide/_native.pyd
+src/opentide/_native.so

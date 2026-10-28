@@ -43,7 +43,7 @@ def test_the_pinned_engine_is_current(capsys: pytest.CaptureFixture[str]) -> Non
         name: os.environ.get(name) for name in ("OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE")
     }
     assert _script().main() == 0
-    assert "bundled catalogs (opentide-analysis" in capsys.readouterr().out
+    assert "bundled catalogs (language server" in capsys.readouterr().out
     # The empty workspace it generates in is gone again.
     assert {name: os.environ.get(name) for name in before} == before
 
@@ -57,7 +57,7 @@ def test_a_stale_engine_names_the_fields_and_the_fix(
     stale["fields"] = [row for row in stale["fields"] if row["path"] != "metadata.reviewed"]
     engine = SimpleNamespace(bundled_catalog=lambda: (json.dumps(stale), deprecations))
     monkeypatch.setattr(analysis, "engine", lambda: engine)
-    monkeypatch.setattr(analysis, "engine_versions", lambda: {"package": "0.0.0", "engine": "0"})
+    monkeypatch.setattr(analysis, "engine_versions", lambda: {"engine": "0"})
     assert _script().main() == 1
     err = capsys.readouterr().err
     assert "bundled fields.json is stale: 1 new (rule::1.1 metadata.reviewed)" in err
