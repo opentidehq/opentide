@@ -63,3 +63,18 @@ def test_a_release_refuses_engine_crates_from_git_or_a_path(repo: Path) -> None:
     mixed = text.replace('opentide-lsp = "=0.6.0"', 'opentide-lsp = "=0.5.0"')
     cargo.write_text(mixed + "\n", encoding="utf-8")
     assert any("same source and version" in item for item in script.problems(repo, release=True))
+
+
+def test_a_string_pin_and_a_table_pin_of_one_version_agree(repo: Path) -> None:
+    """``"=0.6.0"`` and ``{ version = "=0.6.0" }`` are one source, as the help suggests."""
+    script = _script()
+    cargo = repo / "analysis" / "Cargo.toml"
+    rows = []
+    for row in cargo.read_text(encoding="utf-8").splitlines():
+        if row.startswith("opentide-analysis"):
+            row = 'opentide-analysis = "=0.6.0"'
+        elif row.startswith("opentide-lsp"):
+            row = 'opentide-lsp = { version = "=0.6.0", default-features = false }'
+        rows.append(row)
+    cargo.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    assert script.problems(repo, release=True) == []

@@ -556,8 +556,6 @@ def check_lsp_catalog(ctx: DoctorContext) -> list[Check]:
     ``.opentide/lsp/catalogs/`` is read only by editors that run the
     ``opentide-lsp`` binary on its own, and when generation fails.
     """
-    import json
-
     from opentide import __version__
     from opentide.core.root import OPENTIDE_DIR
     from opentide.generation.lsp_catalog import CATALOG_DIR, FIELDS_FILE
