@@ -6,7 +6,9 @@ the wheel as ``opentide/_native`` (``.abi3.so``, or ``.pyd`` on Windows), so
 ``pip install opentide`` is the one install: there is no separate engine
 distribution. The extension uses the stable ABI from CPython 3.10, so the
 wheel is tagged ``cp310-abi3-<platform>``: one wheel per platform serves every
-CPython from 3.10 on.
+CPython from 3.10 on. A free-threaded CPython (3.14t) or another
+implementation has no stable ABI: a wheel built there is tagged for that
+interpreter alone.
 
 - A wheel builds with cargo's ``release`` profile.
 - An editable install (``uv sync``) builds the ``develop`` profile, which skips
@@ -15,9 +17,11 @@ CPython from 3.10 on.
   build ``develop`` wheels).
 
 Building needs a Rust toolchain (stable, see ``rust-version`` in
-``analysis/Cargo.toml``). The release workflow publishes a wheel for each
-supported platform; elsewhere, pip builds from the sdist, which carries
-``analysis/``.
+``analysis/Cargo.toml``). On musl (Alpine, the musllinux images) cargo is told
+to link the C runtime dynamically: Rust's musl targets link it statically by
+default, and then cannot build a shared library at all. The release workflow
+publishes a wheel for each supported platform; elsewhere, pip builds from the
+sdist, which carries ``analysis/``.
 """
 
 from __future__ import annotations
@@ -41,9 +45,46 @@ PROFILE_ENV = "OPENTIDE_ENGINE_PROFILE"
 ABI3_FLOOR = "cp310"
 
 
+def stable_abi() -> bool:
+    """Whether this interpreter loads a stable-ABI (``abi3``) extension: a CPython with the GIL."""
+    return sys.implementation.name == "cpython" and not sysconfig.get_config_var("Py_GIL_DISABLED")
+
+
 def module_name() -> str:
-    """The extension's file name in the package, as CPython imports it."""
+    """The extension's file name in the package, as this interpreter imports it."""
+    if not stable_abi():
+        return "_native" + str(sysconfig.get_config_var("EXT_SUFFIX"))
     return "_native.pyd" if sys.platform == "win32" else "_native.abi3.so"
+
+
+def wheel_tag() -> str:
+    """``cp310-abi3-<platform>`` on a CPython with the GIL; this interpreter's own tag otherwise."""
+    if stable_abi():
+        return f"{ABI3_FLOOR}-abi3-{platform_tag()}"
+    from packaging.tags import sys_tags
+
+    return str(next(iter(sys_tags())))
+
+
+def builds_for_musl(rust_host: str | None) -> bool:
+    """Whether cargo builds for a musl target: ``CARGO_BUILD_TARGET``, else rustc's host."""
+    target = os.environ.get("CARGO_BUILD_TARGET") or rust_host or ""
+    return target.endswith("musl")
+
+
+def rust_host(rustc: str | None) -> str | None:
+    """rustc's host triple (``x86_64-unknown-linux-musl``), or ``None`` when rustc does not say."""
+    if rustc is None:
+        return None
+    version = subprocess.run([rustc, "-vV"], capture_output=True, text=True, check=False).stdout
+    return next(
+        (
+            line.split(":", 1)[1].strip()
+            for line in version.splitlines()
+            if line.startswith("host:")
+        ),
+        None,
+    )
 
 
 def built_library(profile: str) -> Path:
@@ -82,6 +123,10 @@ def build_engine(profile: str) -> Path:
         # The interpreter running this build, for PyO3's configuration.
         "PYO3_PYTHON": os.environ.get("PYO3_PYTHON", sys.executable),
     }
+    if builds_for_musl(rust_host(shutil.which("rustc"))):
+        # musl links its C runtime statically by default, which rules out a cdylib.
+        flags = env.get("RUSTFLAGS", "")
+        env["RUSTFLAGS"] = f"{flags} -C target-feature=-crt-static".strip()
     command = [cargo, "build", "--manifest-path", str(MANIFEST), "--lib", "--locked"]
     command += ["--profile", profile]
     subprocess.run(command, check=True, env=env)
@@ -112,7 +157,7 @@ class EngineBuildHook(BuildHookInterface):
             shutil.copy2(library, staged)
             build_data["force_include"][str(staged)] = f"opentide/{name}"
         build_data["pure_python"] = False
-        build_data["tag"] = f"{ABI3_FLOOR}-abi3-{platform_tag()}"
+        build_data["tag"] = wheel_tag()
 
     def finalize(self, version: str, build_data: dict[str, Any], artifact_path: str) -> None:
         staging = getattr(self, "_staging", None)
