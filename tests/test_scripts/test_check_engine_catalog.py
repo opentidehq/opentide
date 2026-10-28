@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -14,6 +15,17 @@ from opentide import analysis
 from opentide.analysis import EngineUnavailableError
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(autouse=True)
+def _fresh_registry() -> Iterator[None]:
+    """The script runs in a process of its own; here, earlier tests' registry
+    state (another workspace) must not reach the empty one it generates in."""
+    from tests.corpus_support import clear_runtime_caches
+
+    clear_runtime_caches()
+    yield
+    clear_runtime_caches()
 
 
 def _script() -> ModuleType:
