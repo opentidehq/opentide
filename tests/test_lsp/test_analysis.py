@@ -194,3 +194,63 @@ def test_highlight_tokens_are_in_cli_coordinates() -> None:
     assert (by_capture["type"].column, by_capture["type"].end_column) == (1, 14)
     assert (by_capture["string"].column, by_capture["string"].end_column) == (28, 31)
     assert by_capture["comment"].column == 32
+
+
+REVISION_RULE = """\
+name: Revision Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000002
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Someone
+description: |
+  test
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    status: DESIGN
+    query: index=main
+"""
+
+
+def _shape(tmp_path: Path, text: str) -> list[tuple[str, tuple[str, ...], int]]:
+    from opentide.analysis import check_file, workspace
+
+    path = tmp_path / "objects" / "rules" / "revision-rule.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return [
+        (finding.message, finding.field_path, finding.line)
+        for finding in check_file(workspace(tmp_path, [path]), path, text)
+        if finding.code == "schema_validation"
+    ]
+
+
+def test_the_language_server_checks_the_revision_an_object_names(
+    tmp_path: Path, bundled_catalog: None
+) -> None:
+    """#676: what validate reports, the language server reports, with this
+    opentide's catalog: a rule::1.1 without description, a rule::1.0 carrying
+    the 1.1-only metadata.reviewed."""
+    from opentide.generation.lsp_catalog import write_catalog
+
+    write_catalog(tmp_path)
+    assert install_workspace_catalog(tmp_path).source == "workspace"
+    assert _shape(tmp_path, REVISION_RULE) == []
+    assert _shape(tmp_path, REVISION_RULE.replace("description: |\n  test\n", "")) == [
+        ("missing required field 'description'", ("description",), 1)
+    ]
+    older = REVISION_RULE.replace("rule::1.1", "rule::1.0").replace(
+        "  author: Someone\n", "  author: Someone\n  reviewed: 2026-01-03\n"
+    )
+    assert _shape(tmp_path, older) == [
+        ("field 'metadata.reviewed' is not defined in rule::1.0", ("metadata", "reviewed"), 10)
+    ]
+    assert _shape(tmp_path, older.replace("rule::1.0", "rule::1.1")) == []
+    # A splunk::2.x spelling validates, so it is no finding either.
+    legacy = REVISION_RULE.replace("    query: index=main\n", "    search: index=main\n")
+    assert _shape(tmp_path, legacy) == []

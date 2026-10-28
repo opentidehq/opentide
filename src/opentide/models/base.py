@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import Enum
-from typing import Any, cast
+from types import MappingProxyType
+from typing import Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.fields import FieldInfo
@@ -84,6 +86,16 @@ class TideModel(BaseModel):
         validate_assignment=True,
         use_attribute_docstrings=True,
     )
+
+    #: Keys a ``mode="before"`` validator accepts although the schema does not
+    #: list them: a legacy spelling, by its path relative to the model
+    #: (``"search"``, ``"scheduling.frequency"``), and the field it fills,
+    #: relative to the same model (``"query"``), or ``None`` when the key is
+    #: dropped. The language server reads them from its catalog
+    #: (:mod:`opentide.generation.lsp_catalog`), so it accepts the same objects
+    #: as validation. A model whose before-validator rewrites keys declares
+    #: them here, even as an empty mapping (``tests/test_lsp``).
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = MappingProxyType({})
 
     @classmethod
     def schema_identifier(cls) -> str:
