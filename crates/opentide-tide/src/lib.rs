@@ -1231,7 +1231,8 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
     }
 }
 
-const DEPRECATIONS_JSON: &str = include_str!(concat!(
+/// The bundled `deprecations.json`, as compiled into the engine.
+pub const DEPRECATIONS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/catalogs/tide/generated/deprecations.json"
 ));
@@ -1265,6 +1266,20 @@ fn deprecation_overlay() -> &'static RwLock<Vec<FieldDeprecation>> {
 /// whole process, so a host that analyzes on several threads sees one overlay.
 pub fn install_deprecation_overlay(items: Vec<FieldDeprecation>) {
     *deprecation_overlay()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
+}
+
+fn default_deprecations() -> &'static RwLock<Option<Vec<FieldDeprecation>>> {
+    static DEFAULT: OnceLock<RwLock<Option<Vec<FieldDeprecation>>>> = OnceLock::new();
+    DEFAULT.get_or_init(|| RwLock::new(None))
+}
+
+/// Use `items` instead of the bundled deprecations, under the workspace
+/// overlay ([`install_deprecation_overlay`]). `None` goes back to the bundled
+/// ones. Process-wide.
+pub fn set_default_deprecations(items: Option<Vec<FieldDeprecation>>) {
+    *default_deprecations()
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
 }
@@ -1326,12 +1341,17 @@ fn diagnose_deprecations(object_type: &str, source: &str, diagnostics: &mut Vec<
         let message = overlay
             .iter()
             .find(|row| row.schema == object_type && row.path == dotted)
-            .map(|row| row.message.as_str())
+            .map(|row| row.message.clone())
             .or_else(|| {
-                bundled_deprecations()
+                let default = default_deprecations()
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                default
+                    .as_deref()
+                    .unwrap_or_else(|| bundled_deprecations())
                     .iter()
                     .find(|row| row.schema == object_type && row.path == dotted)
-                    .map(|row| row.message.as_str())
+                    .map(|row| row.message.clone())
             });
         let Some(message) = message else {
             continue;

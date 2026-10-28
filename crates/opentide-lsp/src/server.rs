@@ -1035,7 +1035,23 @@ pub const WORKSPACE_CATALOGS: &str = ".opentide/lsp/catalogs/generated";
 /// Install the workspace's `fields.json` and `deprecations.json` when they
 /// exist, and the bundled catalogs otherwise. A file that does not parse is
 /// reported on stderr and leaves the bundled catalogs in place.
+/// Set by a host that installed the catalogs itself
+/// ([`opentide_analysis::set_default_catalog`]): the server then leaves them
+/// alone at `initialize` instead of reading the workspace's.
+static HOST_CATALOGS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Keep the catalogs the host installed: `initialize` does not read
+/// `.opentide/lsp/catalogs/generated/`. opentide generates the catalogs from
+/// its own models for the workspace it serves, so a committed copy, possibly
+/// from an older opentide, must not replace them. Process-wide.
+pub fn use_host_catalogs() {
+    HOST_CATALOGS.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 pub fn install_workspace_catalog(root: &Path) {
+    if HOST_CATALOGS.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let dir = root.join(WORKSPACE_CATALOGS);
     let read = |name: &str| {
         if root.as_os_str().is_empty() {

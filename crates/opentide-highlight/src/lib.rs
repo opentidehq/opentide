@@ -318,14 +318,23 @@ fn installed_tide_catalog() -> &'static RwLock<InstalledCatalog> {
     INSTALLED.get_or_init(|| RwLock::new(None))
 }
 
+/// The catalog a host set in place of the bundled one ([`set_default_tide_fields`]).
+fn default_tide_catalog() -> &'static RwLock<Option<&'static TideCatalog>> {
+    static DEFAULT: OnceLock<RwLock<Option<&'static TideCatalog>>> = OnceLock::new();
+    DEFAULT.get_or_init(|| RwLock::new(None))
+}
+
 fn tide_catalog() -> &'static TideCatalog {
     let installed = installed_tide_catalog()
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    match *installed {
-        Some((catalog, _)) => catalog,
-        None => bundled_tide_catalog(),
+    if let Some((catalog, _)) = *installed {
+        return catalog;
     }
+    let default = default_tide_catalog()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    default.unwrap_or_else(bundled_tide_catalog)
 }
 
 fn text_hash(text: &str) -> u64 {
@@ -352,14 +361,21 @@ pub fn install_tide_fields(json: Option<&str>) -> Result<(), HighlightError> {
         return Ok(());
     };
     let hash = text_hash(json);
+    *installed = Some((built_tide_catalog(json)?, hash));
+    Ok(())
+}
+
+/// The catalog built from `json`, built once per distinct text and kept for
+/// the life of the process (its fields are handed out as `&'static`).
+fn built_tide_catalog(json: &str) -> Result<&'static TideCatalog, HighlightError> {
+    let hash = text_hash(json);
     static BUILT: OnceLock<Mutex<Vec<(u64, &'static TideCatalog)>>> = OnceLock::new();
     let mut built = BUILT
         .get_or_init(|| Mutex::new(Vec::new()))
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     if let Some((_, catalog)) = built.iter().find(|(seen, _)| *seen == hash) {
-        *installed = Some((catalog, hash));
-        return Ok(());
+        return Ok(catalog);
     }
     let catalog = build_tide_catalog(json).map_err(HighlightError::Catalog)?;
     if catalog.fields.is_empty() {
@@ -369,7 +385,18 @@ pub fn install_tide_fields(json: Option<&str>) -> Result<(), HighlightError> {
     }
     let catalog: &'static TideCatalog = Box::leak(Box::new(catalog));
     built.push((hash, catalog));
-    *installed = Some((catalog, hash));
+    Ok(catalog)
+}
+
+/// Use `json` instead of the bundled catalog whenever no workspace catalog is
+/// installed ([`install_tide_fields`]): a host that generates the catalog
+/// from its own models (opentide) is never behind the snapshot compiled in.
+/// `None` goes back to the bundled catalog. Process-wide.
+pub fn set_default_tide_fields(json: Option<&str>) -> Result<(), HighlightError> {
+    let catalog = json.map(built_tide_catalog).transpose()?;
+    *default_tide_catalog()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = catalog;
     Ok(())
 }
 

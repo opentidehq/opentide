@@ -8,7 +8,7 @@
 mod jsonrpc;
 pub mod server;
 
-pub use server::{WORKSPACE_CATALOGS, run_listen, run_stdio};
+pub use server::{WORKSPACE_CATALOGS, run_listen, run_stdio, use_host_catalogs};
 
 /// The server's version: the crate version every `opentide-*` crate shares.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

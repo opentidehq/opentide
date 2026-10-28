@@ -283,6 +283,39 @@ pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
     Ok(())
 }
 
+/// Use `catalog` instead of the bundled catalogs whenever no workspace catalog
+/// is installed ([`install_catalog`]), for the whole process: a host that
+/// generates the catalogs from its own models (opentide, with
+/// `opentide.generation.lsp_catalog`) is then never behind the snapshot
+/// compiled into the engine, even after the language server's `initialize`
+/// finds no workspace catalog. A `None` part goes back to the bundled one. A
+/// part that does not parse is an error and changes nothing.
+pub fn set_default_catalog(catalog: &Catalog) -> Result<(), String> {
+    let deprecations = catalog
+        .deprecations
+        .as_deref()
+        .map(opentide_tide::parse_deprecation_overlay)
+        .transpose()
+        .map_err(|err| format!("deprecations.json: {err}"))?;
+    opentide_highlight::set_default_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    opentide_tide::set_default_deprecations(deprecations);
+    Ok(())
+}
+
+/// The Tide catalogs compiled into the engine, as their files hold them.
+///
+/// A host that generates its own catalogs (the `opentide` package, with
+/// `opentide.generation.lsp_catalog`) compares them with these to know
+/// whether the engine it bundles is current: labels such as the opentide
+/// version aside, the same models generate the same text.
+pub fn bundled_catalog() -> Catalog {
+    Catalog {
+        fields: Some(opentide_highlight::TIDE_FIELDS_JSON.to_string()),
+        deprecations: Some(opentide_tide::DEPRECATIONS_JSON.to_string()),
+    }
+}
+
 /// The opentide version the Tide field catalog in use was generated from.
 pub fn catalog_version() -> &'static str {
     opentide_highlight::tide_catalog_version()
