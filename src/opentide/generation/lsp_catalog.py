@@ -388,7 +388,12 @@ def _field_node(
     docs = [] if len(values) > ENUM_DOC_MAX else [_cap_doc(doc) for doc in docs]
     kind = _type_name(spec, schema, is_array)
     const = _const_of(spec)
-    ref = ref_leaves.get(name) if not values and kind in {"string", "array"} else None
+    ref = ref_leaves.get(name) if kind in {"string", "array"} else None
+    if ref is not None:
+        # A reference is checked, and completed, against the live index of
+        # the workspace's objects, never against a snapshot of their UUIDs:
+        # the catalog stays the same while objects come and go.
+        values, docs = [], []
     if const and not values:
         values, docs = [const], [""]
     if default and values and default not in values:

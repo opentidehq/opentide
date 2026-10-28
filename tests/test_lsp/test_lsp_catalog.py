@@ -204,3 +204,42 @@ def test_required_is_what_validation_requires(fields: dict) -> None:
             assert (row["required"], row.get("recommended")) == (False, True), (schema, path)
         assert _field(fields, schema, "description")["required"] is True
         assert "recommended" not in _field(fields, schema, "description")
+
+
+def test_references_are_not_a_snapshot_of_uuids(tmp_path: Path) -> None:
+    """In a workspace, the schema enumerates its objectives' UUIDs for
+    detection_model; the catalog keeps the reference, not the list, so it
+    does not change as objects are added and the engine checks the live index."""
+    from tests.test_cli.e2e.helpers import TUTORIAL, write_tutorial_objects
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+
+    repo = tmp_path / "detections"
+    result = CliRunner().invoke(
+        app,
+        ["--json", "--repo", str(tmp_path), "setup", "--yes", "--name", "Refs", "--org", "Example",
+         "--platform", "sentinel", "--path", str(repo)],
+        env={"OPENTIDE_REPO_ROOT": str(tmp_path), "OPENTIDE_TIDE_WORKSPACE": str(tmp_path)},
+    )  # fmt: skip
+    assert result.exit_code == 0, result.stdout
+    write_tutorial_objects(repo, markdown=TUTORIAL.read_text(encoding="utf-8"))
+    from tests.corpus_support import clear_runtime_caches
+
+    clear_runtime_caches()
+    os_env = {"OPENTIDE_REPO_ROOT": str(repo), "OPENTIDE_TIDE_WORKSPACE": str(repo)}
+    import os
+
+    saved = {name: os.environ.get(name) for name in os_env}
+    os.environ.update(os_env)
+    try:
+        catalog = fields_catalog("refs")
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        clear_runtime_caches()
+    row = _field(catalog, "rule::1.1", "detection_model")
+    assert (row["ref"], row["enum"]) == ("objective", [])
