@@ -35,6 +35,7 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.mv-apply | `mv_apply_operator` | `mv_apply_operator__valid` | `keyword` |
 | kql.make-series | `make_series_operator` | `make_series_operator__valid` | `keyword` |
 | kql.evaluate | `evaluate_operator` | `evaluate_operator__valid` | `keyword` |
+| kql.search source | `search_source` | `search_source__valid` | `keyword` |
 | kql.set | `expression_list` | `expression_list__valid` | `punctuation.bracket` |
 | kql.between | `range` | `range__valid` | `operator` |
 | kql.member | `member_expression` | `member_expression__valid` | `property` |

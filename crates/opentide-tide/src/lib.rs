@@ -25,7 +25,9 @@ pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
 };
 pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
-pub use yaml_path::{YamlCursor, document_schema_id, key_span, uuid_span, yaml_cursor};
+pub use yaml_path::{
+    YamlCursor, document_schema_id, key_span, key_span_in, uuid_span, yaml_cursor,
+};
 
 const RULE_TEMPLATE: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -132,7 +134,8 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
     while i < lines.len() {
         let line = lines[i];
         let indent = line.chars().take_while(|c| *c == ' ').count();
-        let trimmed = line.trim();
+        let unquoted = unquote_key(line.trim());
+        let trimmed = unquoted.as_ref();
         let content = trimmed.strip_prefix("- ").unwrap_or(trimmed);
         // Keep platform across a same-indent sibling `query:` / `search:` of `system:`.
         // Real hunts look like:
@@ -176,6 +179,26 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
     out
 }
 
+/// `line` (trimmed) with its mapping key unquoted: `"query": |` reads as
+/// `query: |`, and `- 'sentinel':` as `- sentinel:`. YAML allows either
+/// spelling of a key; the value is left as written.
+fn unquote_key(line: &str) -> std::borrow::Cow<'_, str> {
+    let (dash, rest) = match line.strip_prefix("- ") {
+        Some(rest) => ("- ", rest.trim_start()),
+        None => ("", line),
+    };
+    let Some(quote) = rest.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+        return std::borrow::Cow::Borrowed(line);
+    };
+    let Some(close) = rest[1..].find(quote).map(|i| i + 1) else {
+        return std::borrow::Cow::Borrowed(line);
+    };
+    if !rest[close + 1..].starts_with(':') {
+        return std::borrow::Cow::Borrowed(line);
+    }
+    std::borrow::Cow::Owned(format!("{dash}{}{}", &rest[1..close], &rest[close + 1..]))
+}
+
 #[allow(clippy::question_mark)]
 fn parse_query_block(
     source: &str,
@@ -186,7 +209,8 @@ fn parse_query_block(
 ) -> Option<InjectedQuery> {
     let line = *lines.get(i)?;
     let indent = line.chars().take_while(|c| *c == ' ').count();
-    let trimmed = line.trim().strip_prefix("- ").unwrap_or(line.trim());
+    let unquoted = unquote_key(line.trim());
+    let trimmed = unquoted.strip_prefix("- ").unwrap_or(&unquoted);
     let (key, is_block) = if trimmed == "query: |" || trimmed.starts_with("query: |") {
         ("query", true)
     } else if trimmed == "search: |" || trimmed.starts_with("search: |") {
@@ -266,11 +290,10 @@ fn parse_query_block(
             break;
         }
         let strip = *content_indent.get_or_insert(ind);
-        let body = if l.len() >= strip {
-            &l[strip..]
-        } else {
-            l.trim_start()
-        };
+        // A line indented less than the first (an explicit `|2` indicator)
+        // loses only its own indentation: spaces are one byte each, so the
+        // cut is always on a character boundary.
+        let body = &l[ind.min(strip)..];
         // Where the body starts in the line: `trim_start` may cut fewer bytes.
         let cut = l.len() - body.len();
         if inner.is_empty() {
@@ -1304,7 +1327,7 @@ fn bundled_deprecations() -> &'static [FieldDeprecation] {
 }
 
 fn diagnose_deprecations(object_type: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(source) else {
+    let Some(value) = merged_yaml(source) else {
         return;
     };
     let mut present = Vec::new();
@@ -1393,7 +1416,7 @@ fn diagnose_shape(schema: &str, source: &str, diagnostics: &mut Vec<Diagnostic>)
     let Some((revision, root)) = tide_schema_root(schema) else {
         return;
     };
-    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(source) else {
+    let Some(value) = merged_yaml(source) else {
         return;
     };
     let Some(mapping) = value.as_mapping() else {
@@ -1408,24 +1431,45 @@ fn diagnose_shape(schema: &str, source: &str, diagnostics: &mut Vec<Diagnostic>)
             .iter()
             .filter_map(|d| d.field_path.clone())
             .collect(),
+        seen: std::collections::BTreeSet::new(),
         found: Vec::new(),
     };
-    shape.mapping(&[], mapping, root.closed, &root.legacy);
+    shape.mapping(&[], &[], mapping, root.closed, &root.legacy);
     diagnostics.extend(shape.found);
 }
+
+/// `source` as a YAML value, with `<<` merge keys resolved as opentide's
+/// loader resolves them.
+fn merged_yaml(source: &str) -> Option<serde_yaml::Value> {
+    let mut value = serde_yaml::from_str::<serde_yaml::Value>(source).ok()?;
+    value.apply_merge().ok()?;
+    Some(value)
+}
+
+/// One key of a path, and the item of the list it holds the path goes into.
+type Step = (String, Option<usize>);
 
 struct ShapeCheck<'a> {
     revision: &'static str,
     exact: bool,
     source: &'a str,
+    /// Field paths another check reported: not repeated.
     reported: std::collections::BTreeSet<Vec<String>>,
+    /// What this check reported, by path with list items: one per place.
+    seen: std::collections::BTreeSet<Vec<Step>>,
     found: Vec<Diagnostic>,
 }
 
 impl ShapeCheck<'_> {
+    /// Whether nothing was reported at `path` (`steps` with its list items) yet.
+    fn first(&mut self, path: &[String], steps: &[Step]) -> bool {
+        !self.reported.contains(path) && self.seen.insert(steps.to_vec())
+    }
+
     fn mapping(
         &mut self,
         path: &[String],
+        steps: &[Step],
         mapping: &serde_yaml::Mapping,
         closed: bool,
         legacy: &BTreeMap<String, Option<String>>,
@@ -1450,7 +1494,9 @@ impl ShapeCheck<'_> {
             }
             let mut field_path = path.to_vec();
             field_path.push(field.name.clone());
-            if !self.reported.insert(field_path.clone()) {
+            let mut field_steps = steps.to_vec();
+            field_steps.push((field.name.clone(), None));
+            if !self.first(&field_path, &field_steps) {
                 continue;
             }
             let dotted = field_path.join(".");
@@ -1458,26 +1504,35 @@ impl ShapeCheck<'_> {
                 Diagnostic::error(
                     codes::SCHEMA_VALIDATION,
                     format!("missing required field '{dotted}'"),
-                    self.range(path),
+                    self.range(steps),
                 )
             } else {
                 Diagnostic::warning(
                     codes::RECOMMENDED_FIELD_MISSING,
                     format!("recommended field '{dotted}' is missing"),
-                    self.range(path),
+                    self.range(steps),
                 )
             };
             self.found.push(diagnostic.with_field_path(field_path));
         }
         for (key, value) in mapping {
-            let Some(name) = key.as_str() else {
-                continue;
+            // A key that is not a string (`1: x`) is never a field.
+            let name = match key.as_str() {
+                Some(name) => name.to_string(),
+                None => serde_yaml::to_string(key)
+                    .map(|text| text.trim().to_string())
+                    .unwrap_or_default(),
             };
             let mut field_path = path.to_vec();
-            field_path.push(name.to_string());
-            let Some(field) = children.iter().find(|field| field.name == name) else {
-                let accepted = legacy.contains_key(name);
-                if closed && !accepted && self.exact && self.reported.insert(field_path.clone()) {
+            field_path.push(name.clone());
+            let mut field_steps = steps.to_vec();
+            field_steps.push((name.clone(), None));
+            let field = key
+                .as_str()
+                .and_then(|name| children.iter().find(|field| field.name == name));
+            let Some(field) = field else {
+                let accepted = legacy.contains_key(&name);
+                if closed && !accepted && self.exact && self.first(&field_path, &field_steps) {
                     self.found.push(
                         Diagnostic::error(
                             codes::SCHEMA_VALIDATION,
@@ -1486,26 +1541,42 @@ impl ShapeCheck<'_> {
                                 field_path.join("."),
                                 self.revision
                             ),
-                            self.range(&field_path),
+                            self.range(&field_steps),
                         )
                         .with_field_path(field_path),
                     );
                 }
                 continue;
             };
-            self.values(&field_path, field, value);
             match value {
                 serde_yaml::Value::Mapping(child) => {
-                    self.mapping(&field_path, child, field.closed, &field.legacy)
+                    self.values(&field_path, &field_steps, field, value);
+                    self.mapping(
+                        &field_path,
+                        &field_steps,
+                        child,
+                        field.closed,
+                        &field.legacy,
+                    )
                 }
                 serde_yaml::Value::Sequence(items) => {
-                    for item in items {
+                    for (index, item) in items.iter().enumerate() {
+                        let mut item_steps = steps.to_vec();
+                        item_steps.push((name.clone(), Some(index)));
                         if let Some(child) = item.as_mapping() {
-                            self.mapping(&field_path, child, field.closed, &field.legacy);
+                            self.mapping(
+                                &field_path,
+                                &item_steps,
+                                child,
+                                field.closed,
+                                &field.legacy,
+                            );
+                        } else {
+                            self.values(&field_path, &item_steps, field, item);
                         }
                     }
                 }
-                _ => {}
+                _ => self.values(&field_path, &field_steps, field, value),
             }
         }
     }
@@ -1513,45 +1584,53 @@ impl ShapeCheck<'_> {
     /// A value outside the field's enum (a vocabulary, a fixed set), for a
     /// scalar or for each item of a list: every enum the catalog has, not a
     /// hand-picked few.
-    fn values(&mut self, path: &[String], field: &TideField, value: &serde_yaml::Value) {
+    /// A value outside the field's enum (a vocabulary, a fixed set): a scalar,
+    /// or one item of a list (`steps` names which): every enum the catalog
+    /// has, not a hand-picked few.
+    fn values(
+        &mut self,
+        path: &[String],
+        steps: &[Step],
+        field: &TideField,
+        value: &serde_yaml::Value,
+    ) {
         // A reference is checked against the workspace index (invalid_ref),
         // never against a list of UUIDs a catalog may carry.
         if field.enum_values.is_empty() || field.ref_kind.is_some() {
             return;
         }
-        let items: Vec<&str> = match value {
-            serde_yaml::Value::String(text) => vec![text.as_str()],
-            serde_yaml::Value::Sequence(items) if field.array => {
-                items.iter().filter_map(serde_yaml::Value::as_str).collect()
-            }
-            _ => Vec::new(),
-        };
-        let Some(unknown) = items
-            .into_iter()
-            .find(|item| !field.enum_values.iter().any(|known| known == item))
+        let Some(unknown) = value
+            .as_str()
+            .filter(|item| !field.enum_values.iter().any(|known| known == item))
         else {
             return;
         };
-        if !self.reported.insert(path.to_vec()) {
+        if !self.first(path, steps) {
             return;
         }
         self.found.push(
             Diagnostic::error(
                 codes::VOCAB_UNKNOWN,
                 format!("unknown {} value '{unknown}'", field.name),
-                self.range(path),
+                self.range(steps),
             )
             .with_field_path(path.to_vec()),
         );
     }
 
-    /// The key at `path`, or the top of the document for the root.
-    fn range(&self, path: &[String]) -> Range {
-        let keys: Vec<&str> = path.iter().map(String::as_str).collect();
-        match key_span(self.source, &keys) {
-            Some(span) => span_to_range(self.source, span),
-            None => Range::point(0, 0),
-        }
+    /// The key at `steps`, else the nearest key above it that has a place (a
+    /// flow mapping's keys have none), else the top of the document.
+    fn range(&self, steps: &[Step]) -> Range {
+        (1..=steps.len())
+            .rev()
+            .find_map(|len| {
+                let path: Vec<(&str, Option<usize>)> = steps[..len]
+                    .iter()
+                    .map(|(key, item)| (key.as_str(), *item))
+                    .collect();
+                key_span_in(self.source, &path)
+            })
+            .map_or(Range::point(0, 0), |span| span_to_range(self.source, span))
     }
 }
 
@@ -1861,6 +1940,135 @@ configurations:
         let source = format!("{VALID_RULE}bogus: 1\n");
         assert_eq!(shape_findings(&source)[0].0, "bogus");
     }
+
+    fn every_finding(path: &str, source: &str) -> Vec<Diagnostic> {
+        analyze(AnalyzeInput {
+            path,
+            source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+    }
+
+    #[test]
+    fn a_merge_key_fills_the_fields_it_merges() {
+        // serde_yaml leaves `<<` unresolved: it read as an unknown key, and
+        // the merged `status` as missing. opentide's loader resolves it.
+        let source = VALID_RULE.replace(
+            "    status: DESIGN\n",
+            "    <<: &base\n      status: DESIGN\n",
+        );
+        assert_eq!(shape_findings(&source), vec![]);
+    }
+
+    #[test]
+    fn a_bad_value_in_a_later_list_item_is_reported_on_that_item() {
+        let source = OBJECTIVE_SIGNALS;
+        let found: Vec<_> = every_finding("objects/objectives/o.yaml", source)
+            .into_iter()
+            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
+            .collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].message, "unknown severity value 'Bogus'");
+        // The second signal's `severity` (line 30), not the valid first one's (20).
+        assert_eq!(found[0].range.start.line, 29);
+        // Two bad items are two findings.
+        let both = source.replace("severity: Medium", "severity: Wrong");
+        let found = every_finding("objects/objectives/o.yaml", &both)
+            .into_iter()
+            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
+            .count();
+        assert_eq!(found, 2);
+    }
+
+    #[test]
+    fn an_unknown_key_is_placed_whatever_its_spelling() {
+        // Non-ASCII, quoted: on the key itself.
+        for key in ["réf", "\"bogus\"", "'bogus'"] {
+            let source = format!("{VALID_RULE}{key}: 1\n");
+            let found = shape_findings(&source);
+            assert_eq!(found.len(), 1, "{key}: {found:?}");
+            assert_eq!(found[0].2.start.line, 19, "{key}");
+        }
+        // A flow mapping's key has no line of its own: its block's key.
+        let source = VALID_RULE.replace(
+            "  splunk:\n    status: DESIGN\n    query: index=main\n",
+            "  splunk: {status: DESIGN, query: index=main, bogus: 1}\n",
+        );
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "configurations.splunk.bogus");
+        assert_eq!(found[0].2.start.line, 16);
+    }
+
+    #[test]
+    fn a_key_that_is_not_a_string_is_not_a_field() {
+        let source = format!("{VALID_RULE}1: x\n");
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].1, "field '1' is not defined in rule::1.1");
+    }
+
+    #[test]
+    fn a_quoted_query_key_is_still_the_query() {
+        let source = VALID_RULE.replace("rule::1.1", "rule::1.0").replace(
+            "    query: index=main\n",
+            "    \"query\": |\n      index=main | statz\n",
+        );
+        let queries = extract_injections(&source);
+        assert_eq!(queries.len(), 1, "{queries:?}");
+        assert_eq!(queries[0].inner, "index=main | statz");
+    }
+
+    #[test]
+    fn an_indentation_indicator_with_a_shallower_line_does_not_panic() {
+        // `|2`: the first line is indented further than a later one holding
+        // a multi-byte character. Cutting that line at the first line's
+        // indentation split the character.
+        let source = "name: Rule\nmetadata:\n  schema: rule::1.1\nconfigurations:\n  sentinel:\n    query: |2\n        SecurityEvent\n      xé\n";
+        let queries = extract_injections(source);
+        assert_eq!(queries.len(), 1);
+        assert!(queries[0].inner.ends_with("xé"), "{:?}", queries[0].inner);
+    }
+
+    const OBJECTIVE_SIGNALS: &str = r#"name: Obj
+metadata:
+  uuid: 00000000-0000-4000-8002-000000000001
+  schema: objective::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: d
+  composition:
+    strategy: Independent
+    description: c
+  signals:
+    - name: a
+      uuid: 00000000-0000-4000-8099-000000000001
+      description: s
+      severity: Medium
+      methodology: Artifacts
+      entities:
+        - Host::Account
+      data:
+        availability: Complete
+        requirements: r
+    - name: b
+      uuid: 00000000-0000-4000-8099-000000000002
+      description: s
+      severity: Bogus
+      methodology: Artifacts
+      entities:
+        - Host::Account
+      data:
+        availability: Complete
+        requirements: r
+"#;
 
     #[test]
     fn legacy_spellings_opentide_accepts_are_accepted() {
