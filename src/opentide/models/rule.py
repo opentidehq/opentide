@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, ClassVar, Protocol, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast
 
 from pydantic import PrivateAttr
 
@@ -15,6 +15,12 @@ from opentide.models.metadata import ObjectMetadata, ObjectReferences, RuleMetad
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
 from opentide.models.results import DeploymentResult, ValidationResult
+from opentide.query.models import DEFAULT_LIMIT
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from opentide.query.service import QueryRun
 
 #: Environment flags a platform query validator raises on a failure or a warning.
 _ERROR_FLAG = "VALIDATION_ERROR_RAISED"
@@ -189,6 +195,25 @@ class DetectionRule(TideModel):
             errors=[f"Query validation failed for {platform}"] if failed else [],
             warnings=[f"Query validation reported warnings for {platform}"] if warned else [],
         )
+
+    def run_query(
+        self,
+        platform: str,
+        *,
+        tenants: Sequence[str] = (),
+        since: str | None = None,
+        limit: int = DEFAULT_LIMIT,
+    ) -> QueryRun:
+        """Run the query this rule deploys to *platform* on its tenants, read-only.
+
+        *tenants* names the tenants (``["all"]`` for every one); none runs on
+        the only tenant configured. Raises
+        :class:`~opentide.query.service.QueryUsageError` when the call cannot
+        run; a tenant that refuses the query is a failed outcome in the result.
+        """
+        from opentide.query.service import run_query
+
+        return run_query(platform, rule=self, tenants=tenants, since=since, limit=limit)
 
     def document(self) -> str:
         if self._registry is None:
