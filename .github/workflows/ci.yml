@@ -68,6 +68,12 @@ jobs:
       - name: opentide and opentide-analysis versions agree
         run: uv run python scripts/build/check_engine_pin.py
 
+      # The engine ships a Tide catalog for editors that run opentide-lsp on
+      # its own; a model or vocabulary change makes it stale until
+      # language-server regenerates it and this pins that engine.
+      - name: The engine's bundled catalogs match the models
+        run: uv run python scripts/build/check_engine_catalog.py
+
       # A change to analysis/ under a version PyPI already has would publish
       # nothing: say so on the pull request, not at release time.
       - name: A changed engine has a new version

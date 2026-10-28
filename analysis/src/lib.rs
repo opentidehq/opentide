@@ -235,6 +235,15 @@ fn set_default_catalog(fields: Option<String>, deprecations: Option<String>) -> 
     .map_err(PyValueError::new_err)
 }
 
+/// The Tide catalogs compiled into the engine, `(fields, deprecations)`, as
+/// their files hold them: opentide compares them with what its models
+/// generate (`scripts/build/check_engine_catalog.py`).
+#[pyfunction]
+fn bundled_catalog() -> (Option<String>, Option<String>) {
+    let catalog = opentide_analysis::bundled_catalog();
+    (catalog.fields, catalog.deprecations)
+}
+
 /// Keep the catalogs set here when the language server initializes: it does
 /// not read the workspace's `.opentide/lsp/catalogs/`. Process-wide.
 #[pyfunction]
@@ -375,8 +384,8 @@ mod _native {
 
     #[pymodule_export]
     use super::{
-        Diagnostic, QueryReport, Workspace, analyze_query, catalog_is_workspace, catalog_version,
-        describe_code, highlight, install_catalog, language_for_path, serve_stdio,
+        Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
+        catalog_version, describe_code, highlight, install_catalog, language_for_path, serve_stdio,
         set_default_catalog, use_host_catalogs,
     };
 

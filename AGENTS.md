@@ -80,6 +80,8 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 
 **Vocabulary drift gate:** when bundled vocab TOML files, schema pins (`src/opentide/data/pins/`), `data/specifications.lock.json` or the sync script change, CI also checks out `opentidehq/specifications` (`main`) and runs `uv run python scripts/build/sync_vocabularies.py --check` against it (`OPENTIDE_SPECIFICATIONS_ROOT`).
 
+**Engine catalog gate:** `scripts/build/check_engine_catalog.py` (lint job, `ci-local.sh`) fails when the Tide catalog bundled in the pinned engine differs from what the models generate. Fix it in language-server (`scripts/sync_opentide_schemas.py` run with this checkout), then bump the engine pin. language-server's `opentide canary` job runs the same comparison daily against `development`.
+
 **CodeQL:** Python and Actions via [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) (`/language:python` + `/language:actions`); Code Quality may also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`.
 
 **Dependabot:** weekly PRs for `uv` (test toolchain grouped), `github-actions` (SHA pins) and `pre-commit`. Merge procedure: [uv skill](.agents/skills/uv/SKILL.md#dependency-upgrades-and-dependabot).
@@ -115,6 +117,7 @@ is `engine_unavailable`, never a skipped check.
 |--------|----|
 | Rust binding (`analysis/src/lib.rs`) | Update `analysis/python/opentide_analysis/_native.pyi`; `cargo fmt`, `cargo clippy -D warnings` and `cargo test` in `analysis/` |
 | Engine crates | Bump the revision or version of both `opentide-analysis` and `opentide-lsp` in `analysis/Cargo.toml` together |
+| Object models, vocabulary or pins | The engine's bundled Tide catalog goes stale (`scripts/build/check_engine_catalog.py`, in CI): regenerate it in language-server with this checkout (`uv run --project <opentide> python scripts/sync_opentide_schemas.py`), then pin that engine. opentide checks objects with the catalog it generates; the gate keeps the engine it ships, which editors running `opentide-lsp` on its own use, from going out stale |
 | Release | `scripts/build/check_engine_pin.py --release` must pass: crates.io sources, and one version in the root pin, `analysis/pyproject.toml` and `analysis/Cargo.toml` |
 
 ## Code quality bar
