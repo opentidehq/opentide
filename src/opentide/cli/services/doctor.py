@@ -550,8 +550,6 @@ def check_analysis_engine(ctx: DoctorContext) -> list[Check]:
 
 def check_lsp_catalog(ctx: DoctorContext) -> list[Check]:
     """The workspace's language-server catalogs exist, parse and match this version."""
-    import json
-
     from opentide import __version__
     from opentide.core.root import OPENTIDE_DIR
     from opentide.generation.lsp_catalog import CATALOG_DIR, FIELDS_FILE
