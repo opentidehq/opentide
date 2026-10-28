@@ -213,7 +213,7 @@ def _defender_tenant() -> C.Systems.DefenderForEndpoint.Tenant:
 @pytest.fixture
 def graph(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
     import opentide.platforms.defender_for_endpoint.client as client
-    import opentide.platforms.defender_for_endpoint.runner as runner
+    from opentide.platforms.defender_for_endpoint import runner
 
     session = FakeSession()
     # "Now" is the end of the test window, so the 30-day retention check is stable.
@@ -388,7 +388,7 @@ def _s1_tenant() -> C.Systems.SentinelOne.Tenant:
 @pytest.fixture
 def s1(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
     import opentide.platforms.sentinel_one.client as client
-    import opentide.platforms.sentinel_one.runner as runner
+    from opentide.platforms.sentinel_one import runner
 
     session = FakeSession()
 
@@ -444,7 +444,7 @@ def test_sentinel_one_polls_until_the_powerquery_finishes(s1: FakeSession) -> No
 def test_sentinel_one_gives_up_at_the_timeout(
     s1: FakeSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import opentide.platforms.sentinel_one.runner as runner
+    from opentide.platforms.sentinel_one import runner
 
     clock = iter([0.0, 0.0, 999.0])
     monkeypatch.setattr(runner.time, "monotonic", lambda: next(clock))
@@ -561,7 +561,7 @@ def _crowdstrike_tenant() -> C.Systems.Crowdstrike.Tenant:
 @pytest.fixture
 def falcon(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
     import opentide.platforms.crowdstrike.client as client
-    import opentide.platforms.crowdstrike.runner as runner
+    from opentide.platforms.crowdstrike import runner
 
     session = FakeSession()
 
@@ -605,7 +605,7 @@ def test_crowdstrike_starts_and_polls_a_query_job(falcon: FakeSession) -> None:
 def test_crowdstrike_stops_the_job_it_stops_waiting_for(
     falcon: FakeSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import opentide.platforms.crowdstrike.runner as runner
+    from opentide.platforms.crowdstrike import runner
 
     clock = iter([0.0, 999.0])
     monkeypatch.setattr(runner.time, "monotonic", lambda: next(clock))
@@ -725,7 +725,7 @@ def _elastic_tenant(index: list[str] | None = None) -> C.Systems.Elastic.Tenant:
 
 @pytest.fixture
 def elastic(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
-    import opentide.platforms.elastic.runner as runner
+    from opentide.platforms.elastic import runner
 
     session = FakeSession()
 
