@@ -13,8 +13,11 @@ from opentide.generation.lsp_catalog import (
     CATALOG_DIR,
     DEPRECATIONS_FILE,
     FIELDS_FILE,
+    catalog_differences,
+    catalog_texts,
     deprecations_catalog,
     fields_catalog,
+    main,
     write_catalog,
 )
 
@@ -32,23 +35,46 @@ def _field(catalog: dict, schema: str, path: str) -> dict:
 
 def test_the_field_catalog_has_the_engines_shape(fields: dict) -> None:
     assert fields["opentide"] == "1.2.3"
-    assert fields["generator"] == "opentide generate schemas"
+    assert fields["generator"] == "opentide.generation.lsp_catalog"
     assert fields["ref_leaves"]["detection_model"] == "objective"
-    assert {item["schema"] for item in fields["fields"]} == {"rule", "threat", "objective"}
+    # One set of rows per registered revision, keyed by schema id.
+    revisions = ["objective::1.0", "rule::1.0", "rule::1.1", "threat::1.0"]
+    assert sorted({item["schema"] for item in fields["fields"]}) == revisions
+    assert list(fields["schemas"]) == revisions
+    assert fields["schemas"]["rule::1.0"] == {"family": "rule", "closed": True}
     keys = {"schema", "path", "name", "title", "description", "type", "required", "markdown"}
     assert all(keys <= set(item) for item in fields["fields"])
     paths = [(item["schema"], item["path"]) for item in fields["fields"]]
     assert paths == sorted(paths)
 
 
+def test_each_revision_has_its_own_fields(fields: dict) -> None:
+    """``metadata.reviewed`` is a rule::1.1 field: a rule::1.0 object may not carry it."""
+    assert _field(fields, "rule::1.1", "metadata.reviewed")
+    with pytest.raises(StopIteration):
+        _field(fields, "rule::1.0", "metadata.reviewed")
+    for schema in ("rule::1.0", "rule::1.1"):
+        assert _field(fields, schema, "description")["required"] is True
+        assert _field(fields, schema, "metadata")["closed"] is True
+
+
+def test_open_objects_are_not_closed(fields: dict) -> None:
+    """A mapping of free keys (internal references) takes any key."""
+    internal = _field(fields, "rule::1.1", "references.internal")
+    assert "closed" not in internal
+
+
 def test_vocabulary_fields_list_their_values(fields: dict) -> None:
-    tlp = _field(fields, "rule", "metadata.tlp")
+    tlp = _field(fields, "rule::1.1", "metadata.tlp")
     assert {"clear", "green", "amber", "red"} <= set(tlp["enum"])
-    # metadata.schema offers every revision of the family, newest last.
-    schema = _field(fields, "rule", "metadata.schema")
-    assert schema["enum"][0] == "rule::1.0" and len(schema["enum"]) >= 2
-    assert schema["const"] is None
-    assert _field(fields, "rule", "detection_model")["ref"] == "objective"
+    # metadata.schema offers every revision of the family, newest last, in
+    # every revision: changing it is how an object moves to another one.
+    for revision in ("rule::1.0", "rule::1.1"):
+        schema = _field(fields, revision, "metadata.schema")
+        assert schema["enum"] == ["rule::1.0", "rule::1.1"]
+        assert schema["const"] is None
+    assert _field(fields, "threat::1.0", "metadata.schema")["const"] == "threat::1.0"
+    assert _field(fields, "rule::1.1", "detection_model")["ref"] == "objective"
 
 
 def test_the_deprecations_name_root_and_platform_fields() -> None:
@@ -77,3 +103,35 @@ def test_the_written_catalogs_are_what_the_engine_installs(
     state = install_workspace_catalog(tmp_path)
     assert state.source == "workspace", state.problem
     assert engine().catalog_version() == opentide.__version__
+
+
+def test_differences_ignore_the_labels_and_name_the_fields() -> None:
+    expected = catalog_texts()
+    relabelled = {
+        name: text.replace('"opentide.generation.lsp_catalog"', '"elsewhere"')
+        for name, text in expected.items()
+    }
+    assert catalog_differences(expected, dict(relabelled)) == []
+    fields = json.loads(expected[FIELDS_FILE])
+    fields["fields"] = [row for row in fields["fields"] if row["path"] != "metadata.reviewed"]
+    changed = {FIELDS_FILE: json.dumps(fields), DEPRECATIONS_FILE: None}
+    assert catalog_differences(expected, changed) == [
+        (FIELDS_FILE, "1 new (rule::1.1 metadata.reviewed)"),
+        (DEPRECATIONS_FILE, "missing"),
+    ]
+    assert catalog_differences(expected, {FIELDS_FILE: "{", DEPRECATIONS_FILE: "{}"})[0][
+        1
+    ].startswith("does not parse")
+
+
+def test_the_module_writes_and_checks_a_directory(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """How language-server generates the catalogs compiled into the engine."""
+    out = tmp_path / "generated"
+    assert main(["--out", str(out), "--check"]) == 1
+    assert "fields.json: missing" in capsys.readouterr().err
+    assert main(["--out", str(out)]) == 0
+    assert (out / FIELDS_FILE).read_text(encoding="utf-8") == catalog_texts()[FIELDS_FILE]
+    assert main(["--out", str(out), "--check"]) == 0
+    assert "match opentide's models" in capsys.readouterr().out
