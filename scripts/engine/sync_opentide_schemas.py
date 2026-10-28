@@ -108,6 +108,10 @@ def check(outputs: dict[Path, str]) -> int:
         current = path.read_text(encoding="utf-8") if path.is_file() else None
         if _unlabelled(path, current) != _unlabelled(path, text):
             problems.append(f"{path.relative_to(ROOT)}: differs")
+    # Writing removes a schema opentide no longer registers: so must checking.
+    for stale in sorted(SCHEMA_DIR.glob("*.schema.json")):
+        if stale not in outputs:
+            problems.append(f"{stale.relative_to(ROOT)}: not registered in opentide")
     for problem in problems:
         print(f"error: {problem}", file=sys.stderr)
     if problems:
