@@ -1,7 +1,7 @@
 """CLI E2E: the analysis engine behind ``validate query``, ``validate --deep``, ``lsp check``.
 
-The engine ships with ``pip install opentide`` (the ``opentide-analysis``
-package). These tests run it for real on the tutorial workspace: no stub
+The engine ships with ``pip install opentide``, compiled into the package
+(``opentide._native``). These tests run it for real on the tutorial workspace: no stub
 stands between the CLI and the Rust engine, except where a test hides the
 engine to prove that a missing one fails rather than skips.
 """
@@ -56,7 +56,7 @@ def no_engine() -> Iterator[None]:
     from opentide.analysis import engine
 
     engine.cache_clear()
-    with hidden_modules("opentide_analysis", purge=("opentide_analysis",)):
+    with hidden_modules("opentide._native", purge=("opentide._native",)):
         yield
     engine.cache_clear()
 
@@ -107,7 +107,7 @@ def test_a_bare_validate_query_checks_the_tutorial_rule_offline(invoke_cli, tuto
     assert query["field_path"] == ["configurations", "sentinel", "query"]
     assert payload["diagnostics"] == []
     assert payload["summary"]["queries"] == 1
-    assert set(payload["engine"]) == {"package", "engine"}
+    assert set(payload["engine"]) == {"engine"}
 
 
 def test_a_broken_query_fails_with_a_frame_at_its_place(invoke_cli, tutorial: Path) -> None:

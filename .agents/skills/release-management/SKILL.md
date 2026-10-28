@@ -38,16 +38,14 @@ Never tag a feature branch. Trunk is `development`.
 
 A GitHub Release whose `--target` is not the tagged commit is a failed release. Do not retag; fix the target and publish from the correct tag.
 
-## The engine package (`opentide-analysis`)
+## The engine is part of the wheels
 
-`opentide` pins `opentide-analysis==X.Y.Z` (the Rust engine, built from `analysis/`). `publish-pypi.yml` builds its wheels and sdist and publishes them **before** `opentide`; a version already on PyPI is skipped.
+opentide compiles its analysis engine (`analysis/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64) and an sdist that carries `analysis/`, and refuses to publish when a platform's wheel is missing.
 
 | Before tagging | Check |
 |----------------|-------|
-| The engine changed since the last release | Bump `version` in `analysis/pyproject.toml` and `analysis/Cargo.toml`, and the pin in `pyproject.toml`, together |
-| `analysis/Cargo.toml` takes `opentide-analysis` / `opentide-lsp` from git | Release the language server to crates.io first, then pin both to `"=<version>"`. `uv run python scripts/build/check_engine_pin.py --release` must pass, or the publish fails before building |
-| `analysis/` changed but its version is already on PyPI | `scripts/build/check_engine_published.py` fails (in CI's lint job and in the publish guard): bump the engine version |
-| First release with the engine | A pending trusted publisher for `opentide-analysis` ([pypi-trusted-publishing](../../../docs/internal/pypi-trusted-publishing.md#opentide-analysis-the-engine)) |
+| `analysis/Cargo.toml` takes `opentide-analysis` / `opentide-lsp` (the language-server crates) from git | Release the language server to crates.io first, then pin both to `"=<version>"`. `uv run python scripts/build/check_engine_pin.py --release` must pass, or the publish fails before building |
+| The engine's bundled catalog | `scripts/build/check_engine_catalog.py` passes (CI) |
 
 ## Patch vs minor
 

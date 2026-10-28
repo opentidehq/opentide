@@ -20,7 +20,7 @@ from opentide.cli.ui.mode import OutputMode, resolve_mode
 @pytest.fixture
 def no_engine() -> Iterator[None]:
     engine.cache_clear()
-    with hidden_modules("opentide_analysis", purge=("opentide_analysis",)):
+    with hidden_modules("opentide._native", purge=("opentide._native",)):
         yield
     engine.cache_clear()
 
@@ -71,7 +71,7 @@ def test_doctor_reports_the_engine_and_its_versions(tmp_path: Path) -> None:
     (check,) = check_analysis_engine(DoctorContext(workspace=tmp_path))
     assert check.code == "analysis_engine"
     assert check.status == "pass"
-    assert "opentide-analysis" in check.message and "engine" in check.message
+    assert check.message.startswith("The analysis engine (language server ")
 
 
 def test_doctor_fails_when_the_engine_does_not_load(tmp_path: Path, no_engine: None) -> None:

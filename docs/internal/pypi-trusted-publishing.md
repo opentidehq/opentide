@@ -99,14 +99,8 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
 - PyPI 5xx (`502 Bad Gateway`) or a partial upload, where PyPI kept the wheel but not the sdist (0.4.0): re-run with the same `repository_dispatch` command. The publish step sets `skip-existing: true`, so the retry uploads only the files PyPI is missing instead of failing with `400 File already exists`. The **Verify PyPI lists every built file** step then fails the job unless `https://pypi.org/pypi/opentide/<version>/json` lists both the wheel and the sdist, and its log prints the retry command. `gh run rerun` does not work with the GitHub App token (403, no `actions:write`).
 - Release exists but Publish to PyPI never starts: the workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag.
 
-## opentide-analysis (the engine)
+## The analysis engine
 
-The same workflow publishes `opentide-analysis` first: one abi3 wheel per platform and an sdist, built with maturin from `analysis/`, then `opentide`, which pins it exactly. Its jobs run under the same `pypi` environment. Before the first release that carries it, add a second pending publisher with the same fields and the project name `opentide-analysis`:
+There is one project on PyPI, `opentide`, and one trusted publisher. The engine (`analysis/`, Rust) is compiled into the package (`hatch_build.py`), so the workflow publishes one `cp310-abi3` wheel per platform, built with cibuildwheel (Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64), and an sdist that carries `analysis/`. It refuses to publish when a platform's wheel is missing or a wheel is not `cp310-abi3`.
 
-- PyPI project name: `opentide-analysis`
-- Owner: `opentidehq`
-- Repository name: `opentide`
-- Workflow name: `publish-pypi.yml`
-- Environment name: `pypi`
-
-A release that does not change the engine's version uploads nothing for it (`skip-existing`). A release whose `analysis/Cargo.toml` still takes the engine crates from git fails before it builds anything (`scripts/build/check_engine_pin.py --release`): publish the language server to crates.io first and pin its version.
+A release whose `analysis/Cargo.toml` still takes the language-server crates from git fails before it builds anything (`scripts/build/check_engine_pin.py --release`): publish the language server to crates.io first and pin its version.
