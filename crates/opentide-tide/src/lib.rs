@@ -1417,7 +1417,7 @@ impl ShapeCheck<'_> {
         }
         for field in &children {
             let key = serde_yaml::Value::String(field.name.clone());
-            if !field.required || mapping.contains_key(&key) {
+            if !(field.required || field.recommended) || mapping.contains_key(&key) {
                 continue;
             }
             // A legacy spelling that fills the field counts (`search` for `query`).
@@ -1433,14 +1433,21 @@ impl ShapeCheck<'_> {
             if !self.reported.insert(field_path.clone()) {
                 continue;
             }
-            self.found.push(
+            let dotted = field_path.join(".");
+            let diagnostic = if field.required {
                 Diagnostic::error(
                     codes::SCHEMA_VALIDATION,
-                    format!("missing required field '{}'", field_path.join(".")),
+                    format!("missing required field '{dotted}'"),
                     self.range(path),
                 )
-                .with_field_path(field_path),
-            );
+            } else {
+                Diagnostic::warning(
+                    codes::RECOMMENDED_FIELD_MISSING,
+                    format!("recommended field '{dotted}' is missing"),
+                    self.range(path),
+                )
+            };
+            self.found.push(diagnostic.with_field_path(field_path));
         }
         for (key, value) in mapping {
             let Some(name) = key.as_str() else {
@@ -1845,6 +1852,35 @@ configurations:
         // Neither the query nor its legacy spelling: required.
         let source = VALID_RULE.replace("    query: index=main\n", "");
         assert_eq!(shape_findings(&source)[0].0, "configurations.splunk.query");
+    }
+
+    #[test]
+    fn a_field_only_the_templates_ask_for_is_a_warning() {
+        // opentide validate accepts a rule without configurations or response.
+        let source = VALID_RULE
+            .split("response:")
+            .next()
+            .expect("head")
+            .to_string();
+        assert_eq!(shape_findings(&source), vec![]);
+        let warnings: Vec<String> = analyze(AnalyzeInput {
+            path: "objects/rules/rule.yaml",
+            source: &source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::RECOMMENDED_FIELD_MISSING)
+        .map(|d| d.message)
+        .collect();
+        assert_eq!(
+            warnings,
+            vec![
+                "recommended field 'configurations' is missing",
+                "recommended field 'response' is missing"
+            ]
+        );
     }
 
     #[test]

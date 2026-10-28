@@ -185,6 +185,10 @@ pub struct TideField {
     /// JSON Schema `minItems`, when the field is an array.
     #[serde(default)]
     pub min_items: Option<u32>,
+    /// The templates ask for it, validation does not require it: a warning
+    /// when it is missing, where a `required` field is an error.
+    #[serde(default)]
+    pub recommended: bool,
     /// An object (or the items of an array of objects) that forbids keys it
     /// does not define: JSON Schema `additionalProperties: false`.
     #[serde(default)]
