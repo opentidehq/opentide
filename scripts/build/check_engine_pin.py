@@ -51,7 +51,8 @@ def problems(root: Path, *, release: bool) -> list[str]:
 def _source(spec: object) -> tuple[str, ...]:
     """Where a dependency comes from: a version, a git revision, or a local checkout."""
     if not isinstance(spec, dict):
-        return ("version", str(spec))
+        # `"=0.5.0"` is `{ version = "=0.5.0" }`.
+        spec = {"version": spec}
     if "path" in spec:
         # Each crate has its own folder in the one checkout.
         return ("path", str(Path(spec["path"]).parent))
