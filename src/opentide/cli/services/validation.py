@@ -1018,10 +1018,7 @@ def validate_query_offline(
             if query_file_language(path) not in languages
         ]
         if other:
-            message = (
-                f"--platform {platform} checks {', '.join(languages)}: "
-                f"not {', '.join(other)}"
-            )
+            message = f"--platform {platform} checks {', '.join(languages)}: not {', '.join(other)}"
             refused = _query_scope_refused(platform, message, exit_code=2, mode="offline")
             refused["_failure_argument"] = "--file"
             return refused
