@@ -11,7 +11,7 @@ mod yaml_path;
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
 use opentide_highlight::{
     HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
-    tokens_from_spans,
+    tide_schema_root, tokens_from_spans,
 };
 use opentide_kql::Profile;
 use regex::Regex;
@@ -25,7 +25,7 @@ pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
 };
 pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
-pub use yaml_path::{YamlCursor, object_schema_kind, uuid_span, yaml_cursor};
+pub use yaml_path::{YamlCursor, document_schema_id, key_span, uuid_span, yaml_cursor};
 
 const RULE_TEMPLATE: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -406,6 +406,13 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     let schema = object_schema_id(&object);
     let object_type = schema.split("::").next().unwrap_or("").to_string();
+    // Catalog lookups take the schema id, so each revision is checked
+    // against its own fields; a bare family resolves to its newest revision.
+    let catalog_schema = if schema.contains("::") {
+        schema.clone()
+    } else {
+        object_type.clone()
+    };
 
     if object.name.as_deref().unwrap_or("").is_empty() {
         diagnostics.push(
@@ -532,40 +539,10 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 .with_field_path(vec!["metadata".into(), "organisation".into()]),
             );
         }
-        if schema == "rule::1.0" && object.description.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'description'",
-                    Range::point(0, 0),
-                )
-                .with_field_path(vec!["description".into()]),
-            );
-        }
-        if schema == "rule::1.0" && object.response.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'response'",
-                    Range::point(0, 0),
-                )
-                .with_field_path(vec!["response".into()]),
-            );
-        }
-        if schema == "rule::1.0" && object.configurations.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'configurations'",
-                    Range::point(0, 0),
-                )
-                .with_field_path(vec!["configurations".into()]),
-            );
-        }
     }
 
     if let Some(sev) = &object.severity {
-        if let Some(message) = unknown_enum(&object_type, "severity", sev) {
+        if let Some(message) = unknown_enum(&catalog_schema, "severity", sev) {
             diagnostics.push(
                 Diagnostic::error(
                     codes::VOCAB_UNKNOWN,
@@ -577,7 +554,8 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
-    diagnose_catalog_values(&object_type, &object, input.source, &mut diagnostics);
+    diagnose_catalog_values(&catalog_schema, &object, input.source, &mut diagnostics);
+    diagnose_shape(&schema, input.source, &mut diagnostics);
     diagnose_deprecations(&object_type, input.source, &mut diagnostics);
 
     let uuid = object
@@ -1073,7 +1051,7 @@ fn is_block_scalar(rest: &str) -> bool {
 }
 
 fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<HighlightToken> {
-    let schema = object_schema_kind(source);
+    let schema = document_schema_id(source);
     let mut spans = Vec::new();
     let mut stack: Vec<(usize, String, bool)> = Vec::new();
     let mut in_block = false;
@@ -1363,13 +1341,13 @@ fn collect_mapping_paths(value: &serde_yaml::Value, prefix: &[String], out: &mut
 }
 
 fn diagnose_catalog_values(
-    object_type: &str,
+    schema: &str,
     object: &TideObject,
     source: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if let Some(criticality) = &object.criticality {
-        push_unknown_enum(object_type, "criticality", criticality, source, diagnostics);
+        push_unknown_enum(schema, "criticality", criticality, source, diagnostics);
     }
     let Some(threat) = object.threat.as_ref().and_then(|v| v.as_mapping()) else {
         return;
@@ -1379,7 +1357,138 @@ fn diagnose_catalog_values(
             continue;
         };
         let path = format!("threat.{key}");
-        diagnose_field_value(object_type, &path, value, source, diagnostics);
+        diagnose_field_value(schema, &path, value, source, diagnostics);
+    }
+}
+
+/// The object's shape against its revision in the field catalog, as
+/// opentide's own validation checks it: every required field present, and
+/// no key a closed object (or the closed document root) does not define.
+///
+/// Required fields are checked against the revision `schema` resolves to.
+/// Unknown keys only when the catalog has that exact revision: a revision it
+/// does not know, or a catalog keyed by family, says nothing about which
+/// keys exist. A field another check already reported is not repeated.
+fn diagnose_shape(schema: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
+    let Some((revision, root)) = tide_schema_root(schema) else {
+        return;
+    };
+    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(source) else {
+        return;
+    };
+    let Some(mapping) = value.as_mapping() else {
+        return;
+    };
+    let exact = revision == schema;
+    let mut shape = ShapeCheck {
+        revision,
+        exact,
+        source,
+        reported: diagnostics
+            .iter()
+            .filter_map(|d| d.field_path.clone())
+            .collect(),
+        found: Vec::new(),
+    };
+    shape.mapping(&[], mapping, root.closed, &root.legacy);
+    diagnostics.extend(shape.found);
+}
+
+struct ShapeCheck<'a> {
+    revision: &'static str,
+    exact: bool,
+    source: &'a str,
+    reported: std::collections::BTreeSet<Vec<String>>,
+    found: Vec<Diagnostic>,
+}
+
+impl ShapeCheck<'_> {
+    fn mapping(
+        &mut self,
+        path: &[String],
+        mapping: &serde_yaml::Mapping,
+        closed: bool,
+        legacy: &BTreeMap<String, Option<String>>,
+    ) {
+        let dotted = path.join(".");
+        let children = opentide_highlight::tide_children(self.revision, &dotted);
+        if children.is_empty() {
+            return;
+        }
+        for field in &children {
+            let key = serde_yaml::Value::String(field.name.clone());
+            if !field.required || mapping.contains_key(&key) {
+                continue;
+            }
+            // A legacy spelling that fills the field counts (`search` for `query`).
+            let filled = legacy.iter().any(|(old, fills)| {
+                fills.as_deref() == Some(field.name.as_str())
+                    && mapping.contains_key(serde_yaml::Value::String(old.clone()))
+            });
+            if filled {
+                continue;
+            }
+            let mut field_path = path.to_vec();
+            field_path.push(field.name.clone());
+            if !self.reported.insert(field_path.clone()) {
+                continue;
+            }
+            self.found.push(
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    format!("missing required field '{}'", field_path.join(".")),
+                    self.range(path),
+                )
+                .with_field_path(field_path),
+            );
+        }
+        for (key, value) in mapping {
+            let Some(name) = key.as_str() else {
+                continue;
+            };
+            let mut field_path = path.to_vec();
+            field_path.push(name.to_string());
+            let Some(field) = children.iter().find(|field| field.name == name) else {
+                let accepted = legacy.contains_key(name);
+                if closed && !accepted && self.exact && self.reported.insert(field_path.clone()) {
+                    self.found.push(
+                        Diagnostic::error(
+                            codes::SCHEMA_VALIDATION,
+                            format!(
+                                "field '{}' is not defined in {}",
+                                field_path.join("."),
+                                self.revision
+                            ),
+                            self.range(&field_path),
+                        )
+                        .with_field_path(field_path),
+                    );
+                }
+                continue;
+            };
+            match value {
+                serde_yaml::Value::Mapping(child) => {
+                    self.mapping(&field_path, child, field.closed, &field.legacy)
+                }
+                serde_yaml::Value::Sequence(items) => {
+                    for item in items {
+                        if let Some(child) = item.as_mapping() {
+                            self.mapping(&field_path, child, field.closed, &field.legacy);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The key at `path`, or the top of the document for the root.
+    fn range(&self, path: &[String]) -> Range {
+        let keys: Vec<&str> = path.iter().map(String::as_str).collect();
+        match key_span(self.source, &keys) {
+            Some(span) => span_to_range(self.source, span),
+            None => Range::point(0, 0),
+        }
     }
 }
 
@@ -1598,6 +1707,124 @@ configurations:
       | where EventID == 4688
       | take 1
 "#;
+
+    fn shape_findings(source: &str) -> Vec<(String, String, Range)> {
+        analyze(AnalyzeInput {
+            path: "objects/rules/rule.yaml",
+            source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::SCHEMA_VALIDATION)
+        .map(|d| {
+            (
+                d.field_path.unwrap_or_default().join("."),
+                d.message,
+                d.range,
+            )
+        })
+        .collect()
+    }
+
+    const VALID_RULE: &str = r#"name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000002
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Someone
+  #reviewed: YYYY-MM-DD
+description: |
+  test
+detection_model: 00000000-0000-4000-8002-000000000001
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    status: DESIGN
+    query: index=main
+"#;
+
+    #[test]
+    fn a_valid_object_has_no_shape_finding() {
+        assert_eq!(shape_findings(VALID_RULE), vec![]);
+        let older = VALID_RULE.replace("rule::1.1", "rule::1.0");
+        assert_eq!(shape_findings(&older), vec![]);
+    }
+
+    #[test]
+    fn every_revision_requires_its_own_fields() {
+        // rule::1.1 requires description as rule::1.0 does: the check was
+        // hard-coded for rule::1.0 only.
+        let source = VALID_RULE.replace("description: |\n  test\n", "");
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "description");
+        assert_eq!(found[0].1, "missing required field 'description'");
+        // Nested: a platform block without its status, under the block's key.
+        let source = VALID_RULE.replace("    status: DESIGN\n", "");
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "configurations.splunk.status");
+        assert_eq!(found[0].2.start.line, 16);
+    }
+
+    #[test]
+    fn a_key_the_revision_does_not_define_is_reported_where_it_is() {
+        // metadata.reviewed exists in rule::1.1 only.
+        let source = VALID_RULE.replace("rule::1.1", "rule::1.0").replace(
+            "  author: Someone\n",
+            "  author: Someone\n  reviewed: 2026-01-03\n",
+        );
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let (path, message, range) = &found[0];
+        assert_eq!(path, "metadata.reviewed");
+        assert_eq!(
+            message,
+            "field 'metadata.reviewed' is not defined in rule::1.0"
+        );
+        // The real key on line 10, not the commented-out template key below it.
+        assert_eq!((range.start.line, range.start.character), (9, 2));
+        assert_eq!(
+            shape_findings(&source.replace("rule::1.0", "rule::1.1")),
+            vec![]
+        );
+        // An unknown root key, and one in a list item of a closed object.
+        let source = format!("{VALID_RULE}bogus: 1\n");
+        assert_eq!(shape_findings(&source)[0].0, "bogus");
+    }
+
+    #[test]
+    fn legacy_spellings_opentide_accepts_are_accepted() {
+        // splunk::2.x: `search` fills the required `query`, flat `throttling`
+        // moves into `trigger`; both validate in opentide.
+        let source = VALID_RULE.replace(
+            "    query: index=main\n",
+            "    search: index=main\n    throttling:\n      period: 1h\n",
+        );
+        assert_eq!(shape_findings(&source), vec![]);
+        // Neither the query nor its legacy spelling: required.
+        let source = VALID_RULE.replace("    query: index=main\n", "");
+        assert_eq!(shape_findings(&source)[0].0, "configurations.splunk.query");
+    }
+
+    #[test]
+    fn a_revision_the_catalog_does_not_know_reports_no_unknown_key() {
+        let source = VALID_RULE.replace("rule::1.1", "rule::7.0").replace(
+            "  author: Someone\n",
+            "  author: Someone\n  future_field: 1\n",
+        );
+        assert!(
+            shape_findings(&source)
+                .iter()
+                .all(|(path, _, _)| path != "metadata.future_field")
+        );
+    }
 
     #[test]
     fn legacy_meta_is_deprecated_field() {

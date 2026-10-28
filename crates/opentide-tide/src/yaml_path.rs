@@ -286,17 +286,89 @@ pub fn uuid_span(source: &str, uuid: &str) -> Option<ByteSpan> {
 }
 
 /// Schema id from `metadata.schema` (`rule::1.0` → `rule`).
-pub fn object_schema_kind(source: &str) -> String {
+/// The object's schema id (`rule::1.1`) from its first `schema:` line, or an
+/// empty string. Catalog lookups resolve it to its revision's fields.
+pub fn document_schema_id(source: &str) -> String {
     for raw in source.lines() {
         let t = raw.trim();
         if let Some(rest) = t.strip_prefix("schema:") {
-            let v = rest.trim();
-            if let Some(family) = v.split_once("::").map(|(family, _)| family) {
-                return family.to_string();
+            let v = rest.split_whitespace().next().unwrap_or("");
+            let v = v.trim_matches(|c| c == '"' || c == '\'');
+            if v.contains("::") {
+                return v.to_string();
             }
         }
     }
     String::new()
+}
+
+/// The span of the key at mapping `path` (`["metadata", "reviewed"]`), in
+/// block-style YAML. Comment lines and block scalars are skipped, so a
+/// commented-out template key (`#reviewed:`) is never taken for the real one.
+/// List items do not count in the path: the first item holding the key wins.
+pub fn key_span(source: &str, path: &[&str]) -> Option<ByteSpan> {
+    if path.is_empty() {
+        return None;
+    }
+    let mut stack: Vec<(usize, String)> = Vec::new();
+    let mut block: Option<usize> = None;
+    let mut offset = 0;
+    for raw in source.split_inclusive('\n') {
+        let start = offset;
+        offset += raw.len();
+        let line = raw.trim_end_matches(['\n', '\r']);
+        let indent = line_indent(line);
+        let body = &line[indent..];
+        if body.is_empty() {
+            continue;
+        }
+        if let Some(owner) = block {
+            if indent > owner {
+                continue;
+            }
+            block = None;
+        }
+        if body.starts_with('#') {
+            continue;
+        }
+        // `- key: value` puts the key after the dash.
+        let mut column = indent;
+        let mut content = body;
+        while let Some(rest) = content.strip_prefix('-') {
+            if !(rest.is_empty() || rest.starts_with(' ')) {
+                break;
+            }
+            let trimmed = rest.trim_start();
+            column += content.len() - trimmed.len();
+            content = trimmed;
+        }
+        let Some(colon) = content.find(':') else {
+            continue;
+        };
+        let key = &content[..colon];
+        let after = &content[colon + 1..];
+        if key.is_empty()
+            || !key.chars().all(is_key_char)
+            || !(after.is_empty() || after.starts_with(' '))
+        {
+            continue;
+        }
+        while stack.last().is_some_and(|(depth, _)| *depth >= column) {
+            stack.pop();
+        }
+        if stack.len() + 1 == path.len()
+            && stack.iter().zip(path).all(|((_, name), want)| name == want)
+            && key == path[path.len() - 1]
+        {
+            return Some(ByteSpan::new(start + column, start + column + key.len()));
+        }
+        let value = strip_comment(after).trim();
+        if value.starts_with('|') || value.starts_with('>') {
+            block = Some(column);
+        }
+        stack.push((column, key.to_string()));
+    }
+    None
 }
 
 #[cfg(test)]
@@ -403,5 +475,28 @@ configurations:
         let off = src.find("purpose:").unwrap();
         let c = yaml_cursor(src, off);
         assert_eq!(c.field_path(), "response.procedure.searches.purpose");
+    }
+
+    #[test]
+    fn key_span_finds_the_real_key_by_path() {
+        let source = "a:\n  #b: commented\n  c: |\n    b: inside a block\n  b: real\nlist:\n  - x: 1\n    b: item\n";
+        let at = |path: &[&str]| key_span(source, path).map(|span| &source[span.start..span.end]);
+        let span = key_span(source, &["a", "b"]).expect("a.b");
+        assert_eq!(&source[span.start..span.end], "b");
+        assert_eq!(source[..span.start].matches('\n').count(), 4);
+        assert_eq!(at(&["list", "b"]), Some("b"));
+        assert_eq!(at(&["list", "x"]), Some("x"));
+        assert_eq!(at(&["b"]), None);
+        assert_eq!(at(&[]), None);
+    }
+
+    #[test]
+    fn the_document_schema_id_is_the_whole_id() {
+        assert_eq!(document_schema_id(RULE), "rule::1.0");
+        assert_eq!(
+            document_schema_id("metadata:\n  schema: \"rule::1.1\"  # note\n"),
+            "rule::1.1"
+        );
+        assert_eq!(document_schema_id("name: x\n"), "");
     }
 }

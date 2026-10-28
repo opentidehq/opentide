@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 from opentide.models.objective import DetectionObjective
 from opentide.models.rule import DetectionRule
+from opentide.models.schema_registry import resolve_model
 from opentide.models.threat import ThreatVector
 from opentide.validation.deprecated_fields import walk_deprecated_fields
 from opentide.validation.errors import issues_from_pydantic
@@ -26,10 +27,21 @@ MODELS = {
 }
 
 
-def family(payload: dict) -> str:
+def schema_id(payload: dict) -> str:
     meta = payload.get("metadata") or payload.get("meta") or {}
-    schema = meta.get("schema") or ""
-    return schema.split("::", 1)[0]
+    return str(meta.get("schema") or "")
+
+
+def family(payload: dict) -> str:
+    return schema_id(payload).split("::", 1)[0]
+
+
+def model_for(payload: dict):
+    """The model of the revision the object names, as opentide validates it."""
+    try:
+        return resolve_model(schema_id(payload))
+    except Exception:
+        return MODELS.get(family(payload))
 
 
 def issues_for(path: Path) -> list[dict]:
@@ -37,7 +49,7 @@ def issues_for(path: Path) -> list[dict]:
     if not isinstance(payload, dict):
         return []
     kind = family(payload)
-    model = MODELS.get(kind)
+    model = model_for(payload)
     rows: list[dict] = []
     if model is not None:
         try:
