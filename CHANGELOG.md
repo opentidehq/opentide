@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **`opentide validate` names Elastic advisories by the codes of the platform specification** ([#637](https://github.com/opentidehq/opentide/issues/637)). The editor already used `lookback_zero`, `lookback_long`, `threshold_lookback`, `esql_metadata_id`, `eql_maxspan_window`, `eql_maxspan_lookback`, `risk_band` and `technique_not_enterprise`, while the CLI logged event names of its own, two of which (`elastic_lookback_long_warning`, `elastic_eql_maxspan_window_warning`) covered two conditions each. The log event is now the code, repeated as `code`, and `legacy_event` holds the old name for log consumers; it goes in the release after next. The three look-back codes are now independent: a `threshold` rule with a look-back over `1h` raises `lookback_long` and `threshold_lookback`, where only the first was reported before. The `technique_not_enterprise` warning that `deploy` logs when it leaves a Mobile or ICS technique out of `threat` is renamed the same way. See [opentide validate](docs/cli/validate.md#elastic-live-validation-and-deploy).
+
 ## [0.18.0] — 2026-10-27
 
 Minor release: configuration files are now validated, rule `severity` moves to the alert labels, and new commands arrive (`new`, `doctor`, `tui`, `explain`, `commands`, `info vocab`, `validate --fix` and `--watch`). It is a minor because files that loaded under 0.17.2 can now fail, and because the CLI's human and JSON output changed. After upgrading:

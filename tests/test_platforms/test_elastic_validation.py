@@ -10,6 +10,9 @@ import pytest
 import requests
 
 from opentide.models.system_config import ConfigurationModels
+from opentide.platforms.elastic import advisories as elastic_advisories
+from opentide.platforms.elastic import attack as elastic_attack
+from opentide.platforms.elastic import validator as elastic_validator
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.es_checks import (
     ElasticRuleCheckError,
@@ -824,3 +827,169 @@ def test_aggregation_field_check_non_200_fails_closed() -> None:
         mock_get.return_value = _mock_response(503, text="unavailable")
         with pytest.raises(ElasticRuleCheckError, match="HTTP 503"):
             run_aggregation_fields_check(client, block)
+
+
+_SEQUENCE = (
+    "sequence by host.id with maxspan={maxspan}\n"
+    '  [process where event.type == "start"]\n'
+    '  [network where event.type == "start"]'
+)
+
+
+@pytest.fixture
+def advisory_log(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, object]]]:
+    """Warnings the validator and the ATT&CK mapper log, as ``(event, fields)``.
+
+    Recorded at the loggers: loggers cached on first use bypass ``capture_logs``.
+    """
+    events: list[tuple[str, dict[str, object]]] = []
+
+    class _Recorder:
+        def warning(self, event: str, **fields: object) -> None:
+            events.append((event, fields))
+
+    monkeypatch.setattr(elastic_validator, "logger", _Recorder())
+    monkeypatch.setattr(elastic_attack, "logger", _Recorder())
+    _clear_validation_flags(monkeypatch)
+    return events
+
+
+def _advisory_codes(events: list[tuple[str, dict[str, object]]]) -> list[str]:
+    return [str(fields["code"]) for _, fields in events if "code" in fields]
+
+
+@pytest.mark.parametrize(
+    ("rule_kwargs", "expected"),
+    [
+        pytest.param({"lookback": "0m"}, ["lookback_zero"], id="lookback-zero"),
+        pytest.param({"lookback": "2h"}, ["lookback_long"], id="lookback-long"),
+        pytest.param(
+            {
+                "rule_type": "threshold",
+                "lookback": "10m",
+                "threshold": {"field": ["user.name"], "value": 5},
+            },
+            ["threshold_lookback"],
+            id="threshold-lookback-over-interval",
+        ),
+        pytest.param(
+            {
+                "rule_type": "threshold",
+                "lookback": "2h",
+                "threshold": {"field": ["user.name"], "value": 5},
+            },
+            ["lookback_long", "threshold_lookback"],
+            id="threshold-lookback-is-independent-of-lookback-long",
+        ),
+        pytest.param(
+            {
+                "rule_type": "threshold",
+                "lookback": "0m",
+                "threshold": {"field": ["user.name"], "value": 5},
+            },
+            ["lookback_zero"],
+            id="threshold-with-zero-lookback",
+        ),
+        pytest.param(
+            {"rule_type": "esql", "query": "FROM logs-* | WHERE x", "lookback": "1m"},
+            ["esql_metadata_id"],
+            id="esql-metadata-id",
+        ),
+        pytest.param({"alert_severity": "High", "risk": 20}, ["risk_band"], id="risk-outside-band"),
+        pytest.param(
+            {
+                "rule_type": "eql",
+                "query": _SEQUENCE.format(maxspan="15m"),
+                "interval": "5m",
+                "lookback": "1m",
+            },
+            ["eql_maxspan_window"],
+            id="eql-maxspan-over-window",
+        ),
+        pytest.param(
+            {
+                "rule_type": "eql",
+                "query": _SEQUENCE.format(maxspan="3m"),
+                "interval": "5m",
+                "lookback": "1m",
+            },
+            ["eql_maxspan_lookback"],
+            id="eql-maxspan-over-lookback-only",
+        ),
+        pytest.param(
+            {
+                "rule_type": "eql",
+                "query": _SEQUENCE.format(maxspan="1m"),
+                "interval": "5m",
+                "lookback": "1m",
+            },
+            [],
+            id="eql-maxspan-within-lookback",
+        ),
+        pytest.param({"lookback": "5m"}, [], id="nothing-to-advise"),
+    ],
+)
+@patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
+def test_validator_emits_the_spec_advisory_codes(
+    _mock_checks,
+    advisory_log: list[tuple[str, dict[str, object]]],
+    rule_kwargs: dict,
+    expected: list[str],
+) -> None:
+    _run_validator(
+        _elastic_rule("Advisory Codes", "00000000-0000-4000-8003-000000000030", **rule_kwargs)
+    )
+    assert _advisory_codes(advisory_log) == expected
+    assert (os.environ.get("VALIDATION_WARNING_RAISED") == "1") is bool(expected)
+
+
+@patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
+def test_validator_logs_the_code_as_the_event_with_the_old_name_as_legacy_event(
+    _mock_checks, advisory_log: list[tuple[str, dict[str, object]]]
+) -> None:
+    _run_validator(
+        _elastic_rule("Legacy Event", "00000000-0000-4000-8003-000000000031", lookback="2h")
+    )
+    [(event, fields)] = advisory_log
+    assert event == "lookback_long"
+    assert fields["code"] == "lookback_long"
+    assert fields["legacy_event"] == "elastic_lookback_long_warning"
+    assert fields["rule"] == "Legacy Event"
+
+
+@patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
+def test_validator_logs_technique_not_enterprise_for_an_ics_technique(
+    _mock_checks, advisory_log: list[tuple[str, dict[str, object]]]
+) -> None:
+    _run_validator(
+        _elastic_rule(
+            "ICS Technique",
+            "00000000-0000-4000-8003-000000000032",
+            lookback="5m",
+            techniques=["T0807", "T1105"],
+        )
+    )
+    [(event, fields)] = advisory_log
+    assert event == "technique_not_enterprise"
+    assert fields["technique"] == "T0807"
+    assert fields["legacy_event"] == "skipping_non_enterprise_technique"
+    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+
+
+def test_every_advisory_code_names_the_event_it_replaced() -> None:
+    codes = {
+        value
+        for name, value in vars(elastic_advisories).items()
+        if name.isupper() and name != "LEGACY_EVENTS"
+    }
+    assert codes == set(elastic_advisories.LEGACY_EVENTS)
+    assert codes == {
+        "lookback_zero",
+        "lookback_long",
+        "threshold_lookback",
+        "esql_metadata_id",
+        "eql_maxspan_window",
+        "eql_maxspan_lookback",
+        "risk_band",
+        "technique_not_enterprise",
+    }

@@ -9,6 +9,7 @@ import structlog
 
 from opentide.generation.framework import get_type, get_vocab_entry, techniques_resolver
 from opentide.models.rule import DetectionRule
+from opentide.platforms.elastic.advisories import TECHNIQUE_NOT_ENTERPRISE, warn_advisory
 
 logger = structlog.get_logger(__name__)
 
@@ -101,7 +102,7 @@ def resolve_elastic_threat(data: DetectionRule) -> list[dict[str, Any]]:
 
         name = entry.get("name", "")
         if name.startswith(NON_ENTERPRISE_PREFIXES):
-            logger.warning("skipping_non_enterprise_technique", technique=tech_id, name=name)
+            warn_advisory(logger, TECHNIQUE_NOT_ENTERPRISE, technique=tech_id, name=name)
             continue
 
         raw_stages = _cached_get_vocab_entry("att&ck", tech_id, "tide.vocab.stages") or []
