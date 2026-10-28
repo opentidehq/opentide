@@ -6,9 +6,11 @@ name: opentide canary
 # there (a field, a revision, a vocabulary pin) shows up here before it is
 # released, and the test suite runs against the catalogs it would generate.
 #
-# It never blocks: opentide may be ahead on purpose. The summary says what
-# would change; `python3 scripts/sync_opentide_schemas.py` with that opentide
-# applies it.
+# Drift fails the scheduled and manual runs, so a failed run notifies; on a
+# pull request it is a warning, since opentide may be ahead on purpose. The
+# summary says what would change; `python3 scripts/sync_opentide_schemas.py`
+# with that opentide applies it. A script that errors, or a test that fails
+# against the regenerated catalogs, fails every run.
 on:
   schedule:
     - cron: "17 5 * * *"
@@ -26,13 +28,15 @@ on:
         description: opentide branch, tag or commit
         default: development
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   canary:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -56,8 +60,16 @@ jobs:
           opentide-src/.venv/bin/python -c "import opentide; print('opentide', opentide.__version__)"
       - name: Do the bundled catalogs match opentide development?
         id: drift
-        continue-on-error: true
-        run: python scripts/sync_opentide_schemas.py --check 2> drift.txt
+        # Exit 1 is drift, reported below; any other failure is the script's.
+        run: |
+          set +e
+          python scripts/sync_opentide_schemas.py --check 2> drift.txt
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -gt 1 ]; then
+            cat drift.txt
+            exit "$code"
+          fi
       - name: Regenerate them, and test against them
         run: |
           python scripts/sync_opentide_schemas.py
@@ -71,8 +83,14 @@ jobs:
             echo
             echo "opentide: \`$(python -c 'import opentide; print(opentide.__version__)')\`"
             echo
-            if [ "${{ steps.drift.outcome }}" = "success" ]; then
+            if [ "${{ steps.drift.outputs.code }}" = "0" ]; then
               echo "The bundled catalogs match opentide's models."
+            elif [ "${{ steps.drift.outputs.code }}" != "1" ]; then
+              echo "The check did not run to the end:"
+              echo
+              echo '```'
+              cat drift.txt
+              echo '```'
             else
               echo "The bundled catalogs differ from opentide's models:"
               echo
@@ -83,3 +101,12 @@ jobs:
               echo "Regenerate with \`python3 scripts/sync_opentide_schemas.py\` using that opentide."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Drift fails a scheduled or manual run
+        if: steps.drift.outputs.code == '1'
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "::warning::The bundled catalogs differ from opentide development (see the summary)"
+          else
+            echo "::error::The bundled catalogs differ from opentide development (see the summary)"
+            exit 1
+          fi
