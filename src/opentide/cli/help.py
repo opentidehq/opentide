@@ -19,7 +19,6 @@ SUMMARIES: dict[str, str] = {
     "mcp": "Run the opentide MCP server for editors and agents",
     "mcp start": "Serve MCP on stdio until the host closes stdin",
     "lsp start": "Serve LSP on stdio until the editor closes stdin",
-    "lsp check": "Print the diagnostics an editor shows",
     "validate query": "Check rule queries offline, or on the tenants (--live)",
     "new threat": "Scaffold a threat",
     "new objective": "Scaffold a detection objective",
@@ -77,13 +76,8 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "commands": ("opentide commands", "opentide --json commands"),
     "mcp": ("opentide mcp start",),
     "mcp start": ("opentide mcp start",),
-    "lsp": ("opentide lsp check", "opentide lsp start"),
+    "lsp": ("opentide lsp start",),
     "lsp start": ("opentide lsp start",),
-    "lsp check": (
-        "opentide lsp check",
-        "opentide lsp check objects/rules/suspicious-lsass-access.yaml",
-        "opentide --json lsp check hunting/lsass.kql",
-    ),
     "setup": (
         "opentide setup",
         'opentide setup --yes --name "Detections" --platform sentinel --ci github',
@@ -126,11 +120,12 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "validate": (
         "opentide validate",
         "opentide validate --strict --type rule",
-        "opentide validate --deep",
+        "opentide validate --queries warn",
     ),
     "validate query": (
         "opentide validate query",
         "opentide validate query --platform splunk --changed",
+        "opentide validate query --file hunting/lsass.kql",
         "opentide validate query --platform sentinel --live",
     ),
     "deploy": (

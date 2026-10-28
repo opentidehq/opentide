@@ -1,11 +1,11 @@
 ---
 title: opentide validate
-description: Object validation (schema, UUID, uniqueness) and platform query syntax validation.
+description: Object validation (schema, UUIDs, uniqueness, configuration, queries) and platform query validation.
 ---
 
 # opentide validate
 
-Validates detection objects and platform query syntax.
+Validates detection objects and their queries: does the catalogue deploy? `validate` reports what a platform or opentide would reject. Style that would not stop a deploy (a slow query shape, a missing recommended key) is [`opentide lint`](./lint.md)'s.
 
 ## Object validation (default)
 
@@ -19,7 +19,8 @@ opentide validate --check schema
 opentide validate --fix
 opentide validate --fix --dry-run
 opentide validate --watch
-opentide validate --deep
+opentide validate --queries warn
+opentide validate --queries off
 opentide validate --check queries
 ```
 
@@ -28,7 +29,7 @@ opentide validate --check queries
 | Flag | Purpose |
 |------|---------|
 | `--check` | Run a single check: `id-uniqueness`, `uuid-format`, `schema`, `configuration`, `cve`, `sharing-config`, `queries` |
-| `--deep` | Run the default checks, then the `queries` check: every query of every object, through the analysis engine (see [Queries: `--deep`](#queries---deep)). Cannot be combined with `--check` |
+| `--queries` | How the `queries` check reports a query the platform would reject: `error` (the default), `warn` (a warning: the run passes unless `--strict`) or `off` (queries are not checked). See [Queries](#queries) |
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
@@ -302,18 +303,32 @@ Accepted identifiers:
 
 The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are skipped (logged) rather than reported as invalid.
 
-### Queries: `--deep`
+### Queries
 
 ```bash
-opentide validate --deep
+opentide validate
+opentide validate --queries warn
+opentide validate --queries off
 opentide validate --check queries --file objects/rules/example.yaml
 ```
 
-`--deep` runs the default checks and then the `queries` check, which reads every query the selected objects carry (each platform block's `query`, and hunts) and checks it offline with the analysis engine, in its own language: the check [`validate query`](#offline-the-analysis-engine) runs, inside `validate`. `--check queries` runs it alone. It honours `--file`, `--uuid`, `--type`, `--strict`, `--watch` and `--fix` (no query finding has a safe fix).
+The `queries` check is one of the default checks. It reads every query the selected objects carry (each platform block's `query`, and hunts) and checks it offline with the analysis engine, in its own language: the check [`validate query`](#offline-the-analysis-engine) runs, inside `validate`. `--check queries` runs it alone. It honours `--file`, `--uuid`, `--type`, `--strict`, `--watch` and `--fix` (no query finding has a safe fix).
 
-The engine's errors and warnings join `report.issues` and `report.warnings` with their codes (`kql_parse_error`, `spl_unknown_command`, ...), at their place in the file, and print as code frames with the rest. `context` names the `language`, the `platform` and the engine's `position`. Its notes (hints) are left to `validate query` and [`lsp check`](./lsp.md). `summary.queries` counts the queries checked, and the outcome line says it: `✓ 6 objects valid · 4 queries · 1.2s`. `checks` gains a `queries` verdict.
+It reports the engine's errors: a query the platform would reject (`kql_parse_error`, `spl_unknown_command`, `esql_unavailable`, ...). They join `report.issues` at their place in the file and print as code frames with the rest; `context` names the `language`, the `platform` and the engine's `position`. The engine's warnings and notes (slow query shapes, deprecated commands) are style, which [`opentide lint`](./lint.md#queries) reports. `summary.queries` counts the queries checked, and the outcome line says it: `✓ 6 objects valid · 4 queries · 1.2s`.
 
-When the engine does not load, the check reports one `engine_unavailable` error and the run fails: `--deep` never skips its queries. The engine ships with `pip install opentide`; there is no extra to install.
+`--queries` sets how a rejected query is reported:
+
+| `--queries` | A rejected query | The run |
+|-------------|------------------|---------|
+| `error` (default) | An error in `report.issues` | Fails (exit `1`) |
+| `warn` | A warning in `report.warnings`, with `context.reported_as_warning` and a frame note | Passes, unless `--strict` |
+| `off` | Not checked: `checks` and `summary` have no `queries` entry | The other checks decide |
+
+`warn` is for a catalogue that has to keep validating while its queries are fixed; `off` validates everything but the queries. `--queries` with `--check` other than `queries` exits `2`, as does `--check queries --queries off`: the run would ignore the one or contradict the other. A failed run's `validate · check again` step keeps the mode.
+
+A query `opentide new` wrote as a placeholder (`...`, marked `# opentide:placeholder`) is an error too, since no platform accepts it; its frame says so and its help asks for the rule's query.
+
+When the engine does not load, the check reports one `engine_unavailable` error and the run fails, whatever `--queries` says but `off`: the check never skips. The engine ships with `pip install opentide`; there is no extra to install.
 
 ### Default checks
 
@@ -323,36 +338,38 @@ When no `--check` is specified, the pipeline runs:
 - `uuid-format`
 - `schema` (includes vocabulary and cross-object references)
 - `configuration` (the merged files under `.opentide/configurations/`, against their models)
+- `queries` (every query, offline, with the analysis engine; `--queries off` leaves it out)
 
-CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI pipeline so offline `opentide validate` stays deterministic. The `queries` check is opt-in too: `--deep`, or `--check queries`.
+CVE lookup is **opt-in**: pass `--check cve`. It is not part of the default CLI pipeline so offline `opentide validate` stays deterministic.
 
 ## Query validation
 
 ```bash
 opentide validate query
 opentide validate query --platform splunk --changed
-opentide validate query --platform sentinel --file objects/rules/example.yaml --strict
+opentide validate query --file objects/rules/example.yaml --queries warn
+opentide validate query --file hunting/lsass.kql
 opentide validate query --platform sentinel --live
 opentide validate query --platform splunk --live --changed
 opentide validate query --platform splunk --live --file objects/rules/example.yaml
 opentide validate query --platform splunk --live --strategy RELEASE --wide
 ```
 
-`validate query` checks rule queries in two ways. **Offline**, the default, the analysis engine that ships with opentide parses each query in its platform's language: no tenant, no credentials, no network. **`--live`** sends one platform's queries to its tenants.
+`validate query` checks queries in two ways. **Offline**, the default, the analysis engine that ships with opentide parses each query in its platform's language: no tenant, no credentials, no network. It is the `queries` check of `opentide validate`, on its own, with a query file allowed. **`--live`** sends one platform's rule queries to its tenants.
 
 | Flag | Purpose |
 |------|---------|
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
-| `--offline` | Check with the analysis engine (the default, so the flag only says so) |
-| `--live` | Check the queries on the platform's tenants (needs credentials). Cannot be combined with `--offline` |
+| `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
-| `--strict` | Offline: fail on warnings too. Refused with `--live` |
+| `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
+| `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
 | `--strategy` | `--live`: check only the rules a run with this strategy deploys, on the tenants that accept it: `PREVIEW` or `RELEASE`, repeatable. Default: both |
 | `--wide` | `--live`: ignore each rule's status: check every status except `DISABLEMENT` and `DELETION`, `INERT` included |
 
-`--strategy` and `--wide` choose tenants, so offline they exit `2` (`usage_error`). Through 0.18.0 a bare `validate query` refused and named `--live`; it now runs the offline check.
+`--strategy` and `--wide` choose tenants, so offline they exit `2` (`usage_error`); so do a query file with `--live`, which sends rule queries, and a query file with `--changed`. `--queries` and `--strict`, typed before `query`, carry over: `opentide validate --queries warn query` is `opentide validate query --queries warn`. Through 0.18.0 a bare `validate query` refused and named `--live`; it now runs the offline check.
 
 ### Offline: the analysis engine
 
@@ -400,11 +417,13 @@ error[kql_unknown_operator]: unknown tabular operator 'wher'
 → opentide validate query · check again
 ```
 
-Errors fail the run with exit `1` (`failure.code` `issues_found`). Warnings, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), print and exit `0`, unless `--strict`. Notes (hints) never fail it. A passing run ends `✓ 3 queries valid`; one with warnings `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
+It reports the engine's errors, as `validate` does: they fail the run with exit `1` (`failure.code` `issues_found`), or, with `--queries warn`, print as warnings and exit `0` unless `--strict`. The engine's warnings and notes, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), are style: [`opentide lint`](./lint.md#queries) reports them. A passing run ends `✓ 3 queries valid`; one under `--queries warn` with rejected queries `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
 
-`--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`, `warnings`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the package and engine versions), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
+A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, checked without a platform profile; `platform` and `field_path` are empty for it. Given alone it checks no rule. A query file that does not exist exits `2` (`unmatched`); one that is not UTF-8 fails with exit `1`.
 
-To check the queries together with the objects, run `opentide validate --deep`. To see everything the editor shows for a file, run [`opentide lsp check`](./lsp.md).
+`--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the engine version), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
+
+`opentide validate` checks the queries together with the objects. Your editor shows the engine's findings as you type: see [`opentide lsp`](./lsp.md).
 
 ### `--live`
 

@@ -6,10 +6,11 @@ This crate binds [`opentide-analysis`](https://crates.io/crates/opentide-analysi
 
 | Command | What the engine does |
 | --- | --- |
-| `opentide validate query` | Checks every rule query offline, in its platform's language |
-| `opentide validate --deep` | Object validation plus those query checks |
-| `opentide lsp check PATH` | The diagnostics an editor shows for a file |
+| `opentide validate` | Object validation, with every rule query checked offline (the `queries` check): the queries a platform would reject |
+| `opentide validate query` | That queries check on its own, for rules or query files (`--file hunting/lsass.kql`) |
+| `opentide lint` | The engine's warnings and notes on queries, and Elastic block advisories (the `queries` check) |
 | `opentide lsp start` | Serves the language server protocol on stdio, for editors |
+| `opentide tui` | The editor's findings for each object, as you browse |
 
 ## Building
 

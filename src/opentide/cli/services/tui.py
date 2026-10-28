@@ -2,7 +2,7 @@
 
 The catalogue comes from the registry (:func:`collect_info` reloads it), the
 coverage table from the same lookup as ``opentide info --technique … coverage``,
-the language server's findings from the engine behind ``opentide lsp check``,
+the language server's findings from the engine behind ``opentide lsp start``,
 and the actions call the service functions behind ``validate``, ``generate``
 and ``deploy --dry-run``, so the terminal UI cannot disagree with the CLI.
 Textual is imported only by :mod:`opentide.cli.tui_app`.
@@ -189,12 +189,12 @@ def _language_server_report() -> LanguageServerReport:
     except Exception as exc:
         return LanguageServerReport(
             unavailable=f"The language server failed: {type(exc).__name__}: {exc}",
-            advice="opentide lsp check shows the same failure on the command line",
+            advice="opentide doctor checks the analysis engine and its catalogs",
         )
 
 
 def language_server_report() -> LanguageServerReport:
-    """What ``opentide lsp check`` reports for every object file of the workspace.
+    """What the language server reports for every object file of the workspace.
 
     The workspace's catalogs are used when ``opentide generate schemas``
     wrote them. A file that cannot be read has no findings here: the
@@ -294,8 +294,8 @@ VALUE_SUGGESTION_CODES = frozenset({"invalid_ref", "vocab_unknown", "chaining_re
 VALIDATE = "validate"
 #: :attr:`Diagnostic.source` of a finding from the language server.
 LANGUAGE_SERVER = "language server"
-#: :attr:`Diagnostic.source` of a validate finding the engine made: ``validate
-#: --deep``'s query findings, which the language server reports too.
+#: :attr:`Diagnostic.source` of a validate finding the engine made: the queries
+#: check's findings, which the language server reports too.
 ENGINE = "engine"
 
 
@@ -403,12 +403,6 @@ def _validate(ctx: CliContext) -> dict[str, Any]:
     return dict(run_validate(ctx))
 
 
-def _validate_deep(ctx: CliContext) -> dict[str, Any]:
-    from opentide.cli.services.validation import run_validate
-
-    return dict(run_validate(ctx, deep=True))
-
-
 def _generate(ctx: CliContext) -> dict[str, Any]:
     from opentide.cli.services.generation import run_generate
 
@@ -425,21 +419,14 @@ def _deploy_dry_run(strategy: str) -> Callable[[CliContext], dict[str, Any]]:
 
 
 #: The actions that are validate runs.
-VALIDATE_ACTIONS = frozenset({"validate", "validate-deep"})
+VALIDATE_ACTIONS = frozenset({"validate"})
 
 ACTIONS: tuple[Action, ...] = (
     Action(
         "validate",
         "opentide validate",
-        "Validate every object: schema, UUIDs and uniqueness",
+        "Validate every object: schema, UUIDs, uniqueness, and each query with the analysis engine",
         _validate,
-        default_message="Validation passed",
-    ),
-    Action(
-        "validate-deep",
-        "opentide validate --deep",
-        "Validate every object, and check every rule's query offline with the analysis engine",
-        _validate_deep,
         default_message="Validation passed",
     ),
     Action(

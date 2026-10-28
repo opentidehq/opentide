@@ -46,6 +46,18 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)
 
+#: The engine's advisories on an Elastic rule block's settings (elastic-1.0):
+#: style, which ``opentide lint`` reports with the query warnings.
+ELASTIC_ADVISORY_CODES = frozenset(
+    {
+        "lookback_zero",
+        "lookback_long",
+        "threshold_lookback",
+        "risk_band",
+        "technique_not_enterprise",
+    }
+)
+
 #: Where the Elastic tenants' stack versions are read from; the engine matches
 #: this path's ending, so it is passed as written here.
 ELASTIC_CONFIGURATION = ".opentide/configurations/platforms/elastic.toml"
@@ -463,6 +475,42 @@ def check_query(
         Finding.from_engine(item)
         for item in engine().analyze_query(text, language, platform=platform, stack=stack)
     ]
+
+
+#: Extensions of a query file: one query in the language its extension names.
+QUERY_FILE_SUFFIXES = (".kql", ".spl", ".esql", ".eql", ".kuery", ".lucene")
+
+
+def is_query_file(path: Path | str) -> bool:
+    """Whether *path* names a query file (by extension), rather than an object file."""
+    return Path(path).suffix.lower() in QUERY_FILE_SUFFIXES
+
+
+def check_query_file(path: Path) -> QueryCheck | UnreadableFile:
+    """The query in a query file, checked in the language its extension names.
+
+    No platform profile applies: the file says only its language.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        from opentide.core.io import not_utf8_problem
+
+        return UnreadableFile(path, not_utf8_problem(exc))
+    except OSError as exc:
+        return UnreadableFile(path, exc.strerror or str(exc))
+    language = language_for_path(path)
+    if language is None:  # an extension the engine does not know: a bug in the list above
+        return UnreadableFile(path, f"no query language for {path.suffix}")
+    return QueryCheck(
+        file_path=path,
+        platform=None,
+        language=language,
+        field_path=(),
+        line=1,
+        column=1,
+        findings=tuple(check_query(text, language=language)),
+    )
 
 
 def check_file(

@@ -31,7 +31,6 @@ def no_engine() -> Iterator[None]:
 def test_lsp_start_owns_stdout_like_mcp_start() -> None:
     for command in (("lsp", "start"), ("mcp", "start")):
         assert resolve_mode(command=command, json_flag=True, env={}) is OutputMode.MCP
-    assert resolve_mode(command=("lsp", "check"), json_flag=True, env={}) is OutputMode.JSON
 
 
 def test_serve_says_on_stderr_when_the_engine_does_not_load(

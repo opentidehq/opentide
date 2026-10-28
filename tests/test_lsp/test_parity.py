@@ -1,13 +1,13 @@
 """What ``opentide validate`` reports on an object, the language server reports too (#678).
 
-The language server (editors, ``opentide lsp check``, ``opentide tui``) and
+The language server (editors, ``opentide lsp start``, ``opentide tui``) and
 ``opentide validate`` check the same objects. For every registered revision
 of every object family, this starts from a valid object and derives variants
 with one fault each, taken from the catalog of that revision: a required
 field missing, a key the revision does not define (one another revision of
 the family defines included), a vocabulary value that does not exist, a
 malformed UUID. Every variant is one file of one workspace, so ``validate``
-and ``lsp check`` each run once.
+and the language server (as ``opentide tui`` runs it) each run once.
 
 The assertion: each object-schema error ``validate`` reports on a variant,
 the language server reports too, as an error on the same field. The
@@ -223,13 +223,29 @@ def run(
         name = Path(str(issue.get("file_path") or "")).name
         field = ".".join(part for part in issue.get("field_path") or [] if not str(part).isdigit())
         by_validate.setdefault(name, set()).add((issue["code"], field, issue["severity"]))
-    checked = parse_cli_json(invoke_cli_module("lsp", "check", repo=repo))
     by_lsp: dict[str, set[tuple[str, str, str]]] = {}
-    for item in checked["diagnostics"]:
-        name = Path(item["path"]).name
-        field = ".".join(item.get("field_path") or [])
-        by_lsp.setdefault(name, set()).add((item["code"], field, item["severity"]))
+    for path, found in _language_server(repo).findings.items():
+        for item in found:
+            field = ".".join(item.field_path)
+            by_lsp.setdefault(path.name, set()).add((item.code, field, item.severity))
     return Run(variants, by_validate, by_lsp)
+
+
+def _language_server(repo: Path) -> Any:
+    """What the language server reports for every object file of *repo*, as the TUI runs it."""
+    from tests.corpus_support import clear_runtime_caches
+
+    from opentide.cli.services.tui import language_server_report
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("OPENTIDE_REPO_ROOT", str(repo))
+        patch.setenv("OPENTIDE_TIDE_WORKSPACE", str(repo))
+        patch.chdir(repo)
+        clear_runtime_caches()
+        report = language_server_report()
+        clear_runtime_caches()
+    assert report.unavailable is None, report.unavailable
+    return report
 
 
 @pytest.fixture(scope="module")

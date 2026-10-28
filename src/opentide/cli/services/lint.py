@@ -5,10 +5,10 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import structlog
 import yaml
@@ -17,9 +17,11 @@ from opentide.cli.enums import LintCheck
 from opentide.cli.ui.contract import ISSUES_FOUND, NO_WORKSPACE_STEP, NextAction
 from opentide.cli.ui.diagnostics import (
     LINT_CODES,
+    Diagnostic,
     SourceFiles,
     annotate,
     diagnostic_from_lint_finding,
+    lint_severity,
 )
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.errors import UserFileError
@@ -32,6 +34,9 @@ from opentide.core.io import (
 from opentide.core.lint_config import LintConfig, Severity, load_lint_config
 from opentide.documentation.markdown.links import slugify
 from opentide.registry.catalogue import NESTED_OBJECT_FILE, nested_file_message, scan_object_dir
+
+if TYPE_CHECKING:
+    from opentide.analysis import Finding
 
 logger = structlog.get_logger("opentide.cli.services.lint")
 
@@ -52,6 +57,8 @@ class _ObjectRecord:
     key_lines: dict[str, int] = field(default_factory=dict)
     #: Each value ``opentide new`` marked as a placeholder.
     placeholder_lines: list[_Marked] = field(default_factory=list)
+    #: The file's text, for the queries check; ``None`` when it was not read.
+    text: str | None = None
 
 
 def _object_files(root: Path) -> tuple[list[Path], list[Path]]:
@@ -210,6 +217,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     except OSError as exc:
         record.parse_error = str(exc)
         return record
+    record.text = text
     record.key_lines = _top_level_key_lines(text)
     record.placeholder_lines = _placeholder_lines(text)
     if (problem := root_mapping_problem(data)) is not None:
@@ -468,6 +476,63 @@ def _placeholder_findings(records: list[_ObjectRecord]) -> list[dict[str, object
     ]
 
 
+def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The engine's style findings on each object: query warnings and notes, Elastic advisories.
+
+    A query the engine rejects (an error) is ``opentide validate``'s finding,
+    and the engine's object checks are validate's and lint's other checks'.
+    A placeholder query is the ``placeholders`` check's.
+    Raises :class:`~opentide.analysis.EngineUnavailableError`.
+    """
+    from opentide.analysis import ELASTIC_ADVISORY_CODES, check_file, workspace
+    from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+
+    space = workspace(root)
+    findings: list[dict[str, object]] = []
+    for record in records:
+        if record.parse_error or record.text is None:
+            continue
+        lines = record.text.splitlines()
+        marked = {marked.line + 1 for marked in record.placeholder_lines}
+        for finding in check_file(space, record.path, record.text):
+            if finding.severity == "error" or _in_placeholder(finding, lines, marked):
+                continue
+            if (
+                engine_reference(finding.code) is None
+                and finding.code not in ELASTIC_ADVISORY_CODES
+            ):
+                continue
+            findings.append(
+                {
+                    "check": LintCheck.queries.value,
+                    "severity": "warning" if finding.severity == "warning" else "info",
+                    "path": record.relative,
+                    "yaml_line": finding.line - 1,
+                    "uuid": record.uuid,
+                    "message": finding.message,
+                    "_code": finding.code,
+                    "_field_path": list(finding.field_path),
+                    "_diagnostic": diagnostic_from_engine(
+                        finding, file_path=record.path, workspace=root
+                    ),
+                }
+            )
+    return findings
+
+
+def _in_placeholder(finding: Finding, lines: list[str], marked: set[int]) -> bool:
+    """Whether *finding* is in a ``...`` stand-in under a marked key (1-based *marked* lines)."""
+    from opentide.validation.queries import is_stand_in
+
+    line = finding.line
+    if not (line in marked or line - 1 in marked) or not 0 < line <= len(lines):
+        return False
+    text = lines[line - 1]
+    if line in marked:  # inline, `query: ...  # opentide:placeholder`: the value after the key
+        text = text.split(":", 1)[-1]
+    return is_stand_in(text.lstrip())
+
+
 def _rewrite_renamed_paths(findings: list[dict[str, object]]) -> None:
     """Point earlier findings at the path ``--fix`` just renamed the file to."""
     renamed = {
@@ -529,6 +594,17 @@ def run_lint(
         findings.extend(_metadata_findings(records, config.required_metadata))
     if LintCheck.placeholders in selected:
         findings.extend(_placeholder_findings(records))
+    if LintCheck.queries in selected:
+        from opentide.analysis import EngineUnavailableError
+
+        try:
+            findings.extend(_query_findings(target, records))
+        except EngineUnavailableError as exc:
+            from opentide.cli.services.engine import engine_unavailable_result
+
+            return engine_unavailable_result(
+                exc, path=str(target), checks=[item.value for item in selected], findings=[]
+            )
     if LintCheck.filenames in selected:
         findings.extend(_filename_findings(target, records, fix=fix))
         _rewrite_renamed_paths(findings)
@@ -604,6 +680,12 @@ def _add_diagnostic_fields(root: Path, findings: list[dict[str, object]]) -> Non
         position = finding.pop("_position", None)
         if isinstance(position, tuple):
             finding["line"], finding["column"] = position
+        engine = finding.pop("_diagnostic", None)
+        if isinstance(engine, Diagnostic):
+            # The engine framed it; the severity is lint's, after lint.toml.
+            severity = lint_severity(str(finding["severity"]))
+            annotate(finding, replace(engine, severity=severity))
+            continue
         annotate(finding, diagnostic_from_lint_finding(finding, root=root, sources=sources))
 
 

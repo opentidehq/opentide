@@ -23,7 +23,7 @@ catalogs compiled into the engine::
     python -m opentide.generation.lsp_catalog --out catalogs/tide/generated
     python -m opentide.generation.lsp_catalog --out catalogs/tide/generated --check
 
-``opentide lsp start``, ``opentide lsp check`` and the query checks install
+``opentide lsp start``, ``opentide tui`` and the query checks install
 them (:mod:`opentide.analysis`).
 """
 

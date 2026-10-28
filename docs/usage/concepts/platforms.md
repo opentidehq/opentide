@@ -20,7 +20,7 @@ opentide integrates with **eight detection platforms** through built-in adapters
 | CrowdStrike Falcon | `crowdstrike` | yes | no | no | correlation filter |
 | HarfangLab | `harfanglab` | yes | no | no | Sigma or YARA |
 
-The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate query`, `opentide validate --deep`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
+The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
 CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 

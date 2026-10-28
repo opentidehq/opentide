@@ -232,7 +232,7 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         assert f"╭─▶ {RULE_FILE}:8:8" in log
         assert "8 │   tlp: clearr" in log
         assert "━━━━━━ not in tlp::1.0" in log
-        assert re.search(r"✗ 1 error in 1 file · 3 objects checked · \d+(\.\d+)?m?s", log)
+        assert re.search(r"✗ 1 error in 1 file · 3 objects checked · 1 query · \d+(\.\d+)?m?s", log)
         assert "error: Validation failed" not in log
         # The next steps a person would run, not the --json form.
         assert "→ opentide validate · check again" in log
@@ -965,17 +965,17 @@ def test_a_finding_both_report_is_shown_and_counted_once(tutorial_repo: Path) ->
     _drive(tutorial_repo, script)
 
 
-def test_validate_deep_runs_from_the_ui_and_its_query_findings_are_not_doubled(
+def test_validate_checks_queries_from_the_ui_and_its_query_findings_are_not_doubled(
     tutorial_repo: Path,
 ) -> None:
     _break_query(tutorial_repo)
 
     async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
         await pilot.press("down", "down")
-        await pilot.press("V")
+        await pilot.press("v")
         await _settle(app, pilot)
         [outcome] = app.outcomes
-        assert outcome.action.command == "opentide validate --deep"
+        assert outcome.action.command == "opentide validate"
         assert app.validated
         [deep] = [item for item in app.diagnostics if item.code == "kql_unknown_operator"]
         assert deep.source == tui_service.ENGINE
@@ -985,7 +985,7 @@ def test_validate_deep_runs_from_the_ui_and_its_query_findings_are_not_doubled(
         assert "No diagnostics from the last validate run" in detail
         assert _labels(app.query_one("#tree", Tree).root)[-1] == "    Sentinel KQL Rule  ✗ 1"
         log = await _results(app, pilot)
-        assert "$ opentide validate --deep" in log
+        assert "$ opentide validate" in log
         assert "28 │       | tak 1" in log
 
     _drive(tutorial_repo, script)
@@ -993,9 +993,7 @@ def test_validate_deep_runs_from_the_ui_and_its_query_findings_are_not_doubled(
 
 def test_the_results_tab_colours_the_query_lines_of_a_frame(tutorial_repo: Path) -> None:
     _break_query(tutorial_repo)
-    outcome = run_action(
-        CliContext(repo=tutorial_repo), tui_service.ACTIONS_BY_NAME["validate-deep"]
-    )
+    outcome = run_action(CliContext(repo=tutorial_repo), tui_service.ACTIONS_BY_NAME["validate"])
     text = outcome_text(outcome, tutorial_repo)
     [row] = [line for line in text.split() if "| tak 1" in line.plain]
     pipe = row.plain.index("|", row.plain.index("│") + 1)

@@ -531,7 +531,7 @@ def check_schemas(ctx: DoctorContext) -> list[Check]:
 
 
 def check_analysis_engine(ctx: DoctorContext) -> list[Check]:
-    """The compiled engine behind validate query, validate --deep and opentide lsp imports."""
+    """The compiled engine behind validate's queries check, validate query, lint and lsp imports."""
     del ctx
     from opentide.analysis import EngineUnavailableError, engine_versions
 
@@ -551,7 +551,7 @@ def check_analysis_engine(ctx: DoctorContext) -> list[Check]:
 def check_lsp_catalog(ctx: DoctorContext) -> list[Check]:
     """opentide generates the language-server catalog; a committed copy is current.
 
-    ``lsp start``, ``lsp check`` and the TUI check objects with the catalog
+    ``lsp start`` and the TUI check objects with the catalog
     this opentide generates for the workspace. The committed
     ``.opentide/lsp/catalogs/`` is read only by editors that run the
     ``opentide-lsp`` binary on its own, and when generation fails.

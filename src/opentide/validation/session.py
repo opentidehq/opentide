@@ -49,6 +49,7 @@ _DEFAULT_CHECKS = frozenset(
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
         ValidateCheck.configuration,
+        ValidateCheck.queries,
     }
 )
 
@@ -95,8 +96,13 @@ def run_validation(
     *,
     index: Mapping[str, Any] | None = None,
     workers: int | None = None,
+    queries_as_warnings: bool = False,
 ) -> ValidationReport:
-    """Run validation checks and return a structured report."""
+    """Run validation checks and return a structured report.
+
+    *queries_as_warnings* reports the queries check's errors as warnings
+    (``validate --queries warn``): the run passes unless strict.
+    """
     started = time.perf_counter()
     scope = scope or ValidationScope.full()
     checks = checks or _DEFAULT_CHECKS
@@ -235,6 +241,7 @@ def run_validation(
                 if item.file_path is not None
             ),
             root=discover_workspace(),
+            as_warnings=queries_as_warnings,
         )
         issues.extend(found.errors)
         warnings.extend(found.warnings)

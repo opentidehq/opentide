@@ -47,7 +47,7 @@ class ValidateSummary(ResultModel):
     # From validate --fix (#646), declared ahead so either merge order stays green.
     fixable: int = Field(0, description="Findings a safe fix resolves")
     fixed: int = Field(0, description="With --fix: values replaced")
-    queries: int | None = Field(None, description="With --deep or --check queries: queries checked")
+    queries: int | None = Field(None, description="Queries checked (absent with --queries off)")
 
 
 class ValidateResult(CommandDocument):
@@ -73,14 +73,15 @@ class ValidateResult(CommandDocument):
 class QueryChecked(ResultModel):
     """One query the offline check read."""
 
-    path: str = Field(description="Workspace-relative path of the rule file")
-    platform: str | None = Field(description="The configurations block the query is in")
+    path: str = Field(description="Workspace-relative path of the rule file or query file")
+    platform: str | None = Field(
+        description="The configurations block the query is in; null in a hunt or a query file"
+    )
     language: Literal["kql", "spl", "esql", "eql", "kuery", "lucene"]
-    field_path: list[str] = Field(description="YAML path of the query")
+    field_path: list[str] = Field(description="YAML path of the query; empty for a query file")
     line: int = Field(description="1-based line where the query starts")
     column: int
-    errors: int
-    warnings: int
+    errors: int = Field(description="Errors the engine reports: the platform rejects the query")
 
 
 class QueryValidationResult(CommandDocument):
@@ -161,7 +162,8 @@ class LintResult(CommandDocument):
     findings: list[LintFinding] = Field(default_factory=list)
     count: int | None = None
     fixed: int | None = None
-    summary: LintSummary
+    summary: LintSummary | None = None
+    advice: str | None = Field(None, description="How to fix a failure that stopped the run")
 
 
 # --------------------------------------------------------------------------

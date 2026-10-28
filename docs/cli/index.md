@@ -33,7 +33,7 @@ Run `opentide --help` for the live command tree.
 | [`explain`](./diagnostics.md) | What a diagnostic code means, an example, and how to fix it |
 | [`commands`](#command-tree-for-agents) | Every command with its options, defaults and an example; `--json` for the tree |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
-| [`lsp`](./lsp.md) | Language server for editors (`lsp start`), and its diagnostics on the command line (`lsp check`) |
+| [`lsp`](./lsp.md) | Language server for editors (`lsp start`) |
 
 <Callout type="info">
 

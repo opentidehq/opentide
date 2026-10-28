@@ -196,10 +196,23 @@ def tool_validation_report(
     file: str | None = None,
     uuid: str | None = None,
     object_type: str | None = None,
+    queries: str = "error",
 ) -> dict[str, Any]:
-    """Structured validation report for agents (headless API)."""
+    """Structured validation report for agents (headless API).
+
+    *queries* is ``validate --queries``: ``error``, ``warn`` or ``off``.
+    """
+    from opentide.cli.enums import QueriesMode
+    from opentide.cli.services.validation import default_check_names, queries_flag
+
+    try:
+        mode = QueriesMode(queries)
+    except ValueError:
+        choices = ", ".join(item.value for item in QueriesMode)
+        return {"ok": False, "error": f"queries must be one of {choices}, got {queries!r}"}
     # Re-read the workspace, as ``tool_validate_rule`` does.
     Opentide.reload()
+    from opentide.validation.checks.kinds import ValidateCheck
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
@@ -210,7 +223,11 @@ def tool_validation_report(
             uuids=frozenset({uuid}) if uuid else None,
             types=frozenset({object_type}) if object_type else None,
         )
-    report = run_validation(scope=scope)
+    report = run_validation(
+        scope=scope,
+        checks=frozenset(ValidateCheck(name) for name in default_check_names(mode)),
+        queries_as_warnings=mode is QueriesMode.warn,
+    )
     payload = report.model_dump_json_ready()
     diagnostics = _annotate(payload, report, ("issues", "warnings"))
     arguments = {
@@ -222,6 +239,9 @@ def tool_validation_report(
         f" --{'type' if key == 'object_type' else key} {shlex.quote(value)}"
         for key, value in arguments.items()
     )
+    flags += "".join(f" {word}" for word in queries_flag(mode))
+    if mode is not QueriesMode.error:
+        arguments["queries"] = mode.value
     again = next_action(
         "validation_report", arguments, command=f"opentide --json validate{flags}", reason=""
     )

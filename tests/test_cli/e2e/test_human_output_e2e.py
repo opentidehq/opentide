@@ -122,6 +122,18 @@ def _break_query(repo: Path) -> None:
     _edit_rule(repo, "| where EventID == 4688", '| where Account == "unterminated')
 
 
+def _broken_kql(repo: Path) -> None:
+    (repo / "broken.kql").write_text("SecurityEvent\n| wher EventID == 4688\n", encoding="utf-8")
+
+
+def _slow_query(repo: Path) -> None:
+    _edit_rule(
+        repo,
+        "| where EventID == 4688",
+        "| summarize count() by Account\n      | where Account != ''",
+    )
+
+
 def _drop_author(repo: Path) -> None:
     _edit_rule(repo, "  author: Tutorial Author\n", "")
 
@@ -248,9 +260,10 @@ _CASES = {
     "validate-query-broken": Case(("validate", "query", "--platform", "sentinel"), _break_query),
     "validate-query-offline": Case(("validate", "query")),
     "validate-query-sentinel-one": Case(("validate", "query", "--platform", "sentinel_one")),
-    "validate-deep-broken": Case(("validate", "--deep"), _break_query),
-    "lsp-check": Case(("lsp", "check")),
-    "lsp-check-broken": Case(("lsp", "check"), _break_query),
+    "validate-queries-broken": Case(("validate",), _break_query),
+    "validate-queries-warn-broken": Case(("validate", "--queries", "warn"), _break_query),
+    "validate-query-file-broken": Case(("validate", "query", "--file", "broken.kql"), _broken_kql),
+    "lint-queries": Case(("lint", "--check", "queries"), _slow_query),
     "validate-query-disabled-platform": Case(("validate", "query", "--platform", "splunk")),
     "validate-query-unsupported": Case(("validate", "query", "--platform", "crowdstrike")),
     "validate-query-live-without-sdk": Case(
@@ -305,7 +318,7 @@ def _load_bearing(payload: dict[str, Any]) -> list[Expectation]:
     # Where findings print as code frames, the outcome line counts them in
     # place of the message, and each warning is a frame, not a warning line.
     # The engine's commands (#332) frame their findings the same way.
-    engine = payload.get("command") in {"validate query", "lsp check"} and "diagnostics" in payload
+    engine = payload.get("command") == "validate query" and "diagnostics" in payload
     framed = payload.get("command") in {"validate", "lint"} or engine
     # A run that found issues repeats its message as `error`; a usage error
     # has no findings, and prints its `error`.
