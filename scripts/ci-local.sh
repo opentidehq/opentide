@@ -99,6 +99,9 @@ cargo test --manifest-path analysis/Cargo.toml --quiet
 echo "==> The engine crates come from one source"
 uv run python scripts/build/check_engine_pin.py
 
+echo "==> The engine's bundled catalogs match the models"
+uv run python scripts/build/check_engine_catalog.py
+
 echo "==> uv build (sdist + wheel)"
 rm -rf dist
 uv build
