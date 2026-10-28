@@ -103,4 +103,4 @@ cargo test -p opentide-kql -p opentide-spl -p opentide-tide -p opentide-analysis
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Schema sync: `python scripts/sync_opentide_schemas.py --check` with opentide installed passes (labels aside, the catalogs match what it generates).
+Schema sync: `python scripts/sync_opentide_schemas.py --check` with opentide installed passes (labels aside, the catalogs match what it generates). The `opentide canary` workflow (`.github/workflows/opentide-canary.yml`) runs it daily against opentide `development` and reports drift in its summary without failing the build: when it reports drift, regenerate with that opentide and commit.
