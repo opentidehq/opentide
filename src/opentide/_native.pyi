@@ -6,7 +6,7 @@ from typing import Final, Literal, final
 Severity = Literal["error", "warning", "information", "hint"]
 Language = Literal["kql", "spl", "esql", "eql", "kuery", "lucene", "opentide-yaml"]
 
-#: The version of the opentide-analysis crate this module was built from.
+#: The version of the language-server crates (opentide-analysis) compiled in.
 ENGINE_VERSION: Final[str]
 #: Every diagnostic code the engine can emit.
 CODES: Final[list[str]]

@@ -68,10 +68,9 @@ dependencies = [
     # makes the resolver keep a current boto3 and cap python-dateutil instead.
     "boto3>=1.35",
     # The query and Tide object engine and the language server (`opentide
-    # validate query`, `validate --deep`, `opentide lsp`): Rust, built from
-    # analysis/ in this repository and published with each opentide release.
-    # A dependency, not an extra, so every install has the engine.
-    "opentide-analysis==0.6.0",
+    # validate query`, `validate --deep`, `opentide lsp`) are not a dependency:
+    # they are Rust, compiled from analysis/ into this package (opentide._native)
+    # by hatch_build.py.
 ]
 
 [dependency-groups]
@@ -91,19 +90,18 @@ dev = [
     "pre-commit>=4.0",
 ]
 
-[tool.uv.workspace]
-members = ["analysis"]
-
 [tool.uv]
-# `uv sync` builds the engine with analysis/'s `develop` profile: optimised,
-# without the release profile's link-time optimisation. Release wheels are
-# built by .github/workflows/publish-pypi.yml with the release profile.
-config-settings-package = { opentide-analysis = { build-args = "--profile develop" } }
-
-[tool.uv.sources]
-# Developers and CI build the engine from analysis/ (needs a Rust toolchain);
-# a release pins the wheel published from the same commit.
-opentide-analysis = { workspace = true }
+# Rebuild opentide, which compiles the engine (hatch_build.py), when the Rust
+# sources change, as well as on a new commit or tag (the version).
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "hatch_build.py" },
+    { file = "analysis/Cargo.toml" },
+    { file = "analysis/Cargo.lock" },
+    { file = "analysis/build.rs" },
+    { file = "analysis/src/**/*.rs" },
+    { git = { commit = true, tags = true } },
+]
 
 [project.urls]
 Homepage = "https://opentide.org"
@@ -132,15 +130,41 @@ source = "vcs"
 [tool.hatch.build.targets.sdist]
 # hatchling 1.32 defaults to Core Metadata 2.5; PyPI/twine still gate on 2.4.
 core-metadata-version = "2.4"
-# The engine is its own distribution (opentide-analysis), built from analysis/.
-exclude = ["/analysis"]
+# The sdist carries the engine's Rust sources (analysis/) and the hook that
+# compiles them, so it builds wherever a Rust toolchain is installed.
+exclude = ["/analysis/target", "/src/opentide/_native.*"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opentide"]
 core-metadata-version = "2.4"
+# An editable install's compiled module, in src/; a wheel gets its own build.
+exclude = ["src/opentide/_native.*"]
+
+# Compiles analysis/ (Rust) into opentide/_native: see hatch_build.py.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/opentide/_version.py"
+
+# Release wheels (.github/workflows/publish-pypi.yml). Each compiles the engine
+# (hatch_build.py). The extension uses the stable ABI from CPython 3.10, so one
+# build per platform, on 3.10, serves every later CPython.
+[tool.cibuildwheel]
+build = "cp310-*"
+skip = ["*-win32", "*_i686", "*_ppc64le", "*_s390x", "*_armv7l", "*_riscv64"]
+# The workflow sets the version from the release tag: the Linux containers
+# build from a copy of the checkout.
+environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION"]
+test-command = [
+    "opentide --version",
+    "python -c \"from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']\"",
+]
+
+[tool.cibuildwheel.linux]
+# The manylinux and musllinux images have no Rust toolchain.
+before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
+environment = { PATH = "$HOME/.cargo/bin:$PATH" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

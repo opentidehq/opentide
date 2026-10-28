@@ -1,11 +1,12 @@
 """The analysis engine: offline query checks, editor diagnostics and the language server.
 
-The engine is Rust, from opentidehq/language-server, compiled into the
-``opentide-analysis`` distribution that ``pip install opentide`` installs (there
-is no extra). This module is opentide's one door to it: commands, MCP tools and
-validation import it, never ``opentide_analysis`` directly, so a damaged install
-fails in one place, with one message (:class:`EngineUnavailableError`). A
-missing engine is an error, never a skipped check.
+The engine is Rust, from opentidehq/language-server, compiled into this package
+as ``opentide._native`` (``analysis/``, built by ``hatch_build.py``): ``pip
+install opentide`` is the one install. This module is opentide's one door to
+it: commands, MCP tools and validation import it, never ``opentide._native``
+directly, so a damaged install fails in one place, with one message
+(:class:`EngineUnavailableError`). A missing engine is an error, never a
+skipped check.
 
 Positions are the CLI's: 1-based lines and columns, columns in code points,
 ``end_column`` exclusive.
@@ -23,8 +24,8 @@ from typing import TYPE_CHECKING, Literal
 from opentide.core.logging import get_logger
 
 if TYPE_CHECKING:
-    from opentide_analysis import Diagnostic as EngineDiagnostic
-    from opentide_analysis import Workspace
+    from opentide._native import Diagnostic as EngineDiagnostic
+    from opentide._native import Workspace
 
 logger = get_logger(__name__)
 
@@ -73,18 +74,20 @@ class EngineUnavailableError(RuntimeError):
 
 @cache
 def engine() -> ModuleType:
-    """The ``opentide_analysis`` module. Raises :class:`EngineUnavailableError`."""
+    """The ``opentide._native`` module. Raises :class:`EngineUnavailableError`."""
+    import importlib
+
     try:
-        import opentide_analysis
+        # Through the import system, not the package attribute, so a module
+        # that fails to load (or is hidden in tests) is reported every time.
+        return importlib.import_module("opentide._native")
     except ImportError as exc:
         raise EngineUnavailableError(str(exc) or type(exc).__name__) from exc
-    return opentide_analysis
 
 
 def engine_versions() -> dict[str, str]:
-    """``{"package": …, "engine": …}``: the bindings' and the Rust engine's versions."""
-    module = engine()
-    return {"package": str(module.__version__), "engine": str(module.ENGINE_VERSION)}
+    """``{"engine": …}``: the version of the language-server crates compiled in."""
+    return {"engine": str(engine().ENGINE_VERSION)}
 
 
 @dataclass(frozen=True)
