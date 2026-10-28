@@ -17,6 +17,20 @@ from typing import Any
 
 _FLAT_SCHEDULE_KEYS = ("frequency", "cron", "custom_time")
 
+#: Every splunk::2.x spelling :func:`normalize_splunk_v2` accepts, relative to
+#: the splunk block, and the v3 field it fills (``SplunkConfig.__legacy_keys__``).
+SPLUNK_V2_KEYS: dict[str, str | None] = {
+    "search": "query",
+    "cron_schedule": "scheduling",
+    "throttling": "trigger",
+    "threshold": "trigger",
+    "notable": "actions",
+    "risk": "actions",
+    "email": "actions",
+    **{f"scheduling.{key}": "scheduling.schedule" for key in _FLAT_SCHEDULE_KEYS},
+    "scheduling.lookback": "scheduling.timerange",
+}
+
 
 def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value.strip() else None

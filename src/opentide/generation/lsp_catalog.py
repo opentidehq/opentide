@@ -5,8 +5,9 @@
 - ``fields.json``: every field of every registered revision of each object
   family (``rule::1.0`` and ``rule::1.1`` each have their own rows), with its
   title, description, type, whether it is required, enum values and their
-  docs, and whether an object field forbids keys it does not define
-  (``closed``; ``schemas`` says the same of each revision's root). The engine
+  docs, whether an object field forbids keys it does not define
+  (``closed``; ``schemas`` says the same of each revision's root), and the
+  legacy keys a mapping also accepts (``legacy``: key → the field it fills). The engine
   uses it for hover, completion, and the required, unknown-key and enum
   checks, so they follow the revision an object names and this workspace's
   vocabulary rather than the snapshot compiled into the engine.
@@ -169,9 +170,15 @@ def fields_catalog(version: str) -> dict[str, Any]:
     roots: dict[str, dict[str, Any]] = {}
     for schema_id, schema in schemas.items():
         family = schema_id.split("::", 1)[0]
-        extras, defaults = _model_facts(resolve_model(schema_id))
-        nodes.extend(_flatten(schema, schema_id, extras, defaults, ref_leaves))
+        extras, defaults, legacy = _model_facts(resolve_model(schema_id))
+        flattened = _flatten(schema, schema_id, extras, defaults, ref_leaves)
+        for node in flattened:
+            if node["path"] in legacy:
+                node["legacy"] = legacy[node["path"]]
+        nodes.extend(flattened)
         roots[schema_id] = {"family": family, "closed": _closed(schema)}
+        if legacy.get(""):
+            roots[schema_id]["legacy"] = legacy[""]
 
     # metadata.schema offers every revision of the family: changing it is how
     # an object moves to another revision.
@@ -234,11 +241,16 @@ def _revision_key(revision: str) -> tuple[int, ...]:
     return tuple(int(part) for part in revision.split(".") if part.isdigit())
 
 
-def _model_facts(model: type[TideModel]) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
-    """``json_schema_extra`` flags and string defaults by dotted path.
+def _model_facts(
+    model: type[TideModel],
+) -> tuple[dict[str, dict[str, Any]], dict[str, str], dict[str, dict[str, str | None]]]:
+    """``json_schema_extra`` flags, string defaults, and legacy keys, by dotted path.
 
-    The schema emitter drops ``tide.template.multiline`` and ``hide``, and a
-    Pydantic default is not always in the schema.
+    The schema emitter drops ``tide.template.multiline`` and ``hide``, a
+    Pydantic default is not always in the schema, and the keys a model's
+    before-validator accepts (``TideModel.__legacy_keys__``) are in no schema:
+    ``legacy`` maps the path of the mapping that may hold them to ``{legacy
+    key: the field it fills, or None}``.
     """
     from pydantic_core import PydanticUndefined
 
@@ -246,11 +258,22 @@ def _model_facts(model: type[TideModel]) -> tuple[dict[str, dict[str, Any]], dic
 
     extras: dict[str, dict[str, Any]] = {}
     defaults: dict[str, str] = {}
+    legacy: dict[str, dict[str, str | None]] = {}
 
     def is_tide_model(annotation: object) -> TypeGuard[type[TideModel]]:
         return isinstance(annotation, type) and issubclass(annotation, TideModel)
 
     def walk(current: type[TideModel], path: str) -> None:
+        for key, fills in current.__legacy_keys__.items():
+            parent, _, name = key.rpartition(".")
+            target_parent, _, target = (fills or "").rpartition(".")
+            if fills is not None and target_parent != parent:
+                raise ValueError(
+                    f"{current.__name__}.__legacy_keys__: {key!r} fills {fills!r}, "
+                    "which is not in the same mapping"
+                )
+            where = ".".join(part for part in (path, parent) if part)
+            legacy.setdefault(where, {})[name] = target if fills is not None else None
         for name, field in current.model_fields.items():
             key = field.alias or name
             child = f"{path}.{key}" if path else key
@@ -271,7 +294,7 @@ def _model_facts(model: type[TideModel]) -> tuple[dict[str, dict[str, Any]], dic
                     walk(inner, child)
 
     walk(model, "")
-    return extras, defaults
+    return extras, defaults, legacy
 
 
 def _unwrap_optional(annotation: Any) -> Any:

@@ -135,3 +135,59 @@ def test_the_module_writes_and_checks_a_directory(
     assert (out / FIELDS_FILE).read_text(encoding="utf-8") == catalog_texts()[FIELDS_FILE]
     assert main(["--out", str(out), "--check"]) == 0
     assert "match opentide's models" in capsys.readouterr().out
+
+
+def _object_models() -> set[type]:
+    """Every model an object revision is built from, root and nested."""
+    import types as builtin_types
+    import typing
+    from typing import get_args, get_origin
+
+    from opentide.models.base import TideModel
+    from opentide.models.object_types import CORE_OBJECT_TYPES
+    from opentide.models.schema_registry import identifiers_for_families, resolve_model
+
+    def models_in(annotation: object) -> list[type[TideModel]]:
+        if isinstance(annotation, type) and issubclass(annotation, TideModel):
+            return [annotation]
+        if get_origin(annotation) in (builtin_types.UnionType, typing.Union, list, tuple, dict):
+            return [model for arg in get_args(annotation) for model in models_in(arg)]
+        if get_origin(annotation) is typing.Annotated:
+            return models_in(get_args(annotation)[0])
+        return []
+
+    seen: set[type] = set()
+    pending = [resolve_model(i) for i in identifiers_for_families(CORE_OBJECT_TYPES)]
+    while pending:
+        model = pending.pop()
+        if model in seen:
+            continue
+        seen.add(model)
+        for field in model.model_fields.values():
+            pending.extend(models_in(field.annotation))
+    return seen
+
+
+def test_a_model_that_rewrites_keys_declares_them_for_the_language_server() -> None:
+    """A before-validator can accept keys no schema lists; the catalog only knows
+    them from ``__legacy_keys__``, so every such model must declare its keys,
+    even as an empty mapping, or the language server rejects objects that
+    validate."""
+    undeclared = sorted(
+        model.__name__
+        for model in _object_models()
+        if any(
+            decorator.info.mode == "before"
+            for decorator in model.__pydantic_decorators__.model_validators.values()
+        )
+        and "__legacy_keys__" not in vars(model)
+    )
+    assert undeclared == []
+
+
+def test_legacy_keys_reach_the_catalog(fields: dict) -> None:
+    assert fields["schemas"]["objective::1.0"]["legacy"] == {"composition": None}
+    splunk = _field(fields, "rule::1.1", "configurations.splunk")
+    assert splunk["legacy"]["search"] == "query"
+    scheduling = _field(fields, "rule::1.1", "configurations.splunk.scheduling")
+    assert scheduling["legacy"]["frequency"] == "schedule"

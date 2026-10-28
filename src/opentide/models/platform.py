@@ -12,6 +12,7 @@ reports any other drift.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, cast
 
 from pydantic import AfterValidator, model_validator
@@ -57,7 +58,7 @@ from opentide.models.platform_configs import (
     SplunkScheduling,
     SplunkTrigger,
 )
-from opentide.models.splunk_legacy import normalize_splunk_v2
+from opentide.models.splunk_legacy import SPLUNK_V2_KEYS, normalize_splunk_v2
 from opentide.platforms.elastic.durations import duration_seconds
 
 
@@ -149,6 +150,7 @@ class DefenderConfig(PlatformConfigBase):
 
 class SplunkConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::splunk::1.0"
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = SPLUNK_V2_KEYS
     # Required, like every other platform's query and like the JSON Schema
     # extras already said. Optional here meant the FieldInfo template renderer
     # emitted `#query: |` commented out for Splunk alone, and the deployer
@@ -323,6 +325,8 @@ def _valid_response(action: dict[str, Any]) -> bool:
 
 class ElasticConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::elastic::1.0"
+    # Its before-validator reports bad type blocks; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
 
     type: Literal[
         "query", "eql", "esql", "threshold", "new_terms", "threat_match", "machine_learning"
