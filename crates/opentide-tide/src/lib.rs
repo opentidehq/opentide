@@ -1466,6 +1466,7 @@ impl ShapeCheck<'_> {
                 }
                 continue;
             };
+            self.values(&field_path, field, value);
             match value {
                 serde_yaml::Value::Mapping(child) => {
                     self.mapping(&field_path, child, field.closed, &field.legacy)
@@ -1480,6 +1481,39 @@ impl ShapeCheck<'_> {
                 _ => {}
             }
         }
+    }
+
+    /// A value outside the field's enum (a vocabulary, a fixed set), for a
+    /// scalar or for each item of a list: every enum the catalog has, not a
+    /// hand-picked few.
+    fn values(&mut self, path: &[String], field: &TideField, value: &serde_yaml::Value) {
+        if field.enum_values.is_empty() {
+            return;
+        }
+        let items: Vec<&str> = match value {
+            serde_yaml::Value::String(text) => vec![text.as_str()],
+            serde_yaml::Value::Sequence(items) if field.array => {
+                items.iter().filter_map(serde_yaml::Value::as_str).collect()
+            }
+            _ => Vec::new(),
+        };
+        let Some(unknown) = items
+            .into_iter()
+            .find(|item| !field.enum_values.iter().any(|known| known == item))
+        else {
+            return;
+        };
+        if !self.reported.insert(path.to_vec()) {
+            return;
+        }
+        self.found.push(
+            Diagnostic::error(
+                codes::VOCAB_UNKNOWN,
+                format!("unknown {} value '{unknown}'", field.name),
+                self.range(path),
+            )
+            .with_field_path(path.to_vec()),
+        );
     }
 
     /// The key at `path`, or the top of the document for the root.
@@ -1814,6 +1848,30 @@ configurations:
     }
 
     #[test]
+    fn every_enum_in_the_catalog_is_checked() {
+        let vocab = |source: &str| -> Vec<String> {
+            analyze(AnalyzeInput {
+                path: "objects/rules/rule.yaml",
+                source,
+                workspace: &[],
+                elastic_tenants: &[],
+            })
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
+            .map(|d| d.field_path.unwrap_or_default().join("."))
+            .collect()
+        };
+        assert_eq!(vocab(VALID_RULE), Vec::<String>::new());
+        // response.alert_severity had no check of its own.
+        let source = VALID_RULE.replace("alert_severity: High", "alert_severity: Severe");
+        assert_eq!(vocab(&source), vec!["response.alert_severity"]);
+        // A field another check covers is reported once.
+        let source = VALID_RULE.replace("tlp: clear", "tlp: clearr");
+        assert_eq!(vocab(&source), vec!["metadata.tlp"]);
+    }
+
+    #[test]
     fn a_revision_the_catalog_does_not_know_reports_no_unknown_key() {
         let source = VALID_RULE.replace("rule::1.1", "rule::7.0").replace(
             "  author: Someone\n",
@@ -2106,7 +2164,7 @@ threat:
         // opentide 0.18.0: a rule's `severity` takes alert_severity values
         // (`High`), not the threat severity scale (`Substantial incident`).
         let check = |severity: &str| {
-            let source = RULE.replace("severity: High", &format!("severity: {severity}"));
+            let source = RULE.replace("\nseverity: High", &format!("\nseverity: {severity}"));
             analyze(AnalyzeInput {
                 path: "objects/rules/sentinel-kql-rule.yaml",
                 source: &source,
