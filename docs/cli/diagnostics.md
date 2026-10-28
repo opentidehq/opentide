@@ -145,6 +145,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`promotion_target_unknown`](#promotion_target_unknown) | `deployment.toml` `[promotion] promotion_target` is not the name of a `[[statuses]]` entry. |
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
+| [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; opentide validate accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
 | [`risk_band`](#risk_band) | The risk score is outside the band of the rule's severity. |
@@ -2382,6 +2383,22 @@ Reported by `opentide doctor`. Fails when it is older than 3.10.
 ### How to fix
 
 Install Python 3.10 or later and reinstall opentide with it (`uv tool install opentide`, or `pipx install --python python3.12 opentide`).
+
+## recommended_field_missing
+
+A field the templates ask for is missing; opentide validate accepts the object without it.
+
+Reported by the analysis engine for an object file: `opentide lsp check` and an editor running `opentide lsp start` show it. `opentide validate` and `opentide lint` are the authority for objects and may name the same problem with their own code.
+
+### Example
+
+```text
+opentide lsp check objects/rules
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide lsp check` again.
 
 ## reference_not_found
 
