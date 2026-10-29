@@ -120,6 +120,13 @@ paths = [
   "testdata/corpus/spl/tstats_command__invalid.spl",
 ]
 
+# Probes Splunk's parser cannot check with parse_only.
+
+[[spl]]
+id = "spl-parse-only-subsearch"
+reason = "Splunk's search/parser answers \"This search cannot be parsed when parse_only is set to true\" for a subsearch it would have to run first (`where NOT [| makeresults ...]`). It is a limit of parse_only, not a syntax error: a deployed detection uses the form."
+paths = ["testdata/oracles/spl/where_not_subsearch.spl"]
+
 # Names: catalogs/spl/commands.toml against Splunk searchbnf.conf.
 
 [[spl]]

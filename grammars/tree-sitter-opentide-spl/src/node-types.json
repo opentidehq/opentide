@@ -1499,10 +1499,6 @@
           "named": true
         },
         {
-          "type": "prefix_clause",
-          "named": true
-        },
-        {
           "type": "search_group",
           "named": true
         },
