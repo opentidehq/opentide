@@ -25,7 +25,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-eql` | no | `Diagnostic` | EQL catalog, sequence and sample checks |
 | `opentide-kuery` | no | `Diagnostic` | Kibana KQL checks |
 | `opentide-lucene` | no | `Diagnostic` | Lucene `query_string` checks |
-| `opentide-ecs` | no | — | ECS field catalog (`OnceLock`) |
+| `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
 | `opentide-analysis` | no | — | `WorkspaceHost` orchestrator |
 | `opentide-lsp` | yes | `anyhow` | stdio host and CLI |

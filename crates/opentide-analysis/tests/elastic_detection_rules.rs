@@ -6,7 +6,9 @@
 //! never copied into this repository.
 //!
 //! Every rule there passes Elasticsearch's parser, so any *error* from the
-//! ES|QL, EQL, kuery, or Lucene engine is an engine bug. Warnings are
+//! ES|QL, EQL, kuery, or Lucene engine is an engine bug. A rule whose `index`
+//! list is all `logs-*` data streams (and every ES|QL `FROM logs-*`) also gets
+//! the ECS checks, so an `ecs_type_mismatch` there is an engine bug too. Warnings are
 //! reported as a tally only: they are advisories about real rules. List them
 //! with `OPENTIDE_SWEEP_SHOW=eql_literal_wildcard,kuery_escape`.
 
@@ -39,18 +41,65 @@ fn min_stack(doc: &toml::Table) -> Option<opentide_esql::StackTarget> {
     opentide_esql::StackTarget::parse(&major_minor)
 }
 
+/// The engine's diagnostics, plus the ECS checks when every index the rule
+/// reads holds ECS documents (`logs-*`). ES|QL reads its indices from `FROM`.
 fn analyze(
     language: LanguageId,
     query: &str,
     stack: Option<opentide_esql::StackTarget>,
+    indices: &[&str],
 ) -> Vec<Diagnostic> {
+    let ecs = opentide_ecs::indices_are_ecs(indices);
+    let (mut found, extra) = match language {
+        LanguageId::Esql => (
+            opentide_esql::analyze_for(query, stack).diagnostics,
+            Vec::new(),
+        ),
+        LanguageId::Eql => (
+            opentide_eql::analyze(query).diagnostics,
+            if ecs {
+                opentide_eql::ecs_diagnostics(query)
+            } else {
+                Vec::new()
+            },
+        ),
+        LanguageId::Kuery => (
+            opentide_kuery::analyze(query).diagnostics,
+            if ecs {
+                opentide_kuery::ecs_diagnostics(query)
+            } else {
+                Vec::new()
+            },
+        ),
+        LanguageId::Lucene => (
+            opentide_lucene::analyze(query).diagnostics,
+            if ecs {
+                opentide_lucene::ecs_diagnostics(query)
+            } else {
+                Vec::new()
+            },
+        ),
+        _ => (Vec::new(), Vec::new()),
+    };
+    opentide_ecs::merge(&mut found, extra);
+    found
+}
+
+/// Whether the ECS checks apply to the query.
+fn reads_ecs(language: LanguageId, query: &str, indices: &[&str]) -> bool {
     match language {
-        LanguageId::Esql => opentide_esql::analyze_for(query, stack).diagnostics,
-        LanguageId::Eql => opentide_eql::analyze(query).diagnostics,
-        LanguageId::Kuery => opentide_kuery::analyze(query).diagnostics,
-        LanguageId::Lucene => opentide_lucene::analyze(query).diagnostics,
-        _ => Vec::new(),
+        LanguageId::Esql => {
+            opentide_esql::source_indices(query).is_some_and(|i| opentide_ecs::indices_are_ecs(&i))
+        }
+        _ => opentide_ecs::indices_are_ecs(indices),
     }
+}
+
+fn strings(value: Option<&toml::Value>) -> Vec<&str> {
+    value
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default()
 }
 
 #[test]
@@ -66,6 +115,7 @@ fn every_public_elastic_rule_is_free_of_engine_errors() {
     }
     files.sort();
     let mut checked: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut ecs_checked: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut warnings: BTreeMap<String, usize> = BTreeMap::new();
     let mut errors = Vec::new();
     let show: Vec<String> = std::env::var("OPENTIDE_SWEEP_SHOW")
@@ -78,7 +128,7 @@ fn every_public_elastic_rule_is_free_of_engine_errors() {
         let Ok(doc) = text.parse::<toml::Table>() else {
             continue;
         };
-        let mut queries = Vec::new();
+        let mut queries: Vec<(LanguageId, &str, Vec<&str>)> = Vec::new();
         if let Some(hunt) = doc.get("hunt").and_then(|h| h.as_table()) {
             // Hunts list their languages; analyse those with exactly one.
             let languages: Vec<&str> = hunt
@@ -96,15 +146,18 @@ fn every_public_elastic_rule_is_free_of_engine_errors() {
                 queries.extend(
                     list.iter()
                         .filter_map(|q| q.as_str())
-                        .map(|q| (language, q)),
+                        .map(|q| (language, q, Vec::new())),
                 );
             }
         }
         let Some(rule) = doc.get("rule").and_then(|r| r.as_table()) else {
-            for (language, query) in queries {
+            for (language, query, indices) in queries {
                 *checked.entry(language.as_str()).or_default() += 1;
                 let query = query.trim();
-                for d in analyze(language, query, min_stack(&doc)) {
+                if reads_ecs(language, query, &indices) {
+                    *ecs_checked.entry(language.as_str()).or_default() += 1;
+                }
+                for d in analyze(language, query, min_stack(&doc), &indices) {
                     if d.severity == Severity::Error {
                         errors.push(format!(
                             "{}: {} {}:{} {}",
@@ -120,22 +173,31 @@ fn every_public_elastic_rule_is_free_of_engine_errors() {
             continue;
         };
         let get = |key: &str| rule.get(key).and_then(|v| v.as_str());
+        // A data view's fields are Kibana's: no index list to check against.
+        let index = if get("data_view_id").is_some() {
+            Vec::new()
+        } else {
+            strings(rule.get("index"))
+        };
         if let (Some(query), Some(language)) = (
             get("query"),
             elastic_query_language(get("type"), get("language")),
         ) {
-            queries.push((language, query));
+            queries.push((language, query, index));
         }
         if let (Some(query), Some(language)) = (
             get("threat_query"),
             elastic_query_language(Some("threat_match"), get("threat_language")),
         ) {
-            queries.push((language, query));
+            queries.push((language, query, strings(rule.get("threat_index"))));
         }
-        for (language, query) in queries {
+        for (language, query, indices) in queries {
             *checked.entry(language.as_str()).or_default() += 1;
             let query = query.trim_end();
-            for d in analyze(language, query, min_stack(&doc)) {
+            if reads_ecs(language, query, &indices) {
+                *ecs_checked.entry(language.as_str()).or_default() += 1;
+            }
+            for d in analyze(language, query, min_stack(&doc), &indices) {
                 if show.contains(&d.code) {
                     let line = query.lines().nth(d.range.start.line as usize).unwrap_or("");
                     eprintln!(
@@ -161,7 +223,9 @@ fn every_public_elastic_rule_is_free_of_engine_errors() {
             }
         }
     }
-    eprintln!("checked {checked:?}; non-error diagnostics {warnings:?}");
+    eprintln!(
+        "checked {checked:?} (on ECS indices {ecs_checked:?}); non-error diagnostics {warnings:?}"
+    );
     assert!(
         checked.values().sum::<usize>() > 1000,
         "expected the detection-rules corpus under {}",

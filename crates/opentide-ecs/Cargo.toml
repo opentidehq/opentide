@@ -11,5 +11,6 @@ description = "opentide engine component: Elastic Common Schema field catalog fo
 readme = "../COMPONENT.md"
 
 [dependencies]
+opentide-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true

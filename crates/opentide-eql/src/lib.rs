@@ -9,9 +9,12 @@
 //! field-versus-field rule; `lexical` follows the lexer where the grammar
 //! cannot (nested block comments, the expression-depth pre-scan).
 
+mod ecs;
 mod lexical;
 mod regex;
 mod semantics;
+
+pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Position, Range,

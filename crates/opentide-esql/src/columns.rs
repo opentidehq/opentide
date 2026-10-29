@@ -310,7 +310,7 @@ fn verbatim(node: Node, source: &str) -> Option<String> {
 }
 
 /// A dotted name with backquoted parts unquoted. `None` for parameters.
-fn qualified(node: Node, source: &str) -> Option<String> {
+pub(crate) fn qualified(node: Node, source: &str) -> Option<String> {
     let mut parts = Vec::new();
     let mut cursor = node.walk();
     for part in node.named_children(&mut cursor) {
@@ -467,7 +467,7 @@ fn keep(command: Node, source: &str, input: Option<&[String]>) -> Option<Columns
 /// Output keys of a dissect pattern in pattern order: `%{key}`, `%{+key}`,
 /// `%{key->}`, `%{+key/2}`. `%{?key}` and `%{}` are skipped; reference keys
 /// (`%{*k}`, `%{&k}`) are rejected by ES|QL.
-fn dissect_keys(pattern: &str) -> Option<Vec<String>> {
+pub(crate) fn dissect_keys(pattern: &str) -> Option<Vec<String>> {
     let mut keys: Vec<String> = Vec::new();
     let mut rest = pattern;
     while let Some(start) = rest.find("%{") {
@@ -577,7 +577,7 @@ const GROK_PLAIN: &[&str] = &[
 
 /// Columns a grok pattern adds: `%{SYNTAX:name}` / `%{SYNTAX:name:type}` and
 /// regex named groups `(?<name>…)`.
-fn grok_names(pattern: &str) -> Option<Vec<String>> {
+pub(crate) fn grok_names(pattern: &str) -> Option<Vec<String>> {
     let mut names = Vec::new();
     let mut rest = pattern;
     while let Some(start) = rest.find("%{") {

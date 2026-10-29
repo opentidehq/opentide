@@ -683,6 +683,107 @@ fn path_range(source: &str, path: &[&str]) -> Range {
     Range::point(0, 0)
 }
 
+/// A YAML list of strings, or a single string, as names.
+fn names(value: Option<&serde_yaml::Value>) -> Vec<String> {
+    match value {
+        Some(serde_yaml::Value::Sequence(items)) => items
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect(),
+        Some(serde_yaml::Value::String(s)) => vec![s.clone()],
+        _ => Vec::new(),
+    }
+}
+
+/// The index patterns a rule query reads, from its block: `index` for
+/// `configurations.elastic.query`, `threat.index` for the indicator query
+/// `threat.query`. `None` when they are not in the block: a `data_view_id`
+/// (its fields are Kibana's), or `index` omitted (the tenant's
+/// `setup.index`).
+pub(crate) fn query_indices(
+    configurations: Option<&serde_yaml::Value>,
+    field_path: &[String],
+) -> Option<Vec<String>> {
+    let block = configurations?.get("elastic")?;
+    let path: Vec<&str> = field_path.iter().map(String::as_str).collect();
+    let list = match path.as_slice() {
+        ["configurations", "elastic", "query"] => {
+            if block.get("data_view_id").is_some_and(|v| !v.is_null()) {
+                return None;
+            }
+            block.get("index")
+        }
+        ["configurations", "elastic", "threat", "query"] => {
+            block.get("threat").and_then(|t| t.get("index"))
+        }
+        _ => return None,
+    };
+    let indices = names(list);
+    (!indices.is_empty()).then_some(indices)
+}
+
+/// Whether the query at `field_path` reads only ECS indices
+/// (`opentide_ecs::indices_are_ecs`), so its fields are checked against
+/// ECS. A query whose indices are not known is not.
+pub(crate) fn reads_ecs(configurations: Option<&serde_yaml::Value>, field_path: &[String]) -> bool {
+    query_indices(configurations, field_path).is_some_and(|i| opentide_ecs::indices_are_ecs(&i))
+}
+
+/// Range of `item`, a value listed under the key at `path`: the first place
+/// it is written between that key and the next one, else the key.
+fn item_range(source: &str, path: &[&str], item: &str) -> Range {
+    let lines: Vec<&str> = source.split_inclusive('\n').collect();
+    let keys = key_lines(&lines);
+    let found = keys
+        .iter()
+        .position(|k| k.path.len() == path.len() && k.path.iter().zip(path).all(|(a, b)| a == b));
+    if let Some(i) = found {
+        let start: usize = lines[..keys[i].line].iter().map(|l| l.len()).sum();
+        let end: usize = keys.get(i + 1).map_or(source.len(), |next| {
+            lines[..next.line].iter().map(|l| l.len()).sum()
+        });
+        // Past the key itself, so a value equal to the key name is not hit.
+        let from = start + lines[keys[i].line].find(':').map_or(0, |c| c + 1);
+        if let Some(at) = source.get(from..end).and_then(|region| region.find(item)) {
+            let at = from + at;
+            return span_to_range(source, ByteSpan::new(at, at + item.len()));
+        }
+    }
+    path_range(source, path)
+}
+
+/// `elastic_dataset_not_declared` for the block's `index`, `threat.index`,
+/// and `data_view_id`, against the workspace's declared Elastic datasets
+/// (opt-in per kind: nothing when it declares no index, or no data view).
+fn dataset_declarations(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let threat_index = block.get("threat").and_then(|t| t.get("index"));
+    for (path, list) in [
+        (
+            vec!["configurations", "elastic", "index"],
+            block.get("index"),
+        ),
+        (
+            vec!["configurations", "elastic", "threat", "index"],
+            threat_index,
+        ),
+    ] {
+        for name in names(list) {
+            let range = item_range(source, &path, &name);
+            if let Some(d) = opentide_ecs::index_not_declared(&name, range) {
+                out.push(d.with_field_path(path.iter().map(|p| p.to_string()).collect()));
+            }
+        }
+    }
+    let path = ["configurations", "elastic", "data_view_id"];
+    if let Some(id) = block.get("data_view_id").and_then(|v| v.as_str()) {
+        if let Some(d) = opentide_ecs::data_view_not_declared(id, item_range(source, &path, id)) {
+            out.push(d.with_field_path(path.iter().map(|p| p.to_string()).collect()));
+        }
+    }
+    out
+}
+
 /// Kibana's risk score band for an `alert_severity` value ([elastic-1.0]
 /// Severity and risk): Informational and Low map to `low`.
 fn risk_band(alert_severity: &str) -> Option<(&'static str, i64, i64)> {
@@ -753,7 +854,7 @@ pub(crate) fn block_advisories(
         let (range, path) = at(rest);
         Diagnostic::warning(code, message, range).with_field_path(path)
     };
-    let mut out = Vec::new();
+    let mut out = dataset_declarations(source, block);
 
     let scheduling = block.get("scheduling");
     let read = |key: &str| scheduling.and_then(|s| s.get(key)).and_then(|v| v.as_str());

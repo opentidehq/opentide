@@ -46,6 +46,8 @@ Query extras (engine may add these inside `query: |`):
 - `spl_wildcard`
 - `spl_leading_not`
 - `spl_subsearch_truncation`
+- `ecs_type_mismatch`, `ecs_unknown_field` (Elastic queries whose indices all hold ECS documents; `docs/LANGUAGE.md`, Elastic indices and ECS)
+- `elastic_dataset_not_declared` (`configurations.elastic.index`, `threat.index`, `data_view_id`, and ES|QL `FROM`, when the workspace declares Elastic datasets)
 - `crowdstrike_unsupported` (never faked)
 - `defender_output_columns`
 

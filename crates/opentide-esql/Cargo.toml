@@ -12,6 +12,7 @@ readme = "../COMPONENT.md"
 
 [dependencies]
 opentide-core.workspace = true
+opentide-ecs.workspace = true
 opentide-lucene.workspace = true
 opentide-syntax.workspace = true
 opentide-highlight.workspace = true

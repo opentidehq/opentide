@@ -31,6 +31,7 @@ fn chain(term: &str, op: &str, n: usize) -> String {
 #[test]
 fn long_or_chains_do_not_overflow_the_stack() {
     const N: usize = 20_000;
+    // `FROM logs-*` also runs the ECS checks.
     on_small_stack("esql", || {
         let q = format!("FROM logs-* | WHERE {}", chain("a == 1", " OR ", N));
         opentide_esql::analyze(&q);
@@ -38,11 +39,14 @@ fn long_or_chains_do_not_overflow_the_stack() {
     on_small_stack("eql", || {
         let q = format!("process where {}", chain("a == 1", " or ", N));
         opentide_eql::analyze(&q);
+        opentide_eql::ecs_diagnostics(&q);
     });
     on_small_stack("kuery", || {
         opentide_kuery::analyze(&chain("a:1", " or ", N));
+        opentide_kuery::ecs_diagnostics(&chain("source.port:1", " or ", N));
     });
     on_small_stack("lucene", || {
         opentide_lucene::analyze(&chain("a:1", " OR ", N));
+        opentide_lucene::ecs_diagnostics(&chain("source.port:1", " OR ", N));
     });
 }

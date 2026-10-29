@@ -229,4 +229,15 @@ Engine checks below the grammar (Elastic dialect unless noted):
 | lucene.term-query | `term_query` | `term_query__valid`, `term_query__invalid` | `string` |
 | lucene.wildcard-term | `wildcard_term` | `wildcard_term__valid`, `wildcard_term__invalid` | `string` |
 
+## Elastic indices and ECS
+
+ES|QL, EQL, kuery, and Lucene know which indices a query reads where it is written down: ES|QL from its `FROM` (or `TS`) command, the others from the Tide rule's elastic block, `index` for `query` and `threat.index` for `threat.query`. A `data_view_id`, an omitted `index` (the tenant's `setup.index`), a hunt, or a raw `.kuery`, `.lucene`, or `.eql` file leaves them unknown.
+
+Where the workspace declares Elastic datasets (`datasets.json`, from the `indices` and `data_views` of `system = "elastic"` log sources in `visibility.toml`), an index pattern no declared pattern covers or reaches is `elastic_dataset_not_declared` (warning), and so is a data view no log source names. `logs-*` declared covers `logs-azure.signinlogs-*`; a used `win*` reaches a declared `winlogbeat-x`. Each kind is opt-in: a workspace that declares no data view gets no warning about one.
+
+Where every index is ECS, an integration data stream (`logs-*`) or a name a declared `ecs_indices` pattern covers (log sources with `ecs = true`), fields are checked against `catalogs/ecs/fields.json`:
+
+- `ecs_type_mismatch` (error), only what Elasticsearch rejects on an ECS mapping (`testdata/oracles/elasticsearch`): in kuery and Lucene, a wildcard, regexp, or fuzzy term on a number, date, ip, or boolean field (`source.ip:10.*`) and a value the type cannot parse (`source.port:http`, `process.pid:[a TO b]`); in EQL, `:`, `like`, or `regex` on a field that is not a string, an `in` list of numbers on a string field, a function argument or arithmetic operand of the wrong type, and an object (`host`) used as a value; in ES|QL, `LIKE` or `RLIKE` on a column that is not a string (`FROM logs-* | WHERE source.ip LIKE "10.*"`) and a column passed to a function parameter that takes no type of its kind. A range on an ip field, `==` on a `text` field, and a string compared with an ip or a number with `==` are valid and never reported. ES|QL checks only columns the query reads from the indices: a name `EVAL`, `RENAME`, `DISSECT`, `GROK`, `ENRICH … WITH`, or `INLINE STATS` defines is the query's own, and nothing is checked after `STATS` or a command whose columns the text does not show.
+- `ecs_unknown_field` (warning), only a near miss of an ECS field under an ECS field set, with the field as the suggestion (`process.nmae` → `process.name`). ECS allows custom fields, so `labels.*`, children of object, flattened, and nested fields, Elastic Defend's `*.Ext.*`, integration namespaces (`azure.*`, `okta.*`, `winlog.*`), wildcards, and optional EQL fields (`?x`) are never reported. `.text`, `.keyword`, and `.caseless` multi-fields resolve to their parent.
+
 Corpus lives in `testdata/corpus/{kql,spl,esql,eql,kuery,lucene}/` tagged `prod:<rule>`.
