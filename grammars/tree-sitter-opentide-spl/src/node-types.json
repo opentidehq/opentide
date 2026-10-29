@@ -84,6 +84,10 @@
           "named": true
         },
         {
+          "type": "search_boolean",
+          "named": true
+        },
+        {
           "type": "string",
           "named": true
         },

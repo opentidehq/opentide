@@ -2558,6 +2558,28 @@
             "name": "subsearch"
           },
           {
+            "type": "ALIAS",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "AND"
+                },
+                {
+                  "type": "STRING",
+                  "value": "OR"
+                },
+                {
+                  "type": "STRING",
+                  "value": "NOT"
+                }
+              ]
+            },
+            "named": true,
+            "value": "search_boolean"
+          },
+          {
             "type": "SYMBOL",
             "name": "field_value"
           },
