@@ -77,8 +77,8 @@ Every command ends with **exactly one outcome line**. Warnings print before it. 
 | `setup skills discover` | the table, then `✓ 31 skills available · 2 installed · opentidehq/skills@main` |
 | `generate` (all phases and subcommands) | `✓ Generated 28 files in 4.8s · 6 phases` |
 | `generate extract <platform>` | `✓ Imported 14 rules from sentinel · 2 skipped` |
-| `deploy --dry-run` | `Plan: 1 to create, 0 to update, 0 to disable, 0 to delete` (the plan's header names `1 platform, 0 tenants`) |
-| `deploy` | `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 12.4s` |
+| `deploy --dry-run` | `Plan: 1 to create, 0 to update, 0 to disable, 0 to delete` (the plan's header names `1 platform, 0 tenants`), then `dry run, nothing sent` |
+| `deploy` | a line per rule as it is sent, then `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 0 failed, 0 not attempted · 12.4s` / `✗ Deployment failed · 2 created or updated, 1 failed, 88 not attempted · 14s` |
 | `deploy migrate-state` | `✓ Moved 6 vendor ids to .opentide/states/deployment/` |
 | `validate query --live` | `✓ 12 queries valid on 2 tenants` / `error: Queries rejected on sentinel · 12 checked on 2 tenants` / `Skipped: no configured tenant reached` |
 | `setup` and its subcommands | `✓ Created Tutorial Detections in ./tutorial-detections` / `✓ Wrote .vscode/settings.json` |

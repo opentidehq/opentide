@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment, check_status
@@ -192,11 +193,14 @@ class CarbonBlackCloudDeploy(CarbonBlackCloudConnection, RuleDeployer):
             cbc_service = CarbonBlackCloudService(tenant_config)
             for mdr in tenant_deployment.rules:
                 logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
-                self.deploy_mdr(
-                    data=mdr,
-                    service=cbc_service.service,
-                    tenant_config=tenant_config,
-                )
+                with deploy_events.deploying(
+                    "carbon_black_cloud", tenant_config.name, mdr.metadata.uuid, mdr.name
+                ):
+                    self.deploy_mdr(
+                        data=mdr,
+                        service=cbc_service.service,
+                        tenant_config=tenant_config,
+                    )
 
 
 def declare():

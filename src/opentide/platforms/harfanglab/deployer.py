@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 import structlog
 
+from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.deployment import TideDeployment, check_status
@@ -306,6 +307,13 @@ class HarfangLabDeploy(RuleDeployer):
                 mdr_config = mdr.platform_configs().harfanglab
                 if not mdr_config:
                     logger.warning("skipping_rule_no_harfanglab_config", detail=mdr.name)
+                    deploy_events.skipped(
+                        "harfanglab",
+                        tenant_config.name,
+                        mdr.metadata.uuid,
+                        mdr.name,
+                        "no HarfangLab configuration",
+                    )
                     continue
                 is_sigma = mdr_config.sigma is not None
                 is_yara = mdr_config.yara is not None
@@ -317,9 +325,19 @@ class HarfangLabDeploy(RuleDeployer):
                         context_1=mdr.name,
                         advice=tenant_config.name,
                     )
+                    deploy_events.skipped(
+                        "harfanglab",
+                        tenant_config.name,
+                        mdr.metadata.uuid,
+                        mdr.name,
+                        f"{rule_type or 'unknown'} rule, {tenant_type} tenant",
+                    )
                     continue
                 logger.info("processing_rule", detail=mdr.name, advice=mdr.metadata.uuid)
-                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_config)
+                with deploy_events.deploying(
+                    "harfanglab", tenant_config.name, mdr.metadata.uuid, mdr.name
+                ):
+                    self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_config)
 
 
 def declare():

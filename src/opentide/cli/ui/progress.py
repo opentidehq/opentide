@@ -100,6 +100,9 @@ class Step:
     #: What the step produced, in *unit*s; ``None`` when it does not count anything.
     count: int | None = None
     unit: str = "file"
+    #: Replaces the count where a step has more to say than one number
+    #: (``2 deployed, 1 failed, 88 not attempted``).
+    outcome: str | None = None
     #: Where the output went, as the reader should see it (``.opentide/schemas/``).
     where: str | None = None
     #: The engine stage running now, or a short note on a finished step.
@@ -115,8 +118,11 @@ class Step:
         unit: str | None = None,
         where: str | None = None,
         detail: str | None = None,
+        outcome: str | None = None,
     ) -> None:
         """Record what the step produced. The checklist closes it when the block ends."""
+        if outcome is not None:
+            self.outcome = outcome
         if count is not None:
             self.count = count
         if unit is not None:
@@ -135,7 +141,9 @@ class Step:
     def facts(self) -> list[str]:
         """The parts a finished step prints after its name, in order."""
         parts: list[str] = []
-        if self.count is not None:
+        if self.outcome:
+            parts.append(self.outcome)
+        elif self.count is not None:
             parts.append(plural(self.count, self.unit))
         if self.status == "skipped" and self.detail:
             parts.append(self.detail)
@@ -194,7 +202,7 @@ def checklist_table(
     for step in steps:
         status = step.status if step.status != "running" else "failed"
         mark = Text(glyph(_GLYPH[status], encoding=encoding), style=_STYLE[status])
-        count = plural(step.count, step.unit) if step.count is not None else ""
+        count = step.outcome or (plural(step.count, step.unit) if step.count is not None else "")
         if step.status == "skipped":
             grid.add_row(mark, Text(step.name, style="dim"), "", "", step.detail)
             continue
@@ -204,7 +212,8 @@ def checklist_table(
         grid.add_row(
             spinner or Text("…"),
             Text(running.name, style=_STYLE["running"]),
-            plural(running.count, running.unit) if running.count is not None else "",
+            running.outcome
+            or (plural(running.count, running.unit) if running.count is not None else ""),
             seconds_text(elapsed),
             running.detail or running.where or "",
         )
@@ -216,8 +225,8 @@ def _row(step: Step, encoding: str, digits: int = 0) -> tuple[Text, ...]:
     mark = Text(glyph(_GLYPH[status], encoding=encoding), style=_STYLE[status])
     if step.status == "skipped":
         return (mark, Text(step.name, style="dim"), Text(), Text(), Text(step.detail, style="dim"))
-    count = ""
-    if step.count is not None:
+    count = step.outcome or ""
+    if not count and step.count is not None:
         count = " " * (digits - len(str(step.count))) + plural(step.count, step.unit)
     return (
         mark,
@@ -345,6 +354,17 @@ class Checklist:
     def _stage(self, name: str) -> None:
         if self.current is not None:
             self.current.detail = name
+
+    def line(self, text: Text, *, always: bool = False) -> None:
+        """Print one line above the running step, flushed as it happens.
+
+        In ``human`` mode the live row stays below it; elsewhere it is an
+        append-only line on stderr, with no carriage return. Nothing prints in
+        JSON or MCP mode. ``--quiet`` hides it unless *always* is set (a failure).
+        """
+        if self.mode in (OutputMode.JSON, OutputMode.MCP) or (self.quiet and not always):
+            return
+        self.console.print(text, soft_wrap=True)
 
     def _finished(self, step: Step) -> None:
         if self._terminal is not None:

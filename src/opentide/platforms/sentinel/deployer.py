@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
 from opentide.core.registry import DetectionPlatforms, Opentide
@@ -342,7 +343,10 @@ class SentinelDeploy(RuleDeployer):
             service = SentinelService(tenant_config).connect()
             for mdr in tenant_deployment.rules:
                 logger.info("processing_rule", detail=mdr.name, advice=mdr.metadata.uuid)
-                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_config)
+                with deploy_events.deploying(
+                    "sentinel", tenant_config.name, mdr.metadata.uuid, mdr.name
+                ):
+                    self.deploy_mdr(data=mdr, service=service, tenant_config=tenant_config)
 
 
 def declare():

@@ -24,9 +24,12 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.ui.progress import plural
+
+if TYPE_CHECKING:
+    from opentide.core.deploy_events import RuleResult
 
 Action = Literal["create", "update", "upsert", "disable", "delete"]
 
@@ -208,5 +211,62 @@ def deployed_message(changes: Sequence[PlannedChange], seconds: float) -> str:
     parts = [f"Deployed {plural(rules, 'rule')} to {plural(tenants, 'tenant')}"]
     if done:
         parts.append(done)
+    parts.append(seconds_text(seconds))
+    return " · ".join(parts)
+
+
+def run_counts(results: Sequence[RuleResult], seconds: float) -> dict[str, int | float]:
+    """What a real run did, rule by rule: every count is present, whether it is 0 or not.
+
+    ``create``, ``update``, ``upsert``, ``disable`` and ``delete`` count the rules
+    that were sent with that action; ``failed``, ``skipped`` and ``not_attempted``
+    count the rest. A rule on two tenants counts once per tenant.
+    """
+    counts: Counter[str] = Counter()
+    for result in results:
+        if result.status == "deployed":
+            counts[result.action or "upsert"] += 1
+        else:
+            counts[result.status] += 1
+    row: dict[str, int | float] = {action: counts.get(action, 0) for action in ACTIONS}
+    row["failed"] = counts.get("failed", 0)
+    row["skipped"] = counts.get("skipped", 0)
+    row["not_attempted"] = counts.get("not_attempted", 0)
+    row["seconds"] = round(seconds, 3)
+    return row
+
+
+def run_summary(
+    results: Sequence[RuleResult], platforms: Sequence[str], tenants: int, seconds: float
+) -> dict[str, int | float]:
+    """The JSON ``summary`` of a real run: :func:`run_counts`, platforms and tenants."""
+    return {**run_counts(results, seconds), "platforms": len(platforms), "tenants": tenants}
+
+
+def outcome_message(results: Sequence[RuleResult], seconds: float, *, failed: bool) -> str:
+    """The run's last line, for a pass and for a failure alike.
+
+    ``Deployed 91 rules to 1 tenant · 91 created or updated · 0 failed, 0 not attempted · 1m56s``
+    ``Deployment failed · 2 created or updated, 1 failed, 88 not attempted · 14s``
+
+    Counts of 0 are left out for the actions, never for ``failed`` and ``not attempted``.
+    """
+    from opentide.cli.ui.progress import seconds_text
+
+    counts = run_counts(results, seconds)
+    done = [f"{counts[action]} {_DONE[action]}" for action in ACTIONS if counts[action]]
+    if counts["skipped"]:
+        done.append(f"{counts['skipped']} skipped")
+    sent = [result for result in results if result.status == "deployed"]
+    rules = len({result.id for result in sent})
+    tenants = len({(result.platform, result.tenant) for result in sent if result.tenant})
+    tail = f"{counts['failed']} failed, {counts['not_attempted']} not attempted"
+    if failed:
+        parts = ["Deployment failed", ", ".join([*done, tail])]
+    else:
+        parts = [f"Deployed {plural(rules, 'rule')} to {plural(tenants, 'tenant')}"]
+        if done:
+            parts.append(", ".join(done))
+        parts.append(tail)
     parts.append(seconds_text(seconds))
     return " · ".join(parts)
