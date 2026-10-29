@@ -85,6 +85,10 @@ def environment() -> list[dict[str, str]]:
             "meaning": "Fewest objects before validate runs in parallel",
         },
         {
+            "name": "OPENTIDE_EXPLORER_PACKAGE",
+            "meaning": "npm spec opentide explorer runs instead of @opentide/explorer@<version>",
+        },
+        {
             "name": "OPENTIDE_PROGRESS",
             "meaning": "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal",
         },

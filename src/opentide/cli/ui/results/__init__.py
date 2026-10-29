@@ -50,7 +50,7 @@ from opentide.cli.ui.results.setup import (
     SkillsShowResult,
 )
 from opentide.cli.ui.results.share import ShareResult, ShareTargetsResult
-from opentide.cli.ui.results.workspace import DoctorResult, NewResult
+from opentide.cli.ui.results.workspace import DoctorResult, ExplorerResult, NewResult
 
 __all__ = [
     "NO_DOCUMENT",
@@ -111,6 +111,8 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "new objective": NewResult,
     "new rule": NewResult,
     "doctor": DoctorResult,
+    "explorer build": ExplorerResult,
+    "explorer serve": ExplorerResult,
     # Refuses outside an interactive terminal, so --json only ever prints a usage error.
     "tui": CommandError,
     "migrate objects": MigrateObjectsResult,

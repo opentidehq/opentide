@@ -1,4 +1,4 @@
-"""Results of ``opentide new`` and ``opentide doctor`` (#642)."""
+"""Results of ``opentide new``, ``opentide doctor`` (#642) and ``opentide explorer``."""
 
 from __future__ import annotations
 
@@ -62,3 +62,21 @@ class DoctorResult(CommandDocument):
     """``opentide doctor``: each check and its status."""
 
     checks: list[DoctorCheck]
+
+
+# --------------------------------------------------------------------------
+# explorer
+# --------------------------------------------------------------------------
+
+
+class ExplorerResult(CommandDocument):
+    """``opentide explorer build|serve``: the export, the package that ran and the site."""
+
+    package: str | None = Field(
+        None, description="npm spec npx ran, such as '@opentide/explorer@latest'"
+    )
+    node: str | None = Field(None, description="node --version of the Node.js that ran it")
+    exports_dir: str | None = Field(None, description="Directory holding explorer.bundle.json")
+    output: str | None = Field(None, description="Directory the static site was built into")
+    exit_status: int | None = Field(None, description="On a failed run: the package's exit status")
+    phase: str | None = Field(None, description="On a failed export: the generation phase")

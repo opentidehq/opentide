@@ -97,6 +97,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
 | `OPENTIDE_PROXY` | HTTP(S) proxy, like `--proxy` |
 | `OPENTIDE_TIDE_WORKSPACE` | Folder whose objects are read, when it is not the repository root; see [Repository root resolution](#repository-root-resolution) |
+| `OPENTIDE_EXPLORER_PACKAGE` | npm spec [`opentide explorer`](./explorer.md) runs instead of `@opentide/explorer@<version>`: a mirror, a fork or a local tarball |
 | `OPENTIDE_LINKS` | Link scheme of code-frame paths: `file`, `vscode`, `cursor` or `none`; default `vscode` inside VS Code, else `file` |
 | `OPENTIDE_LOG_JSON` | `1` for one JSON object per log line on stderr |
 | `OPENTIDE_VALIDATE_WORKERS` | Most threads `validate` uses: a number, or `auto` |

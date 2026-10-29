@@ -130,6 +130,13 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         rich_help_panel=WORKSPACE,
     ),
     CommandSpec(
+        "explorer",
+        "opentide.cli.explorer_app",
+        "explorer_app",
+        "Build or serve the corpus explorer",
+        rich_help_panel=WORKSPACE,
+    ),
+    CommandSpec(
         "explain",
         "opentide.cli.commands.explain",
         "explain_cmd",

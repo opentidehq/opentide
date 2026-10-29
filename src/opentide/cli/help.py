@@ -68,6 +68,13 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
         "'process where process.name == \"cmd.exe\"'",
     ),
     "new": ('opentide new threat --name "Credential Dumping"',),
+    "explorer": ("opentide explorer serve", "opentide explorer build --base-path /detections"),
+    "explorer build": (
+        "opentide explorer build",
+        "opentide explorer build --output site --base-path /detections",
+        "opentide explorer build --version 0.5.0",
+    ),
+    "explorer serve": ("opentide explorer serve", "opentide explorer serve --port 8080 --latest"),
     "new threat": ('opentide new threat --name "Credential Dumping"',),
     "new objective": (
         'opentide new objective --name "Detect Credential Dumping" --threat <threat-uuid>',

@@ -11,6 +11,7 @@ One install gets the CLI, the MCP server (`opentide mcp start`), all eight platf
 
 - Python **3.10–3.14**
 - A detection content repository (or use `opentide setup repo` to scaffold one)
+- Optional: Node.js **20.19+** with `npx`, for [`opentide explorer`](../cli/explorer.md)
 - Platform credentials when deploying or running live queries — configured under `.opentide/configurations/`, see [Configuration → credentials](./configuration.md#credentials)
 
 ## Recommended: an isolated environment
@@ -124,6 +125,7 @@ opentide --help
 | `OPENTIDE_REPO_ROOT` | Root of the detection content repository (objects, configurations). See [Repository setup](./repository-setup.md) |
 | `OPENTIDE_DATA_ROOT` | Override bundled package data (advanced; defaults to wheel contents) |
 | `DEBUG` | Enable debug logging when set |
+| `OPENTIDE_EXPLORER_PACKAGE` | npm spec `opentide explorer` runs instead of `@opentide/explorer@<version>` (a mirror, fork, or local tarball) |
 
 ## Verify installation
 
