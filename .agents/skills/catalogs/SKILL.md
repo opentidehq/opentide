@@ -67,11 +67,14 @@ Injection, from `language_for_field_path`:
 | `configurations.defender_for_endpoint.query` | KQL |
 | `configurations.splunk.query` and legacy `configurations.splunk.search` | SPL |
 | `configurations.elastic.query` and `threat.query` | ES\|QL, EQL, kuery, or Lucene from `type` and `language` (`elastic_query_language`) |
+| `configurations.carbon_black_cloud.query` | Lucene, Carbon Black dialect |
 | `response.procedure.searches[].query` with `system: elastic` | the entry's `language`; none when omitted |
+| `response.procedure.searches[].query` with `system:` a platform identifier above | that platform's language and profile, in any key order (`hunt_query_language`) |
+| `configurations.splunk.actions.notable.drilldown.search`, any other `query:` / `search:` | none |
 | `configurations.crowdstrike.*` | unsupported |
 | markdown fields | HighlightSpec `markdown.*`, not a query engine |
 
-Block-scalar indent is stripped for analysis. Tokens are remapped onto the original YAML coordinates. Do not highlight the dedented buffer's offsets.
+Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), not from line prefixes, and carry their real path and their platform. The analysed text is the scalar's value (folded, unquoted, escapes decoded, block indent stripped). Tokens are remapped onto the original YAML coordinates through the byte map. Do not highlight the dedented buffer's offsets. `scripts/oracles/oracle.py` extracts the same paths with PyYAML, and `crates/opentide-tide/tests/query_extraction.rs` holds every `testdata/` object to it.
 
 ## Conformance
 

@@ -6,6 +6,15 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- `InjectedQuery::platform` and `QueryReport::platform`: the platform a query runs on, as a `configurations` key: the block's key for a rule query, the entry's `system` for a hunt, whose path does not name it. It picks the KQL profile and Lucene dialect for hover, completion and diagnostics, so a `defender_for_endpoint` hunt is checked against Defender's tables. `opentide_tide::hunt_query_language` maps a hunt's `system` (and Elastic `language`) to its language.
+
+### Fixed
+
+- Queries are extracted from a Tide object's YAML structure, not from lines that say `query:` or `search:` ([#118](https://github.com/opentidehq/language-server/issues/118)). A Splunk notable's drilldown search (`configurations.splunk.actions.notable.drilldown.search`, a `$token$` template) is no longer analysed as the rule's query `configurations.splunk.search`; a `query:` or `search:` nested anywhere else under a platform block is not a query either. Each response hunt (`response.procedure.searches[]`) is analysed in the language its `system` names whatever the order of its keys, and reported at its own path (`response.procedure.searches.0.query`), not as the rule's `configurations.<system>.query`; a `system` that is not a platform identifier (`Sentinel`, `Splunk ES`) is free text and is not analysed. A folded (`>`, `>-`) or indentation-indicated (`|2`) block scalar is analysed as its value rather than as the text `>-`, and a plain scalar on the line below its key or over several lines as the YAML value. Diagnostics map back through the folding to their line and column in the file.
+- A quoted query (`query: "SecurityEvent\n| take 1\n"`, as `yaml.safe_dump` writes one, or a single-quoted query over several lines) is analysed as its value, escapes decoded and lines folded, not as its source text ([#105](https://github.com/opentidehq/language-server/issues/105)).
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.

@@ -23,7 +23,7 @@ Tide YAML already has its oracle: `tide_corpus.rs` runs the opentide CLI's Pydan
 - `testdata/conformance/external/<lang>/*`, including the `.broken.` twins
 - `testdata/conformance/perf/*`
 - `testdata/oracles/<lang>/*`, one probe per form real detections use
-- every `configurations.{sentinel,defender_for_endpoint,splunk}` query in a Tide rule under `testdata/`
+- every `configurations.{sentinel,defender_for_endpoint,splunk}` query in a Tide rule under `testdata/` (and the legacy `configurations.splunk.search`), and every `response.procedure.searches[]` query whose `system` is one of those platforms, as YAML loads them (folded, quoted). A drilldown search is not a query
 - Elastic: `configurations.elastic.query` and `threat.query` in the language their `type` and `language` select, `response.procedure.searches[]` entries with `system: elastic` and a `language`, the verdict tables `testdata/conformance/external/{lucene-queryparser,kuery-opensearch-dashboards}/cases.tsv`, and, when `OPENTIDE_DETECTION_RULES` names an `elastic/detection-rules` checkout (CI pins one), every rule and single-language hunt in it
 
 Each query runs through `opentide-lsp analyze` and through the reference.
