@@ -1,0 +1,3 @@
+// prod:externaldata_expression valid
+externaldata (Ip: string, Tag: string) [@"https://example.com/ips.csv"] with (format="csv", ignoreFirstRecord=true)
+| take 10

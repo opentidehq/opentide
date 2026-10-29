@@ -292,6 +292,84 @@
     }
   },
   {
+    "type": "externaldata_expression",
+    "named": true,
+    "fields": {
+      "uris": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "operator_option",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "facet_operator",
+    "named": true,
+    "fields": {
+      "columns": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "tabular_operator",
+            "named": true
+          }
+        ]
+      },
+      "subquery": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "subquery",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "filter_operator",
     "named": true,
     "fields": {
@@ -305,6 +383,47 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "fork_branch",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "subquery": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "subquery",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "fork_operator",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "fork_branch",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -541,15 +660,7 @@
             "named": false
           },
           {
-            "type": "facet",
-            "named": false
-          },
-          {
             "type": "find",
-            "named": false
-          },
-          {
-            "type": "fork",
             "named": false
           },
           {
@@ -581,27 +692,11 @@
             "named": false
           },
           {
-            "type": "partition",
-            "named": false
-          },
-          {
-            "type": "range",
-            "named": false
-          },
-          {
             "type": "reduce",
             "named": false
           },
           {
             "type": "sample",
-            "named": false
-          },
-          {
-            "type": "sample-distinct",
-            "named": false
-          },
-          {
-            "type": "scan",
             "named": false
           },
           {
@@ -614,10 +709,6 @@
           },
           {
             "type": "top-hitters",
-            "named": false
-          },
-          {
-            "type": "top-nested",
             "named": false
           }
         ]
@@ -1232,6 +1323,66 @@
     }
   },
   {
+    "type": "partition_operator",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "tabular_expression",
+            "named": true
+          }
+        ]
+      },
+      "column": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "dynamic_literal",
+            "named": true
+          },
+          {
+            "type": "function_call",
+            "named": true
+          }
+        ]
+      },
+      "subquery": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "subquery",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "hint_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "primary_expression",
     "named": true,
     "fields": {},
@@ -1285,6 +1436,10 @@
         },
         {
           "type": "toscalar_expression",
+          "named": true
+        },
+        {
+          "type": "typed_literal",
           "named": true
         }
       ]
@@ -1417,6 +1572,22 @@
             "named": false
           },
           {
+            "type": "asc",
+            "named": false
+          },
+          {
+            "type": "desc",
+            "named": false
+          },
+          {
+            "type": "granny-asc",
+            "named": false
+          },
+          {
+            "type": "granny-desc",
+            "named": false
+          },
+          {
             "type": "identifier",
             "named": true
           }
@@ -1453,6 +1624,52 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "range_operator",
+    "named": true,
+    "fields": {
+      "column": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "from": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "step": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "to": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -1495,6 +1712,130 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "sample_distinct_operator",
+    "named": true,
+    "fields": {
+      "column": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "count": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "hint_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "scan_operator",
+    "named": true,
+    "fields": {
+      "order": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "sort_item",
+            "named": true
+          }
+        ]
+      },
+      "partition": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "operator_option",
+          "named": true
+        },
+        {
+          "type": "parameter",
+          "named": true
+        },
+        {
+          "type": "scan_step",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "scan_step",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "predicate": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "assignment",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1748,7 +2089,15 @@
           "named": true
         },
         {
+          "type": "facet_operator",
+          "named": true
+        },
+        {
           "type": "filter_operator",
+          "named": true
+        },
+        {
+          "type": "fork_operator",
           "named": true
         },
         {
@@ -1792,6 +2141,10 @@
           "named": true
         },
         {
+          "type": "partition_operator",
+          "named": true
+        },
+        {
           "type": "project_away_operator",
           "named": true
         },
@@ -1812,7 +2165,19 @@
           "named": true
         },
         {
+          "type": "range_operator",
+          "named": true
+        },
+        {
           "type": "render_operator",
+          "named": true
+        },
+        {
+          "type": "sample_distinct_operator",
+          "named": true
+        },
+        {
+          "type": "scan_operator",
           "named": true
         },
         {
@@ -1825,6 +2190,10 @@
         },
         {
           "type": "take_operator",
+          "named": true
+        },
+        {
+          "type": "top_nested_operator",
           "named": true
         },
         {
@@ -1870,6 +2239,10 @@
           "named": true
         },
         {
+          "type": "externaldata_expression",
+          "named": true
+        },
+        {
           "type": "function_call",
           "named": true
         },
@@ -1879,6 +2252,10 @@
         },
         {
           "type": "print_operator",
+          "named": true
+        },
+        {
+          "type": "range_operator",
           "named": true
         },
         {
@@ -1910,6 +2287,67 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "top_nested_clause",
+    "named": true,
+    "fields": {
+      "by": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_item",
+            "named": true
+          }
+        ]
+      },
+      "count": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "of": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "column_item",
+            "named": true
+          }
+        ]
+      },
+      "others": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "top_nested_operator",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "top_nested_clause",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -2011,6 +2449,10 @@
           {
             "type": ",",
             "named": false
+          },
+          {
+            "type": "function_call",
+            "named": true
           },
           {
             "type": "identifier",
@@ -2213,6 +2655,10 @@
     "named": false
   },
   {
+    "type": "=>",
+    "named": false
+  },
+  {
     "type": "=~",
     "named": false
   },
@@ -2246,6 +2692,10 @@
   },
   {
     "type": "]",
+    "named": false
+  },
+  {
+    "type": "all",
     "named": false
   },
   {
@@ -2290,11 +2740,19 @@
     "named": false
   },
   {
+    "type": "containscs",
+    "named": false
+  },
+  {
     "type": "count_operator",
     "named": true
   },
   {
     "type": "datatable",
+    "named": false
+  },
+  {
+    "type": "declare",
     "named": false
   },
   {
@@ -2327,6 +2785,10 @@
   },
   {
     "type": "extend",
+    "named": false
+  },
+  {
+    "type": "external_data",
     "named": false
   },
   {
@@ -2363,6 +2825,14 @@
   },
   {
     "type": "getschema",
+    "named": false
+  },
+  {
+    "type": "granny-asc",
+    "named": false
+  },
+  {
+    "type": "granny-desc",
     "named": false
   },
   {
@@ -2502,7 +2972,19 @@
     "named": false
   },
   {
+    "type": "none",
+    "named": false
+  },
+  {
     "type": "not",
+    "named": false
+  },
+  {
+    "type": "notcontains",
+    "named": false
+  },
+  {
+    "type": "notcontainscs",
     "named": false
   },
   {
@@ -2518,7 +3000,15 @@
     "named": true
   },
   {
+    "type": "of",
+    "named": false
+  },
+  {
     "type": "on",
+    "named": false
+  },
+  {
+    "type": "optional",
     "named": false
   },
   {
@@ -2527,6 +3017,14 @@
   },
   {
     "type": "order",
+    "named": false
+  },
+  {
+    "type": "others",
+    "named": false
+  },
+  {
+    "type": "output",
     "named": false
   },
   {
@@ -2660,6 +3158,10 @@
   {
     "type": "true",
     "named": false
+  },
+  {
+    "type": "typed_literal",
+    "named": true
   },
   {
     "type": "typeof",

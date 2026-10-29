@@ -6,6 +6,18 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- `kql_deprecated_operator` (warning): `containscs`, `notcontains` and `notcontainscs`, legacy spellings Kusto still parses, suggest `contains_cs`, `!contains` and `!contains_cs` ([#125](https://github.com/opentidehq/language-server/issues/125)).
+
+### Fixed
+
+- KQL typed scalar literals parse as literals, not calls: `datetime(2024-01-01 10:00:00)`, `timespan(1d)`, `time(0s)`, `long(null)`, `double(0)`, `guid(00000000-...)` and the other `bool`, `int`, `real`, `decimal` forms were `kql_unknown_function`, and a date with a space or a `T` was also a `kql_parse_error` ([#125](https://github.com/opentidehq/language-server/issues/125), [#109](https://github.com/opentidehq/language-server/issues/109)). As in Kusto, the value runs to `)` on the same line, right after the type name.
+- `externaldata (c:string) [@"https://..."] with (format="csv")` parses wherever a tabular expression may start: a `let` value, a pipeline source, and inside `in ((...))` ([#125](https://github.com/opentidehq/language-server/issues/125)). Without its URI list it is still a syntax error.
+- Inside a function body a tabular parameter, `(T:(x:string))` or `(T:(*))`, is a table: `T | where ...` was `kql_unknown_table 'T'` ([#125](https://github.com/opentidehq/language-server/issues/125)).
+- `union` takes calls as legs (`union isfuzzy=true g("a"), g("b")`), and `containscs` parses ([#125](https://github.com/opentidehq/language-server/issues/125)).
+- The KQL operators with their own syntax parse: `range x from 1 to 3 step 1` (also as a source), `project-reorder x asc`, `top-nested 3 of x by count()`, `fork (take 1) (take 2)`, `facet by x`, `sample-distinct 1 of x`, `scan ... with (step s: x == 1;)` and `partition by x (take 1)` were `kql_parse_error` ([#125](https://github.com/opentidehq/language-server/issues/125)).
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.

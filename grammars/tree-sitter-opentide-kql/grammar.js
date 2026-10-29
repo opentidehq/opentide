@@ -93,6 +93,8 @@ module.exports = grammar({
         $.print_operator,
         $.union_operator,
         $.datatable_expression,
+        $.externaldata_expression,
+        $.range_operator,
         // `table("SigninLogs")`, a tabular function declared with `let`
         $.function_call,
         $.materialize_expression,
@@ -130,6 +132,39 @@ module.exports = grammar({
         "[",
         optional(seq(commaSep1($.expression), optional(","))),
         "]",
+      ),
+
+    // `externaldata (c:string, v:dynamic) [@"https://..."] with (format="csv")`:
+    // a table read from storage, wherever a tabular expression may start
+    // (`let x = externaldata ...;`, a pipeline source, `in ((externaldata ...))`).
+    // The URI list is required; the `with` properties are optional.
+    externaldata_expression: ($) =>
+      seq(
+        choice("externaldata", "external_data"),
+        repeat($.operator_option),
+        "(",
+        commaSep1(seq($.identifier, ":", $.type)),
+        optional(","),
+        ")",
+        "[",
+        field("uris", commaSep1($.expression)),
+        optional(","),
+        "]",
+        optional(seq("with", "(", commaSep1($.operator_option), ")")),
+      ),
+
+    // `range x from 1 to 10 step 1`: a one-column table of a series. A source,
+    // and an operator after a pipe as Kusto.Language parses it.
+    range_operator: ($) =>
+      seq(
+        "range",
+        field("column", $.identifier),
+        "from",
+        field("from", $.expression),
+        "to",
+        field("to", $.expression),
+        "step",
+        field("step", $.expression),
       ),
 
     // `kind=inner`, `isfuzzy=true`, `hint.strategy=shuffle`. Where options
@@ -199,6 +234,13 @@ module.exports = grammar({
         $.sort_operator,
         $.distinct_operator,
         $.render_operator,
+        $.range_operator,
+        $.top_nested_operator,
+        $.sample_distinct_operator,
+        $.fork_operator,
+        $.facet_operator,
+        $.partition_operator,
+        $.scan_operator,
         $.keyword_operator,
         $.unknown_operator,
       ),
@@ -246,7 +288,13 @@ module.exports = grammar({
         seq(
           "union",
           repeat($.operator_option),
-          field("tables", commaSep1(choice($.identifier, seq("(", $.tabular_expression, ")")))),
+          field(
+            "tables",
+            commaSep1(
+              // `union g("a"), g("b")`: a call to a tabular function is a leg too
+              choice($.identifier, $.function_call, seq("(", $.tabular_expression, ")")),
+            ),
+          ),
         ),
       ),
 
@@ -271,8 +319,17 @@ module.exports = grammar({
     project_keep_operator: ($) =>
       seq("project-keep", field("columns", commaSep1($.identifier))),
 
+    // `project-reorder a, b desc`: a column may carry the order its group is sorted in.
     project_reorder_operator: ($) =>
-      seq("project-reorder", field("columns", commaSep1($.identifier))),
+      seq(
+        "project-reorder",
+        field(
+          "columns",
+          commaSep1(
+            seq($.identifier, optional(choice("asc", "desc", "granny-asc", "granny-desc"))),
+          ),
+        ),
+      ),
 
     top_operator: ($) =>
       seq(
@@ -336,6 +393,102 @@ module.exports = grammar({
     evaluate_operator: ($) =>
       seq("evaluate", repeat($.hint_option), field("plugin", $.function_call)),
 
+    // `top-nested 3 of x with others = "other" by count() desc, top-nested 2 of y by count()`
+    top_nested_operator: ($) => prec.right(commaSep1($.top_nested_clause)),
+
+    top_nested_clause: ($) =>
+      prec.right(
+        seq(
+          "top-nested",
+          optional(field("count", $.expression)),
+          "of",
+          field("of", $.column_item),
+          optional(seq("with", "others", "=", field("others", $.expression))),
+          "by",
+          field("by", $.column_item),
+          optional(choice("asc", "desc")),
+          optional(seq("nulls", choice("first", "last"))),
+        ),
+      ),
+
+    // `sample-distinct 10 of Account`
+    sample_distinct_operator: ($) =>
+      seq(
+        "sample-distinct",
+        repeat($.hint_option),
+        field("count", $.expression),
+        "of",
+        field("column", $.expression),
+      ),
+
+    // `fork (where a > 1 | take 5) b = (count)`: each branch runs on the input.
+    fork_operator: ($) => prec.right(seq("fork", repeat1($.fork_branch))),
+
+    fork_branch: ($) =>
+      seq(
+        optional(seq(field("name", $.identifier), "=")),
+        "(",
+        field("subquery", $.subquery),
+        ")",
+      ),
+
+    // `facet by a, b with (where x > 1 | take 5)` or `with take 5`
+    facet_operator: ($) =>
+      prec.right(
+        seq(
+          "facet",
+          "by",
+          field("columns", commaSep1($.identifier)),
+          optional(
+            seq(
+              "with",
+              choice(seq("(", field("subquery", $.subquery), ")"), field("operator", $.tabular_operator)),
+            ),
+          ),
+        ),
+      ),
+
+    // `partition hint.strategy=native by Account (top 1 by TimeGenerated)`, or the
+    // legacy `partition by Account { T | ... }`.
+    partition_operator: ($) =>
+      seq(
+        "partition",
+        repeat($.hint_option),
+        "by",
+        field("column", $.identifier),
+        optional(seq("in", field("scope", choice($.function_call, $.dynamic_literal)))),
+        choice(
+          seq("(", field("subquery", $.subquery), ")"),
+          seq("{", field("body", $.tabular_expression), "}"),
+        ),
+      ),
+
+    // `scan declare (n:long = 0) with (step s output=last: x == 1 => n = s.n + 1;)`
+    scan_operator: ($) =>
+      seq(
+        "scan",
+        repeat($.operator_option),
+        optional(seq("order", "by", field("order", commaSep1($.sort_item)))),
+        optional(seq("partition", "by", field("partition", commaSep1($.expression)))),
+        optional(seq("declare", "(", optional(commaSep1($.parameter)), ")")),
+        "with",
+        "(",
+        repeat1($.scan_step),
+        ")",
+      ),
+
+    scan_step: ($) =>
+      seq(
+        "step",
+        field("name", $.identifier),
+        optional("optional"),
+        optional(seq("output", "=", choice("all", "last", "none"))),
+        ":",
+        field("predicate", $.expression),
+        optional(seq("=>", commaSep1($.assignment))),
+        ";",
+      ),
+
     keyword_operator: ($) =>
       seq(
         field(
@@ -345,16 +498,10 @@ module.exports = grammar({
             "find",
             "invoke",
             "serialize",
-            "scan",
             "as",
             "getschema",
             "sample",
-            "sample-distinct",
-            "range",
             "externaldata",
-            "partition",
-            "fork",
-            "facet",
             "consume",
             "reduce",
             "make-graph",
@@ -363,7 +510,6 @@ module.exports = grammar({
             "graph-to-table",
             "graph-mark-components",
             "top-hitters",
-            "top-nested",
           ),
         ),
         optional(field("args", $.expression)),
@@ -457,6 +603,10 @@ module.exports = grammar({
                 "!contains",
                 "contains_cs",
                 "!contains_cs",
+                // legacy spellings Kusto still parses; the engine suggests the current name
+                "containscs",
+                "notcontains",
+                "notcontainscs",
                 "startswith",
                 "!startswith",
                 "startswith_cs",
@@ -531,6 +681,7 @@ module.exports = grammar({
         $.boolean,
         $.null,
         $.timespan,
+        $.typed_literal,
         $.dynamic_literal,
         $.toscalar_expression,
         $.member_expression,
@@ -551,7 +702,9 @@ module.exports = grammar({
       prec(
         10,
         seq(
-          field("name", $.identifier),
+          // `range` is also the keyword of range_operator, which may start a
+          // tabular expression where a call may (`let r = range(1, 5, 1);`).
+          field("name", choice($.identifier, alias("range", $.identifier))),
           "(",
           field("arguments", optional(commaSep1(choice($.expression, $.star)))),
           ")",
@@ -560,6 +713,34 @@ module.exports = grammar({
 
     // `arg_max(TimeGenerated, *)`
     star: (_) => "*",
+
+    // `datetime(2024-01-01 10:00)`, `timespan(1d)`, `long(null)`, `guid(...)`: a
+    // scalar literal of a type. As in Kusto.Language, the type name is followed
+    // directly by `(` and the value is raw text up to `)` on the same line, not
+    // an expression (a date holds a space, a guid holds hyphens).
+    typed_literal: (_) =>
+      token(
+        seq(
+          choice(
+            "bool",
+            "date",
+            "datetime",
+            "decimal",
+            "double",
+            "guid",
+            "int",
+            "int32",
+            "int64",
+            "long",
+            "real",
+            "time",
+            "timespan",
+          ),
+          "(",
+          /[^)\r\n]*/,
+          ")",
+        ),
+      ),
 
     // `dynamic([...])`, `dynamic({...})`, `dynamic(null)`
     dynamic_literal: ($) => seq("dynamic", "(", optional($.json_value), ")"),

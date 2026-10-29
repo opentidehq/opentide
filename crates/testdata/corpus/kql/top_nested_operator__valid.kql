@@ -1,0 +1,3 @@
+// prod:top_nested_operator prod:top_nested_clause valid
+SecurityEvent
+| top-nested 3 of Computer by Failures = count(), top-nested 2 of Account with others = "other" by count() desc
