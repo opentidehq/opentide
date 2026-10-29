@@ -36,6 +36,14 @@ jobs:
         run: cargo test --workspace
       - name: generate-highlights --check
         run: cargo run -p opentide-lsp -- generate-highlights --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The TypeScript client against the debug server `cargo test` built.
+      - name: lsp-client (stdio)
+        env:
+          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
+        run: node --experimental-strip-types --test packages/lsp-client/src/index.test.ts
 
   # Every crate builds from its packaged sources, as it will from crates.io:
   # a crate that reads a file outside OPENTIDE_ASSETS fails here, not at release.
@@ -78,6 +86,15 @@ jobs:
           node-version: "22"
       - run: cargo install --locked wasm-bindgen-cli --version 0.2.128
       - run: bash scripts/build-wasm.sh
+      # The TypeScript client's worker and wasi transports on what was just
+      # built, compared with the native CLI.
+      - run: cargo build -p opentide-lsp
+      - name: lsp-client (worker, wasi)
+        env:
+          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
+          OPENTIDE_WASI_BIN: target/wasm32-wasip1/release/opentide-lsp.wasm
+          OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
+        run: node --experimental-strip-types --test packages/lsp-client/src/index.test.ts
 
   # Every public Elastic rule passes Elasticsearch's parser, so any engine
   # error on them is an engine bug (#82). The rules are ELv2: checked out
