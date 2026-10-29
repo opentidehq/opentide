@@ -5,7 +5,7 @@
 //! sentinels are already dropped. Cross-object UUID fields use `ref`.
 
 use crate::IndexedObject;
-use crate::yaml_path::{YamlCursor, object_schema_kind, yaml_cursor};
+use crate::yaml_path::{YamlCursor, document_schema_id, yaml_cursor};
 use opentide_core::{CompletionItem, Position, offset_to_position};
 use opentide_highlight::{TideField, load_tide_fields, tide_children, tide_field_at};
 
@@ -59,7 +59,7 @@ fn field_for(source: &str, cursor: &YamlCursor) -> Option<&'static TideField> {
     if path.is_empty() {
         return None;
     }
-    let schema = object_schema_kind(source);
+    let schema = document_schema_id(source);
     if !schema.is_empty() {
         return tide_field_at(&schema, &path);
     }
@@ -138,7 +138,7 @@ pub fn completions_tide(
     workspace: &[IndexedObject],
 ) -> Vec<CompletionItem> {
     let cursor = yaml_cursor(source, offset);
-    let schema = object_schema_kind(source);
+    let schema = document_schema_id(source);
     if cursor.on_key || cursor.value.is_none() {
         return complete_keys(&cursor, &schema);
     }

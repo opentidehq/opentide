@@ -1679,6 +1679,26 @@ mod tests {
     }
 
     #[test]
+    fn a_query_may_start_with_search_or_find() {
+        // Valid KQL: `search` was only an operator after a pipe, so a query
+        // starting with it was a parse error.
+        for query in [
+            "search \"mimikatz\"",
+            "search in (SecurityEvent, Syslog) Account == \"a\" | take 10",
+            "search kind=case_sensitive \"Mimikatz\"",
+            "find in (SecurityEvent) where Account == \"a\" | project Account",
+        ] {
+            let r = analyze(query, Profile::Sentinel);
+            let errors: Vec<_> = r
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == opentide_core::Severity::Error)
+                .collect();
+            assert!(errors.is_empty(), "{query}: {errors:?}");
+        }
+    }
+
+    #[test]
     fn render_is_warning() {
         let r = analyze("SecurityEvent | render table", Profile::Core);
         assert!(

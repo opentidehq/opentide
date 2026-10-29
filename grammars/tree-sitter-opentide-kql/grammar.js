@@ -96,6 +96,22 @@ module.exports = grammar({
         // `table("SigninLogs")`, a tabular function declared with `let`
         $.function_call,
         $.materialize_expression,
+        $.search_source,
+      ),
+
+    // `search "x"`, `search in (SecurityEvent, Syslog) Account == "a"`,
+    // `find in (T) where x`: a query may start with search or find, which
+    // read every table (or those `in` names). After a pipe they are
+    // keyword_operator.
+    search_source: ($) =>
+      prec.right(
+        seq(
+          field("name", choice("search", "find")),
+          repeat($.operator_option),
+          optional(seq("in", "(", commaSep1(field("table", $.identifier)), ")")),
+          optional("where"),
+          field("predicate", $.expression),
+        ),
       ),
 
     // `materialize(T | ...)` and `toscalar(T | ...)` take a tabular argument.

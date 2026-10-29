@@ -1498,6 +1498,56 @@
     }
   },
   {
+    "type": "search_source",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "find",
+            "named": false
+          },
+          {
+            "type": "search",
+            "named": false
+          }
+        ]
+      },
+      "predicate": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "table": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "operator_option",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "series_aggregate",
     "named": true,
     "fields": {
@@ -1829,6 +1879,10 @@
         },
         {
           "type": "print_operator",
+          "named": true
+        },
+        {
+          "type": "search_source",
           "named": true
         },
         {

@@ -697,3 +697,43 @@ configurations:
     );
     assert_eq!(item["textEdit"]["newText"], "process.parent.name");
 }
+
+#[test]
+fn initialize_installs_the_workspace_field_catalog() {
+    let root = std::env::temp_dir().join(format!("opentide-lsp-catalog-{}", std::process::id()));
+    let catalogs = root.join(".opentide/lsp/catalogs/generated");
+    std::fs::create_dir_all(&catalogs).unwrap();
+    std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+    std::fs::write(
+        catalogs.join("fields.json"),
+        r#"{"opentide": "0.19.0", "fields": [
+            {"schema": "rule", "path": "metadata", "name": "metadata", "type": "object"},
+            {"schema": "rule", "path": "metadata.tlp", "name": "tlp", "type": "string",
+             "enum": ["clear", "house"]}]}"#,
+    )
+    .unwrap();
+    let rule = "name: House Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: house\n";
+    let uri = format!("file://{}/objects/rules/house-rule.yaml", root.display());
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+    );
+    let with_catalog = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    drop(lsp);
+
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let bundled = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    std::fs::remove_dir_all(&root).ok();
+
+    assert!(
+        !with_catalog.contains(&"vocab_unknown".to_string()),
+        "{with_catalog:?}"
+    );
+    assert!(
+        bundled.contains(&"vocab_unknown".to_string()),
+        "{bundled:?}"
+    );
+}

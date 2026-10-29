@@ -2,8 +2,7 @@
 //!
 //! The CLI never speaks JSON-RPC. `--stdio` is the editor protocol.
 
-mod jsonrpc;
-mod server;
+use opentide_lsp::server;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -94,6 +93,7 @@ fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
     if let Some(root) = find_objects_root(file) {
         collect_yaml(&root, &mut files)?;
         if let Some(workspace) = root.parent() {
+            server::install_workspace_catalog(workspace);
             let config = workspace.join(opentide_analysis::ELASTIC_CONFIGURATION);
             if let Ok(text) = std::fs::read_to_string(&config) {
                 files.push((config.display().to_string(), text));

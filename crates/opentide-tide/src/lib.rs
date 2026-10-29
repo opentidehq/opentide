@@ -11,14 +11,13 @@ mod yaml_path;
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
 use opentide_highlight::{
     HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
-    tokens_from_spans,
+    tide_schema_root, tokens_from_spans,
 };
 use opentide_kql::Profile;
 use regex::Regex;
 use serde::Deserialize;
-use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 use uuid::Uuid;
 
 pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
@@ -26,7 +25,9 @@ pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
 };
 pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
-pub use yaml_path::{YamlCursor, object_schema_kind, uuid_span, yaml_cursor};
+pub use yaml_path::{
+    YamlCursor, document_schema_id, key_span, key_span_in, uuid_span, yaml_cursor,
+};
 
 const RULE_TEMPLATE: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -133,7 +134,8 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
     while i < lines.len() {
         let line = lines[i];
         let indent = line.chars().take_while(|c| *c == ' ').count();
-        let trimmed = line.trim();
+        let unquoted = unquote_key(line.trim());
+        let trimmed = unquoted.as_ref();
         let content = trimmed.strip_prefix("- ").unwrap_or(trimmed);
         // Keep platform across a same-indent sibling `query:` / `search:` of `system:`.
         // Real hunts look like:
@@ -177,6 +179,26 @@ pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
     out
 }
 
+/// `line` (trimmed) with its mapping key unquoted: `"query": |` reads as
+/// `query: |`, and `- 'sentinel':` as `- sentinel:`. YAML allows either
+/// spelling of a key; the value is left as written.
+fn unquote_key(line: &str) -> std::borrow::Cow<'_, str> {
+    let (dash, rest) = match line.strip_prefix("- ") {
+        Some(rest) => ("- ", rest.trim_start()),
+        None => ("", line),
+    };
+    let Some(quote) = rest.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+        return std::borrow::Cow::Borrowed(line);
+    };
+    let Some(close) = rest[1..].find(quote).map(|i| i + 1) else {
+        return std::borrow::Cow::Borrowed(line);
+    };
+    if !rest[close + 1..].starts_with(':') {
+        return std::borrow::Cow::Borrowed(line);
+    }
+    std::borrow::Cow::Owned(format!("{dash}{}{}", &rest[1..close], &rest[close + 1..]))
+}
+
 #[allow(clippy::question_mark)]
 fn parse_query_block(
     source: &str,
@@ -187,7 +209,8 @@ fn parse_query_block(
 ) -> Option<InjectedQuery> {
     let line = *lines.get(i)?;
     let indent = line.chars().take_while(|c| *c == ' ').count();
-    let trimmed = line.trim().strip_prefix("- ").unwrap_or(line.trim());
+    let unquoted = unquote_key(line.trim());
+    let trimmed = unquoted.strip_prefix("- ").unwrap_or(&unquoted);
     let (key, is_block) = if trimmed == "query: |" || trimmed.starts_with("query: |") {
         ("query", true)
     } else if trimmed == "search: |" || trimmed.starts_with("search: |") {
@@ -267,22 +290,25 @@ fn parse_query_block(
             break;
         }
         let strip = *content_indent.get_or_insert(ind);
+        // A line indented less than the first (an explicit `|2` indicator)
+        // loses only its own indentation: spaces are one byte each, so the
+        // cut is always on a character boundary.
+        let body = &l[ind.min(strip)..];
+        // Where the body starts in the line: `trim_start` may cut fewer bytes.
+        let cut = l.len() - body.len();
         if inner.is_empty() {
-            host_start = b;
+            // The query starts at its text, not at the line's indentation.
+            host_start = b + cut;
         }
-        let body = if l.len() >= strip {
-            &l[strip..]
-        } else {
-            l.trim_start()
-        };
         let body = body.strip_suffix('\n').unwrap_or(body);
         if !inner.is_empty() {
             inner.push('\n');
             host_map.push(b.saturating_sub(1));
         }
-        for (k, ch) in body.char_indices() {
-            host_map.push(b + strip + k);
-            let _ = ch;
+        // One entry per byte: `host_map` maps inner *byte* offsets, so a
+        // multi-byte character takes as many entries as it has bytes.
+        for k in 0..body.len() {
+            host_map.push(b + cut + k);
         }
         inner.push_str(body);
         host_end = b + l.len();
@@ -403,6 +429,13 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     let schema = object_schema_id(&object);
     let object_type = schema.split("::").next().unwrap_or("").to_string();
+    // Catalog lookups take the schema id, so each revision is checked
+    // against its own fields; a bare family resolves to its newest revision.
+    let catalog_schema = if schema.contains("::") {
+        schema.clone()
+    } else {
+        object_type.clone()
+    };
 
     if object.name.as_deref().unwrap_or("").is_empty() {
         diagnostics.push(
@@ -529,40 +562,10 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 .with_field_path(vec!["metadata".into(), "organisation".into()]),
             );
         }
-        if schema == "rule::1.0" && object.description.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'description'",
-                    Range::point(0, 0),
-                )
-                .with_field_path(vec!["description".into()]),
-            );
-        }
-        if schema == "rule::1.0" && object.response.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'response'",
-                    Range::point(0, 0),
-                )
-                .with_field_path(vec!["response".into()]),
-            );
-        }
-        if schema == "rule::1.0" && object.configurations.is_none() {
-            diagnostics.push(
-                Diagnostic::error(
-                    codes::SCHEMA_VALIDATION,
-                    "missing required field 'configurations'",
-                    Range::point(0, 0),
-                )
-                .with_field_path(vec!["configurations".into()]),
-            );
-        }
     }
 
     if let Some(sev) = &object.severity {
-        if let Some(message) = unknown_enum(&object_type, "severity", sev) {
+        if let Some(message) = unknown_enum(&catalog_schema, "severity", sev) {
             diagnostics.push(
                 Diagnostic::error(
                     codes::VOCAB_UNKNOWN,
@@ -574,7 +577,8 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
-    diagnose_catalog_values(&object_type, &object, input.source, &mut diagnostics);
+    diagnose_catalog_values(&catalog_schema, &object, input.source, &mut diagnostics);
+    diagnose_shape(&schema, input.source, &mut diagnostics);
     diagnose_deprecations(&object_type, input.source, &mut diagnostics);
 
     let uuid = object
@@ -754,91 +758,14 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let injections = extract_injections(input.source);
     let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
     let mut tokens = highlight_tide(&spec, input.source, &skip);
-    for inj in &injections {
-        match inj.language {
-            LanguageId::Kql => {
-                let profile = if inj.field_path.iter().any(|p| p == "defender_for_endpoint") {
-                    Profile::Defender
-                } else {
-                    Profile::Sentinel
-                };
-                let result = opentide_kql::analyze(&inj.inner, profile);
-                for d in result.diagnostics {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in result.tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::Spl => {
-                let result = opentide_spl::analyze(&inj.inner);
-                for d in result.diagnostics {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in result.tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
-                let (found, query_tokens) = match inj.language {
-                    LanguageId::Esql => {
-                        // Hunts have no tenants; only the rule block is targeted.
-                        let target = (inj.field_path.first().map(String::as_str)
-                            == Some("configurations"))
-                        .then(|| {
-                            elastic::stack_target(
-                                object
-                                    .configurations
-                                    .as_ref()
-                                    .and_then(|c| c.get("elastic")),
-                                input.elastic_tenants,
-                            )
-                        })
-                        .flatten();
-                        let r = opentide_esql::analyze_for(&inj.inner, target);
-                        (r.diagnostics, r.tokens)
-                    }
-                    LanguageId::Eql => {
-                        let r = opentide_eql::analyze(&inj.inner);
-                        // Hunts have no schedule; only the rule query is compared.
-                        if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                            diagnostics.extend(elastic::maxspan_advisories(
-                                input.source,
-                                object.configurations.as_ref(),
-                                inj,
-                            ));
-                        }
-                        (r.diagnostics, r.tokens)
-                    }
-                    LanguageId::Kuery => {
-                        let r = opentide_kuery::analyze(&inj.inner);
-                        (r.diagnostics, r.tokens)
-                    }
-                    _ => {
-                        let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
-                            opentide_lucene::Dialect::CarbonBlack
-                        } else {
-                            opentide_lucene::Dialect::Elastic
-                        };
-                        let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
-                        (r.diagnostics, r.tokens)
-                    }
-                };
-                for d in found {
-                    diagnostics.push(remap_diagnostic(input.source, inj, d));
-                }
-                for t in query_tokens {
-                    if let Some(mapped) = remap_token(input.source, inj, &t) {
-                        tokens.push(mapped);
-                    }
-                }
-            }
-            LanguageId::TideYaml => {}
-        }
+    for query in analyze_injections(
+        input.source,
+        object.configurations.as_ref(),
+        input.elastic_tenants,
+        injections,
+    ) {
+        diagnostics.extend(query.diagnostics);
+        tokens.extend(query.tokens);
     }
 
     tokens.sort_by_key(|t| (t.span.start, t.span.end));
@@ -848,6 +775,108 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         tokens,
         symbols,
     }
+}
+
+/// One query injected into a Tide object, analyzed in its language. Ranges and
+/// token spans are in the object file's coordinates.
+#[derive(Debug, Clone)]
+pub struct QueryAnalysis {
+    pub query: InjectedQuery,
+    pub diagnostics: Vec<Diagnostic>,
+    pub tokens: Vec<HighlightToken>,
+}
+
+/// Every query injected into a Tide object, each analyzed in its language,
+/// including queries with no diagnostic (so a host can count what it checked).
+/// The object's other fields are not checked. A file that is not YAML has no
+/// queries.
+pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
+    let configurations = serde_yaml::from_str::<TideObject>(source)
+        .ok()
+        .and_then(|object| object.configurations);
+    analyze_injections(
+        source,
+        configurations.as_ref(),
+        elastic_tenants,
+        extract_injections(source),
+    )
+}
+
+fn analyze_injections(
+    source: &str,
+    configurations: Option<&serde_yaml::Value>,
+    elastic_tenants: &[ElasticTenant],
+    injections: Vec<InjectedQuery>,
+) -> Vec<QueryAnalysis> {
+    let mut out = Vec::with_capacity(injections.len());
+    for inj in injections {
+        let mut extra = Vec::new();
+        let (found, query_tokens) = match inj.language {
+            LanguageId::Kql => {
+                let profile = if inj.field_path.iter().any(|p| p == "defender_for_endpoint") {
+                    Profile::Defender
+                } else {
+                    Profile::Sentinel
+                };
+                let r = opentide_kql::analyze(&inj.inner, profile);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Spl => {
+                let r = opentide_spl::analyze(&inj.inner);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Esql => {
+                // Hunts have no tenants; only the rule block is targeted.
+                let target = (inj.field_path.first().map(String::as_str) == Some("configurations"))
+                    .then(|| {
+                        elastic::stack_target(
+                            configurations.and_then(|c| c.get("elastic")),
+                            elastic_tenants,
+                        )
+                    })
+                    .flatten();
+                let r = opentide_esql::analyze_for(&inj.inner, target);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Eql => {
+                let r = opentide_eql::analyze(&inj.inner);
+                // Hunts have no schedule; only the rule query is compared.
+                if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    extra = elastic::maxspan_advisories(source, configurations, &inj);
+                }
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Kuery => {
+                let r = opentide_kuery::analyze(&inj.inner);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Lucene => {
+                let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
+                    opentide_lucene::Dialect::CarbonBlack
+                } else {
+                    opentide_lucene::Dialect::Elastic
+                };
+                let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::TideYaml => (Vec::new(), Vec::new()),
+        };
+        let mut diagnostics: Vec<Diagnostic> = found
+            .into_iter()
+            .map(|d| remap_diagnostic(source, &inj, d))
+            .collect();
+        diagnostics.extend(extra);
+        let tokens = query_tokens
+            .iter()
+            .filter_map(|t| remap_token(source, &inj, t))
+            .collect();
+        out.push(QueryAnalysis {
+            query: inj,
+            diagnostics,
+            tokens,
+        });
+    }
+    out
 }
 
 fn remap_diagnostic(source: &str, inj: &InjectedQuery, mut d: Diagnostic) -> Diagnostic {
@@ -1045,7 +1074,7 @@ fn is_block_scalar(rest: &str) -> bool {
 }
 
 fn highlight_tide(spec: &HighlightSpec, source: &str, skip: &[ByteSpan]) -> Vec<HighlightToken> {
-    let schema = object_schema_kind(source);
+    let schema = document_schema_id(source);
     let mut spans = Vec::new();
     let mut stack: Vec<(usize, String, bool)> = Vec::new();
     let mut in_block = false;
@@ -1202,7 +1231,8 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
     }
 }
 
-const DEPRECATIONS_JSON: &str = include_str!(concat!(
+/// The bundled `deprecations.json`, as compiled into the engine.
+pub const DEPRECATIONS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/catalogs/tide/generated/deprecations.json"
 ));
@@ -1227,13 +1257,31 @@ struct DeprecationRow {
     deprecated: Option<String>,
 }
 
-thread_local! {
-    static DEPRECATION_OVERLAY: RefCell<Vec<FieldDeprecation>> = const { RefCell::new(Vec::new()) };
+fn deprecation_overlay() -> &'static RwLock<Vec<FieldDeprecation>> {
+    static OVERLAY: OnceLock<RwLock<Vec<FieldDeprecation>>> = OnceLock::new();
+    OVERLAY.get_or_init(|| RwLock::new(Vec::new()))
 }
 
-/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for this thread.
+/// Workspace `.opentide/lsp/catalogs/` entries. Replaces the overlay for the
+/// whole process, so a host that analyzes on several threads sees one overlay.
 pub fn install_deprecation_overlay(items: Vec<FieldDeprecation>) {
-    DEPRECATION_OVERLAY.with(|cell| *cell.borrow_mut() = items);
+    *deprecation_overlay()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
+}
+
+fn default_deprecations() -> &'static RwLock<Option<Vec<FieldDeprecation>>> {
+    static DEFAULT: OnceLock<RwLock<Option<Vec<FieldDeprecation>>>> = OnceLock::new();
+    DEFAULT.get_or_init(|| RwLock::new(None))
+}
+
+/// Use `items` instead of the bundled deprecations, under the workspace
+/// overlay ([`install_deprecation_overlay`]). `None` goes back to the bundled
+/// ones. Process-wide.
+pub fn set_default_deprecations(items: Option<Vec<FieldDeprecation>>) {
+    *default_deprecations()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = items;
 }
 
 /// Parse `deprecations.json` or a `fields.json` that carries `deprecated` messages.
@@ -1279,23 +1327,31 @@ fn bundled_deprecations() -> &'static [FieldDeprecation] {
 }
 
 fn diagnose_deprecations(object_type: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
-    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(source) else {
+    let Some(value) = merged_yaml(source) else {
         return;
     };
     let mut present = Vec::new();
     collect_mapping_paths(&value, &[], &mut present);
-    let overlay = DEPRECATION_OVERLAY.with(|cell| cell.borrow().clone());
+    let overlay = deprecation_overlay()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
     for path in present {
         let dotted = path.join(".");
         let message = overlay
             .iter()
             .find(|row| row.schema == object_type && row.path == dotted)
-            .map(|row| row.message.as_str())
+            .map(|row| row.message.clone())
             .or_else(|| {
-                bundled_deprecations()
+                let default = default_deprecations()
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                default
+                    .as_deref()
+                    .unwrap_or_else(|| bundled_deprecations())
                     .iter()
                     .find(|row| row.schema == object_type && row.path == dotted)
-                    .map(|row| row.message.as_str())
+                    .map(|row| row.message.clone())
             });
         let Some(message) = message else {
             continue;
@@ -1328,13 +1384,13 @@ fn collect_mapping_paths(value: &serde_yaml::Value, prefix: &[String], out: &mut
 }
 
 fn diagnose_catalog_values(
-    object_type: &str,
+    schema: &str,
     object: &TideObject,
     source: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if let Some(criticality) = &object.criticality {
-        push_unknown_enum(object_type, "criticality", criticality, source, diagnostics);
+        push_unknown_enum(schema, "criticality", criticality, source, diagnostics);
     }
     let Some(threat) = object.threat.as_ref().and_then(|v| v.as_mapping()) else {
         return;
@@ -1344,7 +1400,237 @@ fn diagnose_catalog_values(
             continue;
         };
         let path = format!("threat.{key}");
-        diagnose_field_value(object_type, &path, value, source, diagnostics);
+        diagnose_field_value(schema, &path, value, source, diagnostics);
+    }
+}
+
+/// The object's shape against its revision in the field catalog, as
+/// opentide's own validation checks it: every required field present, and
+/// no key a closed object (or the closed document root) does not define.
+///
+/// Required fields are checked against the revision `schema` resolves to.
+/// Unknown keys only when the catalog has that exact revision: a revision it
+/// does not know, or a catalog keyed by family, says nothing about which
+/// keys exist. A field another check already reported is not repeated.
+fn diagnose_shape(schema: &str, source: &str, diagnostics: &mut Vec<Diagnostic>) {
+    let Some((revision, root)) = tide_schema_root(schema) else {
+        return;
+    };
+    let Some(value) = merged_yaml(source) else {
+        return;
+    };
+    let Some(mapping) = value.as_mapping() else {
+        return;
+    };
+    let exact = revision == schema;
+    let mut shape = ShapeCheck {
+        revision,
+        exact,
+        source,
+        reported: diagnostics
+            .iter()
+            .filter_map(|d| d.field_path.clone())
+            .collect(),
+        seen: std::collections::BTreeSet::new(),
+        found: Vec::new(),
+    };
+    shape.mapping(&[], &[], mapping, root.closed, &root.legacy);
+    diagnostics.extend(shape.found);
+}
+
+/// `source` as a YAML value, with `<<` merge keys resolved as opentide's
+/// loader resolves them.
+fn merged_yaml(source: &str) -> Option<serde_yaml::Value> {
+    let mut value = serde_yaml::from_str::<serde_yaml::Value>(source).ok()?;
+    value.apply_merge().ok()?;
+    Some(value)
+}
+
+/// One key of a path, and the item of the list it holds the path goes into.
+type Step = (String, Option<usize>);
+
+struct ShapeCheck<'a> {
+    revision: &'static str,
+    exact: bool,
+    source: &'a str,
+    /// Field paths another check reported: not repeated.
+    reported: std::collections::BTreeSet<Vec<String>>,
+    /// What this check reported, by path with list items: one per place.
+    seen: std::collections::BTreeSet<Vec<Step>>,
+    found: Vec<Diagnostic>,
+}
+
+impl ShapeCheck<'_> {
+    /// Whether nothing was reported at `path` (`steps` with its list items) yet.
+    fn first(&mut self, path: &[String], steps: &[Step]) -> bool {
+        !self.reported.contains(path) && self.seen.insert(steps.to_vec())
+    }
+
+    fn mapping(
+        &mut self,
+        path: &[String],
+        steps: &[Step],
+        mapping: &serde_yaml::Mapping,
+        closed: bool,
+        legacy: &BTreeMap<String, Option<String>>,
+    ) {
+        let dotted = path.join(".");
+        let children = opentide_highlight::tide_children(self.revision, &dotted);
+        if children.is_empty() {
+            return;
+        }
+        for field in &children {
+            let key = serde_yaml::Value::String(field.name.clone());
+            if !(field.required || field.recommended) || mapping.contains_key(&key) {
+                continue;
+            }
+            // A legacy spelling that fills the field counts (`search` for `query`).
+            let filled = legacy.iter().any(|(old, fills)| {
+                fills.as_deref() == Some(field.name.as_str())
+                    && mapping.contains_key(serde_yaml::Value::String(old.clone()))
+            });
+            if filled {
+                continue;
+            }
+            let mut field_path = path.to_vec();
+            field_path.push(field.name.clone());
+            let mut field_steps = steps.to_vec();
+            field_steps.push((field.name.clone(), None));
+            if !self.first(&field_path, &field_steps) {
+                continue;
+            }
+            let dotted = field_path.join(".");
+            let diagnostic = if field.required {
+                Diagnostic::error(
+                    codes::SCHEMA_VALIDATION,
+                    format!("missing required field '{dotted}'"),
+                    self.range(steps),
+                )
+            } else {
+                Diagnostic::warning(
+                    codes::RECOMMENDED_FIELD_MISSING,
+                    format!("recommended field '{dotted}' is missing"),
+                    self.range(steps),
+                )
+            };
+            self.found.push(diagnostic.with_field_path(field_path));
+        }
+        for (key, value) in mapping {
+            // A key that is not a string (`1: x`) is never a field.
+            let name = match key.as_str() {
+                Some(name) => name.to_string(),
+                None => serde_yaml::to_string(key)
+                    .map(|text| text.trim().to_string())
+                    .unwrap_or_default(),
+            };
+            let mut field_path = path.to_vec();
+            field_path.push(name.clone());
+            let mut field_steps = steps.to_vec();
+            field_steps.push((name.clone(), None));
+            let field = key
+                .as_str()
+                .and_then(|name| children.iter().find(|field| field.name == name));
+            let Some(field) = field else {
+                let accepted = legacy.contains_key(&name);
+                if closed && !accepted && self.exact && self.first(&field_path, &field_steps) {
+                    self.found.push(
+                        Diagnostic::error(
+                            codes::SCHEMA_VALIDATION,
+                            format!(
+                                "field '{}' is not defined in {}",
+                                field_path.join("."),
+                                self.revision
+                            ),
+                            self.range(&field_steps),
+                        )
+                        .with_field_path(field_path),
+                    );
+                }
+                continue;
+            };
+            match value {
+                serde_yaml::Value::Mapping(child) => {
+                    self.values(&field_path, &field_steps, field, value);
+                    self.mapping(
+                        &field_path,
+                        &field_steps,
+                        child,
+                        field.closed,
+                        &field.legacy,
+                    )
+                }
+                serde_yaml::Value::Sequence(items) => {
+                    for (index, item) in items.iter().enumerate() {
+                        let mut item_steps = steps.to_vec();
+                        item_steps.push((name.clone(), Some(index)));
+                        if let Some(child) = item.as_mapping() {
+                            self.mapping(
+                                &field_path,
+                                &item_steps,
+                                child,
+                                field.closed,
+                                &field.legacy,
+                            );
+                        } else {
+                            self.values(&field_path, &item_steps, field, item);
+                        }
+                    }
+                }
+                _ => self.values(&field_path, &field_steps, field, value),
+            }
+        }
+    }
+
+    /// A value outside the field's enum (a vocabulary, a fixed set), for a
+    /// scalar or for each item of a list: every enum the catalog has, not a
+    /// hand-picked few.
+    /// A value outside the field's enum (a vocabulary, a fixed set): a scalar,
+    /// or one item of a list (`steps` names which): every enum the catalog
+    /// has, not a hand-picked few.
+    fn values(
+        &mut self,
+        path: &[String],
+        steps: &[Step],
+        field: &TideField,
+        value: &serde_yaml::Value,
+    ) {
+        // A reference is checked against the workspace index (invalid_ref),
+        // never against a list of UUIDs a catalog may carry.
+        if field.enum_values.is_empty() || field.ref_kind.is_some() {
+            return;
+        }
+        let Some(unknown) = value
+            .as_str()
+            .filter(|item| !field.enum_values.iter().any(|known| known == item))
+        else {
+            return;
+        };
+        if !self.first(path, steps) {
+            return;
+        }
+        self.found.push(
+            Diagnostic::error(
+                codes::VOCAB_UNKNOWN,
+                format!("unknown {} value '{unknown}'", field.name),
+                self.range(steps),
+            )
+            .with_field_path(path.to_vec()),
+        );
+    }
+
+    /// The key at `steps`, else the nearest key above it that has a place (a
+    /// flow mapping's keys have none), else the top of the document.
+    fn range(&self, steps: &[Step]) -> Range {
+        (1..=steps.len())
+            .rev()
+            .find_map(|len| {
+                let path: Vec<(&str, Option<usize>)> = steps[..len]
+                    .iter()
+                    .map(|(key, item)| (key.as_str(), *item))
+                    .collect();
+                key_span_in(self.source, &path)
+            })
+            .map_or(Range::point(0, 0), |span| span_to_range(self.source, span))
     }
 }
 
@@ -1552,7 +1838,7 @@ metadata:
 description: |
   test
 status: STAGING
-severity: Substantial incident
+severity: High
 detection_model: 00000000-0000-4000-8002-000000000001
 response:
   alert_severity: High
@@ -1563,6 +1849,306 @@ configurations:
       | where EventID == 4688
       | take 1
 "#;
+
+    fn shape_findings(source: &str) -> Vec<(String, String, Range)> {
+        analyze(AnalyzeInput {
+            path: "objects/rules/rule.yaml",
+            source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::SCHEMA_VALIDATION)
+        .map(|d| {
+            (
+                d.field_path.unwrap_or_default().join("."),
+                d.message,
+                d.range,
+            )
+        })
+        .collect()
+    }
+
+    const VALID_RULE: &str = r#"name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000002
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Someone
+  #reviewed: YYYY-MM-DD
+description: |
+  test
+detection_model: 00000000-0000-4000-8002-000000000001
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    status: DESIGN
+    query: index=main
+"#;
+
+    #[test]
+    fn a_valid_object_has_no_shape_finding() {
+        assert_eq!(shape_findings(VALID_RULE), vec![]);
+        let older = VALID_RULE.replace("rule::1.1", "rule::1.0");
+        assert_eq!(shape_findings(&older), vec![]);
+    }
+
+    #[test]
+    fn every_revision_requires_its_own_fields() {
+        // rule::1.1 requires description as rule::1.0 does: the check was
+        // hard-coded for rule::1.0 only.
+        let source = VALID_RULE.replace("description: |\n  test\n", "");
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "description");
+        assert_eq!(found[0].1, "missing required field 'description'");
+        // Nested: a platform block without its status, under the block's key.
+        let source = VALID_RULE.replace("    status: DESIGN\n", "");
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "configurations.splunk.status");
+        assert_eq!(found[0].2.start.line, 16);
+    }
+
+    #[test]
+    fn a_key_the_revision_does_not_define_is_reported_where_it_is() {
+        // metadata.reviewed exists in rule::1.1 only.
+        let source = VALID_RULE.replace("rule::1.1", "rule::1.0").replace(
+            "  author: Someone\n",
+            "  author: Someone\n  reviewed: 2026-01-03\n",
+        );
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let (path, message, range) = &found[0];
+        assert_eq!(path, "metadata.reviewed");
+        assert_eq!(
+            message,
+            "field 'metadata.reviewed' is not defined in rule::1.0"
+        );
+        // The real key on line 10, not the commented-out template key below it.
+        assert_eq!((range.start.line, range.start.character), (9, 2));
+        assert_eq!(
+            shape_findings(&source.replace("rule::1.0", "rule::1.1")),
+            vec![]
+        );
+        // An unknown root key, and one in a list item of a closed object.
+        let source = format!("{VALID_RULE}bogus: 1\n");
+        assert_eq!(shape_findings(&source)[0].0, "bogus");
+    }
+
+    fn every_finding(path: &str, source: &str) -> Vec<Diagnostic> {
+        analyze(AnalyzeInput {
+            path,
+            source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+    }
+
+    #[test]
+    fn a_merge_key_fills_the_fields_it_merges() {
+        // serde_yaml leaves `<<` unresolved: it read as an unknown key, and
+        // the merged `status` as missing. opentide's loader resolves it.
+        let source = VALID_RULE.replace(
+            "    status: DESIGN\n",
+            "    <<: &base\n      status: DESIGN\n",
+        );
+        assert_eq!(shape_findings(&source), vec![]);
+    }
+
+    #[test]
+    fn a_bad_value_in_a_later_list_item_is_reported_on_that_item() {
+        let source = OBJECTIVE_SIGNALS;
+        let found: Vec<_> = every_finding("objects/objectives/o.yaml", source)
+            .into_iter()
+            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
+            .collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].message, "unknown severity value 'Bogus'");
+        // The second signal's `severity` (line 30), not the valid first one's (20).
+        assert_eq!(found[0].range.start.line, 29);
+        // Two bad items are two findings.
+        let both = source.replace("severity: Medium", "severity: Wrong");
+        let found = every_finding("objects/objectives/o.yaml", &both)
+            .into_iter()
+            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
+            .count();
+        assert_eq!(found, 2);
+    }
+
+    #[test]
+    fn an_unknown_key_is_placed_whatever_its_spelling() {
+        // Non-ASCII, quoted: on the key itself.
+        for key in ["réf", "\"bogus\"", "'bogus'"] {
+            let source = format!("{VALID_RULE}{key}: 1\n");
+            let found = shape_findings(&source);
+            assert_eq!(found.len(), 1, "{key}: {found:?}");
+            assert_eq!(found[0].2.start.line, 19, "{key}");
+        }
+        // A flow mapping's key has no line of its own: its block's key.
+        let source = VALID_RULE.replace(
+            "  splunk:\n    status: DESIGN\n    query: index=main\n",
+            "  splunk: {status: DESIGN, query: index=main, bogus: 1}\n",
+        );
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "configurations.splunk.bogus");
+        assert_eq!(found[0].2.start.line, 16);
+    }
+
+    #[test]
+    fn a_key_that_is_not_a_string_is_not_a_field() {
+        let source = format!("{VALID_RULE}1: x\n");
+        let found = shape_findings(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].1, "field '1' is not defined in rule::1.1");
+    }
+
+    #[test]
+    fn a_quoted_query_key_is_still_the_query() {
+        let source = VALID_RULE.replace("rule::1.1", "rule::1.0").replace(
+            "    query: index=main\n",
+            "    \"query\": |\n      index=main | statz\n",
+        );
+        let queries = extract_injections(&source);
+        assert_eq!(queries.len(), 1, "{queries:?}");
+        assert_eq!(queries[0].inner, "index=main | statz");
+    }
+
+    #[test]
+    fn an_indentation_indicator_with_a_shallower_line_does_not_panic() {
+        // `|2`: the first line is indented further than a later one holding
+        // a multi-byte character. Cutting that line at the first line's
+        // indentation split the character.
+        let source = "name: Rule\nmetadata:\n  schema: rule::1.1\nconfigurations:\n  sentinel:\n    query: |2\n        SecurityEvent\n      xé\n";
+        let queries = extract_injections(source);
+        assert_eq!(queries.len(), 1);
+        assert!(queries[0].inner.ends_with("xé"), "{:?}", queries[0].inner);
+    }
+
+    const OBJECTIVE_SIGNALS: &str = r#"name: Obj
+metadata:
+  uuid: 00000000-0000-4000-8002-000000000001
+  schema: objective::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: d
+  composition:
+    strategy: Independent
+    description: c
+  signals:
+    - name: a
+      uuid: 00000000-0000-4000-8099-000000000001
+      description: s
+      severity: Medium
+      methodology: Artifacts
+      entities:
+        - Host::Account
+      data:
+        availability: Complete
+        requirements: r
+    - name: b
+      uuid: 00000000-0000-4000-8099-000000000002
+      description: s
+      severity: Bogus
+      methodology: Artifacts
+      entities:
+        - Host::Account
+      data:
+        availability: Complete
+        requirements: r
+"#;
+
+    #[test]
+    fn legacy_spellings_opentide_accepts_are_accepted() {
+        // splunk::2.x: `search` fills the required `query`, flat `throttling`
+        // moves into `trigger`; both validate in opentide.
+        let source = VALID_RULE.replace(
+            "    query: index=main\n",
+            "    search: index=main\n    throttling:\n      period: 1h\n",
+        );
+        assert_eq!(shape_findings(&source), vec![]);
+        // Neither the query nor its legacy spelling: required.
+        let source = VALID_RULE.replace("    query: index=main\n", "");
+        assert_eq!(shape_findings(&source)[0].0, "configurations.splunk.query");
+    }
+
+    #[test]
+    fn a_field_only_the_templates_ask_for_is_a_warning() {
+        // opentide validate accepts a rule without configurations or response.
+        let source = VALID_RULE
+            .split("response:")
+            .next()
+            .expect("head")
+            .to_string();
+        assert_eq!(shape_findings(&source), vec![]);
+        let warnings: Vec<String> = analyze(AnalyzeInput {
+            path: "objects/rules/rule.yaml",
+            source: &source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::RECOMMENDED_FIELD_MISSING)
+        .map(|d| d.message)
+        .collect();
+        assert_eq!(
+            warnings,
+            vec![
+                "recommended field 'configurations' is missing",
+                "recommended field 'response' is missing"
+            ]
+        );
+    }
+
+    #[test]
+    fn every_enum_in_the_catalog_is_checked() {
+        let vocab = |source: &str| -> Vec<String> {
+            analyze(AnalyzeInput {
+                path: "objects/rules/rule.yaml",
+                source,
+                workspace: &[],
+                elastic_tenants: &[],
+            })
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == codes::VOCAB_UNKNOWN)
+            .map(|d| d.field_path.unwrap_or_default().join("."))
+            .collect()
+        };
+        assert_eq!(vocab(VALID_RULE), Vec::<String>::new());
+        // response.alert_severity had no check of its own.
+        let source = VALID_RULE.replace("alert_severity: High", "alert_severity: Severe");
+        assert_eq!(vocab(&source), vec!["response.alert_severity"]);
+        // A field another check covers is reported once.
+        let source = VALID_RULE.replace("tlp: clear", "tlp: clearr");
+        assert_eq!(vocab(&source), vec!["metadata.tlp"]);
+    }
+
+    #[test]
+    fn a_revision_the_catalog_does_not_know_reports_no_unknown_key() {
+        let source = VALID_RULE.replace("rule::1.1", "rule::7.0").replace(
+            "  author: Someone\n",
+            "  author: Someone\n  future_field: 1\n",
+        );
+        assert!(
+            shape_findings(&source)
+                .iter()
+                .all(|(path, _, _)| path != "metadata.future_field")
+        );
+    }
 
     #[test]
     fn legacy_meta_is_deprecated_field() {
@@ -1592,6 +2178,41 @@ meta:
             Some(["meta".to_string()].as_slice())
         );
         assert!(diag.message.contains("metadata"));
+    }
+
+    #[test]
+    fn non_ascii_text_keeps_later_query_positions_exact() {
+        // `🔥` is four bytes and two UTF-16 units; `é` is two bytes and one unit.
+        for prefix in ["\"ab\"", "\"é\"", "\"🔥🔥\""] {
+            let src = format!(
+                "name: Rule\nmetadata:\n  schema: rule::1.0\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | where Account == {prefix} | wher EventID == 1\n"
+            );
+            let (query,) = match extract_injections(&src).as_slice() {
+                [query] => (query.clone(),),
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(query.host_map.len(), query.inner.len());
+            assert_eq!(
+                &src[query.host_span.start..query.host_span.start + 13],
+                "SecurityEvent"
+            );
+            let r = analyze(AnalyzeInput {
+                path: "objects/rules/rule.yaml",
+                source: &src,
+                workspace: &[],
+                elastic_tenants: &[],
+            });
+            let d = r
+                .diagnostics
+                .iter()
+                .find(|d| d.code == codes::KQL_UNKNOWN_OPERATOR)
+                .expect("wher");
+            let line = src.lines().nth(d.range.start.line as usize).unwrap();
+            let units: Vec<u16> = line.encode_utf16().collect();
+            let at = String::from_utf16(&units[d.range.start.character as usize..]).unwrap();
+            assert!(at.starts_with("wher"), "{prefix}: {at:?}");
+            assert_eq!(d.range.start.line, d.range.end.line, "{prefix}");
+        }
     }
 
     #[test]
@@ -1805,6 +2426,27 @@ threat:
     }
 
     #[test]
+    fn rule_severity_is_an_alert_severity() {
+        // opentide 0.18.0: a rule's `severity` takes alert_severity values
+        // (`High`), not the threat severity scale (`Substantial incident`).
+        let check = |severity: &str| {
+            let source = RULE.replace("\nseverity: High", &format!("\nseverity: {severity}"));
+            analyze(AnalyzeInput {
+                path: "objects/rules/sentinel-kql-rule.yaml",
+                source: &source,
+                workspace: &[],
+                elastic_tenants: &[],
+            })
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == "vocab_unknown" && d.message.contains("severity"))
+            .count()
+        };
+        assert_eq!(check("High"), 0);
+        assert_eq!(check("Substantial incident"), 1);
+    }
+
+    #[test]
     fn tide_values_use_legend_captures() {
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
@@ -1821,7 +2463,7 @@ threat:
         assert!(schema_vals.contains(&"rule::1.0"), "{schema_vals:?}");
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"STAGING"));
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"clear"));
-        assert!(token_text(RULE, &r.tokens, "constant").contains(&"Substantial incident"));
+        assert!(token_text(RULE, &r.tokens, "constant").contains(&"High"));
         let uuid_keys = token_text(RULE, &r.tokens, "tide.property");
         assert!(uuid_keys.contains(&"uuid"), "{uuid_keys:?}");
         let starts: Vec<usize> = r.tokens.iter().map(|t| t.span.start).collect();

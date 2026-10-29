@@ -1,6 +1,6 @@
 {
-  "opentide": "0.16.1",
-  "generator": "scripts/sync_opentide_schemas.py",
+  "opentide": "0.18.1.dev7+gfe8c43058",
+  "generator": "opentide.generation.lsp_catalog",
   "fields": [
     {
       "schema": "rule",
