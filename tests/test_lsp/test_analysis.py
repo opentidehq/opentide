@@ -135,11 +135,16 @@ def test_a_file_that_cannot_be_read_is_reported_not_skipped(tmp_path: Path) -> N
 
 
 def test_a_query_on_its_own_takes_its_platform_profile() -> None:
+    # Sentinel ingests the Defender XDR tables; a Log Analytics table is not
+    # an advanced hunting one.
     query = "DeviceProcessEvents | take 1"
     assert check_query(query, language="kql", platform="defender_for_endpoint") == []
-    assert [f.code for f in check_query(query, language="kql", platform="sentinel")] == [
-        "kql_unknown_table"
-    ]
+    assert check_query(query, language="kql", platform="sentinel") == []
+    log_analytics = "NTANetAnalytics | take 1"
+    assert check_query(log_analytics, language="kql", platform="sentinel") == []
+    assert [
+        f.code for f in check_query(log_analytics, language="kql", platform="defender_for_endpoint")
+    ] == ["kql_unknown_table"]
 
 
 @pytest.fixture

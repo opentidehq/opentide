@@ -13,7 +13,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
-- **The analysis engine is pinned to the language-server revision with declared datasets** (`opentide-analysis`, `opentide-lsp`). Under the `sentinel` profile `kql_unknown_table` is now a warning, as a Sentinel workspace holds tables no catalog lists; it stays an error under Defender's advanced hunting schema.
+- **The analysis engine is pinned to the language-server revision with table and column knowledge** (`opentide-analysis`, `opentide-lsp`; [opentidehq/language-server#134](https://github.com/opentidehq/language-server/pull/134)). What the queries check sees:
+  - Under the `sentinel` profile `kql_unknown_table` is a warning, not an error, as a Sentinel workspace holds tables no catalog lists; it stays an error under Defender's advanced hunting schema. The Azure Monitor Logs tables (`NTANetAnalytics`, `SentinelHealth`, ...), the Defender XDR tables and the ASIM parsers are known under `sentinel`, so `validate` no longer fails on them.
+  - `kql_unknown_column` (error): a near miss of a documented column (`_Im_NetworkSession | where DstPortNumbr == 22` suggests `DstPortNumber`), or a name that is not a column after `project`, `summarize` or `distinct`. `kql_type_mismatch` (error): an operator Kusto does not define for a column's type (`EventID has "46"`).
+  - `spl_unknown_datamodel_field` and `spl_unknown_datamodel` (errors) on a near miss of a CIM field, data model or dataset; `ecs_type_mismatch` (error) and `ecs_unknown_field` (warning) on Elastic queries over ECS indices.
+  - `_Im_NetworkSession(starttime=ago(1d))` and other named arguments parse.
 
 ## [0.19.0] — 2026-10-29
 

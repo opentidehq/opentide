@@ -54,12 +54,12 @@ def test_validate_query_finds_the_error_in_a_broken_query() -> None:
 
 
 def test_validate_query_uses_the_platform_profile() -> None:
-    """Defender tables are unknown to Sentinel, and the other way round."""
-    query = "DeviceProcessEvents | take 1"
+    """A Log Analytics table is Sentinel's, not advanced hunting's."""
+    query = "NTANetAnalytics | take 1"
     defender = tools.tool_validate_query(query, "defender_for_endpoint")
     sentinel = tools.tool_validate_query(query, "sentinel")
-    assert not any(item["code"] == "kql_unknown_table" for item in defender["diagnostics"])
-    assert any(item["code"] == "kql_unknown_table" for item in sentinel["diagnostics"])
+    assert any(item["code"] == "kql_unknown_table" for item in defender["diagnostics"])
+    assert not any(item["code"] == "kql_unknown_table" for item in sentinel["diagnostics"])
 
 
 def test_validate_query_takes_the_elastic_language_and_stack() -> None:
