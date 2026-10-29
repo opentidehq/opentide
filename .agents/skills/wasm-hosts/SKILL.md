@@ -57,9 +57,13 @@ Do not `cargo build -p opentide-wasm --target wasm32-wasip1`. That target must n
 
 `packages/lsp-client` exports `createOpentideClient`. There is no `createOtideClient` except the throwing stub `scripts/check-names.sh` allows. Transports are `"stdio" | "worker" | "wasi"`.
 
-- `stdio` spawns the native binary. `highlight` may call the CLI `highlight` subcommand (plain JSON on stdout), not a JSON-RPC frame.
-- `worker` calls the wasm `highlight(languageId, Uint8Array)` when the global is present.
-- `wasi` is the vscode.dev path.
+- `stdio` starts `opentide-lsp --stdio` once and calls `opentide/analyze` and `opentide/highlight` over JSON-RPC. `dispose()` sends `shutdown` and `exit`.
+- `worker` calls the `module` option: `opentide-wasm`'s `highlight(languageId, Uint8Array)` and `legend()`, loaded with `loadHighlightModule` from `@opentide/lsp-worker`. `analyze` rejects: the browser module has no analyzer.
+- `wasi` runs the `wasm32-wasip1` CLI (`wasi` option) under `node:wasi`, one `analyze` or `highlight` per call. vscode.dev hosts it with its own WASI runtime.
+
+A transport that cannot answer (no artifact, a failed spawn, an unknown language id) rejects. It never returns `tokens: []` or `diagnostics: []` in place of a result: that is fake validation. `legend()` comes from the engine, never a copy, so it cannot drift from `highlights/generated/legend.json`.
+
+The host tests run against built artifacts named by environment variables: `OPENTIDE_LSP_BIN` (default `target/debug/opentide-lsp` when it exists), `OPENTIDE_WASI_BIN` and `OPENTIDE_WASM_GLUE` (`wasm-bindgen --target nodejs` output). CI sets each one in the job that builds it; a test whose artifact is absent is skipped.
 
 `packages/lsp-worker` is the worker wrapper. Its package description says not to mix WASI. Keep that true.
 
