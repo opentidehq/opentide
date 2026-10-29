@@ -22,10 +22,11 @@ Each [GitHub Release](https://github.com/opentidehq/language-server/releases) al
 
 ## Releases
 
-Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](CHANGELOG.md). Every crate shares the workspace version, and the internal crates pin each other to it. To cut a release:
+Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](CHANGELOG.md). Every crate shares the workspace version, and the internal crates pin each other to it. The procedure is [`skills/release/SKILL.md`](skills/release/SKILL.md):
 
-1. In a pull request, run `python3 scripts/release.py bump 0.6.0` (workspace version, internal pins, `Cargo.lock`) and write the `0.6.0` section of CHANGELOG.md; its first paragraph is the summary. `python3 scripts/release.py check v0.6.0` confirms they agree.
-2. Merge it, then run the **Release** workflow on `main` (Actions → Release → Run workflow). Pushing a `v0.6.0` tag does the same.
+1. In a pull request, run `python3 scripts/release.py bump X.Y.Z` (workspace version, internal pins, `Cargo.lock`) and write the `X.Y.Z` section of CHANGELOG.md; its first paragraph is the summary. `python3 scripts/release.py check vX.Y.Z` confirms they agree.
+2. Merge it, then run the **Release** workflow on `main` (Actions → Release → Run workflow). Pushing a `vX.Y.Z` tag does the same.
+3. Open a PR in [opentidehq/opentide](https://github.com/opentidehq/opentide) that pins `opentide-analysis` and `opentide-lsp` in `analysis/Cargo.toml` to `"=X.Y.Z"`, and merge it. opentide compiles the engine into its Python package and cannot publish while it builds from a git revision, so a release is not done until that PR is merged.
 
 The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release with the changelog notes, creating the tag. Then it publishes the crates to crates.io in dependency order (a re-run resumes where a failed one stopped).
 

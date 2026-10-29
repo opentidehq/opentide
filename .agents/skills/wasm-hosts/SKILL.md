@@ -81,6 +81,8 @@ This repository publishes no Python package. The Python bindings and the `openti
 
 The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `package` runs `scripts/release.py vendor` and `cargo package --workspace`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
 
+Cutting a release, and the opentide pin PR that finishes one, is `skills/release/SKILL.md`.
+
 ## Names
 
 Package names: `@opentide/lsp-client`, `@opentide/lsp-worker`. Rust crate: `opentide-wasm`. Never `otide`.

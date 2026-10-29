@@ -10,5 +10,6 @@ Agent procedures for working in this repository. Detection-engineering skills ar
 | `wasm-hosts` | `wasm-bindgen`, WASI, the TypeScript client, or packaging |
 | `catalogs` | Compiled catalogs, HighlightSpec, or conformance corpora |
 | `add-language` | Adding S1QL, Lucene, Sigma, or YARA |
+| `release` | Cutting a release, and repinning the engine in opentide |
 
 `AGENTS.md` is the index. `scripts/validate-skills.sh` checks frontmatter against the [Agent Skills specification](https://agentskills.io/specification).
