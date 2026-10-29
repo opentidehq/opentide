@@ -182,8 +182,49 @@ Each file is checked against its model when a command reads it, after your file 
 
 ## Visibility and documentation
 
-- `visibility.toml` controls which objects are exposed/deployed in a given context; it is validated by a generated `visibility` schema.
+- `visibility.toml` declares the assets, log sources and external detectors of your environment; a rule's signals name its log sources. It is validated by a generated `visibility` schema.
 - `documentation.toml` tunes `opentide generate docs` output (which folders, which sections). CVE links and optional API enrichment use [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu); see [`generate docs`](../cli/generate.md).
+
+### The datasets a log source fills
+
+A log source can name the tables, indexes and index patterns it fills. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know those names, so a custom table or index is not reported as unknown. Which fields a log source takes depends on its `system`:
+
+| `system` | Fields | What they match in a query |
+|----------|--------|----------------------------|
+| `sentinel`, `defender_for_endpoint` | `tables` | The table or function a KQL query starts from, `union`, `join` |
+| `splunk` | `indexes`, `sourcetypes`, `macros` | `index=`, `sourcetype=`, macro calls (without backticks) |
+| `elastic` | `indices` (index patterns and data streams), `data_views`, `ecs` | A rule's `index`, `data_view_id`, a threat match's `index`, ES\|QL `FROM` |
+
+```toml
+# .opentide/configurations/visibility.toml
+[[logsources]]
+name = "VNet flow logs"
+description = "Traffic analytics on the production VNet flow logs."
+system = "sentinel"
+tables = ["NTANetAnalytics", "NTAIpDetails", "*_CL"]
+
+[[logsources]]
+name = "Windows security events"
+description = "Security event log of the domain controllers."
+system = "splunk"
+indexes = ["wineventlog"]
+sourcetypes = ["WinEventLog:Security"]
+macros = ["wineventlog_security"]
+
+[[logsources]]
+name = "Endpoint telemetry"
+description = "Elastic Defend and custom ECS endpoint data."
+system = "elastic"
+indices = ["logs-endpoint.events.*", "custom-ecs-*"]
+data_views = ["security-solution-default"]
+ecs = true   # these indices follow the Elastic Common Schema
+```
+
+- Every field is optional. A workspace that names no dataset is checked as before.
+- `*` matches any run of characters (`*_CL`, `logs-azure.*`); the names are passed to the engine as written. Splunk names match regardless of case; tables and Elastic names do not.
+- Names are kept per `system`: a Splunk index never makes a Sentinel table known. A field that does not fit its log source's `system` (`tables` on a `splunk` log source, `ecs` anywhere but `elastic`) fails validation, and so does an empty name.
+- Checking is opt-in per platform and kind: once you name at least one Splunk index, a query that reads an index you did not name gets a warning; a workspace that names no Splunk index never gets one about an index.
+- `opentide generate schemas` writes the names to `.opentide/lsp/catalogs/generated/datasets.json`, for editors that run `opentide-lsp` on its own; commit it with the other catalogs. `opentide doctor` (`lsp_catalog`) warns when the committed copy no longer matches `visibility.toml`. `opentide lsp start` reads the names when it starts: restart the language server after changing them.
 
 ## Lint
 

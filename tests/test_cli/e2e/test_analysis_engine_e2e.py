@@ -544,10 +544,26 @@ def test_a_query_file_takes_the_profile_of_its_platform(invoke_cli, tutorial: Pa
     )
     (checked,) = payload["queries"]
     assert (checked["platform"], checked["language"]) == ("defender_for_endpoint", "kql")
-    # The upper-case extension is a query file too, and without a platform the
-    # language alone does not know Defender's tables.
-    plain = parse_cli_json(invoke_cli("validate", "query", "--file", str(query), repo=tutorial))
-    assert [item["code"] for item in plain["diagnostics"]] == ["kql_unknown_table"]
+    # The upper-case extension is a query file too. Without a platform an
+    # unknown table is a warning (lint's), so the query passes.
+    plain = assert_json_ok(invoke_cli("validate", "query", "--file", str(query), repo=tutorial))
+    assert plain["diagnostics"] == []
+    # Defender's profile rejects a table outside its schema; the language alone does not.
+    sentinel = tutorial / "hunting" / "sentinel.kql"
+    sentinel.write_text("SecurityEvent | take 1\n", encoding="utf-8")
+    rejected = invoke_cli(
+        "validate",
+        "query",
+        "--platform",
+        "defender_for_endpoint",
+        "--file",
+        str(sentinel),
+        repo=tutorial,
+    )
+    assert rejected.exit_code == 1, rejected.output
+    codes = [item["code"] for item in parse_cli_json(rejected)["diagnostics"]]
+    assert codes == ["kql_unknown_table"]
+    assert_json_ok(invoke_cli("validate", "query", "--file", str(sentinel), repo=tutorial))
 
     other = invoke_cli(
         "validate", "query", "--platform", "splunk", "--file", str(query), repo=tutorial

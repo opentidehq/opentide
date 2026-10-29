@@ -2,3 +2,31 @@
 name = "Placeholder Logsource"
 description = "Customize this field by adding logsources and assets entries under logsources.toml"
 system = "splunk"
+
+# A log source can name the datasets it fills, read according to its `system`.
+# The query checks then know those names, and warn about a name the workspace
+# does not declare once it declares at least one of that kind for the platform.
+# `*` matches any run of characters. A field that does not fit the system is
+# a validation error. Copy an example into your own visibility.toml:
+#
+# [[logsources]]
+# name = "VNet flow logs"
+# description = "Traffic analytics on the production VNet flow logs."
+# system = "sentinel"                  # or "defender_for_endpoint"
+# tables = ["NTANetAnalytics", "NTAIpDetails", "*_CL"]
+#
+# [[logsources]]
+# name = "Windows security events"
+# description = "Security event log of the domain controllers."
+# system = "splunk"
+# indexes = ["wineventlog"]
+# sourcetypes = ["WinEventLog:Security"]
+# macros = ["wineventlog_security"]
+#
+# [[logsources]]
+# name = "Endpoint telemetry"
+# description = "Elastic Defend and custom ECS endpoint data."
+# system = "elastic"
+# indices = ["logs-endpoint.events.*", "custom-ecs-*"]
+# data_views = ["security-solution-default"]
+# ecs = true                           # these indices follow the Elastic Common Schema

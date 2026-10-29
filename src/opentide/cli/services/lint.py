@@ -484,9 +484,17 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
     A placeholder query is the ``placeholders`` check's.
     Raises :class:`~opentide.analysis.EngineUnavailableError`.
     """
-    from opentide.analysis import ELASTIC_ADVISORY_CODES, check_file, workspace
+    from opentide.analysis import (
+        DECLARED_DATASET_CODES,
+        ELASTIC_ADVISORY_CODES,
+        check_file,
+        install_workspace_datasets,
+        workspace,
+    )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
 
+    # The datasets visibility.toml declares, as validate and the editor see them.
+    install_workspace_datasets(root)
     space = workspace(root)
     findings: list[dict[str, object]] = []
     for record in records:
@@ -500,6 +508,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
+                and finding.code not in DECLARED_DATASET_CODES
             ):
                 continue
             findings.append(

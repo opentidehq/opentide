@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **A `visibility.toml` log source names the datasets it fills, so a custom table or index is known to the query checks** ([#695](https://github.com/opentidehq/opentide/issues/695), part of [opentidehq/language-server#110](https://github.com/opentidehq/language-server/issues/110)). The engine knew only the tables it ships, so a workspace's own tables (`MyApp_CL`), Splunk indexes and Elastic index patterns were unknown to it. A log source now takes, according to its `system`, `tables` (`sentinel`, `defender_for_endpoint`), `indexes`, `sourcetypes` and `macros` (`splunk`), or `indices`, `data_views` and `ecs` (`elastic`, `ecs = true` marking its indices as following the Elastic Common Schema). Names may hold `*` (`*_CL`, `logs-azure.*`). A field that does not fit its log source's `system`, or an empty name, fails validation (`schema_validation` on that field), so a Splunk index can never make a Sentinel table known. Every field is optional: a workspace that names none is checked as before, and the engine's warnings about an undeclared name (`kql_table_not_declared`, `spl_dataset_not_declared`, `elastic_dataset_not_declared`) are opt-in per platform and kind. `opentide generate schemas` writes the names to `.opentide/lsp/catalogs/generated/datasets.json` beside `fields.json`, and `opentide lsp start`, `opentide tui`, `opentide validate`, `opentide validate query` and `opentide lint` all check queries with them; `opentide doctor` (`lsp_catalog`) warns when a committed `datasets.json` no longer matches `visibility.toml`. The bundled `visibility.toml` shows one commented example per platform, and the `visibility::1.0` schema carries the new fields. See [The datasets a log source fills](docs/usage/configuration.md#the-datasets-a-log-source-fills).
+- **`opentide lint` reports the engine's ECS findings** (`ecs_unknown_field`, `ecs_type_mismatch`) and its undeclared-dataset warnings with the other query warnings, instead of dropping a code with no language prefix; each has an `opentide explain` page.
+
+### Changed
+
+- **The analysis engine is pinned to the language-server revision with declared datasets** (`opentide-analysis`, `opentide-lsp`). Under the `sentinel` profile `kql_unknown_table` is now a warning, as a Sentinel workspace holds tables no catalog lists; it stays an error under Defender's advanced hunting schema.
+
 ## [0.19.0] — 2026-10-29
 
 Minor release: the language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. It is a minor because `validate` now fails on a query the platform would reject, `validate query` without `--live` checks instead of refusing, and wheels are built per platform.

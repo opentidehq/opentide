@@ -70,8 +70,10 @@ def engine_page(code: str) -> ExplainPage | None:
     reference = engine_reference(code)
     if reference is not None:
         language, url = reference
+        article = "an" if language[:1] in "AEIOU" else "a"
         where = (
-            f"Reported by the analysis engine in a {language} query, at the place in the query: "
+            f"Reported by the analysis engine in {article} {language} query, at the place in "
+            "the query: "
             "as an error, a query the platform would reject, by `opentide validate` (its "
             "`queries` check) and `opentide validate query`; as a warning or a note, style, by "
             "`opentide lint` (its `queries` check). An editor running `opentide lsp start` "
