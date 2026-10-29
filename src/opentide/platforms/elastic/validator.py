@@ -14,6 +14,8 @@ from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels, batch_tenant
+from opentide.platforms.elastic import advisories
+from opentide.platforms.elastic.advisories import warn_advisory
 from opentide.platforms.elastic.attack import find_non_enterprise_techniques
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.compile import SEVERITY_TABLE, _alert_level, compile_rule
@@ -61,23 +63,27 @@ def _emit_rule_advisories(
     if not cfg:
         return
 
-    # 1. Look-back time advisories (0s/0m and >1h or threshold > interval)
+    # 1. Look-back time advisories. The three conditions are independent: a rule can
+    # trip more than one.
     interval_str = cfg.scheduling.interval if cfg.scheduling else "5m"
     lookback_str = cfg.scheduling.lookback if cfg.scheduling else "1m"
     interval_secs = duration_seconds(interval_str)
     lookback_secs = duration_seconds(lookback_str, allow_zero=True)
 
     if cfg.scheduling and lookback_secs == 0:
-        logger.warning(
-            "elastic_lookback_zero_warning",
+        warn_advisory(
+            logger,
+            advisories.LOOKBACK_ZERO,
             rule=rule.name,
             lookback=lookback_str,
             advice="scheduling.lookback is 0m; Elastic recommends at least 1m overlap",
         )
         _flag_warning()
-    elif lookback_secs > _MAX_RECOMMENDED_LOOKBACK_SECONDS:
-        logger.warning(
-            "elastic_lookback_long_warning",
+
+    if lookback_secs > _MAX_RECOMMENDED_LOOKBACK_SECONDS:
+        warn_advisory(
+            logger,
+            advisories.LOOKBACK_LONG,
             rule=rule.name,
             lookback=lookback_str,
             interval=interval_str,
@@ -88,9 +94,11 @@ def _emit_rule_advisories(
             ),
         )
         _flag_warning()
-    elif cfg.type == "threshold" and lookback_secs > interval_secs:
-        logger.warning(
-            "elastic_lookback_long_warning",
+
+    if cfg.type == "threshold" and lookback_secs > interval_secs:
+        warn_advisory(
+            logger,
+            advisories.THRESHOLD_LOOKBACK,
             rule=rule.name,
             lookback=lookback_str,
             interval=interval_str,
@@ -109,8 +117,9 @@ def _emit_rule_advisories(
         and not esql_aggregates(cfg.query)
         and not esql_has_metadata_id(cfg.query)
     ):
-        logger.warning(
-            "elastic_esql_metadata_id_warning",
+        warn_advisory(
+            logger,
+            advisories.ESQL_METADATA_ID,
             rule=rule.name,
             advice=(
                 "Non-aggregating ES|QL query lacks METADATA _id; alerts will not be deduplicated"
@@ -128,8 +137,9 @@ def _emit_rule_advisories(
             kibana_severity, _ = SEVERITY_TABLE[level]
             low, high = _RISK_BANDS[kibana_severity]
             if not (low <= explicit_score <= high):
-                logger.warning(
-                    "elastic_risk_score_band_warning",
+                warn_advisory(
+                    logger,
+                    advisories.RISK_BAND,
                     rule=rule.name,
                     severity=kibana_severity,
                     risk_score=explicit_score,
@@ -148,8 +158,9 @@ def _emit_rule_advisories(
             maxspan_str, maxspan_ms = maxspan
             window_ms = (interval_secs + lookback_secs) * 1000
             if maxspan_ms > window_ms:
-                logger.warning(
-                    "elastic_eql_maxspan_window_warning",
+                warn_advisory(
+                    logger,
+                    advisories.EQL_MAXSPAN_WINDOW,
                     rule=rule.name,
                     maxspan=maxspan_str,
                     interval=interval_str,
@@ -162,8 +173,9 @@ def _emit_rule_advisories(
                 )
                 _flag_warning()
             elif maxspan_ms > lookback_secs * 1000:
-                logger.warning(
-                    "elastic_eql_maxspan_window_warning",
+                warn_advisory(
+                    logger,
+                    advisories.EQL_MAXSPAN_LOOKBACK,
                     rule=rule.name,
                     maxspan=maxspan_str,
                     interval=interval_str,

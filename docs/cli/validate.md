@@ -527,12 +527,20 @@ Live query validation works on **six platforms**; the offline engine on five of 
 
 `opentide validate query --platform elastic --live` checks each rule against the tenant. It does not parse Kuery, Lucene, EQL, or ES|QL in-process.
 
-- It emits configuration advisories as warnings:
-  - `scheduling.lookback` is `0` (`0m`, `0s`, `PT0S`), exceeds `1h` (`scheduling.lookback` is additional overlap added to `interval`, not the total window), or exceeds `scheduling.interval` on a `threshold` rule.
-  - A non-aggregating ES|QL query (no `STATS` step; `INLINE STATS` keeps rows) has no `METADATA _id`. Comments and strings do not count.
-  - An explicit `risk` score falls outside the RFC 0007 band for the rule's severity (`low` `0–21`, `medium` `22–47`, `high` `48–73`, `critical` `74–100`).
-  - An EQL `sequence` `maxspan` (`ms`, `s`, `m`, `h` or `d`, read from the `sequence` header) exceeds `scheduling.interval + scheduling.lookback` or `scheduling.lookback`.
-  - The target tenant has `setup.suppression = false` while the rule configures `suppression`, or the rule references a non-Enterprise (Mobile or ICS) ATT&CK technique.
+- It emits configuration advisories as warnings. Each carries the stable code of the Elastic platform specification (`code` in the log record, which is also its event name), the same code the language server shows in the editor:
+
+  | Code | Raised when |
+  |------|-------------|
+  | `lookback_zero` | `scheduling.lookback` is `0` (`0m`, `0s`, `PT0S`) |
+  | `lookback_long` | `scheduling.lookback` exceeds `1h`. It is additional overlap added to `interval`, not the total window |
+  | `threshold_lookback` | A `threshold` rule has `scheduling.lookback` above `scheduling.interval` |
+  | `esql_metadata_id` | A non-aggregating ES\|QL query (no `STATS` step; `INLINE STATS` keeps rows) has no `METADATA _id`. Comments and strings do not count |
+  | `risk_band` | An explicit `risk` score falls outside the RFC 0007 band for the rule's severity (`low` `0–21`, `medium` `22–47`, `high` `48–73`, `critical` `74–100`) |
+  | `eql_maxspan_window` | An EQL `sequence` `maxspan` (`ms`, `s`, `m`, `h` or `d`, read from the `sequence` header) exceeds `scheduling.interval + scheduling.lookback` |
+  | `eql_maxspan_lookback` | The `maxspan` fits that window but exceeds `scheduling.lookback`. A sequence gets one of the two EQL codes, never both |
+  | `technique_not_enterprise` | The rule references a non-Enterprise (Mobile or ICS) ATT&CK technique, which is left out of the compiled `threat` |
+
+  The three look-back codes are independent, so a threshold rule with a look-back over `1h` raises `lookback_long` and `threshold_lookback`. Each log record also carries `legacy_event`, the event name the code replaced (`elastic_lookback_zero_warning`, `elastic_lookback_long_warning`, `elastic_esql_metadata_id_warning`, `elastic_risk_score_band_warning`, `elastic_eql_maxspan_window_warning`, `skipping_non_enterprise_technique`). It is removed in the release after next. The tenant `setup.suppression = false` with a rule that configures `suppression` is a separate warning, `suppression_omitted_basic_license`.
 - It runs the Elasticsearch and Kibana checks below.
 - It posts the compiled rule to Kibana `rules/preview` with `invocationCount: 1` and a UTC `timeframeEnd`. Entries in `logs[].errors` fail the rule. `logs[].warnings`, including a missing index, are warnings. HTTP 400 is a schema error, and any other non-200 response fails that rule. HTTP 401 or 403, or a missing preview-index privilege, fails that tenant and the remaining rules on it are skipped.
 
