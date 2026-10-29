@@ -5,6 +5,7 @@
 //! types its functions take and return are re-exported here, so a host never needs
 //! the per-language crates behind it.
 
+pub use opentide_core::datasets::{DatasetKind, Declaration, DeclaredDatasets};
 pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
@@ -266,6 +267,44 @@ pub struct Catalog {
     /// `deprecations.json`: `deprecated_field` warnings on top of the bundled
     /// ones.
     pub deprecations: Option<String>,
+    /// `datasets.json`: the tables, indexes, sourcetypes, macros, index
+    /// patterns and data views the workspace declares in `visibility.toml`,
+    /// per platform. The query checks know a declared name, and warn about an
+    /// undeclared one where the workspace declares names of that kind. The
+    /// engine bundles none.
+    pub datasets: Option<String>,
+}
+
+/// Declared datasets from the workspace ([`install_catalog`]) and from the
+/// host ([`set_default_catalog`]); the workspace's win.
+#[derive(Default)]
+struct DatasetLayers {
+    workspace: Option<DeclaredDatasets>,
+    default: Option<DeclaredDatasets>,
+}
+
+fn dataset_layers() -> &'static std::sync::RwLock<DatasetLayers> {
+    static LAYERS: std::sync::OnceLock<std::sync::RwLock<DatasetLayers>> =
+        std::sync::OnceLock::new();
+    LAYERS.get_or_init(Default::default)
+}
+
+fn parse_datasets(text: Option<&str>) -> Result<Option<DeclaredDatasets>, String> {
+    text.map(DeclaredDatasets::parse)
+        .transpose()
+        .map_err(|err| format!("datasets.json: {err}"))
+}
+
+fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
+    let mut layers = dataset_layers()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if workspace {
+        layers.workspace = datasets;
+    } else {
+        layers.default = datasets;
+    }
+    opentide_core::datasets::install(layers.workspace.clone().or(layers.default.clone()));
 }
 
 /// Install workspace catalogs for the whole process. A `None` part goes back
@@ -277,9 +316,11 @@ pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
             .map_err(|err| format!("deprecations.json: {err}"))?,
         None => Vec::new(),
     };
+    let datasets = parse_datasets(catalog.datasets.as_deref())?;
     opentide_highlight::install_tide_fields(catalog.fields.as_deref())
         .map_err(|err| format!("fields.json: {err}"))?;
     opentide_tide::install_deprecation_overlay(deprecations);
+    set_dataset_layer(true, datasets);
     Ok(())
 }
 
@@ -297,10 +338,18 @@ pub fn set_default_catalog(catalog: &Catalog) -> Result<(), String> {
         .map(opentide_tide::parse_deprecation_overlay)
         .transpose()
         .map_err(|err| format!("deprecations.json: {err}"))?;
+    let datasets = parse_datasets(catalog.datasets.as_deref())?;
     opentide_highlight::set_default_tide_fields(catalog.fields.as_deref())
         .map_err(|err| format!("fields.json: {err}"))?;
     opentide_tide::set_default_deprecations(deprecations);
+    set_dataset_layer(false, datasets);
     Ok(())
+}
+
+/// The declared datasets the query checks use: the workspace's
+/// ([`install_catalog`]), else the host's ([`set_default_catalog`]), else none.
+pub fn declared_datasets() -> std::sync::Arc<DeclaredDatasets> {
+    opentide_core::datasets::current()
 }
 
 /// The Tide catalogs compiled into the engine, as their files hold them.
@@ -313,6 +362,7 @@ pub fn bundled_catalog() -> Catalog {
     Catalog {
         fields: Some(opentide_highlight::TIDE_FIELDS_JSON.to_string()),
         deprecations: Some(opentide_tide::DEPRECATIONS_JSON.to_string()),
+        datasets: None,
     }
 }
 

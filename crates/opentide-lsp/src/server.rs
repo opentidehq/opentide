@@ -1030,8 +1030,8 @@ fn range_json(range: Range) -> Value {
 /// Where `opentide generate schemas` writes the workspace catalogs.
 pub const WORKSPACE_CATALOGS: &str = ".opentide/lsp/catalogs/generated";
 
-/// Install the workspace's `fields.json` and `deprecations.json` when they
-/// exist, and the bundled catalogs otherwise. A file that does not parse is
+/// Install the workspace's `fields.json`, `deprecations.json` and
+/// `datasets.json` when they exist, and the bundled catalogs otherwise. A file that does not parse is
 /// reported on stderr and leaves the bundled catalogs in place.
 /// Set by a host that installed the catalogs itself
 /// ([`opentide_analysis::set_default_catalog`]): the server then leaves them
@@ -1060,6 +1060,7 @@ pub fn install_workspace_catalog(root: &Path) {
     let catalog = Catalog {
         fields: read("fields.json"),
         deprecations: read("deprecations.json"),
+        datasets: read("datasets.json"),
     };
     if let Err(err) = install_catalog(&catalog) {
         eprintln!(

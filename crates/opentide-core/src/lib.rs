@@ -374,6 +374,8 @@ impl Diagnostic {
     }
 }
 
+pub mod datasets;
+
 /// Well-known diagnostic codes. Extra query diagnostics are allowed.
 pub mod codes {
     pub const SCHEMA_VALIDATION: &str = "schema_validation";
@@ -461,6 +463,16 @@ pub mod codes {
     pub const EQL_NOT_BOOLEAN: &str = "eql_not_boolean";
     pub const ESQL_PATTERN: &str = "esql_pattern";
     pub const ESQL_EXPRESSION_DEPTH: &str = "esql_expression_depth";
+    // Dataset knowledge (#110): known schemas, then visibility.toml, then warn.
+    pub const KQL_TABLE_NOT_DECLARED: &str = "kql_table_not_declared";
+    pub const KQL_UNKNOWN_COLUMN: &str = "kql_unknown_column";
+    pub const KQL_TYPE_MISMATCH: &str = "kql_type_mismatch";
+    pub const SPL_UNKNOWN_DATAMODEL: &str = "spl_unknown_datamodel";
+    pub const SPL_UNKNOWN_DATAMODEL_FIELD: &str = "spl_unknown_datamodel_field";
+    pub const SPL_DATASET_NOT_DECLARED: &str = "spl_dataset_not_declared";
+    pub const ECS_TYPE_MISMATCH: &str = "ecs_type_mismatch";
+    pub const ECS_UNKNOWN_FIELD: &str = "ecs_unknown_field";
+    pub const ELASTIC_DATASET_NOT_DECLARED: &str = "elastic_dataset_not_declared";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -546,6 +558,15 @@ pub mod codes {
         EQL_NOT_BOOLEAN,
         ESQL_PATTERN,
         ESQL_EXPRESSION_DEPTH,
+        KQL_TABLE_NOT_DECLARED,
+        KQL_UNKNOWN_COLUMN,
+        KQL_TYPE_MISMATCH,
+        SPL_UNKNOWN_DATAMODEL,
+        SPL_UNKNOWN_DATAMODEL_FIELD,
+        SPL_DATASET_NOT_DECLARED,
+        ECS_TYPE_MISMATCH,
+        ECS_UNKNOWN_FIELD,
+        ELASTIC_DATASET_NOT_DECLARED,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -712,6 +733,27 @@ pub mod codes {
             EQL_NOT_BOOLEAN => "A string or number literal is used as a condition.",
             ESQL_PATTERN => "A LIKE or RLIKE pattern escapes or matches differently than it reads.",
             ESQL_EXPRESSION_DEPTH => "The expression nests deeper than Elasticsearch accepts.",
+            KQL_TABLE_NOT_DECLARED => {
+                "The table is not one the workspace declares in visibility.toml for the platform."
+            }
+            KQL_UNKNOWN_COLUMN => {
+                "The column is not in the documented schema of the table or ASIM parser it comes from."
+            }
+            KQL_TYPE_MISMATCH => "The operator cannot apply to the column's documented type.",
+            SPL_UNKNOWN_DATAMODEL => "The CIM data model or dataset is not one Splunk CIM defines.",
+            SPL_UNKNOWN_DATAMODEL_FIELD => {
+                "The field is not in the CIM data model the search reads."
+            }
+            SPL_DATASET_NOT_DECLARED => {
+                "The index, sourcetype or macro is not one the workspace declares in visibility.toml."
+            }
+            ECS_TYPE_MISMATCH => "The operation cannot apply to the ECS field's type.",
+            ECS_UNKNOWN_FIELD => {
+                "The field is not in the Elastic Common Schema, on indices that use it; ECS allows custom fields."
+            }
+            ELASTIC_DATASET_NOT_DECLARED => {
+                "The index pattern or data view is not one the workspace declares in visibility.toml."
+            }
             _ => return None,
         })
     }
