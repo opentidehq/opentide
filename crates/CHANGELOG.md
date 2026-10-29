@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-29
+
+The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.
+
 ### Added
 
 - `opentide_analysis::set_default_catalog` replaces the bundled Tide catalogs for the whole process whenever no workspace catalog is installed, so a host that generates them from its own models (opentide) is never behind the snapshot compiled in, including after `initialize` finds no workspace catalog, and `opentide_lsp::use_host_catalogs()` keeps `initialize` from replacing them with a committed workspace copy ([opentide#677](https://github.com/opentidehq/opentide/issues/677)).
@@ -133,6 +137,7 @@ The first working server: KQL, SPL, and Tide YAML over stdio and WASM, with the 
 - A frozen HighlightSpec with generated editor maps, and semantic tokens on the standard LSP legend.
 - Stdio and WASM hosts, and Zed, Helix, and Neovim samples.
 
+[0.6.0]: https://github.com/opentidehq/language-server/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/opentidehq/language-server/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/opentidehq/language-server/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/opentidehq/language-server/compare/v0.2.0...v0.3.0
