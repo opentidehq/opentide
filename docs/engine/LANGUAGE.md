@@ -25,6 +25,7 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.control | `control_command` | `control_command__valid` | `error` (`kql_control_command_unsupported`) |
 | kql.pipe | `"\|"` | `take_operator__valid` | `operator.pipe` |
 | kql.function | `function_call` | `function_call__valid` | `function` |
+| kql.named-argument | `named_argument` | `named_argument__valid` | `variable` |
 | kql.string | `string` | `string__valid` | `string` |
 | kql.number | `number` | `number__valid` | `number` |
 | kql.comment | `comment` | `comment__valid` | `comment` |

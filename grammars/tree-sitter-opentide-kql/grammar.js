@@ -553,9 +553,20 @@ module.exports = grammar({
         seq(
           field("name", $.identifier),
           "(",
-          field("arguments", optional(commaSep1(choice($.expression, $.star)))),
+          field(
+            "arguments",
+            optional(commaSep1(choice($.named_argument, $.expression, $.star))),
+          ),
           ")",
         ),
+      ),
+
+    // `_Im_NetworkSession(starttime=ago(1d), dstportnumber=22)`: a user or
+    // ASIM function called with its parameters by name.
+    named_argument: ($) =>
+      prec(
+        11,
+        seq(field("name", $.identifier), "=", field("value", $.expression)),
       ),
 
     // `arg_max(TimeGenerated, *)`

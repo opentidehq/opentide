@@ -1,0 +1,3 @@
+// prod:named_argument valid
+let f = (starttime:datetime, ipaddr:string) { print s = starttime, i = ipaddr };
+f(starttime=ago(1d), ipaddr="1.2.3.4")
