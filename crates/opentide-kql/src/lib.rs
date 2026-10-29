@@ -203,6 +203,8 @@ pub struct OperatorOption {
 
 #[derive(Debug, Clone)]
 pub struct Catalog {
+    /// The profile the tables and columns come from.
+    pub profile: Profile,
     pub operators: Vec<OperatorRow>,
     pub functions: Vec<FunctionRow>,
     pub scalar_operators: Vec<ScalarOperatorRow>,
@@ -222,6 +224,7 @@ impl Catalog {
             toml::from_str(SCALAR_OPERATORS_TOML).expect("operators-scalar.toml");
         let plugins: PluginsFile = toml::from_str(PLUGINS_TOML).expect("evaluate-plugins.toml");
         Self {
+            profile: Profile::Core,
             operators: operators.operators,
             functions: functions.functions,
             scalar_operators: scalar.scalar_operators,
@@ -244,6 +247,7 @@ impl Catalog {
             Profile::Defender => DEFENDER_TABLES,
         };
         let tables: TablesFile = toml::from_str(extra).expect("tables.toml");
+        self.profile = profile;
         self.tables = tables.tables;
         let mut columns = Vec::new();
         match profile {
@@ -762,11 +766,24 @@ fn collect_table_diagnostics(
                 && catalog.operator(&table).is_none()
                 && table.chars().next().is_some_and(|c| c.is_ascii_uppercase())
             {
-                let mut d = Diagnostic::error(
-                    codes::KQL_UNKNOWN_TABLE,
-                    format!("unknown table '{table}'"),
-                    node_range(source, node),
-                );
+                let range = node_range(source, node);
+                let mut d = match catalog.profile {
+                    // A Sentinel workspace holds tables no catalog lists (custom `_CL`
+                    // tables, Defender XDR, every Azure Monitor connector), so a name
+                    // missing here is the engine's gap, not a mistake in the query.
+                    Profile::Sentinel => Diagnostic::warning(
+                        codes::KQL_UNKNOWN_TABLE,
+                        format!(
+                            "'{table}' is not a table opentide knows; if the workspace holds it, declare it in visibility.toml"
+                        ),
+                        range,
+                    ),
+                    Profile::Core | Profile::Defender => Diagnostic::error(
+                        codes::KQL_UNKNOWN_TABLE,
+                        format!("unknown table '{table}'"),
+                        range,
+                    ),
+                };
                 if let Some(s) = catalog.suggest_table(&table) {
                     d = d.with_suggestion(s);
                 }
@@ -1764,6 +1781,59 @@ mod tests {
             .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
             .expect("table diag");
         assert_eq!(d.suggestion.as_deref(), Some("SecurityEvent"));
+        assert_eq!(d.severity, opentide_core::Severity::Warning);
+        let r = analyze("SigninLog | take 1", Profile::Sentinel);
+        let d = r
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+            .expect("table diag");
+        assert_eq!(d.suggestion.as_deref(), Some("SigninLogs"));
+    }
+
+    #[test]
+    fn unknown_table_is_a_warning_under_sentinel() {
+        for query in [
+            "NTANetAnalytics | take 1",
+            "MyCustomLog_CL | take 1",
+            "DeviceProcessEvents | take 1",
+        ] {
+            let r = analyze(query, Profile::Sentinel);
+            let tables: Vec<_> = r
+                .diagnostics
+                .iter()
+                .filter(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+                .collect();
+            assert!(!tables.is_empty(), "{query}");
+            for d in tables {
+                assert_eq!(d.severity, opentide_core::Severity::Warning, "{query}");
+                assert!(
+                    d.message.contains("is not a table opentide knows")
+                        && d.message.contains("visibility.toml"),
+                    "{}",
+                    d.message
+                );
+            }
+            assert!(
+                r.diagnostics
+                    .iter()
+                    .all(|d| d.severity != opentide_core::Severity::Error),
+                "{query}: {:?}",
+                r.diagnostics
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_table_stays_an_error_under_defender() {
+        let r = analyze("NTANetAnalytics | take 1", Profile::Defender);
+        let d = r
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+            .expect("table diag");
+        assert_eq!(d.severity, opentide_core::Severity::Error);
+        assert_eq!(d.message, "unknown table 'NTANetAnalytics'");
     }
 
     #[test]

@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Changed
+
+- Under the `sentinel` profile, a table the catalog does not list is a `kql_unknown_table` warning, not an error ([#111](https://github.com/opentidehq/language-server/issues/111), part of [#110](https://github.com/opentidehq/language-server/issues/110)). The engine cannot see a workspace's tables, and Sentinel workspaces hold many no catalog lists: custom `_CL` tables, Defender XDR tables, and Azure Monitor tables such as `NTANetAnalytics`, `AppServiceConsoleLogs` and `SentinelHealth`. Since opentide 0.19.0 runs the `queries` check in `opentide validate`, each one failed the run. The message now says `'X' is not a table opentide knows; if the workspace holds it, declare it in visibility.toml`, and a misspelt known table (`SigninLog`) still gets its suggestion. The `defender_for_endpoint` profile still reports an error. `opentide_kql::Catalog` has a `profile` field.
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.

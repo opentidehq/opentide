@@ -572,7 +572,7 @@ pub mod codes {
                 "The KQL function is a deprecated alias; Microsoft Learn names its replacement."
             }
             KQL_UNKNOWN_TABLE => {
-                "The table is not in the platform's KQL schema (Sentinel or Defender)."
+                "The table is not one the engine knows for the platform: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema."
             }
             KQL_RENDER_NOT_VALID => "render draws a chart; it has no effect in a detection rule.",
             KQL_PARSE_ERROR => "The KQL query does not parse.",

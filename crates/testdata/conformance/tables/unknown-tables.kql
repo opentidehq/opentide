@@ -1,0 +1,4 @@
+NTANetAnalytics
+| where FlowType_s == "MaliciousFlow"
+| join kind=inner (MyCustomLog_CL | where Action_s == "deny") on $left.SrcIP_s == $right.SrcIp_s
+| join kind=inner (DeviceProcessEvents | where FileName == "x.exe") on $left.SrcIP_s == $right.LocalIP
