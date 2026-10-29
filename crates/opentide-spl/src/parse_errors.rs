@@ -70,7 +70,7 @@ fn describe(region: Node, source: &str) -> (ByteSpan, String) {
     let message = if text.is_empty() {
         "SPL syntax error".to_string()
     } else {
-        format!("SPL syntax error: unexpected `{}`", quoted(text))
+        format!("SPL syntax error: unexpected '{}'", quoted(text))
     };
     (node_span(token), message)
 }
@@ -126,7 +126,7 @@ fn missing(node: Node) -> (ByteSpan, String) {
             if s.kind() == opener && !s.is_missing() {
                 return (
                     node_span(s),
-                    format!("SPL syntax error: `{opener}` is never closed"),
+                    format!("SPL syntax error: '{opener}' is never closed"),
                 );
             }
             sibling = s.prev_sibling();
@@ -134,7 +134,7 @@ fn missing(node: Node) -> (ByteSpan, String) {
     }
     (
         node_span(node),
-        format!("SPL syntax error: missing `{kind}`"),
+        format!("SPL syntax error: missing '{kind}'"),
     )
 }
 
@@ -178,7 +178,7 @@ mod tests {
         let d = only_error(src);
         assert_eq!(d.range.start, at(src, ")", 0), "{d:?}");
         assert_eq!(d.range.end.character, d.range.start.character + 1);
-        assert!(d.message.contains("unexpected `)`"), "{}", d.message);
+        assert!(d.message.contains("unexpected ')'"), "{}", d.message);
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
         let d = only_error(src);
         assert_eq!(d.range.start, at(src, "(", 0), "{d:?}");
         assert_eq!(d.range.start.line, 2);
-        assert!(d.message.contains("`(` is never closed"), "{}", d.message);
+        assert!(d.message.contains("'(' is never closed"), "{}", d.message);
     }
 
     #[test]
@@ -195,7 +195,7 @@ mod tests {
         let src = "index=a | join host [ search index=b | head 1";
         let d = only_error(src);
         assert_eq!(d.range.start, at(src, "[", 0), "{d:?}");
-        assert!(d.message.contains("`[` is never closed"), "{}", d.message);
+        assert!(d.message.contains("'[' is never closed"), "{}", d.message);
     }
 
     #[test]
