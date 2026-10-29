@@ -52,6 +52,11 @@ class _HttpError(Exception):
         self.response = response
 
 
+def _send(error: BaseException) -> None:
+    """What a deployer's call into the platform does when it is refused."""
+    raise error
+
+
 def test_a_rule_that_returns_is_deployed_and_reported_twice() -> None:
     recorder = _Recorder()
     with deploy_events.listen(recorder), deploying("sentinel", "contoso", "u1", "Rule one"):
@@ -67,13 +72,13 @@ def test_a_rule_that_raises_is_failed_with_the_platform_message_and_the_error_pr
             results.append(result)
 
     error = _AzureError("(BadRequest) Bad query\nCode: BadRequest", 400, "Bad query")
-    try:
-        with deploy_events.listen(_Keep()), deploying("sentinel", "contoso", "u1", "Rule one"):
-            raise error
-    except _AzureError as raised:
-        assert raised is error
-    else:
-        pytest.fail("the platform's error must propagate out of the rule's block")
+    with (
+        pytest.raises(_AzureError) as raised,
+        deploy_events.listen(_Keep()),
+        deploying("sentinel", "contoso", "u1", "Rule one"),
+    ):
+        _send(error)
+    assert raised.value is error
     (result,) = results
     assert result.status == "failed"
     assert result.error == "HTTP 400: Bad query"
@@ -214,7 +219,7 @@ def test_a_listener_that_raises_on_start_leaves_no_scope_behind() -> None:
         pytest.raises(OSError),
         deploying("sentinel", "contoso", "u1", "Rule one"),
     ):
-        pytest.fail("entering the block should have raised")
+        pass  # not reached: entering the block raises
     assert deploy_events._current == []  # ty: ignore[unresolved-attribute]  # private, on purpose
 
     results: list[RuleResult] = []
