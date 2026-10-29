@@ -189,7 +189,7 @@ fn command_arguments_parse() {
         "index=a | foreach * [ eval <<FIELD>>=mvdedup(<<FIELD>>) ]",
         "index=a | foreach user* [| eval r<<MATCHSTR>>=lower('<<FIELD>>') ]",
         "index=a | foreach a, b mode=multifield [ eval <<FIELD>>=1 ]",
-        "| tstats count, values(a) as a\n    values(b) as b fillnull_value=\"-\" from datamodel=X.Y where index=a by host span=1h",
+        "| tstats count, values(a) as a\n    values(b) as b fillnull_value=\"-\" from datamodel=X.Y where index=a by _time host span=1h",
         "| tstats count from datamodel=\"Web\" by _time PREFIX(dst=) span=1s",
         "index=a | sort -lt limit=0",
         "index=a | sort 0 host _time",

@@ -1,2 +1,2 @@
 ``` prod:stats_command valid, prod:by_clause, prod:aggregate_item
-index=main | eventstats values(dns_*) as dns_*, dc(src) AS c by dest span=1h
+index=main | eventstats values(dns_*) as dns_*, dc(src) AS c by dest, user
