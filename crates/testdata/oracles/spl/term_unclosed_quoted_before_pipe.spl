@@ -1,0 +1,1 @@
+index=a TERM("x" | eval y=1 | stats count by host

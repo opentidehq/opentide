@@ -12,6 +12,9 @@
  *
  * Comments are ```triple-backtick``` spans. Single-backtick pairs are macros.
  */
+/** Search comparisons Splunk parses but splits into separate terms. */
+const LOOSE_OPERATORS = ["==", "<>", "=>", "=<", "!~"];
+
 module.exports = grammar({
   name: "opentide_spl",
 
@@ -229,13 +232,17 @@ module.exports = grammar({
     prefix_clause: ($) => directive("PREFIX", $),
 
     // A run of non-whitespace up to `)`; a quoted part may hold anything.
-    term_text: (_) => token(/([^)\s"]|"([^"\\]|\\.)*")+/),
+    // An unquoted `|` ends the stage, as in Splunk: `TERM(x|y)` is `TERM(x`
+    // then a command `y)`.
+    term_text: (_) => token(/([^)\s"|]|"([^"\\]|\\.)*")+/),
 
     value_list: ($) => seq("(", sepBy1($._search_value), ")"),
 
     // A field compared in a search: a name, a quoted name, or any other run
     // of non-breaking characters (`alert.attack-time`, `{}.Id`).
-    _search_field: ($) => choice($.identifier, $.string, $.search_word),
+    // A term followed by `==` is the field of that comparison (`x==1`),
+    // not a term before a comparison with no field (`==1`).
+    _search_field: ($) => prec(1, choice($.identifier, $.string, $.search_word)),
 
     _search_value: ($) =>
       choice($.string, $.glob, $.identifier, $.number, $.macro, $.search_word),
@@ -807,11 +814,27 @@ module.exports = grammar({
 
     // `field=value`, `"a.b"=x`, `earliest=-1h@h`, `_index_latest=@m`,
     // `version=2.0.0`, `host=S-RC*`, `domain_rank=-1`.
+    //
+    // Splunk 10.6.1 also parses `==`, `<>`, `=>`, `=<` and `!~` in a search,
+    // with or without a term on either side (`x==1`, `x == 1`, `a==`, `==1`),
+    // and splits them into separate terms (`x==1` runs as `x == 1`), so the
+    // comparison never matches. They parse here; `tstats ... where` rejects
+    // them ("WHERE clause is not an exact query"), which the engine reports.
+    // `x=~1` is `=` with the value `~1`, as in Splunk.
     field_value: ($) =>
-      seq(
-        field("field", $._search_field),
-        field("operator", choice("=", "!=", "<", ">", "<=", ">=")),
-        field("value", choice($._search_value, $.value_list)),
+      choice(
+        seq(
+          field("field", $._search_field),
+          field("operator", choice("=", "!=", "<", ">", "<=", ">=")),
+          field("value", choice($._search_value, $.value_list)),
+        ),
+        prec.right(
+          seq(
+            optional(field("field", $._search_field)),
+            field("operator", choice(...LOOSE_OPERATORS)),
+            optional(field("value", $._search_value)),
+          ),
+        ),
       ),
 
     expression: ($) => $.or_expression,

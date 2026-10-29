@@ -41,10 +41,28 @@ fn covers(outer: Range, inner: Range) -> bool {
 /// `PREFIX(` (which Splunk lets stay open) do not count.
 fn unbalanced(source: &str) -> Option<(ByteSpan, &'static str)> {
     let bytes = source.as_bytes();
-    let mut open: Vec<usize> = Vec::new();
+    // Each open `(` with the subsearch depth it was opened at.
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    let mut depth = 0usize;
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
+            b'[' => {
+                depth += 1;
+                i += 1;
+            }
+            b']' => {
+                depth = depth.saturating_sub(1);
+                i += 1;
+            }
+            // Splunk ends a stage at `|` whatever parentheses are open
+            // (`TERM("x" | eval ...`), but not inside a subsearch's `[ ]`.
+            b'|' => {
+                if let Some(&(at, _)) = open.last().filter(|(_, d)| *d == depth) {
+                    return Some(unclosed(at));
+                }
+                i += 1;
+            }
             b'`' if source[i..].starts_with("```") => {
                 let run = bytes[i..].iter().take_while(|&&b| b == b'`').count();
                 i += run;
@@ -67,7 +85,7 @@ fn unbalanced(source: &str) -> Option<(ByteSpan, &'static str)> {
                 if directive_before(source, i) {
                     i = end_of_directive(bytes, i + 1);
                 } else {
-                    open.push(i);
+                    open.push((i, depth));
                     i += 1;
                 }
             }
@@ -83,12 +101,14 @@ fn unbalanced(source: &str) -> Option<(ByteSpan, &'static str)> {
             _ => i += 1,
         }
     }
-    open.pop().map(|at| {
-        (
-            ByteSpan::new(at, at + 1),
-            "unbalanced parentheses: this '(' is never closed",
-        )
-    })
+    open.pop().map(|(at, _)| unclosed(at))
+}
+
+fn unclosed(at: usize) -> (ByteSpan, &'static str) {
+    (
+        ByteSpan::new(at, at + 1),
+        "unbalanced parentheses: this '(' is never closed",
+    )
 }
 
 fn end_of_string(bytes: &[u8], start: usize, quote: u8) -> usize {
@@ -129,12 +149,13 @@ fn is_word_byte(b: u8) -> bool {
 }
 
 /// The raw contents of a directive, as the grammar's `term_text`: up to the
-/// closing `)` (consumed), or to whitespace when it is left open.
+/// closing `)` (consumed), or to whitespace or a `|` when it is left open.
 fn end_of_directive(bytes: &[u8], mut i: usize) -> usize {
     while i < bytes.len() {
         match bytes[i] {
             b')' => return i + 1,
             b'"' => i = end_of_string(bytes, i, b'"'),
+            b'|' => return i,
             b if b.is_ascii_whitespace() => return i,
             _ => i += 1,
         }
@@ -167,6 +188,11 @@ mod tests {
                 .contains("no matching '('")
         );
         assert!(found("index=a (a OR b").unwrap().1.contains("never closed"));
+        // A `|` ends the stage with the `(` still open, unless the `(` is
+        // outside the subsearch the `|` is in.
+        assert_eq!(found("index=a (b | eval x=1)").map(|f| f.0), Some(8));
+        assert_eq!(found("index=a ([search b | fields x] OR c)"), None);
+        assert_eq!(found("index=a TERM(x|y)").map(|f| f.0), Some(16));
     }
 
     #[test]

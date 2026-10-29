@@ -761,7 +761,7 @@
     "fields": {
       "field": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "identifier",
@@ -786,6 +786,10 @@
             "named": false
           },
           {
+            "type": "!~",
+            "named": false
+          },
+          {
             "type": "<",
             "named": false
           },
@@ -794,7 +798,23 @@
             "named": false
           },
           {
+            "type": "<>",
+            "named": false
+          },
+          {
             "type": "=",
+            "named": false
+          },
+          {
+            "type": "=<",
+            "named": false
+          },
+          {
+            "type": "==",
+            "named": false
+          },
+          {
+            "type": "=>",
             "named": false
           },
           {
@@ -809,7 +829,7 @@
       },
       "value": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "glob",
@@ -2164,6 +2184,10 @@
     "named": false
   },
   {
+    "type": "!~",
+    "named": false
+  },
+  {
     "type": "%",
     "named": false
   },
@@ -2208,11 +2232,23 @@
     "named": false
   },
   {
+    "type": "<>",
+    "named": false
+  },
+  {
     "type": "=",
     "named": false
   },
   {
+    "type": "=<",
+    "named": false
+  },
+  {
     "type": "==",
+    "named": false
+  },
+  {
+    "type": "=>",
     "named": false
   },
   {

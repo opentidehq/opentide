@@ -526,3 +526,47 @@ fn prefix_belongs_to_aggregates_and_by() {
     ]);
     assert_rejected(&["| tstats count where index=a PREFIX(src=) by host"]);
 }
+
+/// #136: Splunk 10.6.1 parses `==`, `<>`, `=>`, `=<` and `!~` in a search
+/// (they never match; that is a lint, not a syntax error), and rejects them
+/// in `tstats ... where`.
+#[test]
+fn loose_comparisons_parse_in_searches() {
+    assert_parses(&[
+        "index=a status==200",
+        "index=a status==\"200\" code<>404 bytes=>10 bytes=<99 user!~admin",
+        "index=a status == 200 NOT code <> 404",
+        "index=a dGVzdA==",
+        "index=a ==200",
+        "index=a x=a==b",
+        "index=a *==*",
+        "index=a | search status==200 OR code<>404",
+        "index=a [search status!~200 | fields status]",
+        "| inputlookup t.csv where a==1 b<>2",
+        "| tstats count where index=a sourcetype=~x by host",
+        "index=a | where status==200",
+    ]);
+    assert_rejected(&[
+        "| tstats count where index=a sourcetype==x by host",
+        "| tstats count where index=a sourcetype <> x by host",
+        "| tstats count where index=a sourcetype=>x",
+        "| tstats count where index=a sourcetype=<x",
+        "| tstats count where index=a sourcetype!~x",
+    ]);
+}
+
+/// Splunk ends a stage at a `|` outside quotes, comments, macros and `[ ]`,
+/// whatever parentheses are open.
+#[test]
+fn a_pipe_ends_the_stage_inside_open_parentheses() {
+    assert_parses(&[
+        "index=a TERM(\"x\" | eval y=1",
+        "index=a TERM(x | stats count",
+        "index=a TERM(x|stats count",
+        "index=a TERM(\"x|y\") | stats count",
+        "index=a ([search b | fields x] OR c)",
+        "index=a x=\"a|b\" ```c|d``` `m(\"e|f\")` | stats count",
+    ]);
+    // Splunk: "Unknown search command 'y'".
+    assert_rejected(&["index=a TERM(x|y)", "index=a CASE(x|y) | stats count"]);
+}
