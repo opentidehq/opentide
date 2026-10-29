@@ -173,7 +173,7 @@ name = "*"
 docs = "Multiplication"
 citation = "https://learn.microsoft.com/kusto/query/numerical-operators"
 
-# Legacy spellings Kusto.Language still parses (SyntaxFacts: containscs,
+# Legacy spellings Kusto's parser still accepts (containscs,
 # notcontains, notcontainscs). The engine warns and suggests `deprecated`.
 [[scalar_operators]]
 name = "containscs"

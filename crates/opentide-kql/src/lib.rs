@@ -679,7 +679,7 @@ fn let_names(node: Node, source: &str, out: &mut BTreeSet<String>) {
 }
 
 /// Type names that begin a typed scalar literal, `datetime(2024-01-01)`, as
-/// Kusto.Language lexes them (the `typed_literal` token in grammar.js).
+/// Kusto's lexer reads them (the `typed_literal` token in grammar.js).
 const TYPED_LITERAL_TYPES: &[&str] = &[
     "bool", "date", "datetime", "decimal", "double", "guid", "int", "int32", "int64", "long",
     "real", "time", "timespan",

@@ -1,7 +1,7 @@
-//! The probes in `testdata/oracles/kql/` without the Kusto.Language oracle: each
+//! The probes in `testdata/oracles/kql/` without the reference parser: each
 //! is a valid detection form, so the Sentinel profile reports no error on it, and
 //! each `.broken.` twin is a syntax error. CI's oracle job checks the same files
-//! against Kusto.Language (`scripts/oracles/README.md`).
+//! against the reference parser (`scripts/oracles/README.md`).
 
 use std::fs;
 use std::path::PathBuf;

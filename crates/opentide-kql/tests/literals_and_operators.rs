@@ -67,7 +67,7 @@ fn typed_null_literals_parse() {
 #[test]
 fn typed_literal_needs_its_closing_paren_on_the_line() {
     assert_parse_error("print x = datetime(2024-01-01");
-    // Kusto.Language scans a literal's value to the end of the line, and needs
+    // Kusto's lexer scans a literal's value to the end of the line, and needs
     // the `(` right after the type name.
     assert_parse_error("print x = datetime(2024-01-01\n)");
     assert_parse_error("print x = datetime (2024-01-01)");
@@ -84,8 +84,24 @@ fn names_that_start_like_a_type_stay_calls_and_columns() {
 }
 
 #[test]
+fn range_is_still_a_column_name() {
+    // `range` is a keyword Kusto lets stand as a name; only `range x from ...`
+    // where a table may start is the operator.
+    for source in [
+        "print range = 1",
+        "print x=1 | extend range = 1 | where range > 0",
+        "print x=1 | summarize range = max(x) - min(x)",
+        "print x=1 | project range",
+        "print r = range(1, 5, 1) | mv-expand r",
+        "print x = 1 | make-series c = count() on x in range(1, 5, 1) by x",
+    ] {
+        assert_clean(source);
+    }
+}
+
+#[test]
 fn string_is_not_a_typed_literal() {
-    // Kusto.Language lexes `type(...)` as a literal only for bool, date, datetime,
+    // Kusto's lexer reads `type(...)` as a literal only for bool, date, datetime,
     // decimal, double, guid, int, int32, int64, long, real, time and timespan;
     // the string type has no null (docs/kql/types.md).
     let tree = lower("print x = string(null)");
@@ -134,7 +150,7 @@ fn legacy_contains_spellings_parse_and_suggest_the_current_name() {
 
 #[test]
 fn bang_containscs_is_not_an_operator() {
-    // Kusto.Language has `!contains_cs` and `notcontainscs`, not `!containscs`.
+    // Kusto's parser has `!contains_cs` and `notcontainscs`, not `!containscs`.
     assert_parse_error("print h = \"Mozilla\" | where h !containscs \"M\"");
 }
 

@@ -97,6 +97,19 @@ module.exports = grammar({
         $.range_operator,
         // `table("SigninLogs")`, a tabular function declared with `let`
         $.function_call,
+        // Where range_operator may start, `range` is lexed as its keyword, so
+        // the range() function needs its own spelling here
+        // (`let r = range(1, 5, 1);`). Elsewhere `range` stays an identifier:
+        // a column (`summarize range = max(x) - min(x)`) or a call.
+        alias(
+          seq(
+            field("name", alias("range", $.identifier)),
+            "(",
+            field("arguments", optional(commaSep1(choice($.expression, $.star)))),
+            ")",
+          ),
+          $.function_call,
+        ),
         $.materialize_expression,
         $.search_source,
       ),
@@ -154,7 +167,7 @@ module.exports = grammar({
       ),
 
     // `range x from 1 to 10 step 1`: a one-column table of a series. A source,
-    // and an operator after a pipe as Kusto.Language parses it.
+    // and an operator after a pipe as Kusto's parser reads it.
     range_operator: ($) =>
       seq(
         "range",
@@ -702,9 +715,7 @@ module.exports = grammar({
       prec(
         10,
         seq(
-          // `range` is also the keyword of range_operator, which may start a
-          // tabular expression where a call may (`let r = range(1, 5, 1);`).
-          field("name", choice($.identifier, alias("range", $.identifier))),
+          field("name", $.identifier),
           "(",
           field("arguments", optional(commaSep1(choice($.expression, $.star)))),
           ")",
@@ -715,7 +726,7 @@ module.exports = grammar({
     star: (_) => "*",
 
     // `datetime(2024-01-01 10:00)`, `timespan(1d)`, `long(null)`, `guid(...)`: a
-    // scalar literal of a type. As in Kusto.Language, the type name is followed
+    // scalar literal of a type. As in Kusto's lexer, the type name is followed
     // directly by `(` and the value is raw text up to `)` on the same line, not
     // an expression (a date holds a space, a guid holds hyphens).
     typed_literal: (_) =>
