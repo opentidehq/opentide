@@ -1,2 +1,2 @@
 ``` prod:fields_command invalid
-index=main | fields
+index=main | fields a=

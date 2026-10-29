@@ -849,7 +849,7 @@
     "fields": {
       "fields": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": ",",
@@ -1050,7 +1050,7 @@
     "fields": {
       "table": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "identifier",
@@ -1128,7 +1128,7 @@
     "fields": {
       "inputs": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": ",",
@@ -1156,7 +1156,7 @@
       },
       "table": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "identifier",
@@ -1355,7 +1355,15 @@
           "named": true
         },
         {
+          "type": "inputlookup_command",
+          "named": true
+        },
+        {
           "type": "macro",
+          "named": true
+        },
+        {
+          "type": "search_command",
           "named": true
         }
       ]
@@ -2137,7 +2145,7 @@
     "fields": {
       "predicate": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "expression",
@@ -2974,10 +2982,6 @@
   },
   {
     "type": "where",
-    "named": false
-  },
-  {
-    "type": "x11",
     "named": false
   },
   {

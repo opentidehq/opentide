@@ -1,0 +1,1 @@
+index=a | append | stats count by host

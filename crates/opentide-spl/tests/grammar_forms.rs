@@ -116,24 +116,175 @@ fn reserved_booleans_are_arguments() {
     ]);
 }
 
+/// #135: with no leading `|`, Splunk runs the text as `search <text>`, so a
+/// leading word is a search term. After a `|` it is a command.
 #[test]
-fn leading_bare_word_is_still_a_command() {
-    let r = analyze("index=main | bogus foo=bar");
-    assert!(
-        r.diagnostics
-            .iter()
-            .any(|d| d.code == codes::SPL_UNKNOWN_COMMAND),
-        "{:?}",
-        r.diagnostics
-    );
-    let r = analyze("bogus foo=bar");
-    assert!(
-        r.diagnostics
-            .iter()
-            .any(|d| d.code == codes::SPL_UNKNOWN_COMMAND),
-        "{:?}",
-        r.diagnostics
-    );
+fn leading_bare_word_is_a_search_term_and_piped_word_a_command() {
+    for src in [
+        "index=main | bogus foo=bar",
+        "| bogus foo=bar",
+        "index=a [bogus x]",
+    ] {
+        let r = analyze(src);
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::SPL_UNKNOWN_COMMAND),
+            "{src}: {:?}",
+            r.diagnostics
+        );
+    }
+    for src in [
+        "bogus foo=bar",
+        "error",
+        "index",
+        "tstats",
+        "makeresults count=5",
+    ] {
+        let r = analyze(src);
+        assert!(
+            !r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::SPL_UNKNOWN_COMMAND || d.code == codes::SPL_PARSE_ERROR),
+            "{src}: {:?}",
+            r.diagnostics
+        );
+    }
+    // Splunk: "Unknown search command 'index'".
+    assert_rejected(&["| index=a", "| index=a sourcetype=b | stats count"]);
+}
+
+/// #135: what Splunk 10.6.1's parser accepts with no arguments, and the
+/// trailing empty stage it ignores.
+#[test]
+fn argumentless_commands_and_a_trailing_pipe_parse() {
+    assert_parses(&[
+        "index=a | where",
+        "index=a | search",
+        "index=a | fields",
+        "index=a | fields -",
+        "index=a | eventstats",
+        "index=a | streamstats",
+        "index=a | sistats",
+        "index=a | stats",
+        "index=a | lookup",
+        "| inputlookup",
+        "index=a [| inputlookup]",
+        "index=a | head",
+        "index=a | spath",
+        "index=a | fillnull",
+        "index=a | tojson",
+        "index=a | where | stats count",
+        "index=a | stats count |",
+        "index=a ```c``` |",
+        "search |",
+        "| makeresults |",
+        "tstats count where index=a by sourcetype",
+    ]);
+}
+
+/// #135: what Splunk 10.6.1's parser rejects with no arguments, and an empty
+/// stage anywhere but last.
+#[test]
+fn argumentless_commands_splunk_rejects() {
+    let commands = [
+        "chart",
+        "timechart",
+        "sichart",
+        "sitimechart",
+        "geostats",
+        "foreach",
+        "outputlookup",
+        "sort",
+        "rename",
+        "dedup",
+        "table",
+        "eval",
+        "rex",
+        "mvexpand",
+        "join",
+        "append",
+        "top",
+        "rare",
+        "transaction",
+        "bin",
+        "tstats",
+        "makemv",
+    ];
+    let faults: Vec<String> = commands.iter().map(|c| format!("index=a | {c}")).collect();
+    assert_rejected(&faults.iter().map(String::as_str).collect::<Vec<_>>());
+    // Catalog commands without a rule of their own that Splunk rejects bare.
+    let catalog = [
+        "metadata",
+        "from",
+        "rest",
+        "inputcsv",
+        "gentimes",
+        "mstats",
+        "savedsearch",
+        "multisearch",
+        "set",
+        "xyseries",
+        "contingency",
+        "mvcombine",
+        "sitop",
+        "sirare",
+        "timewrap",
+        "regex",
+        "replace",
+        "setfields",
+        "fieldformat",
+        "nomv",
+        "strcat",
+        "bucket",
+        "rangemap",
+        "iplocation",
+        "fromjson",
+        "appendcols",
+        "appendpipe",
+        "selfjoin",
+        "return",
+        "map",
+        "concurrency",
+        "script",
+        "mcollect",
+        "accum",
+        "analyzefields",
+        "arules",
+        "autoregress",
+        "cofilter",
+        "delta",
+        "gauge",
+        "trendline",
+        "typeahead",
+    ];
+    let faults: Vec<String> = catalog.iter().map(|c| format!("index=a | {c}")).collect();
+    assert_rejected(&faults.iter().map(String::as_str).collect::<Vec<_>>());
+    // ... and the ones it runs with defaults.
+    assert_parses(&[
+        "index=a | reverse",
+        "index=a | addtotals",
+        "index=a | transpose",
+        "index=a | filldown",
+        "index=a | tail",
+        "| makeresults",
+        "| eventcount",
+        "index=a | append [search b]",
+        "index=a | top user",
+        "index=a | bin _time",
+        "index=a | geostats count",
+    ]);
+    assert_rejected(&[
+        // Splunk: "At least one data field must be specified."
+        "index=a | geostats by x",
+        "| geostats latfield=lat longfield=lon by x",
+        "index=a | | stats count",
+        "| | stats count",
+        "index=a [search b |]",
+        "| makeresults | inputlookup",
+        "index=a TERM(a)) AND b",
+        "index=a (a OR b",
+    ]);
 }
 
 /// #121: eval and where expressions.
@@ -267,7 +418,8 @@ fn command_argument_faults_are_rejected() {
         "index=a | rex field=x",
         "index=a | join type=left k",
         "index=a | mvexpand",
-        "| inputlookup",
+        "| makeresults | inputlookup",
+        "index=a | lookup local=t",
     ]);
 }
 
@@ -362,7 +514,6 @@ fn inputlookup_options_and_geostats_without_aggregates() {
         "| inputlookup t append=true",
         "| inputlookup t [search a]",
         "| geostats latfield=lat longfield=lon",
-        "| geostats latfield=lat longfield=lon by x",
         "index=a | geostats count by x",
     ]);
 }

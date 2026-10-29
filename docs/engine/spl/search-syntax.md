@@ -27,6 +27,8 @@ search index=wineventlog EventCode=4688 process_name=powershell.exe
 
 Generating commands that **replace** implied search must be written with a leading pipe: `| tstats …`, `| makeresults`, `| inputlookup …`, `| from …`, `| rest …`, `| metadata …`.
 
+Without the pipe Splunk accepts the query and searches for the words: `tstats count where index=a by sourcetype` runs `search tstats count where index=a by sourcetype` and returns nothing. The engine parses it as search terms, as Splunk does, and reports `spl_command_without_pipe` (error) when the first word is a catalogued command followed by two or more terms; the fix adds `| `. A lone word (`error`, `tstats`) or a command word with one term (`delete user`) may be a real search and is not reported. A subsearch is different: Splunk runs a leading command word there as the command (`[makeresults | eval a=1]`, `[inputlookup t.csv]`).
+
 Citation: [search — The implied search command](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search).
 
 ## Field-value pairs
@@ -153,6 +155,20 @@ index=web status>=400
 ```
 
 Citation: [search](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search) — “Use the vertical bar (`|`) to apply a command”.
+
+### Forms Splunk accepts that are mistakes
+
+`spl_parse_error` means Splunk's parser rejects the query. Checked against Splunk 10.6.1 (`search/parser` with `parse_only=t`, and as a real search), these forms parse and get their own code instead:
+
+| Form | Splunk | Diagnostic |
+| --- | --- | --- |
+| `\| where`, `\| search`, `\| fields`, `\| eventstats`, `\| streamstats`, `\| sistats`, `\| lookup` with no arguments | runs; keeps every row (`sistats` returns one summary row) | `spl_empty_command` (warning) |
+| `\| stats` with no arguments | runs; returns no results | `spl_empty_command` (error) |
+| `\| inputlookup` with no table, first in the search | runs; fails: the lookup table `''` needs a definition | `spl_empty_command` (error) |
+| `… \| stats count \|` | ignores the empty last stage | `spl_empty_stage` (warning) |
+| `tstats count where index=a by sourcetype` (no leading `\|`) | searches for the words, returns nothing | `spl_command_without_pipe` (error, with a fix) |
+
+`head`, `spath`, `fillnull`, `tojson` and `tail` have defaults and are not reported. Splunk rejects, and the engine reports `spl_parse_error` for: an empty stage before another (`… \| \| stats count`) or at the end of a subsearch (`[search a \|]`), `inputlookup` with no table later in a pipeline, `\| index=a`, and these commands with no arguments: `chart`, `timechart`, `sichart`, `sitimechart`, `geostats`, `foreach`, `outputlookup`, `sort`, `rename`, `dedup`, `table`, `eval`, `rex`, `mvexpand`, `makemv`, `join`, `append`, `top`, `rare`, `transaction`, `bin`, `tstats`, and other catalogued commands Splunk requires arguments for (`xyseries`, `regex`, `iplocation`, `rest`, `metadata`, …). Unbalanced parentheses are a syntax error at the parenthesis (`unbalanced parentheses: this ')' has no matching '('`); an unclosed `TERM(x` is not, since Splunk matches it like `TERM(x)`.
 
 ## Subsearches `[ ]`
 
