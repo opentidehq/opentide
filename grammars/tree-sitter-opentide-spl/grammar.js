@@ -601,12 +601,15 @@ module.exports = grammar({
     // Arguments of a command with no rule of its own. Permissive on purpose:
     // a known command must never be a syntax error because its arguments are
     // not modelled. Command-specific checks belong in the analyzer
-    // (`catalogs/spl/command-options.toml`).
+    // (`catalogs/spl/command-options.toml`). `AND`, `OR` and `NOT` are
+    // reserved, so a command that takes a search (`metasearch index=a OR
+    // index=b`) gets them as booleans here.
     argument_list: ($) =>
       repeat1(
         choice(
           $.macro,
           $.subsearch,
+          alias(choice("AND", "OR", "NOT"), $.search_boolean),
           $.command_option,
           $.comparison,
           $.function_call,

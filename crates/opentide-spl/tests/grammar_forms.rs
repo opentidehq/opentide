@@ -100,6 +100,22 @@ fn comments_span_lines_and_take_any_backtick_run() {
     ]);
 }
 
+/// Reserving `AND`, `OR` and `NOT` must not break commands that take them.
+#[test]
+fn reserved_booleans_are_arguments() {
+    assert_parses(&[
+        "| metasearch index=a OR index=b",
+        "| metasearch NOT index=a",
+        "| metasearch index=a AND sourcetype=b",
+        "| mpreview index=a OR index=b",
+        "| eventcount index=a OR index=b",
+        "| metadata type=hosts index=a OR index=b",
+        "| searchtxn t max_terms=10 a OR b",
+        "index=a | bogus a OR b",
+        "index=a | bogus NOT b",
+    ]);
+}
+
 #[test]
 fn leading_bare_word_is_still_a_command() {
     let r = analyze("index=main | bogus foo=bar");

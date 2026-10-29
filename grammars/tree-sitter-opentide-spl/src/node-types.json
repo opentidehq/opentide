@@ -104,6 +104,10 @@
           "named": true
         },
         {
+          "type": "search_boolean",
+          "named": true
+        },
+        {
           "type": "search_word",
           "named": true
         },
