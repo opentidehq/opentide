@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- `spl_search_operator` (error): `==`, `<>`, `=>`, `=<` or `!~` in an SPL search clause ([#136](https://github.com/opentidehq/language-server/issues/136)). Splunk accepts them, but the comparison never matches, so a detection that uses one never fires (`| search status==200` matches nothing); in `tstats … where` the search fails at run time, and in `inputlookup … where` the comparison is ignored. The quick fix rewrites `==`, `<>`, `=>` and `=<` to `=`, `!=`, `>=` and `<=`. `=~` is a warning: it compares with a value that starts with `~`, not a regular expression. Search clauses are the base search, `| search`, a subsearch's search, `tstats … where` and `inputlookup … where`; `eval`, `where`, quoted values, comments and macro arguments are never read.
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.

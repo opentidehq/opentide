@@ -41,6 +41,8 @@ Unknown operators, functions, tables, and commands are diagnostics (`kql_unknown
 
 Slow-query warnings (`kql_where_not_first`, `kql_unscoped_search`, `spl_wildcard`, `spl_leading_not`, and the rest of `opentide_core::codes`) come from the `perf` modules. They are warnings about public query shapes, not style nits. Do not add a warning that contradicts `docs/kql/` or `docs/spl/`.
 
+`spl_search_operator` (`crates/opentide-spl/src/search_operators.rs`) reports `==`, `<>`, `=>`, `=<`, `!~` and `=~` in an SPL search clause: Splunk accepts them, but the comparison does not do what it says (`docs/spl/search-syntax.md`). Its fixtures are `testdata/conformance/lint/`, which the oracle does not read while the grammar reports `spl_parse_error` on these operators; the forms around them that are valid (`==` in `eval` and `where`, quoted values) are probes in `testdata/oracles/spl/`.
+
 ## Elastic catalogs
 
 | Path | Contents |

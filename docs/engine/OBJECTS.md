@@ -46,6 +46,7 @@ Query extras (engine may add these inside `query: |`):
 - `spl_wildcard`
 - `spl_leading_not`
 - `spl_subsearch_truncation`
+- `spl_search_operator`
 - `crowdstrike_unsupported` (never faked)
 - `defender_output_columns`
 

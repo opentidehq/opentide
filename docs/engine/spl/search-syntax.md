@@ -47,6 +47,25 @@ NOT field IN (v1, v2)
 
 Citation: [search](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search), [Field expressions](https://docs.splunk.com/Documentation/Splunk/latest/Search/Fieldexpressions).
 
+### Operators search does not have
+
+`==`, `<>`, `=>`, `=<` and `!~` are not search operators. Splunk parses them without complaint and splits the comparison into separate terms (`status==200` runs as `status == 200`), so it never matches and a detection that uses one never fires. Tested on Splunk 10.6.1 with four rows whose `status` is 200, 200, 404 and 404:
+
+| Clause | Rows matched |
+| --- | --- |
+| `\| search status=200` | 2 |
+| `\| search status==200`, `status=="200"` | 0 |
+| `\| search status<>200` | 0 (`status!=200` matches 2) |
+| `\| search status!~200` | 0 |
+| `\| search status=>300`, `status=<300` | 0 (`>=` and `<=` match 2) |
+| `\| search NOT status==200` | 0 |
+| `\| search status==200 OR status=404` | 0 |
+| `\| where status==200` | 2 (`==` is valid in `eval` and `where`) |
+
+In `tstats … where` the same operators fail the search at run time (`WHERE clause is not an exact query`); in `inputlookup … where` the comparison is ignored, so every row passes. `=~` is `=` with a value that starts with `~`: `status=~200` matches the value `~200`, not a regular expression.
+
+The engine reports each one as `spl_search_operator` in a search clause (the base search, `| search`, a subsearch's search, `tstats … where` up to `by`, and `inputlookup … where`), never in `eval` or `where` and never inside a quoted value, a comment or a macro's arguments. `==`, `<>`, `=>` and `=<` are errors with a quick fix to `=`, `!=`, `>=` and `<=`. `!~` is an error with no fix: use `| where NOT match(field, "regex")`. `=~` is a warning with no fix, since a value can start with a tilde (`~/.ssh`, `~$report.docx`): use `| where match(field, "regex")` for a regular expression, or quote the value (`file="~$*"`) to keep the literal comparison.
+
 ### Default indexed fields
 
 These are first-class search modifiers (not just ordinary extracted fields):

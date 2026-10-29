@@ -6,6 +6,7 @@ use opentide_core::{
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 mod perf;
+mod search_operators;
 
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
@@ -271,6 +272,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     }
     collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
     perf::collect(source, catalog, &mut diagnostics);
+    search_operators::collect(source, catalog, &mut diagnostics);
     let tokens = highlight_tree(&spec, source, tree.root_node()).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
