@@ -116,9 +116,10 @@ class RuleScope:
             self.result.reason = reason
 
     def __enter__(self) -> RuleScope:
-        _current.append(self)
+        # Listeners first: one that raises must not leave a scope that never exits on the stack.
         for listener in _listeners:
             listener.rule_started(self.result)
+        _current.append(self)
         return self
 
     def __exit__(

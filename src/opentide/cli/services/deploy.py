@@ -611,7 +611,7 @@ def _deploy(
             )
         for system, uuids in deployment_list.items():
             deployer = cast(Any, mdr_deployers[system])
-            if dry_run:
+            if run_log is None:  # a dry run: nothing is sent, so nothing reports
                 logger.info(
                     "event", detail=f"Dry-run: would deploy {len(uuids)} rule(s) to {system}"
                 )
@@ -621,7 +621,6 @@ def _deploy(
                 if system not in missing_tenants:
                     deployed.append(system)
                 continue
-            assert run_log is not None
             with checklist.step(system, unit="rule") as step:
                 step.done(len(uuids))
                 # A deployer reports a failed rule through the environment, not
@@ -663,12 +662,15 @@ def _deploy(
                     step.skip(NOT_ATTEMPTED)
     results = run_log.results if run_log is not None else []
     seconds = time.perf_counter() - started
-    if failure is not None:
+    if failure is not None and run_log is not None:
         system, exc = failure
-        assert run_log is not None
         # An error on a rule is on that rule's line already; an error before any
-        # rule (the tenant's credentials, say) has no line, so it is logged.
-        culprit = next((result for result in results if result.status == "failed"), None)
+        # rule of this platform (the tenant's credentials, say) has no line, so it is
+        # logged. A rule another platform failed without raising is not this one's.
+        culprit = next(
+            (result for result in run_log.platform_results(system) if result.status == "failed"),
+            None,
+        )
         detail = str(exc).strip()
         error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
         failed_result: dict[str, object] = {

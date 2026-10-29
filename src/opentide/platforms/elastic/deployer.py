@@ -264,7 +264,7 @@ class ElasticDeploy:
                 "get_elastic_rule_failed",
                 rule_id=rule_id,
                 status_code=get_resp.status_code,
-                error=get_resp.text,
+                error=_kibana_error(get_resp),
             )
             return
 

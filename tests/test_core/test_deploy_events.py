@@ -200,3 +200,29 @@ def test_a_page_of_html_does_not_fill_the_log() -> None:
     error = describe_error(RuntimeError("<html>" + "x" * 5000))
     assert len(error) <= deploy_events.MAX_ERROR_LENGTH
     assert error.endswith("…")
+
+
+def test_a_listener_that_raises_on_start_leaves_no_scope_behind() -> None:
+    """A stale scope would take the next rule's failure notes."""
+
+    class _Broken(_Recorder):
+        def rule_started(self, result: RuleResult) -> None:
+            raise OSError("stderr is closed")
+
+    with (
+        deploy_events.listen(_Broken()),
+        pytest.raises(OSError),
+        deploying("sentinel", "contoso", "u1", "Rule one"),
+    ):
+        pytest.fail("entering the block should have raised")
+    assert deploy_events._current == []  # ty: ignore[unresolved-attribute]  # private, on purpose
+
+    results: list[RuleResult] = []
+
+    class _Keep(_Recorder):
+        def rule_finished(self, result: RuleResult) -> None:
+            results.append(result)
+
+    with deploy_events.listen(_Keep()), deploying("sentinel", "contoso", "u2", "Rule two"):
+        deploy_events.note_failure("belongs to rule two")
+    assert [(r.id, r.error) for r in results] == [("u2", "belongs to rule two")]

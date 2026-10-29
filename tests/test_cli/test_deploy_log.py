@@ -227,3 +227,15 @@ def test_the_outcome_line_counts_failed_and_not_attempted_on_a_pass_and_on_a_fai
 @pytest.mark.parametrize("seconds", [0.0, 59.94])
 def test_the_outcome_line_always_ends_with_the_elapsed_time(seconds: float) -> None:
     assert outcome_message([_result(1)], seconds, failed=False).endswith("s")
+
+
+def test_rules_an_engine_never_reached_after_one_of_its_failures_are_not_attempted() -> None:
+    """Elastic fails a tenant on an auth error and returns normally: the rest was not reached."""
+    log, _ = _log([_change(1), _change(2), _change(3)])
+    log.rule_finished(_result(1, "failed", error="HTTP 403: missing privileges"))
+    log.settle("sentinel")
+    assert [(r.id, r.status) for r in log.results] == [
+        ("u1", "failed"),
+        ("u2", "not_attempted"),
+        ("u3", "not_attempted"),
+    ]

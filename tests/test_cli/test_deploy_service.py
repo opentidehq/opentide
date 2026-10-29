@@ -798,3 +798,32 @@ def test_a_rule_failure_recorded_in_the_environment_fails_the_run_with_its_count
     ]
     assert result["message"].startswith("Deployment failed · 1 created or updated, 1 failed, 0 not")
     assert result["_failure_code"] == "issues_found"
+
+
+def test_a_platform_that_raises_is_not_blamed_for_a_rule_another_platform_failed() -> None:
+    """Platform one fails a rule and returns; platform two then raises before any of its rules."""
+    import os
+
+    from opentide.core import deploy_events
+
+    def one_rule_fails(**kwargs: object) -> None:
+        with deploy_events.deploying("sentinel", "t", "u1", "Sentinel rule"):
+            os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+            deploy_events.note_failure("HTTP 409: conflict")
+
+    sentinel, splunk = MagicMock(), MagicMock()
+    sentinel.deploy.side_effect = one_rule_fails
+    splunk.deploy.side_effect = RuntimeError("splunk token expired")
+    try:
+        result = _deploy_with(
+            {"sentinel": sentinel, "splunk": splunk}, {"sentinel": ["u1"], "splunk": ["u2"]}
+        )
+    finally:
+        os.environ.pop("DEPLOYMENT_ERROR_RAISED", None)
+    assert result["message"] == "Deployment to splunk failed: RuntimeError: splunk token expired"
+    assert "Sentinel rule" not in str(result.get("error", ""))
+    assert "_failure_code" not in result
+    assert [(row["id"], row["status"]) for row in result["results"]] == [
+        ("u1", "failed"),
+        ("u2", "not_attempted"),
+    ]

@@ -189,7 +189,12 @@ class DeployLog:
                         )
                     )
             return
-        self.unreached([platform], status="skipped", reason="not reported by the engine")
+        # After a failure the rest of its tenant was never reached (Elastic stops a tenant on an
+        # auth error and carries on): that is not attempted, not a rule the engine chose to skip.
+        if any(result.status == "failed" for result in self.platform_results(platform)):
+            self.unreached([platform])
+        else:
+            self.unreached([platform], status="skipped", reason="not reported by the engine")
 
     def unreached(
         self,
