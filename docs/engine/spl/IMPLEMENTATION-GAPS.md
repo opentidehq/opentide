@@ -73,7 +73,7 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | Subsearch `[ pipeline ]` | `subsearch` rule (join + argument_list + search_term) |
 | Search clauses | One `search_expression` for the base search, `search`, `tstats ... where` and subsearches |
 | `IN (...)` in **search** clauses | `in_clause`, comma- or space-separated |
-| `TERM(...)` / `CASE(...)` / tstats `PREFIX(...)` | `term_clause` / `case_clause` / `prefix_clause`, raw contents (`term_text`) |
+| `TERM(...)` / `CASE(...)` / tstats `by PREFIX(...)` | `term_clause` / `case_clause` / `prefix_clause`, raw contents (`term_text`) up to `)` or whitespace; the `)` is optional, as in Splunk |
 | Eval expressions | `.` concatenation, `like`, `!`, `true()`/`false()`, quoted and `{f}` assignment names, `<<FIELD>>` templates |
 | Search values | `search_word`: any run of non-breaking characters (`-1h@h`, `2.0.0`, `svc-x`) |
 | `tstats` `from datamodel=...` | `from datamodel=` + dotted identifiers |

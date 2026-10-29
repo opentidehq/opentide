@@ -1,2 +1,2 @@
 ``` prod:prefix_clause valid
-| tstats count where index=main PREFIX(src=) by host
+| tstats count where index=main by _time PREFIX(src=) span=1h

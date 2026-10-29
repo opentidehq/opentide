@@ -41,7 +41,11 @@ fn search_clauses_parse() {
         "`m` TERM(user=)",
         "index=a TERM(TERMSRV/*)",
         "index=a (TERM(N1*) OR TERM(N2*)) CASE(Admin)",
-        "| tstats count where index=a PREFIX(src=) by host",
+        "| tstats count where index=a by PREFIX(src=)",
+        "| tstats count where index=a by _time PREFIX(dst=) span=1s",
+        "index=a TERM(EventID=4688",
+        "index=a TERM(\"a-b\"\n| stats count",
+        "index=a TERM(\"a b\") TERM(x",
         "index=a \"http_request.user_agent\"=x",
         "index=a | search \"{}.Id\"=\"x\"",
         "index=a earliest=-1h@h latest=now",
@@ -58,7 +62,7 @@ fn search_clauses_parse() {
         "\"Accepted\" index=a",
         "NOT `m` index=a",
         "`m` NOT title=\"a - *\" status=new",
-        "| tstats count as c, values(tag) as tag where index=a earliest=-1h by host span=1h",
+        "| tstats count as c, values(tag) as tag where index=a earliest=-1h by _time span=1h",
         "index=a [| inputlookup t.csv | fields x]",
         "index=a and or not",
     ]);
@@ -67,7 +71,7 @@ fn search_clauses_parse() {
 #[test]
 fn search_clause_faults_are_rejected() {
     assert_rejected(&[
-        "index=a TERM(EventID=4688",
+        "index=a (TERM(EventID=4688)",
         "index=a app IN (\"a\" \"b\"",
         "index=a OR",
         "OR index=a",
@@ -75,7 +79,8 @@ fn search_clause_faults_are_rejected() {
         "index=a NOT",
         "index=a (x=1",
         "index=a x=1)",
-        "| tstats count where index=a PREFIX(src= by host",
+        // Splunk: "Comparator '=' is missing a term on the right hand side".
+        "| tstats count where index=a PREFIX(src=) by host",
     ]);
 }
 
