@@ -50,7 +50,7 @@ A query that does not parse gets no column diagnostic. Hover on a column shows i
 
 ## Type checks
 
-`kql_type_mismatch` reports only what Kusto rejects, each rule checked against Microsoft's Kusto.Language with the catalog's schemas:
+`kql_type_mismatch` reports only what Kusto rejects, each rule checked against Microsoft's Kusto.Language with the catalog's schemas. The KQL oracle (`scripts/oracles/README.md`) keeps it so: every column or type error the engine reports on the corpus and on `testdata/conformance/columns/` must be one Kusto.Language reports too.
 
 - a string operator (`has`, `contains`, `startswith`, `endswith`, `hasprefix`, `hassuffix` and their `!`/`_cs` forms, `=~`, `!~`, `matches regex`) or `has_any`, `has_all`, `in~` on a numeric, `datetime`, `timespan` or `bool` column;
 - `between` on a `string`, `bool` or `guid` column;

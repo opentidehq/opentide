@@ -22,6 +22,7 @@ Tide YAML already has its oracle: `tide_corpus.rs` runs the opentide CLI's Pydan
 - `testdata/corpus/<lang>/*` (fixture tag line removed, as `corpus_gate.rs` does)
 - `testdata/conformance/external/<lang>/*`, including the `.broken.` twins
 - `testdata/conformance/perf/*`
+- `testdata/conformance/columns/*` (KQL: one column or type error each)
 - `testdata/oracles/<lang>/*`, one probe per form real detections use
 - every `configurations.{sentinel,defender_for_endpoint,splunk}` query in a Tide rule under `testdata/`
 - Elastic: `configurations.elastic.query` and `threat.query` in the language their `type` and `language` select, `response.procedure.searches[]` entries with `system: elastic` and a `language`, the verdict tables `testdata/conformance/external/{lucene-queryparser,kuery-opensearch-dashboards}/cases.tsv`, and, when `OPENTIDE_DETECTION_RULES` names an `elastic/detection-rules` checkout (CI pins one), every rule and single-language hunt in it
@@ -29,6 +30,8 @@ Tide YAML already has its oracle: `tide_corpus.rs` runs the opentide CLI's Pydan
 Each query runs through `opentide-lsp analyze` and through the reference.
 
 **Verdicts.** Ours rejects a query when it reports `kql_parse_error` or `kql_unknown_operator` (`spl_parse_error` or `spl_unknown_command` for SPL; for the Elastic languages, an error-severity syntax code from `REJECT` in `oracle.py`, which leaves out checks Elasticsearch makes after parsing). The reference rejects it when it reports an error. A query where they differ must be listed by path in `testdata/oracles/exceptions.toml`. A `.broken.` fixture the reference accepts always fails: its injected fault breaks nothing. A probe in `testdata/oracles/<lang>/` is a valid detection form, so any error-severity diagnostic from ours on it fails too (an unknown table or function there is a false positive).
+
+**KQL columns and types.** `KustoOracle semantic` analyzes every KQL query against a database `oracle.py` builds from the engine's own catalogs (the Azure Monitor tables, the hand-written columns, the standard Log Analytics columns, the ASIM parsers). Every `kql_unknown_column` and `kql_type_mismatch` ours reports must be an error Kusto.Language reports too: the name it does not know, or KS106/KS107 for an operator it does not define for the types. Each fixture in `testdata/conformance/columns/` must make ours report one, so the check is never vacuous. The reverse is not compared: ours stays silent on purpose wherever a column may exist that the catalog does not list (`docs/kql/columns.md`).
 
 **Names.** KQL: `catalogs/kql/core/functions.toml` and `evaluate-plugins.toml` against the functions, aggregates and plugins in Kusto.Language's `GlobalState.Default`, plus any name ours flags `kql_unknown_function` that Kusto.Language knows. SPL: `catalogs/spl/commands.toml` against the `*-command` stanzas and aliases in `searchbnf.conf`, plus any name ours flags `spl_unknown_command` that Splunk knows. Every disagreeing name must be listed.
 
