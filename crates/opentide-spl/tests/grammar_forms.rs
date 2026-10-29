@@ -273,7 +273,9 @@ fn command_argument_faults_are_rejected() {
 
 #[test]
 fn known_command_arguments_never_make_an_unknown_command() {
-    let r = analyze("index=a | bin _time span=1h | xyseries a b c | notacommand x");
+    let r = analyze(
+        "index=a | bin _time span=1h | xyseries a b c | metasearch index=a OR index=b NOT c | notacommand x",
+    );
     let unknown: Vec<&str> = r
         .diagnostics
         .iter()
@@ -304,4 +306,71 @@ fn keywords_highlight_whatever_their_case() {
             "{word} not a keyword: {keywords:?}"
         );
     }
+}
+
+/// chart and timechart end in an optional `where` clause.
+#[test]
+fn chart_where_clause_parses() {
+    assert_parses(&[
+        "index=a | timechart count by host where count > 10",
+        "index=a | timechart span=1h count by host where count < 5",
+        "index=a | chart count by host where count > 10",
+        "index=a | timechart count by host where max in top5",
+        "index=a | timechart count by host where sum(x) notin bottom10",
+    ]);
+    assert_rejected(&[
+        "index=a | timechart count by host where",
+        "index=a | chart count by host where count >",
+        "index=a | stats count by host where count > 10",
+    ]);
+}
+
+/// A macro may stand for a field, table or aggregate, and a quoted name
+/// for a by-field, wherever a dedicated rule replaced argument_list.
+#[test]
+fn macros_and_quoted_names_in_command_rules() {
+    assert_parses(&[
+        "index=a | spath `m`",
+        "index=a | fillnull value=0 `m`",
+        "index=a | tojson `m`",
+        "| inputlookup `m` where x=1",
+        "index=a | outputlookup `m`",
+        "index=a | foreach `m` [eval x=1]",
+        "index=a | eventstats count by `m`",
+        "index=a | timechart `m` count",
+        "index=a | timechart count by \"Source IP\"",
+        "index=a | eventstats count by \"Source IP\"",
+        "index=a | chart count over \"a b\"",
+        "index=a | stats count by x `m`",
+        "index=a | table `m`",
+        "index=a | fields `m`",
+        "index=a | dedup `m`",
+        "index=a | lookup `m` x",
+        "| tstats `m` count where index=a by host",
+        "index=a | spath input=x [search a]",
+        "index=a | timechart count by x [search a]",
+        "index=a | outputlookup t x=(a,b)",
+    ]);
+}
+
+#[test]
+fn inputlookup_options_and_geostats_without_aggregates() {
+    assert_parses(&[
+        "| inputlookup t.csv max=10",
+        "| inputlookup t start=0 max=10",
+        "| inputlookup t append=true",
+        "| inputlookup t [search a]",
+        "| geostats latfield=lat longfield=lon",
+        "| geostats latfield=lat longfield=lon by x",
+        "index=a | geostats count by x",
+    ]);
+}
+
+/// PREFIX() is valid in tstats aggregates and `by`, not in `where`.
+#[test]
+fn prefix_belongs_to_aggregates_and_by() {
+    assert_parses(&[
+        "| tstats count values(PREFIX(x=)) as p where index=a by _time PREFIX(dst=) span=1s",
+    ]);
+    assert_rejected(&["| tstats count where index=a PREFIX(src=) by host"]);
 }

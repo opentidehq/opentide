@@ -59,6 +59,8 @@
 "output" @keyword
 "outputnew" @keyword
 "desc" @keyword
+"in" @keyword
+"notin" @keyword
 "d" @keyword
 "from" @keyword
 "where" @keyword

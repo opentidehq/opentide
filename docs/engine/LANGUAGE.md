@@ -87,6 +87,7 @@ Control commands are parsed so the engine can reject them. They are not valid de
 | spl.tojson | `tojson_command` | `tojson_command__valid` | `keyword` |
 | spl.inputlookup | `inputlookup_command` | `inputlookup_command__valid` | `keyword` |
 | spl.outputlookup | `outputlookup_command` | `outputlookup_command__valid` | `keyword` |
+| spl.chart-where | `chart_where` | `chart_where__valid` | `keyword` |
 | spl.by | `by_clause` | `stats_command__valid.eventstats` | `keyword` |
 | spl.aggregate | `aggregate_item` | `stats_command__valid.eventstats` | `function` |
 | spl.rename-item | `rename_item` | `rename_item__valid` | `keyword` (`as`) |

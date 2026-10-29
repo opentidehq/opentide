@@ -189,24 +189,52 @@ module.exports = grammar({
     // The stats family shares one shape: options, aggregates (each with an
     // optional `as` alias, separated by spaces or commas), then `over` and
     // `by` clauses that may carry options (`by host span=1h limit=0`).
+    // Which option a stats-family command takes is the analyzer's business
+    // (command-options.toml); the grammar accepts any `name=value`.
     stats_command: ($) =>
-      seq(
-        choice(
-          "stats",
-          "eventstats",
-          "streamstats",
-          "sistats",
-          "chart",
-          "timechart",
-          "sichart",
-          "sitimechart",
-          "geostats",
+      choice(
+        seq(
+          choice("stats", "eventstats", "streamstats", "sistats"),
+          repeat($.command_option),
+          field("aggregates", listOf($._stats_aggregate)),
+          statsTail($),
         ),
-        repeat($.command_option),
-        field("aggregates", listOf($.aggregate_item)),
-        repeat($.command_option),
-        optional(seq(kw("over"), field("over", $._field_name), repeat($.command_option))),
-        optional($.by_clause),
+        // chart and timechart may end in `where <agg> in top5` or
+        // `where <agg> > 10`.
+        seq(
+          choice("chart", "timechart", "sichart", "sitimechart"),
+          repeat($.command_option),
+          field("aggregates", listOf($._stats_aggregate)),
+          statsTail($),
+          optional($.chart_where),
+        ),
+        // searchbnf: geostats takes zero or more aggregates.
+        seq(
+          "geostats",
+          repeat($.command_option),
+          optional(
+            choice(
+              seq(field("aggregates", listOf($._stats_aggregate)), statsTail($)),
+              $.by_clause,
+            ),
+          ),
+        ),
+      ),
+
+    // A macro may stand for aggregates (`timechart `m` count`).
+    _stats_aggregate: ($) => choice($.aggregate_item, $.macro),
+
+    chart_where: ($) =>
+      seq(
+        kw("where"),
+        field("field", choice($.function_call, $._field_name)),
+        choice(
+          seq(choice(kw("in"), kw("notin")), field("limit", $._field_name)),
+          seq(
+            field("operator", choice("=", "!=", "<", ">", "<=", ">=")),
+            field("value", $.number),
+          ),
+        ),
       ),
 
     // `by a, b span=1h`: fields, with options among or after them.
@@ -219,7 +247,8 @@ module.exports = grammar({
       ),
 
     // tstats groups by `PREFIX(dst=)` too.
-    _by_field: ($) => choice($._field_name, $.prefix_clause),
+    _by_field: ($) =>
+      choice($._field_name, $.prefix_clause, $.string, $.macro, $.subsearch),
 
     // `count`, `dc(src) as c`, `values(*) as *`, `min(eval(if(...))) as e`,
     // `values(PREFIX(dpt=)) as p`, `earliest(_time) as "earliest"`.
@@ -275,7 +304,7 @@ module.exports = grammar({
 
     // A field list entry: a name, a wildcard pattern (`user*`, `*`), or a
     // quoted name.
-    field_name: ($) => choice($._field_name, $.glob, $.string),
+    field_name: ($) => choice($._field_name, $.glob, $.string, $.macro),
 
     // `rename a as b, DNS.* as *`. `as` is case-insensitive.
     rename_command: ($) =>
@@ -353,7 +382,7 @@ module.exports = grammar({
       seq(
         "lookup",
         repeat($.command_option),
-        field("table", choice($._field_name, $.string)),
+        field("table", $._table_name),
         field("inputs", listOf($.lookup_field)),
         // `OUTPUT` with no fields returns every lookup field.
         optional(
@@ -442,7 +471,13 @@ module.exports = grammar({
     spath_command: ($) =>
       seq(
         "spath",
-        repeat(choice($.command_option, field("path", choice($._field_name, $.string)))),
+        repeat(
+          choice(
+            $.command_option,
+            field("path", choice($._field_name, $.string, $.macro)),
+            $.subsearch,
+          ),
+        ),
       ),
 
     // `tojson * output_field=j`, `tojson fill_null=true a, b*, str(c)`.
@@ -457,7 +492,8 @@ module.exports = grammar({
       seq(
         "inputlookup",
         repeat($.command_option),
-        field("table", choice($._field_name, $.string)),
+        field("table", $._table_name),
+        repeat(choice($.command_option, $.subsearch)),
         optional(seq(kw("where"), field("where", $.search_expression))),
       ),
 
@@ -465,9 +501,12 @@ module.exports = grammar({
       seq(
         "outputlookup",
         repeat($.command_option),
-        field("table", choice($._field_name, $.string)),
+        field("table", $._table_name),
         repeat($.command_option),
       ),
+
+    // A lookup table: a name, a quoted name or a macro.
+    _table_name: ($) => choice($._field_name, $.string, $.macro),
 
     catalog_command: ($) =>
       seq(field("name", $.catalog_command_name), optional($.argument_list)),
@@ -642,6 +681,7 @@ module.exports = grammar({
         $.glob,
         $.search_word,
         $.macro,
+        $.value_list,
       ),
 
     // `x!=y`, `x>5` in a command with no rule of its own (`regex _raw!="a"`).
@@ -834,6 +874,15 @@ function kw(word) {
 function directive(name, $) {
   return prec.right(
     seq(name, "(", optional(field("value", $.term_text)), optional(")")),
+  );
+}
+
+/** Options, then `over` and `by`, after the stats-family aggregates. */
+function statsTail($) {
+  return seq(
+    repeat($.command_option),
+    optional(seq(kw("over"), field("over", $._by_field), repeat($.command_option))),
+    optional($.by_clause),
   );
 }
 

@@ -410,9 +410,28 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         | "makemv"
         | "mvexpand"
         | "tstats"
-        | "AS"
+        | "eventstats"
+        | "streamstats"
+        | "sistats"
+        | "chart"
+        | "timechart"
+        | "sichart"
+        | "sitimechart"
+        | "geostats"
+        | "fillnull"
+        | "foreach"
+        | "spath"
+        | "tojson"
+        | "inputlookup"
+        | "outputlookup"
         | "as"
         | "by"
+        | "over"
+        | "output"
+        | "outputnew"
+        | "desc"
+        | "in"
+        | "notin"
         | "from"
         | "datamodel"
         | "summariesonly"
@@ -421,8 +440,11 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         | "fillnull_value"
         | "TERM"
         | "CASE"
+        | "PREFIX"
         | "IN" => Some("keyword"),
-        "glob" => Some("variable"),
+        "glob" | "search_word" => Some("variable"),
+        "term_text" => Some("string"),
+        "search_boolean" => Some("operator"),
         "identifier" => {
             if node.parent().map(|p| p.kind()) == Some("function_call") {
                 Some("function")
