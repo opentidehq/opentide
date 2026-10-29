@@ -30,6 +30,9 @@ pub enum DatasetKind {
     Indices,
     /// Elastic data views (`data_view_id`).
     DataViews,
+    /// Elastic indices a log source marks as following ECS (`ecs = true`):
+    /// the field checks apply to them as to `logs-*` integration data streams.
+    EcsIndices,
 }
 
 impl DatasetKind {
@@ -42,6 +45,7 @@ impl DatasetKind {
             Self::Macros => "macros",
             Self::Indices => "indices",
             Self::DataViews => "data_views",
+            Self::EcsIndices => "ecs_indices",
         }
     }
 
