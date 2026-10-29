@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Fixed
+
+- `spl_wildcard` and `spl_leading_not` describe the cost of reading the index, so they now look only at a base search, the first stage of the query or of a subsearch ([#124](https://github.com/opentidehq/language-server/issues/124)). A later `| search NOT outcome="Failure"` or `| search value="*@*"` filters rows already in the pipeline and is no longer flagged. `field=*` and `field="*"` are the existence check and are never `spl_wildcard`; a bare `*` term still is. A leading or mid-token wildcard is flagged only when nothing else narrows the read: an `index=`, `sourcetype=`, `source=` or `host=` value, `TERM()`, `PREFIX()` or a macro (`index=a src_user!="*$"` is fine, `index=* *foo*` is not).
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.

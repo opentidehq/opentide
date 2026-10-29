@@ -27,5 +27,5 @@ configurations:
     name: Leading Wildcard
     status: STAGING
     search: |
-      index=main sourcetype=wineventlog *fail
+      index=* EventCode=4688 *fail
     cron_schedule: "0 * * * *"
