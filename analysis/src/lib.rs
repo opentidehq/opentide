@@ -8,7 +8,8 @@
 //! position is converted here, against the text it points into.
 
 use opentide_analysis::{
-    AnalyzeRequest, Catalog, IndexedObject, LanguageId, MemoryWorkspace, QueryRequest, Range, codes,
+    AnalyzeRequest, Catalog, DatasetKind, Declaration, IndexedObject, LanguageId, MemoryWorkspace,
+    QueryRequest, Range, codes,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -209,31 +210,76 @@ fn highlight(py: Python<'_>, text: String, language: &str) -> PyResult<Vec<Token
 }
 
 /// Replace the bundled Tide catalogs, for the whole process, with a
-/// workspace's (`fields.json`, `deprecations.json` as `opentide generate
-/// schemas` writes them). `None` goes back to the bundled one. Raises
-/// `ValueError`, and changes nothing, when a part does not parse.
+/// workspace's (`fields.json`, `deprecations.json` and `datasets.json` as
+/// `opentide generate schemas` writes them). `None` goes back to the bundled
+/// one; for `datasets`, which the engine does not bundle, to none declared.
+/// Raises `ValueError`, and changes nothing, when a part does not parse.
 #[pyfunction]
-#[pyo3(signature = (fields=None, deprecations=None))]
-fn install_catalog(fields: Option<String>, deprecations: Option<String>) -> PyResult<()> {
+#[pyo3(signature = (fields=None, deprecations=None, datasets=None))]
+fn install_catalog(
+    fields: Option<String>,
+    deprecations: Option<String>,
+    datasets: Option<String>,
+) -> PyResult<()> {
     opentide_analysis::install_catalog(&Catalog {
         fields,
         deprecations,
+        datasets,
     })
     .map_err(PyValueError::new_err)
 }
 
 /// Use these catalogs wherever the engine would use its bundled ones (no
 /// workspace catalog installed), for the whole process: the catalogs opentide
-/// generates from its own models. `None` goes back to the bundled one. Raises
-/// `ValueError`, and changes nothing, when a part does not parse.
+/// generates from its own models and the workspace's `visibility.toml`.
+/// `None` goes back to the bundled one (for `datasets`, to none declared).
+/// Raises `ValueError`, and changes nothing, when a part does not parse.
 #[pyfunction]
-#[pyo3(signature = (fields=None, deprecations=None))]
-fn set_default_catalog(fields: Option<String>, deprecations: Option<String>) -> PyResult<()> {
+#[pyo3(signature = (fields=None, deprecations=None, datasets=None))]
+fn set_default_catalog(
+    fields: Option<String>,
+    deprecations: Option<String>,
+    datasets: Option<String>,
+) -> PyResult<()> {
     opentide_analysis::set_default_catalog(&Catalog {
         fields,
         deprecations,
+        datasets,
     })
     .map_err(PyValueError::new_err)
+}
+
+/// Every dataset kind, by its key in `visibility.toml` and `datasets.json`.
+const DATASET_KINDS: [DatasetKind; 7] = [
+    DatasetKind::Tables,
+    DatasetKind::Indexes,
+    DatasetKind::Sourcetypes,
+    DatasetKind::Macros,
+    DatasetKind::Indices,
+    DatasetKind::DataViews,
+    DatasetKind::EcsIndices,
+];
+
+fn dataset_kind(key: &str) -> Option<DatasetKind> {
+    DATASET_KINDS.into_iter().find(|kind| kind.key() == key)
+}
+
+/// What the declared datasets in use (the workspace's `datasets.json`, else
+/// the host's) say about `name` of `kind` (`tables`, `indexes`, ...) on
+/// `platform`: `unchecked` when nothing of that kind is declared for the
+/// platform, else `declared` or `undeclared`. Raises `ValueError` for an
+/// unknown kind.
+#[pyfunction]
+fn dataset_status(platform: &str, kind: &str, name: &str) -> PyResult<&'static str> {
+    let kind = dataset_kind(kind)
+        .ok_or_else(|| PyValueError::new_err(format!("unknown dataset kind: {kind}")))?;
+    Ok(
+        match opentide_analysis::declared_datasets().status(platform, kind, name) {
+            Declaration::Unchecked => "unchecked",
+            Declaration::Declared => "declared",
+            Declaration::Undeclared => "undeclared",
+        },
+    )
 }
 
 /// The Tide catalogs compiled into the engine, `(fields, deprecations)`, as
@@ -386,8 +432,8 @@ mod _native {
     #[pymodule_export]
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
-        catalog_version, describe_code, highlight, install_catalog, language_for_path, serve_stdio,
-        set_default_catalog, use_host_catalogs,
+        catalog_version, dataset_status, describe_code, highlight, install_catalog,
+        language_for_path, serve_stdio, set_default_catalog, use_host_catalogs,
     };
 
     #[pymodule_init]
@@ -437,5 +483,13 @@ mod tests {
         assert_eq!(language_of("hunt.esql"), Some(LanguageId::Esql));
         assert_eq!(language_of("notes.txt"), None);
         assert_eq!(language_of("Makefile"), None);
+    }
+
+    #[test]
+    fn every_dataset_kind_is_found_by_its_key() {
+        for kind in DATASET_KINDS {
+            assert_eq!(dataset_kind(kind.key()), Some(kind));
+        }
+        assert_eq!(dataset_kind("ecs"), None);
     }
 }
