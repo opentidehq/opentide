@@ -41,6 +41,9 @@ Query extras (engine may add these inside `query: |`):
 - `kql_unscoped_union`
 - `kql_wildcard_table`
 - `kql_join_summarize_before_project`
+- `kql_table_not_declared`
+- `kql_unknown_column`
+- `kql_type_mismatch`
 - `spl_unknown_command`
 - `spl_parse_error`
 - `spl_wildcard`

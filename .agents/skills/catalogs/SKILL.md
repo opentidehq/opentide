@@ -31,6 +31,8 @@ Do not parse catalogs with `serde_yaml`. Do not switch catalog files to JSON unl
 | `catalogs/kql/core/` | operators, scalar operators, functions, types, evaluate plugins, operator options |
 | `catalogs/kql/sentinel/` | tables and columns |
 | `catalogs/kql/defender/` | tables and columns |
+| `catalogs/kql/azure-monitor/tables.json` | every Azure Monitor Logs table with its columns (generated) |
+| `catalogs/kql/asim/asim.json` | ASIM schemas, columns, parsers and their parameters (generated) |
 | `catalogs/spl/` | commands, command options, fields, datamodels, macros |
 
 KQL profiles are `Core`, `Sentinel`, and `Defender`. Sentinel analysis is the default for a raw `.kql` file. Defender is selected when the Tide field path contains `defender_for_endpoint`. A function that exists only in one profile must not be marked known in the other.
@@ -38,6 +40,10 @@ KQL profiles are `Core`, `Sentinel`, and `Defender`. Sentinel analysis is the de
 Signatures and operator options are copied from public docs (Microsoft Learn for KQL, Splunk Search Reference for SPL). `scripts/sync_kql_learn_signatures.py` is the generator. Do not invent a parameter the Learn page does not list. Cite the page in the catalog `citation` field when the row has one.
 
 Unknown operators, functions, tables, and commands are diagnostics (`kql_unknown_operator`, `kql_unknown_function`, `kql_unknown_table`, `spl_unknown_command`), not grammar errors. A function row with `deprecated = "<replacement>"` is a deprecated alias Learn names on the replacement's article; the engine warns `kql_deprecated_function` and leaves it out of completion. `evaluate` calls are checked against `evaluate-plugins.toml`, not functions. `render` parses and warns `kql_render_not_valid`. Control commands warn `kql_control_command_unsupported`.
+
+The `sentinel` profile knows the hand-written Sentinel tables, the Defender XDR tables (the Defender XDR connector streams them into a workspace), every table of the Azure Monitor Logs reference and the ASIM parsers; `defender_for_endpoint` knows the advanced hunting tables. `scripts/sync_azure_monitor_tables.py` (MicrosoftDocs/azure-monitor-docs, CC BY 4.0, plus the columns of Azure-Sentinel's KQL validation schemas, MIT) and `scripts/sync_asim_schemas.py` (Azure-Sentinel's `ASimTester.csv` and parser YAML, MIT) generate the JSON catalogs; regenerate them, never hand-edit. Hand-written columns are merged in, never removed. An unknown table is `kql_unknown_table`: a warning under `sentinel`, an error under `defender_for_endpoint`. Tables a workspace declares in `visibility.toml` (`datasets.json`, `opentide_core::datasets`) are known, and once it declares any for a platform an undeclared one is `kql_table_not_declared` (warning).
+
+`crates/opentide-kql/src/schema.rs` tracks columns through a query (#112). A documented source (a table of the reference, an ASIM parser) reports only a near miss of a documented column (`kql_unknown_column` with a suggestion): tables gain columns before the reference lists them. After `project`, `summarize`, `distinct` or `count` the query names its columns, so any other name is an error. An unknown source, `evaluate` or an operator whose output naming is not modelled makes the columns open, and nothing below it is reported. `kql_type_mismatch` covers only the operators Kusto does not define for a documented type; read `docs/kql/columns.md` before adding a rule, and verify it against the KQL oracle first.
 
 Slow-query warnings (`kql_where_not_first`, `kql_unscoped_search`, `spl_wildcard`, `spl_leading_not`, and the rest of `opentide_core::codes`) come from the `perf` modules. They are warnings about public query shapes, not style nits. Do not add a warning that contradicts `docs/kql/` or `docs/spl/`.
 

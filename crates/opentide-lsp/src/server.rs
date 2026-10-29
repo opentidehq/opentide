@@ -4,8 +4,9 @@
 use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
-    AnalyzeRequest, Catalog, MemoryWorkspace, WorkspaceHost, analyze, compiled_kql, compiled_spl,
-    completions, hover, index_workspace, install_catalog, signature_help,
+    AnalyzeRequest, Catalog, DatasetKind, MemoryWorkspace, VISIBILITY_CONFIGURATION, WorkspaceHost,
+    analyze, codes, compiled_kql, compiled_spl, completions, declare_dataset, hover,
+    index_workspace, install_catalog, signature_help,
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
@@ -733,10 +734,13 @@ fn handle_code_action(session: &Session, params: &Value) -> Value {
         },
     );
     let requested = params.get("range");
-    let actions: Vec<Value> = response
+    let in_range: Vec<&opentide_core::Diagnostic> = response
         .diagnostics
         .iter()
         .filter(|d| range_overlaps_param(d.range, requested))
+        .collect();
+    let mut actions: Vec<Value> = in_range
+        .iter()
         .filter_map(|d| {
             let suggestion = d.suggestion.as_ref()?;
             Some(json!({
@@ -753,7 +757,69 @@ fn handle_code_action(session: &Session, params: &Value) -> Value {
             }))
         })
         .collect();
+    if let Some(root) = &session.root {
+        let path = root.join(VISIBILITY_CONFIGURATION);
+        let existing = std::fs::read_to_string(&path).ok();
+        let target = path_to_uri(&path.display().to_string());
+        let mut seen = std::collections::BTreeSet::new();
+        for d in &in_range {
+            let Some((platform, kind, name)) = undeclared_dataset(d) else {
+                continue;
+            };
+            if !seen.insert((platform, kind, name.clone())) {
+                continue;
+            }
+            let edit = declare_dataset(existing.as_deref(), platform, kind, &name);
+            let text_edit = json!({ "range": range_json(edit.range), "newText": edit.new_text });
+            let workspace_edit = if existing.is_some() {
+                json!({ "changes": { target.clone(): [text_edit] } })
+            } else {
+                json!({ "documentChanges": [
+                    { "kind": "create", "uri": target, "options": { "ignoreIfExists": true } },
+                    { "textDocument": { "uri": target, "version": null }, "edits": [text_edit] }
+                ] })
+            };
+            actions.push(json!({
+                "title": edit.title,
+                "kind": "quickfix",
+                "diagnostics": [{
+                    "range": range_json(d.range),
+                    "code": d.code,
+                    "message": d.message,
+                }],
+                "edit": workspace_edit
+            }));
+        }
+    }
     json!(actions)
+}
+
+/// The dataset a "declare it in visibility.toml" diagnostic names: its
+/// platform, kind and name (the first quoted word of the message).
+fn undeclared_dataset(
+    d: &opentide_core::Diagnostic,
+) -> Option<(&'static str, DatasetKind, String)> {
+    let name = d.message.split('\'').nth(1)?.to_string();
+    let in_defender = d
+        .field_path
+        .as_ref()
+        .is_some_and(|p| p.iter().any(|s| s == "defender_for_endpoint"));
+    match d.code.as_str() {
+        codes::KQL_TABLE_NOT_DECLARED => Some((
+            if in_defender {
+                "defender_for_endpoint"
+            } else {
+                "sentinel"
+            },
+            DatasetKind::Tables,
+            name,
+        )),
+        // #111's warning points at visibility.toml too (Sentinel only).
+        codes::KQL_UNKNOWN_TABLE if d.severity == opentide_core::Severity::Warning => {
+            Some(("sentinel", DatasetKind::Tables, name))
+        }
+        _ => None,
+    }
 }
 
 fn handle_folding(session: &Session, params: &Value) -> Value {

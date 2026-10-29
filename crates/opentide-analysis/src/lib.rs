@@ -6,6 +6,9 @@
 //! the per-language crates behind it.
 
 pub use opentide_core::datasets::{DatasetKind, Declaration, DeclaredDatasets};
+pub use visibility::{DatasetEdit, VISIBILITY_CONFIGURATION, declare_dataset};
+
+mod visibility;
 pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };

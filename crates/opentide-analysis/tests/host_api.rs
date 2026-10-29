@@ -87,8 +87,17 @@ fn a_single_query_takes_the_platform_profile() {
             .iter()
             .any(|d| d.code == codes::KQL_UNKNOWN_TABLE)
     };
+    // Sentinel ingests the Defender XDR tables (#113).
     assert!(!unknown_table(&defender));
-    assert!(unknown_table(&sentinel));
+    assert!(!unknown_table(&sentinel));
+    // A Log Analytics table is not an advanced hunting table.
+    let log_analytics = |platform: &str| QueryRequest {
+        platform: Some(platform.into()),
+        text: "NTANetAnalytics | take 1".into(),
+        ..defender.clone()
+    };
+    assert!(unknown_table(&log_analytics("defender_for_endpoint")));
+    assert!(!unknown_table(&log_analytics("sentinel")));
 
     let broken = QueryRequest {
         language: LanguageId::Esql,

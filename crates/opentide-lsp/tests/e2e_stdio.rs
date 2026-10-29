@@ -836,3 +836,59 @@ fn a_raw_query_file_ignores_the_yaml_around_it() {
     std::fs::write(&file, "SecurityEvent | wher EventID == 1").unwrap();
     assert!(!cli_codes(&file).is_empty());
 }
+
+#[test]
+fn an_undeclared_table_has_a_code_action_that_declares_it() {
+    let scratch = Scratch::new("declare-table");
+    let root = &scratch.0;
+    let catalogs = root.join(".opentide/lsp/catalogs/generated");
+    std::fs::create_dir_all(&catalogs).unwrap();
+    std::fs::write(
+        catalogs.join("datasets.json"),
+        r#"{"platforms": {"sentinel": {"tables": ["NTANetAnalytics"]}}}"#,
+    )
+    .unwrap();
+    let visibility = "[[logsources]]\nname = \"VNet flow logs\"\ndescription = \"Flows.\"\nsystem = \"sentinel\"\ntables = [\"NTANetAnalytics\"]\n";
+    std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
+    std::fs::write(
+        root.join(".opentide/configurations/visibility.toml"),
+        visibility,
+    )
+    .unwrap();
+    let uri = format!("file://{}/hunt.kql", root.display());
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+    );
+    let codes = published_codes(&mut lsp, &uri, "kql", "NTAIpDetails | take 1");
+    assert_eq!(codes, vec!["kql_table_not_declared".to_string()]);
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } }
+        }),
+    );
+    let action = actions["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| {
+            a["title"]
+                .as_str()
+                .unwrap()
+                .starts_with("Declare 'NTAIpDetails'")
+        })
+        .unwrap_or_else(|| panic!("{actions}"))
+        .clone();
+    let changes = &action["edit"]["changes"];
+    let (target, edits) = changes.as_object().unwrap().iter().next().unwrap();
+    assert!(
+        target.ends_with("/.opentide/configurations/visibility.toml"),
+        "{target}"
+    );
+    assert_eq!(edits[0]["newText"], ", \"NTAIpDetails\"");
+    assert_eq!(edits[0]["range"]["start"]["line"], 4);
+}

@@ -423,6 +423,7 @@ dependencies = [
  "opentide-syntax",
  "regex",
  "serde",
+ "serde_json",
  "thiserror",
  "toml",
  "tree-sitter",

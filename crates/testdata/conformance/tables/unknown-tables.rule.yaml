@@ -11,7 +11,7 @@ metadata:
   organisation: opentide
 
 description: |
-  Tables the Sentinel catalog does not list, and a misspelt one it does.
+  Tables opentide knows (Azure Monitor, Defender XDR), tables it does not, and a misspelt one.
 status: STAGING
 severity: High
 techniques:
@@ -28,10 +28,11 @@ configurations:
     status: STAGING
     query: |
       NTANetAnalytics
-      | where FlowType_s == "MaliciousFlow"
-      | join kind=inner (MyCustomLog_CL | where Action_s == "deny") on $left.SrcIP_s == $right.SrcIp_s
-      | join kind=inner (DeviceProcessEvents | where FileName == "x.exe") on $left.SrcIP_s == $right.LocalIP
-      | join kind=inner (SigninLog | where ResultType == 0) on $left.SrcIP_s == $right.IPAddress
+      | where FlowType == "MaliciousFlow"
+      | join kind=inner (MyCustomLog_CL | where Action_s == "deny") on $left.SrcIp == $right.SrcIp_s
+      | join kind=inner (DeviceNetworkEvents | where ActionType == "ConnectionSuccess") on $left.SrcIp == $right.LocalIP
+      | join kind=inner (VendorFirewallEvents | where Action == "deny") on $left.SrcIp == $right.Ip
+      | join kind=inner (SigninLog | where ResultType == 0) on $left.SrcIp == $right.IPAddress
     scheduling:
       frequency: PT1H
       lookback: PT2H

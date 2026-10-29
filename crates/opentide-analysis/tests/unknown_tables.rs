@@ -1,5 +1,6 @@
 //! A table the Sentinel catalog does not list is a warning, never an error: the
-//! engine cannot see the workspace's tables (#111).
+//! engine cannot see the workspace's tables (#111). The Azure Monitor and
+//! Defender XDR tables are known (#113).
 
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze};
 use opentide_core::{Diagnostic, LanguageId, Severity, codes};
@@ -52,9 +53,8 @@ fn raw_kql_file_warns_on_tables_the_catalog_does_not_list() {
     assert_eq!(
         unknown_tables(&found, &source),
         vec![
-            ("NTANetAnalytics".into(), Severity::Warning),
             ("MyCustomLog_CL".into(), Severity::Warning),
-            ("DeviceProcessEvents".into(), Severity::Warning),
+            ("VendorFirewallEvents".into(), Severity::Warning),
         ]
     );
 }
@@ -78,9 +78,8 @@ fn tide_query_block_warns_and_still_suggests_a_known_table() {
     assert_eq!(
         unknown_tables(&found, &source),
         vec![
-            ("NTANetAnalytics".into(), Severity::Warning),
             ("MyCustomLog_CL".into(), Severity::Warning),
-            ("DeviceProcessEvents".into(), Severity::Warning),
+            ("VendorFirewallEvents".into(), Severity::Warning),
             ("SigninLog".into(), Severity::Warning),
         ]
     );

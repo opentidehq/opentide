@@ -35,6 +35,8 @@ Machine-readable catalogs live under [`/workspace/catalogs/kql/`](../../catalogs
 | `catalogs/kql/sentinel/columns.toml` | Sentinel table columns (hover / `| where` completions) | [`DESIGN.md`](DESIGN.md) |
 | `catalogs/kql/defender/columns.toml` | Defender hunting columns | [`DESIGN.md`](DESIGN.md) |
 | `catalogs/kql/core/operator-options.toml` | `join kind=` and related options | [`DESIGN.md`](DESIGN.md) |
+| `catalogs/kql/azure-monitor/tables.json` | 943 Azure Monitor Logs tables with their columns, generated | [`columns.md`](columns.md) |
+| `catalogs/kql/asim/asim.json` | 14 ASIM schemas and 1019 parsers, generated | [`columns.md`](columns.md) |
 | *(design)* | — | [`DESIGN.md`](DESIGN.md) |
 
 Core tabular ops, scalar ops, types, tables, **columns**, and **operator options** are cataloged. Remaining drift is long-tail Learn names and detection-quality warnings; see [`coverage-gap.md`](coverage-gap.md) and [`DESIGN.md`](DESIGN.md).
