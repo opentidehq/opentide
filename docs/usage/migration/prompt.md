@@ -47,7 +47,7 @@ Steps:
 5. CI/CD
    - Remove submodules: recursive checkout.
    - Regenerate pipeline: opentide setup ci github (or gitlab/azure).
-   - Typical job order: pip install 'opentide==0.18.0' → opentide validate → validate query --live per enabled platform → opentide generate → opentide generate docs --output docs → deploy stages.
+   - Typical job order: pip install 'opentide==0.19.0' → opentide validate → validate query --live per enabled platform → opentide generate → opentide generate docs --output docs → deploy stages.
    - Do not reference opentide mutate or top-level opentide document/export/extract (use generate docs/exports/extract). Use `opentide migrate objects` only for directory layout.
 
 6. Agents and IDE
@@ -56,7 +56,7 @@ Steps:
    - Remove references to vendored detection-ops skill packs. That pack is now `detection-workflow`, and `opentide setup skills` does not install it.
 
 7. Verification checklist
-   - pip install 'opentide==0.18.0' succeeds
+   - pip install 'opentide==0.19.0' succeeds
    - opentide validate --strict passes
    - opentide generate completes
    - CI YAML contains no CoreTide checkout or python Orchestration/*.py

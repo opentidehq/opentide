@@ -7,6 +7,37 @@ description: Public package versions of opentide on PyPI.
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.19.0 — 29 October 2026
+
+Minor release. The language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. Run `opentide validate` after upgrading: a rule whose query the platform would reject now fails it.
+
+**Install**
+
+```bash
+pip install opentide==0.19.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+opentide generate schemas
+```
+
+**What changes**
+
+- **`validate` checks queries.** A query the platform would reject fails `validate` (exit `1`). `--queries warn` reports it as a warning while you fix it; `--queries off` skips queries.
+- **`validate query` works offline.** Without `--live` it checks every rule query instead of exiting `2`; `--strategy` and `--wide` now need `--live`.
+- **Editors.** `opentide lsp start` serves the language server protocol: diagnostics, hover, completion and highlighting for Tide objects and the queries in them, and for `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` and `.lucene` files. Run `opentide generate schemas` first.
+- **`opentide query`** runs a read-only query on a platform's tenants and returns the rows.
+- **`opentide deploy` reports each rule as it is sent**, and counts failed and not-attempted rules on every run.
+- **Elastic advisories use the specification's codes** (`lookback_long`, `risk_band`, ...).
+- **Wheels are per platform.** Linux, macOS and Windows x64 get a prebuilt wheel; elsewhere, including free-threaded Python, pip builds from the sdist and needs a Rust toolchain.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0190--2026-10-29) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.19.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.19.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.18.0 — 27 October 2026
 
 Minor release. Configuration files are validated, rule `severity` uses the alert labels, and the CLI gains commands for authoring and for agents. Run `opentide validate` after upgrading: a file that loaded under 0.17.2 can fail now, and the error names the file and the key. Then regenerate your CI pipeline and run `opentide generate`.

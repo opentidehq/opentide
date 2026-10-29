@@ -66,7 +66,7 @@ opentide --repo /path/to/detections validate --strict
 The CLI ships with the package. Install it:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at that environment's `opentide` binary with args `mcp` and `start` — see [MCP configuration](../mcp/configuration.md).
@@ -78,7 +78,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -88,7 +88,7 @@ pip install 'opentide==0.18.0'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
@@ -115,7 +115,7 @@ ValueError: validate must be callable
 `0.1.5` passed `validate=None` into Questionary for optional checkboxes. **0.1.6** omits the argument when a selection is optional. Non-interactive `opentide setup --ci github` was already fine. Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup
 ```
 
@@ -124,7 +124,7 @@ opentide setup
 Generate-first `opentide setup vscode` `chdir`s into the target before writing files. **0.1.6** raised `FileNotFoundError` when that path did not exist yet. **0.1.7** creates the directory first (same as other setup commands). Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup vscode
 ```
 
@@ -133,7 +133,7 @@ opentide setup vscode
 `0.1.6` wrote `.vscode/settings.json` even when templates (and therefore snippets) were missing. **0.1.7** generates templates and schemas first, then fails (`status: failed`) if snippets were requested but could not be written. Re-run:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup vscode
 ```
 
@@ -144,7 +144,7 @@ Pass `--no-generate` only when `.opentide/templates` already exist. A missing ta
 `0.1.7` logged missing `objects/{threats,objectives,rules}` at **error** during generate-first `setup vscode` or `generate` on a brand-new scaffold. Those folders are empty until you author YAML. **0.1.8** logs absence at **debug** (once per path). A path that exists but is not a directory still logs at error. Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide generate
 ```
 
@@ -153,7 +153,7 @@ opentide generate
 `0.1.7` accepted `--platform sentinel` on `opentide setup repo` but did not write `.opentide/configurations/platforms/sentinel.toml`. The parent `opentide setup --platform` path already did. **0.1.8** runs platform setup from `setup repo --platform` as well, so `generate` emits `#sentinel:` configuration stubs. Upgrade and re-run:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup repo --yes --name SOC --platform sentinel
 opentide generate
 ```
@@ -163,7 +163,7 @@ opentide generate
 `0.1.7` dumped `default: None` as YAML `null`, and commented `#organisation:` without commenting nested `uuid` / `name`, so those keys parsed as children of `metadata.tlp`. **0.1.8** patched the legacy JSON Schema walker. **0.2.0** replaces that walker: templates come from Pydantic `FieldInfo`, optional sections are commented as whole blocks with `#` hugging each key (nested optionals are not commented again), and there are no `null` tokens. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide generate templates
 ```
 
@@ -251,7 +251,7 @@ The editor schemas describe each objective with its `priority`, and through 0.16
 Unquoted `metadata.created` / `modified` values (`created: 2026-09-11`) are valid Tide YAML. PyYAML loads them as `datetime.date`, and `0.1.5` crashed when writing `.opentide/exports/objects.export.json`. **0.1.6** stringifies those timestamps at YAML load. Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide generate
 ```
 
@@ -262,7 +262,7 @@ Quoted dates (`created: "2026-09-11"`) already worked; you do not need to quote 
 `0.1.6` expanded `$ref` / `$defs` in templates but nested objects still inherited a shallow parent `required` list, so required fields under array items were commented out. **0.1.7** uses each nested object's own required list. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide generate
 ```
 
@@ -271,7 +271,7 @@ opentide generate
 `0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 ```
 
 Write actors as objects, not bare IDs:
@@ -319,7 +319,7 @@ opentide generate schemas
 `0.2.0` and earlier scraped NVD through `mitrecve`. **0.2.1** looks up `threat.cve` on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu). Generated threat pages link to `https://vulnerability.circl.lu/vuln/{id}` and can enrich published date, severity, and aliases. Upgrade, regenerate docs, and (optionally) run the opt-in check:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide generate docs
 opentide validate --check cve
 ```
@@ -331,7 +331,7 @@ Default `opentide validate` does not call the network. Empty JSON from CIRCL mea
 `0.1.7` applied GitLab `uuid_permalinks` to every flavour and built index links from the UUID while page files used slugify. GitHub pages were therefore `simulated-actor.md` while indexes linked to `{uuid}.md`, and folders used Title Case (`docs/Threats`). **0.1.8** scopes UUID permalinks to GitLab and writes lowercase `docs/{rules,objectives,threats}/<slug>.md`. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide generate docs
 ```
 
@@ -340,7 +340,7 @@ opentide generate docs
 Objective `priority` is an unconstrained alert-style string (High / Critical), not an incident `criticality::1.0` token. **0.1.7** looked it up in that vocab. **0.1.8** renders the author value as-is. Threat `criticality` and impact vocab spelling (including `Impairement`) are unchanged. Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide generate docs
 ```
 
@@ -351,7 +351,7 @@ opentide generate docs
 `0.1.6` attributed `invalid_ref` to the nested object that contained the UUID. **0.1.7** reports the leaf field (`detection_model`, `objective.threats`, …). Vocabulary names also skip YAML list indices (`[0]`). Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide validate --strict
 ```
 
@@ -360,7 +360,7 @@ opentide validate --strict
 `--json` used a single repo-wide `valid`/`invalid` for every check name. A vocab failure then looked like a failing `uuid` or `metadata` check. **0.1.7** emits per-check `status`. Upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide --json validate
 ```
 
@@ -385,7 +385,7 @@ threat:
 If your CI patches the installed `opentide` model to accept lists, drop that step once you upgrade:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide validate --strict
 ```
 
@@ -425,7 +425,7 @@ Seen while preparing 0.18.0:
 - A `documentation.toml` that `opentide migrate` copied from CoreTIDE: delete `skip_vocabularies`, `model_cover_pages` and the `[titles]` table, which opentide never read.
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide validate
 ```
 
@@ -434,7 +434,7 @@ opentide validate
 A rule whose `configurations` holds no platform block stopped the whole deploy with this message. `opentide new rule` writes that shape when no `--platform` is given. **0.18.0** skips the rule. Add a platform block from `.opentide/templates/rule.1.1.template.yaml` to deploy it.
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 ```
 
 ## Query validation
@@ -492,7 +492,7 @@ Verify with `opentide info --platform sentinel`. See [Configuration → enabling
 python-dateutil 3.0.0 (21 October 2026) led `uv`'s resolver to install boto3 `0.0.3` with opentide **0.17.1** and earlier; its botocore cannot import on current Python. **0.17.2** requires `boto3>=1.35`. Upgrade; to stay on an older version, add `'boto3>=1.35'` to the same install command.
 
 ```bash
-uv pip install 'opentide==0.18.0'
+uv pip install 'opentide==0.19.0'
 ```
 
 ### Splunk answers with HTML instead of XML behind a proxy
@@ -508,7 +508,7 @@ Do not replace opentide's Splunk handler with splunklib's own (`verify=not ssl_e
 Through **0.17.0** the Splunk client ignored a tenant's `ssl = false` and verified the certificate anyway, so a self-signed Splunk failed every `deploy` and `validate query --live` with `CERTIFICATE_VERIFY_FAILED`. **0.17.1** honours each tenant's `ssl`. Upgrade, and delete any pipeline step that patches the installed `opentide/platforms/splunk/client.py`:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 ```
 
 An `xml.etree.ElementTree.ParseError: mismatched tag` is not a certificate failure: the answer was an HTML page, usually a proxy's. See [Splunk answers with HTML instead of XML behind a proxy](#splunk-answers-with-html-instead-of-xml-behind-a-proxy).
@@ -636,7 +636,7 @@ Through **0.6.3** a target of `.` was printed without quotes, so the trailing pe
 Through **0.6.3** the generated production job needed `deploy_staging`, and staging runs only on a pull request, so a push to the default branch skipped production. **0.6.4** needs `generate` and still runs only on a push to the default branch ([#348](https://github.com/opentidehq/opentide/issues/348)). Deploy jobs also fetch full history, so a depth-1 checkout no longer exits `1` with a bare parent SHA. Regenerate:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup ci github --yes
 ```
 
@@ -671,7 +671,7 @@ Through **0.7.0** a GitHub or Azure pull-request checkout (detached `HEAD`) died
 Through **0.7.0** the generated prune job ran `git add .opentide/inflight/` and exited 128 when that directory was absent. **0.8.0** creates the directory first ([#403](https://github.com/opentidehq/opentide/issues/403)). Regenerate:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup ci github --yes
 ```
 
@@ -707,14 +707,14 @@ Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit 
 
 ### Installation pages name 0.6.1 as the latest release
 
-Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/opentidehq/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.18.0`.
+Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/opentidehq/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.19.0`.
 
 ### GitLab deploy runs after `validate query` fails
 
 Through **0.8.0** a generated GitLab pipeline started `generate` as soon as the object `validate` job finished. Query checks are separate jobs in the same stage, and GitLab starts a job when its `needs` finish, so a failed `opentide validate query` did not stop deploy ([#429](https://github.com/opentidehq/opentide/issues/429)). **0.8.1** lists every query-validation job in `generate`'s `needs`. GitHub and Azure already gated generate this way. Regenerate:
 
 ```bash
-pip install 'opentide==0.18.0'
+pip install 'opentide==0.19.0'
 opentide setup ci gitlab --yes
 ```
 

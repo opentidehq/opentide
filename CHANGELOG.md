@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-10-29
+
+Minor release: the language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. It is a minor because `validate` now fails on a query the platform would reject, `validate query` without `--live` checks instead of refusing, and wheels are built per platform.
+
 The language server and its query engine ship with `pip install opentide` ([#332](https://github.com/opentidehq/opentide/issues/332)). There is no `opentide[lsp]` extra and no second package: the Rust engine from [opentidehq/language-server](https://github.com/opentidehq/language-server) is compiled into opentide itself, so each opentide wheel is built for its platform. After upgrading:
 
 - **`opentide validate` checks every rule query.** The new `queries` check is one of the defaults, so a query the platform would reject now fails `validate` (exit `1`). `--queries warn` reports those queries as warnings instead (the run passes unless `--strict`) while you fix them; `--queries off` validates everything but the queries.
@@ -1352,7 +1356,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/opentidehq/opentide/releases/tag/v0.19.0
 [0.18.0]: https://github.com/opentidehq/opentide/releases/tag/v0.18.0
 [0.17.2]: https://github.com/opentidehq/opentide/releases/tag/v0.17.2
 [0.17.1]: https://github.com/opentidehq/opentide/releases/tag/v0.17.1
