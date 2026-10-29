@@ -9,7 +9,9 @@
 //! index, which only a base search pays: the first stage of the query or of a
 //! subsearch. A later `| search` filters results already in the pipeline.
 //! Stages are found by splitting on top-level `|` (outside quotes, comments,
-//! macros, brackets and parentheses), not from grammar rule names.
+//! macros and subsearch brackets), not from grammar rule names. Parentheses do
+//! not hide a `|`: Splunk splits `index=a TERM("x" | stats count` into two
+//! stages, so an unclosed `(` must not pull later stages into the base search.
 //!
 //! The query text is not rewritten.
 
@@ -115,7 +117,6 @@ fn split_segments(source: &str, start: usize, end: usize) -> Vec<(usize, usize)>
     let mut i = start;
     let mut seg_start = start;
     let mut brackets = 0i32;
-    let mut parens = 0i32;
     let mut segs = Vec::new();
     while i < end {
         if let Some(next) = skip_hidden(source, i, end) {
@@ -123,33 +124,16 @@ fn split_segments(source: &str, start: usize, end: usize) -> Vec<(usize, usize)>
             continue;
         }
         match bytes[i] {
-            b'|' if brackets == 0 && parens == 0 => {
+            // Parentheses are not counted: Splunk splits on `|` inside them.
+            b'|' if brackets == 0 => {
                 segs.push((seg_start, i));
-                i += 1;
-                seg_start = i;
+                seg_start = i + 1;
             }
-            b'[' => {
-                brackets += 1;
-                i += 1;
-            }
-            b']' => {
-                if brackets > 0 {
-                    brackets -= 1;
-                }
-                i += 1;
-            }
-            b'(' => {
-                parens += 1;
-                i += 1;
-            }
-            b')' => {
-                if parens > 0 {
-                    parens -= 1;
-                }
-                i += 1;
-            }
-            _ => i += 1,
+            b'[' => brackets += 1,
+            b']' if brackets > 0 => brackets -= 1,
+            _ => {}
         }
+        i += 1;
     }
     if seg_start < end {
         segs.push((seg_start, end));
@@ -719,6 +703,28 @@ mod tests {
             let expected = usize::from(src.starts_with("* "));
             assert_eq!(found.len(), expected, "{src}: {found:?}");
         }
+    }
+
+    #[test]
+    fn an_unclosed_paren_does_not_swallow_later_stages() {
+        // Splunk 10.6 splits on `|` regardless of parentheses.
+        let src = r#"index=a TERM("x" | search NOT x=1 | search y=*z"#;
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+        // Not covered by a constraint: the later `y=*z` must still be skipped.
+        let src = "index=* (x=1 | search NOT x=1 | search y=*z";
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+        let src = "| search (x=1 | search NOT x=1 | search y=*z";
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+        // The base search before the `|` is still scanned.
+        assert_eq!(count("index=* (*foo | search y=*z", codes::SPL_WILDCARD), 1);
+        // And a later `join` is still found.
+        assert!(has(
+            "index=a (x=1 | join d [search index=b]",
+            codes::SPL_SUBSEARCH_TRUNCATION
+        ));
+        // In a subsearch, the bracket still bounds the stages.
+        let src = "index=a [search index=* (c=1 | search NOT x=1 | search e=*f] | stats count";
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
     }
 
     #[test]
