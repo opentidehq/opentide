@@ -234,7 +234,7 @@ jobs:
 
       - name: Publish test report
         if: always() && matrix.python-version == env.COVERAGE_PYTHON
-        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0.9.3.2.0
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: Pytest (${{ env.COVERAGE_PYTHON }})
           path: pytest-results.xml
