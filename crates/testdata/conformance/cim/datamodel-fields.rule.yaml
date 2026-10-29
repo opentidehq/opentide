@@ -1,0 +1,35 @@
+name: CIM Datamodel Fields
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000115
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: analyst
+  organisation: opentide
+
+description: |
+  A tstats search on the CIM Endpoint.Processes dataset with a misspelt field.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  splunk:
+    enabled: true
+    name: CIM Datamodel Fields
+    status: STAGING
+    query: |
+      | tstats count from datamodel=Endpoint.Processes
+        where Processes.process_name="cmd.exe"
+        by Processes.dest Processes.proces_name
+      | `drop_dm_object_name(Processes)`
+      | table dest process_name
+    cron_schedule: "0 * * * *"

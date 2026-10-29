@@ -104,7 +104,8 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | `hover` on commands | Catalog docs + citation |
 | `hover` on functions | Catalog docs, kind, Search Reference signature, citation. Aggregate kind inside stats-family commands |
 | `hover` on a catalogued argument | `command-options.toml` docs + citation |
-| Field completions (CIM) | `catalogs/spl/fields.toml` + datamodel-prefixed completions |
+| Field completions (CIM) | `catalogs/spl/fields.toml` + datamodel-prefixed completions (lineage-prefixed for child datasets) and expected values after `Prefix.field=` |
+| CIM checks | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` (near misses only) and `spl_dataset_not_declared` ([cim-fields.md](cim-fields.md)) |
 | Macro name completions | `catalogs/spl/macros.toml` after `` ` `` / inside `tstats` |
 | Signature help | Command arguments from `command-options.toml`; function `signature` strings; macro `signature` strings |
 

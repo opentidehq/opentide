@@ -49,6 +49,9 @@ Query extras (engine may add these inside `query: |`):
 - `spl_wildcard`
 - `spl_leading_not`
 - `spl_subsearch_truncation`
+- `spl_unknown_datamodel` (error: a near miss of a CIM data model or dataset, with a suggestion)
+- `spl_unknown_datamodel_field` (error: a near miss of a CIM dataset field, `Processes.proces_name`, with a suggestion)
+- `spl_dataset_not_declared` (warning: an index, sourcetype or base-search macro the workspace's Splunk log sources do not declare, when they declare that kind)
 - `crowdstrike_unsupported` (never faked)
 - `defender_output_columns`
 
