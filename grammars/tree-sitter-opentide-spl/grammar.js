@@ -102,6 +102,12 @@ module.exports = grammar({
         $.makemv_command,
         $.mvexpand_command,
         $.tstats_command,
+        $.fillnull_command,
+        $.foreach_command,
+        $.spath_command,
+        $.tojson_command,
+        $.inputlookup_command,
+        $.outputlookup_command,
         $.catalog_command,
         $.unknown_command,
       ),
@@ -179,40 +185,119 @@ module.exports = grammar({
     eval_command: ($) =>
       seq("eval", field("assignments", commaSep1($.assignment))),
 
-    // Aggregations and by-fields are separated by spaces or commas.
+    // The stats family shares one shape: options, aggregates (each with an
+    // optional `as` alias, separated by spaces or commas), then `over` and
+    // `by` clauses that may carry options (`by host span=1h limit=0`).
     stats_command: ($) =>
       seq(
-        "stats",
-        field("aggregates", sepBy1($.aggregate_item)),
-        optional(seq(choice("by", "BY"), field("by", sepBy1($.identifier)))),
+        choice(
+          "stats",
+          "eventstats",
+          "streamstats",
+          "sistats",
+          "chart",
+          "timechart",
+          "sichart",
+          "sitimechart",
+          "geostats",
+        ),
+        repeat($.command_option),
+        field("aggregates", listOf($.aggregate_item)),
+        repeat($.command_option),
+        optional(seq(kw("over"), field("over", $._field_name), repeat($.command_option))),
+        optional($.by_clause),
       ),
 
+    // `by a, b span=1h`: fields, with options among or after them.
+    by_clause: ($) =>
+      seq(
+        kw("by"),
+        field("by", $._by_field),
+        repeat(choice(seq(repeat(","), field("by", $._by_field)), $.command_option)),
+        repeat(","),
+      ),
+
+    // tstats groups by `PREFIX(dst=)` too.
+    _by_field: ($) => choice($._field_name, $.prefix_clause),
+
+    // `count`, `dc(src) as c`, `values(*) as *`, `min(eval(if(...))) as e`,
+    // `values(PREFIX(dpt=)) as p`, `earliest(_time) as "earliest"`.
     aggregate_item: ($) =>
       seq(
-        choice($.function_call, $.identifier),
-        optional(seq(choice("as", "AS"), field("alias", $.identifier))),
+        field(
+          "function",
+          choice(alias($.aggregate_call, $.function_call), $.identifier),
+        ),
+        optional(seq(kw("as"), field("alias", $._alias_name))),
       ),
 
+    aggregate_call: ($) =>
+      prec(
+        10,
+        seq(
+          field("name", $.identifier),
+          "(",
+          field("arguments", optional(commaSep1($._aggregate_argument))),
+          ")",
+        ),
+      ),
+
+    _aggregate_argument: ($) =>
+      choice(
+        $.function_call,
+        $.prefix_clause,
+        $.glob,
+        $._field_name,
+        $.string,
+        $.number,
+      ),
+
+    _alias_name: ($) => choice($._field_name, $.glob, $.string),
+
+    // `rex [field=f] [max_match=n] [mode=sed] "<regex>"`, options in any
+    // order and optionally comma-separated.
     rex_command: ($) =>
       seq(
         "rex",
-        optional(seq("field", "=", field("field", $.identifier))),
+        repeat(choice($._rex_option, ",")),
         field("pattern", $.string),
+        repeat($._rex_option),
       ),
 
-    table_command: ($) => seq("table", field("fields", sepBy1($.field_name))),
+    _rex_option: ($) =>
+      choice(
+        seq("field", "=", field("field", choice($._field_name, $.string))),
+        $.command_option,
+      ),
 
-    // A field list entry: a name or a wildcard pattern (`user*`, `*`).
-    field_name: ($) => choice($.identifier, $.glob),
+    table_command: ($) => seq("table", field("fields", listOf($.field_name))),
 
+    // A field list entry: a name, a wildcard pattern (`user*`, `*`), or a
+    // quoted name.
+    field_name: ($) => choice($._field_name, $.glob, $.string),
+
+    // `rename a as b, DNS.* as *`. `as` is case-insensitive.
     rename_command: ($) =>
-      seq("rename", field("renames", commaSep1($.rename_item))),
+      seq("rename", field("renames", listOf($.rename_item))),
+
+    // The old name may be a field a command named after a call
+    // (`IsOutlier(x)`), or one tstats `PREFIX(dst=)` named `dst=`.
+    rename_item: ($) =>
+      seq(
+        field(
+          "old",
+          choice($._alias_name, $.function_call, alias($._prefix_field, $.identifier)),
+        ),
+        optional(","),
+        kw("as"),
+        field("new", $._alias_name),
+      ),
 
     fields_command: ($) =>
       seq(
         "fields",
         optional(choice("-", "+")),
-        field("fields", sepBy1($.field_name)),
+        field("fields", listOf($.field_name)),
       ),
 
     // Splunk requires at least one field.
@@ -221,7 +306,7 @@ module.exports = grammar({
         "dedup",
         optional($.number),
         repeat($.dedup_option),
-        field("fields", sepBy1($.identifier)),
+        field("fields", sepBy1($.field_name)),
         repeat($.dedup_option),
         optional(seq("sortby", field("sortby", sepBy1($.sort_item)))),
       ),
@@ -233,54 +318,88 @@ module.exports = grammar({
         choice($.boolean, $.identifier),
       ),
 
+    // `sort 0 host _time`, `sort -lt limit=0`, `sort limit=0 + src, _time`,
+    // `sort num(x) desc`.
     sort_command: ($) =>
-      seq("sort", optional($.number), field("keys", commaSep1($.sort_item))),
+      seq(
+        "sort",
+        optional(field("count", $.number)),
+        repeat($.command_option),
+        field("keys", sepBy1($.sort_item)),
+        repeat($.command_option),
+        optional(choice(kw("desc"), kw("d"))),
+      ),
 
-    sort_item: ($) => seq(optional(choice("+", "-")), $.identifier),
+    sort_item: ($) =>
+      seq(optional(choice("+", "-")), choice($._field_name, $.function_call)),
 
-    head_command: ($) => seq("head", optional(field("count", $.number))),
+    head_command: ($) =>
+      seq("head", optional(field("count", $.number)), repeat($.command_option)),
 
     tail_command: ($) => seq("tail", optional(field("count", $.number))),
 
+    // `join type=left a, b [ search ... ]`.
     join_command: ($) =>
       seq(
         "join",
-        optional(field("type_or_field", $.identifier)),
+        repeat(choice($.command_option, field("fields", $._field_name), ",")),
         $.subsearch,
       ),
 
+    // `lookup [local=t] <table> f [AS g], ... [OUTPUT|OUTPUTNEW f [AS g], ...]`.
+    // Keywords are case-insensitive.
     lookup_command: ($) =>
-      seq("lookup", field("table", $.identifier), optional(commaSep1($.identifier))),
+      seq(
+        "lookup",
+        repeat($.command_option),
+        field("table", choice($._field_name, $.string)),
+        field("inputs", listOf($.lookup_field)),
+        // `OUTPUT` with no fields returns every lookup field.
+        optional(
+          seq(
+            choice(kw("output"), kw("outputnew")),
+            optional(field("outputs", listOf($.lookup_field))),
+          ),
+        ),
+      ),
+
+    lookup_field: ($) =>
+      seq(
+        field("field", choice($._field_name, $.string)),
+        optional(seq(kw("as"), field("alias", choice($._field_name, $.string)))),
+      ),
 
     makemv_command: ($) =>
       seq(
         "makemv",
-        optional(seq("delim", "=", $.string)),
-        field("field", $.identifier),
+        repeat(choice(seq("delim", "=", $.string), $.command_option)),
+        field("field", $._field_name),
       ),
 
-    mvexpand_command: ($) => seq("mvexpand", field("field", $.identifier)),
+    mvexpand_command: ($) =>
+      seq(
+        "mvexpand",
+        repeat($.command_option),
+        // `mvexpand(x)` also deploys: Splunk splits the name at `(`.
+        choice(field("field", $._field_name), seq("(", field("field", $._field_name), ")")),
+        repeat($.command_option),
+      ),
 
     tstats_command: ($) =>
       seq(
         "tstats",
         repeat($.tstats_preamble),
         field("aggregates", sepBy1($.aggregate_item)),
+        repeat($.tstats_preamble),
         optional(
           seq(
-            choice("from", "FROM"),
+            kw("from"),
             optional(seq("datamodel", "=")),
-            field("datamodel", $.identifier),
+            field("datamodel", choice($._field_name, $.string)),
           ),
         ),
-        optional(seq(choice("where", "WHERE"), field("where", $.search_expression))),
-        optional(
-          seq(
-            choice("by", "BY"),
-            sepBy1($.identifier),
-            optional(seq("span", "=", field("span", choice($.identifier, $.number, $.search_word)))),
-          ),
-        ),
+        optional(seq(kw("where"), field("where", $.search_expression))),
+        optional($.by_clause),
       ),
 
     tstats_preamble: ($) =>
@@ -297,8 +416,56 @@ module.exports = grammar({
             ),
           ),
           "=",
-          field("value", choice($.boolean, $.identifier, $.string, $.number)),
+          field("value", $._option_value),
         ),
+        $.command_option,
+      ),
+
+    // `fillnull`, `fillnull value="-" a, b`, `fillnull a value=-1`.
+    fillnull_command: ($) =>
+      seq(
+        "fillnull",
+        repeat(choice($.command_option, field("fields", $.field_name), ",")),
+      ),
+
+    // `foreach * [ eval <<FIELD>>=... ]`, `foreach user* mode=multifield
+    // [| eval ...]`. The body is a pipeline in brackets.
+    foreach_command: ($) =>
+      seq(
+        "foreach",
+        repeat1(choice($.command_option, field("fields", $.field_name), ",")),
+        field("body", $.subsearch),
+      ),
+
+    // `spath`, `spath a{}`, `spath input=x path=a{}.b output=y`.
+    spath_command: ($) =>
+      seq(
+        "spath",
+        repeat(choice($.command_option, field("path", choice($._field_name, $.string)))),
+      ),
+
+    // `tojson * output_field=j`, `tojson fill_null=true a, b*, str(c)`.
+    tojson_command: ($) =>
+      seq(
+        "tojson",
+        repeat(choice($.command_option, field("fields", $.field_name), $.function_call, ",")),
+      ),
+
+    // `inputlookup append=t t.csv where (x="a" OR x="b") AND y<=60`.
+    inputlookup_command: ($) =>
+      seq(
+        "inputlookup",
+        repeat($.command_option),
+        field("table", choice($._field_name, $.string)),
+        optional(seq(kw("where"), field("where", $.search_expression))),
+      ),
+
+    outputlookup_command: ($) =>
+      seq(
+        "outputlookup",
+        repeat($.command_option),
+        field("table", choice($._field_name, $.string)),
+        repeat($.command_option),
       ),
 
     catalog_command: ($) =>
@@ -307,7 +474,6 @@ module.exports = grammar({
     catalog_command_name: ($) =>
       choice(
         "metadata",
-        "inputlookup",
         "makeresults",
         "from",
         "rest",
@@ -326,27 +492,18 @@ module.exports = grammar({
         "dbinspect",
         "walklex",
         "searchtxn",
-        "timechart",
-        "chart",
         "top",
         "rare",
         "transaction",
-        "eventstats",
-        "streamstats",
         "xyseries",
-        "geostats",
         "addtotals",
         "contingency",
         "anomalydetection",
         "mvcombine",
-        "sistats",
-        "sichart",
-        "sitimechart",
         "sitop",
         "sirare",
         "timewrap",
         "regex",
-        "fillnull",
         "filldown",
         "convert",
         "replace",
@@ -354,7 +511,6 @@ module.exports = grammar({
         "fieldformat",
         "reltime",
         "addinfo",
-        "spath",
         "xmlkv",
         "extract",
         "kv",
@@ -371,16 +527,13 @@ module.exports = grammar({
         "tags",
         "xpath",
         "xmlunescape",
-        "tojson",
         "fromjson",
-        "outputlookup",
         "append",
         "appendcols",
         "appendpipe",
         "selfjoin",
         "return",
         "format",
-        "foreach",
         "union",
         "map",
         "reverse",
@@ -444,20 +597,63 @@ module.exports = grammar({
     unknown_command: ($) =>
       seq(field("name", $.identifier), optional($.argument_list)),
 
+    // Arguments of a command with no rule of its own. Permissive on purpose:
+    // a known command must never be a syntax error because its arguments are
+    // not modelled. Command-specific checks belong in the analyzer
+    // (`catalogs/spl/command-options.toml`).
     argument_list: ($) =>
       repeat1(
         choice(
           $.macro,
           $.subsearch,
-          $.field_value,
+          $.command_option,
+          $.comparison,
+          $.function_call,
           $.string,
-          $.identifier,
+          $._field_name,
           $.number,
+          $.glob,
+          $.search_word,
+          ",",
         ),
       ),
 
-    // `x=...`, `"a.b"=...`, `{f}=...` (the value of `f` names the field),
-    // and `<<FIELD>>=...` inside a `foreach` body.
+    // `name=value`: `limit=0`, `type=left`, `current=f`, `value=-1`,
+    // `span=1h`, `path={}`, `timeformat="%Y"`, `x=tostring(y)`.
+    command_option: ($) =>
+      seq(
+        field("name", $._field_name),
+        "=",
+        field("value", $._option_value),
+      ),
+
+    _option_value: ($) =>
+      choice(
+        $.function_call,
+        $.string,
+        alias($._quoted_compound, $.string),
+        $.number,
+        $.boolean,
+        $._field_name,
+        $.glob,
+        $.search_word,
+        $.macro,
+      ),
+
+    // `x!=y`, `x>5` in a command with no rule of its own (`regex _raw!="a"`).
+    comparison: ($) =>
+      seq(
+        field("field", $._field_name),
+        field("operator", choice("!=", "<", ">", "<=", ">=")),
+        field("value", $._option_value),
+      ),
+
+    // A field name outside eval: letters, digits and `_ . : - { } @ $`
+    // (`alert.attack-time`, `a{}.b`, `t-include.csv`). Exposed as
+    // `identifier`; eval names stay narrow so `a-b` subtracts.
+    _field_name: ($) => choice($.identifier, alias($._field_token, $.identifier)),
+
+
     assignment: ($) =>
       seq(
         field(
@@ -472,9 +668,6 @@ module.exports = grammar({
         "=",
         field("value", $.expression),
       ),
-
-    rename_item: ($) =>
-      seq(field("old", $.identifier), "AS", field("new", $.identifier)),
 
     // `field=value`, `"a.b"=x`, `earliest=-1h@h`, `_index_latest=@m`,
     // `version=2.0.0`, `host=S-RC*`, `domain_rank=-1`.
@@ -594,6 +787,22 @@ module.exports = grammar({
     boolean: (_) => choice("true", "false", "TRUE", "FALSE"),
 
     // Broad tokens last: on an equal-length match the earlier rule wins.
+
+    // An option value built from quoted and bare parts with no space between
+    // them, read as one argument: streamstats `reset_after="("x==\"y\"")"`.
+    _quoted_compound: (_) =>
+      token(
+        seq(
+          repeat(choice(/"([^"\\]|\\.)*"/, /\\./, /[^\s"\\|\[\]`]/)),
+          choice(/"([^"\\]|\\.)*"/, /\\./),
+          repeat1(choice(/"([^"\\]|\\.)*"/, /\\./, /[^\s"\\|\[\]`]/)),
+        ),
+      ),
+    _field_token: (_) => token(/[A-Za-z0-9_@{][A-Za-z0-9_.:@{}$\-]*/),
+
+    // The field tstats `PREFIX(dst=)` creates: `dst=`, `*=`.
+    _prefix_field: (_) => token(/[A-Za-z0-9_.*]+=/),
+
     // Search wildcards: any run of non-breaking characters with a `*` in it
     // (`fail*`, `*fail`, `f*il`, `S-RC*`, `C:\\*.exe`, bare `*`). Not part of
     // `identifier`, so `*` in eval stays multiplication. The engine warns on
@@ -608,8 +817,26 @@ module.exports = grammar({
   },
 });
 
+/** Case-insensitive keyword, exposed as the lower-case anonymous node. */
+function kw(word) {
+  const pattern = word
+    .split("")
+    .map((c) => (/[a-z]/i.test(c) ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c))
+    .join("");
+  return alias(token(new RegExp(pattern)), word);
+}
+
 function sepBy1(rule) {
   return seq(rule, repeat(seq(optional(","), rule)));
+}
+
+/**
+ * A field or aggregate list: entries separated by spaces or commas. Splunk
+ * reads a comma as a separator, so it also takes a doubled or trailing one
+ * (`a, , b`, `values(x) as x,` before the next pipe).
+ */
+function listOf(rule) {
+  return seq(rule, repeat(seq(repeat(","), rule)), repeat(","));
 }
 
 function commaSep1(rule) {
