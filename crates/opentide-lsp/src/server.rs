@@ -4,12 +4,11 @@
 use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
-    AnalyzeRequest, MemoryWorkspace, WorkspaceHost, analyze, compiled_kql, compiled_spl,
-    completions, hover, index_workspace, signature_help,
+    AnalyzeRequest, Catalog, MemoryWorkspace, WorkspaceHost, analyze, compiled_kql, compiled_spl,
+    completions, hover, index_workspace, install_catalog, signature_help,
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
-use opentide_tide::{install_deprecation_overlay, parse_deprecation_overlay};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufReader, Write};
@@ -109,10 +108,10 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 .map(uri_to_path)
             {
                 let root = PathBuf::from(root);
-                install_deprecation_overlay(load_catalog_deprecations(&root));
+                install_workspace_catalog(&root);
                 session.root = Some(root);
             } else {
-                install_deprecation_overlay(Vec::new());
+                install_workspace_catalog(Path::new(""));
             }
             jsonrpc::write_message(
                 writer,
@@ -1028,23 +1027,124 @@ fn range_json(range: Range) -> Value {
     })
 }
 
-fn load_catalog_deprecations(root: &Path) -> Vec<opentide_tide::FieldDeprecation> {
-    let path = root.join(".opentide/lsp/catalogs/generated/deprecations.json");
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return Vec::new();
+/// Where `opentide generate schemas` writes the workspace catalogs.
+pub const WORKSPACE_CATALOGS: &str = ".opentide/lsp/catalogs/generated";
+
+/// Install the workspace's `fields.json` and `deprecations.json` when they
+/// exist, and the bundled catalogs otherwise. A file that does not parse is
+/// reported on stderr and leaves the bundled catalogs in place.
+/// Set by a host that installed the catalogs itself
+/// ([`opentide_analysis::set_default_catalog`]): the server then leaves them
+/// alone at `initialize` instead of reading the workspace's.
+static HOST_CATALOGS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Keep the catalogs the host installed: `initialize` does not read
+/// `.opentide/lsp/catalogs/generated/`. opentide generates the catalogs from
+/// its own models for the workspace it serves, so a committed copy, possibly
+/// from an older opentide, must not replace them. Process-wide.
+pub fn use_host_catalogs() {
+    HOST_CATALOGS.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn install_workspace_catalog(root: &Path) {
+    if HOST_CATALOGS.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let dir = root.join(WORKSPACE_CATALOGS);
+    let read = |name: &str| {
+        if root.as_os_str().is_empty() {
+            return None;
+        }
+        std::fs::read_to_string(dir.join(name)).ok()
     };
-    parse_deprecation_overlay(&text).unwrap_or_default()
+    let catalog = Catalog {
+        fields: read("fields.json"),
+        deprecations: read("deprecations.json"),
+    };
+    if let Err(err) = install_catalog(&catalog) {
+        eprintln!(
+            "opentide-lsp: ignoring {}: {err}; using the bundled catalogs",
+            dir.display()
+        );
+        let _ = install_catalog(&Catalog::default());
+    }
 }
 
+/// A `file:` URI as a filesystem path: percent-decoded, an optional
+/// `localhost` authority dropped, and `/c:/x` read as the Windows path `c:/x`.
+/// Editors send `file:///home/u/My%20Detections` and `file:///c%3A/Users/...`.
+/// Anything that is not a `file:` URI is returned as it is.
 fn uri_to_path(uri: &str) -> String {
-    uri.strip_prefix("file://").unwrap_or(uri).to_string()
+    let Some(rest) = uri.strip_prefix("file://") else {
+        return uri.to_string();
+    };
+    let rest = rest.strip_prefix("localhost").unwrap_or(rest);
+    let decoded = percent_decode(rest);
+    let bytes = decoded.as_bytes();
+    if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+        return decoded[1..].to_string();
+    }
+    decoded
 }
 
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).ok();
+            if let Some(value) = hex.and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                out.push(value);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
+}
+
+/// A filesystem path as a `file:` URI, the inverse of [`uri_to_path`]: the
+/// characters a URI path cannot hold are percent-encoded, and a Windows path
+/// gets the leading `/` (`file:///c:/x`).
 fn path_to_uri(path: &str) -> String {
     if path.starts_with("file://") {
-        path.to_string()
+        return path.to_string();
+    }
+    let path = path.replace('\\', "/");
+    let mut encoded = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        match byte {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'/'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'~'
+            | b':'
+            | b'@'
+            | b'!'
+            | b'$'
+            | b'&'
+            | b'\''
+            | b'('
+            | b')'
+            | b'*'
+            | b'+'
+            | b','
+            | b';'
+            | b'=' => encoded.push(byte as char),
+            other => encoded.push_str(&format!("%{other:02X}")),
+        }
+    }
+    if encoded.starts_with('/') {
+        format!("file://{encoded}")
     } else {
-        format!("file://{path}")
+        format!("file:///{encoded}")
     }
 }
 
@@ -1104,4 +1204,30 @@ fn collect_objects(root: &Path) -> Vec<(String, String)> {
     }
     rec(&objects, &mut out);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{path_to_uri, uri_to_path};
+
+    #[test]
+    fn file_uris_become_paths_and_back() {
+        assert_eq!(
+            uri_to_path("file:///home/u/My%20Detections"),
+            "/home/u/My Detections"
+        );
+        assert_eq!(uri_to_path("file:///c%3A/Users/u/det"), "c:/Users/u/det");
+        assert_eq!(uri_to_path("file://localhost/srv/d%C3%A9t"), "/srv/dét");
+        assert_eq!(uri_to_path("file:///a/100%"), "/a/100%");
+        assert_eq!(uri_to_path("untitled:Untitled-1"), "untitled:Untitled-1");
+        for path in [
+            "/home/u/My Detections/a#1.yaml",
+            "/srv/dét/r.yaml",
+            "c:/Users/u/r.yaml",
+        ] {
+            assert_eq!(uri_to_path(&path_to_uri(path)), path, "{path}");
+        }
+        assert_eq!(path_to_uri("/a b"), "file:///a%20b");
+        assert_eq!(path_to_uri("c:/x"), "file:///c:/x");
+    }
 }

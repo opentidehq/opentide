@@ -8,9 +8,9 @@ There is **no YAML formatter**. The LSP does not rename object `name`.
 
 | schema | refs |
 | --- | --- |
-| `rule::1.0`, `rule::1.1` | `detection_model` → objective UUID (optional; not schema-required). The field catalog is built from the newest revision, and `metadata.schema` offers both |
+| `rule::1.0`, `rule::1.1` | `detection_model` → objective UUID (optional; not schema-required). Each revision has its own fields: an object is checked against the revision its `metadata.schema` names (required fields, keys the revision does not define, enums). A revision the catalog does not know takes the newest one's fields, without the unknown-key check. `metadata.schema` offers both |
 | `objective::1.0` | `objective.threats[]` → threat UUIDs |
-| `threat::1.0` | `threat.impact` / `threat.leverage` are non-empty lists. `threat.chaining[].vector` / `relation` are not schema properties in 0.16.1 |
+| `threat::1.0` | `threat.impact` / `threat.leverage` are non-empty lists. `threat.chaining[].vector` / `relation` are not schema properties |
 
 ## Diagnostic codes (CLI-compatible)
 
@@ -51,7 +51,12 @@ Query extras (engine may add these inside `query: |`):
 
 ## Catalogs
 
-Snapshot from `opentide generate schemas` into `catalogs/tide/`. A workspace file `.opentide/lsp/catalogs/generated/deprecations.json` (same shape as the bundled catalog) adds `deprecated_field` warnings on top of `catalogs/tide/generated/deprecations.json`.
+Snapshot from `opentide generate schemas` into `catalogs/tide/`. That is the fallback: a workspace that ran `opentide generate schemas` has its own catalogs under `.opentide/lsp/catalogs/generated/`, in the same shapes, and they replace the bundled ones when the server starts (`initialize`), in `opentide-lsp analyze`, and in the `opentide` CLI:
+
+- `fields.json` replaces `catalogs/tide/generated/fields.json`: hover, completion and the enum checks follow the workspace's schemas, custom vocabulary included.
+- `deprecations.json` adds `deprecated_field` warnings on top of `catalogs/tide/generated/deprecations.json`.
+
+A file that does not parse is reported on stderr, and the bundled catalogs are used. Hosts embedding the engine call `opentide_analysis::install_catalog`, `opentide_analysis::set_default_catalog` puts the host's own catalogs where the bundled ones would be used, and `opentide_analysis::bundled_catalog` returns the bundled catalogs so a host can check they match its own models.
 
 Snippets come from the same templates `opentide generate` writes (`catalogs/tide/templates/`).
 

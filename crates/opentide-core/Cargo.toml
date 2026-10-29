@@ -7,7 +7,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-description = "Shared types for the opentide language server (I/O-free)"
+description = "opentide engine component: Shared types for the opentide language server (I/O-free). Depend on opentide-analysis."
+readme = "../COMPONENT.md"
 
 [dependencies]
 serde.workspace = true

@@ -1,13 +1,29 @@
 //! I/O-free analysis orchestrator. Filesystem lives behind [`WorkspaceHost`].
+//!
+//! The engine's public entry point: the language server, the browser build, and
+//! bindings such as the `opentide` Python package depend on this crate alone. The
+//! types its functions take and return are re-exported here, so a host never needs
+//! the per-language crates behind it.
 
-use opentide_core::{CompletionItem, Diagnostic, LanguageId, Position, SignatureHelp};
-use opentide_highlight::{
-    HighlightResult, HighlightSpec, HighlightToken, SemanticTokens, encode_lsp_semantic_tokens,
+pub use opentide_core::{
+    CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
+pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
+pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
+
+use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
 use opentide_kql::Profile;
-use opentide_tide::{IndexedObject, TideAnalyzeResult};
+use opentide_tide::TideAnalyzeResult;
+
+// The README's example runs as a doctest, so the crates.io page cannot drift.
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
 
 mod ecs;
+
+/// This engine's version: the crate version every `opentide-*` crate shares.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Host-supplied workspace snapshot. The analysis crate never calls `std::fs`.
 pub trait WorkspaceHost {
@@ -44,7 +60,7 @@ pub struct AnalyzeRequest {
 pub struct AnalyzeResponse {
     pub diagnostics: Vec<Diagnostic>,
     pub tokens: Vec<HighlightToken>,
-    pub symbols: Vec<opentide_tide::DocumentSymbol>,
+    pub symbols: Vec<DocumentSymbol>,
 }
 
 pub fn index_workspace(host: &dyn WorkspaceHost) -> Vec<IndexedObject> {
@@ -61,7 +77,7 @@ pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elas
 
 /// Elastic tenants declared in the workspace, if the host supplies the
 /// configuration file.
-pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<opentide_tide::ElasticTenant> {
+pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
     host.documents()
         .iter()
         .find(|(path, _)| path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION))
@@ -75,6 +91,17 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
     } else {
         Vec::new()
     };
+    analyze_with_index(host, &workspace, request)
+}
+
+/// [`analyze`] with the workspace already indexed ([`index_workspace`]), for a
+/// host that checks many files of one workspace: [`analyze`] parses every
+/// object file on each call.
+pub fn analyze_with_index(
+    host: &dyn WorkspaceHost,
+    workspace: &[IndexedObject],
+    request: AnalyzeRequest,
+) -> AnalyzeResponse {
     match request.language {
         LanguageId::Kql => {
             let r = opentide_kql::analyze(&request.text, Profile::Sentinel);
@@ -128,7 +155,7 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
                 source: &request.text,
-                workspace: &workspace,
+                workspace,
                 elastic_tenants: &elastic_tenants(host),
             });
             AnalyzeResponse {
@@ -138,6 +165,165 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
             }
         }
     }
+}
+
+/// One query a Tide object carries (`configurations.<platform>.query`, a hunt's
+/// `query`), analyzed in its own language.
+#[derive(Debug, Clone)]
+pub struct QueryReport {
+    pub language: LanguageId,
+    /// YAML path of the query (`["configurations", "sentinel", "query"]`).
+    pub field_path: Vec<String>,
+    /// The query text's range in the object file.
+    pub range: Range,
+    /// Ranges are in the object file, like [`AnalyzeResponse::diagnostics`].
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+/// Every query injected into the Tide object `text`, each analyzed in its
+/// language with the platform's profile (Sentinel or Defender KQL, Elastic or
+/// Carbon Black Lucene, the ES|QL stack of the block's Elastic tenants). A
+/// query with no finding is reported too, so a host can count what it
+/// checked. Only the queries are checked: for the object's own fields, use
+/// [`analyze`] with [`LanguageId::TideYaml`]. CrowdStrike and HarfangLab
+/// queries are not injected, so they never appear.
+pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport> {
+    opentide_tide::analyze_queries(text, &elastic_tenants(host))
+        .into_iter()
+        .map(|query| QueryReport {
+            language: query.query.language,
+            field_path: query.query.field_path,
+            range: opentide_core::span_to_range(text, query.query.host_span),
+            diagnostics: query.diagnostics,
+        })
+        .collect()
+}
+
+/// A query on its own, outside an object file.
+#[derive(Debug, Clone)]
+pub struct QueryRequest {
+    pub language: LanguageId,
+    /// The detection platform the query is for, as a `configurations` key
+    /// (`defender_for_endpoint` picks the Defender KQL schema and
+    /// `carbon_black_cloud` the Carbon Black Lucene dialect). `None` for the
+    /// language's default.
+    pub platform: Option<String>,
+    /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
+    /// ES|QL. `None`, or a value that does not parse, checks every supported
+    /// stack.
+    pub stack: Option<String>,
+    pub text: String,
+}
+
+/// Diagnostics for one query, in the query's own coordinates.
+pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+    let platform = request.platform.as_deref().unwrap_or("");
+    match request.language {
+        LanguageId::Kql => {
+            let profile = if platform == "defender_for_endpoint" {
+                Profile::Defender
+            } else {
+                Profile::Sentinel
+            };
+            opentide_kql::analyze(&request.text, profile).diagnostics
+        }
+        LanguageId::Lucene => {
+            let dialect = if platform == "carbon_black_cloud" {
+                opentide_lucene::Dialect::CarbonBlack
+            } else {
+                opentide_lucene::Dialect::Elastic
+            };
+            opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
+        }
+        LanguageId::Esql => {
+            let target = request
+                .stack
+                .as_deref()
+                .and_then(opentide_esql::StackTarget::parse);
+            opentide_esql::analyze_for(&request.text, target).diagnostics
+        }
+        language => {
+            let host = MemoryWorkspace::default();
+            analyze(
+                &host,
+                AnalyzeRequest {
+                    uri: "query".into(),
+                    language,
+                    text: request.text.clone(),
+                },
+            )
+            .diagnostics
+        }
+    }
+}
+
+/// Workspace catalogs that replace the bundled ones, as `opentide generate
+/// schemas` writes them under `.opentide/lsp/catalogs/generated/`.
+#[derive(Debug, Clone, Default)]
+pub struct Catalog {
+    /// `fields.json`: the Tide field catalog (hover, completion, enum checks).
+    pub fields: Option<String>,
+    /// `deprecations.json`: `deprecated_field` warnings on top of the bundled
+    /// ones.
+    pub deprecations: Option<String>,
+}
+
+/// Install workspace catalogs for the whole process. A `None` part goes back
+/// to the bundled catalog. A part that does not parse is an error and changes
+/// nothing.
+pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
+    let deprecations = match &catalog.deprecations {
+        Some(text) => opentide_tide::parse_deprecation_overlay(text)
+            .map_err(|err| format!("deprecations.json: {err}"))?,
+        None => Vec::new(),
+    };
+    opentide_highlight::install_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    opentide_tide::install_deprecation_overlay(deprecations);
+    Ok(())
+}
+
+/// Use `catalog` instead of the bundled catalogs whenever no workspace catalog
+/// is installed ([`install_catalog`]), for the whole process: a host that
+/// generates the catalogs from its own models (opentide, with
+/// `opentide.generation.lsp_catalog`) is then never behind the snapshot
+/// compiled into the engine, even after the language server's `initialize`
+/// finds no workspace catalog. A `None` part goes back to the bundled one. A
+/// part that does not parse is an error and changes nothing.
+pub fn set_default_catalog(catalog: &Catalog) -> Result<(), String> {
+    let deprecations = catalog
+        .deprecations
+        .as_deref()
+        .map(opentide_tide::parse_deprecation_overlay)
+        .transpose()
+        .map_err(|err| format!("deprecations.json: {err}"))?;
+    opentide_highlight::set_default_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    opentide_tide::set_default_deprecations(deprecations);
+    Ok(())
+}
+
+/// The Tide catalogs compiled into the engine, as their files hold them.
+///
+/// A host that generates its own catalogs (the `opentide` package, with
+/// `opentide.generation.lsp_catalog`) compares them with these to know
+/// whether the engine it bundles is current: labels such as the opentide
+/// version aside, the same models generate the same text.
+pub fn bundled_catalog() -> Catalog {
+    Catalog {
+        fields: Some(opentide_highlight::TIDE_FIELDS_JSON.to_string()),
+        deprecations: Some(opentide_tide::DEPRECATIONS_JSON.to_string()),
+    }
+}
+
+/// The opentide version the Tide field catalog in use was generated from.
+pub fn catalog_version() -> &'static str {
+    opentide_highlight::tide_catalog_version()
+}
+
+/// Whether a workspace catalog ([`install_catalog`]) is in use.
+pub fn catalog_is_workspace() -> bool {
+    opentide_highlight::tide_catalog_is_workspace()
 }
 
 pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {

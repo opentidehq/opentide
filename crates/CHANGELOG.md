@@ -6,10 +6,39 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- `opentide_analysis::set_default_catalog` replaces the bundled Tide catalogs for the whole process whenever no workspace catalog is installed, so a host that generates them from its own models (opentide) is never behind the snapshot compiled in, including after `initialize` finds no workspace catalog, and `opentide_lsp::use_host_catalogs()` keeps `initialize` from replacing them with a committed workspace copy ([opentide#677](https://github.com/opentidehq/opentide/issues/677)).
+- `opentide_analysis::bundled_catalog()` returns the Tide catalogs compiled into the engine, as their files hold them, so a host can tell whether the engine it bundles matches its own models ([#99](https://github.com/opentidehq/language-server/issues/99)). opentide's CI fails when it does not.
+- Each Tide object is checked against the schema revision its `metadata.schema` names ([#98](https://github.com/opentidehq/language-server/issues/98)). The field catalog has rows per revision (`rule::1.0`, `rule::1.1`); required fields come from it rather than three checks hard-coded for `rule::1.0`, so a `rule::1.1` without `description` is reported; and a key the object's revision does not define is a `schema_validation` error where it is (`field 'metadata.reviewed' is not defined in rule::1.0`), except the legacy spellings opentide accepts (a splunk block's `search`). Catalogs keyed by family, from an older `opentide generate schemas`, still load. Every field with an enum in the catalog is checked (`vocab_unknown`), not only a hand-picked few: `response.alert_severity`, `objective.type`, `objective.composition.strategy` and the signals' fields were not.
+- `recommended_field_missing` (warning): a field the templates ask for and opentide validate does not require (a rule's `configurations` and `response`) is missing. The catalog's `required` follows what validation requires, and such fields are `recommended`.
+- `opentide-analysis` re-exports every type its functions take and return, so a host (the `opentide` Python package, an editor) depends on it alone. Its crates.io page shows a usage example, run as a doctest.
+- `cargo binstall opentide-lsp` downloads the release binary for the target instead of compiling the workspace.
+- A host API on `opentide-analysis` for the `opentide` Python package ([opentide#332](https://github.com/opentidehq/opentide/issues/332), [#16](https://github.com/opentidehq/language-server/issues/16)): `analyze_queries` reports every query a Tide object carries, with its language, YAML path, place and diagnostics, including queries with no finding; `analyze_query` checks one query with its platform's profile (Defender KQL, Carbon Black Lucene, an ES|QL stack); `install_catalog` replaces the bundled Tide field and deprecation catalogs with a workspace's; `analyze_with_index` reuses one workspace index across files; `VERSION`.
+- `opentide_core::codes::ALL` lists every diagnostic code, and `codes::describe` gives each one a sentence, for hosts that explain a code (`opentide explain`).
+- `opentide-lsp` is also a library (`opentide_lsp::run_stdio`), so a host can serve the protocol from its own process.
+- The server and `opentide-lsp analyze` read the workspace field catalog `.opentide/lsp/catalogs/generated/fields.json`, which `opentide generate schemas` writes, as well as `deprecations.json`. Hover, completion and vocabulary checks then follow the workspace's schemas, custom vocabulary included. A catalog that does not parse is reported on stderr, and the bundled one is used.
+
 ### Fixed
 
+- `pydantic_object_issues.py` validates each object with its revision's model, not the family's first one.
+- A rule's `severity: High` was reported as `vocab_unknown` when the workspace had no generated catalog: the bundled Tide catalogs came from opentide 0.16.1, which checked a rule's severity against the threat severity scale. They are generated from opentide 0.18.0 now, where it takes `alert_severity` values, and hover shows the field descriptions 0.18.0 added.
+- A diagnostic inside a block-scalar query (`query: |`) after a non-ASCII character (`é`, `🔥`, an accented comment) pointed too far right, and could spill onto the next line: the injection map counted characters where it is indexed by bytes. Semantic tokens and hover inside the query moved the same way.
+- An injected query's span starts at its text, not at the indentation of its first line.
+- The shape check reads YAML as opentide does: a `<<` merge key fills the fields it merges instead of being an unknown key; a key that is not a string (`1: x`) is not a field; a value outside its enum in the second item of a list is reported on that item, and each bad item once; an unknown key that is quoted, non-ASCII or in a flow mapping is placed on its key, or on the nearest key above it, never at the top of the file.
+- A quoted query key (`"query": |`, `'sentinel':`) is still a query: it was left unchecked.
+- A KQL query may start with `search` or `find` (`search "mimikatz"`, `search in (SecurityEvent) "x"`, `find in (T) where ...`): it was a `kql_parse_error`, and only `T | search ...` parsed.
+- A block-scalar query with an indentation indicator (`query: |2`) whose later line is indented less than the first and holds a multi-byte character no longer panics.
+- `scripts/sync_opentide_schemas.py --check` reports a reference schema opentide no longer registers, which writing removes.
+- `rootUri` and document URIs are percent-decoded, and a Windows drive (`file:///c%3A/...`) becomes `c:/...`, so a workspace whose path has a space or a drive letter finds its objects and catalogs. Locations the server returns are percent-encoded.
 - `opentide-lsp analyze` on a `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` or `.lucene` file no longer reads the directories around it. Outside a workspace it walked the file's grandparent directory, so one YAML file there that was not UTF-8 failed the command.
 - One unreadable workspace file (not UTF-8, no permission) no longer drops the whole object index. The stdio server reported every reference to another object as `invalid_ref`, and `analyze` on a Tide object failed. Now that file is left out, and the rest of the workspace still resolves.
+
+### Changed
+
+- The other library crates say on crates.io that they are engine components and point to `opentide-analysis`.
+- The workspace deprecation overlay is process-wide instead of per thread, so a host that analyzes on several threads sees the one it installed.
+- The bundled Tide catalogs are generated by opentide's own generator: `scripts/sync_opentide_schemas.py` runs `opentide.generation.lsp_catalog`, which `opentide generate schemas` also uses, instead of a copy of it ([#100](https://github.com/opentidehq/language-server/issues/100)). `--check` says whether the committed catalogs match, and a daily `opentide canary` job runs it against opentide's `development` branch, then the test suite against the catalogs it generates, without blocking. The router schema points each revision at its own schema (`rule::1.1` named `rule.1.0`).
 
 ## [0.5.0] - 2026-10-26
 

@@ -7,6 +7,7 @@
     release.py notes X.Y.Z          print the CHANGELOG.md section for a version
     release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
     release.py publish              publish every crate to crates.io, dependencies first
+    release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
 
 Crates embed catalogs, grammars, and highlight queries from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
@@ -17,11 +18,18 @@ looks when the workspace root is not there. `vendor --clean` removes the copies.
 `publish` can be re-run: it skips each crate whose version crates.io already has, and
 waits out the rate limit crates.io puts on brand-new crates, so a first release that
 stops partway resumes where it stopped.
+
+`trust` registers this repository's WORKFLOW (e.g. release.yml) as the trusted
+publisher of every published crate, with a crates.io token that has the
+trusted-publishing scope in CRATES_IO_TOKEN, so later releases publish with the
+workflow's OIDC identity instead of a stored token. Crates already registered are
+left alone; without a token it does nothing.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -214,6 +222,76 @@ def publish() -> None:
             time.sleep(RATE_LIMIT_WAIT)
 
 
+CRATES_IO_API = "https://crates.io/api/v1"
+
+
+def crates_io(method: str, path: str, token: str, body: dict | None = None) -> dict:
+    request = urllib.request.Request(
+        f"{CRATES_IO_API}{path}",
+        method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={
+            "Authorization": token,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "opentide-lsp release.py (https://github.com/opentidehq/language-server)",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode() or "{}")
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode(errors="replace")
+        raise RuntimeError(f"{method} {path}: HTTP {error.code} {detail}") from None
+
+
+def trust(workflow: str) -> None:
+    token = os.environ.get("CRATES_IO_TOKEN", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    if not token:
+        print("CRATES_IO_TOKEN is unset: trusted publishing not registered")
+        return
+    if "/" not in repository:
+        sys.exit("GITHUB_REPOSITORY must be owner/name")
+    owner, name = repository.split("/", 1)
+    failed = []
+    for package in publish_order(publishable_crates()):
+        crate = package["name"]
+        if not on_crates_io(crate, package["version"]):
+            print(f"{crate}: not on crates.io yet, skipped")
+            continue
+        try:
+            listed = crates_io("GET", f"/trusted_publishing/github_configs?crate={crate}", token)
+            if any(
+                c["repository_owner"].lower() == owner.lower()
+                and c["repository_name"].lower() == name.lower()
+                and c["workflow_filename"] == workflow
+                for c in listed.get("github_configs", [])
+            ):
+                print(f"{crate}: {repository} {workflow} is already trusted")
+                continue
+            crates_io(
+                "POST",
+                "/trusted_publishing/github_configs",
+                token,
+                {
+                    "github_config": {
+                        "crate": crate,
+                        "repository_owner": owner,
+                        "repository_name": name,
+                        "workflow_filename": workflow,
+                        "environment": None,
+                    }
+                },
+            )
+            print(f"{crate}: trusts {repository} {workflow}")
+        except RuntimeError as error:
+            print(f"{crate}: {error}", file=sys.stderr)
+            failed.append(crate)
+    if failed:
+        sys.exit(f"trusted publishing not registered for {', '.join(failed)}")
+
+
 def main(argv: list[str]) -> None:
     match argv:
         case ["version"]:
@@ -238,6 +316,8 @@ def main(argv: list[str]) -> None:
             vendor(clean=True)
         case ["publish"]:
             publish()
+        case ["trust", workflow]:
+            trust(workflow)
         case _:
             sys.exit(__doc__)
 

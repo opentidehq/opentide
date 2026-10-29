@@ -7,7 +7,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-description = "I/O-free analysis orchestrator (WorkspaceHost + analyze/highlight)"
+description = "The opentide engine: I/O-free analysis of KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, and Tide YAML"
+readme = "README.md"
+keywords = ["kql", "spl", "esql", "detection", "siem"]
+categories = ["parser-implementations", "development-tools"]
 
 [dependencies]
 opentide-core.workspace = true
