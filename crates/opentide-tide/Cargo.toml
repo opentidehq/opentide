@@ -12,6 +12,7 @@ readme = "../COMPONENT.md"
 
 [dependencies]
 opentide-core.workspace = true
+opentide-ecs.workspace = true
 opentide-kql.workspace = true
 opentide-spl.workspace = true
 opentide-esql.workspace = true

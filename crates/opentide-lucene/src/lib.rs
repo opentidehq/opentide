@@ -9,7 +9,10 @@
 //! `/regexp/` bodies are Lucene's own regular-expression grammar
 //! ([`regexp`]). Those are the checks this engine adds after the grammar.
 
+mod ecs;
 pub mod regexp;
+
+pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, codes,

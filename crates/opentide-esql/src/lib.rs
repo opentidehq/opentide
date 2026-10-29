@@ -17,14 +17,24 @@
 //!
 //! [`output_columns`] returns the column names a query produces when they can
 //! be known without the index mappings.
+//!
+//! # Indices
+//!
+//! [`analyze_for`] reads the indices `FROM` names ([`source_indices`]). Where
+//! the workspace declares Elastic indices, an undeclared one is
+//! `elastic_dataset_not_declared`. Where every one holds ECS documents
+//! (`logs-*`, or declared `ecs_indices`), columns read straight from them are
+//! checked against ECS ([`ecs_diagnostics`]).
 
 pub mod catalog;
 mod columns;
+mod ecs;
 mod gates;
 pub mod version;
 
 pub use catalog::{Catalog, CommandRow, FunctionRow, Lifecycle, StackVersion, TypeRow};
 pub use columns::output_columns;
+pub use ecs::{ecs_diagnostics, source_indices};
 pub use version::{Availability, RELEASES, StackTarget};
 
 use opentide_core::{
@@ -188,6 +198,9 @@ pub fn analyze_for(source: &str, target: Option<StackTarget>) -> AnalyzeResult {
             diagnostics.push(d);
         }
     }
+    // The indices `FROM` reads: undeclared ones, and ECS field checks when
+    // every one holds ECS documents.
+    opentide_ecs::merge(&mut diagnostics, ecs::dataset_diagnostics(root, source));
     let tokens = highlight(&spec, source, catalog);
     AnalyzeResult {
         diagnostics,

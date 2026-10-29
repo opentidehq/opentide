@@ -839,15 +839,23 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Eql => {
-                let r = opentide_eql::analyze(&inj.inner);
+                let mut r = opentide_eql::analyze(&inj.inner);
                 // Hunts have no schedule; only the rule query is compared.
                 if inj.field_path.first().map(String::as_str) == Some("configurations") {
                     extra = elastic::maxspan_advisories(source, configurations, &inj);
                 }
+                if elastic::reads_ecs(configurations, &inj.field_path) {
+                    let ecs = opentide_eql::ecs_diagnostics(&inj.inner);
+                    opentide_ecs::merge(&mut r.diagnostics, ecs);
+                }
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Kuery => {
-                let r = opentide_kuery::analyze(&inj.inner);
+                let mut r = opentide_kuery::analyze(&inj.inner);
+                if elastic::reads_ecs(configurations, &inj.field_path) {
+                    let ecs = opentide_kuery::ecs_diagnostics(&inj.inner);
+                    opentide_ecs::merge(&mut r.diagnostics, ecs);
+                }
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Lucene => {
@@ -856,7 +864,13 @@ fn analyze_injections(
                 } else {
                     opentide_lucene::Dialect::Elastic
                 };
-                let r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
+                let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
+                if dialect == opentide_lucene::Dialect::Elastic
+                    && elastic::reads_ecs(configurations, &inj.field_path)
+                {
+                    let ecs = opentide_lucene::ecs_diagnostics(&inj.inner);
+                    opentide_ecs::merge(&mut r.diagnostics, ecs);
+                }
                 (r.diagnostics, r.tokens)
             }
             LanguageId::TideYaml => (Vec::new(), Vec::new()),

@@ -14,6 +14,11 @@
 //! with `lenient: false` (Kibana's default `query:queryString:options`), so the
 //! strict verdict counts. `EXCEPTIONS` lists the probes the engine cannot
 //! decide statically, with the reason.
+//!
+//! The fixture index maps every ECS field with its ECS type, so the probes
+//! ran against ECS documents. The second test adds the ECS checks a rule on
+//! ECS indices gets (`ecs_diagnostics`): the probes that depend on the
+//! mapping must then agree too, except `ECS_EXCEPTIONS`.
 
 use opentide_core::{Diagnostic, LanguageId, Severity};
 use std::fs;
@@ -71,6 +76,22 @@ const EXCEPTIONS: &[(&str, &str)] = &[
     ),
 ];
 
+/// Probes the ECS checks still cannot decide, with the reason.
+const ECS_EXCEPTIONS: &[(&str, &str)] = &[
+    // Comparing two fields is `eql_field_comparison`, not a type check: an
+    // optional field stays a warning even when ECS maps it.
+    (
+        "eql-field-comparison/optional_mapped_both.eql",
+        "an optional field compared with a field stays a warning",
+    ),
+    (
+        "eql-field-comparison/optional_mapped_left.eql",
+        "an optional field compared with a field stays a warning",
+    ),
+    // No field: the default field's mapping is the cluster's.
+    ("lucene/bare_leading_wildcard_default_field.lucene", MAPPING),
+];
+
 const MAPPING: &str = "depends on the tenant's field mapping";
 const NEWER: &str = "accepted by the 9.6 grammar";
 
@@ -78,16 +99,49 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/oracles/elasticsearch")
 }
 
-fn analyze(language: LanguageId, text: &str) -> Vec<Diagnostic> {
-    match language {
-        LanguageId::Esql => opentide_esql::analyze(text).diagnostics,
-        LanguageId::Eql => opentide_eql::analyze(text).diagnostics,
-        _ => opentide_lucene::analyze(text).diagnostics,
-    }
+/// The engine's diagnostics; with `ecs`, plus the ECS checks a rule whose
+/// indices hold ECS documents gets. ES|QL reads its indices from `FROM`.
+fn analyze(language: LanguageId, text: &str, ecs: bool) -> Vec<Diagnostic> {
+    let (mut found, extra) = match language {
+        LanguageId::Esql => (opentide_esql::analyze(text).diagnostics, Vec::new()),
+        LanguageId::Eql => (
+            opentide_eql::analyze(text).diagnostics,
+            if ecs {
+                opentide_eql::ecs_diagnostics(text)
+            } else {
+                Vec::new()
+            },
+        ),
+        _ => (
+            opentide_lucene::analyze(text).diagnostics,
+            if ecs {
+                opentide_lucene::ecs_diagnostics(text)
+            } else {
+                Vec::new()
+            },
+        ),
+    };
+    opentide_ecs::merge(&mut found, extra);
+    found
 }
 
 #[test]
 fn engines_agree_with_live_elasticsearch() {
+    disagreements(false, EXCEPTIONS);
+}
+
+#[test]
+fn engines_with_ecs_agree_with_live_elasticsearch() {
+    let exceptions: Vec<(&str, &str)> = EXCEPTIONS
+        .iter()
+        .filter(|(_, reason)| *reason != MAPPING)
+        .chain(ECS_EXCEPTIONS)
+        .copied()
+        .collect();
+    disagreements(true, &exceptions);
+}
+
+fn disagreements(ecs: bool, exceptions: &[(&str, &str)]) {
     let expected = fs::read_to_string(root().join("expected.tsv")).unwrap();
     let mut problems = Vec::new();
     let mut checked = 0;
@@ -108,7 +162,7 @@ fn engines_agree_with_live_elasticsearch() {
             _ => continue,
         };
         let text = fs::read_to_string(root().join(probe)).unwrap();
-        let found = analyze(language, text.trim_end());
+        let found = analyze(language, text.trim_end(), ecs);
         let errors: Vec<&Diagnostic> = found
             .iter()
             .filter(|d| d.severity == Severity::Error)
@@ -125,7 +179,7 @@ fn engines_agree_with_live_elasticsearch() {
         let disagrees = (all_err && errors.is_empty())
             || (all_ok && !errors.is_empty())
             || (!all_err && !all_ok && (!errors.is_empty() || found.is_empty()));
-        if let Some((_, reason)) = EXCEPTIONS.iter().find(|(p, _)| *p == probe) {
+        if let Some((_, reason)) = exceptions.iter().find(|(p, _)| *p == probe) {
             if !disagrees {
                 problems.push(format!(
                     "{probe}: listed in EXCEPTIONS ({reason}) but the engine agrees; remove it"

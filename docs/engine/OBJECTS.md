@@ -52,6 +52,8 @@ Query extras (engine may add these inside `query: |`):
 - `spl_unknown_datamodel` (error: a near miss of a CIM data model or dataset, with a suggestion)
 - `spl_unknown_datamodel_field` (error: a near miss of a CIM dataset field, `Processes.proces_name`, with a suggestion)
 - `spl_dataset_not_declared` (warning: an index, sourcetype or base-search macro the workspace's Splunk log sources do not declare, when they declare that kind)
+- `ecs_type_mismatch`, `ecs_unknown_field` (Elastic queries whose indices all hold ECS documents; `docs/LANGUAGE.md`, Elastic indices and ECS)
+- `elastic_dataset_not_declared` (`configurations.elastic.index`, `threat.index`, `data_view_id`, and ES|QL `FROM`, when the workspace declares Elastic datasets)
 - `crowdstrike_unsupported` (never faked)
 - `defender_output_columns`
 
