@@ -114,11 +114,14 @@ rule = Opentide.Rules[uuid]
 
 rule.validate() -> ValidationResult                      # schema + cross-object checks
 rule.validate_query(platform) -> ValidationResult        # query syntax (supported platforms)
+rule.run_query(platform, *, tenants=(), since=None, limit=100) -> QueryRun  # rows from the tenants
 rule.deploy(platform, dry_run=False, *, strategies=None) -> DeploymentResult
 rule.document() -> str                                   # or Opentide.render_rule(rule)
 ```
 
 `validate_query` runs the platform's query validator when one exists (Sentinel, Defender, Splunk, SentinelOne, Carbon Black); for CrowdStrike/HarfangLab it reports unsupported rather than faking a pass. See [Validation → query validation](./validation.md#query-validation).
+
+`run_query` sends the query this rule deploys to *platform* to the tenants `tenants` names (`["all"]` for every one; none for the only one) over the last `since` (default `24h`), and returns an `opentide.query.QueryRun`: `outcomes` holds one `TenantOutcome` per tenant, with `result.columns` and `result.rows` or an `error`. A call that cannot run raises `opentide.query.QueryUsageError`. It is [`opentide query --rule`](../cli/query.md) in Python; `opentide.query.run_query(platform, query=...)` runs a query that is not a rule's.
 
 <Callout type="warn">
 `Opentide.promote_rule()` raises `NotImplementedError` — change rule `status` in YAML and use `opentide deploy` (promotion runs inside deploy when configured).

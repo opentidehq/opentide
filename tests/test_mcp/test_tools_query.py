@@ -1,6 +1,7 @@
 """MCP query tools tell the truth about what they did (#245, #258).
 
-``validate_query`` used to answer ``valid: true`` for any string, and
+``validate_query`` used to answer ``valid: true`` for any string (it now runs
+the analysis engine on it, #332), and
 ``run_query`` returned ``rows: 0`` with an empty result set, which reads to an
 agent as "the query ran and matched nothing".
 """
@@ -20,28 +21,71 @@ def test_query_validation_platform_count() -> None:
     assert "crowdstrike" not in QUERY_VALIDATION_PLATFORMS
 
 
-@pytest.mark.parametrize("platform", sorted(QUERY_VALIDATION_PLATFORMS))
-def test_validate_query_refuses_without_live(platform: str) -> None:
-    result = tools.tool_validate_query("DeviceProcessEvents", platform)
+#: A query each offline platform's engine accepts.
+VALID_QUERIES = {
+    "sentinel": "SecurityEvent | where EventID == 4688",
+    "defender_for_endpoint": "DeviceProcessEvents | where FileName == 'x.exe'",
+    "splunk": "index=main sourcetype=WinEventLog EventCode=4688",
+    "elastic": 'process.name : "cmd.exe"',
+    "carbon_black_cloud": "process_name:cmd.exe",
+}
+
+
+@pytest.mark.parametrize("platform", sorted(VALID_QUERIES))
+def test_validate_query_checks_the_query_offline(platform: str) -> None:
+    result = tools.tool_validate_query(VALID_QUERIES[platform], platform)
     assert result["supported"] is True
-    assert result["valid"] is None
-    assert result.get("mode") != "offline-syntax"
-    assert "live: true" in result["message"]
+    assert result["mode"] == "offline"
+    assert result["valid"] is True, result
+    assert result["status"] == "passed"
+    assert result["errors"] == []
+    assert set(result["engine"]) == {"engine"}
 
 
-def test_validate_query_does_not_scan_a_broken_query() -> None:
+def test_validate_query_finds_the_error_in_a_broken_query() -> None:
     result = tools.tool_validate_query(GARBAGE, "sentinel")
-    assert result["valid"] is None
+    assert result["valid"] is False
+    assert result["status"] == "failed"
+    assert result["language"] == "kql"
+    (error, *_) = result["errors"]
+    assert error["severity"] == "error"
+    assert error["line"] == 1 and error["column"] >= 1
+    assert error["explain"] == f"opentide explain {error['code']}"
+
+
+def test_validate_query_uses_the_platform_profile() -> None:
+    """Defender tables are unknown to Sentinel, and the other way round."""
+    query = "DeviceProcessEvents | take 1"
+    defender = tools.tool_validate_query(query, "defender_for_endpoint")
+    sentinel = tools.tool_validate_query(query, "sentinel")
+    assert not any(item["code"] == "kql_unknown_table" for item in defender["diagnostics"])
+    assert any(item["code"] == "kql_unknown_table" for item in sentinel["diagnostics"])
+
+
+def test_validate_query_takes_the_elastic_language_and_stack() -> None:
+    result = tools.tool_validate_query(
+        "FROM logs-* | WHER x == 1", "elastic", language="esql", stack="9.5"
+    )
+    assert result["language"] == "esql"
+    assert result["valid"] is False
+    wrong = tools.tool_validate_query("x", "elastic", language="kql")
+    assert wrong["valid"] is None
+    assert "esql, eql, kuery, lucene" in wrong["message"]
+
+
+def test_validate_query_refuses_sentinel_one_offline() -> None:
+    """S1QL has no offline engine: the check is the tenant's."""
+    result = tools.tool_validate_query("EventType = 'Process Creation'", "sentinel_one")
     assert result["supported"] is True
-    assert "errors" not in result
+    assert result["valid"] is None
     assert "live: true" in result["message"]
 
 
 @pytest.mark.parametrize("query", ["", "   "])
-def test_validate_query_refuses_an_empty_query_without_scanning(query: str) -> None:
+def test_validate_query_refuses_an_empty_query(query: str) -> None:
     result = tools.tool_validate_query(query, "splunk")
     assert result["valid"] is None
-    assert "live: true" in result["message"]
+    assert "empty" in result["message"]
 
 
 def test_validate_query_live_calls_the_tenant(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -67,27 +111,107 @@ def test_validate_query_never_fakes_an_unsupported_platform(platform: str) -> No
 
 
 def test_validate_query_truncates_the_preview() -> None:
-    result = tools.tool_validate_query("A" * 500, "sentinel")
+    result = tools.tool_validate_query("A" * 500, "sentinel_one")
     assert len(result["query_preview"]) == 200
 
 
-@pytest.mark.parametrize(("platform", "supported"), [("sentinel", True), ("crowdstrike", False)])
-def test_run_query_is_an_explicit_stub(platform: str, supported: bool) -> None:
+@pytest.mark.parametrize("platform", ["sentinel", "crowdstrike", "harfanglab"])
+def test_run_query_refuses_without_live(platform: str) -> None:
+    """Without live true no tenant is contacted: an agent must ask a person first."""
     result = tools.tool_run_query("index=*", platform, tenant="prod")
-    assert result["stub"] is True
-    assert result["rows"] is None
-    assert result["supported"] is supported
-    assert result["tenant"] == "prod"
-    # An agent must not be able to read this as an executed, empty result.
+    assert result["supported"] is True
+    assert result["status"] == "failed"
+    assert "live: true" in result["message"]
     assert "results" not in result
-    assert result.get("truncated") is None
+    (action,) = result["next_actions"]
+    assert action["tool"] == "run_query"
+    assert action["arguments"] == {
+        "query": "index=*",
+        "platform": platform,
+        "live": True,
+        "tenant": "prod",
+    }
+    assert action["command"] == (
+        f"opentide --json query --platform {platform} --tenant prod 'index=*'"
+    )
 
 
-def test_run_query_says_it_did_not_run() -> None:
-    assert "not implemented" in tools.tool_run_query("index=*", "sentinel")["message"]
+def test_run_query_names_the_rule_in_its_next_action() -> None:
+    result = tools.tool_run_query("", "splunk", rule="00000000-0000-4000-8003-000000000003")
+    (action,) = result["next_actions"]
+    assert action["arguments"]["rule"] == "00000000-0000-4000-8003-000000000003"
+    assert action["command"].endswith("--rule 00000000-0000-4000-8003-000000000003")
 
 
-def test_run_query_mentions_the_row_cap_the_live_path_would_apply() -> None:
-    result = tools.tool_run_query("index=*", "splunk")
-    assert str(MAX_QUERY_ROWS) in result["message"]
-    assert result["tenant"] is None
+def test_run_query_next_action_keeps_every_choice() -> None:
+    """Following the next action must run what the agent asked, not the defaults."""
+    result = tools.tool_run_query(
+        "process where true",
+        "elastic",
+        since="7d",
+        limit=5,
+        language="eql",
+        index="logs-*,winlogbeat-*",
+    )
+    (action,) = result["next_actions"]
+    assert action["arguments"] == {
+        "query": "process where true",
+        "platform": "elastic",
+        "live": True,
+        "since": "7d",
+        "limit": 5,
+        "language": "eql",
+        "index": "logs-*,winlogbeat-*",
+    }
+    assert action["command"] == (
+        "opentide --json query --platform elastic --since 7d --limit 5 --language eql "
+        "--index 'logs-*' --index 'winlogbeat-*' 'process where true'"
+    )
+
+
+def test_run_query_refuses_an_unknown_platform() -> None:
+    result = tools.tool_run_query("index=*", "qradar", live=True)
+    assert result["supported"] is False
+    assert "qradar" in result["message"]
+
+
+def test_run_query_live_runs_the_cli_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def _fake(ctx: object, platform: str, **kwargs: object) -> dict[str, object]:
+        seen.update(platform=platform, **kwargs)
+        return {
+            "platform": platform,
+            "status": "completed",
+            "results": [],
+            "_summary": {"rows": 0},
+            "_exit_code": 0,
+        }
+
+    monkeypatch.setattr("opentide.cli.services.query.query_platform", _fake)
+    result = tools.tool_run_query(
+        "SecurityEvent", "sentinel", tenant="prod, lab", live=True, since="7d", limit=5
+    )
+    assert seen == {
+        "platform": "sentinel",
+        "query": "SecurityEvent",
+        "rule_uuid": None,
+        "tenants": ["prod", "lab"],
+        "since": "7d",
+        "limit": 5,
+        "language": None,
+        "index": [],
+    }
+    # The CLI envelope's private keys stay out of the tool payload.
+    assert result == {
+        "platform": "sentinel",
+        "status": "completed",
+        "results": [],
+        "supported": True,
+    }
+
+
+def test_run_query_default_limit_is_the_row_cap() -> None:
+    import inspect
+
+    assert inspect.signature(tools.tool_run_query).parameters["limit"].default == MAX_QUERY_ROWS

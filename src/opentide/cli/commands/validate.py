@@ -12,7 +12,13 @@ import typer
 
 from opentide.cli.commands._plan import REMOVED_PLAN_HELP, refuse_removed_plan
 from opentide.cli.context import CliContext, get_context
-from opentide.cli.enums import PLATFORM_METAVAR, DetectionPlatform, ValidateCheck, platform_help
+from opentide.cli.enums import (
+    PLATFORM_METAVAR,
+    QUERY_VALIDATION_PLATFORMS,
+    DetectionPlatform,
+    QueriesMode,
+    ValidateCheck,
+)
 from opentide.cli.findings import (
     FORMAT_HELP,
     OUTPUT_HELP,
@@ -44,6 +50,7 @@ from opentide.cli.ui.render import render_warnings
 from opentide.cli.ui.reports import ReportFormat
 from opentide.cli.ui.watch import LiveView, PlainView, Watcher, WatchRun
 from opentide.core.logging.config import get_console, get_stdout_console
+from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
 
 if TYPE_CHECKING:
     from opentide.cli.ui.fixes import FixPlan
@@ -56,6 +63,18 @@ QUERY_STRATEGY_HELP = (
 )
 
 CHECK_HELP = "Run one check only: " + ", ".join(item.value for item in ValidateCheck)
+
+QUERY_PLATFORM_HELP = (
+    "Check this platform's queries. Offline, default every platform the engine parses: "
+    + ", ".join(sorted(OFFLINE_QUERY_PLATFORMS))
+    + ". --live needs one of: "
+    + ", ".join(sorted(QUERY_VALIDATION_PLATFORMS))
+)
+
+QUERIES_HELP = (
+    "How a query the platform would reject is reported: error (the default), warn (passes "
+    "unless --strict) or off (queries are not checked)"
+)
 
 
 @validate_app.callback(invoke_without_command=True)
@@ -77,6 +96,9 @@ def validate_group(
         None, "--type", help="Validate only this type: rule, threat or objective (repeatable)"
     ),
     strict: bool = typer.Option(False, "--strict", help="Fail on warnings too"),
+    queries: QueriesMode | None = typer.Option(
+        None, "--queries", metavar="error|warn|off", help=QUERIES_HELP
+    ),
     fix: bool = typer.Option(
         False, "--fix", help="Apply every safe fix (vocabulary typos), then validate again"
     ),
@@ -89,7 +111,7 @@ def validate_group(
     report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
     output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
 ) -> None:
-    """Validate detection objects (schema, UUID, uniqueness)."""
+    """Validate detection objects: schema, UUIDs, uniqueness, configuration and queries."""
     from opentide.cli.services.validation import (
         fix_phrase,
         run_validate,
@@ -118,11 +140,13 @@ def validate_group(
         emit_usage_error(
             cli, "--dry-run previews --fix. Pass both.", argument="--dry-run", code=USAGE_ERROR
         )
+    refuse_queries_mode(cli, queries, check)
     scope: dict[str, Any] = {
         "check": check,
         "strict": strict,
         "uuids": uuid,
         "object_types": object_type,
+        "queries": queries or QueriesMode.error,
     }
     if watch:
         if fix:
@@ -193,6 +217,28 @@ def validate_group(
     emit_result(cli, replace(outcome, outcome=line, warnings=()))
 
 
+def refuse_queries_mode(
+    cli: CliContext, queries: QueriesMode | None, check: ValidateCheck | None
+) -> None:
+    """Refuse a ``--queries`` the run would ignore, or that contradicts ``--check``."""
+    if queries is None or check is None:
+        return
+    if check is not ValidateCheck.queries:
+        emit_usage_error(
+            cli,
+            f"--queries sets how the queries check reports; --check {check.value} does not run it",
+            argument="--queries",
+            code=USAGE_ERROR,
+        )
+    if queries is QueriesMode.off:
+        emit_usage_error(
+            cli,
+            "--check queries runs the queries check and --queries off skips it: pass one of them",
+            argument="--queries",
+            code=USAGE_ERROR,
+        )
+
+
 def _watch(
     cli: CliContext,
     *,
@@ -201,6 +247,7 @@ def _watch(
     files: list[str] | None,
     uuids: list[str] | None,
     object_types: list[str] | None,
+    queries: QueriesMode = QueriesMode.error,
 ) -> None:
     """``validate --watch``: a Live view in ``human`` mode, an outcome line per run in ``plain``."""
     from opentide.cli.services.validation import run_validate, validate_outcome_line
@@ -227,6 +274,7 @@ def _watch(
             files=targets,
             uuids=uuids if changed is None else None,
             object_types=object_types if changed is None else None,
+            queries=queries,
         )
         summary = cast(dict[str, int], result.get("_summary") or {})
         diagnostics = cast("list[Diagnostic]", result.get("_diagnostics") or [])
@@ -283,18 +331,21 @@ def _shown(roots: Sequence[Path]) -> str:
 @validate_app.command("query")
 def validate_query_cmd(
     ctx: typer.Context,
-    platform: DetectionPlatform = typer.Option(
-        ..., "--platform", metavar=PLATFORM_METAVAR, help=platform_help()
+    platform: DetectionPlatform | None = typer.Option(
+        None,
+        "--platform",
+        metavar=PLATFORM_METAVAR,
+        help=QUERY_PLATFORM_HELP,
     ),
     strategy: list[str] | None = typer.Option(None, "--strategy", help=QUERY_STRATEGY_HELP),
     plan: str | None = typer.Option(None, "--plan", hidden=True, help=REMOVED_PLAN_HELP),
     wide: bool = typer.Option(
-        False, "--wide", help="Check every status strategy but DISABLEMENT and DELETION"
+        False, "--wide", help="Check every status strategy but DISABLEMENT and DELETION (--live)"
     ),
     live: bool = typer.Option(
         False,
         "--live",
-        help="Check the tenant (needs platform SDKs and credentials)",
+        help="Check the queries on the platform's tenants (needs credentials)",
     ),
     changed: bool = typer.Option(
         False,
@@ -305,29 +356,100 @@ def validate_query_cmd(
         ),
     ),
     file: list[str] | None = typer.Option(
-        None, "--file", help="Check only this rule file (repeatable)"
+        None,
+        "--file",
+        help=(
+            "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, "
+            ".lucene) offline (repeatable)"
+        ),
     ),
     uuid: list[str] | None = typer.Option(
         None, "--uuid", help="Check only the rule with this UUID (repeatable)"
     ),
+    strict: bool = typer.Option(False, "--strict", help="Fail on warnings too"),
+    queries: QueriesMode | None = typer.Option(
+        None,
+        "--queries",
+        metavar="error|warn",
+        help="How a rejected query is reported offline: error (the default) or warn",
+    ),
 ) -> None:
-    """Check rule queries on the platform's tenants (needs --live)."""
+    """Check rule queries offline with the analysis engine, or on the tenants (--live).
+
+    Offline, the engine reports the queries the platform would reject, as
+    `opentide validate` does; `opentide lint` reports their style.
+    """
+    from opentide.analysis import is_query_file
     from opentide.cli.services.validation import validate_query_platform
 
     refuse_dropped(ctx)
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
+    if queries is QueriesMode.off:
+        emit_usage_error(
+            cli,
+            "--queries off skips the queries check, which is all validate query runs",
+            argument="--queries",
+            code=USAGE_ERROR,
+        )
+    if not live:
+        for flag, used in (("--strategy", bool(strategy)), ("--wide", wide)):
+            if used:
+                emit_usage_error(
+                    cli,
+                    f"{flag} chooses tenants, so it applies to --live; the offline check "
+                    "reads every query whatever its status",
+                    argument=flag,
+                    code=USAGE_ERROR,
+                )
+    else:
+        for flag, used in (("--strict", strict), ("--queries", queries is not None)):
+            if used:
+                emit_usage_error(
+                    cli,
+                    f"{flag} applies to the offline check: a tenant accepts or rejects a query",
+                    argument=flag,
+                    code=USAGE_ERROR,
+                )
+        if any(is_query_file(target) for target in file or ()):
+            emit_usage_error(
+                cli,
+                "a query file is checked offline: --live sends the queries of rules to tenants",
+                argument="--file",
+                code=USAGE_ERROR,
+            )
     result = validate_query_platform(
         cli,
-        platform.value,
+        None if platform is None else platform.value,
         strategies=strategy or (),
         wide=wide,
         live=live,
         changed=changed,
         files=file or (),
         uuids=uuid or (),
+        strict=strict,
+        queries=queries or QueriesMode.error,
     )
+    if result.get("mode") == "offline":
+        _emit_offline_query_result(cli, result)
+        return
     from opentide.cli.ui.summary import query_summary
 
     publish_summary(cli, query_summary(result), command="validate query", payload=result)
     emit_success(cli, result)
+
+
+def _emit_offline_query_result(cli: CliContext, result: dict[str, Any]) -> None:
+    """Code frames, CI annotations and one outcome line, like ``validate``."""
+    diagnostics = cast("list[Diagnostic]", result.pop("_diagnostics", []))
+    outcome = CommandResult.from_payload(result, default_message="Queries valid")
+    if not cli.json_output:
+        render_diagnostics(get_stdout_console(), diagnostics, mode=text_mode(cli), quiet=cli.quiet)
+        publish_findings(
+            cli,
+            diagnostics,
+            outcome,
+            command="validate query",
+            outcome=outcome.outcome or outcome.message,
+        )
+    emit_result(cli, outcome)

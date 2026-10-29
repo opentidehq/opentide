@@ -67,12 +67,13 @@ def test_a_rule_that_raises_is_failed_with_the_platform_message_and_the_error_pr
             results.append(result)
 
     error = _AzureError("(BadRequest) Bad query\nCode: BadRequest", 400, "Bad query")
-    with (
-        deploy_events.listen(_Keep()),
-        pytest.raises(_AzureError),
-        deploying("sentinel", "contoso", "u1", "Rule one"),
-    ):
-        raise error
+    try:
+        with deploy_events.listen(_Keep()), deploying("sentinel", "contoso", "u1", "Rule one"):
+            raise error
+    except _AzureError as raised:
+        assert raised is error
+    else:
+        pytest.fail("the platform's error must propagate out of the rule's block")
     (result,) = results
     assert result.status == "failed"
     assert result.error == "HTTP 400: Bad query"

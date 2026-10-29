@@ -196,10 +196,23 @@ def tool_validation_report(
     file: str | None = None,
     uuid: str | None = None,
     object_type: str | None = None,
+    queries: str = "error",
 ) -> dict[str, Any]:
-    """Structured validation report for agents (headless API)."""
+    """Structured validation report for agents (headless API).
+
+    *queries* is ``validate --queries``: ``error``, ``warn`` or ``off``.
+    """
+    from opentide.cli.enums import QueriesMode
+    from opentide.cli.services.validation import default_check_names, queries_flag
+
+    try:
+        mode = QueriesMode(queries)
+    except ValueError:
+        choices = ", ".join(item.value for item in QueriesMode)
+        return {"ok": False, "error": f"queries must be one of {choices}, got {queries!r}"}
     # Re-read the workspace, as ``tool_validate_rule`` does.
     Opentide.reload()
+    from opentide.validation.checks.kinds import ValidateCheck
     from opentide.validation.scope import ValidationScope
     from opentide.validation.session import run_validation
 
@@ -210,7 +223,11 @@ def tool_validation_report(
             uuids=frozenset({uuid}) if uuid else None,
             types=frozenset({object_type}) if object_type else None,
         )
-    report = run_validation(scope=scope)
+    report = run_validation(
+        scope=scope,
+        checks=frozenset(ValidateCheck(name) for name in default_check_names(mode)),
+        queries_as_warnings=mode is QueriesMode.warn,
+    )
     payload = report.model_dump_json_ready()
     diagnostics = _annotate(payload, report, ("issues", "warnings"))
     arguments = {
@@ -222,6 +239,9 @@ def tool_validation_report(
         f" --{'type' if key == 'object_type' else key} {shlex.quote(value)}"
         for key, value in arguments.items()
     )
+    flags += "".join(f" {word}" for word in queries_flag(mode))
+    if mode is not QueriesMode.error:
+        arguments["queries"] = mode.value
     again = next_action(
         "validation_report", arguments, command=f"opentide --json validate{flags}", reason=""
     )
@@ -252,8 +272,20 @@ def tool_explain(code: str = "") -> dict[str, Any]:
     return {"found": True, **page.to_dict()}
 
 
-def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[str, Any]:
-    """Tenant query check. The default refuses; ``live=True`` calls the tenant.
+#: The language a platform's ``query`` is in, when the tool is not told one.
+_DEFAULT_QUERY_LANGUAGE = {
+    "sentinel": "kql",
+    "defender_for_endpoint": "kql",
+    "splunk": "spl",
+    "carbon_black_cloud": "lucene",
+    "elastic": "kuery",
+}
+
+
+def tool_validate_query(
+    query: str, platform: str, live: bool = False, language: str = "", stack: str = ""
+) -> dict[str, Any]:
+    """Check *query* offline with the analysis engine; ``live=True`` checks the tenant.
 
     ``live=True`` validates the catalogue rules for ``platform``, not ``query``.
     """
@@ -265,59 +297,224 @@ def tool_validate_query(query: str, platform: str, live: bool = False) -> dict[s
             "message": f"query validation not supported for {platform}",
             "errors": [],
         }
-    if not live:
+    if live:
+        from opentide.cli.context import CliContext
+        from opentide.cli.services.validation import validate_query_platform
+
+        result = validate_query_platform(CliContext(), platform, live=True)
+        # The CLI envelope's failure code; the tool payload keeps its shape.
+        result.pop("_failure_code", None)
+        return result
+    return _offline_query_check(query, platform, language=language, stack=stack)
+
+
+def _offline_query_check(query: str, platform: str, *, language: str, stack: str) -> dict[str, Any]:
+    """``validate_query`` without ``live``: the engine checks the text it is given."""
+    from opentide.analysis import (
+        OFFLINE_QUERY_LANGUAGES,
+        EngineUnavailableError,
+        check_query,
+        engine_versions,
+    )
+    from opentide.cli.ui.diagnostics import engine_reference, explain_command
+
+    live_step = next_action(
+        "validate_query",
+        {"query": query, "platform": platform, "live": True},
+        command=f"opentide --json validate query --platform {platform} --live",
+        reason=(
+            f"check the catalogue's {platform} rules: this contacts the {platform} tenant with "
+            "the configured credentials, so ask a person first"
+        ),
+    )
+    base: dict[str, Any] = {"supported": True, "mode": "offline", "platform": platform}
+    languages = OFFLINE_QUERY_LANGUAGES.get(platform, ())
+    if not languages:
         return {
+            **base,
             "valid": None,
+            "status": "failed",
+            "message": (
+                f"{platform} queries are checked on the tenant only; the engine does not parse "
+                "them. Pass live: true."
+            ),
+            "query_preview": query[:200],
+            "next_actions": [live_step],
+        }
+    if not query.strip():
+        # Most engines accept an empty query; an empty query is not a detection.
+        return {
+            **base,
+            "valid": None,
+            "status": "failed",
+            "message": "query is empty: pass the query text to check",
+        }
+    chosen = language.strip().lower() or _DEFAULT_QUERY_LANGUAGE[platform]
+    if chosen not in languages:
+        return {
+            **base,
+            "valid": None,
+            "status": "failed",
+            "message": (
+                f"{platform} queries are in {', '.join(languages)}, not {chosen!r}; pass one "
+                "of those as language"
+            ),
+        }
+    try:
+        findings = check_query(query, language=chosen, platform=platform, stack=stack or None)
+        versions = engine_versions()
+    except EngineUnavailableError as exc:
+        return {
+            **base,
+            "valid": None,
+            "status": "failed",
+            "message": str(exc),
+            "advice": exc.advice,
+        }
+    diagnostics = []
+    for finding in findings:
+        reference = engine_reference(finding.code)
+        diagnostics.append(
+            {
+                "code": finding.code,
+                "severity": finding.severity,
+                "message": finding.message,
+                "line": finding.line,
+                "column": finding.column,
+                "end_line": finding.end_line,
+                "end_column": finding.end_column,
+                "suggestion": finding.suggestion,
+                "reference": None if reference is None else reference[1],
+                "explain": explain_command(finding.code),
+            }
+        )
+    errors = [item for item in diagnostics if item["severity"] == "error"]
+    warnings = [item for item in diagnostics if item["severity"] == "warning"]
+    payload: dict[str, Any] = {
+        **base,
+        "language": chosen,
+        "valid": not errors,
+        "status": "failed" if errors else "passed",
+        "message": (
+            f"{len(errors)} error(s) in the {chosen} query"
+            if errors
+            else f"The {chosen} query is valid offline"
+            + (f", with {len(warnings)} warning(s)" if warnings else "")
+        ),
+        "errors": errors,
+        "warnings": warnings,
+        "diagnostics": diagnostics,
+        "engine": versions,
+        "query_preview": query[:200],
+    }
+    first = (errors or warnings or [None])[0]
+    actions = []
+    if first is not None:
+        actions.append(
+            next_action(
+                "explain",
+                {"code": first["code"]},
+                command=str(first["explain"]),
+                reason="how to fix it",
+            )
+        )
+    actions.append(live_step)
+    payload["next_actions"] = actions
+    return payload
+
+
+def tool_run_query(
+    query: str,
+    platform: str,
+    tenant: str = "",
+    live: bool = False,
+    rule: str = "",
+    since: str = "24h",
+    limit: int = MAX_QUERY_ROWS,
+    language: str = "",
+    index: str = "",
+) -> dict[str, Any]:
+    """Run a read-only query on *platform*'s tenants; the default refuses without contacting one.
+
+    ``live=True`` sends *query*, or the query of the rule whose UUID is
+    *rule*, to the tenants *tenant* names (comma-separated, or ``all``) and
+    returns the payload of ``opentide --json query``.
+    """
+    from opentide.query.runner import QUERY_PLATFORMS
+
+    tenants = [name.strip() for name in tenant.split(",") if name.strip()]
+    indices = [name.strip() for name in index.split(",") if name.strip()]
+    if platform not in QUERY_PLATFORMS:
+        return {
+            "supported": False,
+            "status": "failed",
+            "platform": platform,
+            "message": f"query execution not supported for {platform}",
+            "choices": sorted(QUERY_PLATFORMS),
+        }
+    if not live:
+        arguments: dict[str, Any] = {"query": query, "platform": platform, "live": True}
+        command = ["opentide", "--json", "query", "--platform", platform]
+        if tenant:
+            arguments["tenant"] = tenant
+            for name in tenants:
+                command += ["--tenant", name]
+        if rule:
+            arguments["rule"] = rule
+            command += ["--rule", rule]
+        # The live call keeps every choice the agent made, so it runs what was asked.
+        if since and since != "24h":
+            arguments["since"] = since
+            command += ["--since", since]
+        if limit != MAX_QUERY_ROWS:
+            arguments["limit"] = limit
+            command += ["--limit", str(limit)]
+        if language:
+            arguments["language"] = language
+            command += ["--language", language]
+        if index:
+            arguments["index"] = index
+            for name in indices:
+                command += ["--index", name]
+        if not rule:
+            command.append(query)
+        return {
             "supported": True,
             "status": "failed",
-            "message": "Query validation checks the tenant. Pass live: true.",
+            "platform": platform,
+            "message": "run_query sends the query to the tenant. Pass live: true.",
             "query_preview": query[:200],
             "next_actions": [
                 next_action(
-                    "validate_query",
-                    {"query": query, "platform": platform, "live": True},
-                    command=f"opentide --json validate query --platform {platform} --live",
+                    "run_query",
+                    arguments,
+                    command=shlex.join(command),
                     reason=(
-                        f"check the catalogue's {platform} rules: this contacts the "
-                        f"{platform} tenant with the configured credentials, so ask a "
-                        "person first"
+                        f"run it on {platform}: this contacts the tenant with the configured "
+                        "credentials, so ask a person first"
                     ),
                 )
             ],
         }
     from opentide.cli.context import CliContext
-    from opentide.cli.services.validation import validate_query_platform
+    from opentide.cli.services.query import query_platform
 
-    result = validate_query_platform(CliContext(), platform, live=True)
-    # The CLI envelope's failure code; the tool payload keeps its shape.
-    result.pop("_failure_code", None)
+    result = query_platform(
+        CliContext(),
+        platform,
+        query=None if rule else query,
+        rule_uuid=rule or None,
+        tenants=tenants,
+        since=since or None,
+        limit=limit,
+        language=language or None,
+        index=indices,
+    )
+    # The CLI envelope's fields; the tool payload keeps its shape.
+    for key in [key for key in result if key.startswith("_")]:
+        result.pop(key)
+    result["supported"] = True
     return result
-
-
-def tool_run_query(query: str, platform: str, tenant: str = "") -> dict[str, Any]:
-    """Not implemented. Never returns a row payload that looks like a real run."""
-    if platform not in QUERY_VALIDATION_PLATFORMS:
-        return {
-            "supported": False,
-            "stub": True,
-            "rows": None,
-            "platform": platform,
-            "tenant": tenant or None,
-            "message": f"query execution not supported for {platform}",
-            "query_preview": query[:200],
-        }
-    return {
-        "supported": True,
-        "stub": True,
-        "rows": None,
-        "platform": platform,
-        "tenant": tenant or None,
-        "message": (
-            "Read-only query execution is not implemented; no query was sent to "
-            f"{platform}. The live path would cap results at {MAX_QUERY_ROWS} rows."
-        ),
-        "query_preview": query[:200],
-    }
 
 
 def _unknown_platform(uuid: str, platform: str, *, dry_run: bool) -> dict[str, Any]:

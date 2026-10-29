@@ -18,6 +18,7 @@ from opentide.generation.vocabulary import (
     parse_vocab_contract,
 )
 from opentide.platforms.enabled import enabled_systems
+from opentide.query.runner import QUERY_PLATFORMS
 from opentide.registry.builder import parse_errors_reported_by_caller
 
 if TYPE_CHECKING:
@@ -74,6 +75,7 @@ def collect_info(
                 "enabled": name in enabled_platforms,
                 "can_deploy": plat.can_deploy,
                 "can_validate": plat.can_validate,
+                "can_query": name in QUERY_PLATFORMS,
             }
         )
     payload: dict[str, Any] = {
@@ -180,6 +182,8 @@ def _summary_table(payload: dict[str, Any]) -> Text:
             caps.append("deploy")
         if plat["can_validate"]:
             caps.append("validate")
+        if plat.get("can_query"):
+            caps.append("query")
         try:
             display_name = platform_label(DetectionPlatform(plat["name"]))
         except ValueError:

@@ -3,7 +3,7 @@
 The mode is resolved once per command run (see ``docs/internal/cli-experience.md``,
 "Output modes") and read through :func:`get_mode`. The first rule that matches wins:
 
-1. ``opentide mcp start`` → ``mcp``
+1. ``opentide mcp start`` or ``opentide lsp start`` → ``mcp`` (stdout is the protocol's)
 2. ``--json`` → ``json``
 3. ``OPENTIDE_OUTPUT`` set to ``json``, ``agent``, ``plain`` or ``human`` → that mode
 4. a coding agent is detected → ``agent``
@@ -37,7 +37,10 @@ class OutputMode(str, Enum):
         return self.value
 
 
-#: ``OPENTIDE_OUTPUT`` values. ``mcp`` is not one: only ``mcp start`` runs in it.
+#: Commands whose stdout carries a JSON-RPC protocol: the MCP and the language server.
+PROTOCOL_COMMANDS = frozenset({("mcp", "start"), ("lsp", "start")})
+
+#: ``OPENTIDE_OUTPUT`` values. ``mcp`` is not one: only the protocol commands run in it.
 OUTPUT_ENV_VALUES = frozenset({"json", "agent", "plain", "human"})
 
 #: Read in this order. ``AI_AGENT`` is the proposed cross-tool standard
@@ -112,7 +115,7 @@ def resolve_mode(
 ) -> OutputMode:
     """Apply the precedence rules above. *command* holds the leading command words."""
     env = os.environ if env is None else env
-    if tuple(command[:2]) == ("mcp", "start"):
+    if tuple(command[:2]) in PROTOCOL_COMMANDS:
         return OutputMode.MCP
     if json_flag:
         return OutputMode.JSON

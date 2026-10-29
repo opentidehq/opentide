@@ -232,7 +232,7 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         assert f"╭─▶ {RULE_FILE}:8:8" in log
         assert "8 │   tlp: clearr" in log
         assert "━━━━━━ not in tlp::1.0" in log
-        assert re.search(r"✗ 1 error in 1 file · 3 objects checked · \d+(\.\d+)?m?s", log)
+        assert re.search(r"✗ 1 error in 1 file · 3 objects checked · 1 query · \d+(\.\d+)?m?s", log)
         assert "error: Validation failed" not in log
         # The next steps a person would run, not the --json form.
         assert "→ opentide validate · check again" in log
@@ -281,7 +281,8 @@ def test_unlinked_objects_are_grouped(tutorial_repo: Path) -> None:
 
     async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
         labels = _labels(app.query_one("#tree", Tree).root)
-        assert labels[-2:] == ["Rules without an objective (1)", "  Sentinel KQL Rule"]
+        # The language server reports the dangling reference before any validate run.
+        assert labels[-2:] == ["Rules without an objective (1)", "  Sentinel KQL Rule  ✗ 1"]
         assert labels[1] == "  Credential Access Objective  0 rules"
 
     _drive(tutorial_repo, script)
@@ -501,7 +502,9 @@ def test_at_100_columns_names_end_in_an_ellipsis_and_nothing_scrolls_sideways(
         # The counts stay whole; the name gives way.
         assert threat.endswith("  1 objective · 1 rule"), threat
         assert objective.endswith("…  1 rule"), objective
-        assert leaf.endswith("…") and " …" not in leaf, leaf
+        # The language server's warning (the name no longer matches the file
+        # name) stays whole too.
+        assert leaf.endswith("…  ! 1") and " …" not in leaf, leaf
         assert LONG_RULE not in leaf
         assert tree.virtual_size.width <= width
         assert not tree.show_horizontal_scrollbar
@@ -823,4 +826,220 @@ def test_the_status_line_and_toast_say_the_counted_outcome() -> None:
     assert status_text(result) == "6 objects valid · 1.2s"
     assert status_text(CommandResult(message="Deployment completed\nmore")) == (
         "Deployment completed"
+    )
+
+
+# -- the language server ----------------------------------------------------
+
+
+def _break_query(repo: Path) -> None:
+    """``| take 1`` → ``| tak 1``: an unknown KQL operator on line 28."""
+    rule = repo / RULE_FILE
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("| take 1", "| tak 1"), encoding="utf-8"
+    )
+
+
+def _styles(renderable: Any, text: str, width: int = 120) -> list[Any]:
+    """The style of each rendered segment that is exactly *text*."""
+    console = Console(width=width, file=io.StringIO(), color_system="truecolor")
+    return [
+        segment.style
+        for segment in console.render(renderable)
+        if segment.text == text and segment.style is not None
+    ]
+
+
+def test_the_language_server_reports_each_object_at_load(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+    catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+    report = catalogue.language_server
+    assert report.unavailable is None
+    rule = catalogue.entries[RULE]
+    [finding] = report.for_path(rule.path)
+    assert (finding.code, finding.severity, finding.line) == ("kql_unknown_operator", "error", 28)
+    assert (finding.column, finding.end_column) == (9, 14)
+    assert finding.field_path == ("configurations", "sentinel", "query")
+    assert finding.help == "did you mean 'take'?"
+    assert finding.source == tui_service.LANGUAGE_SERVER
+    # A rule's `severity: High` is an alert_severity: the engine's bundled
+    # catalog no longer checks it against the threat severity scale.
+    assert report.for_path(catalogue.entries[THREAT].path) == ()
+
+
+def test_without_the_engine_nothing_is_checked_and_the_ui_says_so(
+    tutorial_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide import analysis
+
+    def unavailable() -> Any:
+        raise analysis.EngineUnavailableError("No module named 'opentide._native'")
+
+    monkeypatch.setattr(analysis, "engine", unavailable)
+    catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+    assert catalogue.language_server.findings == {}
+    assert "opentide._native" in (catalogue.language_server.unavailable or "")
+    assert (
+        catalogue.language_server.advice
+        == "reinstall opentide: pip install --force-reinstall opentide"
+    )
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        assert "The opentide analysis engine does not load" in _text(app, "#status")
+        await pilot.press("down", "down")
+        detail = _text(app, "#diagnostics")
+        assert "Language server\nThe opentide analysis engine does not load" in detail
+        assert "╰─ help: reinstall opentide: pip install --force-reinstall opentide" in detail
+        # The file is still shown, coloured as plain YAML.
+        assert "SecurityEvent" in _text(app, "#source")
+
+    _drive(tutorial_repo, script)
+
+
+def test_the_detail_pane_shows_what_the_editor_shows_before_any_validate_run(
+    tutorial_repo: Path,
+) -> None:
+    _break_query(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        assert _labels(app.query_one("#tree", Tree).root)[-1] == "    Sentinel KQL Rule  ✗ 1"
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        detail = _text(app, "#diagnostics")
+        assert "Language server\n" in detail
+        assert "error[kql_unknown_operator]: unknown tabular operator 'tak'" in detail
+        assert f"╭─▶ {RULE_FILE}:28:9\n" in detail
+        assert "help: did you mean 'take'?" in detail
+        assert "Not validated yet" in detail
+        await pilot.press("up")
+        detail = _text(app, "#diagnostics")
+        assert "✓ Nothing to report" in detail
+
+    _drive(tutorial_repo, script)
+
+
+def test_the_source_is_coloured_by_the_engine_and_findings_are_underlined(
+    tutorial_repo: Path,
+) -> None:
+    _break_query(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        source = app.query_one("#source", Static).content
+        # The query inside the rule is KQL: `where` is a keyword, the table a type.
+        [where] = _styles(source, "where")
+        assert where.bold and where.color is not None and where.color.name == "magenta"
+        assert any(style.color.name == "bright_cyan" for style in _styles(source, "SecurityEvent"))
+        # Tide keys are bold, UUIDs yellow.
+        assert all(style.bold for style in _styles(source, "tlp"))
+        assert any(style.color.name == "yellow" for style in _styles(source, RULE))
+        # The finding's span (`tak 1`), as the editor underlines it; the
+        # tokens keep their colours, so the number is still yellow.
+        [tak] = _styles(source, "tak ")
+        assert tak.underline and tak.bold
+        assert any(
+            style.underline and style.color is not None and style.color.name == "yellow"
+            for style in _styles(source, "1")
+        )
+
+    _drive(tutorial_repo, script)
+
+
+def test_a_finding_both_report_is_shown_and_counted_once(tutorial_repo: Path) -> None:
+    _break_tlp(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        before = _text(app, "#diagnostics")
+        assert before.count("error[vocab_unknown]") == 1
+        await pilot.press("v")
+        await _settle(app, pilot)
+        after = _text(app, "#diagnostics")
+        # validate's frame, with its `did you mean`, and nothing left for the
+        # language server to add.
+        assert after.count("error[vocab_unknown]") == 1
+        assert "help: did you mean 'clear'?" in after
+        assert "✓ Nothing to report" in after
+        assert _labels(app.query_one("#tree", Tree).root)[-1].endswith("Sentinel KQL Rule  ✗ 1")
+
+    _drive(tutorial_repo, script)
+
+
+def test_validate_checks_queries_from_the_ui_and_its_query_findings_are_not_doubled(
+    tutorial_repo: Path,
+) -> None:
+    _break_query(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        await pilot.press("v")
+        await _settle(app, pilot)
+        [outcome] = app.outcomes
+        assert outcome.action.command == "opentide validate"
+        assert app.validated
+        [deep] = [item for item in app.diagnostics if item.code == "kql_unknown_operator"]
+        assert deep.source == tui_service.ENGINE
+        assert (deep.line, deep.column, deep.end_column) == (28, 9, 14)
+        detail = _text(app, "#diagnostics")
+        assert detail.count("error[kql_unknown_operator]") == 1
+        assert "No diagnostics from the last validate run" in detail
+        assert _labels(app.query_one("#tree", Tree).root)[-1] == "    Sentinel KQL Rule  ✗ 1"
+        log = await _results(app, pilot)
+        assert "$ opentide validate" in log
+        assert "28 │       | tak 1" in log
+
+    _drive(tutorial_repo, script)
+
+
+def test_the_results_tab_colours_the_query_lines_of_a_frame(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+    outcome = run_action(CliContext(repo=tutorial_repo), tui_service.ACTIONS_BY_NAME["validate"])
+    text = outcome_text(outcome, tutorial_repo)
+    [row] = [line for line in text.split() if "| tak 1" in line.plain]
+    pipe = row.plain.index("|", row.plain.index("│") + 1)
+    styles = [span.style for span in row.spans if span.start <= pipe < span.end]
+    # `|` is a pipe operator: bold magenta, as at a terminal.
+    assert any(
+        style.bold and style.color is not None and style.color.number == 5
+        for style in styles
+        if not isinstance(style, str)
+    ), row.spans
+
+
+def test_engine_issues_keep_their_position_and_source() -> None:
+    issue = {
+        "code": "kql_unknown_operator",
+        "message": "unknown tabular operator 'tak'",
+        "yaml_line": 27,
+        "context": {
+            "source": "engine",
+            "position": {"line": 28, "column": 9, "end_line": 28, "end_column": 14},
+        },
+    }
+    diagnostic = Diagnostic.from_issue(issue)
+    assert (diagnostic.line, diagnostic.column, diagnostic.end_column) == (28, 9, 14)
+    assert diagnostic.source == tui_service.ENGINE
+    spans = {**issue["context"]["position"], "end_line": 29}
+    across = Diagnostic.from_issue({**issue, "context": {"position": spans}})
+    assert (across.column, across.end_column, across.source) == (9, None, tui_service.VALIDATE)
+    # An engine suggestion is prose, never wrapped in `did you mean`.
+    assert (
+        Diagnostic.from_issue({**issue, "code": "vocab_unknown", "suggestion": "x"}).help_text()
+        == "x"
+    )
+
+
+def test_a_language_server_failure_does_not_lose_the_catalogue(
+    tutorial_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide import analysis
+
+    def broken(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("the engine broke")
+
+    monkeypatch.setattr(analysis, "check_file", broken)
+    catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+    assert [entry.uuid for entry in catalogue.of_kind("rule")] == [RULE]
+    assert catalogue.language_server.unavailable == (
+        "The language server failed: RuntimeError: the engine broke"
     )

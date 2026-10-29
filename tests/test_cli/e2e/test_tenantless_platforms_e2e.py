@@ -344,18 +344,23 @@ def test_live_query_validation_stays_unsupported_without_tenants(
 
 
 @pytest.mark.parametrize("platform", LIVE_PLATFORMS)
-def test_bare_query_validation_refuses_without_tenants(
+def test_offline_query_validation_needs_no_tenant(
     invoke_cli, tenantless_repo, engine_imports: list[str], platform: DetectionPlatform
 ) -> None:
+    """The offline check reads no tenant and loads no platform engine (#332)."""
     repo = tenantless_repo([platform.value])
 
     result, output = _run(invoke_cli, repo, True, "validate", "query", "--platform", platform.value)
 
-    assert result.exit_code == 2, output
     payload = parse_cli_json(result)
-    assert payload["ok"] is False
-    assert payload["status"] == "failed"
+    assert payload["mode"] == "offline"
     assert payload["supported"] is True
-    assert "--live" in payload["message"]
     assert "missing_tenants" not in payload
+    if platform is DetectionPlatform.sentinel_one:
+        # S1QL has no offline engine: the tenant check is the only one, and it says so.
+        assert result.exit_code == 2, output
+        assert "--live" in payload["message"]
+    else:
+        assert result.exit_code == 0, output
+        assert payload["status"] in {"passed", "skipped"}
     assert engine_imports == []

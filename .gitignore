@@ -95,3 +95,11 @@ workshop/
 # Agent tooling: per-user settings and harness worktrees stay local
 .claude/settings.local.json
 .claude/worktrees/
+
+# The engine (analysis/): cargo output, and the module an editable install
+# compiles into the package (hatch_build.py).
+analysis/target/
+src/opentide/_native.*.so
+src/opentide/_native.pyd
+src/opentide/_native.*.pyd
+src/opentide/_native.so

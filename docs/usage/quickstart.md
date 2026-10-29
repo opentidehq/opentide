@@ -39,9 +39,9 @@ This runs the full pipeline: docs → exports → vocabs → templates → schem
 ✓ exports · 3 files · 0.0s · .opentide/exports/
 ✓ vocabularies · 0 files · 0.0s
 ✓ templates · 4 files · 1.9s · .opentide/templates/
-✓ schemas · 6 files · 2.6s · .opentide/schemas/
+✓ schemas · 8 files · 2.6s · .opentide/
 ✓ snippets · 1 file · 0.0s · .vscode/
-✓ Generated 21 files in 5.8s · 6 phases
+✓ Generated 23 files in 5.8s · 6 phases
 ```
 
 Each finished phase prints one line on stderr (files written, time, destination); the outcome line is the only line on stdout. This is the output with `--no-color`, in a pipe or in CI; at a terminal the phases draw as a live checklist.

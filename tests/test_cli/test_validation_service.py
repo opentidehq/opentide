@@ -527,19 +527,30 @@ def test_validate_query_platform_surfaces_retired_tenant_proxy() -> None:
     assert "opentide --proxy" in str(result["message"])
 
 
-def test_validate_query_platform_refuses_without_live() -> None:
-    """A bare call names ``--live`` and does not select rules to deploy."""
-    ctx = CliContext(json_output=True)
+def test_validate_query_platform_checks_offline_without_live(tmp_path: Path) -> None:
+    """A bare call runs the analysis engine and does not select rules to deploy."""
+    ctx = CliContext(json_output=True, repo=tmp_path)
 
     def _explode(*args: object, **kwargs: object) -> None:
-        raise AssertionError("a bare validate query must not select rules to deploy")
+        raise AssertionError("an offline validate query must not select rules to deploy")
 
     with patch("opentide.deployment.make_deploy_plan", side_effect=_explode):
         result = validation_service.validate_query_platform(ctx, "sentinel")
-    assert result["status"] == "failed"
+    assert result["mode"] == "offline"
     assert result["supported"] is True
+    assert result["status"] == "skipped"
+    assert result["queries_validated"] == 0
+
+
+def test_validate_query_platform_names_live_for_sentinel_one() -> None:
+    """S1QL has no offline engine: the refusal names --live, as a bare call used to."""
+    result = validation_service.validate_query_platform(
+        CliContext(json_output=True), "sentinel_one"
+    )
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 2
+    assert result["_failure_argument"] == "--live"
     assert "--live" in str(result["message"])
-    assert "mode" not in result
 
 
 def test_validate_query_live_without_tenants_fails_before_loading_a_validator(

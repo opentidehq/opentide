@@ -88,6 +88,10 @@ def environment() -> list[dict[str, str]]:
             "name": "OPENTIDE_PROGRESS",
             "meaning": "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal",
         },
+        {
+            "name": "OPENTIDE_CACHE_DIR",
+            "meaning": "Where opentide caches the language-server catalogs it generates",
+        },
         *(
             {"name": name, "meaning": "Set by a coding agent: selects agent output mode"}
             for name in AGENT_VARIABLES
