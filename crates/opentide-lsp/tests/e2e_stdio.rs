@@ -737,3 +737,102 @@ fn initialize_installs_the_workspace_field_catalog() {
         "{bundled:?}"
     );
 }
+
+/// A fresh directory under the system temp dir, removed on drop.
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("opentide-e2e-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let path = entry.unwrap().path();
+        let target = to.join(path.file_name().unwrap());
+        if path.is_dir() {
+            copy_dir(&path, &target);
+        } else {
+            std::fs::copy(&path, &target).unwrap();
+        }
+    }
+}
+
+fn cli_codes(file: &std::path::Path) -> Vec<String> {
+    let out = Command::new(bin())
+        .args(["analyze", file.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let diagnostics: Vec<Value> = serde_json::from_slice(&out.stdout).unwrap();
+    let mut codes: Vec<String> = diagnostics
+        .iter()
+        .map(|d| d["code"].as_str().unwrap().to_string())
+        .collect();
+    codes.sort();
+    codes
+}
+
+/// One workspace file that is not UTF-8 is left out of the index. It used to
+/// fail `analyze` outright, and leave the stdio server with no index at all,
+/// so every reference to another object was reported as unresolved.
+#[test]
+fn an_unreadable_workspace_file_does_not_break_analysis() {
+    let corpus = repo_root().join("testdata/workspaces/tide_corpus");
+    let rule = "objects/rules/rule-0001-sentinel-kql.yaml";
+    let expected = cli_codes(&corpus.join(rule));
+
+    let scratch = Scratch::new("unreadable");
+    copy_dir(&corpus, &scratch.0);
+    std::fs::write(
+        scratch.0.join("objects/rules/broken.yaml"),
+        [0xff, 0xfe, 0x00],
+    )
+    .unwrap();
+    assert_eq!(cli_codes(&scratch.0.join(rule)), expected);
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "rootUri": format!("file://{}", scratch.0.display()) }),
+    );
+    lsp.notify("initialized", json!({}));
+    let path = scratch.0.join(rule);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let mut published = published_codes(
+        &mut lsp,
+        &format!("file://{}", path.display()),
+        "opentide-yaml",
+        &text,
+    );
+    published.sort();
+    assert_eq!(published, expected);
+}
+
+/// A raw query is analysed on its own: the CLI does not read the directories
+/// around it, so an unreadable YAML there cannot fail it.
+#[test]
+fn a_raw_query_file_ignores_the_yaml_around_it() {
+    let scratch = Scratch::new("raw-query");
+    std::fs::write(scratch.0.join("broken.yaml"), [0xff, 0xfe, 0x00]).unwrap();
+    let dir = scratch.0.join("queries");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("query.kql");
+    std::fs::write(&file, "SecurityEvent | wher EventID == 1").unwrap();
+    assert!(!cli_codes(&file).is_empty());
+}

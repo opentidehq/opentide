@@ -28,11 +28,9 @@ impl Session {
             .map(|(uri, (_, text))| (uri_to_path(uri), text.clone()))
             .collect();
         if let Some(root) = &self.root {
-            if let Ok(extra) = collect_objects(root) {
-                for (p, t) in extra {
-                    if !files.iter().any(|(e, _)| e == &p) {
-                        files.push((p, t));
-                    }
+            for (p, t) in collect_objects(root) {
+                if !files.iter().any(|(e, _)| e == &p) {
+                    files.push((p, t));
                 }
             }
             // Tenants, for the stack version Elastic queries are checked against.
@@ -1181,27 +1179,31 @@ fn position_to_offset(source: &str, position: Position) -> usize {
     source.len()
 }
 
-fn collect_objects(root: &Path) -> Result<Vec<(String, String)>, std::io::Error> {
+/// The workspace's object YAML. A file or directory that cannot be read (not
+/// UTF-8, no permission) is left out; the rest of the index still loads.
+fn collect_objects(root: &Path) -> Vec<(String, String)> {
     let objects = if root.join("objects").is_dir() {
         root.join("objects")
     } else {
         root.to_path_buf()
     };
     let mut out = Vec::new();
-    fn rec(dir: &Path, out: &mut Vec<(String, String)>) -> Result<(), std::io::Error> {
-        for e in std::fs::read_dir(dir)? {
-            let e = e?;
-            let p = e.path();
+    fn rec(dir: &Path, out: &mut Vec<(String, String)>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for p in entries.flatten().map(|e| e.path()) {
             if p.is_dir() {
-                rec(&p, out)?;
+                rec(&p, out);
             } else if matches!(p.extension().and_then(|s| s.to_str()), Some("yaml" | "yml")) {
-                out.push((p.display().to_string(), std::fs::read_to_string(&p)?));
+                if let Ok(text) = std::fs::read_to_string(&p) {
+                    out.push((p.display().to_string(), text));
+                }
             }
         }
-        Ok(())
     }
-    rec(&objects, &mut out)?;
-    Ok(out)
+    rec(&objects, &mut out);
+    out
 }
 
 #[cfg(test)]

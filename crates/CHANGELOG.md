@@ -31,6 +31,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - A block-scalar query with an indentation indicator (`query: |2`) whose later line is indented less than the first and holds a multi-byte character no longer panics.
 - `scripts/sync_opentide_schemas.py --check` reports a reference schema opentide no longer registers, which writing removes.
 - `rootUri` and document URIs are percent-decoded, and a Windows drive (`file:///c%3A/...`) becomes `c:/...`, so a workspace whose path has a space or a drive letter finds its objects and catalogs. Locations the server returns are percent-encoded.
+- `opentide-lsp analyze` on a `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` or `.lucene` file no longer reads the directories around it. Outside a workspace it walked the file's grandparent directory, so one YAML file there that was not UTF-8 failed the command.
+- One unreadable workspace file (not UTF-8, no permission) no longer drops the whole object index. The stdio server reported every reference to another object as `invalid_ref`, and `analyze` on a Tide object failed. Now that file is left out, and the rest of the workspace still resolves.
 
 ### Changed
 
