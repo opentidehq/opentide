@@ -114,3 +114,45 @@ fn leading_bare_word_is_still_a_command() {
         r.diagnostics
     );
 }
+
+/// #121: eval and where expressions.
+#[test]
+fn eval_expressions_parse() {
+    assert_parses(&[
+        "index=a | eval k=a.\"-\".b",
+        "index=a | eval k = \"x\" . b",
+        "index=a | eval s=case(x>1, 1, true(), 0)",
+        "index=a | eval s=if(x, false(), null())",
+        "index=a | eval s=if(x like \"a%\", 1, 0)",
+        "index=a | where x like \"a%\"",
+        "index=a | where like(x, \"a%\") OR x LIKE \"b%\"",
+        "index=a | eval \"a.b\"='c.d'",
+        "index=a | eval {f}=v",
+        "index=a | eval x=mvindex('a{}.b', 0)",
+        "index=a | eval x=a*2, y=-abs(z), w=a%2",
+        "index=a | eval x=Processes.user",
+        "index=a | eval s=case(\n    x>1, 1,\n    true(), 0)",
+        "index=a | eval x=if(!match(a, \"-\") AND isnotnull(b), 1, 0)",
+        "index=a | where isnull(x) AND NOT y!=2",
+        "index=a | where n > $threshold$",
+        "index=a | where NOT [| inputlookup t.csv | fields x]",
+        "index=a | join x [| eval <<FIELD>>=mvdedup('<<FIELD>>')]",
+        "index=a | join x [| eval r<<MATCHSTR>>=lower('<<FIELD>>')]",
+        "index=a | join x [| eval y=\"<<FIELD>>=\".mvjoin('<<FIELD>>', \" | \")]",
+    ]);
+}
+
+#[test]
+fn eval_expression_faults_are_rejected() {
+    assert_rejected(&[
+        "index=a | eval k=a.",
+        "index=a | eval k=.a",
+        "index=a | eval x=a*",
+        "index=a | eval x=*",
+        "index=a | eval {f=v",
+        "index=a | eval x=true(",
+        "index=a | where x like",
+        "index=a | eval \"a.b\"=",
+        "index=a | eval x=!",
+    ]);
+}

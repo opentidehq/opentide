@@ -105,6 +105,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "string",
+            "named": true
           }
         ]
       },
@@ -592,6 +596,11 @@
     }
   },
   {
+    "type": "identifier",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "in_clause",
     "named": true,
     "fields": {
@@ -822,6 +831,10 @@
         },
         {
           "type": "string",
+          "named": true
+        },
+        {
+          "type": "subsearch",
           "named": true
         }
       ]
@@ -1399,6 +1412,10 @@
     }
   },
   {
+    "type": "!",
+    "named": false
+  },
+  {
     "type": "!=",
     "named": false
   },
@@ -1428,6 +1445,10 @@
   },
   {
     "type": "-",
+    "named": false
+  },
+  {
+    "type": ".",
     "named": false
   },
   {
@@ -1796,10 +1817,6 @@
     "named": false
   },
   {
-    "type": "identifier",
-    "named": true
-  },
-  {
     "type": "inputcsv",
     "named": false
   },
@@ -1833,6 +1850,10 @@
   },
   {
     "type": "kvform",
+    "named": false
+  },
+  {
+    "type": "like",
     "named": false
   },
   {

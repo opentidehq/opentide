@@ -456,8 +456,22 @@ module.exports = grammar({
         ),
       ),
 
+    // `x=...`, `"a.b"=...`, `{f}=...` (the value of `f` names the field),
+    // and `<<FIELD>>=...` inside a `foreach` body.
     assignment: ($) =>
-      seq(field("name", $.identifier), "=", field("value", $.expression)),
+      seq(
+        field(
+          "name",
+          choice(
+            $.identifier,
+            $.string,
+            alias($._dynamic_name, $.identifier),
+            alias($._template_name, $.identifier),
+          ),
+        ),
+        "=",
+        field("value", $.expression),
+      ),
 
     rename_item: ($) =>
       seq(field("old", $.identifier), "AS", field("new", $.identifier)),
@@ -497,7 +511,7 @@ module.exports = grammar({
             choice(
               seq("IN", $.value_list),
               seq(
-                choice("==", "!=", "<", ">", "<=", ">=", "=", "LIKE"),
+                choice("==", "!=", "<", ">", "<=", ">=", "=", "LIKE", "like"),
                 $.additive_expression,
               ),
             ),
@@ -510,7 +524,8 @@ module.exports = grammar({
         4,
         seq(
           $.multiplicative_expression,
-          repeat(seq(choice("+", "-"), $.multiplicative_expression)),
+          // `.` concatenates: `a."-".b`.
+          repeat(seq(choice("+", "-", "."), $.multiplicative_expression)),
         ),
       ),
 
@@ -522,7 +537,7 @@ module.exports = grammar({
 
     unary_expression: ($) =>
       choice(
-        seq(choice("NOT", "not", "-", "+"), $.primary_expression),
+        seq(choice("NOT", "not", "!", "-", "+"), $.primary_expression),
         $.primary_expression,
       ),
 
@@ -531,9 +546,12 @@ module.exports = grammar({
         $.function_call,
         $.macro,
         $.identifier,
+        alias($._template_name, $.identifier),
+        alias($._token_name, $.identifier),
         $.string,
         $.number,
         $.boolean,
+        $.subsearch,
         seq("(", $.expression, ")"),
       ),
 
@@ -541,15 +559,27 @@ module.exports = grammar({
       prec(
         10,
         seq(
-          field("name", $.identifier),
+          // `true()` and `false()` are functions; bare `true` is a boolean.
+          field("name", choice($.identifier, alias($.boolean, $.identifier))),
           "(",
           field("arguments", optional(commaSep1($.expression))),
           ")",
         ),
       ),
 
-    // Dots allowed so CIM-prefixed fields (Processes.user) are one token.
-    identifier: (_) => /[A-Za-z_][A-Za-z0-9_:.]*/,
+    // Dots allowed so CIM-prefixed fields (Processes.user) are one token,
+    // but not at the end, so `a."-".b` is a concatenation.
+    identifier: (_) => /[A-Za-z_][A-Za-z0-9_:]*(\.[A-Za-z0-9_:]+)*/,
+
+    // Eval's `{f}=v`: the value of `f` names the field.
+    _dynamic_name: (_) => token(/[A-Za-z0-9_]*\{[A-Za-z_][A-Za-z0-9_.]*\}[A-Za-z0-9_]*/),
+
+    // A `$token$` that Splunk substitutes before the search runs.
+    _token_name: (_) => token(/\$[A-Za-z_][A-Za-z0-9_.:]*\$/),
+
+    // `foreach` templates: `<<FIELD>>`, `r<<MATCHSTR>>`, `<<ITEM>>`.
+    _template_name: (_) =>
+      token(/([A-Za-z0-9_.]|<<[A-Z_0-9]+>>)*<<[A-Z_0-9]+>>([A-Za-z0-9_.]|<<[A-Z_0-9]+>>)*/),
 
     string: (_) =>
       token(

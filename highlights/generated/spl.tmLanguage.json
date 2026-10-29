@@ -34,7 +34,7 @@
     },
     {
       "comment": "capture:operator",
-      "match": "(?i)(?<![A-Za-z0-9_])(?:AND|IN|LIKE|NOT|OR|and|not|or)(?![A-Za-z0-9_])",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:AND|IN|LIKE|NOT|OR|and|like|not|or)(?![A-Za-z0-9_])",
       "name": "keyword.operator.opentide"
     },
     {
