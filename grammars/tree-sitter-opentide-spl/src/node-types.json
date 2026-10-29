@@ -986,10 +986,6 @@
           "named": true
         },
         {
-          "type": "prefix_clause",
-          "named": true
-        },
-        {
           "type": "search_group",
           "named": true
         },
@@ -1237,6 +1233,10 @@
       "types": [
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "prefix_clause",
           "named": true
         },
         {

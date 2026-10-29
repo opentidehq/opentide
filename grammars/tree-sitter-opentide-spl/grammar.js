@@ -131,7 +131,6 @@ module.exports = grammar({
         $.in_clause,
         $.term_clause,
         $.case_clause,
-        $.prefix_clause,
         $.macro,
         $.subsearch,
         $.field_value,
@@ -150,18 +149,20 @@ module.exports = grammar({
       seq(field("field", $._search_field), "IN", $.value_list),
 
     // TERM, CASE and PREFIX take their contents raw up to the closing `)`:
-    // `TERM(EventID=4688)`, `TERM(user=)`, `TERM(a/*)`.
-    term_clause: ($) =>
-      seq("TERM", "(", optional(field("value", $.term_text)), ")"),
+    // `TERM(EventID=4688)`, `TERM(user=)`, `TERM(a/*)`. Splunk also accepts
+    // the directive left open (`TERM(EventID=4688` at the end of the search
+    // or before the next pipe), so the `)` is optional and the contents stop
+    // at whitespace.
+    term_clause: ($) => directive("TERM", $),
 
-    case_clause: ($) =>
-      seq("CASE", "(", optional(field("value", $.term_text)), ")"),
+    case_clause: ($) => directive("CASE", $),
 
-    // tstats `PREFIX(src=)`.
-    prefix_clause: ($) =>
-      seq("PREFIX", "(", optional(field("value", $.term_text)), ")"),
+    // tstats `PREFIX(src=)`, in a `by` clause or an aggregate. Splunk rejects
+    // it as a `where` term, so it is not a search term.
+    prefix_clause: ($) => directive("PREFIX", $),
 
-    term_text: (_) => token(prec(-1, /[^)\s][^)]*/)),
+    // A run of non-whitespace up to `)`; a quoted part may hold anything.
+    term_text: (_) => token(/([^)\s"]|"([^"\\]|\\.)*")+/),
 
     value_list: ($) => seq("(", sepBy1($._search_value), ")"),
 
@@ -277,7 +278,7 @@ module.exports = grammar({
         optional(
           seq(
             choice("by", "BY"),
-            sepBy1($.identifier),
+            sepBy1(choice($.identifier, $.prefix_clause)),
             optional(seq("span", "=", field("span", choice($.identifier, $.number, $.search_word)))),
           ),
         ),
@@ -577,6 +578,13 @@ module.exports = grammar({
     search_word: (_) => token(choice(/[^\s"()\[\]|=<>!,`*]+/, /[A-Za-z_]+\(\)/)),
   },
 });
+
+/** `TERM(...)`, `CASE(...)`, `PREFIX(...)`: raw contents, `)` optional. */
+function directive(name, $) {
+  return prec.right(
+    seq(name, "(", optional(field("value", $.term_text)), optional(")")),
+  );
+}
 
 function sepBy1(rule) {
   return seq(rule, repeat(seq(optional(","), rule)));
