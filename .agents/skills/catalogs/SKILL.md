@@ -41,6 +41,14 @@ Unknown operators, functions, tables, and commands are diagnostics (`kql_unknown
 
 Slow-query warnings (`kql_where_not_first`, `kql_unscoped_search`, `spl_wildcard`, `spl_leading_not`, and the rest of `opentide_core::codes`) come from the `perf` modules. They are warnings about public query shapes, not style nits. Do not add a warning that contradicts `docs/kql/` or `docs/spl/`.
 
+### SPL CIM data models
+
+`catalogs/spl/datamodels.toml` is generated: `python scripts/sync_cim_datamodels.py --source <splunk/pytest-splunk-addon checkout>` (`--check` compares). It reads `pytest_splunk_addon/data_models/*.json` (Apache-2.0, every CIM model, dataset lineage, field name and expected value) and adds what those files leave out, each with its reason in the script: the base-event fields, the Enterprise Security asset and identity fields on every root dataset, CIM 4.x fields CIM 5 dropped, a few object names and datasets, and the models Enterprise Security adds (`Risk`, `Threat_Intelligence`, ...) as `complete = false`. Never copy `Splunk_SA_CIM` files: it is proprietary. Field names are facts; keep the citations to the CIM manual. Do not hand-edit the TOML.
+
+A row is one dataset: `name` (`Model.Dataset`, the object name `datamodel=` takes), `prefix` (the root dataset, `Processes`), `lineage` (`All_Changes.Account_Management`; a field a child defines is `<lineage>.<field>`), `fields` (the ones the dataset defines; children inherit), `values` (completion only), `complete`. The checks (`crates/opentide-spl/src/cim.rs`) follow precision over recall, because sites add fields and datasets to their CIM models: `spl_unknown_datamodel` and `spl_unknown_datamodel_field` are errors only for a name the catalog lacks **and** that is a near miss (one edit up to five characters, two beyond, a swapped pair counting as one) of one a `complete` model has. Anything else unknown is silent. Expected values are never checked: real add-ons emit values CIM does not list (`reply_code=NXDOMAIN`). A change to the generator or the rules runs `splunk/security_content`'s detections through the engine (see `docs/spl/cim-fields.md`): every error must be a real bug in the detection.
+
+`spl_dataset_not_declared` (`crates/opentide-spl/src/declared.rs`) reads `opentide_core::datasets::current()` for platform `splunk`: `index=`, `sourcetype=` (also `::` and `IN (...)`) in the base search and a `tstats` `where`, and macro calls in the base search before the first pipe. It warns only on `Declaration::Undeclared`, so a workspace that declares no name of a kind is never checked for it. `source=` has no declared kind and is not checked.
+
 ## Elastic catalogs
 
 | Path | Contents |

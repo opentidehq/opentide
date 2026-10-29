@@ -548,7 +548,9 @@ def spl_reference(splunk: Splunk, queries: list[Query]) -> dict[str, list[str]]:
 
     models: dict[str, dict[str, list[str]]] = {}
     for dm in load_toml("catalogs/spl/datamodels.toml")["datamodels"]:
-        models.setdefault(dm["model"], {})[dm["prefix"]] = dm.get("fields", [])
+        # One row per dataset; a root's stand-in carries its children's fields too.
+        fields = models.setdefault(dm["model"], {}).setdefault(dm["prefix"], [])
+        fields += [f for f in dm.get("fields", []) if f not in fields]
     for model, datasets in models.items():
         splunk.define_datamodel(model, datasets)
 
