@@ -794,12 +794,26 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
     let configurations = serde_yaml::from_str::<TideObject>(source)
         .ok()
         .and_then(|object| object.configurations);
-    analyze_injections(
+    let mut out = analyze_injections(
         source,
         configurations.as_ref(),
         elastic_tenants,
         extract_injections(source),
-    )
+    );
+    // The datasets the Elastic block reads (`index`, `threat.index`,
+    // `data_view_id`) are its query's, so `opentide validate` reports them as
+    // the editor does.
+    if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic")) {
+        if let Some(query) = out
+            .iter_mut()
+            .find(|q| q.query.field_path == ["configurations", "elastic", "query"])
+        {
+            query
+                .diagnostics
+                .extend(elastic::dataset_declarations(source, block));
+        }
+    }
+    out
 }
 
 fn analyze_injections(

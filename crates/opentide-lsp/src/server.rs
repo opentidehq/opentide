@@ -795,11 +795,12 @@ fn handle_code_action(session: &Session, params: &Value) -> Value {
 }
 
 /// The dataset a "declare it in visibility.toml" diagnostic names: its
-/// platform, kind and name (the first quoted word of the message).
+/// platform, kind and name (quoted in the message: `'X'` for KQL, `` `X` ``
+/// for SPL and Elastic).
 fn undeclared_dataset(
     d: &opentide_core::Diagnostic,
 ) -> Option<(&'static str, DatasetKind, String)> {
-    let name = d.message.split('\'').nth(1)?.to_string();
+    let name = d.message.split('\'').nth(1).unwrap_or_default().to_string();
     let in_defender = d
         .field_path
         .as_ref()
@@ -818,8 +819,31 @@ fn undeclared_dataset(
         codes::KQL_UNKNOWN_TABLE if d.severity == opentide_core::Severity::Warning => {
             Some(("sentinel", DatasetKind::Tables, name))
         }
+        // `index `wineventlog` is not declared ...`, `macro `sysmon` ...`
+        codes::SPL_DATASET_NOT_DECLARED => {
+            let kind = match d.message.split(' ').next()? {
+                "index" => DatasetKind::Indexes,
+                "sourcetype" => DatasetKind::Sourcetypes,
+                "macro" => DatasetKind::Macros,
+                _ => return None,
+            };
+            Some(("splunk", kind, backticked(&d.message)?))
+        }
+        // `index pattern `logs-*` ...`, `data view `x` ...`
+        codes::ELASTIC_DATASET_NOT_DECLARED => {
+            let kind = if d.message.starts_with("data view") {
+                DatasetKind::DataViews
+            } else {
+                DatasetKind::Indices
+            };
+            Some(("elastic", kind, backticked(&d.message)?))
+        }
         _ => None,
     }
+}
+
+fn backticked(message: &str) -> Option<String> {
+    Some(message.split('`').nth(1)?.to_string())
 }
 
 fn handle_folding(session: &Session, params: &Value) -> Value {

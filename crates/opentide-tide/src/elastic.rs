@@ -755,7 +755,7 @@ fn item_range(source: &str, path: &[&str], item: &str) -> Range {
 /// `elastic_dataset_not_declared` for the block's `index`, `threat.index`,
 /// and `data_view_id`, against the workspace's declared Elastic datasets
 /// (opt-in per kind: nothing when it declares no index, or no data view).
-fn dataset_declarations(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+pub(crate) fn dataset_declarations(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let threat_index = block.get("threat").and_then(|t| t.get("index"));
     for (path, list) in [

@@ -4,7 +4,7 @@
 
 use opentide_analysis::{
     AnalyzeRequest, Catalog, Diagnostic, LanguageId, MemoryWorkspace, QueryRequest, Severity,
-    analyze, analyze_query, codes, install_catalog,
+    analyze, analyze_queries, analyze_query, codes, install_catalog,
 };
 
 const DATASETS: &str = r#"{"opentide": "0.20.0", "platforms": {
@@ -126,6 +126,19 @@ fn declared_index_patterns_and_data_views() {
     let (_, found) =
         tide("    type: query\n    index: [custom-ecs-*]\n    query: source.ip:10.*\n");
     assert!(mismatch(&found), "{found:?}");
+
+    // The query report opentide validate reads has the block's warnings too.
+    let (source, _) = tide(rule);
+    let reports = analyze_queries(&MemoryWorkspace::default(), &source);
+    let elastic = reports
+        .iter()
+        .find(|r| r.field_path == ["configurations", "elastic", "query"])
+        .expect("elastic query");
+    assert_eq!(
+        codes_of(&elastic.diagnostics, undeclared).len(),
+        1,
+        "{reports:?}"
+    );
 
     install(None);
 }

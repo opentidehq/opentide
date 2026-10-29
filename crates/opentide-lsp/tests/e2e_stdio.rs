@@ -892,3 +892,49 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
     assert_eq!(edits[0]["newText"], ", \"NTAIpDetails\"");
     assert_eq!(edits[0]["range"]["start"]["line"], 4);
 }
+
+#[test]
+fn an_undeclared_splunk_index_has_a_code_action_that_adds_a_log_source() {
+    let scratch = Scratch::new("declare-index");
+    let root = &scratch.0;
+    let catalogs = root.join(".opentide/lsp/catalogs/generated");
+    std::fs::create_dir_all(&catalogs).unwrap();
+    std::fs::write(
+        catalogs.join("datasets.json"),
+        r#"{"platforms": {"splunk": {"indexes": ["wineventlog"]}}}"#,
+    )
+    .unwrap();
+    let uri = format!("file://{}/hunt.spl", root.display());
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+    );
+    let codes = published_codes(&mut lsp, &uri, "spl", "index=sysmon EventCode=1");
+    assert!(
+        codes.contains(&"spl_dataset_not_declared".to_string()),
+        "{codes:?}"
+    );
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 12 } }
+        }),
+    );
+    let action = actions["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["title"] == "Add a [[logsources]] entry declaring 'sysmon' to visibility.toml")
+        .unwrap_or_else(|| panic!("{actions}"))
+        .clone();
+    // No visibility.toml yet: the edit creates it.
+    let changes = action["edit"]["documentChanges"].as_array().unwrap();
+    assert_eq!(changes[0]["kind"], "create");
+    let text = changes[1]["edits"][0]["newText"].as_str().unwrap();
+    assert!(
+        text.contains("system = \"splunk\"\nindexes = [\"sysmon\"]"),
+        "{text}"
+    );
+}
