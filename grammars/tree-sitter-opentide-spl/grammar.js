@@ -445,11 +445,14 @@ module.exports = grammar({
     unknown_command: ($) =>
       seq(field("name", $.identifier), optional($.argument_list)),
 
+    // `AND`, `OR` and `NOT` are reserved, so a command that takes a search
+    // (`metasearch index=a OR index=b`) gets them as booleans here.
     argument_list: ($) =>
       repeat1(
         choice(
           $.macro,
           $.subsearch,
+          alias(choice("AND", "OR", "NOT"), $.search_boolean),
           $.field_value,
           $.string,
           $.identifier,
