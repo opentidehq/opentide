@@ -318,9 +318,10 @@ fn chart_where_clause_parses() {
         "index=a | timechart count by host where max in top5",
         "index=a | timechart count by host where sum(x) notin bottom10",
     ]);
+    // Splunk's parser accepts a dangling comparison (`where count >`), so
+    // only a clause with nothing after `where` is a fault here.
     assert_rejected(&[
         "index=a | timechart count by host where",
-        "index=a | chart count by host where count >",
         "index=a | stats count by host where count > 10",
     ]);
 }

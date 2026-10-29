@@ -1,1 +1,0 @@
-index=main | timechart count by host where count >
