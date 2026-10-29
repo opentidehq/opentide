@@ -6,6 +6,11 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Fixed
+
+- An SPL syntax error points at the token the parser could not place, not the whole query: `spl_parse_error` is reported on the first bad token of each error region (``SPL syntax error: unexpected `.` ``), on the `(` or `[` that is never closed, or where a token is missing, at most five per query ([#119](https://github.com/opentidehq/language-server/issues/119)). Every SPL error ran from the first line to the end of the query.
+- `spl_unknown_command` is reported only for a name in command position (after a `|`, first in the query or a subsearch) outside an error region. A word that error recovery stranded, such as `dest` in `| lookup t-x.csv key AS dest OUTPUT c AS m`, was reported as an unknown command ([#119](https://github.com/opentidehq/language-server/issues/119)).
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.
