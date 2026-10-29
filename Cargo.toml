@@ -18,7 +18,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.85"
 license = "EUPL-1.2"
@@ -27,18 +27,18 @@ homepage = "https://opentide.org"
 authors = ["opentide"]
 
 [workspace.dependencies]
-opentide-core = { path = "crates/opentide-core", version = "=0.5.0" }
-opentide-highlight = { path = "crates/opentide-highlight", version = "=0.5.0" }
-opentide-syntax = { path = "crates/opentide-syntax", version = "=0.5.0" }
-opentide-kql = { path = "crates/opentide-kql", version = "=0.5.0" }
-opentide-spl = { path = "crates/opentide-spl", version = "=0.5.0" }
-opentide-esql = { path = "crates/opentide-esql", version = "=0.5.0" }
-opentide-eql = { path = "crates/opentide-eql", version = "=0.5.0" }
-opentide-kuery = { path = "crates/opentide-kuery", version = "=0.5.0" }
-opentide-lucene = { path = "crates/opentide-lucene", version = "=0.5.0" }
-opentide-ecs = { path = "crates/opentide-ecs", version = "=0.5.0" }
-opentide-tide = { path = "crates/opentide-tide", version = "=0.5.0" }
-opentide-analysis = { path = "crates/opentide-analysis", version = "=0.5.0" }
+opentide-core = { path = "crates/opentide-core", version = "=0.6.0" }
+opentide-highlight = { path = "crates/opentide-highlight", version = "=0.6.0" }
+opentide-syntax = { path = "crates/opentide-syntax", version = "=0.6.0" }
+opentide-kql = { path = "crates/opentide-kql", version = "=0.6.0" }
+opentide-spl = { path = "crates/opentide-spl", version = "=0.6.0" }
+opentide-esql = { path = "crates/opentide-esql", version = "=0.6.0" }
+opentide-eql = { path = "crates/opentide-eql", version = "=0.6.0" }
+opentide-kuery = { path = "crates/opentide-kuery", version = "=0.6.0" }
+opentide-lucene = { path = "crates/opentide-lucene", version = "=0.6.0" }
+opentide-ecs = { path = "crates/opentide-ecs", version = "=0.6.0" }
+opentide-tide = { path = "crates/opentide-tide", version = "=0.6.0" }
+opentide-analysis = { path = "crates/opentide-analysis", version = "=0.6.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
