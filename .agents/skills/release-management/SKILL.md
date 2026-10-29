@@ -38,6 +38,15 @@ Never tag a feature branch. Trunk is `development`.
 
 A GitHub Release whose `--target` is not the tagged commit is a failed release. Do not retag; fix the target and publish from the correct tag.
 
+## The engine is part of the wheels
+
+opentide compiles its analysis engine (`analysis/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64) and an sdist that carries `analysis/`, and refuses to publish when a platform's wheel is missing.
+
+| Before tagging | Check |
+|----------------|-------|
+| `analysis/Cargo.toml` takes `opentide-analysis` / `opentide-lsp` (the language-server crates) from git | Release the language server to crates.io first, then pin both to `"=<version>"`. `uv run python scripts/build/check_engine_pin.py --release` must pass, or the publish fails before building |
+| The engine's bundled catalog | `scripts/build/check_engine_catalog.py` passes (CI) |
+
 ## Patch vs minor
 
 The package is pre-1.0, so the minor number carries breaking and behaviour changes. Cut a **minor** (`0.x+1.0`) when any shipped change does one of these:

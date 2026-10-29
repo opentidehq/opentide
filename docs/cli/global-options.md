@@ -102,6 +102,7 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_VALIDATE_WORKERS` | Most threads `validate` uses: a number, or `auto` |
 | `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
 | `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar) |
+| `OPENTIDE_CACHE_DIR` | Where opentide caches what it generates for the language server (`lsp-catalogs/`); default: the user cache directory |
 | `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
 
 ## Environment propagation

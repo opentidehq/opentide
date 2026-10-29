@@ -35,7 +35,7 @@ from typing import Any, TextIO
 from urllib.parse import urlencode, urlsplit
 
 from opentide.cli.ui.contract import INTERNAL, INTERRUPTED_EXIT_CODE, SCHEMA_VERSION, Failure
-from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
+from opentide.cli.ui.mode import PROTOCOL_COMMANDS, OutputMode, elapsed_ms, get_mode, json_indent
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -503,7 +503,7 @@ def _crash_mode(options: Sequence[str], words: Sequence[str]) -> OutputMode:
     has run; a crash before that (importing the root app) must still leave
     the JSON-RPC stdout alone, whatever ``--json`` or ``OPENTIDE_OUTPUT`` say.
     """
-    if tuple(words[:2]) == ("mcp", "start"):
+    if tuple(words[:2]) in PROTOCOL_COMMANDS:
         return OutputMode.MCP
     mode = get_mode()
     if "--json" in options and mode is not OutputMode.MCP:

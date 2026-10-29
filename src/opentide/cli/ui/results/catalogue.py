@@ -10,6 +10,8 @@ from opentide.cli.ui.results.base import (
     CommandDocument,
     Counts,
     DiagnosticFields,
+    EngineDiagnosticModel,
+    EngineVersions,
     ResultModel,
     ValidationReportModel,
 )
@@ -45,6 +47,7 @@ class ValidateSummary(ResultModel):
     # From validate --fix (#646), declared ahead so either merge order stays green.
     fixable: int = Field(0, description="Findings a safe fix resolves")
     fixed: int = Field(0, description="With --fix: values replaced")
+    queries: int | None = Field(None, description="Queries checked (absent with --queries off)")
 
 
 class ValidateResult(CommandDocument):
@@ -67,11 +70,27 @@ class ValidateResult(CommandDocument):
     summary: ValidateSummary
 
 
+class QueryChecked(ResultModel):
+    """One query the offline check read."""
+
+    path: str = Field(description="Workspace-relative path of the rule file or query file")
+    platform: str | None = Field(
+        description="The configurations block the query is in; null in a hunt or a query file"
+    )
+    language: Literal["kql", "spl", "esql", "eql", "kuery", "lucene"]
+    field_path: list[str] = Field(description="YAML path of the query; empty for a query file")
+    line: int = Field(description="1-based line where the query starts")
+    column: int
+    errors: int = Field(description="Errors the engine reports: the platform rejects the query")
+
+
 class QueryValidationResult(CommandDocument):
-    """``opentide validate query``: one platform's queries checked on its tenants."""
+    """``opentide validate query``: rule queries checked offline, or on one platform's tenants."""
 
     platform: str | None = None
-    mode: Literal["live"] | None = None
+    mode: Literal["live", "offline"] | None = Field(
+        None, description="offline: the analysis engine; live: the tenants"
+    )
     supported: bool | None = Field(None, description="Whether the platform has query validation")
     valid: None = Field(None, description="null when the platform has no query validation")
     platform_enabled: bool | None = None
@@ -92,6 +111,74 @@ class QueryValidationResult(CommandDocument):
         default_factory=dict, description="Platform configuration files with no tenant"
     )
     advice: str | None = None
+    # Offline (the analysis engine).
+    platforms: list[str] = Field(
+        default_factory=list, description="Offline: the platforms whose queries were checked"
+    )
+    queries: list[QueryChecked] = Field(
+        default_factory=list, description="Offline: every query checked, with its counts"
+    )
+    diagnostics: list[EngineDiagnosticModel] = Field(
+        default_factory=list, description="Offline: what the engine found, in the rule files"
+    )
+    engine: EngineVersions | None = Field(None, description="Offline: the engine that ran")
+
+
+# --------------------------------------------------------------------------
+# query
+# --------------------------------------------------------------------------
+
+
+class QueryColumnModel(ResultModel):
+    name: str
+    type: str | None = Field(None, description="The platform's type name, when it reports one")
+
+
+class QueryWindow(ResultModel):
+    from_: str = Field(alias="from", description="Start of the window, UTC ISO-8601")
+    to: str = Field(description="End of the window, UTC ISO-8601")
+
+
+class QueryTenantResult(ResultModel):
+    """One tenant's outcome for one query."""
+
+    tenant: str
+    status: Literal["ok", "failed"]
+    label: str | None = Field(None, description="Which of a rule's queries this is")
+    columns: list[QueryColumnModel] = Field(default_factory=list)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    row_count: int | None = None
+    truncated: bool | None = Field(None, description="More rows matched than --limit let through")
+    partial: bool | None = Field(None, description="The platform stopped early")
+    language: str | None = None
+    sent: str | None = Field(None, description="The query as sent, when it differs")
+    vendor_query_id: str | None = None
+    error: str | None = Field(None, description="Why the tenant returned no rows")
+    detail: str | None = Field(None, description="The platform's own message")
+    warnings: list[str] = Field(default_factory=list)
+    elapsed_ms: int
+
+
+class QueryRuleRef(ResultModel):
+    uuid: str
+    name: str
+    queries: list[str] = Field(description="The queries the rule sends to the platform")
+
+
+class QueryCommandResult(CommandDocument):
+    """``opentide query``: a read-only query's rows from each selected tenant."""
+
+    platform: str | None = None
+    source: Literal["query", "rule"] | None = None
+    query: str | None = None
+    rule: QueryRuleRef | None = None
+    window: QueryWindow | None = None
+    limit: int | None = None
+    tenants: list[str] = Field(default_factory=list, description="The tenants queried")
+    results: list[QueryTenantResult] = Field(default_factory=list)
+    row_count: int | None = None
+    detail: str | None = None
+    choices: list[str] = Field(default_factory=list, description="Valid values of the flag")
 
 
 # --------------------------------------------------------------------------
@@ -132,7 +219,8 @@ class LintResult(CommandDocument):
     findings: list[LintFinding] = Field(default_factory=list)
     count: int | None = None
     fixed: int | None = None
-    summary: LintSummary
+    summary: LintSummary | None = None
+    advice: str | None = Field(None, description="How to fix a failure that stopped the run")
 
 
 # --------------------------------------------------------------------------
@@ -145,6 +233,7 @@ class PlatformInfo(ResultModel):
     enabled: bool
     can_deploy: bool
     can_validate: bool
+    can_query: bool = Field(False, description="Whether opentide query runs on the platform")
 
 
 class TechniqueCoverage(ResultModel):

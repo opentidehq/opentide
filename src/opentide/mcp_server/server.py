@@ -16,6 +16,7 @@ from typing import TextIO
 from mcp.server.mcpserver import MCPServer
 
 import opentide
+from opentide.analysis import OFFLINE_QUERY_LANGUAGES
 from opentide.mcp_server import resources as res
 from opentide.mcp_server.constants import QUERY_VALIDATION_PLATFORMS
 from opentide.mcp_server.tools import (
@@ -53,13 +54,14 @@ Each issue has code, severity, message, object_uuid, path, line and column (1-ba
 help, and fix ({{safe, edits}}: each edit replaces the text from (line, column) up \
 to (end_line, end_column) with replacement). Apply safe edits as they are: they \
 only respell the same word; check the others against help. explain(code) says what \
-a code means. Repeat until ok is true.
+a code means. Repeat until ok is true. While drafting a query, validate_query \
+checks it offline in its platform's language, with no tenant.
 4. Preview. deploy_rule with dry_run true shows the deployment; nothing is sent.
 
 People review and merge changes and run real deployments. Call deploy_rule with \
 dry_run false only when a person asks for it. validate_query with live true \
-contacts the tenant with the configured credentials: ask first. run_query is not \
-implemented and never returns rows.
+contacts the tenant with the configured credentials: ask first. run_query with live \
+true runs a read-only query on a tenant and returns its rows: ask first as well.
 
 Results may carry next_actions: [{{tool, arguments, command, reason}}], the next \
 call to make (command is the same step as an opentide command line). Read the \
@@ -138,12 +140,15 @@ def validation_report(
     file: str = "",
     uuid: str = "",
     object_type: str = "",
+    queries: str = "error",
 ) -> dict:
     """Validate objects and return every issue with its position and fix. Call after each edit.
 
     Narrow with file (repository-relative or absolute path; a bare file name
     matches every object file of that name), uuid, or object_type (rule |
-    threat | objective). No argument validates the whole catalogue.
+    threat | objective). No argument validates the whole catalogue. Every
+    rule query is checked offline: queries is error (a query the platform
+    would reject is an issue), warn (a warning) or off (not checked).
     Returns {ok, issues, warnings, stats, next_actions}. Each issue: code,
     severity, message, object_uuid, field_path, path, line, column, end_column
     (1-based Unicode code points; end_column exclusive), help, fix ({safe,
@@ -156,6 +161,7 @@ def validation_report(
         file=file or None,
         uuid=uuid or None,
         object_type=object_type or None,
+        queries=queries,
     )
 
 
@@ -172,29 +178,63 @@ def explain(code: str = "") -> dict:
 
 #: The platform list comes from the constant the tool checks, so the two cannot disagree.
 VALIDATE_QUERY_DESCRIPTION = f"""\
-Check the catalogue's rules for a platform against the tenant (live true only).
+Check one query offline with the analysis engine, or the catalogue's rules on the tenant.
 
-live false refuses without a check: {{valid: null, supported: true, status:
-"failed"}}. live true contacts the tenant with the configured credentials and
-validates the catalogue rules for platform, not query; ask a person first.
+live false (default) parses query in its platform's language, with the
+platform's profile (Defender tables for defender_for_endpoint, Carbon Black
+Lucene for carbon_black_cloud), and returns {{valid, status, language,
+errors, warnings, diagnostics}}; positions are in the query (1-based, code
+points). Elastic takes language: esql, eql, kuery (default) or lucene, and
+stack (such as "9.5") for ES|QL. Offline: {", ".join(sorted(OFFLINE_QUERY_LANGUAGES))}.
+live true contacts the tenant with the configured credentials and validates
+the catalogue rules for platform, not query; ask a person first.
 Platforms: {", ".join(sorted(QUERY_VALIDATION_PLATFORMS))}; others return
 supported false.\
 """
 
 
 @mcp.tool(description=VALIDATE_QUERY_DESCRIPTION)
-def validate_query(query: str, platform: str, live: bool = False) -> dict:
+def validate_query(
+    query: str, platform: str, live: bool = False, language: str = "", stack: str = ""
+) -> dict:
     """See :data:`VALIDATE_QUERY_DESCRIPTION`, the description agents read."""
-    return tool_validate_query(query, platform, live=live)
+    return tool_validate_query(query, platform, live=live, language=language, stack=stack)
 
 
 @mcp.tool()
-def run_query(query: str, platform: str, tenant: str = "") -> dict:
-    """Not implemented: returns stub true and rows null, and never contacts a tenant.
+def run_query(
+    query: str,
+    platform: str,
+    tenant: str = "",
+    live: bool = False,
+    rule: str = "",
+    since: str = "24h",
+    limit: int = 100,
+    language: str = "",
+    index: str = "",
+) -> dict:
+    """Run a read-only query on a platform's tenants and return the rows (live true only).
 
-    Use validate_query with live true for the tenant check.
+    live false refuses without contacting a tenant. live true sends query, or
+    the query of the rule whose UUID is rule, to the tenant named by tenant
+    (comma-separated names, "all", or empty for the only one) over the last
+    since (15m, 24h, 7d) and returns {status, results: [{tenant, status,
+    columns, rows, row_count, truncated, warnings, error}], row_count}, at
+    most limit rows per tenant. It uses the configured credentials: ask a
+    person first. language is Elastic's: esql, eql, lucene or kuery. index
+    names Elastic index patterns (comma-separated) or a CrowdStrike repository.
     """
-    return tool_run_query(query, platform, tenant=tenant)
+    return tool_run_query(
+        query,
+        platform,
+        tenant=tenant,
+        live=live,
+        rule=rule,
+        since=since,
+        limit=limit,
+        language=language,
+        index=index,
+    )
 
 
 @mcp.tool()

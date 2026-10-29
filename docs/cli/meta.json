@@ -15,6 +15,7 @@
     "migrate",
     "generate",
     "validate",
+    "query",
     "lint",
     "rules",
     "deploy",
@@ -22,6 +23,7 @@
     "info",
     "tui",
     "new",
-    "doctor"
+    "doctor",
+    "lsp"
   ]
 }

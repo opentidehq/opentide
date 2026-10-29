@@ -8,6 +8,7 @@ warning must not fail ``--strict``, which the commit hook and generated CI run.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -80,7 +81,7 @@ def test_human_output_names_the_disabled_platform(invoke_cli) -> None:
     assert "warning[platform_not_enabled]: this block will not deploy while splunk" in output
     assert "rule-0003-splunk-spl.yaml:23:3" in output
     assert "opentide setup platforms --splunk" in output
-    assert " valid · 1 warning · " in output
+    assert re.search(r" valid · \d+ quer(y|ies) · 1 warning · ", output), output
     # The frame is the warning; it is not printed a second time as a warning line.
     assert "warning: " not in output
 

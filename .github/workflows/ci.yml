@@ -36,6 +36,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
+
       - name: Install dependencies
         run: uv sync --group dev
 
@@ -47,6 +57,22 @@ jobs:
 
       - name: Ty type check
         run: uv run ty check src/opentide --output-format github
+
+      - name: Engine bindings (rustfmt, clippy, cargo test)
+        run: |
+          rustup component add rustfmt clippy
+          cargo fmt --manifest-path analysis/Cargo.toml -- --check
+          cargo clippy --manifest-path analysis/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path analysis/Cargo.toml
+
+      - name: The engine crates come from one source
+        run: uv run python scripts/build/check_engine_pin.py
+
+      # The engine ships a Tide catalog for editors that run opentide-lsp on
+      # its own; a model or vocabulary change makes it stale until
+      # language-server regenerates it and this pins that engine.
+      - name: The engine's bundled catalogs match the models
+        run: uv run python scripts/build/check_engine_catalog.py
 
       - name: Build sdist and wheel
         run: uv build
@@ -145,6 +171,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
+
       - name: Install dependencies
         run: uv sync --group dev
 
@@ -242,6 +278,16 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
+
       - name: Install dependencies
         run: uv sync --group dev
 
@@ -292,6 +338,16 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
+
       - name: Install dependencies
         run: uv sync --group dev
 
@@ -322,6 +378,16 @@ jobs:
         uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: "3.14"
+
+      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
+      # The runner's rustup provides the toolchain; the cache keeps the
+      # compiled engine crates between runs.
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: analysis -> target
 
       - name: Install dependencies
         run: uv sync --group dev

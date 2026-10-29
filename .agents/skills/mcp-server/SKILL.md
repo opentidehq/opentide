@@ -30,8 +30,8 @@ one install hint before any JSON-RPC is written.
 - **No filesystem paths as inputs.** Tools take UUIDs, names and platform identifiers and
   resolve them through the registry, so a client cannot read or write outside the workspace.
 - **Capabilities are honest.** CrowdStrike and HarfangLab cannot validate queries
-  (`can_validate is False`): return `supported: False`, never a fake pass. `run_query` never
-  contacts a tenant. `deploy_rule` defaults to `dry_run=True`.
+  (`can_validate is False`): return `supported: False`, never a fake pass. `run_query` and
+  `validate_query` contact a tenant only with `live: true`. `deploy_rule` defaults to `dry_run=True`.
 - **Freshness.** The server is long-lived. Anything answering "is this valid now?" must see
   the files on disk, not the index from start-up; resources may serve the start-up snapshot
   as documented in `docs/mcp/resources.md`.

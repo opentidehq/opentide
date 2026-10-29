@@ -103,16 +103,43 @@ def test_deploy_dry_run_before_replay_state_is_refused(
     replay.assert_not_called()
 
 
-def test_validate_strict_before_query_is_refused(
+def test_validate_fix_before_query_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     query = MagicMock(return_value={"status": "passed"})
     monkeypatch.setattr("opentide.cli.services.validation.validate_query_platform", query)
 
-    result = _invoke(tmp_path, "validate", "--strict", "query", "--platform", "sentinel")
+    result = _invoke(tmp_path, "validate", "--fix", "query", "--platform", "sentinel")
 
     assert result.exit_code == 2
     query.assert_not_called()
+
+
+def test_validate_queries_before_query_reaches_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.cli.enums import QueriesMode
+
+    query = MagicMock(return_value={"status": "passed"})
+    monkeypatch.setattr("opentide.cli.services.validation.validate_query_platform", query)
+
+    result = _invoke(tmp_path, "validate", "--queries", "warn", "query")
+
+    assert result.exit_code == 0, result.output
+    assert query.call_args.kwargs["queries"] is QueriesMode.warn
+
+
+def test_validate_strict_before_query_reaches_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``query`` takes ``--strict`` too (the offline check), so it is handed down."""
+    query = MagicMock(return_value={"status": "passed", "mode": "live"})
+    monkeypatch.setattr("opentide.cli.services.validation.validate_query_platform", query)
+
+    result = _invoke(tmp_path, "validate", "--strict", "query", "--platform", "sentinel")
+
+    assert result.exit_code == 0, result.output
+    assert query.call_args.kwargs["strict"] is True
 
 
 def test_validate_file_before_query_reaches_query(

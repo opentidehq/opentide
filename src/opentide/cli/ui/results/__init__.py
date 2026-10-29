@@ -28,6 +28,7 @@ from opentide.cli.ui.results.catalogue import (
     ExplainResult,
     InfoResult,
     LintResult,
+    QueryCommandResult,
     QueryValidationResult,
     UnreviewedResult,
     ValidateResult,
@@ -70,6 +71,7 @@ _IMPORTERS = (" sentinel", " defender", " elastic")
 RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "validate": ValidateResult,
     "validate query": QueryValidationResult,
+    "query": QueryCommandResult,
     "lint": LintResult,
     "info": InfoResult,
     "explain": ExplainResult,
@@ -131,7 +133,7 @@ PENDING_MODELS: dict[str, str] = {}
 
 #: Commands that never print a JSON document, not even for a usage error:
 #: stdout is JSON-RPC.
-NO_DOCUMENT = frozenset({"mcp start"})
+NO_DOCUMENT = frozenset({"mcp start", "lsp start"})
 
 
 def result_model(path: str) -> type[CommandDocument] | None:

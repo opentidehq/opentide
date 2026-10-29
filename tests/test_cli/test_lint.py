@@ -420,7 +420,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload == {
         "path": str(tmp_path.resolve()),
-        "checks": ["filenames", "metadata", "placeholders"],
+        "checks": ["filenames", "metadata", "placeholders", "queries"],
         "findings": [
             {
                 "check": "metadata",

@@ -1,9 +1,9 @@
 """The shape every finding takes: a code, a severity, a message and a place in a file.
 
-A :class:`Diagnostic` is built from a validation issue or a lint finding by
-an adapter here, rendered as a code frame by :mod:`opentide.cli.ui.codeframe`,
-and merged into the JSON entry it came from by :func:`annotate`, which adds
-keys and never changes one. See "Diagnostics" in
+A :class:`Diagnostic` is built from a validation issue, a lint finding or an
+engine finding (:mod:`opentide.analysis`) by an adapter here, rendered as a
+code frame by :mod:`opentide.cli.ui.codeframe`, and merged into the JSON
+entry it came from by :func:`annotate`, which adds keys and never changes one. See "Diagnostics" in
 ``docs/internal/cli-experience.md``.
 
 Positions are 1-based. Columns count Unicode code points, as Python
@@ -27,11 +27,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from opentide.analysis import Finding as EngineFinding
     from opentide.core.io import YamlProblem
     from opentide.validation.issues import ValidationIssue, ValidationReport
 
@@ -616,6 +617,29 @@ def diagnostic_from_issue(
     same list, so a value that repeats is pointed at each time it is written.
     """
     file_path = issue.file_path
+    position = issue.context.get("position")
+    if file_path is not None and isinstance(position, Mapping):
+        # The queries check: the engine named the place.
+        from opentide.analysis import Finding
+
+        finding = Finding(
+            code=issue.code,
+            severity="warning" if issue.severity == "warning" else "error",
+            message=issue.message,
+            line=int(position["line"]),
+            column=int(position["column"]),
+            end_line=int(position.get("end_line", position["line"])),
+            end_column=int(position["end_column"]),
+            field_path=tuple(issue.field_path),
+            suggestion=issue.suggestion,
+        )
+        diagnostic = diagnostic_from_engine(finding, file_path=file_path, workspace=workspace)
+        from opentide.validation.queries import REPORTED_AS_WARNING
+
+        notes = diagnostic.notes
+        if issue.context.get(REPORTED_AS_WARNING):
+            notes = (*notes, ("note", REPORTED_AS_WARNING_NOTE))
+        return replace(diagnostic, object_uuid=issue.object_uuid or None, notes=notes)
     value = _issue_value(issue)
     message = issue.message
     notes: list[tuple[str, str]] = []
@@ -744,6 +768,11 @@ def annotate_report(
 _LINT_SEVERITY: dict[str, Severity] = {"error": "error", "warning": "warning", "info": "note"}
 
 
+def lint_severity(severity: str) -> Severity:
+    """A lint severity (``error``, ``warning``, ``info``) as a diagnostic's."""
+    return _LINT_SEVERITY.get(severity, "warning")
+
+
 def diagnostic_from_lint_finding(
     finding: Mapping[str, Any], *, root: Path, sources: SourceFiles
 ) -> Diagnostic:
@@ -787,7 +816,7 @@ def diagnostic_from_lint_finding(
         notes.append(("note", str(note)))
     return Diagnostic(
         code=code,
-        severity=_LINT_SEVERITY.get(str(finding.get("severity")), "warning"),
+        severity=lint_severity(str(finding.get("severity"))),
         message=message,
         path=path,
         file_path=file_path,
@@ -798,4 +827,71 @@ def diagnostic_from_lint_finding(
         help=help_text,
         notes=tuple(notes),
         object_uuid=str(finding["uuid"]) if finding.get("uuid") else None,
+    )
+
+
+# --------------------------------------------------------------------------
+# Engine findings (opentide.analysis)
+# --------------------------------------------------------------------------
+
+#: The note on a query error ``validate --queries warn`` reports as a warning.
+REPORTED_AS_WARNING_NOTE = "the platform rejects this query; --queries warn reports it as a warning"
+
+#: Words in an engine message that make its ``suggestion`` a replacement name.
+_ENGINE_UNKNOWN = ("unknown", "deprecated")
+
+#: Code prefix → the language reference a finding without a suggestion points at.
+ENGINE_REFERENCES: dict[str, tuple[str, str]] = {
+    "kql_": ("KQL", "https://learn.microsoft.com/kusto/query/"),
+    "spl_": ("SPL", "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"),
+    "esql_": ("ES|QL", "https://www.elastic.co/docs/reference/query-languages/esql"),
+    "eql_": ("EQL", "https://www.elastic.co/docs/reference/query-languages/eql"),
+    "kuery_": ("Kibana KQL", "https://www.elastic.co/docs/reference/query-languages/kql"),
+    "lucene_": (
+        "Lucene query string",
+        "https://www.elastic.co/docs/reference/query-languages/query-dsl/"
+        "query-dsl-query-string-query",
+    ),
+}
+
+
+def engine_reference(code: str) -> tuple[str, str] | None:
+    """``(language, url)`` of the reference for an engine *code*, when it is a query code."""
+    return next(
+        (reference for prefix, reference in ENGINE_REFERENCES.items() if code.startswith(prefix)),
+        None,
+    )
+
+
+def diagnostic_from_engine(
+    finding: EngineFinding, *, file_path: Path, workspace: Path | None
+) -> Diagnostic:
+    """An engine finding (a query or editor diagnostic) as a diagnostic.
+
+    The engine gives positions already. A finding that spans lines is framed
+    on its first line. Its ``suggestion`` becomes the help line: ``did you
+    mean …?`` for an unknown or deprecated name, the step to take otherwise;
+    without one, the language reference or the code's ``opentide explain``.
+    """
+    help_text = None
+    if finding.suggestion:
+        if any(word in finding.message.lower() for word in _ENGINE_UNKNOWN):
+            help_text = f"did you mean {finding.suggestion!r}?"
+        else:
+            help_text = f"try: {finding.suggestion}"
+    elif (reference := engine_reference(finding.code)) is not None:
+        help_text = f"the {reference[0]} reference: {reference[1]}"
+    else:
+        help_text = f"{explain_command(finding.code)} describes it"
+    return Diagnostic(
+        code=finding.code,
+        severity=finding.severity,
+        message=finding.message,
+        path=relative_path(file_path, workspace),
+        file_path=file_path,
+        line=finding.line,
+        column=finding.column,
+        end_column=finding.single_line_end,
+        field_path=finding.field_path,
+        help=help_text,
     )
