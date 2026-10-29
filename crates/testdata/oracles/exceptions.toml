@@ -136,6 +136,11 @@ names = [
   "runshellscript", "showargs", "surrounding",
 ]
 
+[[spl]]
+id = "spl-mltk-commands"
+reason = "Splunk Machine Learning Toolkit commands, catalogued with app = \"MLTK\" because detections use them widely. The app is not installed on the reference search head, so Splunk reports them as unknown search commands."
+names = ["apply", "deletemodel", "fit", "listmodels", "score", "summary"]
+
 # ---------------------------------------------------------------------------
 # Elastic: @elastic/esql, Elasticsearch EqlBase.g4, Kibana grammar.peggy,
 # Lucene QueryParser 10.5.2. Ours rejects on error-severity syntax codes only

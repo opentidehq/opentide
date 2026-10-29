@@ -123,6 +123,8 @@ fn standalone_spl_matches_tide_query_unknown_command() {
     let raw = analyze_raw("queries/broken.spl", LanguageId::Spl, query);
     let raw_op = operator(&raw.diagnostics, codes::SPL_UNKNOWN_COMMAND);
     assert!(raw_op.message.contains("notacommand"), "{}", raw_op.message);
+    // An app on the search head may provide it (#123).
+    assert_eq!(raw_op.severity, opentide_core::Severity::Warning);
     assert!(raw.diagnostics.iter().all(|d| d.code.starts_with("spl_")));
 
     let yaml = tide_rule("splunk", "query", query);

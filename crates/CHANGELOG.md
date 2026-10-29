@@ -6,6 +6,14 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- The Splunk Machine Learning Toolkit commands `fit`, `apply`, `score`, `summary`, `listmodels` and `deletemodel` are in the SPL catalog, marked `app = "MLTK"`, with hover and completion ([#123](https://github.com/opentidehq/language-server/issues/123)).
+
+### Changed
+
+- `spl_unknown_command` is a warning, not an error: an app on the search head can add commands the engine cannot know (DECRYPT2's `decrypt`, MISP42's `mispsearch`), and `opentide validate` failed on searches that run ([#123](https://github.com/opentidehq/language-server/issues/123)). The message says so: `'X' is not a command opentide knows; if an app on the search head provides it, declare it`. A name one edit from a known command (`statz`, or `stast` with two letters swapped) is still an error, and the suggestion stays: `stast` now suggests `stats` rather than `stash`, since a swap of two adjacent letters counts as less than one edit.
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.
