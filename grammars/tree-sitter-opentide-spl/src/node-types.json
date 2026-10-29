@@ -125,19 +125,19 @@
     "named": true,
     "fields": {
       "first": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
-          {
-            "type": "field_value",
-            "named": true
-          },
           {
             "type": "macro",
             "named": true
           },
           {
-            "type": "search_group",
+            "type": "search_boolean",
+            "named": true
+          },
+          {
+            "type": "search_term",
             "named": true
           }
         ]
@@ -147,6 +147,10 @@
       "multiple": true,
       "required": false,
       "types": [
+        {
+          "type": "search_boolean",
+          "named": true
+        },
         {
           "type": "search_term",
           "named": true
@@ -165,14 +169,10 @@
     "fields": {
       "value": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "string",
+            "type": "term_text",
             "named": true
           }
         ]
@@ -448,6 +448,14 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "search_word",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
           }
         ]
       },
@@ -494,7 +502,15 @@
             "named": true
           },
           {
+            "type": "macro",
+            "named": true
+          },
+          {
             "type": "number",
+            "named": true
+          },
+          {
+            "type": "search_word",
             "named": true
           },
           {
@@ -585,6 +601,14 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "search_word",
+            "named": true
+          },
+          {
+            "type": "string",
             "named": true
           }
         ]
@@ -749,6 +773,22 @@
     }
   },
   {
+    "type": "prefix_clause",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "term_text",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "primary_expression",
     "named": true,
     "fields": {},
@@ -860,20 +900,15 @@
     }
   },
   {
-    "type": "search_boolean",
-    "named": true,
-    "fields": {}
-  },
-  {
     "type": "search_command",
     "named": true,
     "fields": {
       "clause": {
-        "multiple": true,
+        "multiple": false,
         "required": false,
         "types": [
           {
-            "type": "search_term",
+            "type": "search_expression",
             "named": true
           }
         ]
@@ -881,7 +916,7 @@
     }
   },
   {
-    "type": "search_group",
+    "type": "search_expression",
     "named": true,
     "fields": {},
     "children": {
@@ -889,7 +924,26 @@
       "required": true,
       "types": [
         {
+          "type": "search_boolean",
+          "named": true
+        },
+        {
           "type": "search_term",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "search_group",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "search_expression",
           "named": true
         }
       ]
@@ -932,11 +986,15 @@
           "named": true
         },
         {
-          "type": "search_boolean",
+          "type": "prefix_clause",
           "named": true
         },
         {
           "type": "search_group",
+          "named": true
+        },
+        {
+          "type": "search_word",
           "named": true
         },
         {
@@ -1106,14 +1164,10 @@
     "fields": {
       "value": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
-            "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "string",
+            "type": "term_text",
             "named": true
           }
         ]
@@ -1148,12 +1202,30 @@
           }
         ]
       },
-      "where": {
-        "multiple": true,
+      "span": {
+        "multiple": false,
         "required": false,
         "types": [
           {
-            "type": "search_term",
+            "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "search_word",
+            "named": true
+          }
+        ]
+      },
+      "where": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "search_expression",
             "named": true
           }
         ]
@@ -1292,7 +1364,15 @@
           "named": true
         },
         {
+          "type": "macro",
+          "named": true
+        },
+        {
           "type": "number",
+          "named": true
+        },
+        {
+          "type": "search_word",
           "named": true
         },
         {
@@ -1416,6 +1496,10 @@
   },
   {
     "type": "OR",
+    "named": false
+  },
+  {
+    "type": "PREFIX",
     "named": false
   },
   {
@@ -1952,6 +2036,14 @@
     "named": false
   },
   {
+    "type": "search_boolean",
+    "named": true
+  },
+  {
+    "type": "search_word",
+    "named": true
+  },
+  {
     "type": "searchtxn",
     "named": false
   },
@@ -2004,6 +2096,10 @@
     "named": false
   },
   {
+    "type": "span",
+    "named": false
+  },
+  {
     "type": "spath",
     "named": false
   },
@@ -2038,6 +2134,10 @@
   {
     "type": "tail",
     "named": false
+  },
+  {
+    "type": "term_text",
+    "named": true
   },
   {
     "type": "timechart",

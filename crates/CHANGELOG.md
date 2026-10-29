@@ -6,6 +6,11 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Fixed
+
+- SPL search clauses from deployed detections no longer report `spl_parse_error` ([#120](https://github.com/opentidehq/language-server/issues/120)). One `search_expression` serves the base search, `search`, `tstats ... where` and subsearches: `TERM()`, `CASE()` and tstats `PREFIX()` take their contents raw (`TERM(EventID=4688)`, `TERM(user=)`, `PREFIX(src=)`); a field may be quoted (`"a.b"=x`) or hold `-` and `{}`; a value may be any run of non-breaking characters (`earliest=-1h@h`, `latest=now()`, `version=2.0.0`, `host=S-RC*`, `rank=-1`); `IN` takes a space-separated list; a search may start with a quoted phrase or `NOT`; and `tstats ... by host span=1h` parses. Upper-case `AND`, `OR` and `NOT` are reserved, so `a AND OR b`, a leading `OR` and a trailing `NOT` are still syntax errors.
+- An SPL comment may span lines and open with more than three backticks (```` ```` note ``` ````). A second line used to become `unknown SPL command`.
+
 ## [0.6.0] - 2026-10-29
 
 The host release: opentide compiles the engine into its Python package and drives it through a new host API, each Tide object is checked against the schema revision it names with catalogs from opentide 0.18.0's own generator, and `@opentide/lsp-client` works on stdio, a browser worker, and WASI.

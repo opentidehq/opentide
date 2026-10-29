@@ -1,0 +1,2 @@
+``` prod:prefix_clause valid
+| tstats count where index=main PREFIX(src=) by host

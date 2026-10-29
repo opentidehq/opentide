@@ -26,6 +26,8 @@
 (tstats_command "datamodel" @keyword)
 (term_clause "TERM" @function.builtin)
 (case_clause "CASE" @function.builtin)
+(prefix_clause "PREFIX" @function.builtin)
+(term_text) @string
 (in_clause "IN" @operator)
 (search_boolean) @operator
 
@@ -33,8 +35,10 @@
 
 (function_call name: (identifier) @function)
 (field_value field: (identifier) @property)
+(field_value field: (search_word) @property)
 (assignment name: (identifier) @variable)
 (glob) @variable
+(search_word) @variable
 (identifier) @variable
 (string) @string
 (number) @number

@@ -73,6 +73,14 @@ Control commands are parsed so the engine can reject them. They are not valid de
 | spl.search-group | `search_group` | `search_group__valid` | `punctuation.bracket` |
 | spl.field-name | `field_name` | `field_name__valid` | `variable` |
 | spl.dedup-option | `dedup_option` | `dedup_option__valid` | `keyword` |
+| spl.search-expression | `search_expression` | `search_expression__valid` | `operator` (`AND`, `OR`, `NOT`) |
+| spl.field-value | `field_value` | `field_value__valid` | `property` |
+| spl.search-word | `search_word` | `field_value__valid` | `variable` |
+| spl.in | `in_clause` | `in_clause__valid` | `operator` |
+| spl.term | `term_clause` | `term_clause__valid` | `function.builtin` |
+| spl.case | `case_clause` | `case_clause__valid` | `function.builtin` |
+| spl.prefix | `prefix_clause` | `prefix_clause__valid` | `function.builtin` |
+| spl.comment | `comment` | `comment__valid` | `comment` |
 
 Authored text is tokenized as written. An implicit leading `| search` is a Splunk runtime default, not a rewrite of the source.
 
