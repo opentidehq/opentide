@@ -387,6 +387,7 @@ pub mod codes {
     pub const KQL_UNKNOWN_OPERATOR: &str = "kql_unknown_operator";
     pub const KQL_UNKNOWN_FUNCTION: &str = "kql_unknown_function";
     pub const KQL_DEPRECATED_FUNCTION: &str = "kql_deprecated_function";
+    pub const KQL_DEPRECATED_OPERATOR: &str = "kql_deprecated_operator";
     pub const KQL_UNKNOWN_TABLE: &str = "kql_unknown_table";
     pub const KQL_RENDER_NOT_VALID: &str = "kql_render_not_valid";
     pub const KQL_PARSE_ERROR: &str = "kql_parse_error";
@@ -400,6 +401,14 @@ pub mod codes {
     pub const SPL_WILDCARD: &str = "spl_wildcard";
     pub const SPL_LEADING_NOT: &str = "spl_leading_not";
     pub const SPL_SUBSEARCH_TRUNCATION: &str = "spl_subsearch_truncation";
+    /// A command Splunk parses with no arguments, where it does nothing,
+    /// returns no results or fails at run time.
+    pub const SPL_EMPTY_COMMAND: &str = "spl_empty_command";
+    /// A trailing `|` with no command, which Splunk ignores.
+    pub const SPL_EMPTY_STAGE: &str = "spl_empty_stage";
+    /// The query starts with a command name but no `|`, so Splunk searches
+    /// for the word.
+    pub const SPL_COMMAND_WITHOUT_PIPE: &str = "spl_command_without_pipe";
     pub const ESQL_PARSE_ERROR: &str = "esql_parse_error";
     pub const ESQL_UNKNOWN_COMMAND: &str = "esql_unknown_command";
     pub const ESQL_UNKNOWN_FUNCTION: &str = "esql_unknown_function";
@@ -475,6 +484,7 @@ pub mod codes {
         KQL_UNKNOWN_OPERATOR,
         KQL_UNKNOWN_FUNCTION,
         KQL_DEPRECATED_FUNCTION,
+        KQL_DEPRECATED_OPERATOR,
         KQL_UNKNOWN_TABLE,
         KQL_RENDER_NOT_VALID,
         KQL_PARSE_ERROR,
@@ -488,6 +498,9 @@ pub mod codes {
         SPL_WILDCARD,
         SPL_LEADING_NOT,
         SPL_SUBSEARCH_TRUNCATION,
+        SPL_EMPTY_COMMAND,
+        SPL_EMPTY_STAGE,
+        SPL_COMMAND_WITHOUT_PIPE,
         ESQL_PARSE_ERROR,
         ESQL_UNKNOWN_COMMAND,
         ESQL_UNKNOWN_FUNCTION,
@@ -571,6 +584,9 @@ pub mod codes {
             KQL_DEPRECATED_FUNCTION => {
                 "The KQL function is a deprecated alias; Microsoft Learn names its replacement."
             }
+            KQL_DEPRECATED_OPERATOR => {
+                "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs)."
+            }
             KQL_UNKNOWN_TABLE => {
                 "The table is not in the platform's KQL schema (Sentinel or Defender)."
             }
@@ -585,7 +601,9 @@ pub mod codes {
             KQL_JOIN_SUMMARIZE_BEFORE_PROJECT => {
                 "join or summarize runs before project, so it carries every column."
             }
-            SPL_UNKNOWN_COMMAND => "The SPL command is not in the Splunk Search Reference.",
+            SPL_UNKNOWN_COMMAND => {
+                "The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command."
+            }
             SPL_PARSE_ERROR => "The SPL search does not parse.",
             SPL_WILDCARD => {
                 "A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event."
@@ -595,6 +613,13 @@ pub mod codes {
             }
             SPL_SUBSEARCH_TRUNCATION => {
                 "A subsearch is silently truncated at its result or time limit."
+            }
+            SPL_EMPTY_COMMAND => {
+                "A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time."
+            }
+            SPL_EMPTY_STAGE => "A trailing | with no command; Splunk ignores it.",
+            SPL_COMMAND_WITHOUT_PIPE => {
+                "The query starts with a command name but no |, so Splunk searches for the word instead of running the command."
             }
             ESQL_PARSE_ERROR => "The ES|QL query does not parse.",
             ESQL_UNKNOWN_COMMAND => "The ES|QL command is not one Elasticsearch knows.",

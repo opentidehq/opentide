@@ -1,0 +1,1 @@
+index=main | streamstats time_window=3h count by user

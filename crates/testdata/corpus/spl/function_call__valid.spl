@@ -1,0 +1,2 @@
+``` prod:function_call valid
+index=main | eval s=case(bytes>1, 1, true(), 0), t=if(user like "a%", 1, 0)

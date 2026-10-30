@@ -1,2 +1,2 @@
 ``` prod:lookup_command invalid
-index=main | lookup
+index=main | lookup local=t
