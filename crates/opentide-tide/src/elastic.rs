@@ -8,6 +8,7 @@
 //! `threat.query` takes `threat.language` the same way.
 
 use crate::vocabs::bundled_vocabs;
+use crate::yaml_scalar::mapping_keys;
 use crate::{IndexedObject, InjectedQuery, remap_span};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
 
@@ -29,416 +30,18 @@ pub fn elastic_query_language(
     }
 }
 
-/// One YAML line that holds a mapping key, with its full key path.
-struct KeyLine {
-    line: usize,
-    path: Vec<String>,
-    value: String,
-}
-
-/// Key paths for every mapping key outside block-scalar bodies. `- key:` list
-/// items nest under their parent key with an `[]` segment.
-fn key_lines(lines: &[&str]) -> Vec<KeyLine> {
-    let mut out = Vec::new();
-    let mut stack: Vec<(usize, String)> = Vec::new();
-    let mut block_indent: Option<usize> = None;
-    for (i, raw) in lines.iter().enumerate() {
-        let line = raw.trim_end_matches(['\n', '\r']);
-        let trimmed = line.trim_start();
-        let indent = line.len() - trimmed.len();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        if let Some(b) = block_indent {
-            if indent > b {
-                continue;
-            }
-            block_indent = None;
-        }
-        let (key_indent, content, list_item) = match trimmed.strip_prefix("- ") {
-            Some(rest) => (indent + 2, rest.trim_start(), true),
-            None => (indent, trimmed, false),
-        };
-        while stack.last().is_some_and(|(ind, _)| *ind >= key_indent) {
-            stack.pop();
-        }
-        if list_item {
-            // The list item itself sits under the nearest parent key.
-            while stack.last().is_some_and(|(ind, _)| *ind >= indent) {
-                stack.pop();
-            }
-            stack.push((indent, "[]".into()));
-        }
-        let Some((key, value)) = split_key(content) else {
-            continue;
-        };
-        let mut path: Vec<String> = stack.iter().map(|(_, k)| k.clone()).collect();
-        path.push(key.to_string());
-        let value = value.trim().to_string();
-        if value.starts_with('|') || value.starts_with('>') {
-            block_indent = Some(key_indent);
-        }
-        out.push(KeyLine {
-            line: i,
-            path,
-            value,
-        });
-        stack.push((key_indent, key.to_string()));
+/// Query language of a `response.procedure.searches[]` entry with
+/// `system: elastic`: the entry's `language`. A search's language is never
+/// guessed from its text (specifications#58): with no `language`, the query
+/// is not analysed.
+pub(crate) fn elastic_search_language(language: Option<&str>) -> Option<LanguageId> {
+    match language? {
+        "esql" => Some(LanguageId::Esql),
+        "eql" => Some(LanguageId::Eql),
+        "kuery" => Some(LanguageId::Kuery),
+        "lucene" => Some(LanguageId::Lucene),
+        _ => None,
     }
-    out
-}
-
-fn split_key(content: &str) -> Option<(&str, &str)> {
-    let colon = content.find(':')?;
-    let key = content[..colon].trim();
-    let rest = &content[colon + 1..];
-    if key.is_empty()
-        || key.contains(' ')
-        || !(rest.is_empty() || rest.starts_with(' ') || rest.starts_with('\t'))
-    {
-        return None;
-    }
-    Some((key.trim_matches(['"', '\'']), rest))
-}
-
-fn scalar(value: &str) -> Option<String> {
-    let v = value.split(" #").next().unwrap_or(value).trim();
-    let v = v.trim_matches(['"', '\'']);
-    (!v.is_empty()).then(|| v.to_string())
-}
-
-fn path_is(path: &[String], expected: &[&str]) -> bool {
-    path.len() == expected.len() && path.iter().zip(expected).all(|(a, b)| a == b)
-}
-
-/// Injected `query` and `threat.query` of a `configurations.elastic` block.
-pub(crate) fn elastic_injections(source: &str) -> Vec<InjectedQuery> {
-    let lines: Vec<&str> = source.split_inclusive('\n').collect();
-    let keys = key_lines(&lines);
-    let value_at = |path: &[&str]| {
-        keys.iter()
-            .find(|k| path_is(&k.path, path))
-            .and_then(|k| scalar(&k.value))
-    };
-    let rule_type = value_at(&["configurations", "elastic", "type"]);
-    let language = value_at(&["configurations", "elastic", "language"]);
-    let threat_language = value_at(&["configurations", "elastic", "threat", "language"]);
-    let mut line_starts = Vec::with_capacity(lines.len());
-    let mut byte = 0usize;
-    for l in &lines {
-        line_starts.push(byte);
-        byte += l.len();
-    }
-    let mut out = Vec::new();
-    for key in &keys {
-        let (language, field_path) = if path_is(&key.path, &["configurations", "elastic", "query"])
-        {
-            (
-                elastic_query_language(rule_type.as_deref(), language.as_deref()),
-                vec!["configurations", "elastic", "query"],
-            )
-        } else if path_is(&key.path, &["configurations", "elastic", "threat", "query"])
-            && rule_type.as_deref() == Some("threat_match")
-        {
-            (
-                elastic_query_language(Some("threat_match"), threat_language.as_deref()),
-                vec!["configurations", "elastic", "threat", "query"],
-            )
-        } else if path_is(&key.path, &SEARCH_QUERY) {
-            let Some((index, system, language)) = search_item(&lines, &keys, key.line) else {
-                continue;
-            };
-            if system.as_deref() != Some("elastic") {
-                continue;
-            }
-            let language = match language.as_deref() {
-                Some("esql") => Some(LanguageId::Esql),
-                Some("eql") => Some(LanguageId::Eql),
-                Some("kuery") => Some(LanguageId::Kuery),
-                Some("lucene") => Some(LanguageId::Lucene),
-                _ => None,
-            };
-            let Some(language) = language else {
-                continue;
-            };
-            let field_path = ["response", "procedure", "searches"]
-                .into_iter()
-                .map(String::from)
-                .chain([index.to_string(), "query".into()])
-                .collect();
-            if let Some(inj) = scalar_injection(
-                source,
-                &lines,
-                key.line,
-                line_starts[key.line],
-                language,
-                field_path,
-            ) {
-                out.push(inj);
-            }
-            continue;
-        } else {
-            continue;
-        };
-        let Some(language) = language else {
-            continue;
-        };
-        let field_path = field_path.into_iter().map(String::from).collect();
-        if let Some(inj) = scalar_injection(
-            source,
-            &lines,
-            key.line,
-            line_starts[key.line],
-            language,
-            field_path,
-        ) {
-            out.push(inj);
-        }
-    }
-    out
-}
-
-const SEARCH_QUERY: [&str; 5] = ["response", "procedure", "searches", "[]", "query"];
-
-/// For the `response.procedure.searches[]` entry holding the key on `line`:
-/// its index and its `system` and `language` values. A search's language is
-/// never guessed from its text (specifications#58): with `system: elastic`
-/// and no `language`, the query is not analysed.
-fn search_item(
-    lines: &[&str],
-    keys: &[KeyLine],
-    line: usize,
-) -> Option<(usize, Option<String>, Option<String>)> {
-    let in_searches = |k: &KeyLine| k.path.len() == 5 && path_is(&k.path[..4], &SEARCH_QUERY[..4]);
-    let starts: Vec<usize> = keys
-        .iter()
-        .filter(|k| in_searches(k) && lines[k.line].trim_start().starts_with("- "))
-        .map(|k| k.line)
-        .collect();
-    let index = starts.iter().rposition(|s| *s <= line)?;
-    let start = starts[index];
-    let end = starts.get(index + 1).copied().unwrap_or(usize::MAX);
-    let value = |name: &str| {
-        keys.iter()
-            .find(|k| in_searches(k) && k.line >= start && k.line < end && k.path[4] == name)
-            .and_then(|k| scalar(&k.value))
-    };
-    Some((index, value("system"), value("language")))
-}
-
-/// The value of the `key: value` on `lines[i]`: a block scalar (`|`, `>`), or a
-/// plain, single-quoted, or double-quoted flow scalar.
-fn scalar_injection(
-    source: &str,
-    lines: &[&str],
-    i: usize,
-    line_start: usize,
-    language: LanguageId,
-    field_path: Vec<String>,
-) -> Option<InjectedQuery> {
-    let line = lines[i];
-    let colon = line.find(':')?;
-    let after = &line[colon + 1..];
-    let value = after.trim();
-    if value.starts_with('|') || value.starts_with('>') {
-        let indent = line.len() - line.trim_start().len();
-        let key_indent = if line.trim_start().starts_with("- ") {
-            indent + 2
-        } else {
-            indent
-        };
-        return block_injection(lines, i, line_start, key_indent, language, field_path);
-    }
-    let lead = after.len() - after.trim_start().len();
-    let start = line_start + colon + 1 + lead;
-    let raw_end = line_start + line.trim_end_matches(['\n', '\r']).len();
-    let raw = source.get(start..raw_end)?;
-    let (mut inner, mut host_map) = match raw.chars().next()? {
-        // A quoted scalar that does not close on its line continues on the
-        // next; it is left unanalysed rather than checked in part.
-        '\'' => unquote(raw, start, '\'')?,
-        '"' => unquote(raw, start, '"')?,
-        _ => {
-            let body = raw.split(" #").next().unwrap_or(raw).trim_end();
-            (body.to_string(), (start..start + body.len()).collect())
-        }
-    };
-    // A plain scalar continues on more-indented lines; YAML folds each line
-    // break into a space (and keeps a blank line as a newline).
-    if !raw.starts_with(['\'', '"']) {
-        let indent = line.len() - line.trim_start().len();
-        let key_indent = if line.trim_start().starts_with("- ") {
-            indent + 2
-        } else {
-            indent
-        };
-        let mut offset = line_start + line.len();
-        let mut blank = 0;
-        for next in &lines[i + 1..] {
-            let content = next.trim_end_matches(['\n', '\r']);
-            let trimmed = content.trim_start();
-            if trimmed.is_empty() {
-                blank += 1;
-                offset += next.len();
-                continue;
-            }
-            let next_indent = content.len() - trimmed.len();
-            if next_indent <= key_indent || trimmed.starts_with('#') {
-                break;
-            }
-            let body = trimmed.split(" #").next().unwrap_or(trimmed).trim_end();
-            let body_start = offset + next_indent;
-            let separator = if blank > 0 {
-                "\n".repeat(blank)
-            } else {
-                " ".into()
-            };
-            for c in separator.chars() {
-                push_char(&mut inner, &mut host_map, c, body_start.saturating_sub(1));
-            }
-            for (k, c) in body.char_indices() {
-                push_char(&mut inner, &mut host_map, c, body_start + k);
-            }
-            blank = 0;
-            offset += next.len();
-        }
-    }
-    if inner.trim().is_empty() {
-        return None;
-    }
-    let host_span = ByteSpan::new(
-        host_map.first().copied().unwrap_or(start),
-        host_map.last().map(|b| b + 1).unwrap_or(raw_end),
-    );
-    Some(InjectedQuery {
-        language,
-        field_path,
-        inner,
-        host_map,
-        host_span,
-    })
-}
-
-/// Strip YAML quotes. Single quotes escape `'` as `''`; double quotes use
-/// YAML's `\` escapes. `None` when the scalar does not close on this line or
-/// uses an escape YAML rejects.
-fn unquote(raw: &str, start: usize, quote: char) -> Option<(String, Vec<usize>)> {
-    let mut inner = String::new();
-    let mut map = Vec::new();
-    let mut chars = raw.char_indices().skip(1).peekable();
-    while let Some((i, c)) = chars.next() {
-        if c == quote {
-            if quote == '\'' && chars.peek().map(|(_, n)| *n) == Some('\'') {
-                chars.next();
-                push_char(&mut inner, &mut map, '\'', start + i);
-                continue;
-            }
-            return Some((inner, map));
-        }
-        if quote == '"' && c == '\\' {
-            let (j, e) = chars.next()?;
-            let hex = |n: usize, chars: &mut std::iter::Peekable<_>| -> Option<char> {
-                let digits: String = (0..n)
-                    .map(|_| chars.next().map(|(_, d): (usize, char)| d))
-                    .collect::<Option<_>>()?;
-                char::from_u32(u32::from_str_radix(&digits, 16).ok()?)
-            };
-            let decoded = match e {
-                '0' => '\0',
-                'a' => '\u{7}',
-                'b' => '\u{8}',
-                't' | '\t' => '\t',
-                'n' => '\n',
-                'v' => '\u{b}',
-                'f' => '\u{c}',
-                'r' => '\r',
-                'e' => '\u{1b}',
-                ' ' => ' ',
-                '"' => '"',
-                '/' => '/',
-                '\\' => '\\',
-                'N' => '\u{85}',
-                '_' => '\u{a0}',
-                'L' => '\u{2028}',
-                'P' => '\u{2029}',
-                'x' => hex(2, &mut chars)?,
-                'u' => hex(4, &mut chars)?,
-                'U' => hex(8, &mut chars)?,
-                _ => return None,
-            };
-            push_char(&mut inner, &mut map, decoded, start + j - 1);
-            continue;
-        }
-        push_char(&mut inner, &mut map, c, start + i);
-    }
-    None
-}
-
-fn push_char(inner: &mut String, map: &mut Vec<usize>, c: char, host: usize) {
-    inner.push(c);
-    for k in 0..c.len_utf8() {
-        map.push(host + k);
-    }
-}
-
-fn block_injection(
-    lines: &[&str],
-    i: usize,
-    line_start: usize,
-    key_indent: usize,
-    language: LanguageId,
-    field_path: Vec<String>,
-) -> Option<InjectedQuery> {
-    let mut inner = String::new();
-    let mut host_map = Vec::new();
-    let mut b = line_start + lines[i].len();
-    let mut host_start = b;
-    let mut host_end = b;
-    let mut content_indent: Option<usize> = None;
-    let mut pending_blank = 0usize;
-    for l in &lines[i + 1..] {
-        let body_line = l.trim_end_matches(['\n', '\r']);
-        if body_line.trim().is_empty() {
-            if content_indent.is_some() {
-                pending_blank += 1;
-            }
-            b += l.len();
-            continue;
-        }
-        let ind = body_line.len() - body_line.trim_start().len();
-        if ind <= key_indent {
-            break;
-        }
-        let strip = *content_indent.get_or_insert(ind);
-        if inner.is_empty() {
-            host_start = b;
-        }
-        if !inner.is_empty() {
-            for _ in 0..=pending_blank {
-                inner.push('\n');
-                host_map.push(host_end.saturating_sub(1).max(host_start));
-            }
-        }
-        pending_blank = 0;
-        let cut = strip.min(ind);
-        let body = &body_line[cut..];
-        for k in 0..body.len() {
-            host_map.push(b + cut + k);
-        }
-        inner.push_str(body);
-        host_end = b + body_line.len() + 1;
-        b += l.len();
-    }
-    if inner.is_empty() {
-        return None;
-    }
-    Some(InjectedQuery {
-        language,
-        field_path,
-        inner,
-        host_map,
-        host_span: ByteSpan::new(host_start, host_end.min(b)),
-    })
 }
 
 /// A duration in the [elastic-1.0] Durations grammar, in milliseconds:
@@ -665,18 +268,14 @@ pub(crate) fn stack_target(
 /// Range of the key at `path` (`["configurations", "elastic", ...]`), or of
 /// the nearest ancestor key that is written.
 fn path_range(source: &str, path: &[&str]) -> Range {
-    let lines: Vec<&str> = source.split_inclusive('\n').collect();
-    let keys = key_lines(&lines);
+    let keys = mapping_keys(source);
     for depth in (1..=path.len()).rev() {
         let want = &path[..depth];
-        if let Some(k) = keys
-            .iter()
-            .find(|k| k.path.len() == want.len() && k.path.iter().zip(want).all(|(a, b)| a == b))
-        {
-            let line_start: usize = lines[..k.line].iter().map(|l| l.len()).sum();
+        if let Some(k) = keys.iter().find(|k| k.path_is(want)) {
             let key = want[depth - 1];
-            let col = lines[k.line].find(key).unwrap_or(0);
-            let start = line_start + col;
+            let start = source[k.key_start..]
+                .find(key)
+                .map_or(k.key_start, |i| k.key_start + i);
             return span_to_range(source, ByteSpan::new(start, start + key.len()));
         }
     }
@@ -924,7 +523,7 @@ mod tests {
             let src = format!(
                 "name: r\nconfigurations:\n  elastic:\n    type: query\n    language: kuery\n    query: {query}\n    status: STAGING\n"
             );
-            elastic_injections(&src)
+            crate::extract_injections(&src)
                 .into_iter()
                 .map(|q| {
                     // Every byte of the inner text maps back into the host.
@@ -945,10 +544,12 @@ mod tests {
             vec!["a\rb AB \"q\" \\"]
         );
         assert_eq!(inner("'it''s'"), vec!["it's"]);
-        // An escape YAML rejects, or a quote that does not close on its
-        // line, is not analysed in part.
+        // An escape YAML rejects, or a quote that never closes, is not
+        // analysed in part.
         assert!(inner(r#""a\qb""#).is_empty());
-        assert!(inner("\"a and\n      b\"").is_empty());
+        assert!(inner("\"a and b").is_empty());
+        // A quoted scalar on several lines folds like YAML (#105).
+        assert_eq!(inner("\"a and\n      b\""), vec!["a and b"]);
     }
 
     #[test]
@@ -1136,7 +737,7 @@ ssl = true
     #[test]
     fn query_language_comes_from_siblings_in_any_order() {
         let src = "configurations:\n  elastic:\n    query: |\n      FROM logs-* METADATA _id\n      | LIMIT 1\n    type: esql\n";
-        let inj = elastic_injections(src);
+        let inj = crate::extract_injections(src);
         assert_eq!(inj.len(), 1);
         assert_eq!(inj[0].language, LanguageId::Esql);
         assert_eq!(inj[0].inner, "FROM logs-* METADATA _id\n| LIMIT 1");
@@ -1145,7 +746,7 @@ ssl = true
     #[test]
     fn single_quoted_kuery_is_unquoted() {
         let src = "configurations:\n  elastic:\n    type: query\n    query: 'event.category : \"process\" and x:''y'''\n";
-        let inj = elastic_injections(src);
+        let inj = crate::extract_injections(src);
         assert_eq!(inj.len(), 1);
         assert_eq!(inj[0].language, LanguageId::Kuery);
         assert_eq!(inj[0].inner, "event.category : \"process\" and x:'y'");
@@ -1170,7 +771,7 @@ configurations:
         - osquery:
             query: SELECT * FROM processes
 ";
-        let inj = elastic_injections(src);
+        let inj = crate::extract_injections(src);
         let langs: Vec<_> = inj
             .iter()
             .map(|i| (i.field_path.join("."), i.language))
@@ -1208,7 +809,7 @@ response:
         language: kuery
         system: elastic
 ";
-        let inj = elastic_injections(src);
+        let inj = crate::extract_injections(src);
         let found: Vec<_> = inj
             .iter()
             .map(|i| (i.field_path.join("."), i.language, i.inner.as_str()))
@@ -1220,6 +821,12 @@ response:
                     "response.procedure.searches.0.query".into(),
                     LanguageId::Esql,
                     "FROM logs-* | STATS c = COUNT(*) BY process.parent.name"
+                ),
+                // `language` is Elastic's: a Sentinel hunt is KQL.
+                (
+                    "response.procedure.searches.2.query".into(),
+                    LanguageId::Kql,
+                    "SecurityEvent"
                 ),
                 (
                     "response.procedure.searches.3.query".into(),
@@ -1233,6 +840,6 @@ response:
     #[test]
     fn no_type_means_no_injection() {
         let src = "configurations:\n  elastic:\n    query: x\n";
-        assert!(elastic_injections(src).is_empty());
+        assert!(crate::extract_injections(src).is_empty());
     }
 }

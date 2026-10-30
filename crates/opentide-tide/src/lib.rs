@@ -4,9 +4,11 @@
 //! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
 mod elastic;
+mod injection;
 mod intel;
 mod vocabs;
 mod yaml_path;
+mod yaml_scalar;
 
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
 use opentide_highlight::{
@@ -21,6 +23,7 @@ use std::sync::{OnceLock, RwLock};
 use uuid::Uuid;
 
 pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
+pub use injection::hunt_query_language;
 pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
 };
@@ -42,10 +45,12 @@ const THREAT_TEMPLATE: &str = include_str!(concat!(
     "/catalogs/tide/templates/threat.1.0.template.yaml"
 ));
 
-/// Map a YAML field path to an injected query language.
+/// Map a `configurations` field path to an injected query language.
 /// CrowdStrike is unsupported — never fake validation. Elastic is not a
 /// path: its language comes from the block's `type` and `language`
-/// ([`elastic_query_language`]).
+/// ([`elastic_query_language`]). A hunt's query
+/// (`response.procedure.searches.<n>.query`) takes the language its `system`
+/// names ([`hunt_query_language`]).
 pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
     match path {
         ["configurations", "sentinel", "query"] => Some(LanguageId::Kql),
@@ -84,24 +89,19 @@ pub fn slugify(name: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct InjectedQuery {
     pub language: LanguageId,
+    /// The platform the query runs on, as a `configurations` key
+    /// (`sentinel`, `defender_for_endpoint`, `elastic`): the block's key for a
+    /// rule query, the entry's `system` for a hunt. It picks the KQL profile
+    /// and the Lucene dialect.
+    pub platform: String,
+    /// YAML path of the query, list items by index:
+    /// `["configurations", "sentinel", "query"]`,
+    /// `["response", "procedure", "searches", "0", "query"]`.
     pub field_path: Vec<String>,
     pub inner: String,
     /// Maps inner byte offset → host byte offset.
     pub host_map: Vec<usize>,
     pub host_span: ByteSpan,
-}
-
-fn intern_platform(name: &str) -> Option<&'static str> {
-    match name {
-        "sentinel" => Some("sentinel"),
-        "defender_for_endpoint" => Some("defender_for_endpoint"),
-        "splunk" => Some("splunk"),
-        "crowdstrike" => Some("crowdstrike"),
-        "sentinel_one" => Some("sentinel_one"),
-        "harfanglab" => Some("harfanglab"),
-        "carbon_black_cloud" => Some("carbon_black_cloud"),
-        _ => None,
-    }
 }
 
 /// Locate the injected query (if any) covering a host byte offset.
@@ -123,208 +123,15 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
     None
 }
 
-/// Strip block-scalar indent and remap tokens onto YAML coordinates.
+/// Every query a Tide object carries, read from its YAML structure, each as
+/// its value (block indentation stripped, folded lines folded, quotes and
+/// escapes decoded) with a map back onto the source. A key is a query only
+/// at a path opentide models as one: `configurations.<platform>.query`, the
+/// legacy `configurations.splunk.search`, Elastic's queries, and each hunt's
+/// `response.procedure.searches.<n>.query` in the language its `system`
+/// names ([`hunt_query_language`]). A drilldown search is not a query.
 pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
-    let mut out = Vec::new();
-    let lines: Vec<&str> = source.split_inclusive('\n').collect();
-    let mut i = 0usize;
-    let mut byte = 0usize;
-    let mut platform: Option<&str> = None;
-    let mut platform_indent = 0usize;
-    while i < lines.len() {
-        let line = lines[i];
-        let indent = line.chars().take_while(|c| *c == ' ').count();
-        let unquoted = unquote_key(line.trim());
-        let trimmed = unquoted.as_ref();
-        let content = trimmed.strip_prefix("- ").unwrap_or(trimmed);
-        // Keep platform across a same-indent sibling `query:` / `search:` of `system:`.
-        // Real hunts look like:
-        //   - purpose: ...
-        //     system: defender_for_endpoint
-        //     query: |-
-        let blank_or_comment = trimmed.is_empty() || trimmed.starts_with('#');
-        // A blank line has indent 0. It must not drop a `system:` platform
-        // before the following `query:` block.
-        if !blank_or_comment
-            && (indent == 0
-                || (platform.is_some()
-                    && indent <= platform_indent
-                    && !content.starts_with("query:")
-                    && !content.starts_with("search:")))
-        {
-            platform = None;
-        }
-        if let Some(name) = trimmed.strip_suffix(':').map(str::trim) {
-            if let Some(plat) = intern_platform(name) {
-                platform = Some(plat);
-                platform_indent = indent;
-            }
-        }
-        if let Some(rest) = content.strip_prefix("system:") {
-            if let Some(plat) = intern_platform(rest.trim()) {
-                platform = Some(plat);
-                platform_indent = indent;
-            }
-        }
-        if let Some(plat) = platform {
-            if let Some(query) = parse_query_block(source, &lines, i, byte, plat) {
-                out.push(query);
-            }
-        }
-        byte += line.len();
-        i += 1;
-    }
-    out.extend(elastic::elastic_injections(source));
-    out.sort_by_key(|inj| inj.host_span.start);
-    out
-}
-
-/// `line` (trimmed) with its mapping key unquoted: `"query": |` reads as
-/// `query: |`, and `- 'sentinel':` as `- sentinel:`. YAML allows either
-/// spelling of a key; the value is left as written.
-fn unquote_key(line: &str) -> std::borrow::Cow<'_, str> {
-    let (dash, rest) = match line.strip_prefix("- ") {
-        Some(rest) => ("- ", rest.trim_start()),
-        None => ("", line),
-    };
-    let Some(quote) = rest.chars().next().filter(|c| *c == '"' || *c == '\'') else {
-        return std::borrow::Cow::Borrowed(line);
-    };
-    let Some(close) = rest[1..].find(quote).map(|i| i + 1) else {
-        return std::borrow::Cow::Borrowed(line);
-    };
-    if !rest[close + 1..].starts_with(':') {
-        return std::borrow::Cow::Borrowed(line);
-    }
-    std::borrow::Cow::Owned(format!("{dash}{}{}", &rest[1..close], &rest[close + 1..]))
-}
-
-#[allow(clippy::question_mark)]
-fn parse_query_block(
-    source: &str,
-    lines: &[&str],
-    i: usize,
-    byte_at_line: usize,
-    platform: &str,
-) -> Option<InjectedQuery> {
-    let line = *lines.get(i)?;
-    let indent = line.chars().take_while(|c| *c == ' ').count();
-    let unquoted = unquote_key(line.trim());
-    let trimmed = unquoted.strip_prefix("- ").unwrap_or(&unquoted);
-    let (key, is_block) = if trimmed == "query: |" || trimmed.starts_with("query: |") {
-        ("query", true)
-    } else if trimmed == "search: |" || trimmed.starts_with("search: |") {
-        ("search", true)
-    } else if let Some(rest) = trimmed.strip_prefix("query:") {
-        if rest.trim().is_empty() {
-            return None;
-        }
-        ("query", false)
-    } else if let Some(rest) = trimmed.strip_prefix("search:") {
-        if rest.trim().is_empty() {
-            return None;
-        }
-        ("search", false)
-    } else {
-        return None;
-    };
-    let language = language_for_field_path(&["configurations", platform, key])?;
-    let field_path = vec![
-        "configurations".into(),
-        platform.to_string(),
-        key.to_string(),
-    ];
-    if !is_block {
-        let colon = line.find(':')?;
-        let mut start = byte_at_line + colon + 1;
-        let line_end = byte_at_line + line.len();
-        while start < line_end
-            && source
-                .as_bytes()
-                .get(start)
-                .is_some_and(|b| b.is_ascii_whitespace())
-        {
-            start += 1;
-        }
-        let mut end = line_end;
-        if source.as_bytes().get(end.saturating_sub(1)) == Some(&b'\n') {
-            end -= 1;
-        }
-        if start >= end {
-            return None;
-        }
-        let inner = source.get(start..end)?.to_string();
-        let host_map: Vec<usize> = (start..end).collect();
-        return Some(InjectedQuery {
-            language,
-            field_path,
-            inner,
-            host_map,
-            host_span: ByteSpan::new(start, end),
-        });
-    }
-
-    let mut inner = String::new();
-    let mut host_map = Vec::new();
-    let mut j = i + 1;
-    let mut b = byte_at_line + line.len();
-    let mut host_start = b;
-    let mut host_end = b;
-    let mut content_indent: Option<usize> = None;
-    while j < lines.len() {
-        let l = lines[j];
-        let ind = l.chars().take_while(|c| *c == ' ').count();
-        if l.trim().is_empty() {
-            if content_indent.is_some() {
-                inner.push('\n');
-                if l.ends_with('\n') {
-                    host_map.push(b + l.len() - 1);
-                }
-            }
-            host_end = b + l.len();
-            b += l.len();
-            j += 1;
-            continue;
-        }
-        if ind <= indent {
-            break;
-        }
-        let strip = *content_indent.get_or_insert(ind);
-        // A line indented less than the first (an explicit `|2` indicator)
-        // loses only its own indentation: spaces are one byte each, so the
-        // cut is always on a character boundary.
-        let body = &l[ind.min(strip)..];
-        // Where the body starts in the line: `trim_start` may cut fewer bytes.
-        let cut = l.len() - body.len();
-        if inner.is_empty() {
-            // The query starts at its text, not at the line's indentation.
-            host_start = b + cut;
-        }
-        let body = body.strip_suffix('\n').unwrap_or(body);
-        if !inner.is_empty() {
-            inner.push('\n');
-            host_map.push(b.saturating_sub(1));
-        }
-        // One entry per byte: `host_map` maps inner *byte* offsets, so a
-        // multi-byte character takes as many entries as it has bytes.
-        for k in 0..body.len() {
-            host_map.push(b + cut + k);
-        }
-        inner.push_str(body);
-        host_end = b + l.len();
-        b += l.len();
-        j += 1;
-    }
-    if inner.is_empty() {
-        return None;
-    }
-    Some(InjectedQuery {
-        language,
-        field_path,
-        inner,
-        host_map,
-        host_span: ByteSpan::new(host_start, host_end),
-    })
+    injection::extract_injections(source)
 }
 
 pub fn remap_span(query: &InjectedQuery, inner: ByteSpan) -> ByteSpan {
@@ -813,7 +620,7 @@ fn analyze_injections(
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
             LanguageId::Kql => {
-                let profile = if inj.field_path.iter().any(|p| p == "defender_for_endpoint") {
+                let profile = if inj.platform == "defender_for_endpoint" {
                     Profile::Defender
                 } else {
                     Profile::Sentinel
@@ -851,7 +658,7 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Lucene => {
-                let dialect = if inj.field_path.iter().any(|p| p == "carbon_black_cloud") {
+                let dialect = if inj.platform == "carbon_black_cloud" {
                     opentide_lucene::Dialect::CarbonBlack
                 } else {
                     opentide_lucene::Dialect::Elastic

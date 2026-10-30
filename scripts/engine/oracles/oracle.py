@@ -104,7 +104,8 @@ FETCH = {
     ),
 }
 
-# Tide configuration fields the engine injects (opentide-tide language_for_field_path).
+# Tide configuration fields the engine injects (opentide-tide language_for_field_path),
+# and the hunt systems it reads in that language.
 PLATFORMS = {
     "sentinel": ("kql", ("query",)),
     "defender_for_endpoint": ("kql", ("query",)),
@@ -257,17 +258,28 @@ def embedded(language: str) -> list[Query]:
             doc = yaml.safe_load(path.read_text())
         except yaml.YAMLError:
             continue
-        configurations = doc.get("configurations") if isinstance(doc, dict) else None
-        if not isinstance(configurations, dict):
+        if not isinstance(doc, dict):
             continue
+        configurations = doc.get("configurations")
         for platform, (lang, fields) in PLATFORMS.items():
-            config = configurations.get(platform)
+            config = configurations.get(platform) if isinstance(configurations, dict) else None
             if lang != language or not isinstance(config, dict):
                 continue
             for field in fields:
                 if isinstance(config.get(field), str):
                     ident = f"{rel(path)}#configurations.{platform}.{field}"
                     queries.append(Query(ident, config[field], False))
+        # Hunts, in the language their `system` names when it is a platform
+        # identifier (opentide_tide::hunt_query_language). Elastic hunts are
+        # in elastic_embedded.
+        searches = ((doc.get("response") or {}).get("procedure") or {}).get("searches") or []
+        for n, search in enumerate(searches if isinstance(searches, list) else []):
+            if not isinstance(search, dict) or not isinstance(search.get("query"), str):
+                continue
+            system = search.get("system")
+            if system in PLATFORMS and PLATFORMS[system][0] == language:
+                ident = f"{rel(path)}#response.procedure.searches.{n}.query"
+                queries.append(Query(ident, search["query"], False))
     return queries
 
 
