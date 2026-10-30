@@ -101,6 +101,16 @@ if Opentide.Platforms["sentinel"].can_validate:
     result = rule.validate_query("sentinel")
 ```
 
+The call checks the rule on every tenant a `PREVIEW` or `RELEASE` deploy sends it to, through the platform's [query runner](../cli/query.md), and reads nothing from or into the process environment. For each query's verdict on each tenant, call the validator itself: `validate` returns a `LiveCheckReport` whose `checks` are `RuleCheck`s (`rule`, `tenant`, `errors`, `warnings`).
+
+```python
+from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+report = Opentide.Platforms["sentinel"].validator.validate([rule], DEPLOYABLE_STRATEGIES)
+for check in report.rejected():
+    print(check.tenant, check.errors)
+```
+
 ### Offline, with the analysis engine
 
 `opentide.analysis` checks queries in-process, with the engine `pip install opentide` installs (no tenant, no SDK). It covers Sentinel and Defender KQL, Splunk SPL, Elastic (ES|QL, EQL, Kibana KQL, Lucene) and Carbon Black Lucene:

@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 from itertools import islice
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from opentide.core.time import format_utc_z
 from opentide.models.system_config import ConfigurationModels, SystemConfig
-from opentide.query.models import QueryRefused, QueryRequest, QueryResult, columns_of, flatten
+from opentide.query.models import (
+    LiveCheck,
+    QueryRefused,
+    QueryRequest,
+    QueryResult,
+    columns_of,
+    flatten,
+)
 from opentide.query.runner import QueryRunner
+
+if TYPE_CHECKING:
+    from cbc_sdk.rest_api import CBCloudAPI
 
 
 class CarbonBlackQueryRunner(QueryRunner):
@@ -26,17 +36,9 @@ class CarbonBlackQueryRunner(QueryRunner):
         )
         from cbc_sdk.platform import Process
 
-        from opentide.core.environment import reject_unsubstituted_placeholders
         from opentide.core.errors import Errors
-        from opentide.platforms.carbon_black.client import CarbonBlackCloudService
 
-        if not isinstance(tenant, ConfigurationModels.Systems.CarbonBlackCloud.Tenant):
-            raise TypeError(
-                f"expected a Carbon Black Cloud tenant, got {type(tenant).__qualname__}"
-            )
-        setup = tenant.setup
-        reject_unsubstituted_placeholders(setup.url, setup.org_key, setup.token, client="CBC")
-        api = CarbonBlackCloudService(tenant).service
+        api = self._api(tenant)
         query = (
             api.select(Process)
             .where(request.text)
@@ -72,6 +74,28 @@ class CarbonBlackQueryRunner(QueryRunner):
             truncated=len(rows) > request.limit,
             language="lucene",
         )
+
+    def check(self, request: QueryRequest, tenant: SystemConfig.Tenant) -> LiveCheck:
+        """Carbon Black's ``search_validation`` call: the query is parsed, no search runs."""
+        if not self._api(tenant).validate_process_query(request.text):
+            raise QueryRefused(
+                f"Carbon Black Cloud refused the query on {tenant.name}",
+                detail="ensure each term has a value, and escape slashes, colons and spaces",
+            )
+        return LiveCheck()
+
+    def _api(self, tenant: SystemConfig.Tenant) -> CBCloudAPI:
+        from opentide.core.environment import reject_unsubstituted_placeholders
+        from opentide.platforms.carbon_black.client import CarbonBlackCloudService
+
+        if not isinstance(tenant, ConfigurationModels.Systems.CarbonBlackCloud.Tenant):
+            raise TypeError(
+                f"expected a Carbon Black Cloud tenant, got {type(tenant).__qualname__}"
+            )
+        setup = tenant.setup
+        reject_unsubstituted_placeholders(setup.url, setup.org_key, setup.token, client="CBC")
+        cbc_tenant = tenant
+        return self.client(tenant, lambda: CarbonBlackCloudService(cbc_tenant).service)
 
 
 def _document(process: Any) -> dict[str, Any]:

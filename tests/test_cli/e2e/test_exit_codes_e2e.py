@@ -70,29 +70,25 @@ def _empty_workspace(root: Path, shape: str) -> Path:
     return workspace
 
 
-def test_validation_warning_exits_zero_without_strict(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opentide.cli.exit_codes import validation_exit_code
+def test_validation_warning_exits_zero_without_strict() -> None:
+    from opentide.cli.exit_codes import validation_outcome
 
-    monkeypatch.setenv("VALIDATION_WARNING_RAISED", "1")
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    assert validation_exit_code(strict=False) == 0
-    assert validation_exit_code(strict=True) == 1
+    assert validation_outcome(failed=False, warned=True, strict=False).exit_code == 0
+    assert validation_outcome(failed=False, warned=True, strict=True).exit_code == 1
 
 
 def test_cli_exit_policy_never_returns_19(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opentide.cli.exit_codes import deployment_exit_code, validation_exit_code
+    from opentide.cli.exit_codes import deployment_exit_code, validation_outcome
     from opentide.deployment.ci import CIEnvironment
 
-    monkeypatch.setenv("VALIDATION_WARNING_RAISED", "1")
     monkeypatch.setenv("DEPLOYMENT_WARNING_RAISED", "1")
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
     monkeypatch.delenv("DEPLOYMENT_ERROR_RAISED", raising=False)
     monkeypatch.setattr(
         CIEnvironment,
         "_check_ci_environment",
         lambda self: CIEnvironment.CIPlatforms.GitlabCI,
     )
-    assert validation_exit_code() != 19
+    assert validation_outcome(failed=False, warned=True).exit_code != 19
     assert deployment_exit_code() != 19
 
 

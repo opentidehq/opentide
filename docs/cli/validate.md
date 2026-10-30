@@ -427,8 +427,21 @@ A query file (`--file hunting/lsass.kql`) holds one query in the language its ex
 
 ### `--live`
 
-`--live` builds the platform client and submits the catalogue queries, so it needs
-tenant credentials. The vendor SDKs ship with `pip install opentide`; there are no
+`--live` sends the catalogue queries to the platform's tenants, so it needs
+tenant credentials. Each query goes through the platform's
+[`opentide query`](./query.md) runner, as deploy would send it (with the
+tenant's exclusions, Splunk's MDR mapping macro, each SentinelOne correlation
+sub-query on its own), and is checked one way per platform:
+
+| Platform | Live check |
+|----------|------------|
+| `sentinel`, `defender_for_endpoint`, `sentinel_one` | A search for one row over the last minute. Defender also fails a query whose output lacks the columns a custom detection needs |
+| `splunk` | Splunk's `search/parser`, with macros and lookups: no search job runs |
+| `carbon_black_cloud` | Carbon Black's `search_validation`: no process search runs |
+| `elastic` | A Kibana preview of the compiled rule (see [below](#elastic-live-validation-and-deploy)) |
+
+No check saves a search or creates a rule. A rejected query is logged with the
+tenant's reason and fails the run; the other rules are still checked. The vendor SDKs ship with `pip install opentide`; there are no
 extras. If an SDK will not import, the environment is damaged and the command
 fails with the remedy rather than a `ModuleNotFoundError` traceback: the `advice`
 field in `--json`, a `help: reinstall opentide: pip install --force-reinstall
@@ -442,7 +455,7 @@ A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
 timeout, or a proxy that will not connect) fails the check with exit `1`, not a
 traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
 Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
-carries the network error; Sentinel reports it in its own failed result. The human output prints the same message as an `error:` line,
+carries the network error; Sentinel does too, where it used to report only a rejected query. The human output prints the same message as an `error:` line,
 with the `advice` as a `help:` line under it. The platform's remaining tenants are not checked after the
 first one that cannot be reached. The sample is illustrative, because it needs a
 configured tenant:

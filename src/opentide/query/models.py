@@ -95,6 +95,21 @@ class QueryResult:
     language: str | None = None
 
 
+@dataclass(frozen=True)
+class LiveCheck:
+    """A tenant accepted a query: what ``validate query --live`` learns from one check.
+
+    ``result`` holds the search's answer when the check ran one (its columns
+    feed checks such as Defender's required columns); a parse-only check
+    (Splunk, Carbon Black) leaves it ``None``. ``warnings`` are the tenant's
+    reservations about the verdict, such as a parser that timed out; a refusal
+    is raised as :class:`QueryRefused` instead.
+    """
+
+    result: QueryResult | None = None
+    warnings: tuple[str, ...] = ()
+
+
 @dataclass
 class TenantOutcome:
     """A query's result on one tenant, or why it has none."""

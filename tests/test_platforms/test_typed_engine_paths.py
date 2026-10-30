@@ -60,10 +60,3 @@ def test_engines_accept_rule_objects_and_an_empty_selection(
     assert plugins.resolve_rules([rule]) == [rule]
     assert plugins.resolve_rules([str(rule.metadata.uuid)]) == [rule]
     assert plugins.resolve_rules([]) == []
-
-
-def test_an_azure_error_without_a_body_falls_back_to_the_generic_message() -> None:
-    from opentide.platforms.sentinel.validator import _inner_message
-
-    with pytest.raises(KeyError):
-        _inner_message(SimpleNamespace(error=None))  # ty: ignore[invalid-argument-type]

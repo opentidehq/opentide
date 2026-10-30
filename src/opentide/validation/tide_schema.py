@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 import structlog
@@ -11,6 +10,7 @@ from opentide.core.logging.config import get_stdout_console, is_json_output
 from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 from opentide.validation.errors import format_issues_for_console
+from opentide.validation.issues import ValidationReport
 from opentide.validation.session import run_validation
 
 logger = structlog.get_logger("opentide.validation.tide_schema")
@@ -28,7 +28,8 @@ def _format_stats_table(rows: list[list[Any]]) -> str:
     return "\n".join(lines)
 
 
-def run() -> None:
+def run() -> ValidationReport:
+    """Validate every object, print the result, and return the report."""
     report_stage("schema validation")
     logger.info("validates_all_opentide_objects_via_model_validate")
     Opentide.initialise()
@@ -53,7 +54,6 @@ def run() -> None:
             detail="opentide objects currently do not match Pydantic models",
             advice="Review the files before running the validation again",
         )
-        os.environ["VALIDATION_ERROR_RAISED"] = "True"
     else:
         statstable = [["Category", "Count"]]
         for key in stats:
@@ -62,7 +62,8 @@ def run() -> None:
         logger.info("step_completed", detail=f"Successfully verified {overall} opentide objects")
         if not is_json_output():
             get_stdout_console().print(statstable, markup=False)
+    return report
 
 
 if __name__ == "__main__":
-    run()
+    raise SystemExit(0 if run().ok else 1)

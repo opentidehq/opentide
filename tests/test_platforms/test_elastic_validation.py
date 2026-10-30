@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +24,32 @@ from opentide.platforms.elastic.es_checks import (
     run_timestamp_fields_check,
 )
 from opentide.platforms.elastic.validator import ElasticValidator
+from opentide.query.check import LiveCheckReport
+
+#: The report of each ElasticValidator.validate call a test made, in order.
+_REPORTS: list[LiveCheckReport] = []
+
+
+@pytest.fixture(autouse=True)
+def _record_reports(monkeypatch: pytest.MonkeyPatch) -> None:
+    _REPORTS.clear()
+    validate = ElasticValidator.validate
+
+    def _validate(self: ElasticValidator, *args: object, **kwargs: object) -> LiveCheckReport:
+        report = validate(self, *args, **kwargs)  # type: ignore[arg-type]
+        _REPORTS.append(report)
+        return report
+
+    monkeypatch.setattr(ElasticValidator, "validate", _validate)
+
+
+def _failed() -> bool:
+    """The last validation's report has a rejected rule."""
+    return _REPORTS[-1].failed
+
+
+def _warned() -> bool:
+    return _REPORTS[-1].warned
 
 
 def _mock_response(status_code: int = 200, json_data: dict | list | None = None, text: str = ""):
@@ -141,8 +166,6 @@ def test_aggregation_fields_check_unonboarded_sources_warns_and_passes() -> None
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks")
 def test_validator_preview_reports_log_errors(mock_checks, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
     mock_checks.return_value = []
     setup = ConfigurationModels.Systems.Elastic.Tenant.Setup(
         ssl=True,
@@ -197,12 +220,7 @@ def test_validator_preview_reports_log_errors(mock_checks, monkeypatch: pytest.M
             json_data={"logs": [{"errors": ["Unknown field 'foo.bar' in query"]}]},
         )
         validator.validate([rule])
-        assert os.environ.get("VALIDATION_ERROR_RAISED") == "1"
-
-
-def _clear_validation_flags(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
+        assert _failed()
 
 
 def _elastic_rule(
@@ -363,7 +381,6 @@ def test_esql_preflight_verification_resolves_sources_without_metadata() -> None
 def test_validator_checks_every_rule_when_the_first_preview_fails(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     first = _elastic_rule("First", "00000000-0000-4000-8003-000000000001")
     second = _elastic_rule("Second", "00000000-0000-4000-8003-000000000002")
     batch = MagicMock(tenant=_tenant(), rules=[first, second])
@@ -379,14 +396,11 @@ def test_validator_checks_every_rule_when_the_first_preview_fails(
         ]
         validator.validate([first, second])
     assert mock_preview.call_count == 2
-    assert os.environ.get("VALIDATION_ERROR_RAISED") == "1"
+    assert _failed()
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
-def test_validator_warnings_set_the_warning_flag(
-    _mock_checks, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _clear_validation_flags(monkeypatch)
+def test_validator_preview_warnings_warn(_mock_checks, monkeypatch: pytest.MonkeyPatch) -> None:
     rule = _elastic_rule(
         "Lookback",
         "00000000-0000-4000-8003-000000000003",
@@ -406,15 +420,14 @@ def test_validator_warnings_set_the_warning_flag(
             json_data={"logs": [{"warnings": ["index logs-* does not exist"]}]},
         )
         validator.validate([rule])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
-    assert os.environ.get("VALIDATION_ERROR_RAISED") is None
+    assert _warned()
+    assert not _failed()
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
 def test_validator_lowercase_metadata_id_does_not_warn(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     rule = _elastic_rule(
         "Deduped",
         "00000000-0000-4000-8003-000000000004",
@@ -430,14 +443,13 @@ def test_validator_lowercase_metadata_id_does_not_warn(
         mock_deployment.return_value.rule_deployment = [batch]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         validator.validate([rule])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+    assert not _warned()
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
 def test_validator_preview_403_skips_the_rest_of_the_tenant(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     first = _elastic_rule("Denied", "00000000-0000-4000-8003-000000000005")
     second = _elastic_rule("Later", "00000000-0000-4000-8003-000000000006")
     batch = MagicMock(tenant=_tenant(), rules=[first, second])
@@ -450,7 +462,7 @@ def test_validator_preview_403_skips_the_rest_of_the_tenant(
         mock_preview.return_value = _mock_response(403, text="forbidden")
         validator.validate([first, second])
     assert mock_preview.call_count == 1
-    assert os.environ.get("VALIDATION_ERROR_RAISED") == "1"
+    assert _failed()
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
@@ -458,7 +470,6 @@ def test_validator_does_not_warn_when_timestamp_override_is_omitted(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """overrides.timestamp is optional in RFC 0007 §2; the RFC template omits it."""
-    _clear_validation_flags(monkeypatch)
     rule = _elastic_rule(
         "No Timestamp Override",
         "00000000-0000-4000-8003-000000000007",
@@ -472,7 +483,7 @@ def test_validator_does_not_warn_when_timestamp_override_is_omitted(
         mock_deployment.return_value.rule_deployment = [batch]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([rule])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+    assert not _warned()
 
 
 @pytest.mark.parametrize(
@@ -493,7 +504,6 @@ def test_validator_warns_on_zero_or_long_lookback(
     lookback: str,
     threshold_cfg: dict | None,
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     rule = _elastic_rule(
         "Schedule Check",
         "00000000-0000-4000-8003-000000000010",
@@ -510,14 +520,13 @@ def test_validator_warns_on_zero_or_long_lookback(
         mock_deployment.return_value.rule_deployment = [batch]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([rule])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert _warned()
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
 def test_validator_warns_when_risk_score_outside_severity_band(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     # High severity expects 48-73; 20 is in the low band
     out_of_band = _elastic_rule(
         "Mismatched Risk",
@@ -533,9 +542,8 @@ def test_validator_warns_when_risk_score_outside_severity_band(
         mock_deployment.return_value.rule_deployment = [batch]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([out_of_band])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert _warned()
 
-    _clear_validation_flags(monkeypatch)
     in_band = _elastic_rule(
         "Matched Risk",
         "00000000-0000-4000-8003-000000000012",
@@ -550,7 +558,7 @@ def test_validator_warns_when_risk_score_outside_severity_band(
         mock_deployment.return_value.rule_deployment = [batch_ok]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([in_band])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+    assert not _warned()
 
 
 @pytest.mark.parametrize(
@@ -573,7 +581,6 @@ def test_validator_eql_maxspan_vs_schedule_window(
     lookback: str,
     should_warn: bool,
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     query = (
         f"sequence by host.id with maxspan={maxspan}\n"
         '  [process where event.type == "start"]\n'
@@ -596,9 +603,9 @@ def test_validator_eql_maxspan_vs_schedule_window(
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([rule])
     if should_warn:
-        assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+        assert _warned()
     else:
-        assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+        assert not _warned()
 
 
 def _run_validator(rule: object) -> None:
@@ -616,7 +623,6 @@ def _run_validator(rule: object) -> None:
 def test_validator_eql_reads_the_header_maxspan(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     query = (
         "sequence by host.id with maxspan=15m\n"
         '  [process where process.name : "a.exe"] // maxspan=1s in a comment\n'
@@ -631,14 +637,13 @@ def test_validator_eql_reads_the_header_maxspan(
             lookback="1m",
         )
     )
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert _warned()
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
 def test_validator_eql_maxspan_in_a_string_is_not_a_sequence(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     _run_validator(
         _elastic_rule(
             "EQL Event Query",
@@ -648,7 +653,7 @@ def test_validator_eql_maxspan_in_a_string_is_not_a_sequence(
             lookback="1m",
         )
     )
-    assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+    assert not _warned()
 
 
 @pytest.mark.parametrize(
@@ -666,7 +671,6 @@ def test_validator_eql_maxspan_in_a_string_is_not_a_sequence(
 def test_validator_esql_metadata_id_warning_reads_past_comments_and_inline_stats(
     _mock_checks, monkeypatch: pytest.MonkeyPatch, query: str, should_warn: bool
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     _run_validator(
         _elastic_rule(
             "ES|QL Dedup",
@@ -677,16 +681,15 @@ def test_validator_esql_metadata_id_warning_reads_past_comments_and_inline_stats
         )
     )
     if should_warn:
-        assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+        assert _warned()
     else:
-        assert os.environ.get("VALIDATION_WARNING_RAISED") is None
+        assert not _warned()
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
 def test_validator_warns_on_basic_license_suppression_and_ics_technique(
     _mock_checks, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_validation_flags(monkeypatch)
     tenant = _tenant()
     tenant.setup.suppression = False
     rule = _elastic_rule(
@@ -702,10 +705,9 @@ def test_validator_warns_on_basic_license_suppression_and_ics_technique(
         mock_deployment.return_value.rule_deployment = [batch]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([rule])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert _warned()
 
     # Non-Enterprise ATT&CK technique (T0807 is ICS) sets warning flag
-    _clear_validation_flags(monkeypatch)
     ics_rule = _elastic_rule(
         "ICS Technique Rule",
         "00000000-0000-4000-8003-000000000015",
@@ -719,7 +721,7 @@ def test_validator_warns_on_basic_license_suppression_and_ics_technique(
         mock_deployment.return_value.rule_deployment = [ics_batch]
         mock_preview.return_value = _mock_response(200, json_data={"logs": []})
         ElasticValidator().validate([ics_rule])
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert _warned()
 
 
 def test_resolve_rule_sources_data_view_404_fails_rule_and_403_raises() -> None:
@@ -850,7 +852,6 @@ def advisory_log(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, o
 
     monkeypatch.setattr(elastic_validator, "logger", _Recorder())
     monkeypatch.setattr(elastic_attack, "logger", _Recorder())
-    _clear_validation_flags(monkeypatch)
     return events
 
 
@@ -940,7 +941,7 @@ def test_validator_emits_the_spec_advisory_codes(
         _elastic_rule("Advisory Codes", "00000000-0000-4000-8003-000000000030", **rule_kwargs)
     )
     assert _advisory_codes(advisory_log) == expected
-    assert (os.environ.get("VALIDATION_WARNING_RAISED") == "1") is bool(expected)
+    assert _warned() is bool(expected)
 
 
 @patch("opentide.platforms.elastic.validator.run_elasticsearch_checks", return_value=[])
@@ -973,7 +974,7 @@ def test_validator_logs_technique_not_enterprise_for_an_ics_technique(
     assert event == "technique_not_enterprise"
     assert fields["technique"] == "T0807"
     assert fields["legacy_event"] == "skipping_non_enterprise_technique"
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert _warned()
 
 
 def test_every_advisory_code_names_the_event_it_replaced() -> None:

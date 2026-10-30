@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import json
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
+
+import structlog
 
 from opentide.models.system_config import ConfigurationModels, SystemConfig
-from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
+from opentide.query.models import LiveCheck, QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner
+
+if TYPE_CHECKING:
+    from splunklib.client import Service
+
+logger = structlog.get_logger(__name__)
+
+#: The warning a parse that timed out at a gateway carries: the query is assumed valid.
+PARSER_TIMEOUT_WARNING = "Splunk's parser timed out behind a gateway; the query is assumed valid"
 
 
 class SplunkQueryRunner(QueryRunner):
@@ -16,18 +26,7 @@ class SplunkQueryRunner(QueryRunner):
     def run(self, request: QueryRequest, tenant: SystemConfig.Tenant) -> QueryResult:
         from splunklib.binding import HTTPError
 
-        from opentide.platforms.splunk.client import connect_splunk
-
-        if not isinstance(tenant, ConfigurationModels.Systems.Splunk.Tenant):
-            raise TypeError(f"expected a Splunk tenant, got {type(tenant).__qualname__}")
-        setup = tenant.setup
-        service = connect_splunk(
-            host=setup.url,
-            port=setup.port,
-            token=setup.token,
-            app=setup.app,
-            ssl_enabled=setup.ssl,
-        )
+        service = self._service(tenant)
         sent = spl_search(request.text)
         try:
             stream = service.jobs.oneshot(
@@ -62,6 +61,54 @@ class SplunkQueryRunner(QueryRunner):
             warnings=warnings,
             sent=sent if sent != request.text.strip() else None,
             language="spl",
+        )
+
+    def check(self, request: QueryRequest, tenant: SystemConfig.Tenant) -> LiveCheck:
+        """Splunk's ``search/parser``: the query is parsed with its macros and lookups, no
+        search job runs."""
+        from opentide.platforms.splunk.client import HTTP_ERROR_STATUS
+
+        service = self._service(tenant, allow_http_errors=True)
+        query = request.text.strip()
+        if not query.startswith("| "):
+            query = "| search " + query
+        response = service.parse(
+            query.strip(), enable_lookups=True, output_mode="json", reload_macros=True
+        )
+        status = response["status"]
+        if status == HTTP_ERROR_STATUS:
+            # The body is a stream: read it once. A second read returned b"" and
+            # failed in json.loads, so a refused query on a redirect crashed the
+            # check instead of being reported.
+            body = response["body"].read()
+            if response.get("reason") == "Temporary Redirect" and "Network Error" in str(body):
+                return LiveCheck(warnings=(PARSER_TIMEOUT_WARNING,))
+            messages = _parse(body).get("messages", []) or []
+            texts = [str(m.get("text", "")) for m in messages if isinstance(m, dict)]
+            detail = "; ".join(text for text in texts if text) or None
+            raise QueryRefused(f"Splunk refused the query on {tenant.name}", detail=detail)
+        if status != 200:
+            # Neither a refusal nor an acceptance: reported, and not failed (as before #673).
+            logger.critical("unexpected_splunk_validation_response", response=str(response))
+        return LiveCheck()
+
+    def _service(self, tenant: SystemConfig.Tenant, *, allow_http_errors: bool = False) -> Service:
+        from opentide.platforms.splunk.client import connect_splunk
+
+        if not isinstance(tenant, ConfigurationModels.Systems.Splunk.Tenant):
+            raise TypeError(f"expected a Splunk tenant, got {type(tenant).__qualname__}")
+        setup = tenant.setup
+        return self.client(
+            tenant,
+            lambda: connect_splunk(
+                host=setup.url,
+                port=setup.port,
+                token=setup.token,
+                app=setup.app,
+                allow_http_errors=allow_http_errors,
+                ssl_enabled=setup.ssl,
+            ),
+            key="parser" if allow_http_errors else "",
         )
 
 

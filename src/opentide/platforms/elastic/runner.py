@@ -8,6 +8,7 @@ the rows are the alerts that preview raised.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Any, ClassVar
 from urllib.parse import quote
 
@@ -28,6 +29,8 @@ from opentide.query.models import (
 )
 from opentide.query.runner import QueryRunner
 
+#: Seconds a request may take when the caller names no timeout (the client's own default).
+DEFAULT_CLIENT_TIMEOUT = 30.0
 #: Kibana caps the alerts one rule execution writes.
 MAX_PREVIEW_ALERTS = 1000
 
@@ -40,21 +43,9 @@ class ElasticQueryRunner(QueryRunner):
     languages: ClassVar[tuple[str, ...]] = ("esql", "eql", "lucene", "kuery")
 
     def run(self, request: QueryRequest, tenant: SystemConfig.Tenant) -> QueryResult:
-        from opentide.core.environment import reject_unsubstituted_placeholders
-        from opentide.platforms.transport import tenant_tls_verify
-
+        client = self.elastic_client(tenant, timeout=request.timeout)
         if not isinstance(tenant, ConfigurationModels.Systems.Elastic.Tenant):
             raise TypeError(f"expected an Elastic tenant, got {type(tenant).__qualname__}")
-        setup = tenant.setup
-        reject_unsubstituted_placeholders(setup.api_key, client="Elastic")
-        client = ElasticClient(
-            url=setup.url,
-            elasticsearch_url=setup.elasticsearch_url,
-            api_key=setup.api_key,
-            space=setup.space,
-            verify_ssl=tenant_tls_verify(setup.ssl, platform="elastic", tenant=tenant.name),
-            timeout=int(max(request.timeout, 1)),
-        )
         language = request.language or self.languages[0]
         if language == "esql":
             return _esql(client, request, tenant.name)
@@ -67,6 +58,63 @@ class ElasticQueryRunner(QueryRunner):
         if language == "lucene":
             return _lucene(client, request, indices, tenant.name)
         return _kuery_preview(client, request, indices, tenant.name)
+
+    def elastic_client(
+        self, tenant: SystemConfig.Tenant, *, timeout: float = DEFAULT_CLIENT_TIMEOUT
+    ) -> ElasticClient:
+        """*tenant*'s Kibana and Elasticsearch client, made once per runner and timeout."""
+        from opentide.core.environment import reject_unsubstituted_placeholders
+        from opentide.platforms.transport import tenant_tls_verify
+
+        if not isinstance(tenant, ConfigurationModels.Systems.Elastic.Tenant):
+            raise TypeError(f"expected an Elastic tenant, got {type(tenant).__qualname__}")
+        setup = tenant.setup
+        reject_unsubstituted_placeholders(setup.api_key, client="Elastic")
+        return self.client(
+            tenant,
+            lambda: ElasticClient(
+                url=setup.url,
+                elasticsearch_url=setup.elasticsearch_url,
+                api_key=setup.api_key,
+                space=setup.space,
+                verify_ssl=tenant_tls_verify(setup.ssl, platform="elastic", tenant=tenant.name),
+                timeout=int(max(timeout, 1)),
+            ),
+            key=f"{timeout:g}",
+        )
+
+    def preview_rule(
+        self, tenant: SystemConfig.Tenant, payload: dict[str, Any], *, end: datetime
+    ) -> dict[str, Any]:
+        """Kibana's preview of the rule *payload* deploy would create, once, ending at *end*.
+
+        Creates no rule: a preview writes only its alerts, to the preview index.
+        Raises :class:`QueryRefused` when Kibana refuses the rule (HTTP 400 or
+        any other failure the client's retries did not clear) and
+        :class:`~opentide.core.errors.Errors.TenantConnectionError` when it
+        refuses the credentials (HTTP 401 or 403).
+        """
+        from opentide.core.errors import Errors
+
+        response = self.elastic_client(tenant).preview_rule(
+            payload, invocation_count=1, timeframe_end=format_utc_ms(end)
+        )
+        if response.status_code == 400:
+            raise QueryRefused(f"Rule schema error on preview: {response.text}")
+        if response.status_code in (401, 403):
+            raise Errors.TenantConnectionError(
+                f"Tenant authentication/authorization failed: HTTP {response.status_code}"
+            )
+        if response.status_code != 200:
+            # 429 and 5xx were already retried by the client (RFC 0007 §5).
+            raise QueryRefused(f"Preview failed (HTTP {response.status_code}): {response.text}")
+        body = response.json()
+        return body if isinstance(body, dict) else {}
+
+
+def format_utc_ms(moment: datetime) -> str:
+    """*moment* as Kibana's preview takes ``timeframeEnd``: UTC, milliseconds, ``Z``."""
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
 def esql_with_limit(query: str, limit: int) -> str:

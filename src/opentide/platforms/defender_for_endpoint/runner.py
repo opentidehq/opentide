@@ -36,7 +36,7 @@ class DefenderQueryRunner(QueryRunner):
         reject_unsubstituted_placeholders(
             setup.tenant_id, setup.client_id, setup.client_secret, client="Microsoft Graph"
         )
-        service = DefenderForEndpointService(tenant)
+        service = self.client(tenant, lambda: DefenderForEndpointService(tenant))
         sent = kql_with_limit(request.text, request.limit)
         timespan = f"{format_utc_z(request.window.start)}/{format_utc_z(request.window.end)}"
         response = service.session.post(

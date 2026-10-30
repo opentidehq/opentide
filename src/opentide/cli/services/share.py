@@ -506,17 +506,10 @@ def _validator(documents: list[TideDocument]) -> Callable[[TideDocument], str | 
     uuids = frozenset(document.uuid for document in documents if document.uuid)
     if not uuids:
         return None
-    previous = (
-        os.environ.get("VALIDATION_ERROR_RAISED"),
-        os.environ.get("VALIDATION_WARNING_RAISED"),
+    report = run_validation(
+        scope=ValidationScope.narrow(uuids=uuids),
+        checks=frozenset({ValidateCheck.schema, ValidateCheck.uuid_format}),
     )
-    try:
-        report = run_validation(
-            scope=ValidationScope.narrow(uuids=uuids),
-            checks=frozenset({ValidateCheck.schema, ValidateCheck.uuid_format}),
-        )
-    finally:
-        _restore_validation_env(previous)
     by_uuid = report.legacy_errors_by_uuid()
 
     def validate(document: TideDocument) -> str | None:
@@ -538,18 +531,6 @@ def _validator(documents: list[TideDocument]) -> Callable[[TideDocument], str | 
         return "; ".join(messages)
 
     return validate
-
-
-def _restore_validation_env(previous: tuple[str | None, str | None]) -> None:
-    for name, value in zip(
-        ("VALIDATION_ERROR_RAISED", "VALIDATION_WARNING_RAISED"),
-        previous,
-        strict=True,
-    ):
-        if value is None:
-            os.environ.pop(name, None)
-        else:
-            os.environ[name] = value
 
 
 #: Record action → the word the outcome line counts it under.

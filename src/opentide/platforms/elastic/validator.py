@@ -1,15 +1,22 @@
-"""Live query validation engine for Elastic Security (RFC 0007 §6)."""
+"""Live query validation engine for Elastic Security (RFC 0007 §6).
+
+Each rule is previewed on its tenants as deploy would create it (the runner's
+:meth:`~opentide.platforms.elastic.runner.ElasticQueryRunner.preview_rule`), so
+the check covers the compiled rule (threshold, new terms, machine learning,
+its schema), not the query alone. The RFC 0007 advisories and the
+Elasticsearch checks are validation's own, on top of the preview.
+"""
 
 from __future__ import annotations
 
-import os
 from collections.abc import Sequence
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, ClassVar
 
 import structlog
 
+from opentide.core.errors import Errors
 from opentide.core.registry import DetectionPlatforms
+from opentide.core.time import utc_now
 from opentide.deployment import TideDeployment
 from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
@@ -31,8 +38,11 @@ from opentide.platforms.elastic.query_text import (
     esql_aggregates,
     esql_has_metadata_id,
 )
-from opentide.platforms.plugins import QueryValidator
-from opentide.platforms.transport import reaching_tenant, tenant_tls_verify
+from opentide.platforms.elastic.runner import ElasticQueryRunner
+from opentide.platforms.live_validation import LiveQueryValidator, refusal_text
+from opentide.platforms.transport import reaching_tenant
+from opentide.query.check import LiveCheckReport, RuleCheck
+from opentide.query.models import QueryRefused
 
 logger = structlog.get_logger(__name__)
 
@@ -45,23 +55,16 @@ _RISK_BANDS: dict[str, tuple[int, int]] = {
 _MAX_RECOMMENDED_LOOKBACK_SECONDS = 3600
 
 
-def _flag_error() -> None:
-    os.environ["VALIDATION_ERROR_RAISED"] = "1"
-
-
-def _flag_warning() -> None:
-    os.environ["VALIDATION_WARNING_RAISED"] = "1"
-
-
 def _emit_rule_advisories(
     rule: DetectionRule,
     block_dict: dict[str, Any],
     tenant: ConfigurationModels.Systems.Elastic.Tenant,
-) -> None:
-    """Emit RFC 0007 and Elastic Security configuration advisories as warnings."""
+) -> list[str]:
+    """Log RFC 0007 and Elastic Security configuration advisories; return them as warnings."""
     cfg = getattr(rule.configurations, "elastic", None) if rule.configurations else None
     if not cfg:
-        return
+        return []
+    warnings: list[str] = []
 
     # 1. Look-back time advisories. The three conditions are independent: a rule can
     # trip more than one.
@@ -78,7 +81,7 @@ def _emit_rule_advisories(
             lookback=lookback_str,
             advice="scheduling.lookback is 0m; Elastic recommends at least 1m overlap",
         )
-        _flag_warning()
+        warnings.append(advisories.LOOKBACK_ZERO)
 
     if lookback_secs > _MAX_RECOMMENDED_LOOKBACK_SECONDS:
         warn_advisory(
@@ -93,7 +96,7 @@ def _emit_rule_advisories(
                 "total query window"
             ),
         )
-        _flag_warning()
+        warnings.append(advisories.LOOKBACK_LONG)
 
     if cfg.type == "threshold" and lookback_secs > interval_secs:
         warn_advisory(
@@ -108,7 +111,7 @@ def _emit_rule_advisories(
                 "deduplicate alerts across overlapping runs"
             ),
         )
-        _flag_warning()
+        warnings.append(advisories.THRESHOLD_LOOKBACK)
 
     # 2. Non-aggregating ES|QL METADATA _id advisory
     if (
@@ -125,7 +128,7 @@ def _emit_rule_advisories(
                 "Non-aggregating ES|QL query lacks METADATA _id; alerts will not be deduplicated"
             ),
         )
-        _flag_warning()
+        warnings.append(advisories.ESQL_METADATA_ID)
 
     # 3. Explicit risk.score outside RFC 0007 §3 severity band
     if cfg.risk is not None:
@@ -149,7 +152,7 @@ def _emit_rule_advisories(
                         f"({low}-{high}) for severity '{kibana_severity}'"
                     ),
                 )
-                _flag_warning()
+                warnings.append(advisories.RISK_BAND)
 
     # 4. EQL sequence maxspan vs. scheduling window
     if cfg.type == "eql" and cfg.query and eql_is_sequence(cfg.query):
@@ -171,7 +174,7 @@ def _emit_rule_advisories(
                         "sequences spanning the full maxspan cannot match"
                     ),
                 )
-                _flag_warning()
+                warnings.append(advisories.EQL_MAXSPAN_WINDOW)
             elif maxspan_ms > lookback_secs * 1000:
                 warn_advisory(
                     logger,
@@ -185,7 +188,7 @@ def _emit_rule_advisories(
                         f"({lookback_str}); sequences straddling two runs can be missed"
                     ),
                 )
-                _flag_warning()
+                warnings.append(advisories.EQL_MAXSPAN_LOOKBACK)
 
     # 5. Basic-licence tenant suppression omission
     if getattr(tenant.setup, "suppression", True) is False and cfg.suppression is not None:
@@ -196,94 +199,107 @@ def _emit_rule_advisories(
             tenant=tenant.name,
             advice="Tenant setup.suppression is false; alert_suppression will be omitted",
         )
-        _flag_warning()
+        warnings.append("suppression_omitted_basic_license")
 
     # 6. Non-Enterprise ATT&CK techniques skipped
     if find_non_enterprise_techniques(rule):
-        _flag_warning()
+        warnings.append(advisories.TECHNIQUE_NOT_ENTERPRISE)
+    return warnings
 
 
-class ElasticValidator(QueryValidator):
+class ElasticValidator(LiveQueryValidator):
     """Validate detection rules against live Kibana and Elasticsearch instances."""
+
+    platform: ClassVar[str] = "elastic"
+
+    @property
+    def elastic(self) -> ElasticQueryRunner:
+        runner = self.runner
+        if not isinstance(runner, ElasticQueryRunner):
+            raise TypeError(f"expected the Elastic runner, got {type(runner).__qualname__}")
+        return runner
 
     def validate(
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
-    ) -> None:
+    ) -> LiveCheckReport:
         deployment = TideDeployment(mdr_deployment, DetectionPlatforms.ELASTIC, strategies)
+        report = LiveCheckReport(self.platform)
         for batch in deployment.rule_deployment:
             tenant = batch_tenant(batch, ConfigurationModels.Systems.Elastic.Tenant)
-            client = ElasticClient(
-                url=tenant.setup.url,
-                elasticsearch_url=tenant.setup.elasticsearch_url,
-                api_key=getattr(tenant.setup, "api_key", ""),
-                space=getattr(tenant.setup, "space", "default"),
-                verify_ssl=tenant_tls_verify(
-                    getattr(tenant.setup, "ssl", True), platform="elastic", tenant=tenant.name
-                ),
-            )
+            client = self.elastic.elastic_client(tenant)
             with reaching_tenant("elastic", tenant.name, tenant.setup.url):
                 for rule in batch.rules:
+                    warnings: list[str] = []
                     try:
-                        self._validate_rule(rule, client, tenant)
+                        self._validate_rule(rule, client, tenant, warnings)
                     except ElasticTenantError as exc:
+                        report.checks.append(_failed(rule, tenant, str(exc), warnings))
                         logger.critical(
                             "elastic_tenant_validation_failed",
                             rule=rule.name,
                             uuid=_rule_uuid(rule),
                             error=str(exc),
                         )
-                        _flag_error()
+                        # The tenant refuses every rule alike: the rest are not sent.
                         break
                     except ElasticRuleCheckError as exc:
+                        report.checks.append(_failed(rule, tenant, str(exc), warnings))
                         logger.critical(
                             "elastic_rule_validation_failed",
                             rule=rule.name,
                             uuid=_rule_uuid(rule),
                             error=str(exc),
                         )
-                        _flag_error()
+                    else:
+                        if getattr(rule.configurations, "elastic", None) is not None:
+                            report.checks.append(
+                                RuleCheck(
+                                    rule=_rule_uuid(rule),
+                                    name=rule.name,
+                                    tenant=tenant.name,
+                                    warnings=tuple(warnings),
+                                )
+                            )
+        return report
 
     def _validate_rule(
         self,
         rule: DetectionRule,
         client: ElasticClient,
         tenant: ConfigurationModels.Systems.Elastic.Tenant,
+        warnings: list[str],
     ) -> None:
+        """Check *rule* on *tenant*, adding its warnings to *warnings*.
+
+        Raises :class:`ElasticRuleCheckError` when the tenant refuses the rule
+        and :class:`ElasticTenantError` when the tenant cannot check any rule.
+        """
         cfg = getattr(rule.configurations, "elastic", None) if rule.configurations else None
         if not cfg:
             return
 
         block_dict = cfg.model_dump(by_alias=True, exclude_none=False)
-        _emit_rule_advisories(rule, block_dict, tenant)
+        warnings.extend(_emit_rule_advisories(rule, block_dict, tenant))
 
         for warning in run_elasticsearch_checks(
             client, block_dict, setup_index=list(tenant.setup.index or [])
         ):
             logger.warning("elasticsearch_check_warning", rule=rule.name, warning=warning)
-            _flag_warning()
+            warnings.append(warning)
 
         payload = compile_rule(rule, tenant_config=tenant)
-        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        resp = client.preview_rule(payload, invocation_count=1, timeframe_end=now_utc)
-
-        if resp.status_code == 400:
-            raise ElasticRuleCheckError(f"Rule schema error on preview: {resp.text}")
-        if resp.status_code in (401, 403):
-            raise ElasticTenantError(
-                f"Tenant authentication/authorization failed: HTTP {resp.status_code}"
-            )
-
-        if resp.status_code != 200:
-            # 429 and 5xx were already retried by the client (RFC 0007 §5). Anything
-            # left fails this rule only; it must not abort the remaining rules.
-            raise ElasticRuleCheckError(f"Preview failed (HTTP {resp.status_code}): {resp.text}")
-        res = resp.json()
+        try:
+            res = self.elastic.preview_rule(tenant, payload, end=utc_now())
+        except QueryRefused as exc:
+            raise ElasticRuleCheckError(refusal_text(exc)) from exc
+        except Errors.TenantConnectionError as exc:
+            raise ElasticTenantError(str(exc)) from exc
 
         if res.get("isAborted") is True:
             logger.warning("preview_inconclusive_aborted", rule=rule.name)
-            _flag_warning()
+            warnings.append("Kibana aborted the preview before it finished")
 
         logs = res.get("logs", [])
         error_msgs: list[str] = []
@@ -292,7 +308,7 @@ class ElasticValidator(QueryValidator):
                 continue
             for warning in entry.get("warnings", []):
                 logger.warning("preview_log_warning", rule=rule.name, warning=str(warning))
-                _flag_warning()
+                warnings.append(str(warning))
             for error in entry.get("errors", []):
                 err_str = str(error)
                 if "preview-index" in err_str or "preview.alerts" in err_str:
@@ -305,6 +321,21 @@ class ElasticValidator(QueryValidator):
             raise ElasticRuleCheckError(
                 f"Preview validation failed for rule '{rule.name}': {'; '.join(error_msgs)}"
             )
+
+
+def _failed(
+    rule: DetectionRule,
+    tenant: ConfigurationModels.Systems.Elastic.Tenant,
+    error: str,
+    warnings: list[str],
+) -> RuleCheck:
+    return RuleCheck(
+        rule=_rule_uuid(rule),
+        name=rule.name,
+        tenant=tenant.name,
+        errors=(error,),
+        warnings=tuple(warnings),
+    )
 
 
 def _rule_uuid(rule: DetectionRule) -> str:

@@ -51,6 +51,17 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     clear_runtime_caches()
 
 
+@pytest.fixture(autouse=True)
+def _flags_stay_unset() -> Iterator[None]:
+    """No live check, passing or failing, sets a process-wide flag (#673).
+
+    Set up before ``repo``, so the check runs after the test's own environment
+    changes are undone.
+    """
+    yield
+    _no_flags()
+
+
 def _add_tenant(repo: Path, platform: str, setup: str, name: str = "soc") -> None:
     config = repo / ".opentide/configurations/systems" / f"{platform}.toml"
     tenant = f'\n[[tenants]]\nname = "{name}"\n[tenants.setup]\n{setup}'
@@ -713,7 +724,8 @@ def test_sdk_leaves_the_callers_environment_alone(
     azure: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Whatever the caller's process environment holds is neither read nor changed."""
-    monkeypatch.setenv("VALIDATION_ERROR_RAISED", "True")
+    with monkeypatch.context() as patched:
+        patched.setenv("VALIDATION_ERROR_RAISED", "True")
 
-    assert _sdk("sentinel") == (True, [], [])
-    assert os.environ["VALIDATION_ERROR_RAISED"] == "True"
+        assert _sdk("sentinel") == (True, [], [])
+        assert os.environ["VALIDATION_ERROR_RAISED"] == "True"

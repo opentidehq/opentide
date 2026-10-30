@@ -31,7 +31,7 @@ class SentinelOneQueryRunner(QueryRunner):
             raise TypeError(f"expected a SentinelOne tenant, got {type(tenant).__qualname__}")
         setup = tenant.setup
         reject_unsubstituted_placeholders(setup.url, setup.api_token, client="SentinelOne")
-        service = SentinelOneService(tenant)
+        service = self.client(tenant, lambda: SentinelOneService(tenant))
         sent = powerquery_with_limit(request.text, request.limit)
         body: dict[str, Any] = {
             "query": sent,
