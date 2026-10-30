@@ -22,7 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
-- **`opentide doctor` no longer reports fresh templates as stale in a workspace that sets `[metadata].required` in `lint.toml`.** `generate templates` renders those metadata keys as live keys, but the `templates_fresh` check rendered the default `author` and `organisation`, so every such workspace was told to regenerate templates it had just generated. The check now renders with the workspace's `[metadata].required`. A `lint.toml` that does not parse is reported by `templates_fresh` as a warning naming the key, where it was not read at all.
+- **`opentide doctor` no longer reports fresh templates as stale in a workspace that sets `[metadata].required` in `lint.toml`.** `generate templates` renders those metadata keys as live keys, but the `templates_fresh` check rendered the default `author` and `organisation`, so a workspace whose `[metadata].required` differs from the default was told to regenerate templates it had just generated. The check now renders with the workspace's `[metadata].required`. A `lint.toml` that parses but holds a value opentide rejects (an unknown `[metadata].required` key, say) is reported by `templates_fresh` as a warning naming the key, where the check used to report stale templates for the wrong reason. A `lint.toml` that is not valid TOML is still reported by `configuration`.
 
 ## [0.19.0] — 2026-10-29
 

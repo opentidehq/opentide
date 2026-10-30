@@ -32,7 +32,7 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `git` | git is on `PATH` | | git is missing | |
 | `git_repository` | The workspace is in a repository, and its default branch (`origin/HEAD`) | | Not a repository, or `origin/HEAD` is not set | |
 | `configuration` | The workspace configuration TOMLs (`.opentide/configurations/`, and a parent instance's) load | One does not parse: the message names the file and line | | |
-| `templates_fresh` | Every template this version generates exists and matches what it would write, with the metadata keys `lint.toml` requires rendered live as `generate templates` does | | A template is missing or differs, or `lint.toml` cannot be read | |
+| `templates_fresh` | Every template this version generates exists and matches what it would write, with the metadata keys `lint.toml` requires rendered live as `generate templates` does | | A template is missing or differs, or `lint.toml` holds a value opentide rejects | |
 | `schemas_fresh` | Every schema this version generates exists | | A schema is missing | |
 | `lsp_catalog` | opentide generates the language server's catalog for this workspace, and a committed copy (`.opentide/lsp/catalogs/generated/`, for editors that run `opentide-lsp` on its own) comes from this opentide version | | It cannot be generated, or the committed copy does not parse or comes from another version | No workspace |
 | `platforms_enabled` | Which platforms are enabled | | None is | |

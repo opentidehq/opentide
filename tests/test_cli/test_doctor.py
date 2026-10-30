@@ -309,6 +309,7 @@ def test_templates_fresh_when_lint_toml_changes_the_required_metadata(
     _generate_templates(root, monkeypatch)
     check = _only(doctor.check_templates(_ctx(root)))
     assert (check.status, check.message) == ("pass", "Templates match the installed version")
+    clear_runtime_caches()
 
 
 def test_templates_not_compared_when_lint_toml_cannot_be_read(
@@ -317,13 +318,32 @@ def test_templates_not_compared_when_lint_toml_cannot_be_read(
     root = _lint_workspace(tmp_path, '[metadata]\nrequired = ["author"]\n')
     _generate_templates(root, monkeypatch)
     (root / ".opentide" / "configurations" / "lint.toml").write_text(
-        '[metadata]\nrequired = ["owner"]\n', encoding="utf-8"
+        '[metadata]\nrequired = ["not-a-metadata-key"]\n', encoding="utf-8"
     )
     clear_runtime_caches()
     check = _only(doctor.check_templates(_ctx(root)))
     assert check.status == "warn"
-    assert "owner" in check.message
+    assert "not-a-metadata-key" in check.message
     assert check.fix and "lint.toml" in check.fix
+    clear_runtime_caches()
+
+
+def test_a_rejected_lint_toml_value_is_reported_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The file parses, so ``configuration`` passes and only ``templates_fresh`` warns."""
+    root = _lint_workspace(tmp_path, '[metadata]\nrequired = ["author"]\n')
+    _generate_templates(root, monkeypatch)
+    (root / ".opentide" / "configurations" / "lint.toml").write_text(
+        '[metadata]\nrequired = ["not-a-metadata-key"]\n', encoding="utf-8"
+    )
+    clear_runtime_caches()
+    payload = doctor.run_doctor(_ctx(root, offline=True, env={}))
+    statuses = {check["code"]: check["status"] for check in payload["checks"]}
+    assert statuses["configuration"] == "pass"
+    assert statuses["templates_fresh"] == "warn"
+    assert [check["code"] for check in payload["checks"]].count("templates_fresh") == 1
+    clear_runtime_caches()
 
 
 # --------------------------------------------------------------------------- platforms
