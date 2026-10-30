@@ -370,7 +370,7 @@ def create_query(data: DetectionRule) -> str:
     uuid = data.metadata.uuid
     splunk_config = data.platform_configs().splunk
     if not splunk_config or not splunk_config.query:
-        raise ValueError("Missing Splunk query in typed MDR")
+        raise ValueError("The rule has no configurations.splunk.query")
     status = splunk_config.status
     spl = splunk_config.query.strip()
     macro = (
