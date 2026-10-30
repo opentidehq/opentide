@@ -31,8 +31,7 @@ from opentide.core.io import (
     parse_yaml,
     root_mapping_problem,
 )
-from opentide.core.lint_config import LintConfig, Severity, load_lint_config
-from opentide.documentation.markdown.links import slugify
+from opentide.core.lint_config import FilenameConfig, LintConfig, Severity, load_lint_config
 from opentide.registry.catalogue import NESTED_OBJECT_FILE, nested_file_message, scan_object_dir
 
 if TYPE_CHECKING:
@@ -135,6 +134,7 @@ _MARKED_KEY = re.compile(r"^(?P<lead>\s*(?:-\s+)?)(?P<key>[A-Za-z_][\w.-]*)\s*:(
 _ITEM = re.compile(r"^(?P<lead>(?P<indent>\s*)-\s+)")
 
 PLACEHOLDER_CODE = LINT_CODES["placeholder"]
+PATTERN_CODE = LINT_CODES["filename_pattern"]
 PLACEHOLDER_HELP = "replace the value, then delete the '# opentide:placeholder' comment"
 
 
@@ -310,7 +310,15 @@ def _finding(
     }
 
 
-def _assign_expected_stems(records: list[_ObjectRecord]) -> None:
+def _assign_expected_stems(records: list[_ObjectRecord], config: FilenameConfig) -> None:
+    """Give each named object the stem its file should have, unique within its folder.
+
+    A stem already in use claims itself first. Another object that wants it gets
+    ``-{uuid[:8]}`` appended. Stems are compared case-insensitively: ``Rule`` and
+    ``rule`` are one file on macOS and Windows (``slug`` stems are lower case, so
+    this never changes them). Nothing is assigned when the style compares no
+    stem, or leaves none to expect.
+    """
     grouped: dict[Path, list[_ObjectRecord]] = defaultdict(list)
     for record in records:
         if record.parse_error:
@@ -319,32 +327,38 @@ def _assign_expected_stems(records: list[_ObjectRecord]) -> None:
     for group in grouped.values():
         taken: set[str] = set()
         for record in group:
-            if record.name and slugify(record.name) == record.path.stem:
+            if record.name and config.stem_for(record.name) == record.path.stem:
                 record.expected_stem = record.path.stem
-                taken.add(record.path.stem)
+                taken.add(record.path.stem.casefold())
         for record in group:
             if record.expected_stem or not record.name:
                 continue
-            stem = slugify(record.name)
-            if stem not in taken:
+            stem = config.stem_for(record.name)
+            if stem is None:
+                continue
+            if stem.casefold() not in taken:
                 record.expected_stem = stem
-                taken.add(stem)
+                taken.add(stem.casefold())
                 continue
             suffix = (record.uuid or "object")[:8]
             candidate = f"{stem}-{suffix}"
             index = 1
-            while candidate in taken:
+            while candidate.casefold() in taken:
                 candidate = f"{stem}-{suffix}-{index}"
                 index += 1
             record.expected_stem = candidate
-            taken.add(candidate)
+            taken.add(candidate.casefold())
 
 
 def _filename_findings(
-    root: Path, records: list[_ObjectRecord], *, fix: bool
+    root: Path,
+    records: list[_ObjectRecord],
+    *,
+    fix: bool,
+    config: FilenameConfig,
 ) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
-    _assign_expected_stems(records)
+    _assign_expected_stems(records, config)
     for record in records:
         if record.parse_error:
             findings.append(
@@ -358,44 +372,92 @@ def _filename_findings(
                 )
             )
             continue
+        current = record.path
         if not record.name:
+            what = " slug" if config.style == "slug" else ""
             findings.append(
                 _finding(
                     LintCheck.filenames,
                     "error",
                     record,
-                    "Object has no name; cannot check filename slug",
+                    f"Object has no name; cannot check filename{what}",
                     code=LINT_CODES["name"],
                     field="name",
                     yaml_line=_key_line(record, "name"),
                 )
             )
-            continue
-        expected = record.expected_stem
-        if expected is None or expected == record.path.stem:
-            continue
-        dest = record.path.with_name(f"{expected}{record.path.suffix}")
-        finding = _finding(
+        else:
+            current = _stem_finding(root, record, config, findings, fix=fix)
+        _pattern_finding(record, current, config, findings)
+    return findings
+
+
+def _stem_finding(
+    root: Path,
+    record: _ObjectRecord,
+    config: FilenameConfig,
+    findings: list[dict[str, object]],
+    *,
+    fix: bool,
+) -> Path:
+    """Report a stem that is not the one the style expects; return the file's path afterwards."""
+    expected = record.expected_stem
+    if expected is None or expected == record.path.stem:
+        return record.path
+    dest = record.path.with_name(f"{expected}{record.path.suffix}")
+    if config.style == "slug":
+        message = f"Filename {record.path.name!r} does not match slugify(name)={expected!r}"
+    else:
+        message = f"Filename {record.path.name!r} does not match name: expected {expected!r}"
+    finding = _finding(
+        LintCheck.filenames,
+        "warning",
+        record,
+        message,
+        code=LINT_CODES["filename"],
+        expected=dest.relative_to(root).as_posix(),
+    )
+    renamed = record.path
+    if fix:
+        if dest.exists() and not _case_only_rename(record.path, dest):
+            finding["fixed"] = False
+            finding["message"] = (
+                f"{finding['message']}; --fix skipped because {finding['expected']} exists"
+            )
+        else:
+            _rename(record.path, dest)
+            finding["fixed"] = True
+            finding["from"] = record.relative
+            finding["path"] = dest.relative_to(root).as_posix()
+            renamed = dest
+    findings.append(finding)
+    return renamed
+
+
+def _pattern_finding(
+    record: _ObjectRecord,
+    current: Path,
+    config: FilenameConfig,
+    findings: list[dict[str, object]],
+) -> None:
+    """Report a stem the configured pattern does not match, as the file is now named.
+
+    *current* is the file after ``--fix``: a rename to the expected stem is judged
+    by the stem it produced. It cannot be fixed, so the finding has no ``expected``.
+    """
+    pattern = config.pattern
+    if pattern is None or pattern.fullmatch(current.stem):
+        return
+    findings.append(
+        _finding(
             LintCheck.filenames,
             "warning",
             record,
-            f"Filename {record.path.name!r} does not match slugify(name)={expected!r}",
-            code=LINT_CODES["filename"],
-            expected=dest.relative_to(root).as_posix(),
+            f"Filename {current.name!r} does not match the configured filename pattern",
+            code=PATTERN_CODE,
+            help=f"rename the file so its name matches the pattern {pattern.pattern}",
         )
-        if fix:
-            if dest.exists() and not _case_only_rename(record.path, dest):
-                finding["fixed"] = False
-                finding["message"] = (
-                    f"{finding['message']}; --fix skipped because {finding['expected']} exists"
-                )
-            else:
-                _rename(record.path, dest)
-                finding["fixed"] = True
-                finding["from"] = record.relative
-                finding["path"] = dest.relative_to(root).as_posix()
-        findings.append(finding)
-    return findings
+    )
 
 
 _CASE_RENAME_SUFFIX = ".opentide-case-rename"
@@ -606,7 +668,7 @@ def run_lint(
                 exc, path=str(target), checks=[item.value for item in selected], findings=[]
             )
     if LintCheck.filenames in selected:
-        findings.extend(_filename_findings(target, records, fix=fix))
+        findings.extend(_filename_findings(target, records, fix=fix, config=config.filenames))
         _rewrite_renamed_paths(findings)
         findings.extend(_nested_findings(target, nested))
     _apply_severity(findings, config)

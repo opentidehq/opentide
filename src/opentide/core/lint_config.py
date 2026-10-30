@@ -8,6 +8,7 @@ like any other configuration file. Template generation reads the same
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,12 +22,17 @@ SEVERITIES: tuple[Severity, ...] = ("error", "warning", "info")
 #: Check names, in the order ``opentide lint`` runs them by default.
 CHECK_NAMES: tuple[str, ...] = ("filenames", "metadata", "placeholders", "queries")
 
+#: How ``[filenames]`` derives the file stem an object should have from its ``name``.
+FilenameStyle = Literal["slug", "name", "none"]
+
+FILENAME_STYLES: tuple[FilenameStyle, ...] = ("slug", "name", "none")
+
 #: ``metadata.required`` when nothing configures it (the behaviour before #489).
 DEFAULT_REQUIRED_METADATA: tuple[str, ...] = ("author", "organisation")
 
 _COMMON_KEYS = frozenset({"enabled", "severity"})
 _CHECK_KEYS: dict[str, frozenset[str]] = {
-    "filenames": _COMMON_KEYS,
+    "filenames": _COMMON_KEYS | {"style", "pattern"},
     "metadata": _COMMON_KEYS | {"required"},
     "placeholders": _COMMON_KEYS,
     "queries": _COMMON_KEYS,
@@ -48,17 +54,61 @@ class CheckConfig:
 
 
 @dataclass(frozen=True)
+class FilenameConfig:
+    """The ``[filenames]`` convention: how a stem derives from ``name``, and what it must match.
+
+    The defaults are the convention before it was configurable: the stem is
+    ``slugify(name)`` and nothing else is demanded of it.
+    """
+
+    style: FilenameStyle = "slug"
+    #: Compiled from ``pattern``; the whole stem must match it (``re.fullmatch``).
+    pattern: re.Pattern[str] | None = None
+
+    def stem_for(self, name: str) -> str | None:
+        """The stem an object called *name* should have, or ``None`` when none is expected."""
+        return expected_stem(name, self.style)
+
+
+@dataclass(frozen=True)
 class LintConfig:
     """Resolved lint settings. The defaults reproduce lint before it was configurable."""
 
     checks: Mapping[str, CheckConfig] = field(default_factory=dict)
     required_metadata: tuple[str, ...] = DEFAULT_REQUIRED_METADATA
+    filenames: FilenameConfig = field(default_factory=FilenameConfig)
 
     def check(self, name: str) -> CheckConfig:
         return self.checks.get(name, CheckConfig())
 
     def enabled_checks(self) -> list[str]:
         return [name for name in CHECK_NAMES if self.check(name).enabled]
+
+
+#: Control characters, which no file system takes in a name (Windows rejects them outright).
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def expected_stem(name: str, style: FilenameStyle) -> str | None:
+    """The file stem ``style`` asks for an object called *name*.
+
+    ``"slug"`` is ``slugify(name)``. ``"name"`` is the name itself less what a
+    file name cannot hold (:func:`opentide.core.files.safe_file_name`), control
+    characters, and the spaces and dots around it: Windows silently drops a
+    trailing space or dot, and a leading dot hides the file on Unix, so the
+    stem would not be the one written. ``None`` when ``"none"`` compares no stem,
+    or when nothing of the name is left to name a file after.
+    """
+    if style == "none":
+        return None
+    if style == "slug":
+        from opentide.documentation.markdown.links import slugify
+
+        return slugify(name)
+    from opentide.core.files import safe_file_name
+
+    stem = _CONTROL_CHARACTERS.sub("", safe_file_name(name)).strip(" .")
+    return stem or None
 
 
 def metadata_keys() -> tuple[str, ...]:
@@ -93,6 +143,7 @@ def parse_lint_config(raw: object, *, source: str = _SOURCE) -> LintConfig:
         )
     checks: dict[str, CheckConfig] = {}
     required = DEFAULT_REQUIRED_METADATA
+    filenames = FilenameConfig()
     for name in CHECK_NAMES:
         table = raw.get(name)
         if table is None:
@@ -117,7 +168,31 @@ def parse_lint_config(raw: object, *, source: str = _SOURCE) -> LintConfig:
         checks[name] = CheckConfig(enabled=enabled, severity=cast("Severity | None", severity))
         if name == "metadata" and "required" in table:
             required = _required_metadata(table["required"], where=where)
-    return LintConfig(checks=checks, required_metadata=required)
+        if name == "filenames":
+            filenames = _filename_config(table, where=where)
+    return LintConfig(checks=checks, required_metadata=required, filenames=filenames)
+
+
+def _filename_config(table: Mapping[str, object], *, where: str) -> FilenameConfig:
+    style = table.get("style", "slug")
+    if style not in FILENAME_STYLES:
+        raise LintConfigError(
+            f"{where}.style must be one of {', '.join(FILENAME_STYLES)}, got {style!r}"
+        )
+    pattern: re.Pattern[str] | None = None
+    if "pattern" in table:
+        raw = table["pattern"]
+        if not isinstance(raw, str):
+            raise LintConfigError(f"{where}.pattern must be a string, got {raw!r}")
+        if not raw:
+            raise LintConfigError(f"{where}.pattern must not be empty")
+        try:
+            pattern = re.compile(raw)
+        except re.error as exc:
+            raise LintConfigError(
+                f"{where}.pattern: invalid regular expression '{raw}': {exc}"
+            ) from exc
+    return FilenameConfig(style=cast("FilenameStyle", style), pattern=pattern)
 
 
 def _required_metadata(value: object, *, where: str) -> tuple[str, ...]:

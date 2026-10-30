@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`lint.toml` can set the filename convention** ([#699](https://github.com/opentidehq/opentide/issues/699)). The `filenames` check had one rule, a stem equal to `slugify(name)`, so a catalogue with its own naming (for example `[SEN][AWS]Some rule[TenantA+TenantB].yaml`) could only turn the check off, and lost its nested-file, unparsable-file and missing-name findings with it. `[filenames]` takes two new keys. `style` is `"slug"` (the default: `slugify(name)`, as before), `"name"` (the stem is the name less the characters a file name cannot hold, with the same `--fix` rename, `-{uuid[:8]}` collision suffix and idempotence) or `"none"` (the stem is not compared with the name). `pattern` is a regular expression the whole stem must match; a stem that misses it is a new `filename_pattern` finding with the check's severity, no `expected` and the pattern in `help`, and `--fix` leaves it. `opentide new` names the file it scaffolds by `style`, and warns when the file misses `pattern`. An unknown `style` or a `pattern` that is not a string or does not compile exits `2` naming the key. Without either key nothing changes. `generate docs` still names pages `slugify(name)`, so with `style = "name"` an object file and its page no longer share a stem. See [opentide lint](docs/cli/lint.md#filename-convention); `opentide explain filename_pattern` describes the finding.
+
 ## [0.19.0] — 2026-10-29
 
 Minor release: the language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. It is a minor because `validate` now fails on a query the platform would reject, `validate query` without `--live` checks instead of refusing, and wheels are built per platform.

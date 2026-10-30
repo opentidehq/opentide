@@ -202,3 +202,63 @@ def test_new_generates_missing_templates_first(invoke_cli, tutorial: Path) -> No
     assert "templates" in payload["generated"]
     assert (templates / "threat.1.0.template.yaml").is_file()
     assert_json_ok(invoke_cli("validate", "--strict", "--file", payload["path"], repo=tutorial))
+
+
+def _configure_filenames(workspace: Path, body: str) -> None:
+    config = workspace / ".opentide" / "configurations" / "lint.toml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(f"[filenames]\n{body}\n", encoding="utf-8")
+
+
+def test_new_names_the_file_by_the_configured_style(invoke_cli, tutorial: Path) -> None:
+    """``style = "name"`` scaffolds a file ``lint`` accepts, and a taken name gets the uuid."""
+    name = "[SEN][AWS]Some rule[TenantA+TenantB]"
+    _configure_filenames(tutorial, 'style = "name"')
+    first = assert_json_ok(
+        invoke_cli("new", "threat", "--name", name, repo=tutorial, extra_env=GIT_AUTHOR)
+    )
+    assert first["path"] == f"objects/threats/{name}.yaml"
+    second = assert_json_ok(
+        invoke_cli("new", "threat", "--name", name, repo=tutorial, extra_env=GIT_AUTHOR)
+    )
+    assert second["path"] == f"objects/threats/{name}-{second['uuid'][:8]}.yaml"
+    assert_json_ok(invoke_cli("generate", repo=tutorial))
+    findings = parse_cli_json(invoke_cli("lint", "--check", "filenames", repo=tutorial))["findings"]
+    # The tutorial's own files keep their slugs; the scaffolded ones are not reported.
+    assert {item["path"] for item in findings} == {
+        "objects/threats/simulated-actor.yaml",
+        "objects/objectives/credential-access-objective.yaml",
+        "objects/rules/sentinel-kql-rule.yaml",
+    }
+
+
+@pytest.mark.parametrize("style", ["slug", "none"])
+def test_new_keeps_the_slug_for_slug_and_none(invoke_cli, tutorial: Path, style: str) -> None:
+    _configure_filenames(tutorial, f'style = "{style}"')
+    payload = assert_json_ok(
+        invoke_cli("new", "threat", "--name", "Some Actor", repo=tutorial, extra_env=GIT_AUTHOR)
+    )
+    assert payload["path"] == "objects/threats/some-actor.yaml"
+
+
+def test_new_warns_when_the_file_misses_the_configured_pattern(invoke_cli, tutorial: Path) -> None:
+    _configure_filenames(tutorial, "pattern = '^\\[SEN\\].+$'")
+    miss = assert_json_ok(
+        invoke_cli("new", "threat", "--name", "Some Actor", repo=tutorial, extra_env=GIT_AUTHOR)
+    )
+    assert any("[filenames].pattern" in text for text in miss["warnings"]), miss["warnings"]
+    _configure_filenames(tutorial, "style = \"name\"\npattern = '^\\[SEN\\].+$'")
+    hit = assert_json_ok(
+        invoke_cli("new", "threat", "--name", "[SEN]Actor", repo=tutorial, extra_env=GIT_AUTHOR)
+    )
+    assert not any("[filenames].pattern" in text for text in hit.get("warnings", []))
+
+
+def test_new_with_an_invalid_lint_toml_exits_2_before_writing(invoke_cli, tutorial: Path) -> None:
+    assert_json_ok(invoke_cli("generate", repo=tutorial))
+    _configure_filenames(tutorial, 'style = "camel"')
+    before = sorted(path.name for path in (tutorial / "objects" / "threats").iterdir())
+    result = invoke_cli("new", "threat", "--name", "Some Actor", repo=tutorial)
+    assert result.exit_code == 2, result.output
+    assert "lint.toml [filenames].style" in parse_cli_json(result)["message"]
+    assert sorted(path.name for path in (tutorial / "objects" / "threats").iterdir()) == before
