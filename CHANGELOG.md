@@ -20,6 +20,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - `spl_unknown_datamodel_field` and `spl_unknown_datamodel` (errors) on a near miss of a CIM field, data model or dataset; `ecs_type_mismatch` (error) and `ecs_unknown_field` (warning) on Elastic queries over ECS indices.
   - `_Im_NetworkSession(starttime=ago(1d))` and other named arguments parse.
 
+### Fixed
+
+- **`opentide doctor` no longer reports fresh templates as stale in a workspace that sets `[metadata].required` in `lint.toml`.** `generate templates` renders those metadata keys as live keys, but the `templates_fresh` check rendered the default `author` and `organisation`, so a workspace whose `[metadata].required` differs from the default was told to regenerate templates it had just generated. The check now renders with the workspace's `[metadata].required`. A `lint.toml` that parses but holds a value opentide rejects (an unknown `[metadata].required` key, say) is reported by `templates_fresh` as a warning naming the key, where the check used to report stale templates for the wrong reason. A `lint.toml` that is not valid TOML is still reported by `configuration`.
+
 ## [0.19.0] — 2026-10-29
 
 Minor release: the language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. It is a minor because `validate` now fails on a query the platform would reject, `validate query` without `--live` checks instead of refusing, and wheels are built per platform.
