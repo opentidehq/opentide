@@ -1796,4 +1796,47 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn bucket_signature_uses_bin_arguments() {
+        let src = "| bucket ";
+        let help = signature_help(src, src.len()).expect("bucket");
+        assert!(
+            help.signatures[0].label.starts_with("bucket "),
+            "{}",
+            help.signatures[0].label
+        );
+        assert!(
+            help.signatures[0]
+                .parameters
+                .iter()
+                .any(|p| p.label == "bins"),
+            "{:?}",
+            help.signatures[0].parameters
+        );
+        assert!(
+            help.signatures[0]
+                .documentation
+                .as_deref()
+                .unwrap_or("")
+                .contains("Search Reference"),
+            "{:?}",
+            help.signatures[0].documentation
+        );
+
+        let minspan = "| bin minspan=";
+        let help = signature_help(minspan, minspan.len()).expect("minspan");
+        assert_eq!(
+            help.signatures[0].parameters[help.active_parameter as usize].label, "minspan",
+            "`span` is a suffix of `minspan` and must not steal the active parameter: {:?}",
+            help.signatures[0].parameters
+        );
+
+        let span = "| bin span=";
+        let help = signature_help(span, span.len()).expect("span");
+        assert_eq!(
+            help.signatures[0].parameters[help.active_parameter as usize].label,
+            "span"
+        );
+    }
 }

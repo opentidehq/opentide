@@ -2792,4 +2792,171 @@ mod tests {
                 .collect::<Vec<_>>()
         );
     }
+
+    #[test]
+    fn defender_column_groups_follow_table_category() {
+        fn has(groups: &[Vec<&str>], expected: &[&str]) -> bool {
+            groups.iter().any(|group| group.as_slice() == expected)
+        }
+
+        let endpoint = defender_required_column_groups("DeviceProcessEvents | take 1");
+        assert!(has(&endpoint, &["Timestamp"]));
+        assert!(!has(&endpoint, &["Timestamp", "TimeGenerated"]));
+        assert_eq!(
+            endpoint
+                .iter()
+                .filter(|g| g.as_slice() == ["ReportId"])
+                .count(),
+            1
+        );
+        assert!(
+            !endpoint
+                .iter()
+                .any(|g| g.contains(&"RecipientEmailAddress")),
+            "an endpoint table must not also require mailbox columns: {endpoint:?}"
+        );
+
+        let xdr = defender_required_column_groups("EmailEvents | take 1");
+        assert!(has(&xdr, &["Timestamp"]));
+        assert!(!has(&xdr, &["DeviceId"]));
+        assert!(has(&xdr, &["ReportId"]));
+        assert!(
+            xdr.iter()
+                .any(|g| g.contains(&"RecipientEmailAddress") && g.contains(&"AccountUpn")),
+            "{xdr:?}"
+        );
+
+        let alert = defender_required_column_groups("AlertInfo | take 1");
+        assert!(has(&alert, &["Timestamp"]));
+        assert!(!has(&alert, &["ReportId"]));
+        assert!(!has(&alert, &["DeviceId"]));
+        assert!(
+            alert.iter().any(|g| g.contains(&"AccountObjectId")),
+            "{alert:?}"
+        );
+
+        let unknown = defender_required_column_groups("print 1");
+        assert!(has(&unknown, &["Timestamp", "TimeGenerated"]));
+        assert!(has(&unknown, &["ReportId"]));
+        assert!(!has(&unknown, &["DeviceId"]));
+        assert!(
+            unknown
+                .iter()
+                .any(|g| g.contains(&"DeviceId") && g.contains(&"SenderFromAddress")),
+            "{unknown:?}"
+        );
+
+        let commented = defender_required_column_groups(
+            "print 1 /* DeviceProcessEvents */\n| where Name == \"EmailEvents\" // AlertInfo",
+        );
+        assert!(
+            has(&commented, &["Timestamp", "TimeGenerated"]),
+            "comments and string literals are not table references: {commented:?}"
+        );
+        assert!(!has(&commented, &["DeviceId"]));
+
+        let mixed = defender_required_column_groups("DeviceEvents | join EmailEvents on Timestamp");
+        assert!(has(&mixed, &["DeviceId"]));
+        assert_eq!(
+            mixed
+                .iter()
+                .filter(|g| g.as_slice() == ["ReportId"])
+                .count(),
+            1
+        );
+        assert!(
+            !mixed.iter().any(|g| g.contains(&"RecipientEmailAddress")),
+            "naming an endpoint table drops the non-endpoint asset group: {mixed:?}"
+        );
+    }
+
+    #[test]
+    fn compile_exclusions_are_tenant_scoped() {
+        let compiled = compile_kql_query(
+            "DeviceEvents | take 1",
+            &[
+                Exclusion {
+                    tenant: Some("tenant-a".into()),
+                    query: "| where Computer != \"MINE_TAIL\"".into(),
+                    lets: vec![
+                        ("flag".into(), LetValue::Bool(false)),
+                        ("n".into(), LetValue::Number("7".into())),
+                    ],
+                },
+                Exclusion {
+                    tenant: Some("other".into()),
+                    query: "| where Computer != \"FOREIGN_TAIL\"".into(),
+                    lets: vec![
+                        ("keep".into(), LetValue::Bool(true)),
+                        ("n".into(), LetValue::Number("3".into())),
+                    ],
+                },
+                Exclusion {
+                    tenant: None,
+                    query: "| where 1 == 1".into(),
+                    lets: vec![("shared".into(), LetValue::String("ok".into()))],
+                },
+            ],
+            "tenant-a",
+        );
+        assert!(compiled.contains("let flag = false;"));
+        assert!(compiled.contains("let n = 7;"));
+        assert!(compiled.contains("let shared = \"ok\";"));
+        assert!(!compiled.contains("FOREIGN_TAIL"), "{compiled}");
+        assert!(!compiled.contains("let keep"), "{compiled}");
+        assert!(!compiled.contains("let n = 3"), "{compiled}");
+        let base = compiled.find("DeviceEvents | take 1").expect("base query");
+        let mine = compiled.find("MINE_TAIL").expect("matching tail");
+        let shared_tail = compiled.find("| where 1 == 1").expect("global tail");
+        assert!(base < mine && mine < shared_tail, "{compiled}");
+    }
+
+    #[test]
+    fn operator_signature_tracks_kind_and_on() {
+        let kind = "SecurityEvent | join kind=";
+        let help = signature_help(kind, kind.len(), Profile::Sentinel).expect("join kind");
+        assert_eq!(
+            help.signatures[0].parameters[help.active_parameter as usize].label,
+            "JoinFlavor"
+        );
+
+        let on_clause = "SecurityEvent | join kind=inner AlertInfo on ";
+        let help = signature_help(on_clause, on_clause.len(), Profile::Sentinel).expect("join on");
+        assert_eq!(
+            help.signatures[0].parameters[help.active_parameter as usize].label, "Conditions",
+            "a later `on` wins over an earlier kind=: {:?}",
+            help.signatures[0].parameters
+        );
+
+        let union = "SecurityEvent | union kind=";
+        let help = signature_help(union, union.len(), Profile::Sentinel).expect("union kind");
+        assert_eq!(
+            help.signatures[0].parameters[help.active_parameter as usize].label,
+            "kind"
+        );
+    }
+
+    #[test]
+    fn nested_call_commas_stay_inside_the_inner_signature() {
+        let outer = "T | evaluate bag_unpack(Parsed, strcat(\"a\", \"b\"), ";
+        let help = signature_help(outer, outer.len(), Profile::Sentinel).expect("bag_unpack");
+        assert!(
+            help.signatures[0].label.starts_with("bag_unpack("),
+            "{}",
+            help.signatures[0].label
+        );
+        assert_eq!(
+            help.signatures[0].parameters[help.active_parameter as usize].label, "columnsConflict",
+            "the comma inside strcat must not advance bag_unpack: {:?}",
+            help.signatures[0].parameters
+        );
+
+        let inner = "T | evaluate bag_unpack(Parsed, strcat(\"a\", ";
+        let help = signature_help(inner, inner.len(), Profile::Sentinel).expect("strcat");
+        assert!(
+            help.signatures[0].label.starts_with("strcat("),
+            "{}",
+            help.signatures[0].label
+        );
+    }
 }
