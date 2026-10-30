@@ -51,6 +51,10 @@ pub struct CommandRow {
     pub kind: String,
     pub docs: Option<String>,
     pub citation: Option<String>,
+    /// The Splunk app that adds the command (`MLTK`); `None` for a Search
+    /// Reference command that every search head has.
+    #[serde(default)]
+    pub app: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -194,15 +198,23 @@ impl Catalog {
     }
 
     pub fn suggest_command(&self, name: &str) -> Option<String> {
+        self.closest_command(name).map(|(n, _)| n.to_string())
+    }
+
+    /// The catalogued command nearest to `name`, within three edits, and its
+    /// [`edit_cost`].
+    fn closest_command(&self, name: &str) -> Option<(&str, usize)> {
+        let lower = name.to_ascii_lowercase();
         self.commands
             .iter()
             .map(|c| {
-                let dist = levenshtein(&c.name.to_ascii_lowercase(), &name.to_ascii_lowercase());
-                (c.name.clone(), dist)
+                (
+                    c.name.as_str(),
+                    edit_cost(&c.name.to_ascii_lowercase(), &lower),
+                )
             })
-            .filter(|(_, d)| *d <= 3)
-            .min_by_key(|(_, d)| *d)
-            .map(|(n, _)| n)
+            .filter(|(_, cost)| *cost <= 3 * ONE_EDIT)
+            .min_by_key(|(_, cost)| *cost)
     }
 
     pub fn field(&self, name: &str) -> Option<&FieldRow> {
@@ -232,17 +244,31 @@ impl Catalog {
     }
 }
 
-fn levenshtein(a: &str, b: &str) -> usize {
+/// [`edit_cost`] of one insertion, deletion or substitution.
+const ONE_EDIT: usize = 2;
+
+/// Edit distance in which swapping two adjacent characters costs half an
+/// edit, so `stast` is nearer `stats` (a swap) than `stash` (a substitution).
+fn edit_cost(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    // Rows i-2, i-1 and i of the optimal-string-alignment matrix.
+    let mut before: Vec<usize> = vec![0; b.len() + 1];
+    let mut prev: Vec<usize> = (0..=b.len()).map(|j| j * ONE_EDIT).collect();
     let mut cur = vec![0; b.len() + 1];
-    for (i, ca) in a.iter().enumerate() {
-        cur[0] = i + 1;
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(ca != cb);
-            cur[j + 1] = (prev[j + 1] + 1).min(cur[j] + 1).min(prev[j] + cost);
+    for i in 1..=a.len() {
+        cur[0] = i * ONE_EDIT;
+        for j in 1..=b.len() {
+            let substitute = if a[i - 1] == b[j - 1] { 0 } else { ONE_EDIT };
+            let mut cost = (prev[j] + ONE_EDIT)
+                .min(cur[j - 1] + ONE_EDIT)
+                .min(prev[j - 1] + substitute);
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                cost = cost.min(before[j - 2] + ONE_EDIT / 2);
+            }
+            cur[j] = cost;
         }
+        std::mem::swap(&mut before, &mut prev);
         std::mem::swap(&mut prev, &mut cur);
     }
     prev[b.len()]
@@ -292,8 +318,11 @@ fn node_range(source: &str, node: Node) -> Range {
 
 /// `spl_unknown_command` for a name in command position only: after a `|`,
 /// at the start of a subsearch, or first in the query. A word that error
-/// recovery strands mid-command (`AS dest` after a broken lookup table name)
-/// is not a command, and nothing inside an `ERROR` region is reported.
+/// recovery strands mid-command is not a command, and nothing inside an
+/// `ERROR` region is reported. An app on the search head can add commands the
+/// catalog cannot know (MLTK, DECRYPT2, MISP42), so an unknown name is a
+/// warning; one edit from a known command it is almost certainly a typo
+/// (`statz`), which Splunk rejects, so it stays an error.
 fn collect_unknown_commands(
     root: Node,
     source: &str,
@@ -311,18 +340,9 @@ fn collect_unknown_commands(
             .child_by_field_name("name")
             .and_then(|n| n.utf8_text(source.as_bytes()).ok())
             .unwrap_or("");
-        if catalog.command(name).is_some() {
-            return;
+        if catalog.command(name).is_none() {
+            out.push(unknown_command(name, node_range(source, node), catalog));
         }
-        let mut d = Diagnostic::error(
-            codes::SPL_UNKNOWN_COMMAND,
-            format!("unknown SPL command '{name}'"),
-            node_range(source, node),
-        );
-        if let Some(s) = catalog.suggest_command(name) {
-            d = d.with_suggestion(s);
-        }
-        out.push(d);
     });
 }
 
@@ -354,6 +374,23 @@ fn previous_token(node: Node) -> Option<Node> {
         }
         return Some(leaf);
     }
+}
+
+fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
+    let message = format!(
+        "'{name}' is not a command opentide knows; if an app on the search head provides it, declare it"
+    );
+    let closest = catalog.closest_command(name);
+    let mut d = match closest {
+        Some((_, cost)) if cost <= ONE_EDIT => {
+            Diagnostic::error(codes::SPL_UNKNOWN_COMMAND, message, range)
+        }
+        _ => Diagnostic::warning(codes::SPL_UNKNOWN_COMMAND, message, range),
+    };
+    if let Some((suggestion, _)) = closest {
+        d = d.with_suggestion(suggestion);
+    }
+    d
 }
 
 fn highlight_tree(
@@ -866,15 +903,19 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
         }
     }
     if let Some(c) = catalog.command(&word) {
+        let source_label = c.app.as_deref().unwrap_or("searchbnf");
         let citation = c
             .citation
             .as_deref()
-            .map(|c| format!("\n\n[searchbnf]({c})"))
+            .map(|c| format!("\n\n[{source_label}]({c})"))
             .unwrap_or_default();
+        let kind = match &c.app {
+            Some(app) => format!("{}, {app} app", c.kind),
+            None => c.kind.clone(),
+        };
         return Some(format!(
-            "**{}** ({})\n\n{}{citation}",
+            "**{}** ({kind})\n\n{}{citation}",
             c.name,
-            c.kind,
             c.docs.clone().unwrap_or_default()
         ));
     }
@@ -1191,6 +1232,78 @@ mod tests {
             .into_iter()
             .filter(|d| d.code == codes::SPL_UNKNOWN_COMMAND)
             .collect()
+    }
+
+    #[test]
+    fn unknown_command_is_a_warning_an_app_may_explain() {
+        let found = unknown_commands("index=a | mispsearch field=user");
+        assert_eq!(found.len(), 1, "{found:?}");
+        let d = &found[0];
+        assert_eq!(d.severity, opentide_core::Severity::Warning, "{d:?}");
+        assert_eq!(
+            d.message,
+            "'mispsearch' is not a command opentide knows; if an app on the search head provides it, declare it"
+        );
+    }
+
+    #[test]
+    fn misspelt_command_keeps_its_suggestion() {
+        let found = unknown_commands("index=a | stast count");
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].suggestion.as_deref(), Some("stats"), "{found:?}");
+        // One edit from a known command is a typo Splunk rejects.
+        assert_eq!(found[0].severity, opentide_core::Severity::Error);
+        let typo = unknown_commands("index=a | statz count");
+        assert_eq!(typo.len(), 1, "{typo:?}");
+        assert_eq!(typo[0].severity, opentide_core::Severity::Error, "{typo:?}");
+        assert_eq!(typo[0].suggestion.as_deref(), Some("stats"));
+        // Further away it may be an app's command: a warning, still with a hint.
+        let far = unknown_commands("index=a | stattz count");
+        assert_eq!(far[0].severity, opentide_core::Severity::Warning, "{far:?}");
+        assert!(far[0].suggestion.is_some(), "{far:?}");
+    }
+
+    #[test]
+    fn edit_cost_counts_a_swap_as_half_an_edit() {
+        assert_eq!(edit_cost("stats", "stats"), 0);
+        assert_eq!(edit_cost("stats", "stast"), 1);
+        assert_eq!(edit_cost("stash", "stast"), ONE_EDIT);
+        assert_eq!(edit_cost("stats", "statz"), ONE_EDIT);
+        assert_eq!(edit_cost("", "abc"), 3 * ONE_EDIT);
+        assert_eq!(edit_cost("head", "tail"), 4 * ONE_EDIT);
+    }
+
+    #[test]
+    fn mltk_commands_are_catalogued_as_an_app() {
+        let c = Catalog::load();
+        for name in [
+            "fit",
+            "apply",
+            "score",
+            "summary",
+            "listmodels",
+            "deletemodel",
+        ] {
+            let row = c.command(name).unwrap_or_else(|| panic!("{name}"));
+            assert_eq!(row.app.as_deref(), Some("MLTK"), "{name}");
+        }
+        assert!(c.command("stats").unwrap().app.is_none());
+        for src in [
+            "index=a | apply m",
+            "index=a | fit LinearRegression y from x into m",
+            "| listmodels",
+        ] {
+            let r = analyze(src);
+            assert!(
+                !r.diagnostics
+                    .iter()
+                    .any(|d| d.code == codes::SPL_UNKNOWN_COMMAND),
+                "{src}: {:?}",
+                r.diagnostics
+            );
+        }
+        let h = hover("index=a | apply m", opentide_core::Position::new(0, 11)).expect("hover");
+        assert!(h.contains("MLTK"), "{h}");
     }
 
     #[test]

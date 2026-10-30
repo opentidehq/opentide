@@ -436,7 +436,9 @@ fn known_command_arguments_never_make_an_unknown_command() {
         .collect();
     assert_eq!(
         unknown,
-        ["unknown SPL command 'notacommand'"],
+        [
+            "'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it"
+        ],
         "{r:?}",
         r = r.diagnostics
     );

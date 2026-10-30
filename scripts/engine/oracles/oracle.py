@@ -68,7 +68,7 @@ REJECT = {
 ELASTIC_LANGUAGES = ("esql", "eql", "kuery", "lucene")
 UNKNOWN_NAME = {
     "kql": ("kql_unknown_function", re.compile(r"unknown function '([^']+)'")),
-    "spl": ("spl_unknown_command", re.compile(r"unknown SPL command '([^']+)'")),
+    "spl": ("spl_unknown_command", re.compile(r"'([^']+)' is not a command opentide knows")),
 }
 REFERENCE = {
     "kql": "Kusto.Language",

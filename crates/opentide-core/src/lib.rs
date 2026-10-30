@@ -601,7 +601,9 @@ pub mod codes {
             KQL_JOIN_SUMMARIZE_BEFORE_PROJECT => {
                 "join or summarize runs before project, so it carries every column."
             }
-            SPL_UNKNOWN_COMMAND => "The SPL command is not in the Splunk Search Reference.",
+            SPL_UNKNOWN_COMMAND => {
+                "The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command."
+            }
             SPL_PARSE_ERROR => "The SPL search does not parse.",
             SPL_WILDCARD => {
                 "A leading or mid-token wildcard cannot use the index and scans every event."
