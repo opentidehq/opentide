@@ -2074,6 +2074,140 @@ meta:
         );
     }
 
+    /// Bundled rows for `configurations.splunk.*` are dotted paths, not the
+    /// top-level `meta` key. A later `notable.security_domain` is the
+    /// replacement and must stay clean. Rule rows do not apply to threats.
+    #[test]
+    fn nested_splunk_deprecations_are_schema_scoped() {
+        let src = r#"
+name: Nested Splunk
+metadata:
+  schema: rule::1.0
+configurations:
+  splunk:
+    advanced: {}
+    security_domain: Access
+    notable:
+      security_domain: Access
+"#;
+        let warnings = deprecation_warnings(src);
+        assert_eq!(
+            warnings,
+            vec![
+                (
+                    vec![
+                        "configurations".to_string(),
+                        "splunk".to_string(),
+                        "advanced".to_string(),
+                    ],
+                    "Use nested Splunk action blocks".to_string(),
+                ),
+                (
+                    vec![
+                        "configurations".to_string(),
+                        "splunk".to_string(),
+                        "security_domain".to_string(),
+                    ],
+                    "security_domain is now nested under the notable block".to_string(),
+                ),
+            ]
+        );
+
+        let threat = r#"
+name: Not a rule
+metadata:
+  schema: threat::1.0
+configurations:
+  splunk:
+    advanced: {}
+    security_domain: Access
+"#;
+        assert!(
+            deprecation_warnings(threat).is_empty(),
+            "rule deprecations leaked onto a threat: {:?}",
+            deprecation_warnings(threat)
+        );
+    }
+
+    /// A workspace overlay adds rows. It does not replace the bundled catalog.
+    #[test]
+    fn deprecation_overlay_keeps_bundled_nested_paths() {
+        install_deprecation_overlay(vec![FieldDeprecation {
+            schema: "rule".into(),
+            path: "legacy_note".into(),
+            message: "removed in 1.0".into(),
+        }]);
+        let src = r#"
+name: Rule
+legacy_note: still here
+metadata:
+  schema: rule::1.0
+configurations:
+  splunk:
+    security_domain: Access
+"#;
+        let warnings = deprecation_warnings(src);
+        install_deprecation_overlay(Vec::new());
+        let paths: Vec<&[String]> = warnings.iter().map(|(path, _)| path.as_slice()).collect();
+        assert!(
+            paths.contains(&["legacy_note".to_string()].as_slice()),
+            "{warnings:?}"
+        );
+        assert!(
+            paths.contains(
+                &[
+                    "configurations".to_string(),
+                    "splunk".to_string(),
+                    "security_domain".to_string(),
+                ]
+                .as_slice()
+            ),
+            "{warnings:?}"
+        );
+    }
+
+    #[test]
+    fn parse_deprecation_overlay_accepts_alias_and_drops_empty() {
+        let parsed = parse_deprecation_overlay(
+            r#"{"fields":[
+                {"schema":"rule","path":"old","deprecated":"use new"},
+                {"schema":"rule","path":"both","message":"from message","deprecated":"ignored"},
+                {"schema":"rule","path":"blank","message":""},
+                {"schema":"rule","path":"neither"}
+            ]}"#,
+        )
+        .expect("overlay");
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].path, "old");
+        assert_eq!(parsed[0].message, "use new");
+        assert_eq!(parsed[1].path, "both");
+        assert_eq!(parsed[1].message, "from message");
+        assert!(parse_deprecation_overlay("{").is_err());
+    }
+
+    fn deprecation_warnings(source: &str) -> Vec<(Vec<String>, String)> {
+        analyze(AnalyzeInput {
+            path: "objects/rules/nested.yaml",
+            source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| {
+            d.code == codes::DEPRECATED_FIELD && d.severity == opentide_core::Severity::Warning
+        })
+        .map(|d| {
+            let message = d
+                .message
+                .split_once(": ")
+                .map(|(_, rest)| rest.to_string())
+                .unwrap_or(d.message);
+            (d.field_path.unwrap_or_default(), message)
+        })
+        .collect()
+    }
+
     #[test]
     fn scalar_impact_is_schema_validation() {
         let src = r#"
