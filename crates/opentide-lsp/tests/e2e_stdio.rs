@@ -841,13 +841,6 @@ fn a_raw_query_file_ignores_the_yaml_around_it() {
 fn an_undeclared_table_has_a_code_action_that_declares_it() {
     let scratch = Scratch::new("declare-table");
     let root = &scratch.0;
-    let catalogs = root.join(".opentide/lsp/catalogs/generated");
-    std::fs::create_dir_all(&catalogs).unwrap();
-    std::fs::write(
-        catalogs.join("datasets.json"),
-        r#"{"platforms": {"sentinel": {"tables": ["NTANetAnalytics"]}}}"#,
-    )
-    .unwrap();
     let visibility = "[[logsources]]\nname = \"VNet flow logs\"\ndescription = \"Flows.\"\nsystem = \"sentinel\"\ntables = [\"NTANetAnalytics\"]\n";
     std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
     std::fs::write(
@@ -894,14 +887,13 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
 }
 
 #[test]
-fn an_undeclared_splunk_index_has_a_code_action_that_adds_a_log_source() {
+fn an_undeclared_splunk_index_has_a_code_action_that_adds_it() {
     let scratch = Scratch::new("declare-index");
     let root = &scratch.0;
-    let catalogs = root.join(".opentide/lsp/catalogs/generated");
-    std::fs::create_dir_all(&catalogs).unwrap();
+    std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
     std::fs::write(
-        catalogs.join("datasets.json"),
-        r#"{"platforms": {"splunk": {"indexes": ["wineventlog"]}}}"#,
+        root.join(".opentide/configurations/visibility.toml"),
+        "[[logsources]]\nname = \"Windows\"\ndescription = \"Events.\"\nsystem = \"splunk\"\nindexes = [\"wineventlog\"]\n",
     )
     .unwrap();
     let uri = format!("file://{}/hunt.spl", root.display());
@@ -926,15 +918,145 @@ fn an_undeclared_splunk_index_has_a_code_action_that_adds_a_log_source() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| a["title"] == "Add a [[logsources]] entry declaring 'sysmon' to visibility.toml")
+        .find(|a| a["title"] == "Declare 'sysmon' in log source \"Windows\" (visibility.toml)")
         .unwrap_or_else(|| panic!("{actions}"))
         .clone();
-    // No visibility.toml yet: the edit creates it.
+    let changes = &action["edit"]["changes"];
+    let (_, edits) = changes.as_object().unwrap().iter().next().unwrap();
+    assert_eq!(edits[0]["newText"], ", \"sysmon\"");
+}
+
+/// No visibility.toml: the quick fix on `kql_unknown_table` creates it.
+#[test]
+fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
+    let scratch = Scratch::new("declare-create");
+    let root = &scratch.0;
+    let uri = format!("file://{}/hunt.kql", root.display());
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+    );
+    let codes = published_codes(&mut lsp, &uri, "kql", "MyCustom_CL | take 1");
+    assert_eq!(codes, vec!["kql_unknown_table".to_string()]);
+    let actions = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } }
+        }),
+    );
+    let action = actions["result"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| {
+            a["title"] == "Add a [[logsources]] entry declaring 'MyCustom_CL' to visibility.toml"
+        })
+        .unwrap_or_else(|| panic!("{actions}"))
+        .clone();
     let changes = action["edit"]["documentChanges"].as_array().unwrap();
     assert_eq!(changes[0]["kind"], "create");
     let text = changes[1]["edits"][0]["newText"].as_str().unwrap();
     assert!(
-        text.contains("system = \"splunk\"\nindexes = [\"sysmon\"]"),
+        text.contains("system = \"sentinel\"\ntables = [\"MyCustom_CL\"]"),
         "{text}"
+    );
+}
+
+fn next_diagnostics(lsp: &mut Lsp, uri: &str) -> Vec<String> {
+    loop {
+        let msg = lsp.read();
+        if msg["method"] == "textDocument/publishDiagnostics" && msg["params"]["uri"] == uri {
+            return msg["params"]["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|d| d["code"].as_str().map(str::to_string))
+                .collect();
+        }
+    }
+}
+
+/// visibility.toml applies as it is edited: in the editor, before it is
+/// saved, and on disk, through the file watcher.
+#[test]
+fn editing_visibility_toml_rechecks_open_queries() {
+    let scratch = Scratch::new("visibility-live");
+    let root = &scratch.0;
+    let config = root.join(".opentide/configurations");
+    std::fs::create_dir_all(&config).unwrap();
+    let path = config.join("visibility.toml");
+    let visibility_uri = format!("file://{}", path.display());
+    let declare = |tables: &str| {
+        format!(
+            "[[logsources]]\nname = \"Flows\"\ndescription = \"Flows.\"\nsystem = \"sentinel\"\ntables = [{tables}]\n"
+        )
+    };
+    let uri = format!("file://{}/hunt.kql", root.display());
+
+    let mut lsp = Lsp::spawn();
+    let init = json!({
+        "capabilities": { "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } },
+        "rootUri": format!("file://{}", root.display())
+    });
+    lsp.request("initialize", init);
+    lsp.notify("initialized", json!({}));
+    let register = lsp.read();
+    assert_eq!(
+        register["method"], "client/registerCapability",
+        "{register}"
+    );
+    // The client's answer is not a request: the server says nothing back.
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+
+    // Nothing declared: a documented table is fine.
+    assert!(published_codes(&mut lsp, &uri, "kql", "NTAIpDetails | take 1").is_empty());
+
+    // Opened and edited in the editor, not saved.
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": {
+            "uri": visibility_uri, "languageId": "toml", "version": 1,
+            "text": declare("\"NTANetAnalytics\"")
+        } }),
+    );
+    assert_eq!(
+        next_diagnostics(&mut lsp, &uri),
+        vec!["kql_table_not_declared"]
+    );
+    // Mid-edit text that is not TOML keeps the declarations in use.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": visibility_uri, "version": 2 },
+            "contentChanges": [{ "text": "[[logsources" }]
+        }),
+    );
+    lsp.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": { "uri": visibility_uri, "version": 3 },
+            "contentChanges": [{ "text": declare("\"NTANetAnalytics\", \"NTAIpDetails\"") }]
+        }),
+    );
+    assert!(next_diagnostics(&mut lsp, &uri).is_empty());
+
+    // Closed unsaved: the file on disk (none) applies again.
+    lsp.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": visibility_uri } }),
+    );
+    assert!(next_diagnostics(&mut lsp, &uri).is_empty());
+
+    // Written outside the editor.
+    std::fs::write(&path, declare("\"NTANetAnalytics\"")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": visibility_uri, "type": 1 }] }),
+    );
+    assert_eq!(
+        next_diagnostics(&mut lsp, &uri),
+        vec!["kql_table_not_declared"]
     );
 }

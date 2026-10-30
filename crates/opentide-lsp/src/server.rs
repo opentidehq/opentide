@@ -6,7 +6,7 @@ use anyhow::Result;
 use opentide_analysis::{
     AnalyzeRequest, Catalog, DatasetKind, MemoryWorkspace, VISIBILITY_CONFIGURATION, WorkspaceHost,
     analyze, codes, compiled_kql, compiled_spl, completions, declare_dataset, hover,
-    index_workspace, install_catalog, signature_help,
+    index_workspace, install_catalog, install_visibility, signature_help,
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
@@ -16,9 +16,15 @@ use std::io::{BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
+#[derive(Default)]
 struct Session {
     docs: HashMap<String, (LanguageId, String)>,
     root: Option<PathBuf>,
+    /// The editor's `visibility.toml` buffer while the file is open: it wins
+    /// over the file on disk.
+    visibility: Option<String>,
+    /// The client can watch files for the server (`didChangeWatchedFiles`).
+    watch_files: bool,
 }
 
 impl Session {
@@ -61,10 +67,7 @@ pub fn run_stdio() -> Result<()> {
     let stdout = std::io::stdout();
     let mut reader = BufReader::new(stdin.lock());
     let mut writer = stdout.lock();
-    let mut session = Session {
-        docs: HashMap::new(),
-        root: None,
-    };
+    let mut session = Session::default();
     loop {
         let Some(msg) = jsonrpc::read_message(&mut reader)? else {
             break;
@@ -82,10 +85,7 @@ pub fn run_listen(addr: &str) -> Result<()> {
     let (stream, _) = listener.accept()?;
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut writer = stream;
-    let mut session = Session {
-        docs: HashMap::new(),
-        root: None,
-    };
+    let mut session = Session::default();
     loop {
         let Some(msg) = jsonrpc::read_message(&mut reader)? else {
             break;
@@ -114,6 +114,11 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
             } else {
                 install_workspace_catalog(Path::new(""));
             }
+            session.watch_files = params
+                .pointer("/capabilities/workspace/didChangeWatchedFiles/dynamicRegistration")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            reload_visibility(session);
             jsonrpc::write_message(
                 writer,
                 &jsonrpc::success(
@@ -147,7 +152,44 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 ),
             )?;
         }
-        "initialized" => {}
+        "initialized" => {
+            // Hear about visibility.toml edits made outside the editor.
+            if session.watch_files {
+                jsonrpc::write_message(
+                    writer,
+                    &json!({
+                        "jsonrpc": "2.0",
+                        "id": "opentide-watch-visibility",
+                        "method": "client/registerCapability",
+                        "params": { "registrations": [{
+                            "id": "opentide-visibility",
+                            "method": "workspace/didChangeWatchedFiles",
+                            "registerOptions": { "watchers": [
+                                { "globPattern": format!("**/{VISIBILITY_CONFIGURATION}") }
+                            ] }
+                        }] }
+                    }),
+                )?;
+            }
+        }
+        "workspace/didChangeWatchedFiles" => {
+            let touched = params
+                .get("changes")
+                .and_then(|v| v.as_array())
+                .is_some_and(|changes| {
+                    changes.iter().any(|c| {
+                        c.get("uri")
+                            .and_then(|u| u.as_str())
+                            .is_some_and(is_visibility)
+                    })
+                });
+            // While the file is open the editor's buffer is the truth.
+            if touched && session.visibility.is_none() {
+                reload_visibility(session);
+                republish_all(session, writer)?;
+            }
+        }
+        "textDocument/didSave" => {}
         "shutdown" => {
             jsonrpc::write_message(writer, &jsonrpc::success(id, Value::Null))?;
         }
@@ -159,7 +201,13 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
             handle_did_change(session, writer, &params)?;
         }
         "textDocument/didClose" => {
-            if let Some(uri) = params.pointer("/textDocument/uri").and_then(|v| v.as_str()) {
+            let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str());
+            if uri.is_some_and(is_visibility) {
+                // Back to the file on disk (unsaved edits are dropped).
+                session.visibility = None;
+                reload_visibility(session);
+                republish_all(session, writer)?;
+            } else if let Some(uri) = uri {
                 session.docs.remove(uri);
                 jsonrpc::write_message(
                     writer,
@@ -285,6 +333,8 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
             let text = session.host().document(path).unwrap_or_default();
             jsonrpc::write_message(writer, &jsonrpc::success(id, json!({ "text": text })))?;
         }
+        // A response to a request the server sent (`client/registerCapability`).
+        "" => {}
         _ => {
             if id.is_some() {
                 jsonrpc::write_message(
@@ -309,6 +359,10 @@ fn handle_did_open(session: &mut Session, writer: &mut impl Write, params: &Valu
     let lang = params
         .pointer("/textDocument/languageId")
         .and_then(|v| v.as_str());
+    if is_visibility(uri) {
+        session.visibility = Some(text.to_string());
+        return visibility_edited(session, writer);
+    }
     let language = session.language_for(uri, lang);
     session
         .docs
@@ -317,11 +371,64 @@ fn handle_did_open(session: &mut Session, writer: &mut impl Write, params: &Valu
     Ok(())
 }
 
+/// Whether `uri` is the workspace's `visibility.toml`.
+fn is_visibility(uri: &str) -> bool {
+    uri_to_path(uri)
+        .replace('\\', "/")
+        .ends_with(VISIBILITY_CONFIGURATION)
+}
+
+/// `visibility.toml` changed in the editor: its declared datasets apply at
+/// once, and every open document is checked again. A buffer that is not
+/// TOML yet (mid-edit) keeps the declarations in use.
+fn visibility_edited(session: &mut Session, writer: &mut impl Write) -> Result<()> {
+    if install_visibility(session.visibility.as_deref()).is_ok() {
+        republish_all(session, writer)?;
+    }
+    Ok(())
+}
+
+/// Read `visibility.toml` from the workspace (unless the editor has it open)
+/// and install the datasets it declares. A file that is not TOML is reported
+/// on stderr and declares nothing.
+fn reload_visibility(session: &mut Session) {
+    if session.visibility.is_some() {
+        return;
+    }
+    let text = session
+        .root
+        .as_ref()
+        .and_then(|root| std::fs::read_to_string(root.join(VISIBILITY_CONFIGURATION)).ok());
+    if let Err(err) = install_visibility(text.as_deref()) {
+        eprintln!("opentide-lsp: {err}; no datasets are declared");
+        let _ = install_visibility(None);
+    }
+}
+
+fn republish_all(session: &Session, writer: &mut impl Write) -> Result<()> {
+    let mut uris: Vec<&String> = session.docs.keys().collect();
+    uris.sort();
+    for uri in uris {
+        publish_diagnostics(session, writer, uri)?;
+    }
+    Ok(())
+}
+
 fn handle_did_change(session: &mut Session, writer: &mut impl Write, params: &Value) -> Result<()> {
     let uri = params
         .pointer("/textDocument/uri")
         .and_then(|v| v.as_str())
         .unwrap_or("");
+    if is_visibility(uri) {
+        let changes = params
+            .get("contentChanges")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let current = session.visibility.clone().unwrap_or_default();
+        session.visibility = Some(apply_content_changes(&current, &changes));
+        return visibility_edited(session, writer);
+    }
     let language = session
         .docs
         .get(uri)
@@ -759,7 +866,11 @@ fn handle_code_action(session: &Session, params: &Value) -> Value {
         .collect();
     if let Some(root) = &session.root {
         let path = root.join(VISIBILITY_CONFIGURATION);
-        let existing = std::fs::read_to_string(&path).ok();
+        // An open buffer may hold edits not yet saved: the edit applies to it.
+        let existing = session
+            .visibility
+            .clone()
+            .or_else(|| std::fs::read_to_string(&path).ok());
         let target = path_to_uri(&path.display().to_string());
         let mut seen = std::collections::BTreeSet::new();
         for d in &in_range {
@@ -1120,8 +1231,8 @@ fn range_json(range: Range) -> Value {
 /// Where `opentide generate schemas` writes the workspace catalogs.
 pub const WORKSPACE_CATALOGS: &str = ".opentide/lsp/catalogs/generated";
 
-/// Install the workspace's `fields.json`, `deprecations.json` and
-/// `datasets.json` when they exist, and the bundled catalogs otherwise. A file that does not parse is
+/// Install the workspace's `fields.json` and `deprecations.json` when they
+/// exist, and the bundled catalogs otherwise. A file that does not parse is
 /// reported on stderr and leaves the bundled catalogs in place.
 /// Set by a host that installed the catalogs itself
 /// ([`opentide_analysis::set_default_catalog`]): the server then leaves them
@@ -1150,7 +1261,8 @@ pub fn install_workspace_catalog(root: &Path) {
     let catalog = Catalog {
         fields: read("fields.json"),
         deprecations: read("deprecations.json"),
-        datasets: read("datasets.json"),
+        // visibility.toml is read on its own (reload_visibility), so edits apply live.
+        visibility: None,
     };
     if let Err(err) = install_catalog(&catalog) {
         eprintln!(

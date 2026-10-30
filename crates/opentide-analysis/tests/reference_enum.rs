@@ -20,7 +20,7 @@ fn a_reference_is_not_checked_against_a_snapshot_of_uuids() {
             .into(),
         ),
         deprecations: None,
-        datasets: None,
+        visibility: None,
     })
     .expect("install");
     let codes: Vec<String> = analyze(

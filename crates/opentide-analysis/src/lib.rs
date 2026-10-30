@@ -271,12 +271,11 @@ pub struct Catalog {
     /// `deprecations.json`: `deprecated_field` warnings on top of the bundled
     /// ones.
     pub deprecations: Option<String>,
-    /// `datasets.json`: the tables, indexes, sourcetypes, macros, index
-    /// patterns and data views the workspace declares in `visibility.toml`,
-    /// per platform. The query checks know a declared name, and warn about an
-    /// undeclared one where the workspace declares names of that kind. The
-    /// engine bundles none.
-    pub datasets: Option<String>,
+    /// The text of the workspace's `visibility.toml`: the tables, indexes,
+    /// sourcetypes, macros, index patterns and data views its log sources
+    /// declare. The query checks know a declared name, and warn about an
+    /// undeclared one where the workspace declares names of that kind.
+    pub visibility: Option<String>,
 }
 
 /// Declared datasets from the workspace ([`install_catalog`]) and from the
@@ -293,10 +292,20 @@ fn dataset_layers() -> &'static std::sync::RwLock<DatasetLayers> {
     LAYERS.get_or_init(Default::default)
 }
 
-fn parse_datasets(text: Option<&str>) -> Result<Option<DeclaredDatasets>, String> {
-    text.map(DeclaredDatasets::parse)
+fn parse_visibility(text: Option<&str>) -> Result<Option<DeclaredDatasets>, String> {
+    text.map(DeclaredDatasets::from_visibility)
         .transpose()
-        .map_err(|err| format!("datasets.json: {err}"))
+        .map_err(|err| format!("visibility.toml: {err}"))
+}
+
+/// Install the datasets a workspace's `visibility.toml` declares, leaving the
+/// Tide catalogs as they are: what a host calls when the file changes, so an
+/// edit applies at once. `None` declares nothing. Text that is not TOML is an
+/// error and keeps the declarations in use.
+pub fn install_visibility(text: Option<&str>) -> Result<(), String> {
+    let datasets = parse_visibility(text)?;
+    set_dataset_layer(true, datasets);
+    Ok(())
 }
 
 fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
@@ -320,7 +329,7 @@ pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
             .map_err(|err| format!("deprecations.json: {err}"))?,
         None => Vec::new(),
     };
-    let datasets = parse_datasets(catalog.datasets.as_deref())?;
+    let datasets = parse_visibility(catalog.visibility.as_deref())?;
     opentide_highlight::install_tide_fields(catalog.fields.as_deref())
         .map_err(|err| format!("fields.json: {err}"))?;
     opentide_tide::install_deprecation_overlay(deprecations);
@@ -342,7 +351,7 @@ pub fn set_default_catalog(catalog: &Catalog) -> Result<(), String> {
         .map(opentide_tide::parse_deprecation_overlay)
         .transpose()
         .map_err(|err| format!("deprecations.json: {err}"))?;
-    let datasets = parse_datasets(catalog.datasets.as_deref())?;
+    let datasets = parse_visibility(catalog.visibility.as_deref())?;
     opentide_highlight::set_default_tide_fields(catalog.fields.as_deref())
         .map_err(|err| format!("fields.json: {err}"))?;
     opentide_tide::set_default_deprecations(deprecations);
@@ -366,7 +375,7 @@ pub fn bundled_catalog() -> Catalog {
     Catalog {
         fields: Some(opentide_highlight::TIDE_FIELDS_JSON.to_string()),
         deprecations: Some(opentide_tide::DEPRECATIONS_JSON.to_string()),
-        datasets: None,
+        visibility: None,
     }
 }
 

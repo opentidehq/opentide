@@ -42,7 +42,7 @@ Where the check applies:
 
 ## Indexes, sourcetypes and macros
 
-`spl_dataset_not_declared` (warning) checks the names a search reads against the `indexes`, `sourcetypes` and `macros` a workspace declares on its `system = "splunk"` log sources in `visibility.toml` (opentide writes them to `.opentide/lsp/catalogs/generated/datasets.json`):
+`spl_dataset_not_declared` (warning) checks the names a search reads against the `indexes`, `sourcetypes` and `macros` a workspace declares on its `system = "splunk"` log sources in `visibility.toml`:
 
 - `index=`, `index::`, `index IN (...)` and the same for `sourcetype`, in the base search (before the first pipe, or a `search` command that starts the query; each subsearch has its own) and in a `tstats` `where` clause. Negated terms (`NOT index=x`, `index!=x`) are not checked.
 - Macro calls in the base search, before the first pipe: `` `wineventlog_security` ``, `` `cim_Endpoint_indexes` ``. A macro with arguments matches a declared `name` or `name(N)`. Macros after a pipe are utilities (`drop_dm_object_name`, `security_content_ctime`, `security_content_summariesonly`) or filters and are never checked; neither is `comment` or a `*_filter` macro.

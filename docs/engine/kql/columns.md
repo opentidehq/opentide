@@ -15,14 +15,14 @@ What the engine knows about the datasets a KQL query reads, and what it reports.
 - Opt-in: a built-in table that is not declared warns only when the workspace declares at least one table for that platform.
 - `union isfuzzy=true` reads whichever legs exist, so its legs are not checked.
 
-opentide writes the declared names to `.opentide/lsp/catalogs/generated/datasets.json`; the language server, `opentide tui` and `opentide validate` install the same file. The code action on `kql_table_not_declared` (and on the `kql_unknown_table` warning) adds the table to the `tables` of the first log source of the platform in `.opentide/configurations/visibility.toml`, or appends a log source when none fits.
+The engine reads `.opentide/configurations/visibility.toml` itself (`DeclaredDatasets::from_visibility`). The language server reads it at start-up and again whenever it changes, in the editor (before it is saved) or on disk, and checks every open document again; `opentide validate` and `opentide tui` pass the file to the engine (`Catalog.visibility`, `install_visibility`). The code action on `kql_table_not_declared` (and on the `kql_unknown_table` warning) adds the table to the `tables` of the first log source of the platform in `.opentide/configurations/visibility.toml`, or appends a log source when none fits.
 
 ## Catalogs
 
 | File | Source | Generator |
 | --- | --- | --- |
-| `catalogs/kql/azure-monitor/tables.json` | [Azure Monitor Logs table reference](https://learn.microsoft.com/azure/azure-monitor/reference/tables/tables-category) (MicrosoftDocs/azure-monitor-docs, CC BY 4.0), plus the columns of Azure-Sentinel's KQL validation schemas (MIT) | `scripts/sync_azure_monitor_tables.py` |
-| `catalogs/kql/asim/asim.json` | [ASIM](https://learn.microsoft.com/azure/sentinel/normalization) schemas from `ASIM/dev/ASimTester/ASimTester.csv` and parsers from `Parsers/ASim*/Parsers/*.yaml` (Azure/Azure-Sentinel, MIT) | `scripts/sync_asim_schemas.py` |
+| `catalogs/kql/azure-monitor/tables.toml` | [Azure Monitor Logs table reference](https://learn.microsoft.com/azure/azure-monitor/reference/tables/tables-category) (MicrosoftDocs/azure-monitor-docs, CC BY 4.0), plus the columns of Azure-Sentinel's KQL validation schemas (MIT) | `scripts/sync_azure_monitor_tables.py` |
+| `catalogs/kql/asim/asim.toml` | [ASIM](https://learn.microsoft.com/azure/sentinel/normalization) schemas from `ASIM/dev/ASimTester/ASimTester.csv` and parsers from `Parsers/ASim*/Parsers/*.yaml` (Azure/Azure-Sentinel, MIT) | `scripts/sync_asim_schemas.py` |
 | `catalogs/kql/{sentinel,defender}/` | hand-written tables and detection-critical columns with docs | — |
 
 Both generators take a checkout (`--docs`, `--sentinel`) and have `--check`. The hand-written columns are merged in and never removed; where a hand-written type disagrees with the reference, the column has no type and gets no type check. Every Log Analytics table also has the [standard columns](https://learn.microsoft.com/azure/azure-monitor/logs/log-standard-columns), and any `_CF` column (a data collection rule adds those). Advanced hunting tables have `Timestamp`.

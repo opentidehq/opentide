@@ -51,7 +51,7 @@ fn a_default_catalog_stands_in_for_the_bundled_one_under_workspace_catalogs() {
             r#"{"opentide": "host", "fields": [{"schema": "rule", "path": "metadata.tlp", "message": "use labels"}]}"#
                 .into(),
         ),
-        datasets: None,
+        visibility: None,
     };
     set_default_catalog(&host).expect("default");
     assert_eq!(catalog_version(), "host");
@@ -64,7 +64,7 @@ fn a_default_catalog_stands_in_for_the_bundled_one_under_workspace_catalogs() {
     let workspace = Catalog {
         fields: Some(catalog("workspace", &["clear"])),
         deprecations: None,
-        datasets: None,
+        visibility: None,
     };
     install_catalog(&workspace).expect("workspace");
     assert_eq!(catalog_version(), "workspace");
@@ -77,7 +77,7 @@ fn a_default_catalog_stands_in_for_the_bundled_one_under_workspace_catalogs() {
         set_default_catalog(&Catalog {
             fields: Some("{".into()),
             deprecations: None,
-            datasets: None,
+            visibility: None,
         })
         .is_err()
     );

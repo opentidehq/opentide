@@ -7,13 +7,20 @@ use opentide_analysis::{
     analyze, analyze_queries, analyze_query, codes, install_catalog,
 };
 
-const DATASETS: &str = r#"{"opentide": "0.20.0", "platforms": {
-    "elastic": {
-        "indices": ["logs-*", "winlogbeat-x", "custom-ecs-*"],
-        "data_views": ["security-solution-default"],
-        "ecs_indices": ["custom-ecs-*"]
-    }
-}}"#;
+const DATASETS: &str = r#"[[logsources]]
+name = "elastic datasets"
+description = "Test log source."
+system = "elastic"
+indices = ["logs-*", "winlogbeat-x"]
+data_views = ["security-solution-default"]
+
+[[logsources]]
+name = "elastic datasets"
+description = "Test log source."
+system = "elastic"
+indices = ["custom-ecs-*"]
+ecs = true
+"#;
 
 fn esql(text: &str) -> Vec<Diagnostic> {
     analyze_query(&QueryRequest {
@@ -46,7 +53,7 @@ fn codes_of<'a>(found: &'a [Diagnostic], code: &str) -> Vec<&'a Diagnostic> {
 
 fn install(datasets: Option<&str>) {
     install_catalog(&Catalog {
-        datasets: datasets.map(str::to_string),
+        visibility: datasets.map(str::to_string),
         ..Catalog::default()
     })
     .unwrap();
@@ -63,7 +70,12 @@ fn declared_index_patterns_and_data_views() {
     assert!(codes_of(&esql("FROM filebeat-* | LIMIT 1"), undeclared).is_empty());
     // Declaring another platform's datasets is no opt-in for Elastic.
     install(Some(
-        r#"{"platforms": {"sentinel": {"tables": ["SigninLogs"]}}}"#,
+        r#"[[logsources]]
+name = "sentinel datasets"
+description = "Test log source."
+system = "sentinel"
+tables = ["SigninLogs"]
+"#,
     ));
     assert!(codes_of(&tide(rule).1, undeclared).is_empty());
 

@@ -10,7 +10,7 @@ Licensed under the Apache License, Version 2.0 (catalogs/ecs/LICENSE.txt,
 catalogs/ecs/NOTICE). The field list is reformatted; allowed-value
 descriptions are cut to their first sentence.
 
-Azure Monitor Logs table reference (catalogs/kql/azure-monitor/tables.json,
+Azure Monitor Logs table reference (catalogs/kql/azure-monitor/tables.toml,
 generated from MicrosoftDocs/azure-monitor-docs by
 scripts/sync_azure_monitor_tables.py)
 Copyright Microsoft Corporation
@@ -18,9 +18,9 @@ Licensed under the Creative Commons Attribution 4.0 International License
 (https://creativecommons.org/licenses/by/4.0/). The table and column names
 and types are reformatted; table descriptions are cut to their first sentence.
 
-Microsoft Sentinel (catalogs/kql/asim/asim.json, generated from
+Microsoft Sentinel (catalogs/kql/asim/asim.toml, generated from
 Azure/Azure-Sentinel by scripts/sync_asim_schemas.py; and the columns of its
-KQL validation schemas in catalogs/kql/azure-monitor/tables.json)
+KQL validation schemas in catalogs/kql/azure-monitor/tables.toml)
 Copyright (c) Microsoft Corporation
 Licensed under the MIT License
 (https://github.com/Azure/Azure-Sentinel/blob/master/LICENSE). Only names,

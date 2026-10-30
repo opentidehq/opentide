@@ -361,8 +361,8 @@ name = "opentide-core"
 version = "0.6.0"
 dependencies = [
  "serde",
- "serde_json",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
@@ -425,7 +425,6 @@ dependencies = [
  "opentide-syntax",
  "regex",
  "serde",
- "serde_json",
  "thiserror",
  "toml",
  "tree-sitter",

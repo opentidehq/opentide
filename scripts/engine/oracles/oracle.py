@@ -397,7 +397,7 @@ def kql_schema() -> dict:
     Kusto.Language database: the Azure Monitor reference, the hand-written
     columns, the standard Log Analytics columns, `Timestamp` on the advanced
     hunting tables, and each ASIM parser returning its schema."""
-    reference = json.loads((ROOT / "catalogs/kql/azure-monitor/tables.json").read_text())
+    reference = load_toml("catalogs/kql/azure-monitor/tables.toml")
     tables: dict[str, list[list[str]]] = {
         t["name"]: [list(c) for c in t["columns"]] for t in reference["tables"] if t.get("columns")
     }
@@ -419,11 +419,12 @@ def kql_schema() -> dict:
         listed = tables.setdefault(table["name"], [])
         if "Timestamp" not in {c[0] for c in listed}:
             listed.append(["Timestamp", "datetime"])
-    asim = json.loads((ROOT / "catalogs/kql/asim/asim.json").read_text())
+    asim = load_toml("catalogs/kql/asim/asim.toml")
+    schemas = {s["name"]: s for s in asim["schemas"]}
     functions = {
         p["name"]: {
-            "columns": [[c[0], c[1]] for c in asim["schemas"][p["schema"]]["columns"]],
-            "params": [[q["name"], q["type"]] for q in p["params"]],
+            "columns": [[c[0], c[1]] for c in schemas[p["schema"]]["columns"]],
+            "params": [[q["name"], q["type"]] for q in p.get("params", [])],
         }
         for p in asim["parsers"]
     }

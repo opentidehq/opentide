@@ -1,17 +1,16 @@
 //! Datasets a workspace declares in `visibility.toml` (tables, indexes,
 //! sourcetypes, macros, index patterns, data views), per platform.
 //!
-//! opentide writes them to `datasets.json` in the workspace catalog
-//! (`.opentide/lsp/catalogs/generated/`) and a host installs them for the
-//! process ([`install`]). The query engines ask [`current`] whether a name a
-//! query reads is declared. Checking is opt-in per platform and kind: a
+//! The engine reads them from the `visibility.toml` text itself
+//! ([`DeclaredDatasets::from_visibility`]); a host installs them for the
+//! process ([`install`]), again whenever the file changes. The query engines
+//! ask [`current`] whether a name a query reads is declared. Checking is opt-in per platform and kind: a
 //! workspace that declares no index for Splunk never gets a warning about an
 //! index.
 //!
 //! Declarations are per `system`, so a Splunk index never makes a Sentinel
 //! table known.
 
-use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock, RwLock};
 
@@ -36,7 +35,7 @@ pub enum DatasetKind {
 }
 
 impl DatasetKind {
-    /// The key in `visibility.toml` and `datasets.json`.
+    /// The key in a `visibility.toml` log source.
     pub fn key(self) -> &'static str {
         match self {
             Self::Tables => "tables",
@@ -69,11 +68,21 @@ pub enum Declaration {
     Undeclared,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-struct DatasetsFile {
-    #[serde(default)]
-    platforms: BTreeMap<String, BTreeMap<String, Vec<String>>>,
-}
+/// The `visibility.toml` fields each `system` may name datasets in
+/// (opentide validates the file; a field that does not fit is ignored here).
+const FIELDS: &[(&str, &[DatasetKind])] = &[
+    ("sentinel", &[DatasetKind::Tables]),
+    ("defender_for_endpoint", &[DatasetKind::Tables]),
+    (
+        "splunk",
+        &[
+            DatasetKind::Indexes,
+            DatasetKind::Sourcetypes,
+            DatasetKind::Macros,
+        ],
+    ),
+    ("elastic", &[DatasetKind::Indices, DatasetKind::DataViews]),
+];
 
 /// The declared datasets, by platform (`sentinel`, `splunk`, ...) and kind.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -82,32 +91,61 @@ pub struct DeclaredDatasets {
 }
 
 impl DeclaredDatasets {
-    /// `datasets.json` as opentide writes it:
+    /// The datasets the `[[logsources]]` of a `visibility.toml` declare:
     ///
-    /// ```json
-    /// {"platforms": {"sentinel": {"tables": ["NTANetAnalytics", "*_CL"]},
-    ///                "splunk": {"indexes": ["wineventlog"]}}}
+    /// ```toml
+    /// [[logsources]]
+    /// name = "VNet flow logs"
+    /// system = "sentinel"
+    /// tables = ["NTANetAnalytics", "*_CL"]
+    ///
+    /// [[logsources]]
+    /// name = "Endpoint"
+    /// system = "elastic"
+    /// indices = ["logs-endpoint.*"]
+    /// ecs = true
     /// ```
     ///
-    /// Other top-level keys (`opentide`, `generator`) are labels and ignored.
-    pub fn parse(text: &str) -> Result<Self, String> {
-        let file: DatasetsFile = serde_json::from_str(text).map_err(|err| err.to_string())?;
-        let mut platforms = BTreeMap::new();
-        for (platform, kinds) in file.platforms {
-            let kinds: BTreeMap<String, Vec<String>> = kinds
-                .into_iter()
-                .map(|(kind, names)| {
-                    let names = names
-                        .into_iter()
-                        .map(|n| n.trim().to_string())
-                        .filter(|n| !n.is_empty())
-                        .collect::<Vec<_>>();
-                    (kind, names)
-                })
-                .filter(|(_, names)| !names.is_empty())
-                .collect();
-            if !kinds.is_empty() {
-                platforms.insert(platform, kinds);
+    /// The `indices` of an elastic log source with `ecs = true` are also
+    /// [`DatasetKind::EcsIndices`]. Text that is not TOML is an error; a
+    /// field that does not fit its `system`, or a name that is not a
+    /// string, is left out (opentide's validation reports it).
+    pub fn from_visibility(text: &str) -> Result<Self, String> {
+        let file: toml::Table = toml::from_str(text).map_err(|err| err.to_string())?;
+        let mut platforms: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
+        let sources = file.get("logsources").and_then(|v| v.as_array());
+        for source in sources.into_iter().flatten().filter_map(|v| v.as_table()) {
+            let Some(system) = source.get("system").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let Some((_, kinds)) = FIELDS.iter().find(|(s, _)| *s == system) else {
+                continue;
+            };
+            let ecs = source.get("ecs").and_then(|v| v.as_bool()) == Some(true);
+            for kind in kinds.iter() {
+                let names: Vec<String> = source
+                    .get(kind.key())
+                    .and_then(|v| v.as_array())
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|v| v.as_str())
+                    .map(|n| n.trim().to_string())
+                    .filter(|n| !n.is_empty())
+                    .collect();
+                if names.is_empty() {
+                    continue;
+                }
+                let platform = platforms.entry(system.to_string()).or_default();
+                if ecs && *kind == DatasetKind::Indices {
+                    platform
+                        .entry(DatasetKind::EcsIndices.key().to_string())
+                        .or_default()
+                        .extend(names.iter().cloned());
+                }
+                platform
+                    .entry(kind.key().to_string())
+                    .or_default()
+                    .extend(names);
             }
         }
         Ok(Self { platforms })
@@ -256,12 +294,31 @@ mod tests {
 
     #[test]
     fn opt_in_per_platform_and_kind() {
-        let d = DeclaredDatasets::parse(
-            r#"{"opentide": "0.20.0", "platforms": {
-                "sentinel": {"tables": ["NTANetAnalytics", "*_CL"]},
-                "splunk": {"indexes": ["WinEventLog"], "macros": []},
-                "elastic": {"indices": ["logs-*"]}
-            }}"#,
+        let d = DeclaredDatasets::from_visibility(
+            r#"
+[[assets]]
+name = "Prod"
+
+[[logsources]]
+name = "Flows"
+description = "VNet flows."
+system = "sentinel"
+tables = ["NTANetAnalytics", "*_CL"]
+
+[[logsources]]
+name = "Windows"
+description = "Security events."
+system = "splunk"
+indexes = ["WinEventLog"]
+macros = []
+tables = ["NotASplunkKind"]
+
+[[logsources]]
+name = "Endpoint"
+description = "Endpoint."
+system = "elastic"
+indices = ["logs-*"]
+"#,
         )
         .unwrap();
         use DatasetKind::*;
@@ -291,15 +348,35 @@ mod tests {
 
     #[test]
     fn empty_and_invalid() {
-        assert!(DeclaredDatasets::parse("{}").unwrap().is_empty());
+        assert!(DeclaredDatasets::from_visibility("").unwrap().is_empty());
         assert!(
-            DeclaredDatasets::parse(r#"{"platforms": {"sentinel": {"tables": []}}}"#)
-                .unwrap()
-                .is_empty()
+            DeclaredDatasets::from_visibility(
+                "[[logsources]]\nname = \"x\"\nsystem = \"sentinel\"\ntables = []\n"
+            )
+            .unwrap()
+            .is_empty()
         );
-        assert!(DeclaredDatasets::parse("[").is_err());
+        // A system without dataset fields, and one the engine does not know.
         assert!(
-            DeclaredDatasets::parse(r#"{"platforms": {"sentinel": {"tables": "x"}}}"#).is_err()
+            DeclaredDatasets::from_visibility(
+                "[[logsources]]\nsystem = \"crowdstrike\"\ntables = [\"x\"]\n"
+            )
+            .unwrap()
+            .is_empty()
         );
+        assert!(DeclaredDatasets::from_visibility("[[logsources]\n").is_err());
+    }
+
+    #[test]
+    fn ecs_marks_an_elastic_log_sources_indices() {
+        let d = DeclaredDatasets::from_visibility(
+            "[[logsources]]\nsystem = \"elastic\"\nindices = [\"custom-*\"]\necs = true\n\n[[logsources]]\nsystem = \"elastic\"\nindices = [\"raw-*\"]\n",
+        )
+        .unwrap();
+        use DatasetKind::*;
+        assert_eq!(d.names("elastic", EcsIndices), ["custom-*"]);
+        assert_eq!(d.names("elastic", Indices), ["custom-*", "raw-*"]);
+        // Another platform's names never make Splunk names known.
+        assert_eq!(d.status("splunk", Tables, "x"), Declaration::Unchecked);
     }
 }

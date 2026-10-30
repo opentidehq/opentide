@@ -265,7 +265,7 @@ Engine checks below the grammar (Elastic dialect unless noted):
 
 ES|QL, EQL, kuery, and Lucene know which indices a query reads where it is written down: ES|QL from its `FROM` (or `TS`) command, the others from the Tide rule's elastic block, `index` for `query` and `threat.index` for `threat.query`. A `data_view_id`, an omitted `index` (the tenant's `setup.index`), a hunt, or a raw `.kuery`, `.lucene`, or `.eql` file leaves them unknown.
 
-Where the workspace declares Elastic datasets (`datasets.json`, from the `indices` and `data_views` of `system = "elastic"` log sources in `visibility.toml`), an index pattern no declared pattern covers or reaches is `elastic_dataset_not_declared` (warning), and so is a data view no log source names. `logs-*` declared covers `logs-azure.signinlogs-*`; a used `win*` reaches a declared `winlogbeat-x`. Each kind is opt-in: a workspace that declares no data view gets no warning about one.
+Where the workspace declares Elastic datasets (the `indices` and `data_views` of `system = "elastic"` log sources in `visibility.toml`), an index pattern no declared pattern covers or reaches is `elastic_dataset_not_declared` (warning), and so is a data view no log source names. `logs-*` declared covers `logs-azure.signinlogs-*`; a used `win*` reaches a declared `winlogbeat-x`. Each kind is opt-in: a workspace that declares no data view gets no warning about one.
 
 Where every index is ECS, an integration data stream (`logs-*`) or a name a declared `ecs_indices` pattern covers (log sources with `ecs = true`), fields are checked against `catalogs/ecs/fields.json`:
 

@@ -5,11 +5,25 @@
 use opentide_analysis::{AnalyzeRequest, Catalog, MemoryWorkspace, analyze, install_catalog};
 use opentide_core::{Diagnostic, LanguageId, Severity, codes};
 
-const SPLUNK: &str = r#"{"opentide": "0.20.0", "platforms": {
-    "splunk": {"indexes": ["wineventlog", "edr_*"], "macros": ["wineventlog_security"]},
-    "sentinel": {"tables": ["SigninLogs"]}
-}}"#;
-const SENTINEL_ONLY: &str = r#"{"platforms": {"sentinel": {"tables": ["SigninLogs"]}}}"#;
+const SPLUNK: &str = r#"[[logsources]]
+name = "splunk datasets"
+description = "Test log source."
+system = "splunk"
+indexes = ["wineventlog", "edr_*"]
+macros = ["wineventlog_security"]
+
+[[logsources]]
+name = "sentinel datasets"
+description = "Test log source."
+system = "sentinel"
+tables = ["SigninLogs"]
+"#;
+const SENTINEL_ONLY: &str = r#"[[logsources]]
+name = "sentinel datasets"
+description = "Test log source."
+system = "sentinel"
+tables = ["SigninLogs"]
+"#;
 
 const RULE: &str = r#"name: Declared Datasets
 
@@ -75,7 +89,7 @@ fn undeclared(language: LanguageId, uri: &str, text: &str) -> Vec<String> {
 
 fn install(datasets: Option<&str>) {
     install_catalog(&Catalog {
-        datasets: datasets.map(str::to_string),
+        visibility: datasets.map(str::to_string),
         ..Catalog::default()
     })
     .unwrap();

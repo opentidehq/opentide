@@ -18,7 +18,7 @@ fn findings(platform: &str, text: &str) -> Vec<(String, String)> {
 
 fn declare(json: Option<&str>) {
     install_catalog(&Catalog {
-        datasets: json.map(str::to_string),
+        visibility: json.map(str::to_string),
         ..Catalog::default()
     })
     .unwrap();
@@ -38,7 +38,12 @@ fn declared_tables_are_known_and_undeclared_ones_warn_once_a_workspace_declares_
 
     // A Splunk index never makes a KQL table known.
     declare(Some(
-        r#"{"platforms": {"splunk": {"indexes": ["Custom_CL", "SigninLogs"]}}}"#,
+        r#"[[logsources]]
+name = "splunk datasets"
+description = "Test log source."
+system = "splunk"
+indexes = ["Custom_CL", "SigninLogs"]
+"#,
     ));
     assert_eq!(
         findings("sentinel", "Custom_CL | take 1"),
@@ -47,7 +52,12 @@ fn declared_tables_are_known_and_undeclared_ones_warn_once_a_workspace_declares_
     assert!(findings("sentinel", "SigninLogs | take 1").is_empty());
 
     declare(Some(
-        r#"{"platforms": {"sentinel": {"tables": ["Custom_CL", "NTANetAnalytics", "Vendor*_CL"]}}}"#,
+        r#"[[logsources]]
+name = "sentinel datasets"
+description = "Test log source."
+system = "sentinel"
+tables = ["Custom_CL", "NTANetAnalytics", "Vendor*_CL"]
+"#,
     ));
     // Declared: known, and an unknown declared table has no column checks.
     assert!(findings("sentinel", "Custom_CL | where AnyColumn == 1 | take 1").is_empty());

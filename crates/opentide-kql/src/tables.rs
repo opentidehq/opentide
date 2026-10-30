@@ -1,19 +1,19 @@
 //! Generated table and ASIM catalogs: the Azure Monitor Logs table reference
-//! (`catalogs/kql/azure-monitor/tables.json`, `scripts/sync_azure_monitor_tables.py`)
-//! and the ASIM schemas and parsers (`catalogs/kql/asim/asim.json`,
-//! `scripts/sync_asim_schemas.py`). Both are JSON, parsed once per process.
+//! (`catalogs/kql/azure-monitor/tables.toml`, `scripts/sync_azure_monitor_tables.py`)
+//! and the ASIM schemas and parsers (`catalogs/kql/asim/asim.toml`,
+//! `scripts/sync_asim_schemas.py`), parsed once per process.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
-const AZURE_MONITOR_JSON: &str = include_str!(concat!(
+const AZURE_MONITOR_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/azure-monitor/tables.json"
+    "/catalogs/kql/azure-monitor/tables.toml"
 ));
-const ASIM_JSON: &str = include_str!(concat!(
+const ASIM_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/asim/asim.json"
+    "/catalogs/kql/asim/asim.toml"
 ));
 
 /// One table of the Azure Monitor Logs reference.
@@ -41,7 +41,7 @@ pub fn azure_monitor() -> &'static BTreeMap<String, AzureMonitorTable> {
     static TABLES: OnceLock<BTreeMap<String, AzureMonitorTable>> = OnceLock::new();
     TABLES.get_or_init(|| {
         let file: AzureMonitorFile =
-            serde_json::from_str(AZURE_MONITOR_JSON).expect("azure-monitor/tables.json");
+            toml::from_str(AZURE_MONITOR_TOML).expect("azure-monitor/tables.toml");
         file.tables
             .into_iter()
             .map(|t| (t.name.clone(), t))
@@ -77,6 +77,7 @@ pub struct AsimColumn(pub String, pub String, pub String);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AsimSchema {
+    pub name: String,
     pub columns: Vec<AsimColumn>,
     #[serde(default)]
     pub citation: Option<String>,
@@ -105,7 +106,7 @@ pub struct AsimParser {
 
 #[derive(Debug, Deserialize)]
 struct AsimFile {
-    schemas: BTreeMap<String, AsimSchema>,
+    schemas: Vec<AsimSchema>,
     parsers: Vec<AsimParser>,
 }
 
@@ -117,9 +118,13 @@ pub struct Asim {
 pub fn asim() -> &'static Asim {
     static ASIM: OnceLock<Asim> = OnceLock::new();
     ASIM.get_or_init(|| {
-        let file: AsimFile = serde_json::from_str(ASIM_JSON).expect("asim/asim.json");
+        let file: AsimFile = toml::from_str(ASIM_TOML).expect("asim/asim.toml");
         Asim {
-            schemas: file.schemas,
+            schemas: file
+                .schemas
+                .into_iter()
+                .map(|s| (s.name.clone(), s))
+                .collect(),
             parsers: file
                 .parsers
                 .into_iter()
