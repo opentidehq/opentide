@@ -88,37 +88,18 @@ names = [
 # ---------------------------------------------------------------------------
 
 # Probes in testdata/oracles/spl/ are one form each, taken from ESCU
-# detections. Ours must accept each with no error-severity diagnostic; that
-# check cannot be excepted.
+# detections, plus the argumentless commands and empty stages of #135 (their
+# `.broken.` twins are the forms Splunk rejects). Ours must accept each with
+# no error-severity diagnostic; that check cannot be excepted. Forms Splunk
+# accepts that are still mistakes (spl_empty_command, spl_empty_stage,
+# spl_command_without_pipe) are not syntax errors, so they never disagree.
 
-# Corpus fixtures labelled invalid that Splunk's parser accepts. Each is kept
-# on purpose: the form is always an authoring mistake in a detection.
-
-[[spl]]
-id = "spl-trailing-pipe"
-reason = "Kept on purpose. Splunk ignores an empty trailing pipeline stage (`search |`, `index=main |`); ours reports a syntax error because it is always a truncated query."
-paths = [
-  "testdata/corpus/spl/search_command__invalid.spl",
-  "testdata/corpus/spl/unknown_command__invalid.spl",
-]
+# Probes Splunk's parser cannot check with parse_only.
 
 [[spl]]
-id = "spl-argumentless-commands"
-reason = "Kept on purpose. Splunk's search parser accepts `fields`, `lookup`, `stats` and `where` with no arguments; ours reports a syntax error because none of them does anything useful without one."
-paths = [
-  "testdata/corpus/spl/fields_command__invalid.spl",
-  "testdata/corpus/spl/lookup_command__invalid.spl",
-  "testdata/corpus/spl/stats_command__invalid.spl",
-  "testdata/corpus/spl/where_command__invalid.spl",
-]
-
-[[spl]]
-id = "spl-leading-word-is-a-search-term"
-reason = "Kept on purpose. Without a leading `|`, Splunk reads `index` and `tstats` as search terms of the implicit `search`, so the query silently searches for those words; ours reports the missing pipe."
-paths = [
-  "testdata/corpus/spl/bare_search__invalid.spl",
-  "testdata/corpus/spl/tstats_command__invalid.spl",
-]
+id = "spl-parse-only-subsearch"
+reason = "Splunk's search/parser answers \"This search cannot be parsed when parse_only is set to true\" for a subsearch it would have to run first (`where NOT [| makeresults ...]`). It is a limit of parse_only, not a syntax error: a deployed detection uses the form."
+paths = ["testdata/oracles/spl/where_not_subsearch.spl"]
 
 # Names: catalogs/spl/commands.toml against Splunk searchbnf.conf.
 

@@ -1,2 +1,2 @@
 ``` prod:stats_command invalid
-index=main | stats
+index=main | stats count by

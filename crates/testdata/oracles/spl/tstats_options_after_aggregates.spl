@@ -1,0 +1,1 @@
+| tstats count values(Processes.user) as user fillnull_value="-" from datamodel=Endpoint.Processes by Processes.dest

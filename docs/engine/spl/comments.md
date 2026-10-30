@@ -55,7 +55,7 @@ index=wineventlog EventCode=4688 ```process create```
 ## opentide engine notes
 
 - Authored comments must remain in the source buffer (no stripping before highlight/analyze unless a future pipeline documents it).
-- Current grammar `comment` token incorrectly accepts `` ``` `` + rest-of-line **or** a single-backtick pair — that collides with macros and does not match Splunk’s paired `` ```…``` `` form. Tracked in [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).
+- The grammar's `comment` token opens with a run of three or more backticks, may span lines, and ends at the next run of three or more. A single-backtick pair is always a macro.
 
 ## Related
 

@@ -1,0 +1,1 @@
+index=a | join | stats count by host

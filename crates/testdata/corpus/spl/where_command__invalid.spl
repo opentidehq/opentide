@@ -1,2 +1,2 @@
 ``` prod:where_command invalid
-index=main | where
+index=main | where (x=1
