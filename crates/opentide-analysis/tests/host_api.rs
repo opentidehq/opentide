@@ -38,6 +38,8 @@ fn every_injected_query_is_reported_with_its_language_and_place() {
         "CrowdStrike is never validated, so it is not a query here"
     );
     assert_eq!(reports[0].language, LanguageId::Kql);
+    assert_eq!(reports[0].platform, "sentinel");
+    assert_eq!(reports[1].platform, "splunk");
     assert!(
         reports[0].diagnostics.is_empty(),
         "{:?}",
@@ -63,6 +65,54 @@ fn every_injected_query_is_reported_with_its_language_and_place() {
             .as_slice()
         )
     );
+}
+
+#[test]
+fn a_hunt_is_reported_at_its_path_with_its_platform_and_profile() {
+    // A hunt's path does not name its platform: `platform` does, and it picks
+    // the KQL profile (`AlertInfo` is a Defender table, not a Sentinel one).
+    let rule = r#"name: Hunts
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000001
+  schema: rule::1.0
+response:
+  procedure:
+    searches:
+      - query: AlertInfo | take 1
+        system: defender_for_endpoint
+      - system: sentinel
+        query: AlertInfo | take 1
+"#;
+    let reports = analyze_queries(&MemoryWorkspace::default(), rule);
+    let found: Vec<(String, &str, bool)> = reports
+        .iter()
+        .map(|r| {
+            (
+                r.field_path.join("."),
+                r.platform.as_str(),
+                r.diagnostics
+                    .iter()
+                    .any(|d| d.code == codes::KQL_UNKNOWN_TABLE),
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        vec![
+            (
+                "response.procedure.searches.0.query".into(),
+                "defender_for_endpoint",
+                false
+            ),
+            (
+                "response.procedure.searches.1.query".into(),
+                "sentinel",
+                true
+            ),
+        ]
+    );
+    assert!(reports.iter().all(|r| r.language == LanguageId::Kql));
+    assert_eq!(reports[0].range.start.line, 7);
 }
 
 #[test]

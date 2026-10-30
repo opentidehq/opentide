@@ -1,0 +1,2 @@
+let g = (t:string) { print t };
+union isfuzzy=true g("a"), g("b")
