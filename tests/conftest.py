@@ -134,13 +134,21 @@ _OUTPUT_MODE_ENV = ("OPENTIDE_OUTPUT", "OPENTIDE_DEBUG")
 
 @pytest.fixture(autouse=True)
 def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Start every test outside an agent, with no output mode chosen yet."""
+    """Start every test outside an agent, with no output mode chosen yet.
+
+    ``CliRunner`` runs the root callback in the test's own context, so the
+    ``CliContext`` it activates (``--debug`` included) would otherwise outlive
+    the test and reach code that reads it, such as the crash handler.
+    """
+    from opentide.cli.context import _cli_context
     from opentide.cli.ui.mode import AGENT_VARIABLES, reset_mode
 
     for name in (*AGENT_VARIABLES, *_OUTPUT_MODE_ENV):
         monkeypatch.delenv(name, raising=False)
     reset_mode()
+    token = _cli_context.set(None)
     yield
+    _cli_context.reset(token)
     reset_mode()
 
 
