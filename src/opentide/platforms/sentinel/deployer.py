@@ -86,22 +86,34 @@ class SentinelCompileError(Errors.TideRuleDataModelErrors):
     """A rule Sentinel cannot compile, with a stable *code*, the *reason* alone and a *hint*.
 
     ``str()`` names the rule, for a live deploy's log; a dry run already knows
-    the rule and its file, so it shows *reason* under *code* instead.
+    the rule and its file, so it shows *reason* under *code* instead. *field*
+    is the key at fault, as a path from the rule's root, for ``validate``'s frame.
     """
 
     def __init__(
-        self, data: DetectionRule, code: str, reason: str, hint: str | None = None
+        self,
+        data: DetectionRule,
+        code: str,
+        reason: str,
+        hint: str | None = None,
+        *,
+        field: tuple[str, ...] = (),
     ) -> None:
         self.code = code
         self.reason = reason
         self.hint = hint
+        self.field = field
         detail = f"{reason}; {hint}" if hint else reason
         super().__init__(f"Rule {data.metadata.uuid} ({data.name}): {detail}")
 
 
 def _missing_field(data: DetectionRule, field: str, requirement: str) -> SentinelCompileError:
     return SentinelCompileError(
-        data, "compile_missing_field", f"configurations.sentinel.{field} is missing", requirement
+        data,
+        "compile_missing_field",
+        f"configurations.sentinel.{field} is missing",
+        requirement,
+        field=("configurations", "sentinel", *field.split(".")),
     )
 
 
@@ -160,6 +172,7 @@ class SentinelDeploy(RuleDeployer):
                 "compile_invalid_value",
                 "configurations.sentinel.alert.suppression is true",
                 "set it to false or a duration such as PT1H",
+                field=("configurations", "sentinel", "alert", "suppression"),
             )
         if configuration.scheduling.nrt is True:
             rule["kind"] = "NRT"
@@ -251,6 +264,7 @@ class SentinelDeploy(RuleDeployer):
                 "compile_empty_block",
                 "`response` is empty, so Sentinel cannot read `alert_severity`",
                 "set response.alert_severity, or configurations.sentinel.alert.severity",
+                field=("response",),
             )
         severity = configuration.alert.severity or data.alert_severity
         if severity == "Critical":

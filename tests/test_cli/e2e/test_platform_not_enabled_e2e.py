@@ -130,6 +130,11 @@ _SENTINEL_BLOCK = """\
       lookback: PT2H
     alert:
       title: Splunk SPL Rule
+      suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false
 """
 
 
