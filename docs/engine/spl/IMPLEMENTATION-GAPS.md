@@ -68,11 +68,13 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | --- | --- |
 | `bare_search` | Present; must stay non-rewriting |
 | `catalog_command` / `unknown_command` | Present |
-| Comments `` ```…``` `` | Triple-backtick comments only |
+| Comments `` ```…``` `` | Three or more backticks each side, may span lines |
 | Macros `` `macro` `` / `` `macro(args)` `` | First-class `macro` node + HighlightSpec `macro` |
 | Subsearch `[ pipeline ]` | `subsearch` rule (join + argument_list + search_term) |
-| `IN (...)` in **search** clauses | `in_clause` |
-| `TERM(...)` / `CASE(...)` | `term_clause` / `case_clause` |
+| Search clauses | One `search_expression` for the base search, `search`, `tstats ... where` and subsearches |
+| `IN (...)` in **search** clauses | `in_clause`, comma- or space-separated |
+| `TERM(...)` / `CASE(...)` / tstats `by PREFIX(...)` | `term_clause` / `case_clause` / `prefix_clause`, raw contents (`term_text`) up to `)` or whitespace; the `)` is optional, as in Splunk |
+| Search values | `search_word`: any run of non-breaking characters (`-1h@h`, `2.0.0`, `svc-x`) |
 | `tstats` `from datamodel=...` | `from datamodel=` + dotted identifiers |
 | Leading `\|` generating command | Optional leading pipe on `pipeline` |
 

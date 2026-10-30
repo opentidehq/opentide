@@ -1,0 +1,2 @@
+``` prod:search_expression invalid
+index=main AND OR user=SYSTEM

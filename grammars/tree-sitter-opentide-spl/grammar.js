@@ -19,11 +19,19 @@ module.exports = grammar({
 
   word: ($) => $.identifier,
 
+  // Upper-case boolean operators are reserved in search (`a AND OR b` is an
+  // error); lower-case `and`/`or`/`not` are plain search terms.
+  reserved: {
+    global: (_) => ["AND", "OR", "NOT"],
+  },
+
   rules: {
     source_file: ($) => $.pipeline,
 
-    // Three backticks both sides. Single-backtick pairs are macros, not comments.
-    comment: (_) => token(seq("```", /[^`\n]*/, "```")),
+    // Three or more backticks both sides, spanning lines. The body holds no
+    // run of three backticks, so the first such run closes the comment.
+    // Single-backtick pairs are macros, not comments.
+    comment: (_) => token(seq(/`{3,}/, /([^`]|`[^`]|``[^`])*/, /`{3,}/)),
 
     macro: (_) =>
       token(
@@ -31,7 +39,8 @@ module.exports = grammar({
           "`",
           // ESCU filter macros can start with a digit (`7zip_..._filter`).
           /[A-Za-z0-9_]+/,
-          optional(seq("(", /[^)`\n]*/, ")")),
+          // Arguments may be quoted, hold `)` inside quotes, and span lines.
+          optional(seq("(", /[^`]*/, ")")),
           "`",
         ),
       ),
@@ -43,14 +52,35 @@ module.exports = grammar({
         repeat(seq("|", choice($.command, $.macro))),
       ),
 
-    // Authored `index=main sourcetype=foo` without a `search` keyword.
-    // Starts with a field=value, a macro followed by more terms, or a group,
-    // so it does not steal unknown commands.
+    // Authored `index=main sourcetype=foo` without a `search` keyword. It
+    // must not start with a bare word, so a leading unknown command stays an
+    // `unknown_command`: it starts with `field=value`, `field IN (...)`, a
+    // quoted phrase, `NOT`, a group, `TERM()`/`CASE()`, a value that is not a
+    // name, or a macro followed by more terms (a lone macro is its own stage).
     bare_search: ($) =>
       choice(
-        seq(field("first", $.field_value), repeat($.search_term)),
-        seq(field("first", $.macro), repeat1($.search_term)),
-        seq(field("first", $.search_group), repeat($.search_term)),
+        seq(field("first", $._bare_search_head), repeat($._search_more)),
+        seq(field("first", $.macro), repeat1($._search_more)),
+      ),
+
+    _bare_search_head: ($) =>
+      choice(
+        $._search_not,
+        alias($._bare_search_term, $.search_term),
+      ),
+
+    _bare_search_term: ($) =>
+      choice(
+        $.search_group,
+        $.in_clause,
+        $.term_clause,
+        $.case_clause,
+        $.subsearch,
+        $.field_value,
+        $.string,
+        $.glob,
+        $.number,
+        $.search_word,
       ),
 
     command: ($) =>
@@ -76,12 +106,28 @@ module.exports = grammar({
         $.unknown_command,
       ),
 
-    search_command: ($) => seq("search", field("clause", repeat($.search_term))),
+    search_command: ($) =>
+      seq("search", optional(field("clause", $.search_expression))),
+
+    // Splunk search syntax, shared by the base search, `search`, `tstats ...
+    // where` and subsearch bodies. Adjacent terms are ANDed; `AND` and `OR`
+    // sit between two terms and `NOT` before one. The operators are flat (no
+    // precedence tree): the parse only has to accept what Splunk accepts.
+    search_expression: ($) => seq($._search_unary, repeat($._search_more)),
+
+    _search_more: ($) =>
+      seq(
+        optional(alias(choice("AND", "OR"), $.search_boolean)),
+        $._search_unary,
+      ),
+
+    _search_unary: ($) => choice($._search_not, $.search_term),
+
+    _search_not: ($) => seq(alias("NOT", $.search_boolean), $._search_unary),
 
     search_term: ($) =>
       choice(
         $.search_group,
-        $.search_boolean,
         $.in_clause,
         $.term_clause,
         $.case_clause,
@@ -92,26 +138,40 @@ module.exports = grammar({
         $.glob,
         $.identifier,
         $.number,
+        $.search_word,
       ),
 
     // `(EventCode=4624 OR EventCode=4625)`
-    search_group: ($) => seq("(", repeat1($.search_term), ")"),
+    search_group: ($) => seq("(", $.search_expression, ")"),
 
-    search_boolean: (_) => choice("OR", "AND", "NOT"),
-
+    // `app IN ("a", "b")` or `app IN ("a" "b")`.
     in_clause: ($) =>
-      seq(
-        field("field", $.identifier),
-        "IN",
-        $.value_list,
-      ),
+      seq(field("field", $._search_field), "IN", $.value_list),
 
-    term_clause: ($) => seq("TERM", "(", field("value", choice($.string, $.identifier)), ")"),
+    // TERM, CASE and PREFIX take their contents raw up to the closing `)`:
+    // `TERM(EventID=4688)`, `TERM(user=)`, `TERM(a/*)`. Splunk also accepts
+    // the directive left open (`TERM(EventID=4688` at the end of the search
+    // or before the next pipe), so the `)` is optional and the contents stop
+    // at whitespace.
+    term_clause: ($) => directive("TERM", $),
 
-    case_clause: ($) => seq("CASE", "(", field("value", choice($.string, $.identifier)), ")"),
+    case_clause: ($) => directive("CASE", $),
 
-    value_list: ($) =>
-      seq("(", commaSep1(choice($.string, $.glob, $.identifier, $.number)), ")"),
+    // tstats `PREFIX(src=)`, in a `by` clause or an aggregate. Splunk rejects
+    // it as a `where` term, so it is not a search term.
+    prefix_clause: ($) => directive("PREFIX", $),
+
+    // A run of non-whitespace up to `)`; a quoted part may hold anything.
+    term_text: (_) => token(/([^)\s"]|"([^"\\]|\\.)*")+/),
+
+    value_list: ($) => seq("(", sepBy1($._search_value), ")"),
+
+    // A field compared in a search: a name, a quoted name, or any other run
+    // of non-breaking characters (`alert.attack-time`, `{}.Id`).
+    _search_field: ($) => choice($.identifier, $.string, $.search_word),
+
+    _search_value: ($) =>
+      choice($.string, $.glob, $.identifier, $.number, $.macro, $.search_word),
 
     subsearch: ($) => seq("[", $.pipeline, "]"),
 
@@ -214,9 +274,14 @@ module.exports = grammar({
             field("datamodel", $.identifier),
           ),
         ),
-        // Search syntax: adjacent terms are ANDed, macros and groups allowed.
-        optional(seq(choice("where", "WHERE"), field("where", repeat1($.search_term)))),
-        optional(seq(choice("by", "BY"), sepBy1($.identifier))),
+        optional(seq(choice("where", "WHERE"), field("where", $.search_expression))),
+        optional(
+          seq(
+            choice("by", "BY"),
+            sepBy1(choice($.identifier, $.prefix_clause)),
+            optional(seq("span", "=", field("span", choice($.identifier, $.number, $.search_word)))),
+          ),
+        ),
       ),
 
     tstats_preamble: ($) =>
@@ -380,11 +445,14 @@ module.exports = grammar({
     unknown_command: ($) =>
       seq(field("name", $.identifier), optional($.argument_list)),
 
+    // `AND`, `OR` and `NOT` are reserved, so a command that takes a search
+    // (`metasearch index=a OR index=b`) gets them as booleans here.
     argument_list: ($) =>
       repeat1(
         choice(
           $.macro,
           $.subsearch,
+          alias(choice("AND", "OR", "NOT"), $.search_boolean),
           $.field_value,
           $.string,
           $.identifier,
@@ -398,24 +466,13 @@ module.exports = grammar({
     rename_item: ($) =>
       seq(field("old", $.identifier), "AS", field("new", $.identifier)),
 
+    // `field=value`, `"a.b"=x`, `earliest=-1h@h`, `_index_latest=@m`,
+    // `version=2.0.0`, `host=S-RC*`, `domain_rank=-1`.
     field_value: ($) =>
       seq(
-        field("field", $.identifier),
+        field("field", $._search_field),
         field("operator", choice("=", "!=", "<", ">", "<=", ">=")),
-        field("value", choice($.string, $.glob, $.identifier, $.number, $.value_list)),
-      ),
-
-    // Search wildcards (`fail*`, `*fail`, `f*il`, bare `*`). Not part of
-    // `identifier`, so `*` in eval stays multiplication. The engine warns on
-    // bare, leading, and mid-token globs; a trailing `fail*` is fine.
-    glob: (_) =>
-      token(
-        choice(
-          "*",
-          /[A-Za-z_][A-Za-z0-9_:.]*\*[A-Za-z0-9_:.*]*/,
-          /\*[A-Za-z0-9_:.*]+/,
-          /[0-9]+(\.[0-9]+)?\*[A-Za-z0-9_:.*]*/,
-        ),
+        field("value", choice($._search_value, $.value_list)),
       ),
 
     expression: ($) => $.or_expression,
@@ -509,8 +566,28 @@ module.exports = grammar({
     number: (_) => token(/[0-9]+(\.[0-9]+)?/),
 
     boolean: (_) => choice("true", "false", "TRUE", "FALSE"),
+
+    // Broad tokens last: on an equal-length match the earlier rule wins.
+    // Search wildcards: any run of non-breaking characters with a `*` in it
+    // (`fail*`, `*fail`, `f*il`, `S-RC*`, `C:\\*.exe`, bare `*`). Not part of
+    // `identifier`, so `*` in eval stays multiplication. The engine warns on
+    // bare, leading, and mid-token globs; a trailing `fail*` is fine.
+    glob: (_) => token(/[^\s"()\[\]|=<>!,`*]*\*[^\s"()\[\]|=<>!,`]*/),
+
+    // A search value or field that is neither a name, a number nor a string:
+    // `-1h@h`, `2.0.0`, `svc-x`, `10.0.0.0/8`, `{}.Id`, and the time
+    // modifier `latest=now()`. Last in the grammar, so an equal-length
+    // `identifier`, `string` or `number` wins.
+    search_word: (_) => token(choice(/[^\s"()\[\]|=<>!,`*]+/, /[A-Za-z_]+\(\)/)),
   },
 });
+
+/** `TERM(...)`, `CASE(...)`, `PREFIX(...)`: raw contents, `)` optional. */
+function directive(name, $) {
+  return prec.right(
+    seq(name, "(", optional(field("value", $.term_text)), optional(")")),
+  );
+}
 
 function sepBy1(rule) {
   return seq(rule, repeat(seq(optional(","), rule)));

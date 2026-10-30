@@ -24,7 +24,7 @@
     },
     {
       "comment": "capture:function.builtin",
-      "match": "(?i)(?<![A-Za-z0-9_])(?:CASE|TERM)(?![A-Za-z0-9_])",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:CASE|PREFIX|TERM)(?![A-Za-z0-9_])",
       "name": "support.function.opentide"
     },
     {
