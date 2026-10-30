@@ -122,11 +122,20 @@ fn spl_leading_wildcard_fixture_raw_and_tide() {
 }
 
 #[test]
-fn project_after_summarize_is_a_warning_and_summarize_alone_is_not() {
-    let reversed = "SecurityEvent\n| where EventID == 4688\n| summarize count() by Computer\n| project Computer, count_\n";
+fn project_after_join_is_a_warning_and_summarize_never_is() {
+    let reversed = "SecurityEvent\n| where EventID == 4688\n| join kind=inner SecurityAlert on EventID\n| project Computer\n";
     let codes = codes_for(LanguageId::Kql, reversed);
     assert!(
         codes
+            .iter()
+            .any(|c| c == "kql_join_summarize_before_project"),
+        "{codes:?}"
+    );
+    // #109 B3: summarize already narrows its own output.
+    let summarized = "SecurityEvent\n| where EventID == 4688\n| summarize count() by Computer\n| project Computer, count_\n";
+    let codes = codes_for(LanguageId::Kql, summarized);
+    assert!(
+        !codes
             .iter()
             .any(|c| c == "kql_join_summarize_before_project"),
         "{codes:?}"

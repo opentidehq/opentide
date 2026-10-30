@@ -1253,6 +1253,7 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
                 Some("variable")
             }
         }
+        "quoted_identifier" => Some("variable"),
         "==" | "!=" | "=~" | "=" | "+" | "-" | "*" | "/" => Some("operator"),
         "(" | ")" => Some("punctuation.bracket"),
         "," | ";" => Some("punctuation.delimiter"),

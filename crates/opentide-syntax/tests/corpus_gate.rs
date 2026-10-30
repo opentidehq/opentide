@@ -142,7 +142,6 @@ fn kql_named_rules_in_grammar_json_are_known() {
         "keyword_operator",
         "mv_expand_operator",
         "parse_kv_operator",
-        "parse_where_operator",
         "project_keep_operator",
         "project_reorder_operator",
         "top_operator",
@@ -158,6 +157,7 @@ fn kql_named_rules_in_grammar_json_are_known() {
         "mv_option",
         "series_aggregate",
         "star",
+        "_column_name",
     ]
     .into_iter()
     .collect();

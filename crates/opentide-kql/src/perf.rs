@@ -5,7 +5,7 @@
 //! Join cardinality and `hint.shufflekey` are intentionally absent: the engine
 //! cannot know which side is larger.
 
-use crate::schema::Analysis;
+use crate::schema::{Analysis, Known};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 use tree_sitter::Node;
 
@@ -56,27 +56,21 @@ fn span(node: Node) -> ByteSpan {
 }
 
 /// The filter reads a column an operator before it makes, so it cannot move
-/// ahead of that operator (#109).
-fn reads_made_column(filter: Node, columns: &Analysis) -> bool {
+/// ahead of that operator (#109): one an `extend` (or `summarize`, `parse`,
+/// ...) made, or one the source does not have, which a `join`, `lookup` or
+/// `union` brought in.
+fn reads_made_column(filter: Node, expr: Node, columns: &Analysis) -> bool {
+    let source = columns
+        .pipeline(span(expr))
+        .map(|p| &p.source)
+        .filter(|s| s.known != Known::Open);
     columns.reads(span(filter)).any(|r| {
-        r.column
+        let made = r
+            .column
             .as_ref()
             .and_then(|c| c.made_by)
-            .is_some_and(|made| made.span.end <= filter.start_byte())
-    })
-}
-
-/// `summarize arg_max(T, *)` needs every column, so projecting first would
-/// change the result.
-fn needs_every_column(op: Node, source: &str) -> bool {
-    let text = &source[op.byte_range()];
-    let compact: String = text.split_whitespace().collect();
-    ["arg_max(", "arg_min("].iter().any(|call| {
-        compact.match_indices(call).any(|(i, _)| {
-            let rest = &compact[i + call.len()..];
-            let end = rest.find(')').unwrap_or(rest.len());
-            rest[..end].split(',').any(|arg| arg == "*")
-        })
+            .is_some_and(|made| made.span.end <= filter.start_byte());
+        made || source.is_some_and(|s| s.column(&r.name).is_none())
     })
 }
 
@@ -91,6 +85,16 @@ fn is_narrowing_project(kind: &str) -> bool {
     )
 }
 
+/// The operator leaves only the columns it names or makes: a `join` after it
+/// is already narrow (#109).
+fn narrows(kind: &str) -> bool {
+    is_narrowing_project(kind)
+        || matches!(
+            kind,
+            "summarize_operator" | "distinct_operator" | "count_operator" | "make_series_operator"
+        )
+}
+
 fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
     let ops = operators(expr);
     if source_is_table(expr, columns) {
@@ -99,7 +103,7 @@ fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Dia
                 if let Some(late) = ops
                     .iter()
                     .find(|op| is_filter(op.kind()))
-                    .filter(|late| !reads_made_column(**late, columns))
+                    .filter(|late| !reads_made_column(**late, expr, columns))
                 {
                     let keyword = if late.kind() == "filter_operator" {
                         "filter"
@@ -121,26 +125,24 @@ fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Dia
         }
     }
 
-    // Warn only when columns are still wide and a later `project` shows the
-    // reversed order. A project already before the operator, or no project
-    // at all, is not this diagnostic.
-    // A `let` that ends in project, summarize or distinct is narrow already.
+    // Warn only when a `join` runs on wide columns and a later `project`
+    // shows the reversed order. A project, summarize or distinct already
+    // before the join, or no project at all, is not this diagnostic. A `let`
+    // (or a `union` of them) that ends in one of those is narrow already.
+    // `summarize` itself is never warned: it already returns only the
+    // columns it names, and projecting before `arg_max(T, *)` would change
+    // its result (#109).
     let mut narrowed = columns
         .pipeline(span(expr))
         .is_some_and(|p| p.source.narrowed);
     for (index, op) in ops.iter().enumerate() {
-        if is_narrowing_project(op.kind()) {
+        if narrows(op.kind()) {
             narrowed = true;
             continue;
         }
-        if narrowed {
+        if narrowed || op.kind() != "join_operator" {
             continue;
         }
-        let name = match op.kind() {
-            "join_operator" => "join",
-            "summarize_operator" if !needs_every_column(*op, source) => "summarize",
-            _ => continue,
-        };
         let project_later = ops
             .iter()
             .skip(index + 1)
@@ -153,7 +155,7 @@ fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Dia
             source,
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT,
             format!(
-                "`{name}` runs before `project` narrows columns; project the needed columns first ({CITE})"
+                "`join` runs before `project` narrows columns; project the needed columns first ({CITE})"
             ),
             op.start_byte(),
             op.end_byte(),
@@ -580,8 +582,13 @@ mod tests {
             "SecurityEvent | join kind=inner SecurityAlert on EventID | project Computer",
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
-        assert!(has(
+        // #109 B3: summarize already narrows its own output; never warned.
+        assert!(!has(
             "SecurityEvent | where EventID == 4688 | summarize count() by Computer | project Computer",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        assert!(!has(
+            "SigninLogs | summarize count() by UserPrincipalName | project UserPrincipalName",
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
         assert!(!has(
@@ -632,7 +639,7 @@ mod tests {
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
         assert!(has(
-            "let base = SigninLogs | where ResultType == 0; base | summarize count() by AppId | project AppId",
+            "let base = SigninLogs | where ResultType == 0; base | join kind=inner AuditLogs on $left.AppId == $right.Id | project AppId",
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
     }
@@ -645,6 +652,91 @@ mod tests {
         ));
         assert!(!has(
             "SigninLogs | summarize Last = arg_min( TimeGenerated , * ) by UserPrincipalName | project UserPrincipalName",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+    }
+
+    // #109 B2, the shapes from the issue comment.
+    #[test]
+    fn where_after_summarize_on_a_let_source_is_not_flagged() {
+        assert!(!has(
+            "let resolved = SigninLogs | project IPAddress, Asn = AutonomousSystemNumber;\n\
+             resolved\n\
+             | summarize AsnCount = dcount(Asn) by IPAddress\n\
+             | where AsnCount == 1",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+        // On a table, a filter on the summarize output cannot move either.
+        assert!(!has(
+            "SigninLogs | summarize AsnCount = dcount(AutonomousSystemNumber) by IPAddress | where AsnCount == 1",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+    }
+
+    #[test]
+    fn where_on_a_column_from_the_right_side_of_a_join_is_not_flagged() {
+        let src = "let resets = AuditLogs | project ResetTime = TimeGenerated, Upn = tostring(TargetResources[0].userPrincipalName);\n\
+             SigninLogs\n\
+             | join kind=inner resets on $left.UserPrincipalName == $right.Upn\n\
+             | where TimeGenerated between (ResetTime .. (ResetTime + 1h))";
+        assert!(!has(src, codes::KQL_WHERE_NOT_FIRST));
+        // A right side that is a table: its columns are not the left table's.
+        assert!(!has(
+            "SigninLogs | join kind=inner (AuditLogs) on $left.UserPrincipalName == $right.Identity | where ActivityDisplayName has 'Add'",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+        // A filter on the left table's own column still could move first.
+        assert!(has(
+            "SigninLogs | join kind=inner (AuditLogs) on $left.UserPrincipalName == $right.Identity | where ResultType == 0",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+    }
+
+    // #109 B3, the join shapes from the issue comment.
+    #[test]
+    fn join_on_narrow_inputs_is_not_flagged() {
+        // The left input is a let that ends in project, summarize or distinct.
+        for tail in [
+            "project UserPrincipalName, AppId",
+            "summarize count() by UserPrincipalName",
+            "distinct UserPrincipalName",
+        ] {
+            let src = format!(
+                "let base = SigninLogs | {tail}; base | join kind=inner AuditLogs on $left.UserPrincipalName == $right.Identity | project UserPrincipalName"
+            );
+            assert!(
+                !has(&src, codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT),
+                "{src}"
+            );
+        }
+        // A union of such lets.
+        assert!(!has(
+            "let a = SigninLogs | project UserPrincipalName; let b = AADNonInteractiveUserSignInLogs | distinct UserPrincipalName;\n\
+             union a, b | join kind=inner AuditLogs on $left.UserPrincipalName == $right.Identity | project UserPrincipalName",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        // A union with one wide leg is still wide.
+        assert!(has(
+            "let a = SigninLogs | project UserPrincipalName;\n\
+             union a, AADNonInteractiveUserSignInLogs | join kind=inner AuditLogs on $left.UserPrincipalName == $right.Identity | project UserPrincipalName",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        // summarize or distinct earlier in the same pipeline.
+        for narrow in [
+            "summarize count() by UserPrincipalName",
+            "distinct UserPrincipalName",
+        ] {
+            let src = format!(
+                "SigninLogs | {narrow} | join kind=inner AuditLogs on $left.UserPrincipalName == $right.Identity | project UserPrincipalName"
+            );
+            assert!(
+                !has(&src, codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT),
+                "{src}"
+            );
+        }
+        // A wide table straight into join still warns.
+        assert!(has(
+            "SigninLogs | where ResultType == 0 | join kind=inner (AuditLogs | where OperationName has 'Add') on $left.UserPrincipalName == $right.Identity | project UserPrincipalName, OperationName",
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
     }
@@ -720,7 +812,7 @@ SecurityEvent
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
         assert!(has(
-            "SecurityEvent | where EventID == 4688 | summarize count() by Computer | project-away EventID",
+            "SecurityEvent | where EventID == 4688 | join kind=inner SecurityAlert on EventID | project-away EventID",
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
         assert!(has(
