@@ -62,6 +62,8 @@ A **term** is a maximal alphanumeric sequence of **≥ 3** characters, indexed. 
 | `has_any` | any element is a term in LHS | no | `"North America" has_any ("south", "north")` |
 | `has_all` | all elements are terms in LHS | no | `"North and South America" has_all ("south", "north")` |
 
+Legacy spellings: Kusto still parses `containscs` (`contains_cs`), `notcontains` (`!contains`) and `notcontainscs` (`!contains_cs`). The engine warns `kql_deprecated_operator` and suggests the current name. `!containscs` is not one of them: Kusto rejects it.
+
 Per-operator pages: [has](https://learn.microsoft.com/kusto/query/has-operator), [has_any](https://learn.microsoft.com/kusto/query/has-any-operator), [has_all](https://learn.microsoft.com/kusto/query/has-all-operator), [contains](https://learn.microsoft.com/kusto/query/contains-operator), [startswith](https://learn.microsoft.com/kusto/query/startswith-operator), [endswith](https://learn.microsoft.com/kusto/query/endswith-operator), [hasprefix](https://learn.microsoft.com/kusto/query/hasprefix-operator), [hassuffix](https://learn.microsoft.com/kusto/query/hassuffix-operator).
 
 Search **all columns**: `where * has "cow"` (expensive). Prefer a named column in detections.
