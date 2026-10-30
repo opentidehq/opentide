@@ -12,6 +12,9 @@
  *
  * Comments are ```triple-backtick``` spans. Single-backtick pairs are macros.
  */
+/** Search comparisons Splunk parses but splits into separate terms. */
+const LOOSE_OPERATORS = ["==", "<>", "=>", "=<", "!~"];
+
 module.exports = grammar({
   name: "opentide_spl",
 
@@ -45,23 +48,84 @@ module.exports = grammar({
         ),
       ),
 
+    // The query. Splunk runs text that does not start with `|` as `search
+    // <text>`, so a first stage with no pipe is search terms even when its
+    // first word is a command name (`tstats count where ...` searches for the
+    // word `tstats`; the engine reports spl_command_without_pipe). After a
+    // leading `|` the first stage is a command (`| index=a` is an unknown
+    // command to Splunk). Splunk ignores an empty last stage (`... |`); an
+    // empty stage anywhere else is an error ("Missing a search command").
     pipeline: ($) =>
       seq(
+        choice(
+          seq(
+            "|",
+            choice(
+              $.command,
+              $.macro,
+              alias($._macro_search, $.bare_search),
+              alias($._inputlookup_alone, $.inputlookup_command),
+            ),
+          ),
+          choice(
+            $.search_command,
+            $.macro,
+            alias($._unpiped_search, $.bare_search),
+          ),
+        ),
+        repeat(seq("|", choice($.command, $.macro))),
         optional("|"),
-        choice($.bare_search, $.command, $.macro),
+      ),
+
+    // A subsearch body. Splunk runs a leading command word here as the
+    // command (`[makeresults | ...]`, `[inputlookup t.csv]`), and rejects a
+    // trailing empty stage (`[search a |]`).
+    _subsearch_pipeline: ($) =>
+      seq(
+        optional("|"),
+        choice(
+          $.bare_search,
+          $.command,
+          $.macro,
+          alias($._inputlookup_alone, $.inputlookup_command),
+        ),
         repeat(seq("|", choice($.command, $.macro))),
       ),
 
-    // Authored `index=main sourcetype=foo` without a `search` keyword. It
-    // must not start with a bare word, so a leading unknown command stays an
-    // `unknown_command`: it starts with `field=value`, `field IN (...)`, a
-    // quoted phrase, `NOT`, a group, `TERM()`/`CASE()`, a value that is not a
-    // name, or a macro followed by more terms (a lone macro is its own stage).
+    // Authored `index=main sourcetype=foo` without a `search` keyword. In a
+    // subsearch it must not start with a bare word, so a leading unknown
+    // command stays an `unknown_command`: it starts with `field=value`,
+    // `field IN (...)`, a quoted phrase, `NOT`, a group, `TERM()`/`CASE()`,
+    // a value that is not a name, or a macro followed by more terms (a lone
+    // macro is its own stage).
     bare_search: ($) =>
       choice(
         seq(field("first", $._bare_search_head), repeat($._search_more)),
-        seq(field("first", $.macro), repeat1($._search_more)),
+        $._macro_search,
       ),
+
+    _macro_search: ($) => seq(field("first", $.macro), repeat1($._search_more)),
+
+    // The first stage of the query with no leading `|`: any search terms,
+    // including a leading bare word (`error`, `tstats count ...`).
+    _unpiped_search: ($) =>
+      choice(
+        seq(
+          field(
+            "first",
+            choice($._bare_search_head, alias($._leading_word, $.search_term)),
+          ),
+          repeat($._search_more),
+        ),
+        $._macro_search,
+      ),
+
+    _leading_word: ($) => $.identifier,
+
+    // `| inputlookup` with no table, first in a search: Splunk parses it and
+    // fails at run time (spl_empty_command). Later in a pipeline Splunk
+    // rejects it ("must be the first command").
+    _inputlookup_alone: (_) => "inputlookup",
 
     _bare_search_head: ($) =>
       choice(
@@ -168,20 +232,25 @@ module.exports = grammar({
     prefix_clause: ($) => directive("PREFIX", $),
 
     // A run of non-whitespace up to `)`; a quoted part may hold anything.
-    term_text: (_) => token(/([^)\s"]|"([^"\\]|\\.)*")+/),
+    // An unquoted `|` ends the stage, as in Splunk: `TERM(x|y)` is `TERM(x`
+    // then a command `y)`.
+    term_text: (_) => token(/([^)\s"|]|"([^"\\]|\\.)*")+/),
 
     value_list: ($) => seq("(", sepBy1($._search_value), ")"),
 
     // A field compared in a search: a name, a quoted name, or any other run
     // of non-breaking characters (`alert.attack-time`, `{}.Id`).
-    _search_field: ($) => choice($.identifier, $.string, $.search_word),
+    // A term followed by `==` is the field of that comparison (`x==1`),
+    // not a term before a comparison with no field (`==1`).
+    _search_field: ($) => prec(1, choice($.identifier, $.string, $.search_word)),
 
     _search_value: ($) =>
       choice($.string, $.glob, $.identifier, $.number, $.macro, $.search_word),
 
-    subsearch: ($) => seq("[", $.pipeline, "]"),
+    subsearch: ($) => seq("[", alias($._subsearch_pipeline, $.pipeline), "]"),
 
-    where_command: ($) => seq("where", field("predicate", $.expression)),
+    // `where` with no predicate keeps every row (spl_empty_command).
+    where_command: ($) => seq("where", optional(field("predicate", $.expression))),
 
     eval_command: ($) =>
       seq("eval", field("assignments", commaSep1($.assignment))),
@@ -193,11 +262,16 @@ module.exports = grammar({
     // (command-options.toml); the grammar accepts any `name=value`.
     stats_command: ($) =>
       choice(
+        // Splunk parses these with no arguments (spl_empty_command).
         seq(
           choice("stats", "eventstats", "streamstats", "sistats"),
-          repeat($.command_option),
-          field("aggregates", listOf($._stats_aggregate)),
-          statsTail($),
+          optional(
+            seq(
+              repeat($.command_option),
+              field("aggregates", listOf($._stats_aggregate)),
+              statsTail($),
+            ),
+          ),
         ),
         // chart and timechart may end in `where <agg> in top5` or
         // `where <agg> > 10`.
@@ -208,15 +282,19 @@ module.exports = grammar({
           statsTail($),
           optional($.chart_where),
         ),
-        // searchbnf: geostats takes zero or more aggregates.
+        // searchbnf: geostats takes zero or more aggregates. Splunk 10.6.1
+        // rejects it with no arguments at all, and a `by` clause with no
+        // aggregate.
         seq(
           "geostats",
-          repeat($.command_option),
-          optional(
-            choice(
-              seq(field("aggregates", listOf($._stats_aggregate)), statsTail($)),
-              $.by_clause,
+          choice(
+            seq(
+              repeat1($.command_option),
+              optional(
+                seq(field("aggregates", listOf($._stats_aggregate)), statsTail($)),
+              ),
             ),
+            seq(field("aggregates", listOf($._stats_aggregate)), statsTail($)),
           ),
         ),
       ),
@@ -327,7 +405,8 @@ module.exports = grammar({
       seq(
         "fields",
         optional(choice("-", "+")),
-        field("fields", listOf($.field_name)),
+        // No field list keeps every field (spl_empty_command).
+        optional(field("fields", listOf($.field_name))),
       ),
 
     // Splunk requires at least one field.
@@ -381,14 +460,20 @@ module.exports = grammar({
     lookup_command: ($) =>
       seq(
         "lookup",
-        repeat($.command_option),
-        field("table", $._table_name),
-        field("inputs", listOf($.lookup_field)),
-        // `OUTPUT` with no fields returns every lookup field.
+        // No arguments at all keeps every row (spl_empty_command); options
+        // with no table are an error.
         optional(
           seq(
-            choice(kw("output"), kw("outputnew")),
-            optional(field("outputs", listOf($.lookup_field))),
+            repeat($.command_option),
+            field("table", $._table_name),
+            field("inputs", listOf($.lookup_field)),
+            // `OUTPUT` with no fields returns every lookup field.
+            optional(
+              seq(
+                choice(kw("output"), kw("outputnew")),
+                optional(field("outputs", listOf($.lookup_field))),
+              ),
+            ),
           ),
         ),
       ),
@@ -509,46 +594,33 @@ module.exports = grammar({
     _table_name: ($) => choice($._field_name, $.string, $.macro),
 
     catalog_command: ($) =>
-      seq(field("name", $.catalog_command_name), optional($.argument_list)),
+      choice(
+        seq(field("name", $.catalog_command_name), optional($.argument_list)),
+        seq(
+          field(
+            "name",
+            alias($._catalog_command_with_arguments, $.catalog_command_name),
+          ),
+          $.argument_list,
+        ),
+      ),
 
     catalog_command_name: ($) =>
       choice(
-        "metadata",
         "makeresults",
-        "from",
-        "rest",
         "datamodel",
-        "inputcsv",
         "loadjob",
-        "gentimes",
         "metasearch",
-        "mstats",
         "mpreview",
         "pivot",
-        "savedsearch",
-        "multisearch",
-        "set",
         "eventcount",
         "dbinspect",
         "walklex",
         "searchtxn",
-        "top",
-        "rare",
-        "transaction",
-        "xyseries",
         "addtotals",
-        "contingency",
         "anomalydetection",
-        "mvcombine",
-        "sitop",
-        "sirare",
-        "timewrap",
-        "regex",
         "filldown",
         "convert",
-        "replace",
-        "setfields",
-        "fieldformat",
         "reltime",
         "addinfo",
         "xmlkv",
@@ -557,32 +629,18 @@ module.exports = grammar({
         "erex",
         "kvform",
         "multikv",
-        "nomv",
-        "strcat",
-        "bin",
-        "bucket",
-        "rangemap",
         "untable",
-        "iplocation",
         "tags",
         "xpath",
         "xmlunescape",
-        "fromjson",
-        "append",
-        "appendcols",
-        "appendpipe",
-        "selfjoin",
-        "return",
         "format",
         "union",
-        "map",
         "reverse",
         "cluster",
         "outlier",
         "fieldsummary",
         "transpose",
         "uniq",
-        "concurrency",
         "localop",
         "noop",
         "redistribute",
@@ -590,33 +648,24 @@ module.exports = grammar({
         "collect",
         "delete",
         "sendemail",
-        "script",
         "outputcsv",
         "kmeans",
         "highlight",
         "history",
-        "mcollect",
         "geom",
         "makecontinuous",
         "localize",
         "scrub",
         "abstract",
-        "accum",
         "addcoltotals",
-        "analyzefields",
         "anomalies",
         "anomalousvalue",
-        "arules",
         "associate",
-        "autoregress",
         "bucketdir",
-        "cofilter",
         "correlate",
-        "delta",
         "diff",
         "findtypes",
         "folderize",
-        "gauge",
         "geomfilter",
         "iconify",
         "meventcollect",
@@ -626,12 +675,62 @@ module.exports = grammar({
         "predict",
         "rtorder",
         "sendalert",
-        "trendline",
         "tscollect",
-        "typeahead",
         "typelearner",
         "typer",
-        "x11",
+      ),
+
+    // Commands Splunk 10.6.1's parser rejects with no arguments ("No fields
+    // were specified", "Usage: ...").
+    _catalog_command_with_arguments: (_) =>
+      choice(
+        "metadata",
+        "from",
+        "rest",
+        "inputcsv",
+        "gentimes",
+        "mstats",
+        "savedsearch",
+        "multisearch",
+        "set",
+        "top",
+        "rare",
+        "transaction",
+        "xyseries",
+        "contingency",
+        "mvcombine",
+        "sitop",
+        "sirare",
+        "timewrap",
+        "regex",
+        "replace",
+        "setfields",
+        "fieldformat",
+        "nomv",
+        "strcat",
+        "bin",
+        "bucket",
+        "rangemap",
+        "iplocation",
+        "fromjson",
+        "append",
+        "appendcols",
+        "appendpipe",
+        "selfjoin",
+        "return",
+        "map",
+        "concurrency",
+        "script",
+        "mcollect",
+        "accum",
+        "analyzefields",
+        "arules",
+        "autoregress",
+        "cofilter",
+        "delta",
+        "gauge",
+        "trendline",
+        "typeahead",
       ),
 
     unknown_command: ($) =>
@@ -715,11 +814,27 @@ module.exports = grammar({
 
     // `field=value`, `"a.b"=x`, `earliest=-1h@h`, `_index_latest=@m`,
     // `version=2.0.0`, `host=S-RC*`, `domain_rank=-1`.
+    //
+    // Splunk 10.6.1 also parses `==`, `<>`, `=>`, `=<` and `!~` in a search,
+    // with or without a term on either side (`x==1`, `x == 1`, `a==`, `==1`),
+    // and splits them into separate terms (`x==1` runs as `x == 1`), so the
+    // comparison never matches. They parse here; `tstats ... where` rejects
+    // them ("WHERE clause is not an exact query"), which the engine reports.
+    // `x=~1` is `=` with the value `~1`, as in Splunk.
     field_value: ($) =>
-      seq(
-        field("field", $._search_field),
-        field("operator", choice("=", "!=", "<", ">", "<=", ">=")),
-        field("value", choice($._search_value, $.value_list)),
+      choice(
+        seq(
+          field("field", $._search_field),
+          field("operator", choice("=", "!=", "<", ">", "<=", ">=")),
+          field("value", choice($._search_value, $.value_list)),
+        ),
+        prec.right(
+          seq(
+            optional(field("field", $._search_field)),
+            field("operator", choice(...LOOSE_OPERATORS)),
+            optional(field("value", $._search_value)),
+          ),
+        ),
       ),
 
     expression: ($) => $.or_expression,

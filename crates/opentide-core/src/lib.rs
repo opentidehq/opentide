@@ -401,6 +401,14 @@ pub mod codes {
     pub const SPL_WILDCARD: &str = "spl_wildcard";
     pub const SPL_LEADING_NOT: &str = "spl_leading_not";
     pub const SPL_SUBSEARCH_TRUNCATION: &str = "spl_subsearch_truncation";
+    /// A command Splunk parses with no arguments, where it does nothing,
+    /// returns no results or fails at run time.
+    pub const SPL_EMPTY_COMMAND: &str = "spl_empty_command";
+    /// A trailing `|` with no command, which Splunk ignores.
+    pub const SPL_EMPTY_STAGE: &str = "spl_empty_stage";
+    /// The query starts with a command name but no `|`, so Splunk searches
+    /// for the word.
+    pub const SPL_COMMAND_WITHOUT_PIPE: &str = "spl_command_without_pipe";
     pub const ESQL_PARSE_ERROR: &str = "esql_parse_error";
     pub const ESQL_UNKNOWN_COMMAND: &str = "esql_unknown_command";
     pub const ESQL_UNKNOWN_FUNCTION: &str = "esql_unknown_function";
@@ -490,6 +498,9 @@ pub mod codes {
         SPL_WILDCARD,
         SPL_LEADING_NOT,
         SPL_SUBSEARCH_TRUNCATION,
+        SPL_EMPTY_COMMAND,
+        SPL_EMPTY_STAGE,
+        SPL_COMMAND_WITHOUT_PIPE,
         ESQL_PARSE_ERROR,
         ESQL_UNKNOWN_COMMAND,
         ESQL_UNKNOWN_FUNCTION,
@@ -600,6 +611,13 @@ pub mod codes {
             }
             SPL_SUBSEARCH_TRUNCATION => {
                 "A subsearch is silently truncated at its result or time limit."
+            }
+            SPL_EMPTY_COMMAND => {
+                "A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time."
+            }
+            SPL_EMPTY_STAGE => "A trailing | with no command; Splunk ignores it.",
+            SPL_COMMAND_WITHOUT_PIPE => {
+                "The query starts with a command name but no |, so Splunk searches for the word instead of running the command."
             }
             ESQL_PARSE_ERROR => "The ES|QL query does not parse.",
             ESQL_UNKNOWN_COMMAND => "The ES|QL command is not one Elasticsearch knows.",

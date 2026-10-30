@@ -84,7 +84,8 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | Stats family | One `stats_command` for `stats`, `eventstats`, `streamstats`, `sistats`, `chart`, `timechart`, `sichart`, `sitimechart`, `geostats`; tstats shares `aggregate_item` and `by_clause` |
 | Other catalog commands | Permissive `argument_list`: options, fields, globs, strings, numbers, calls, commas, comparisons, subsearches |
 | `tstats` `from datamodel=...` | `from datamodel=` + dotted identifiers |
-| Leading `\|` generating command | Optional leading pipe on `pipeline` |
+| Leading `\|` generating command | Optional leading pipe on `pipeline`; without it the first stage is search terms (`spl_command_without_pipe` for a command word), and a trailing `\|` parses (`spl_empty_stage`) |
+| Argumentless commands | Parse where Splunk accepts them (`spl_empty_command`); a syntax error where it rejects them ([search-syntax.md](search-syntax.md#forms-splunk-accepts-that-are-mistakes)) |
 
 ---
 

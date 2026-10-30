@@ -12,6 +12,10 @@ use serde::Deserialize;
 use std::sync::OnceLock;
 use tree_sitter::Node;
 
+mod parens;
+mod rejects;
+mod stages;
+
 const COMMANDS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/catalogs/spl/commands.toml"
@@ -271,6 +275,9 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     }
     collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
     perf::collect(source, catalog, &mut diagnostics);
+    parens::refine(source, &mut diagnostics);
+    stages::collect(tree.root_node(), source, catalog, &mut diagnostics);
+    rejects::collect(tree.root_node(), source, &mut diagnostics);
     let tokens = highlight_tree(&spec, source, tree.root_node()).unwrap_or_default();
     AnalyzeResult {
         diagnostics,

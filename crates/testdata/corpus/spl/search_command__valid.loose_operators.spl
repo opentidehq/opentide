@@ -1,0 +1,2 @@
+``` prod:search_command valid
+index=main | search status==200 OR code<>404 bytes=>10 | stats count
