@@ -70,7 +70,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`esql_unknown_type`](#esql_unknown_type) | The ::type cast names a type no Elasticsearch release can cast to. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
 | [`external_id_shape`](#external_id_shape) | A vendor rule id in deployment state has the wrong form. |
-| [`filename_mismatch`](#filename_mismatch) | An object file's name is not `slugify(name)`. |
+| [`filename_mismatch`](#filename_mismatch) | An object file's name is not the stem `lint.toml` `[filenames].style` asks for: `slugify(name)` by default. |
+| [`filename_pattern`](#filename_pattern) | An object file's name does not match the regular expression `lint.toml` sets for it. |
 | [`filename_slug`](#filename_slug) | The file name is not the slug of the object's name. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
@@ -1151,7 +1152,7 @@ Write the id the platform returned. Defender and SentinelOne ids are canonical d
 
 ## filename_mismatch
 
-An object file's name is not `slugify(name)`.
+An object file's name is not the stem `lint.toml` `[filenames].style` asks for: `slugify(name)` by default.
 
 Severity: warning. Reported by `opentide lint` (filenames check).
 
@@ -1161,9 +1162,42 @@ Severity: warning. Reported by `opentide lint` (filenames check).
 objects/threats/Simulated Actor.yaml   # name: Simulated Actor → simulated-actor.yaml
 ```
 
+With `style = "name"` the stem is the name, less the characters a file name cannot hold (`< > : " / \ | ? *`, control characters, and spaces or dots at either end):
+
+```text illustrative
+objects/threats/actor.yaml   # name: Simulated Actor → Simulated Actor.yaml
+```
+
 ### How to fix
 
-Run `opentide lint --fix`, which renames the file. When another file already has the expected name, the object gets the first eight characters of its UUID as a suffix.
+Run `opentide lint --fix`, which renames the file. When another file already has the expected name (compared without regard to case), the object gets the first eight characters of its UUID as a suffix.
+
+If the catalogue keeps another convention, set `style` in `.opentide/configurations/lint.toml`: `"name"` for the object's name as the file name, `"none"` to stop comparing the stem with the name. `pattern` checks the stem against a regular expression (`opentide explain filename_pattern`).
+
+## filename_pattern
+
+An object file's name does not match the regular expression `lint.toml` sets for it.
+
+Severity: warning, or the severity `[filenames]` sets. Reported by `opentide lint` (filenames check), only when `[filenames].pattern` is set.
+
+### Example
+
+```toml
+# .opentide/configurations/lint.toml
+[filenames]
+style = "name"
+pattern = '^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$'
+```
+
+```text illustrative
+objects/rules/Some rule.yaml   # the stem is not [PLATFORM][GROUP]name[TENANT]
+```
+
+### How to fix
+
+The pattern is matched against the whole file name without its extension (`re.fullmatch`), whatever `style` is. `lint --fix` cannot rename the file, because no name derives from a pattern: rename it so the stem matches, or change `pattern` in `.opentide/configurations/lint.toml` if the convention changed.
+
+`pattern` applies together with `style`. When `style` asks for a stem and `lint --fix` renames the file to it, the pattern is checked against the new name. With `style = "name"` the stem is the object's `name`, so a stem that fails the pattern after `--fix` means the `name` itself does not fit it: change the name. With `style = "none"` only the pattern is checked.
 
 ## filename_slug
 

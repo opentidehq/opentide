@@ -55,6 +55,7 @@ LINT_CODES = {
     "parse": "yaml_parse",
     "name": "name_missing",
     "filename": "filename_mismatch",
+    "filename_pattern": "filename_pattern",
     "metadata": "metadata_recommended",
     "placeholder": "placeholder",
 }
