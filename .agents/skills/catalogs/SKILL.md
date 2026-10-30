@@ -37,7 +37,7 @@ KQL profiles are `Core`, `Sentinel`, and `Defender`. Sentinel analysis is the de
 
 Signatures and operator options are copied from public docs (Microsoft Learn for KQL, Splunk Search Reference for SPL). `scripts/sync_kql_learn_signatures.py` is the generator. Do not invent a parameter the Learn page does not list. Cite the page in the catalog `citation` field when the row has one.
 
-Unknown operators, functions, tables, and commands are diagnostics (`kql_unknown_operator`, `kql_unknown_function`, `kql_unknown_table`, `spl_unknown_command`), not grammar errors. A function row with `deprecated = "<replacement>"` is a deprecated alias Learn names on the replacement's article; the engine warns `kql_deprecated_function` and leaves it out of completion. `evaluate` calls are checked against `evaluate-plugins.toml`, not functions. `render` parses and warns `kql_render_not_valid`. Control commands warn `kql_control_command_unsupported`.
+Unknown operators, functions, tables, and commands are diagnostics (`kql_unknown_operator`, `kql_unknown_function`, `kql_unknown_table`, `spl_unknown_command`), not grammar errors. A function row with `deprecated = "<replacement>"` is a deprecated alias Learn names on the replacement's article; the engine warns `kql_deprecated_function` and leaves it out of completion. A scalar operator row with `deprecated` is a legacy spelling Kusto still parses (`containscs`); the engine warns `kql_deprecated_operator` and leaves it out of completion too. `evaluate` calls are checked against `evaluate-plugins.toml`, not functions. `render` parses and warns `kql_render_not_valid`. Control commands warn `kql_control_command_unsupported`.
 
 Slow-query warnings (`kql_where_not_first`, `kql_unscoped_search`, `spl_wildcard`, `spl_leading_not`, and the rest of `opentide_core::codes`) come from the `perf` modules. They are warnings about public query shapes, not style nits. Do not add a warning that contradicts `docs/kql/` or `docs/spl/`.
 
@@ -67,11 +67,14 @@ Injection, from `language_for_field_path`:
 | `configurations.defender_for_endpoint.query` | KQL |
 | `configurations.splunk.query` and legacy `configurations.splunk.search` | SPL |
 | `configurations.elastic.query` and `threat.query` | ES\|QL, EQL, kuery, or Lucene from `type` and `language` (`elastic_query_language`) |
+| `configurations.carbon_black_cloud.query` | Lucene, Carbon Black dialect |
 | `response.procedure.searches[].query` with `system: elastic` | the entry's `language`; none when omitted |
+| `response.procedure.searches[].query` with `system:` a platform identifier above | that platform's language and profile, in any key order (`hunt_query_language`) |
+| `configurations.splunk.actions.notable.drilldown.search`, any other `query:` / `search:` | none |
 | `configurations.crowdstrike.*` | unsupported |
 | markdown fields | HighlightSpec `markdown.*`, not a query engine |
 
-Block-scalar indent is stripped for analysis. Tokens are remapped onto the original YAML coordinates. Do not highlight the dedented buffer's offsets.
+Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), not from line prefixes, and carry their real path and their platform. The analysed text is the scalar's value (folded, unquoted, escapes decoded, block indent stripped). Tokens are remapped onto the original YAML coordinates through the byte map. Do not highlight the dedented buffer's offsets. `scripts/oracles/oracle.py` extracts the same paths with PyYAML, and `crates/opentide-tide/tests/query_extraction.rs` holds every `testdata/` object to it.
 
 ## Conformance
 

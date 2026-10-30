@@ -1,0 +1,1 @@
+SigninLogs | partition by UserPrincipalName (take 1)

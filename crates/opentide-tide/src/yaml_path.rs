@@ -392,7 +392,7 @@ pub fn key_span_in(source: &str, path: &[(&str, Option<usize>)]) -> Option<ByteS
 
 /// The mapping key `content` starts with: its name (unquoted), where its
 /// token starts and how long it is, and the text after the colon.
-fn mapping_key(content: &str) -> Option<(String, usize, usize, &str)> {
+pub(crate) fn mapping_key(content: &str) -> Option<(String, usize, usize, &str)> {
     let first = content.chars().next()?;
     if first == '"' || first == '\'' {
         let close = content[1..].find(first)? + 1;

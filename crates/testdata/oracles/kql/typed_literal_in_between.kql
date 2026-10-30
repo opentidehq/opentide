@@ -1,0 +1,1 @@
+print d = 1h | where d between (time(0s) .. 2h)
