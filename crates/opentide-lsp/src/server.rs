@@ -1411,7 +1411,179 @@ fn collect_objects(root: &Path) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{path_to_uri, uri_to_path};
+    use super::*;
+
+    fn ranged(start_line: u64, start_char: u64, end_line: u64, end_char: u64, text: &str) -> Value {
+        json!({
+            "range": {
+                "start": { "line": start_line, "character": start_char },
+                "end": { "line": end_line, "character": end_char }
+            },
+            "text": text
+        })
+    }
+
+    fn at(text: &str, line: u64, character: u64) -> usize {
+        offset_at(text, Some(&json!(line)), Some(&json!(character)))
+    }
+
+    #[test]
+    fn incremental_edits_apply_in_order_and_full_replace_wins() {
+        let text = "name: Rule\n";
+        let edited =
+            apply_content_changes(text, &[ranged(0, 6, 0, 6, "X"), ranged(0, 7, 0, 7, "Y")]);
+        assert_eq!(edited, "name: XYRule\n");
+        assert_eq!(
+            apply_content_changes(text, &[json!({ "text": "other" })]),
+            "other"
+        );
+        assert_eq!(
+            apply_content_changes(
+                text,
+                &[
+                    json!({ "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 0 } } })
+                ]
+            ),
+            text
+        );
+    }
+
+    #[test]
+    fn offset_at_is_a_byte_index_and_clamps() {
+        let src = "aéX";
+        assert_eq!(at(src, 0, 0), 0);
+        assert_eq!(at(src, 0, 1), 1);
+        // Byte 2 is inside `é`. Scalar/UTF-16 column 2 is `X`.
+        assert_eq!(at(src, 0, 2), 2);
+        assert_eq!(at(src, 0, 3), 3);
+
+        let src = "a😀b";
+        assert_eq!(at(src, 0, 1), 1);
+        assert_eq!(at(src, 0, 2), 2);
+        assert_eq!(at(src, 0, 5), 5);
+        assert_eq!(
+            apply_content_changes(src, &[ranged(0, 1, 0, 5, "X")]),
+            "aXb"
+        );
+
+        let src = "ab\ncd";
+        assert_eq!(at(src, 0, 99), 2);
+        assert_eq!(at(src, 9, 0), src.len());
+        assert_eq!(
+            apply_content_changes(src, &[ranged(0, 99, 0, 99, "Z")]),
+            "abZ\ncd"
+        );
+        assert_eq!(
+            apply_content_changes("ab", &[ranged(5, 0, 5, 0, "Z")]),
+            "abZ"
+        );
+
+        // The CR stays in the line the splice indexes.
+        let src = "ab\r\ncd";
+        assert_eq!(at(src, 0, 2), 2);
+        assert_eq!(at(src, 1, 1), "ab\r\n".len() + 1);
+    }
+
+    #[test]
+    fn position_to_offset_counts_scalars() {
+        let src = "aéX";
+        assert_eq!(position_to_offset(src, Position::new(0, 2)), 1 + "é".len());
+        let src = "a😀b";
+        assert_eq!(position_to_offset(src, Position::new(0, 2)), 1 + "😀".len());
+        assert_ne!(at(src, 0, 2), position_to_offset(src, Position::new(0, 2)));
+    }
+
+    #[test]
+    fn language_for_ignores_unknown_ids_and_sql() {
+        let session = Session::default();
+        assert_eq!(
+            session.language_for("file:///q.sql", Some("sql")),
+            LanguageId::TideYaml
+        );
+        assert_eq!(
+            session.language_for("file:///q.kql", Some("not-a-language")),
+            LanguageId::Kql
+        );
+        assert_eq!(
+            session.language_for("file:///q.yaml", Some("kusto")),
+            LanguageId::Kql
+        );
+        assert_eq!(
+            session.language_for("file:///q.spl", Some("SPL")),
+            LanguageId::Spl
+        );
+        assert_eq!(
+            session.language_for("file:///q.txt", None),
+            LanguageId::TideYaml
+        );
+    }
+
+    #[test]
+    fn folding_skips_blank_lines_and_does_not_fold_the_whole_buffer() {
+        let with_blank = "metadata:\n  uuid: a\n\n  schema: b\nname: x\n";
+        assert_eq!(folding_ranges(with_blank), vec![(0, 3)]);
+
+        let whole = "root:\n  a\n  b\n";
+        assert!(folding_ranges(whole).is_empty());
+
+        let nested = "outer:\n  inner:\n    leaf\nname: x\n";
+        assert_eq!(folding_ranges(nested), vec![(0, 2), (1, 2)]);
+
+        let tabs = "meta:\n\tuuid: a\n";
+        assert!(folding_ranges(tabs).is_empty());
+    }
+
+    #[test]
+    fn selection_parent_includes_blank_lines_inside_the_block() {
+        let lines: Vec<&str> = "metadata:\n  uuid: a\n\n  schema: b\nname: x"
+            .lines()
+            .collect();
+        assert_eq!(enclosing_block(&lines, 1), (0, 3));
+        assert_eq!(enclosing_block(&lines, 4), (4, 4));
+    }
+
+    #[test]
+    fn uuid_at_matches_the_caret_including_the_end_boundary() {
+        let uuid = "00000000-0000-4000-8000-000000000001";
+        let text = format!("id: {uuid}\n");
+        let start = text.find(uuid).unwrap() as u32;
+        assert_eq!(
+            uuid_at(&text, Position::new(0, start)).as_deref(),
+            Some(uuid)
+        );
+        assert_eq!(
+            uuid_at(&text, Position::new(0, start + uuid.len() as u32)).as_deref(),
+            Some(uuid)
+        );
+        assert_eq!(
+            uuid_at(&text, Position::new(0, start + uuid.len() as u32 + 1)),
+            None
+        );
+        assert_eq!(uuid_at(&text, Position::new(1, 0)), None);
+    }
+
+    #[test]
+    fn range_filters_use_line_overlap() {
+        let range = Range::new(Position::new(2, 0), Position::new(4, 10));
+        assert!(range_overlaps_param(range, None));
+        let touch = json!({
+            "start": { "line": 2, "character": 0 },
+            "end": { "line": 2, "character": 0 }
+        });
+        assert!(range_overlaps_param(range, Some(&touch)));
+        let before = json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 1, "character": 8 }
+        });
+        assert!(!range_overlaps_param(range, Some(&before)));
+
+        assert!(position_in_param(Position::new(3, 0), None));
+        assert!(!position_in_param(Position::new(1, 0), Some(&touch)));
+        assert!(position_in_param(Position::new(2, 99), Some(&touch)));
+        let open_ended = json!({ "start": { "line": 4, "character": 0 } });
+        assert!(position_in_param(Position::new(9, 0), Some(&open_ended)));
+        assert!(!position_in_param(Position::new(3, 0), Some(&open_ended)));
+    }
 
     #[test]
     fn file_uris_become_paths_and_back() {

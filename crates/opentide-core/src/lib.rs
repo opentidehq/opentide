@@ -874,6 +874,31 @@ mod tests {
         assert_eq!(pos.character, 2);
     }
 
+    /// Diagnostic ranges leave the process as UTF-16 code units. `é` is one
+    /// unit (two UTF-8 bytes); an emoji outside the BMP is two units.
+    #[test]
+    fn offset_to_position_counts_utf16_for_accent_and_emoji() {
+        let src = "aé😀";
+        assert_eq!(offset_to_position(src, 0), Position::new(0, 0));
+        assert_eq!(offset_to_position(src, 1), Position::new(0, 1));
+        assert_eq!(offset_to_position(src, 1 + "é".len()), Position::new(0, 2));
+        assert_eq!(offset_to_position(src, src.len()), Position::new(0, 4));
+
+        let emoji_start = 1 + "é".len();
+        let range = span_to_range(src, ByteSpan::new(emoji_start, src.len()));
+        assert_eq!(range.start, Position::new(0, 2));
+        assert_eq!(range.end, Position::new(0, 4));
+        assert_eq!(range.end.character - range.start.character, 2);
+    }
+
+    #[test]
+    fn offset_to_position_emoji_on_the_next_line() {
+        let src = "a\n😀b";
+        let after_emoji = "a\n😀".len();
+        assert_eq!(offset_to_position(src, after_emoji), Position::new(1, 2));
+        assert_eq!(offset_to_position(src, src.len()), Position::new(1, 3));
+    }
+
     #[test]
     fn range_contains_inclusive_end() {
         let range = Range::new(Position::new(0, 1), Position::new(0, 4));

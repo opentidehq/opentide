@@ -1137,6 +1137,28 @@ mod tests {
     }
 
     #[test]
+    fn lsp_semantic_token_length_is_utf16_units() {
+        let spec = HighlightSpec::load().unwrap();
+        let src = "é\n😀";
+        let emoji_start = src.len() - "😀".len();
+        let tokens = tokens_from_spans(
+            &spec,
+            src,
+            &[
+                (ByteSpan::new(0, "é".len()), "keyword"),
+                (ByteSpan::new(emoji_start, src.len()), "string"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(tokens[0].range.end.character, 1);
+        assert_eq!(tokens[1].range.start, opentide_core::Position::new(1, 0));
+        assert_eq!(tokens[1].range.end.character, 2);
+        let data = encode_lsp_semantic_tokens(&tokens);
+        assert_eq!(&data[0..5], &[0, 0, 1, lsp_token_type_index("keyword"), 0]);
+        assert_eq!(&data[5..10], &[1, 0, 2, lsp_token_type_index("string"), 0]);
+    }
+
+    #[test]
     fn lsp_legend_maps_dotted_captures_to_standard_types() {
         assert_eq!(
             LSP_TOKEN_TYPES[lsp_token_type_index("keyword") as usize],
