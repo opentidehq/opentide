@@ -457,13 +457,29 @@ def check_configuration(ctx: DoctorContext) -> list[Check]:
 
 
 def check_templates(ctx: DoctorContext) -> list[Check]:
+    from opentide.core.lint_config import LintConfigError, parse_lint_config
     from opentide.generation.pydantic_skeleton import render_model_template
     from opentide.models.object_types import CORE_OBJECT_TYPES
     from opentide.models.schema_registry import identifiers_for_families, resolve_model
     from opentide.registry.artifacts import template_artifact_name
     from opentide.registry.paths import resolve_workspace_paths
 
-    paths = resolve_workspace_paths(_configurations(ctx), workspace=ctx.workspace)
+    configs = _configurations(ctx)
+    # ``generate templates`` renders the metadata keys ``lint.toml`` requires as live
+    # keys, so the comparison must render them the same way: a workspace that sets
+    # ``[metadata].required`` would otherwise differ from its own fresh templates.
+    try:
+        required_metadata = parse_lint_config(configs.get("lint")).required_metadata
+    except LintConfigError as exc:
+        return [
+            Check(
+                "templates_fresh",
+                "warn",
+                f"Templates not compared: {exc}",
+                "fix the key lint.toml names, then run opentide doctor again",
+            )
+        ]
+    paths = resolve_workspace_paths(configs, workspace=ctx.workspace)
     folder = Path(paths["templates"])
     missing: list[str] = []
     stale: list[str] = []
@@ -472,7 +488,9 @@ def check_templates(ctx: DoctorContext) -> list[Check]:
         if not target.is_file():
             missing.append(target.name)
             continue
-        expected = render_model_template(resolve_model(schema_id), schema_id=schema_id)
+        expected = render_model_template(
+            resolve_model(schema_id), schema_id=schema_id, required_metadata=required_metadata
+        )
         if target.read_text(encoding="utf-8") != expected:
             stale.append(target.name)
     fix = "opentide generate templates schemas snippets"

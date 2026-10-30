@@ -279,6 +279,53 @@ def test_templates_stale_and_missing(
     assert "rule.1.0.schema.json" in schemas.message
 
 
+def _generate_templates(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run ``generate templates`` in *root* the way a user does, then point the runtime at it."""
+    env = {"OPENTIDE_REPO_ROOT": str(root), "OPENTIDE_TIDE_WORKSPACE": str(root)}
+    clear_runtime_caches()
+    result = CliRunner().invoke(
+        app, ["--json", "--repo", str(root), "generate", "templates"], env=env
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(root))
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    clear_runtime_caches()
+
+
+def _lint_workspace(tmp_path: Path, lint_toml: str) -> Path:
+    root = tmp_path / "detections"
+    configurations = root / ".opentide" / "configurations"
+    configurations.mkdir(parents=True)
+    (root / "objects").mkdir()
+    (configurations / "lint.toml").write_text(lint_toml, encoding="utf-8")
+    return root
+
+
+def test_templates_fresh_when_lint_toml_changes_the_required_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``generate templates`` renders ``[metadata].required`` live; doctor must compare alike."""
+    root = _lint_workspace(tmp_path, '[metadata]\nrequired = ["author"]\n')
+    _generate_templates(root, monkeypatch)
+    check = _only(doctor.check_templates(_ctx(root)))
+    assert (check.status, check.message) == ("pass", "Templates match the installed version")
+
+
+def test_templates_not_compared_when_lint_toml_cannot_be_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _lint_workspace(tmp_path, '[metadata]\nrequired = ["author"]\n')
+    _generate_templates(root, monkeypatch)
+    (root / ".opentide" / "configurations" / "lint.toml").write_text(
+        '[metadata]\nrequired = ["owner"]\n', encoding="utf-8"
+    )
+    clear_runtime_caches()
+    check = _only(doctor.check_templates(_ctx(root)))
+    assert check.status == "warn"
+    assert "owner" in check.message
+    assert check.fix and "lint.toml" in check.fix
+
+
 # --------------------------------------------------------------------------- platforms
 
 
