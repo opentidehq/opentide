@@ -47,6 +47,7 @@ Query extras (engine may add these inside `query: |`):
 - `spl_wildcard`
 - `spl_leading_not`
 - `spl_subsearch_truncation`
+- `spl_search_operator`
 - `spl_empty_command`
 - `spl_empty_stage`
 - `spl_command_without_pipe`

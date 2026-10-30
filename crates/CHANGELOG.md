@@ -15,6 +15,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - `spl_empty_stage` (warning): a trailing `|` (`... | stats count |`), which Splunk ignores.
   - `spl_command_without_pipe` (error): the query starts with a command name and no `|` (`tstats count where index=a by sourcetype`), so Splunk searches for the words and returns nothing. The fix adds the `| `. A command word followed by one term or none (`tstats`, `delete user`) is not reported, nor is `search ...`.
 - The Splunk Machine Learning Toolkit commands `fit`, `apply`, `score`, `summary`, `listmodels` and `deletemodel` are in the SPL catalog, marked `app = "MLTK"`, with hover and completion ([#123](https://github.com/opentidehq/language-server/issues/123)).
+- `spl_search_operator` (error): `==`, `<>`, `=>`, `=<` or `!~` in an SPL search clause ([#136](https://github.com/opentidehq/language-server/issues/136)). Splunk accepts them, but the comparison never matches, so a detection that uses one never fires (`| search status==200` matches nothing); in `tstats … where` the search fails at run time, and in `inputlookup … where` the comparison is ignored. The quick fix rewrites `==`, `<>`, `=>` and `=<` to `=`, `!=`, `>=` and `<=`. `=~` is a warning: it compares with a value that starts with `~`, not a regular expression. Search clauses are the base search, `| search`, a subsearch's search, `tstats … where` and `inputlookup … where`; `eval`, `where`, quoted values, comments and macro arguments are never read.
 
 ### Changed
 

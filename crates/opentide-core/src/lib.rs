@@ -401,6 +401,8 @@ pub mod codes {
     pub const SPL_WILDCARD: &str = "spl_wildcard";
     pub const SPL_LEADING_NOT: &str = "spl_leading_not";
     pub const SPL_SUBSEARCH_TRUNCATION: &str = "spl_subsearch_truncation";
+    /// `==`, `<>`, `=>`, `=<`, `!~` or `=~` in a search clause.
+    pub const SPL_SEARCH_OPERATOR: &str = "spl_search_operator";
     /// A command Splunk parses with no arguments, where it does nothing,
     /// returns no results or fails at run time.
     pub const SPL_EMPTY_COMMAND: &str = "spl_empty_command";
@@ -498,6 +500,7 @@ pub mod codes {
         SPL_WILDCARD,
         SPL_LEADING_NOT,
         SPL_SUBSEARCH_TRUNCATION,
+        SPL_SEARCH_OPERATOR,
         SPL_EMPTY_COMMAND,
         SPL_EMPTY_STAGE,
         SPL_COMMAND_WITHOUT_PIPE,
@@ -620,6 +623,9 @@ pub mod codes {
             SPL_EMPTY_STAGE => "A trailing | with no command; Splunk ignores it.",
             SPL_COMMAND_WITHOUT_PIPE => {
                 "The query starts with a command name but no |, so Splunk searches for the word instead of running the command."
+            }
+            SPL_SEARCH_OPERATOR => {
+                "A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`."
             }
             ESQL_PARSE_ERROR => "The ES|QL query does not parse.",
             ESQL_UNKNOWN_COMMAND => "The ES|QL command is not one Elasticsearch knows.",

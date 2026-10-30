@@ -7,6 +7,7 @@ use opentide_core::{
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 mod parse_errors;
 mod perf;
+mod search_operators;
 
 use opentide_syntax::{parse as ts_parse, walk_with_ancestors};
 use serde::Deserialize;
@@ -296,6 +297,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     parse_errors::collect(tree.root_node(), source, &mut diagnostics);
     collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
     perf::collect(source, catalog, &mut diagnostics);
+    search_operators::collect(source, catalog, &mut diagnostics);
     parens::refine(source, &mut diagnostics);
     stages::collect(tree.root_node(), source, catalog, &mut diagnostics);
     rejects::collect(tree.root_node(), source, &mut diagnostics);
