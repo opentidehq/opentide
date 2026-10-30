@@ -62,7 +62,10 @@ def _merge_servers(dest: Path, template: dict[str, object]) -> dict[str, object]
         current = existing.get(key)
         if current is None:
             existing[key] = servers
-        elif isinstance(current, dict) and isinstance(servers, dict):
+        elif not isinstance(servers, dict):
+            # A scalar such as the Agent Plugins `$schema`: the user's value stays.
+            continue
+        elif isinstance(current, dict):
             existing[key] = {**current, **servers}
         else:
             raise McpConfigError(f"has a {key!r} that is not a JSON object")
