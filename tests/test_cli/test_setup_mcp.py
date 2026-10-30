@@ -110,3 +110,36 @@ def test_run_mcp_setup_leaves_a_config_it_cannot_merge(tmp_path: Path, existing:
     warnings = result["warnings"]
     assert isinstance(warnings, list)
     assert any(str(warning).startswith(".mcp.json ") for warning in warnings)
+
+
+AGENT_PLUGINS_MCP_SCHEMA = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "agent_plugins" / "mcp.schema.json"
+)
+
+
+def test_generic_config_is_an_agent_plugins_mcp_json(tmp_path: Path) -> None:
+    """#431: the portable config validates against Agent Plugins 1.0.0, which
+    requires `$schema` and `type` and rejects any other top-level key."""
+    from jsonschema import Draft202012Validator
+
+    schema = json.loads(AGENT_PLUGINS_MCP_SCHEMA.read_text(encoding="utf-8"))
+    payload = json.loads((tmp_path / write_mcp_config(tmp_path, McpHost.generic)).read_text())
+
+    Draft202012Validator(schema).validate(payload)
+    assert payload["mcpServers"]["opentide"] == {
+        "type": "stdio",
+        "command": "opentide",
+        "args": ["mcp", "start"],
+    }
+
+
+def test_write_mcp_config_keeps_the_users_schema_key(tmp_path: Path) -> None:
+    """A scalar the user set, such as `$schema`, is neither overwritten nor an error."""
+    dest = tmp_path / "opentide.mcp.json"
+    dest.write_text('{"$schema": "https://example.test/mcp.json"}', encoding="utf-8")
+
+    write_mcp_config(tmp_path, McpHost.generic)
+
+    payload = json.loads(dest.read_text(encoding="utf-8"))
+    assert payload["$schema"] == "https://example.test/mcp.json"
+    assert payload["mcpServers"]["opentide"]["type"] == "stdio"

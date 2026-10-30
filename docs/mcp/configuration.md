@@ -17,7 +17,7 @@ opentide setup mcp --vscode --generic --yes
 | `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
 | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
-| `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
+| `--generic` | `opentide.mcp.json` | omitted (cwd discovery); an [Agent Plugins](#agent-plugins) `mcp.json` |
 
 ## Minimal config
 
@@ -77,8 +77,10 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 
 ```json
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "opentide": {
+      "type": "stdio",
       "command": "opentide",
       "args": ["mcp", "start"]
     }
@@ -86,7 +88,7 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 }
 ```
 
-When the generic file is imported into a host that does expand placeholders, add that host's variable (or a real path) yourself.
+The generic file validates against the [Agent Plugins 1.0.0](https://agent-plugins.org/specification) `mcp.json` schema, which requires `$schema` and `type` and allows no other top-level key, so a plugin can ship it as it is; hosts that read `mcpServers` accept the two extra keys. When the generic file is imported into a host that does expand placeholders, add that host's variable (or a real path) yourself. Merging into an existing `opentide.mcp.json` keeps its `$schema` and every other server.
 
 Bundled templates: `src/opentide/data/setup/mcp/`.
 
@@ -135,6 +137,7 @@ Install it from the host, with `opentide` on the host's `PATH` (`pip install ope
 
 | Host | Install |
 |------|---------|
+| Claude Code | `/plugin marketplace add opentidehq/skills`, then `/plugin install opentide@opentide`; or, for everyone who opens the project, [`opentide setup skills --plugin`](../cli/setup.md#the-agent-plugin) |
 | VS Code (GitHub Copilot) | **Chat: Install Plugin from Source**, then `https://github.com/opentidehq/skills` |
 | Cursor | **Customize** → Plugins, install from the Git repository |
 | GitHub Copilot CLI | Install from the Git repository URL |

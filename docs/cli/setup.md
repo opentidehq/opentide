@@ -249,6 +249,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--github-copilot` | Write `.github/copilot-instructions.md`, and `AGENTS.md` as `--generic` does |
 | `--install` | Skill slug to install (repeatable); default: `opentide-detection-rule` and `detection-engineering` |
 | `--all` | Install every skill in the catalogue |
+| `--plugin` | Register the [opentidehq/skills](https://github.com/opentidehq/skills) Agent Plugin for Claude Code in `.claude/settings.json` (see [The Agent Plugin](#the-agent-plugin)) |
 | `--name`, `--org`, `--description` | Heading (default: the folder name), organisation and opening paragraph of the agent files |
 | `--yes` / `-y` | Install without asking |
 | `--query` / `-q` | `discover`: keep skills whose name, slug or description holds the text |
@@ -256,6 +257,19 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--refresh` | `discover` / `show`: fetch `manifest.json` again rather than reuse the in-process copy from the last 30 seconds; each CLI run fetches it once anyway |
 
 Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
+
+#### The Agent Plugin
+
+[opentidehq/skills](https://github.com/opentidehq/skills) is also an [Agent Plugin](https://agent-plugins.org/specification): one install gives an agent the skills and the opentide MCP server, which the plugin starts as `opentide mcp start`.
+
+```bash
+opentide setup skills --plugin --yes
+opentide setup skills --plugin --claude-code --yes
+```
+
+`--plugin` adds the `opentide` marketplace (`extraKnownMarketplaces`, from GitHub `opentidehq/skills`) and enables `opentide@opentide` (`enabledPlugins`) in `.claude/settings.json`, keeping every other setting there. Claude Code offers the marketplace and the plugin to whoever opens the project. With `--claude-code`, `CLAUDE.md` is written as usual but the skills are not copied to `.claude/skills/`: the plugin carries them, and a copy would load each skill twice. On its own, `--plugin` downloads nothing. JSON output has `"plugin": "opentide@opentide"`, and `advice` names the install command of each other agent (Cursor, VS Code, Copilot CLI), which install plugins from their own command or menu rather than a project file. A `.claude/settings.json` that is not a JSON object is left unchanged, with a warning.
+
+The plugin starts the MCP server in its own folder; [Agent Plugins](../mcp/configuration.md#agent-plugins) says how the server finds the detection workspace from there (in Claude Code, `CLAUDE_PROJECT_DIR`). Do not also run `opentide setup mcp --claude-code`, or Claude Code starts two opentide servers.
 
 The full wizard checks skill availability before writing repository files. If the catalogue or a requested slug cannot be fetched, the standalone skills command fails without installing a partial tree. The full `opentide setup` wizard omits the skills step with a warning so the rest of the scaffold can still apply.
 
