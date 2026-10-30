@@ -72,7 +72,10 @@ macro) is legal authored text.
 Hover on `Processes.user` resolves as field `user` on dataset `Processes`
 (or unprefixed `user` after the drop macro). Completions after
 `from datamodel=` offer model paths; after `by ` in a `tstats` they offer
-the prefixed field set for the active datamodel.
+the prefixed field set for the active datamodel, and after `Prefix.field=`
+the values CIM expects. The catalog holds every CIM model, dataset and
+field; a near miss of one is `spl_unknown_datamodel` or
+`spl_unknown_datamodel_field` ([cim-fields.md](cim-fields.md)).
 
 ## `tstats` option schema
 

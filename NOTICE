@@ -10,6 +10,30 @@ Licensed under the Apache License, Version 2.0 (catalogs/ecs/LICENSE.txt,
 catalogs/ecs/NOTICE). The field list is reformatted; allowed-value
 descriptions are cut to their first sentence.
 
+Azure Monitor Logs table reference (catalogs/kql/azure-monitor/tables.toml,
+generated from MicrosoftDocs/azure-monitor-docs by
+scripts/sync_azure_monitor_tables.py)
+Copyright Microsoft Corporation
+Licensed under the Creative Commons Attribution 4.0 International License
+(https://creativecommons.org/licenses/by/4.0/). The table and column names
+and types are reformatted; table descriptions are cut to their first sentence.
+
+Microsoft Sentinel (catalogs/kql/asim/asim.toml, generated from
+Azure/Azure-Sentinel by scripts/sync_asim_schemas.py; and the columns of its
+KQL validation schemas in catalogs/kql/azure-monitor/tables.toml)
+Copyright (c) Microsoft Corporation
+Licensed under the MIT License
+(https://github.com/Azure/Azure-Sentinel/blob/master/LICENSE). Only names,
+types, classes and parser parameters are kept.
+
+Splunk Common Information Model data model definitions
+(catalogs/spl/datamodels.toml, generated from splunk/pytest-splunk-addon
+pytest_splunk_addon/data_models by scripts/sync_cim_datamodels.py)
+Copyright Splunk Inc.
+Licensed under the Apache License, Version 2.0 (catalogs/ecs/LICENSE.txt
+holds the licence text). Only dataset names, lineage, field names and
+expected values are kept.
+
 Apache Lucene (crates/opentide-lucene/src/regexp.rs ports the RegExp parser
 and automaton operations of Lucene 10.5.2 and 9.12.0; the Lucene grammar
 adapts token shapes from Lucene's classic QueryParser)

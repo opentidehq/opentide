@@ -1,15 +1,18 @@
 //! I/O-free KQL engine. Catalogs are compiled in; no `std::fs`.
 
+use opentide_core::datasets::{DatasetKind, Declaration};
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, SignatureHelp,
     SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 mod perf;
+pub mod schema;
+pub mod tables;
 
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::OnceLock;
 use tree_sitter::Node;
 
@@ -161,6 +164,10 @@ pub struct TableRow {
     pub category: Option<String>,
     pub docs: Option<String>,
     pub citation: Option<String>,
+    /// The catalog lists the table's documented columns (the Azure Monitor
+    /// Logs reference has the table). A near miss of one is a typo.
+    #[serde(default)]
+    pub documented: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -206,6 +213,8 @@ pub struct OperatorOption {
 
 #[derive(Debug, Clone)]
 pub struct Catalog {
+    /// The profile the tables and columns come from.
+    pub profile: Profile,
     pub operators: Vec<OperatorRow>,
     pub functions: Vec<FunctionRow>,
     pub scalar_operators: Vec<ScalarOperatorRow>,
@@ -214,6 +223,10 @@ pub struct Catalog {
     pub tables: Vec<TableRow>,
     pub columns: Vec<ColumnRow>,
     pub options: Vec<OperatorOption>,
+    /// `tables` by name.
+    table_index: HashMap<String, usize>,
+    /// `columns` by lower-cased table name.
+    column_index: HashMap<String, Vec<usize>>,
 }
 
 impl Catalog {
@@ -225,6 +238,7 @@ impl Catalog {
             toml::from_str(SCALAR_OPERATORS_TOML).expect("operators-scalar.toml");
         let plugins: PluginsFile = toml::from_str(PLUGINS_TOML).expect("evaluate-plugins.toml");
         Self {
+            profile: Profile::Core,
             operators: operators.operators,
             functions: functions.functions,
             scalar_operators: scalar.scalar_operators,
@@ -237,33 +251,148 @@ impl Catalog {
                     toml::from_str(OPERATOR_OPTIONS).expect("operator-options.toml");
                 file.options
             },
+            table_index: HashMap::new(),
+            column_index: HashMap::new(),
         }
     }
 
+    /// The tables and columns of a profile:
+    ///
+    /// - `sentinel`: the hand-written Sentinel tables, the Defender XDR tables
+    ///   the Defender XDR connector streams into a workspace, and every table
+    ///   of the Azure Monitor Logs reference with its columns; ASIM parsers
+    ///   are known sources ([`Catalog::asim_parser`]).
+    /// - `defender_for_endpoint`: the advanced hunting tables, with the
+    ///   columns the reference lists for those it has.
+    ///
+    /// Hand-written columns keep their docs and are added to the reference's,
+    /// never removed: a column either lists is known.
     pub fn with_profile(mut self, profile: Profile) -> Self {
-        let extra = match profile {
-            Profile::Core => return self,
-            Profile::Sentinel => SENTINEL_TABLES,
-            Profile::Defender => DEFENDER_TABLES,
-        };
-        let tables: TablesFile = toml::from_str(extra).expect("tables.toml");
-        self.tables = tables.tables;
+        if profile == Profile::Core {
+            return self;
+        }
+        self.profile = profile;
+        let defender: TablesFile = toml::from_str(DEFENDER_TABLES).expect("defender tables.toml");
+        let defender_columns: ColumnsFile =
+            toml::from_str(DEFENDER_COLUMNS).expect("defender columns");
+        let mut tables = Vec::new();
         let mut columns = Vec::new();
-        match profile {
-            Profile::Core => {}
-            Profile::Sentinel => {
-                let s: ColumnsFile = toml::from_str(SENTINEL_COLUMNS).expect("sentinel columns");
-                let d: ColumnsFile = toml::from_str(DEFENDER_COLUMNS).expect("defender columns");
-                columns.extend(s.columns);
-                columns.extend(d.columns);
-            }
-            Profile::Defender => {
-                let d: ColumnsFile = toml::from_str(DEFENDER_COLUMNS).expect("defender columns");
-                columns.extend(d.columns);
+        if profile == Profile::Sentinel {
+            let sentinel: TablesFile =
+                toml::from_str(SENTINEL_TABLES).expect("sentinel tables.toml");
+            let sentinel_columns: ColumnsFile =
+                toml::from_str(SENTINEL_COLUMNS).expect("sentinel columns");
+            tables.extend(sentinel.tables);
+            columns.extend(sentinel_columns.columns);
+        }
+        for table in defender.tables {
+            if !tables.iter().any(|t: &TableRow| t.name == table.name) {
+                tables.push(table);
             }
         }
+        columns.extend(defender_columns.columns);
+        let reference = tables::azure_monitor();
+        if profile == Profile::Sentinel {
+            for (name, table) in reference {
+                if !tables.iter().any(|t| &t.name == name) {
+                    tables.push(TableRow {
+                        name: name.clone(),
+                        profile: Some("sentinel".into()),
+                        category: table.categories.first().cloned(),
+                        docs: (!table.docs.is_empty()).then(|| table.docs.clone()),
+                        citation: Some(table.citation.clone()),
+                        documented: false,
+                    });
+                }
+            }
+        }
+        let profile_name = match profile {
+            Profile::Defender => "defender",
+            _ => "sentinel",
+        };
+        let mut hand: HashMap<(String, String), usize> = columns
+            .iter()
+            .enumerate()
+            .map(|(i, c)| ((c.table.clone(), c.name.clone()), i))
+            .collect();
+        for row in &mut tables {
+            let Some(reference) = reference.get(&row.name) else {
+                continue;
+            };
+            let Some(listed) = &reference.columns else {
+                continue;
+            };
+            row.documented = true;
+            if row.citation.is_none() {
+                row.citation = Some(reference.citation.clone());
+            }
+            for (column, type_name) in listed {
+                let key = (row.name.clone(), column.clone());
+                if let Some(&i) = hand.get(&key) {
+                    // Where the hand-written type disagrees with the
+                    // reference, neither is trusted for type checks.
+                    if columns[i].type_name.as_deref() != Some(type_name) {
+                        columns[i].type_name = None;
+                    }
+                    continue;
+                }
+                hand.insert(key, columns.len());
+                columns.push(ColumnRow {
+                    table: row.name.clone(),
+                    profile: Some(profile_name.into()),
+                    name: column.clone(),
+                    type_name: Some(type_name.clone()),
+                    docs: None,
+                    citation: Some(reference.citation.clone()),
+                });
+            }
+        }
+        // Advanced hunting's time column. The Log Analytics copies the
+        // reference describes do not list it, yet queries over them use it.
+        for row in &tables {
+            if row.profile.as_deref() == Some("defender")
+                && !hand.contains_key(&(row.name.clone(), "Timestamp".to_string()))
+            {
+                hand.insert((row.name.clone(), "Timestamp".into()), columns.len());
+                columns.push(ColumnRow {
+                    table: row.name.clone(),
+                    profile: Some("defender".into()),
+                    name: "Timestamp".into(),
+                    type_name: Some("datetime".into()),
+                    docs: Some("Event time in advanced hunting.".into()),
+                    citation: row.citation.clone(),
+                });
+            }
+        }
+        self.tables = tables;
         self.columns = columns;
+        self.reindex();
         self
+    }
+
+    fn reindex(&mut self) {
+        self.table_index = self
+            .tables
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.name.clone(), i))
+            .collect();
+        self.column_index.clear();
+        for (i, c) in self.columns.iter().enumerate() {
+            self.column_index
+                .entry(c.table.to_ascii_lowercase())
+                .or_default()
+                .push(i);
+        }
+    }
+
+    /// An ASIM parser the profile knows (`_Im_NetworkSession`,
+    /// `imAuthentication`, `ASimDns`). Only Sentinel workspaces have them.
+    pub fn asim_parser(&self, name: &str) -> Option<&'static tables::AsimParser> {
+        if self.profile != Profile::Sentinel {
+            return None;
+        }
+        tables::asim().parser(name)
     }
 
     /// Parsed once per profile for the process. `core()` still reparses for tests.
@@ -297,7 +426,7 @@ impl Catalog {
     }
 
     pub fn table(&self, name: &str) -> Option<&TableRow> {
-        self.tables.iter().find(|t| t.name == name)
+        self.table_index.get(name).map(|&i| &self.tables[i])
     }
 
     pub fn scalar_operator(&self, name: &str) -> Option<&ScalarOperatorRow> {
@@ -335,27 +464,35 @@ impl Catalog {
     }
 
     pub fn columns_for_table(&self, table: &str) -> Vec<&ColumnRow> {
-        self.columns
-            .iter()
-            .filter(|c| c.table.eq_ignore_ascii_case(table))
+        self.column_index
+            .get(&table.to_ascii_lowercase())
+            .map(|ids| ids.iter().map(|&i| &self.columns[i]).collect())
+            .unwrap_or_default()
+    }
+
+    /// The catalog tables `source` names, in order of first mention.
+    pub fn mentioned_tables(&self, source: &str) -> Vec<&TableRow> {
+        let mut seen = BTreeSet::new();
+        identifiers(source)
+            .filter_map(|word| self.table(word))
+            .filter(|t| seen.insert(t.name.as_str()))
             .collect()
     }
 
     pub fn resolve_column(&self, source: &str, name: &str) -> Option<&ColumnRow> {
-        let mentioned: Vec<&str> = self
-            .tables
-            .iter()
-            .filter(|t| contains_ident(source, &t.name))
-            .map(|t| t.name.as_str())
-            .collect();
+        let mentioned = self.mentioned_tables(source);
         if let Some(col) = mentioned.iter().find_map(|table| {
-            self.columns
-                .iter()
-                .find(|c| c.table.eq_ignore_ascii_case(table) && c.name == name)
+            self.columns_for_table(&table.name)
+                .into_iter()
+                .find(|c| c.name == name)
         }) {
             return Some(col);
         }
-        self.columns.iter().find(|c| c.name == name)
+        // A column of a table the query does not name: only the hand-written
+        // catalog's, not every column of every table in the reference.
+        self.columns
+            .iter()
+            .find(|c| c.name == name && c.docs.is_some())
     }
 
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
@@ -390,6 +527,17 @@ impl Catalog {
             })
             .collect()
     }
+}
+
+/// The identifier-shaped words of `source` (`[A-Za-z_][A-Za-z0-9_]*`).
+fn identifiers(source: &str) -> impl Iterator<Item = &str> {
+    source
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|w| {
+            w.chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        })
 }
 
 fn strsim_distance(a: &str, b: &str) -> usize {
@@ -537,6 +685,16 @@ pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
     analyze_with_catalog(source, catalog)
 }
 
+/// The columns at every operator of a query, with the references and
+/// definitions the column pass found (#112). Empty for a query that does not
+/// parse at all.
+pub fn columns(source: &str, profile: Profile) -> schema::Analysis {
+    let catalog = Catalog::cached(profile);
+    ts_parse(LanguageId::Kql, source)
+        .map(|tree| schema::analyze(tree.root_node(), source, catalog))
+        .unwrap_or_default()
+}
+
 pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let mut diagnostics = Vec::new();
@@ -570,7 +728,9 @@ pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     collect_function_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
     collect_scalar_operator_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
     collect_table_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
-    perf::collect(tree.root_node(), source, &mut diagnostics);
+    let columns = schema::analyze(tree.root_node(), source, catalog);
+    diagnostics.extend(columns.diagnostics.iter().cloned());
+    perf::collect(tree.root_node(), source, &columns, &mut diagnostics);
 
     let tokens = highlight_tree(&spec, source, tree.root_node(), catalog).unwrap_or_default();
     AnalyzeResult {
@@ -855,28 +1015,132 @@ fn collect_table_diagnostics(
             return;
         }
     }
-    if node.kind() == "tabular_primary" {
-        if let Some(table) = child_text(node, "table", source) {
-            if !lets.contains(&table)
-                && catalog.table(&table).is_none()
-                && catalog.operator(&table).is_none()
-                && table.chars().next().is_some_and(|c| c.is_ascii_uppercase())
-            {
-                let mut d = Diagnostic::error(
-                    codes::KQL_UNKNOWN_TABLE,
-                    format!("unknown table '{table}'"),
-                    node_range(source, node),
-                );
-                if let Some(s) = catalog.suggest_table(&table) {
-                    d = d.with_suggestion(s);
-                }
-                out.push(d);
+    match node.kind() {
+        "tabular_primary" => {
+            if let Some(table) = node.child_by_field_name("table") {
+                check_table(table, node, source, catalog, lets, out);
             }
         }
+        // `union isfuzzy=true` runs whatever legs exist.
+        "union_operator" if !is_fuzzy_union(node, source) => {
+            let mut cursor = node.walk();
+            let legs: Vec<Node> = node
+                .children_by_field_name("tables", &mut cursor)
+                .filter(|n| n.kind() == "identifier")
+                .collect();
+            for leg in legs {
+                check_table(leg, leg, source, catalog, lets, out);
+            }
+        }
+        _ => {}
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_table_diagnostics(child, source, catalog, lets, out);
+    }
+}
+
+fn is_fuzzy_union(node: Node, source: &str) -> bool {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .filter(|c| c.kind() == "operator_option")
+        .any(|c| {
+            let text = |f: &str| {
+                c.child_by_field_name(f)
+                    .map(|n| source[n.byte_range()].to_ascii_lowercase())
+            };
+            text("name").as_deref() == Some("isfuzzy") && text("value").as_deref() == Some("true")
+        })
+}
+
+/// The platform whose `visibility.toml` declarations a profile reads.
+fn dataset_platform(profile: Profile) -> &'static str {
+    match profile {
+        Profile::Defender => "defender_for_endpoint",
+        Profile::Core | Profile::Sentinel => "sentinel",
+    }
+}
+
+/// One table a query reads (#110's tiers): a table the workspace declares in
+/// `visibility.toml` is known; one it does not declare warns when it declares
+/// others for the platform (`kql_table_not_declared`); otherwise a name the
+/// catalog lacks is `kql_unknown_table` (#111).
+fn check_table(
+    name: Node,
+    at: Node,
+    source: &str,
+    catalog: &Catalog,
+    lets: &BTreeSet<String>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let table = &source[name.byte_range()];
+    if lets.contains(table)
+        || catalog.asim_parser(table).is_some()
+        || catalog.operator(table).is_some()
+    {
+        return;
+    }
+    let known = catalog.table(table).is_some();
+    // A lower-case unknown name is more likely a workspace function.
+    if !known && !table.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
+        return;
+    }
+    let platform = dataset_platform(catalog.profile);
+    let datasets = opentide_core::datasets::current();
+    let range = node_range(source, at);
+    match datasets.status(platform, DatasetKind::Tables, table) {
+        Declaration::Declared => {}
+        Declaration::Undeclared => {
+            let declared = datasets.names(platform, DatasetKind::Tables);
+            let suggestion = declared
+                .iter()
+                .filter(|d| !d.contains('*'))
+                .map(|d| {
+                    (
+                        d,
+                        strsim_distance(&d.to_ascii_lowercase(), &table.to_ascii_lowercase()),
+                    )
+                })
+                .filter(|(_, d)| *d <= 2)
+                .min_by_key(|(_, d)| *d)
+                .map(|(n, _)| n.clone())
+                .or_else(|| (!known).then(|| catalog.suggest_table(table)).flatten());
+            let mut d = Diagnostic::warning(
+                codes::KQL_TABLE_NOT_DECLARED,
+                format!(
+                    "'{table}' is not a table the workspace declares for {platform} in visibility.toml"
+                ),
+                range,
+            );
+            if let Some(s) = suggestion {
+                d = d.with_suggestion(s);
+            }
+            out.push(d);
+        }
+        Declaration::Unchecked if !known => {
+            let mut d = match catalog.profile {
+                // A Sentinel workspace holds tables no catalog lists (custom `_CL`
+                // tables, every Azure Monitor connector), so a name missing here is
+                // the engine's gap, not a mistake in the query.
+                Profile::Sentinel => Diagnostic::warning(
+                    codes::KQL_UNKNOWN_TABLE,
+                    format!(
+                        "'{table}' is not a table opentide knows; if the workspace holds it, declare it in visibility.toml"
+                    ),
+                    range,
+                ),
+                Profile::Core | Profile::Defender => Diagnostic::error(
+                    codes::KQL_UNKNOWN_TABLE,
+                    format!("unknown table '{table}'"),
+                    range,
+                ),
+            };
+            if let Some(s) = catalog.suggest_table(table) {
+                d = d.with_suggestion(s);
+            }
+            out.push(d);
+        }
+        Declaration::Unchecked => {}
     }
 }
 
@@ -1257,19 +1521,19 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
         if COLUMN_OPERATORS.iter().any(|n| *n == op) {
             let mut seen = std::collections::BTreeSet::new();
             let mut items = Vec::new();
-            let mentioned: Vec<&str> = catalog
-                .tables
-                .iter()
-                .filter(|t| contains_ident(source, &t.name))
-                .map(|t| t.name.as_str())
-                .collect();
+            let mentioned = catalog.mentioned_tables(source);
             let rows: Vec<&ColumnRow> = if mentioned.is_empty() {
-                catalog.columns.iter().collect()
-            } else {
+                // No table named yet: the hand-written columns, not the whole
+                // reference.
                 catalog
                     .columns
                     .iter()
-                    .filter(|c| mentioned.iter().any(|t| c.table.eq_ignore_ascii_case(t)))
+                    .filter(|c| c.docs.is_some())
+                    .collect()
+            } else {
+                mentioned
+                    .iter()
+                    .flat_map(|t| catalog.columns_for_table(&t.name))
                     .collect()
             };
             for col in rows {
@@ -1422,6 +1686,12 @@ pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) 
     let catalog = Catalog::cached(profile);
     let offset = position_to_offset(source, position);
     let word = word_at(source, offset)?;
+    if let Some(md) = column_hover(source, offset, catalog) {
+        return Some(md);
+    }
+    if let Some(parser) = catalog.asim_parser(&word) {
+        return Some(asim_hover(parser));
+    }
     if let Some(op) = catalog.operator(&word) {
         let mut md = format!(
             "**{}** (tabular operator)\n\n{}",
@@ -1528,7 +1798,23 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
     let catalog = Catalog::cached(profile);
     let before = &source[..offset.min(source.len())];
     if let Some((name, active)) = innermost_call(before) {
-        if let Some(help) = signature_for_name(catalog, &name, active) {
+        if let Some(mut help) = signature_for_name(catalog, &name, active) {
+            // `f(a=1, b=` is on parameter `b`, wherever it is in the list.
+            let current = before
+                .rsplit([',', '('])
+                .next()
+                .unwrap_or_default()
+                .trim_start();
+            if let Some((arg, _)) = current.split_once('=') {
+                let arg = arg.trim();
+                if let Some(index) = help.signatures.first().and_then(|s| {
+                    s.parameters
+                        .iter()
+                        .position(|p| p.label.split(':').next().map(str::trim) == Some(arg))
+                }) {
+                    help.active_parameter = index as u32;
+                }
+            }
             return Some(help);
         }
     }
@@ -1552,7 +1838,101 @@ pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<S
     None
 }
 
+/// Hover for a column the query reads or defines: its name and type as the
+/// pipeline has them at that point, and where it comes from.
+fn column_hover(source: &str, offset: usize, catalog: &Catalog) -> Option<String> {
+    let tree = ts_parse(LanguageId::Kql, source)?;
+    let analysis = schema::analyze(tree.root_node(), source, catalog);
+    let column = analysis.column_at(offset)?;
+    let type_name = column.type_name.as_deref().unwrap_or("unknown type");
+    let mut md = format!("**{}** column (`{type_name}`)", column.name);
+    match (&column.renamed_from, &column.made_by) {
+        (Some(old), Some(by)) => {
+            md.push_str(&format!("\n\nRenamed from `{old}` by `{}`.", by.keyword()));
+        }
+        (None, Some(by)) => md.push_str(&format!("\n\nMade by `{}`.", by.keyword())),
+        (_, None) => {
+            if let Some(row) = catalog.resolve_column(source, &column.name) {
+                md.push_str(&format!("\n\nOn `{}`.", row.table));
+                if let Some(docs) = &row.docs {
+                    md.push_str(&format!(" {docs}"));
+                }
+                if let Some(c) = &row.citation {
+                    md.push_str(&format!("\n\n[Microsoft Learn]({c})"));
+                }
+            }
+        }
+    }
+    Some(md)
+}
+
+fn asim_signature(parser: &tables::AsimParser) -> String {
+    let params: Vec<String> = parser
+        .params
+        .iter()
+        .map(|p| match &p.default {
+            Some(d) => format!("{}: {} = {d}", p.name, p.type_name),
+            None => format!("{}: {}", p.name, p.type_name),
+        })
+        .collect();
+    format!("{}({})", parser.name, params.join(", "))
+}
+
+fn asim_hover(parser: &tables::AsimParser) -> String {
+    let asim = tables::asim();
+    let kind = if parser.unifying {
+        "unifying ASIM parser"
+    } else {
+        "ASIM parser"
+    };
+    let mut md = format!(
+        "**{}** ({kind}, {} schema)\n\n`{}`",
+        parser.name,
+        parser.schema,
+        asim_signature(parser)
+    );
+    if let Some(columns) = asim.schemas.get(&parser.schema).map(|s| s.columns.len()) {
+        md.push_str(&format!(
+            "\n\nReturns rows in the ASIM {} schema ({columns} columns).",
+            parser.schema
+        ));
+    }
+    if let Some(c) = asim.citation(&parser.schema) {
+        md.push_str(&format!("\n\n[ASIM {} schema]({c})", parser.schema));
+    }
+    md
+}
+
 fn signature_for_name(catalog: &Catalog, name: &str, active: u32) -> Option<SignatureHelp> {
+    if let Some(parser) = catalog.asim_parser(name) {
+        let parameters: Vec<ParameterInformation> = parser
+            .params
+            .iter()
+            .map(|p| ParameterInformation {
+                label: match &p.default {
+                    Some(d) => format!("{}: {} = {d}", p.name, p.type_name),
+                    None => format!("{}: {}", p.name, p.type_name),
+                },
+                documentation: Some(format!(
+                    "Filters the rows the parser returns ({}).",
+                    p.type_name
+                )),
+            })
+            .collect();
+        let active = active.min(parameters.len().saturating_sub(1) as u32);
+        return Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label: asim_signature(parser),
+                documentation: Some(format!(
+                    "ASIM parser for the {} schema. Pass filters by name: `{}(starttime=ago(1d))`.",
+                    parser.schema, parser.name
+                )),
+                parameters,
+            }],
+            active_signature: 0,
+            active_parameter: active,
+        });
+    }
     if let Some(f) = catalog.function(name) {
         let sig = f.signature.clone().unwrap_or_else(|| format!("{name}(…)"));
         let params = parameter_list(&f.parameters, &sig);
@@ -1857,6 +2237,19 @@ mod tests {
     }
 
     #[test]
+    fn function_parameters_are_not_tables() {
+        let src = "let f = (T:(TimeGenerated:datetime), InDeviceId:string) { T | where TimeGenerated > ago(1d) }; f(DeviceInfo, 'x')";
+        let r = analyze(src, Profile::Defender);
+        assert!(
+            !r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::KQL_UNKNOWN_TABLE),
+            "{:?}",
+            r.diagnostics
+        );
+    }
+
+    #[test]
     fn unknown_table_suggests() {
         let r = analyze("SecurityEvnt | take 1", Profile::Sentinel);
         let d = r
@@ -1865,6 +2258,95 @@ mod tests {
             .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
             .expect("table diag");
         assert_eq!(d.suggestion.as_deref(), Some("SecurityEvent"));
+        assert_eq!(d.severity, opentide_core::Severity::Warning);
+        let r = analyze("SigninLog | take 1", Profile::Sentinel);
+        let d = r
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+            .expect("table diag");
+        assert_eq!(d.suggestion.as_deref(), Some("SigninLogs"));
+    }
+
+    #[test]
+    fn unknown_table_is_a_warning_under_sentinel() {
+        for query in [
+            "MyCustomLog_CL | take 1",
+            "VendorFirewallEvents | take 1",
+            "TableNotInAnyCatalog | take 1",
+        ] {
+            let r = analyze(query, Profile::Sentinel);
+            let tables: Vec<_> = r
+                .diagnostics
+                .iter()
+                .filter(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+                .collect();
+            assert!(!tables.is_empty(), "{query}");
+            for d in tables {
+                assert_eq!(d.severity, opentide_core::Severity::Warning, "{query}");
+                assert!(
+                    d.message.contains("is not a table opentide knows")
+                        && d.message.contains("visibility.toml"),
+                    "{}",
+                    d.message
+                );
+            }
+            assert!(
+                r.diagnostics
+                    .iter()
+                    .all(|d| d.severity != opentide_core::Severity::Error),
+                "{query}: {:?}",
+                r.diagnostics
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_table_stays_an_error_under_defender() {
+        // A Log Analytics table is not an advanced hunting table.
+        let r = analyze("NTANetAnalytics | take 1", Profile::Defender);
+        let d = r
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::KQL_UNKNOWN_TABLE)
+            .expect("table diag");
+        assert_eq!(d.severity, opentide_core::Severity::Error);
+        assert_eq!(d.message, "unknown table 'NTANetAnalytics'");
+    }
+
+    #[test]
+    fn sentinel_knows_azure_monitor_defender_xdr_tables_and_asim_parsers() {
+        for query in [
+            "NTANetAnalytics | take 1",
+            "SentinelHealth | take 1",
+            "AppServiceConsoleLogs | take 1",
+            "SentinelAudit | take 1",
+            "DeviceProcessEvents | take 1",
+            "AzureDiagnostics | take 1",
+            "ASimNetworkSessionLogs | take 1",
+            "ASimNetworkSession | take 1",
+            "_Im_NetworkSession | take 1",
+            "imAuthentication | take 1",
+            "_ASim_Dns | take 1",
+        ] {
+            let r = analyze(query, Profile::Sentinel);
+            assert!(r.diagnostics.is_empty(), "{query}: {:?}", r.diagnostics);
+        }
+        let c = Catalog::cached(Profile::Sentinel);
+        assert!(c.table("NTANetAnalytics").is_some_and(|t| t.documented));
+        assert!(c.table("AzureDiagnostics").is_some_and(|t| !t.documented));
+        assert!(c.table("DeviceProcessEvents").is_some_and(|t| t.documented));
+        // The hand-written docs survive the merge.
+        let docs = c
+            .columns_for_table("DeviceProcessEvents")
+            .into_iter()
+            .find(|col| col.name == "DeviceId")
+            .and_then(|col| col.docs.clone());
+        assert!(docs.is_some());
+        let d = Catalog::cached(Profile::Defender);
+        assert!(d.table("DeviceProcessEvents").is_some_and(|t| t.documented));
+        assert!(d.table("ExposureGraphNodes").is_some_and(|t| !t.documented));
+        assert!(d.asim_parser("_Im_NetworkSession").is_none());
     }
 
     #[test]

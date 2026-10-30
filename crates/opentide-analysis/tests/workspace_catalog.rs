@@ -37,6 +37,7 @@ fn workspace_catalogs_replace_the_bundled_ones() {
     install_catalog(&Catalog {
         fields: Some(fields.into()),
         deprecations: Some(deprecations.into()),
+        visibility: None,
     })
     .expect("install");
     assert!(catalog_is_workspace());
@@ -55,6 +56,7 @@ fn workspace_catalogs_replace_the_bundled_ones() {
     let err = install_catalog(&Catalog {
         fields: Some("{".into()),
         deprecations: None,
+        visibility: None,
     })
     .unwrap_err();
     assert!(err.starts_with("fields.json"), "{err}");

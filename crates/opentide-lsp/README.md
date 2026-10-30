@@ -71,7 +71,7 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 | `opentide-eql` | EQL catalog, sequence/sample/pipe rules, `eql_*` diagnostics |
 | `opentide-kuery` | Kibana KQL checks, Lucene-syntax-in-kuery warnings |
 | `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings |
-| `opentide-ecs` | Elastic Common Schema field catalog (completion, hover; never a closed list) |
+| `opentide-ecs` | Elastic Common Schema field catalog (completion, hover) and the ECS checks for queries on ECS indices (`ecs_type_mismatch`, near-miss `ecs_unknown_field`; never a closed list) |
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |
 | `opentide-lsp` | stdio LSP + CLI |

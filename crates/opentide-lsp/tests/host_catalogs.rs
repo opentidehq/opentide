@@ -27,6 +27,7 @@ fn a_host_that_supplies_the_catalogs_keeps_them() {
     set_default_catalog(&Catalog {
         fields: Some(FIELDS.replace("VERSION", "host")),
         deprecations: None,
+        visibility: None,
     })
     .expect("default");
     install_workspace_catalog(std::path::Path::new(""));

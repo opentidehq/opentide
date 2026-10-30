@@ -94,7 +94,9 @@ jobs:
           OPENTIDE_LSP_BIN: target/debug/opentide-lsp
           OPENTIDE_WASI_BIN: target/wasm32-wasip1/release/opentide-lsp.wasm
           OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
-        run: node --experimental-strip-types --test packages/lsp-client/src/index.test.ts
+        # Node 22's concurrent GC races with node:wasi instances and segfaults
+        # the process after a dozen runs; a single GC thread does not.
+        run: node --single-threaded-gc --experimental-strip-types --test packages/lsp-client/src/index.test.ts
 
   # Every public Elastic rule passes Elasticsearch's parser, so any engine
   # error on them is an engine bug (#82). The rules are ELv2: checked out

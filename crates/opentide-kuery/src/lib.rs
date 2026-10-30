@@ -17,6 +17,10 @@ use regex::Regex;
 use std::sync::OnceLock;
 use tree_sitter::Node;
 
+mod ecs;
+
+pub use ecs::ecs_diagnostics;
+
 const KQL_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/kql";
 
 pub struct AnalyzeResult {

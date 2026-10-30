@@ -18,6 +18,12 @@ the reference, then compare two things:
 - Names. KQL functions and plugins, or SPL commands, that one side knows and
   the other does not, plus names ours flags as unknown that the reference
   knows. Each must be listed by `names`.
+- KQL columns and types. Kusto.Language analyzes each query against a
+  database built from the engine's own table, column and ASIM catalogs; every
+  `kql_unknown_column` or `kql_type_mismatch` ours reports must be an error
+  the reference reports too (the name it does not know, or an operator it does
+  not define for the types). Each fixture in testdata/conformance/columns/
+  must make ours report one. A query where they differ is listed by `paths`.
 
 A listed path or name that no longer disagrees is stale and also fails, so the
 exceptions file is the exact ledger of known disagreements.
@@ -134,6 +140,7 @@ def corpus(language: str) -> list[Query]:
             *ROOT.glob(f"testdata/conformance/external/{language}/*.{language}"),
             *ROOT.glob(f"testdata/conformance/perf/*.{language}"),
             *ROOT.glob(f"testdata/oracles/{language}/*.{language}"),
+            *ROOT.glob(f"testdata/conformance/columns/*.{language}"),
         ]
     )
     queries = [
@@ -380,6 +387,101 @@ def kql_reference(queries: list[Query], scratch: pathlib.Path) -> dict[str, list
     return verdicts
 
 
+# Ours reports these only where Kusto rejects the query; the reference must agree.
+SEMANTIC = {"kql_unknown_column", "kql_type_mismatch"}
+COLUMN_FIXTURES = "testdata/conformance/columns/"
+
+
+def kql_schema() -> dict:
+    """The engine's `sentinel` view of tables, columns and ASIM parsers, as a
+    Kusto.Language database: the Azure Monitor reference, the hand-written
+    columns, the standard Log Analytics columns, `Timestamp` on the advanced
+    hunting tables, and each ASIM parser returning its schema."""
+    reference = load_toml("catalogs/kql/azure-monitor/tables.toml")
+    tables: dict[str, list[list[str]]] = {
+        t["name"]: [list(c) for c in t["columns"]] for t in reference["tables"] if t.get("columns")
+    }
+    standard = [
+        ["TenantId", "string"], ["TimeGenerated", "datetime"], ["Type", "string"],
+        ["SourceSystem", "string"], ["_ResourceId", "string"], ["_SubscriptionId", "string"],
+        ["_BilledSize", "real"], ["_IsBillable", "string"], ["_ItemId", "string"],
+        ["_TimeReceived", "datetime"],
+    ]
+    for columns in tables.values():
+        have = {c[0] for c in columns}
+        columns.extend(c for c in standard if c[0] not in have)
+    for path in ("catalogs/kql/sentinel/columns.toml", "catalogs/kql/defender/columns.toml"):
+        for column in load_toml(path)["columns"]:
+            listed = tables.setdefault(column["table"], [])
+            if column["name"] not in {c[0] for c in listed}:
+                listed.append([column["name"], column.get("type") or "dynamic"])
+    for table in load_toml("catalogs/kql/defender/tables.toml")["tables"]:
+        listed = tables.setdefault(table["name"], [])
+        if "Timestamp" not in {c[0] for c in listed}:
+            listed.append(["Timestamp", "datetime"])
+    asim = load_toml("catalogs/kql/asim/asim.toml")
+    schemas = {s["name"]: s for s in asim["schemas"]}
+    functions = {
+        p["name"]: {
+            "columns": [[c[0], c[1]] for c in schemas[p["schema"]]["columns"]],
+            "params": [[q["name"], q["type"]] for q in p.get("params", [])],
+        }
+        for p in asim["parsers"]
+    }
+    return {"tables": tables, "functions": functions}
+
+
+def kql_semantic(queries: list[Query], scratch: pathlib.Path) -> dict[str, list[dict]]:
+    schema = scratch / "kusto-schema.json"
+    schema.write_text(json.dumps(kql_schema()))
+    paths = {}
+    for n, query in enumerate(queries):
+        path = scratch / f"kusto-semantic-{n}.kql"
+        path.write_text(query.text)
+        paths[str(path)] = query.id
+    found = {}
+    for line in kusto("semantic", str(schema), *paths).splitlines():
+        result = json.loads(line)
+        found[paths[result["path"]]] = result["errors"]
+    return found
+
+
+def kql_columns(
+    queries: list[Query],
+    diagnostics: dict[str, list[dict]],
+    semantic: dict[str, list[dict]],
+    known: Ledger,
+    errors: list[str],
+) -> None:
+    """Every column or type error ours reports, Kusto.Language reports too."""
+    checked = confirmed = listed = 0
+    for query in queries:
+        reported = [
+            d for d in diagnostics[query.id] if d["code"] in SEMANTIC and d["severity"] == "error"
+        ]
+        if query.id.startswith(COLUMN_FIXTURES) and not reported:
+            errors.append(f"{query.id}: ours reports no kql_unknown_column or kql_type_mismatch on this fixture")
+        theirs = semantic.get(query.id, [])
+        for d in reported:
+            checked += 1
+            if d["code"] == "kql_unknown_column":
+                name = d["message"].split("'")[1]
+                agrees = any(e["text"] == name for e in theirs)
+            else:
+                agrees = any(e["code"] in ("KS106", "KS107") for e in theirs)
+            if agrees:
+                confirmed += 1
+                continue
+            ident = known.paths.get(query.id)
+            side = f"ours reports {d['code']} ({d['message']}), Kusto.Language accepts it"
+            if ident:
+                listed += 1
+                print(f"known  {query.id} [{ident}]: {side}")
+            else:
+                errors.append(f"{query.id}: {side}")
+    print(f"Kusto.Language semantics: {checked} column and type errors from ours, {confirmed} confirmed, {listed} listed")
+
+
 def kql_names(flagged: dict[str, str]) -> dict[str, str]:
     """Function and plugin names the two sides disagree on, with the reason."""
     reference = {
@@ -560,7 +662,9 @@ def spl_reference(splunk: Splunk, queries: list[Query]) -> dict[str, list[str]]:
 
     models: dict[str, dict[str, list[str]]] = {}
     for dm in load_toml("catalogs/spl/datamodels.toml")["datamodels"]:
-        models.setdefault(dm["model"], {})[dm["prefix"]] = dm.get("fields", [])
+        # One row per dataset; a root's stand-in carries its children's fields too.
+        fields = models.setdefault(dm["model"], {}).setdefault(dm["prefix"], [])
+        fields += [f for f in dm.get("fields", []) if f not in fields]
     for model, datasets in models.items():
         splunk.define_datamodel(model, datasets)
 
@@ -799,6 +903,7 @@ def main() -> int:
         if language == "kql":
             reference = kql_reference(queries, scratch)
             names = kql_names(flagged)
+            kql_columns(queries, diagnostics, kql_semantic(queries, scratch), known, errors)
         elif language in ELASTIC_LANGUAGES:
             # Catalog names come from the pinned Elasticsearch docs through
             # the sync scripts; the parser references carry no catalog.

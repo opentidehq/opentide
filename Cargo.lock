@@ -362,12 +362,14 @@ version = "0.6.0"
 dependencies = [
  "serde",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
 name = "opentide-ecs"
 version = "0.6.0"
 dependencies = [
+ "opentide-core",
  "serde",
  "serde_json",
 ]
@@ -391,6 +393,7 @@ name = "opentide-esql"
 version = "0.6.0"
 dependencies = [
  "opentide-core",
+ "opentide-ecs",
  "opentide-highlight",
  "opentide-lucene",
  "opentide-syntax",
@@ -463,6 +466,7 @@ name = "opentide-lucene"
 version = "0.6.0"
 dependencies = [
  "opentide-core",
+ "opentide-ecs",
  "opentide-highlight",
  "opentide-syntax",
  "tree-sitter",
@@ -497,6 +501,7 @@ version = "0.6.0"
 dependencies = [
  "insta",
  "opentide-core",
+ "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
  "opentide-highlight",

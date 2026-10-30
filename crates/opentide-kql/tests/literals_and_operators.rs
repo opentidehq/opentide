@@ -91,7 +91,7 @@ fn range_is_still_a_column_name() {
         "print range = 1",
         "print x=1 | extend range = 1 | where range > 0",
         "print x=1 | summarize range = max(x) - min(x)",
-        "print x=1 | project range",
+        "print range = 1 | project range",
         "print r = range(1, 5, 1) | mv-expand r",
         "print x = 1 | make-series c = count() on x in range(1, 5, 1) by x",
     ] {
@@ -179,16 +179,17 @@ fn tabular_parameter_is_a_table_inside_the_body() {
     assert_clean("let f = (T:(x:string)) { T | where x == \"a\" };\nf(SigninLogs)");
     assert_clean("let f = (T:(*), n:long) { T | where n > 0 };\nf(SigninLogs, 1)");
     // Only inside its own body.
+    // (A warning under the default `sentinel` profile, #111.)
     assert!(
-        errors("let f = (T:(x:string)) { T | where x == \"a\" };\nT | take 1")
+        diagnostics("let f = (T:(x:string)) { T | where x == \"a\" };\nT | take 1")
             .iter()
-            .any(|(code, message)| code == codes::KQL_UNKNOWN_TABLE && message.contains("'T'"))
+            .any(|d| d.code == codes::KQL_UNKNOWN_TABLE && d.message.contains("'T'"))
     );
     // A scalar parameter is not a table.
     assert!(
-        errors("let f = (T:string) { T | take 1 };\nf(\"a\")")
+        diagnostics("let f = (T:string) { T | take 1 };\nf(\"a\")")
             .iter()
-            .any(|(code, _)| code == codes::KQL_UNKNOWN_TABLE)
+            .any(|d| d.code == codes::KQL_UNKNOWN_TABLE)
     );
 }
 

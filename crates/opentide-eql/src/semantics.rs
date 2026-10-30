@@ -42,7 +42,7 @@ impl Ty {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Want {
+pub(crate) enum Want {
     Str,
     Int,
     Bool,
@@ -79,7 +79,7 @@ impl Want {
 /// Parameter types each function's `resolveType` enforces, by lower-case
 /// registry name (`EqlFunctionRegistry`). The last entry repeats for
 /// variadic functions.
-fn parameters(name: &str) -> Option<(&'static [Want], bool)> {
+pub(crate) fn parameters(name: &str) -> Option<(&'static [Want], bool)> {
     use Want::*;
     Some(match name {
         "between" => (&[Str, Str, Str, Bool], false),
@@ -100,7 +100,7 @@ fn parameters(name: &str) -> Option<(&'static [Want], bool)> {
 const OPERAND_STRING: (Want, Severity) = (Want::Str, Severity::Error);
 const OPERAND_NUMBER: (Want, Severity) = (Want::Numeric, Severity::Error);
 
-fn named_children<'t>(node: Node<'t>, field: &str) -> Vec<Node<'t>> {
+pub(crate) fn named_children<'t>(node: Node<'t>, field: &str) -> Vec<Node<'t>> {
     let mut cursor = node.walk();
     node.children_by_field_name(field, &mut cursor)
         .filter(|n| n.is_named() && n.kind() != "comment")
@@ -111,7 +111,7 @@ fn text<'a>(node: Node, source: &'a str) -> &'a str {
     source.get(node.start_byte()..node.end_byte()).unwrap_or("")
 }
 
-fn function_name(node: Node, source: &str) -> String {
+pub(crate) fn function_name(node: Node, source: &str) -> String {
     node.child_by_field_name("name")
         .map(|n| text(n, source).trim_end_matches('~').to_ascii_lowercase())
         .unwrap_or_default()
@@ -507,7 +507,7 @@ fn translated_as_query(ancestors: &[Node], cache: &mut HashMap<usize, bool>) -> 
     result
 }
 
-fn strip_parens(mut node: Node) -> Node {
+pub(crate) fn strip_parens(mut node: Node) -> Node {
     while node.kind() == "parenthesized_expression" {
         match node
             .named_children(&mut node.walk())

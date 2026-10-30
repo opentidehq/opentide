@@ -19,7 +19,7 @@ The catalog is `searchbnf`-informed; opentide still owns the grammar. Unknown co
 | Stats aggregations (`kind = "aggregate"`) | **35** | **35** primary names (+ aliases) | Alias rows `c` / `distinct_count` / `p` / `percentile` added. `sum`/`avg`/`min`/`max` remain **eval** rows only (name-unique lookup). |
 | Functions total | **144** | — | — |
 | Search syntax | not catalogued (grammar partial) | [search-syntax.md](search-syntax.md), [macros.md](macros.md), [subsearches.md](subsearches.md), [comments.md](comments.md) | Knowledge OK; grammar/LSP modeling incomplete — [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md) |
-| CIM / ES fields | not catalogued | [common-fields.md](common-fields.md), [cim-fields.md](cim-fields.md) | Inventory present; no field catalog / completion |
+| CIM data models and fields | every CIM model, dataset and field (`datamodels.toml`, generated) | [common-fields.md](common-fields.md), [cim-fields.md](cim-fields.md) | Enterprise Security models (Risk, Threat_Intelligence, ...) are known by name only |
 
 **Catalog ↔ grammar:** 150 commands = 17 dedicated parse rules + 133 `catalog_command_name` literals.
 
@@ -154,7 +154,7 @@ Adjacent command rows now have `docs` + `citation`. Re-check if any new adjacent
 3. ~~AST fallback `catalog_command_name`~~ **done**.
 4. Fix grammar comment vs macro tokens; broaden subsearch parsing.
 5. Add ~32 rare commands only if scope expands past detections.
-6. Optional CIM field catalog from [cim-fields.md](cim-fields.md).
+6. ~~CIM field catalog~~ **done** ([cim-fields.md](cim-fields.md)).
 7. Kind-aware function lookup if `sum`/`avg`/`min`/`max` need aggregate docs distinct from eval.
 8. **Never** add an implicit `| search` rewrite.
 

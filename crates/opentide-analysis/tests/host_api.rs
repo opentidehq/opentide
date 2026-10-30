@@ -70,7 +70,8 @@ fn every_injected_query_is_reported_with_its_language_and_place() {
 #[test]
 fn a_hunt_is_reported_at_its_path_with_its_platform_and_profile() {
     // A hunt's path does not name its platform: `platform` does, and it picks
-    // the KQL profile (`AlertInfo` is a Defender table, not a Sentinel one).
+    // the KQL profile (`NTANetAnalytics` is a Log Analytics table, not an
+    // advanced hunting one).
     let rule = r#"name: Hunts
 metadata:
   uuid: 00000000-0000-4000-8003-000000000001
@@ -78,10 +79,10 @@ metadata:
 response:
   procedure:
     searches:
-      - query: AlertInfo | take 1
+      - query: NTANetAnalytics | take 1
         system: defender_for_endpoint
       - system: sentinel
-        query: AlertInfo | take 1
+        query: NTANetAnalytics | take 1
 "#;
     let reports = analyze_queries(&MemoryWorkspace::default(), rule);
     let found: Vec<(String, &str, bool)> = reports
@@ -102,12 +103,12 @@ response:
             (
                 "response.procedure.searches.0.query".into(),
                 "defender_for_endpoint",
-                false
+                true
             ),
             (
                 "response.procedure.searches.1.query".into(),
                 "sentinel",
-                true
+                false
             ),
         ]
     );
@@ -137,8 +138,17 @@ fn a_single_query_takes_the_platform_profile() {
             .iter()
             .any(|d| d.code == codes::KQL_UNKNOWN_TABLE)
     };
+    // Sentinel ingests the Defender XDR tables (#113).
     assert!(!unknown_table(&defender));
-    assert!(unknown_table(&sentinel));
+    assert!(!unknown_table(&sentinel));
+    // A Log Analytics table is not an advanced hunting table.
+    let log_analytics = |platform: &str| QueryRequest {
+        platform: Some(platform.into()),
+        text: "NTANetAnalytics | take 1".into(),
+        ..defender.clone()
+    };
+    assert!(unknown_table(&log_analytics("defender_for_endpoint")));
+    assert!(!unknown_table(&log_analytics("sentinel")));
 
     let broken = QueryRequest {
         language: LanguageId::Esql,

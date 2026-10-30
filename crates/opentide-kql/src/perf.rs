@@ -5,23 +5,24 @@
 //! Join cardinality and `hint.shufflekey` are intentionally absent: the engine
 //! cannot know which side is larger.
 
+use crate::schema::Analysis;
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 use tree_sitter::Node;
 
 const CITE: &str = "https://learn.microsoft.com/en-us/kusto/query/best-practices";
 
-pub(crate) fn collect(root: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    walk(root, source, out);
+pub(crate) fn collect(root: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
+    walk(root, source, columns, out);
     warn_scope(source, out);
 }
 
-fn walk(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
+fn walk(node: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
     if node.kind() == "tabular_expression" {
-        warn_pipeline(node, source, out);
+        warn_pipeline(node, source, columns, out);
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        walk(child, source, out);
+        walk(child, source, columns, out);
     }
 }
 
@@ -43,10 +44,40 @@ fn operators(expr: Node<'_>) -> Vec<Node<'_>> {
     ops
 }
 
-fn source_is_table(expr: Node) -> bool {
-    expr.child_by_field_name("source")
-        .and_then(|src| src.child_by_field_name("table"))
-        .is_some_and(|table| table.kind() == "identifier")
+/// The pipeline starts from a table (or ASIM parser), not a `let`.
+fn source_is_table(expr: Node, columns: &Analysis) -> bool {
+    columns
+        .pipeline(span(expr))
+        .is_some_and(|p| p.reads_dataset())
+}
+
+fn span(node: Node) -> ByteSpan {
+    ByteSpan::new(node.start_byte(), node.end_byte())
+}
+
+/// The filter reads a column an operator before it makes, so it cannot move
+/// ahead of that operator (#109).
+fn reads_made_column(filter: Node, columns: &Analysis) -> bool {
+    columns.reads(span(filter)).any(|r| {
+        r.column
+            .as_ref()
+            .and_then(|c| c.made_by)
+            .is_some_and(|made| made.span.end <= filter.start_byte())
+    })
+}
+
+/// `summarize arg_max(T, *)` needs every column, so projecting first would
+/// change the result.
+fn needs_every_column(op: Node, source: &str) -> bool {
+    let text = &source[op.byte_range()];
+    let compact: String = text.split_whitespace().collect();
+    ["arg_max(", "arg_min("].iter().any(|call| {
+        compact.match_indices(call).any(|(i, _)| {
+            let rest = &compact[i + call.len()..];
+            let end = rest.find(')').unwrap_or(rest.len());
+            rest[..end].split(',').any(|arg| arg == "*")
+        })
+    })
 }
 
 fn is_filter(kind: &str) -> bool {
@@ -60,12 +91,16 @@ fn is_narrowing_project(kind: &str) -> bool {
     )
 }
 
-fn warn_pipeline(expr: Node, source: &str, out: &mut Vec<Diagnostic>) {
+fn warn_pipeline(expr: Node, source: &str, columns: &Analysis, out: &mut Vec<Diagnostic>) {
     let ops = operators(expr);
-    if source_is_table(expr) {
+    if source_is_table(expr, columns) {
         if let Some(first) = ops.first() {
             if !is_filter(first.kind()) {
-                if let Some(late) = ops.iter().find(|op| is_filter(op.kind())) {
+                if let Some(late) = ops
+                    .iter()
+                    .find(|op| is_filter(op.kind()))
+                    .filter(|late| !reads_made_column(**late, columns))
+                {
                     let keyword = if late.kind() == "filter_operator" {
                         "filter"
                     } else {
@@ -89,7 +124,10 @@ fn warn_pipeline(expr: Node, source: &str, out: &mut Vec<Diagnostic>) {
     // Warn only when columns are still wide and a later `project` shows the
     // reversed order. A project already before the operator, or no project
     // at all, is not this diagnostic.
-    let mut narrowed = false;
+    // A `let` that ends in project, summarize or distinct is narrow already.
+    let mut narrowed = columns
+        .pipeline(span(expr))
+        .is_some_and(|p| p.source.narrowed);
     for (index, op) in ops.iter().enumerate() {
         if is_narrowing_project(op.kind()) {
             narrowed = true;
@@ -100,7 +138,7 @@ fn warn_pipeline(expr: Node, source: &str, out: &mut Vec<Diagnostic>) {
         }
         let name = match op.kind() {
             "join_operator" => "join",
-            "summarize_operator" => "summarize",
+            "summarize_operator" if !needs_every_column(*op, source) => "summarize",
             _ => continue,
         };
         let project_later = ops
@@ -560,6 +598,53 @@ mod tests {
         ));
         assert!(!has(
             "SecurityEvent | project Computer, EventID | join kind=inner SecurityAlert on EventID",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+    }
+
+    #[test]
+    fn a_filter_on_a_column_an_earlier_operator_makes_cannot_move() {
+        // #109 B2: Domain only exists after the extend.
+        assert!(!has(
+            "SigninLogs | extend Domain = tostring(split(UserPrincipalName, '@')[1]) | where Domain == 'example.com'",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+        assert!(has(
+            "SigninLogs | extend Domain = tostring(split(UserPrincipalName, '@')[1]) | where AppId == 'x'",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+        // A custom table is still a table.
+        assert!(has(
+            "MyLog_CL | extend A = 1 | where B == 2",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+        // A let is not a table reference.
+        assert!(!has(
+            "let base = SigninLogs | where ResultType == 0; base | extend A = 1 | where AppId == 'x'",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+    }
+
+    #[test]
+    fn a_let_that_ends_in_project_is_narrow_where_it_is_used() {
+        assert!(!has(
+            "let base = SigninLogs | project UserPrincipalName, AppId; base | summarize count() by AppId | project AppId",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        assert!(has(
+            "let base = SigninLogs | where ResultType == 0; base | summarize count() by AppId | project AppId",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+    }
+
+    #[test]
+    fn summarize_arg_max_star_needs_every_column() {
+        assert!(!has(
+            "SigninLogs | summarize arg_max(TimeGenerated, *) by UserPrincipalName | project UserPrincipalName, AppId",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        assert!(!has(
+            "SigninLogs | summarize Last = arg_min( TimeGenerated , * ) by UserPrincipalName | project UserPrincipalName",
             codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
         ));
     }

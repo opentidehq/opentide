@@ -10,7 +10,9 @@
  * - `worker` calls a loaded `opentide-wasm` module (wasm-bindgen, see
  *   `@opentide/lsp-worker`). It highlights; it does not analyze.
  * - `wasi` runs the `wasm32-wasip1` `opentide-lsp` CLI under `node:wasi`, one
- *   `analyze` or `highlight` per call.
+ *   `analyze` or `highlight` per call. Under Node 22, run the process with
+ *   `--single-threaded-gc`: its concurrent GC races with many `node:wasi`
+ *   instances and segfaults the process.
  *
  * A transport that cannot answer rejects. It never returns an empty result in
  * place of one.
