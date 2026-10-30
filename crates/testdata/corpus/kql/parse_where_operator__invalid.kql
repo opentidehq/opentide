@@ -1,2 +1,2 @@
 // prod:parse_where_operator invalid
-Syslog | parse-where SyslogMessage with
+Syslog | parse-where
