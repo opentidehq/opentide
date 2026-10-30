@@ -5,9 +5,10 @@ use opentide_core::{
     SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
+mod parse_errors;
 mod perf;
 
-use opentide_syntax::{has_error, parse as ts_parse};
+use opentide_syntax::{parse as ts_parse, walk_with_ancestors};
 use serde::Deserialize;
 use std::sync::OnceLock;
 use tree_sitter::Node;
@@ -266,13 +267,7 @@ pub fn analyze(source: &str) -> AnalyzeResult {
             tokens: Vec::new(),
         };
     };
-    if has_error(&tree) {
-        diagnostics.push(Diagnostic::error(
-            codes::SPL_PARSE_ERROR,
-            "SPL syntax error",
-            node_range(source, tree.root_node()),
-        ));
-    }
+    parse_errors::collect(tree.root_node(), source, &mut diagnostics);
     collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
     perf::collect(source, catalog, &mut diagnostics);
     parens::refine(source, &mut diagnostics);
@@ -295,33 +290,69 @@ fn node_range(source: &str, node: Node) -> Range {
     )
 }
 
+/// `spl_unknown_command` for a name in command position only: after a `|`,
+/// at the start of a subsearch, or first in the query. A word that error
+/// recovery strands mid-command (`AS dest` after a broken lookup table name)
+/// is not a command, and nothing inside an `ERROR` region is reported.
 fn collect_unknown_commands(
-    node: Node,
+    root: Node,
     source: &str,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    if node.kind() == "unknown_command" {
+    walk_with_ancestors(root, |node, ancestors| {
+        if node.kind() != "unknown_command"
+            || ancestors.iter().any(|a| a.is_error())
+            || !in_command_position(node)
+        {
+            return;
+        }
         let name = node
             .child_by_field_name("name")
             .and_then(|n| n.utf8_text(source.as_bytes()).ok())
-            .unwrap_or("")
-            .to_string();
-        if catalog.command(&name).is_none() {
-            let mut d = Diagnostic::error(
-                codes::SPL_UNKNOWN_COMMAND,
-                format!("unknown SPL command '{name}'"),
-                node_range(source, node),
-            );
-            if let Some(s) = catalog.suggest_command(&name) {
-                d = d.with_suggestion(s);
-            }
-            out.push(d);
+            .unwrap_or("");
+        if catalog.command(name).is_some() {
+            return;
         }
+        let mut d = Diagnostic::error(
+            codes::SPL_UNKNOWN_COMMAND,
+            format!("unknown SPL command '{name}'"),
+            node_range(source, node),
+        );
+        if let Some(s) = catalog.suggest_command(name) {
+            d = d.with_suggestion(s);
+        }
+        out.push(d);
+    });
+}
+
+fn in_command_position(node: Node) -> bool {
+    match previous_token(node) {
+        None => true,
+        Some(token) => matches!(token.kind(), "|" | "[") && !token.is_missing(),
     }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        collect_unknown_commands(child, source, catalog, out);
+}
+
+/// The token before `node` in document order, skipping comments and the
+/// zero-width tokens error recovery inserts.
+fn previous_token(node: Node) -> Option<Node> {
+    let mut at = node;
+    loop {
+        let sibling = loop {
+            if let Some(s) = at.prev_sibling() {
+                break s;
+            }
+            at = at.parent()?;
+        };
+        let mut leaf = sibling;
+        while leaf.child_count() > 0 {
+            leaf = leaf.child(leaf.child_count() - 1)?;
+        }
+        if leaf.is_extra() || leaf.is_missing() || leaf.start_byte() == leaf.end_byte() {
+            at = leaf;
+            continue;
+        }
+        return Some(leaf);
     }
 }
 
@@ -1152,6 +1183,45 @@ mod tests {
             "{:?}",
             r.diagnostics
         );
+    }
+
+    fn unknown_commands(src: &str) -> Vec<Diagnostic> {
+        analyze(src)
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.code == codes::SPL_UNKNOWN_COMMAND)
+            .collect()
+    }
+
+    #[test]
+    fn recovery_fragments_are_not_unknown_commands() {
+        // The stray `=` breaks the stats by-list; recovery strands `head`,
+        // `x` and `y`, none of which is in command position.
+        let src = "index=a | stats count by host , , = head x y";
+        let r = analyze(src);
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::SPL_PARSE_ERROR),
+            "{:?}",
+            r.diagnostics
+        );
+        assert!(unknown_commands(src).is_empty(), "{:?}", r.diagnostics);
+    }
+
+    #[test]
+    fn unknown_command_in_command_position_is_reported() {
+        for (src, name) in [
+            ("index=a | bogus x", "bogus"),
+            ("| bogus x", "bogus"),
+            ("index=a | join k [ bogus x ]", "bogus"),
+            ("index=a | join k [ search index=b | bogus x ]", "bogus"),
+            ("index=a | ```note``` bogus x", "bogus"),
+        ] {
+            let found = unknown_commands(src);
+            assert_eq!(found.len(), 1, "{src}: {found:?}");
+            assert!(found[0].message.contains(name), "{src}: {found:?}");
+        }
     }
 
     #[test]
