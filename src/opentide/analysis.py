@@ -52,6 +52,22 @@ ELASTIC_ADVISORY_CODES = frozenset(
     }
 )
 
+#: The engine's warnings about a dataset a query reads that ``visibility.toml``
+#: does not declare, where the workspace declares names of that kind for the
+#: platform: ``opentide lint`` reports them with the query warnings, and their
+#: help is their ``opentide explain`` page, not a language reference.
+DECLARED_DATASET_CODES = frozenset(
+    {
+        "kql_table_not_declared",
+        "spl_dataset_not_declared",
+        "elastic_dataset_not_declared",
+    }
+)
+
+#: The workspace's log sources, whose dataset fields (``tables``, ``indexes``,
+#: ``indices``, ...) the engine reads itself, as the language server does.
+VISIBILITY_CONFIGURATION = ".opentide/configurations/visibility.toml"
+
 #: Where the Elastic tenants' stack versions are read from; the engine matches
 #: this path's ending, so it is passed as written here.
 ELASTIC_CONFIGURATION = ".opentide/configurations/platforms/elastic.toml"
@@ -212,6 +228,7 @@ def install_workspace_catalog(root: Path | None) -> CatalogState:
     try:
         own = own_catalog(root)
         module.install_catalog(fields=own[FIELDS_FILE], deprecations=own[DEPRECATIONS_FILE])
+        install_workspace_visibility(root)
     except Exception as exc:  # generating the catalog never fails a command
         own_problem = f"opentide's catalog could not be generated: {type(exc).__name__}: {exc}"
         logger.warning("own_catalog_unavailable", problem=own_problem)
@@ -223,6 +240,7 @@ def install_workspace_catalog(root: Path | None) -> CatalogState:
             files=present,
         )
     state = _install_committed_catalog(module, directory)
+    install_workspace_visibility(root)
     if own_problem is None:
         return state
     problem = own_problem if state.problem is None else f"{own_problem}; {state.problem}"
@@ -240,6 +258,34 @@ def reset_catalog() -> None:
     module = engine()
     module.install_catalog()
     module.set_default_catalog()
+
+
+def install_workspace_visibility(root: Path | None) -> str | None:
+    """Declare the datasets *root*'s ``visibility.toml`` names, for the query checks.
+
+    The engine reads the file's dataset fields itself (``tables``,
+    ``indexes``, ``sourcetypes``, ``macros``, ``indices``, ``data_views``,
+    ``ecs``), as the language server does when it starts and whenever the file
+    changes, so the query checks of ``opentide validate``, ``opentide validate
+    query``, ``opentide lint`` and the TUI know what the editor knows. The Tide
+    catalogs in use stay. No workspace or no file declares nothing. When the
+    file cannot be read or is not TOML (``opentide validate`` reports that),
+    nothing is declared, and the reason is returned and logged. Raises
+    :class:`EngineUnavailableError`.
+    """
+    module = engine()
+    path = None if root is None else root / VISIBILITY_CONFIGURATION
+    text = None
+    problem = None
+    try:
+        if path is not None and path.is_file():
+            text = path.read_text(encoding="utf-8-sig")
+        module.install_visibility(text)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:  # reported by the configuration check
+        problem = f"the declared datasets could not be read: {exc}"
+        logger.warning("declared_datasets_unavailable", path=str(path), problem=problem)
+        module.install_visibility(None)
+    return problem
 
 
 def own_catalog(root: Path | None) -> dict[str, str]:
@@ -430,6 +476,7 @@ def check_queries(
     unchecked.
     """
     wanted = None if platforms is None else frozenset(platforms)
+    install_workspace_visibility(root)
     space = workspace(root)
     checks: list[QueryCheck] = []
     unreadable: list[UnreadableFile] = []

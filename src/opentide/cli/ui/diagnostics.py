@@ -853,6 +853,7 @@ ENGINE_REFERENCES: dict[str, tuple[str, str]] = {
         "https://www.elastic.co/docs/reference/query-languages/query-dsl/"
         "query-dsl-query-string-query",
     ),
+    "ecs_": ("ECS field", "https://www.elastic.co/docs/reference/ecs/ecs-field-reference"),
 }
 
 
@@ -874,13 +875,18 @@ def diagnostic_from_engine(
     mean …?`` for an unknown or deprecated name, the step to take otherwise;
     without one, the language reference or the code's ``opentide explain``.
     """
+    from opentide.analysis import DECLARED_DATASET_CODES
+
     help_text = None
     if finding.suggestion:
         if any(word in finding.message.lower() for word in _ENGINE_UNKNOWN):
             help_text = f"did you mean {finding.suggestion!r}?"
         else:
             help_text = f"try: {finding.suggestion}"
-    elif (reference := engine_reference(finding.code)) is not None:
+    elif (
+        finding.code not in DECLARED_DATASET_CODES
+        and (reference := engine_reference(finding.code)) is not None
+    ):
         help_text = f"the {reference[0]} reference: {reference[1]}"
     else:
         help_text = f"{explain_command(finding.code)} describes it"

@@ -194,6 +194,115 @@
           "default": null,
           "description": "Reference links.",
           "title": "References"
+        },
+        "tables": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "KQL tables and functions the logs fill (`sentinel`, `defender_for_endpoint`).",
+          "title": "Tables"
+        },
+        "indexes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Splunk indexes the logs fill, as `index=` names them (`splunk`).",
+          "title": "Indexes"
+        },
+        "sourcetypes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Splunk sourcetypes the logs carry, as `sourcetype=` names them (`splunk`).",
+          "title": "Sourcetypes"
+        },
+        "macros": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Splunk macros that search the logs, without backticks (`splunk`).",
+          "title": "Macros"
+        },
+        "indices": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Elastic index patterns and data streams the logs fill, as `index` names them (`elastic`).",
+          "title": "Indices"
+        },
+        "data_views": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Elastic data view ids that cover the logs, as `data_view_id` names them (`elastic`).",
+          "title": "Data Views"
+        },
+        "ecs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the `indices` follow the Elastic Common Schema (`elastic`).",
+          "title": "Ecs"
         }
       },
       "required": [

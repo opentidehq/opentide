@@ -143,6 +143,19 @@ def _finding(code: str, message: str, suggestion: str | None = None) -> Finding:
             None,
             "opentide explain missing_author describes it",
         ),
+        # Declared in visibility.toml or not: the page says how, not the KQL reference.
+        (
+            "kql_table_not_declared",
+            "table 'X' is not declared",
+            None,
+            "opentide explain kql_table_not_declared describes it",
+        ),
+        (
+            "ecs_unknown_field",
+            "ECS has no field 'process.nme'",
+            None,
+            "the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference",
+        ),
     ],
 )
 def test_every_engine_frame_ends_in_a_help_line(

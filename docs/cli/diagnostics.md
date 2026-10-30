@@ -40,6 +40,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`doctor_checks_failed`](#doctor_checks_failed) | At least one `opentide doctor` check failed. |
 | [`duplicate_id`](#duplicate_id) | Two object files carry the same UUID. |
 | [`duplicate_name`](#duplicate_name) | Two `sharing.toml` blocks share a name. |
+| [`ecs_type_mismatch`](#ecs_type_mismatch) | The operation cannot apply to the ECS field's type. |
+| [`ecs_unknown_field`](#ecs_unknown_field) | The field is not in the Elastic Common Schema, on indices that use it; ECS allows custom fields. |
+| [`elastic_dataset_not_declared`](#elastic_dataset_not_declared) | The index pattern or data view is not one the workspace declares in visibility.toml. |
 | [`engine_unavailable`](#engine_unavailable) | The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server. |
 | [`eql_argument_type`](#eql_argument_type) | A literal has a type the EQL verifier rejects in this position. |
 | [`eql_case_sensitive`](#eql_case_sensitive) | The comparison is case-sensitive; the case-insensitive form may be meant. |
@@ -84,12 +87,16 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`issues_found`](#issues_found) | The command ran and failed on what it found. |
 | [`kql_control_command_unsupported`](#kql_control_command_unsupported) | A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it. |
 | [`kql_deprecated_function`](#kql_deprecated_function) | The KQL function is a deprecated alias; Microsoft Learn names its replacement. |
+| [`kql_deprecated_operator`](#kql_deprecated_operator) | The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs). |
 | [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | join or summarize runs before project, so it carries every column. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
+| [`kql_table_not_declared`](#kql_table_not_declared) | The table is not one the workspace declares in visibility.toml for the platform. |
+| [`kql_type_mismatch`](#kql_type_mismatch) | The operator cannot apply to the column's documented type. |
+| [`kql_unknown_column`](#kql_unknown_column) | The column is not in the documented schema of the table or ASIM parser it comes from. |
 | [`kql_unknown_function`](#kql_unknown_function) | The KQL function is not in the Kusto function catalog. |
 | [`kql_unknown_operator`](#kql_unknown_operator) | The KQL tabular operator is not one Kusto knows. |
-| [`kql_unknown_table`](#kql_unknown_table) | The table is not in the platform's KQL schema (Sentinel or Defender). |
+| [`kql_unknown_table`](#kql_unknown_table) | The table is not one the engine knows for the platform: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. |
 | [`kql_unscoped_search`](#kql_unscoped_search) | search without a table scans every table in the workspace. |
 | [`kql_unscoped_union`](#kql_unscoped_union) | union * or an unscoped union reads every table. |
 | [`kql_where_not_first`](#kql_where_not_first) | A filter comes after a more expensive operator; filtering first scans fewer rows. |
@@ -160,11 +167,18 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`share_unreachable`](#share_unreachable) | `share` could not authenticate to, or reach, any destination. |
 | [`sharing_config`](#sharing_config) | `sharing.toml` failed validation, so `share` did not run. |
 | [`sharing_directory`](#sharing_directory) | A `sharing/` configuration directory exists; sharing is configured in one `sharing.toml` file. |
-| [`spl_leading_not`](#spl_leading_not) | A search that starts with NOT scans every event before excluding any. |
+| [`spl_command_without_pipe`](#spl_command_without_pipe) | The query starts with a command name but no |, so Splunk searches for the word instead of running the command. |
+| [`spl_dataset_not_declared`](#spl_dataset_not_declared) | The index, sourcetype or macro is not one the workspace declares in visibility.toml. |
+| [`spl_empty_command`](#spl_empty_command) | A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time. |
+| [`spl_empty_stage`](#spl_empty_stage) | A trailing | with no command; Splunk ignores it. |
+| [`spl_leading_not`](#spl_leading_not) | A base search that starts with NOT scans every event before excluding any. |
 | [`spl_parse_error`](#spl_parse_error) | The SPL search does not parse. |
+| [`spl_search_operator`](#spl_search_operator) | A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`. |
 | [`spl_subsearch_truncation`](#spl_subsearch_truncation) | A subsearch is silently truncated at its result or time limit. |
-| [`spl_unknown_command`](#spl_unknown_command) | The SPL command is not in the Splunk Search Reference. |
-| [`spl_wildcard`](#spl_wildcard) | A leading or mid-token wildcard cannot use the index and scans every event. |
+| [`spl_unknown_command`](#spl_unknown_command) | The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command. |
+| [`spl_unknown_datamodel`](#spl_unknown_datamodel) | The CIM data model or dataset is not one Splunk CIM defines. |
+| [`spl_unknown_datamodel_field`](#spl_unknown_datamodel_field) | The field is not in the CIM data model the search reads. |
+| [`spl_wildcard`](#spl_wildcard) | A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event. |
 | [`technique_not_enterprise`](#technique_not_enterprise) | The ATT&CK technique is not in the Enterprise matrix that Elastic maps. |
 | [`template_missing`](#template_missing) | `opentide new` found no generated template or schema for the object type it was asked for. |
 | [`templates_fresh`](#templates_fresh) | Every template this opentide version generates exists and matches what it would write. |
@@ -667,6 +681,65 @@ name = "misp-prod"
 
 Give each block a unique `name`; `share --target` selects blocks by it.
 
+## ecs_type_mismatch
+
+The operation cannot apply to the ECS field's type.
+
+Reported by the analysis engine in an ECS field query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [ECS field reference](https://www.elastic.co/docs/reference/ecs/ecs-field-reference) describes the syntax and the commands the engine checks against.
+
+## ecs_unknown_field
+
+The field is not in the Elastic Common Schema, on indices that use it; ECS allows custom fields.
+
+Reported by the analysis engine in an ECS field query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [ECS field reference](https://www.elastic.co/docs/reference/ecs/ecs-field-reference) describes the syntax and the commands the engine checks against.
+
+## elastic_dataset_not_declared
+
+The index pattern or data view is not one the workspace declares in visibility.toml.
+
+Severity: warning. Reported by the analysis engine on an Elastic rule (`elastic`): its `index`, `data_view_id`, a threat match's `index`, or an ES|QL `FROM`. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in per kind: only a workspace whose `visibility.toml` names at least one Elastic index pattern (or data view) gets it. A declared pattern covers the patterns inside it: `logs-*` covers `logs-azure.*`.
+
+### Example
+
+```toml
+[[logsources]]
+name = "Endpoint telemetry"
+description = "Elastic Defend endpoint data."
+system = "elastic"
+indices = ["logs-endpoint.events.*"]
+```
+
+```yaml
+configurations:
+  elastic:
+    index:
+      - winlogbeat-*   # not declared for elastic
+```
+
+### How to fix
+
+Correct the pattern, or add it to the `indices` (or the data view to `data_views`) of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+
 ## engine_unavailable
 
 The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server.
@@ -688,7 +761,7 @@ The engine is part of the opentide package: each opentide wheel carries it, comp
 
 A literal has a type the EQL verifier rejects in this position.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -704,7 +777,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The comparison is case-sensitive; the case-insensitive form may be meant.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -720,7 +793,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The expression nests deeper than Elasticsearch accepts.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -736,7 +809,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 Both sides of a comparison read fields, which EQL does not support.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -752,7 +825,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 An EQL function is called with the wrong number of arguments.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -768,7 +841,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A wildcard character is compared literally; use : or like for a pattern.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -784,7 +857,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A sequence maxspan is longer than the rule's lookback.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -800,7 +873,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A sequence has no maxspan, so partial sequences are held until they expire.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -816,7 +889,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A sequence maxspan uses a unit Elasticsearch does not accept.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -832,7 +905,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A sequence maxspan is longer than the rule's interval plus lookback, so the rule cannot see whole sequences.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -848,7 +921,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 Elasticsearch nests /* */ comments; the comment ends later than it looks.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -864,7 +937,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A string or number literal is used as a condition.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -880,7 +953,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The EQL query does not parse.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -896,7 +969,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The regular expression trips a Lucene RegExp pitfall.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -912,7 +985,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A decimal runs count is truncated by Elasticsearch.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -928,7 +1001,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The EQL function is not in the Elasticsearch function catalog.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -944,7 +1017,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 Elasticsearch EQL does not support this construct (pipes, relationships, ...).
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -960,7 +1033,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 runs or a missing-event term ![ ] is not allowed on until.
 
-Reported by the analysis engine in a EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an EQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -976,7 +1049,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The expression nests deeper than Elasticsearch accepts.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -992,7 +1065,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A suppression group_by field is not a column the ES|QL query returns.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1008,7 +1081,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1024,7 +1097,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The ES|QL query does not parse.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1040,7 +1113,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A LIKE or RLIKE pattern escapes or matches differently than it reads.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1056,7 +1129,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The command, function or form is missing or in preview on a targeted stack version.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1072,7 +1145,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The ES|QL command is not one Elasticsearch knows.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1088,7 +1161,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The ES|QL function is not in the Elasticsearch function catalog.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1104,7 +1177,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The ::type cast names a type no Elasticsearch release can cast to.
 
-Reported by the analysis engine in a ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an ES|QL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
@@ -1399,6 +1472,22 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
 
+## kql_deprecated_operator
+
+The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).
+
+Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+
 ## kql_join_summarize_before_project
 
 join or summarize runs before project, so it carries every column.
@@ -1447,6 +1536,63 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
 
+## kql_table_not_declared
+
+The table is not one the workspace declares in visibility.toml for the platform.
+
+Severity: warning. Reported by the analysis engine on a KQL query (`sentinel`, `defender_for_endpoint`): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in: only a workspace whose `visibility.toml` names at least one table for that platform gets it, for a table the engine does not otherwise know. `*` in a declared name matches any run of characters.
+
+### Example
+
+```toml
+[[logsources]]
+name = "VNet flow logs"
+description = "Traffic analytics on the production VNet flow logs."
+system = "sentinel"
+tables = ["NTANetAnalytics"]
+```
+
+```kusto
+NTAIpDetails   // not declared for sentinel
+| where FlowType == "MaliciousFlow"
+```
+
+### How to fix
+
+Correct the table name, or add it (or a pattern such as `*_CL`) to the `tables` of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+
+## kql_type_mismatch
+
+The operator cannot apply to the column's documented type.
+
+Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+
+## kql_unknown_column
+
+The column is not in the documented schema of the table or ASIM parser it comes from.
+
+Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+
 ## kql_unknown_function
 
 The KQL function is not in the Kusto function catalog.
@@ -1481,7 +1627,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## kql_unknown_table
 
-The table is not in the platform's KQL schema (Sentinel or Defender).
+The table is not one the engine knows for the platform: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema.
 
 Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -2647,9 +2793,81 @@ Severity: error. Reported by `opentide validate --check sharing-config` and `ope
 
 Move the blocks into `.opentide/configurations/sharing.toml` and remove the directory.
 
+## spl_command_without_pipe
+
+The query starts with a command name but no |, so Splunk searches for the word instead of running the command.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## spl_dataset_not_declared
+
+The index, sourcetype or macro is not one the workspace declares in visibility.toml.
+
+Severity: warning. Reported by the analysis engine on an SPL search (`splunk`): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in per kind: only a workspace whose `visibility.toml` names at least one Splunk index (or sourcetype, or macro) gets it for an index (or sourcetype, or macro). Names match regardless of case, and `*` matches any run of characters.
+
+### Example
+
+```toml
+[[logsources]]
+name = "Windows security events"
+description = "Security event log of the domain controllers."
+system = "splunk"
+indexes = ["wineventlog"]
+```
+
+```text illustrative
+index=winevents EventCode=4688   # winevents is not declared
+```
+
+### How to fix
+
+Correct the name, or add it to the `indexes`, `sourcetypes` or `macros` of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+
+## spl_empty_command
+
+A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## spl_empty_stage
+
+A trailing | with no command; Splunk ignores it.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
 ## spl_leading_not
 
-A search that starts with NOT scans every event before excluding any.
+A base search that starts with NOT scans every event before excluding any.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -2666,6 +2884,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 ## spl_parse_error
 
 The SPL search does not parse.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## spl_search_operator
+
+A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -2697,7 +2931,39 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## spl_unknown_command
 
-The SPL command is not in the Splunk Search Reference.
+The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## spl_unknown_datamodel
+
+The CIM data model or dataset is not one Splunk CIM defines.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## spl_unknown_datamodel_field
+
+The field is not in the CIM data model the search reads.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -2713,7 +2979,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## spl_wildcard
 
-A leading or mid-token wildcard cannot use the index and scans every event.
+A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

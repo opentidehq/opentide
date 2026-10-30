@@ -4,7 +4,36 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from pydantic import ValidationInfo, field_validator
+
 from opentide.models.base import TideField, TideModel
+
+#: The dataset fields a log source may set, by the `system` that reads them.
+#: A field outside its system's list is a validation error, so a Splunk index
+#: never makes a Sentinel table known. The analysis engine reads the same
+#: fields from the file itself (:func:`opentide.analysis.install_workspace_visibility`).
+DATASET_FIELDS: dict[str, tuple[str, ...]] = {
+    "sentinel": ("tables",),
+    "defender_for_endpoint": ("tables",),
+    "splunk": ("indexes", "sourcetypes", "macros"),
+    "elastic": ("indices", "data_views", "ecs"),
+}
+
+#: Every dataset field, in the order the model declares them.
+DATASET_FIELD_NAMES: tuple[str, ...] = (
+    "tables",
+    "indexes",
+    "sourcetypes",
+    "macros",
+    "indices",
+    "data_views",
+    "ecs",
+)
+
+
+def systems_for(field: str) -> tuple[str, ...]:
+    """The `system` values whose log sources may set *field*."""
+    return tuple(system for system, fields in DATASET_FIELDS.items() if field in fields)
 
 
 class VisibilityAsset(TideModel):
@@ -37,6 +66,42 @@ class VisibilityLogSource(TideModel):
     """Tenants of `system` that hold the logs."""
     references: list[str] | None = None
     """Reference links."""
+    # The dataset fields: what the query checks know a log source by. Each fits
+    # the systems DATASET_FIELDS lists; `*` matches any run of characters.
+    tables: list[str] | None = None
+    """KQL tables and functions the logs fill (`sentinel`, `defender_for_endpoint`)."""
+    indexes: list[str] | None = None
+    """Splunk indexes the logs fill, as `index=` names them (`splunk`)."""
+    sourcetypes: list[str] | None = None
+    """Splunk sourcetypes the logs carry, as `sourcetype=` names them (`splunk`)."""
+    macros: list[str] | None = None
+    """Splunk macros that search the logs, without backticks (`splunk`)."""
+    indices: list[str] | None = None
+    """Elastic index patterns and data streams the logs fill, as `index` names them (`elastic`)."""
+    data_views: list[str] | None = None
+    """Elastic data view ids that cover the logs, as `data_view_id` names them (`elastic`)."""
+    ecs: bool | None = None
+    """Whether the `indices` follow the Elastic Common Schema (`elastic`)."""
+
+    @field_validator(*DATASET_FIELD_NAMES)
+    @classmethod
+    def _fits_system(cls, value: object, info: ValidationInfo) -> object:
+        """A dataset field is set only on a log source of a system that reads it."""
+        if value is None or info.field_name is None:
+            return value
+        system = info.data.get("system")
+        if not isinstance(system, str):
+            # `system` failed validation itself: that error is the one to read.
+            return value
+        if info.field_name not in DATASET_FIELDS.get(system, ()):
+            fits = ", ".join(systems_for(info.field_name))
+            raise ValueError(
+                f"`{info.field_name}` does not apply to system {system!r}; "
+                f"it applies to a log source of {fits}"
+            )
+        if isinstance(value, list) and any(not name.strip() for name in value):
+            raise ValueError(f"`{info.field_name}` holds an empty name")
+        return value
 
 
 class VisibilityDetector(TideModel):

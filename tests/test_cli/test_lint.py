@@ -679,3 +679,24 @@ def test_top_level_key_lines_reads_column_zero_keys_only() -> None:
         "tide.vocab": 4,
         "description": 5,
     }
+
+
+def test_lint_reports_the_engines_dataset_and_ecs_warnings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#695: a name visibility.toml does not declare, or an ECS field that does not exist,
+    is a query warning lint shows, like the language-reference codes."""
+    from opentide import analysis
+    from opentide.analysis import Finding
+
+    rule = _write_object(tmp_path, "rules", "simulated-rule.yaml", _THREAT)
+    codes = ("elastic_dataset_not_declared", "ecs_unknown_field", "not_a_query_code")
+
+    def check_file(space: object, path: Path, text: str, *, language: str | None = None) -> list:
+        return [Finding(code, "warning", code, 2, 1, 2, 5) for code in codes]
+
+    monkeypatch.setattr(analysis, "check_file", check_file)
+    result = run_lint(tmp_path, checks=[LintCheck.queries])
+    found = [(item.get("code"), item["path"]) for item in result["findings"]]
+    relative = rule.relative_to(tmp_path).as_posix()
+    assert found == [(code, relative) for code in codes[:2]]

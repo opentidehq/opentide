@@ -77,3 +77,34 @@ def test_validate_check_configuration_alone(invoke_cli) -> None:
     assert parse_cli_json(result)["checks"] == {
         "configuration": {"check": "configuration", "status": "passed"}
     }
+
+
+_DECLARING = """\
+[[logsources]]
+name = "VNet flow logs"
+description = "Traffic analytics."
+system = "sentinel"
+tables = ["NTANetAnalytics", "*_CL"]
+
+[[logsources]]
+name = "Endpoint telemetry"
+description = "ECS endpoint data."
+system = "elastic"
+indices = ["logs-endpoint.events.*"]
+ecs = true
+"""
+
+
+def test_a_dataset_field_of_another_system_fails_validate(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    _write(tide_corpus_repo, "visibility.toml", _DECLARING.replace('"sentinel"', '"splunk"'))
+    result = invoke_cli("validate", "--check", "configuration")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["checks"]["configuration"]["status"] == "failed"
+    issues = [i for i in payload["report"]["issues"] if i["object_type"] == "configuration"]
+    assert [(i["code"], i["field_path"], i["context"]["file"]) for i in issues] == [
+        ("schema_validation", ["logsources", "0", "tables"], "visibility.toml")
+    ]
+    assert "applies to a log source of sentinel, defender_for_endpoint" in issues[0]["message"]

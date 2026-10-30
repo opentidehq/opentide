@@ -20,11 +20,12 @@ crate-type = ["cdylib"]
 # generate-import-lib: a Windows build needs no python3.lib on the machine.
 pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # The engine and the server, from opentidehq/language-server. Both come from one
-# release: the engine crates share a version and pin each other to it, so bump
-# both together. scripts/build/check_engine_pin.py refuses a git source when a
+# commit: the engine crates share a version and pin each other to it. Until the
+# language server publishes the host API this binds (its next release), this is
+# a git revision; scripts/build/check_engine_pin.py refuses a git source when a
 # release is published, so a release always builds from crates.io.
-opentide-analysis = "=0.6.0"
-opentide-lsp = "=0.6.0"
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "9787d1b32107d1764bccb2df0db315fdfe70788a" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "9787d1b32107d1764bccb2df0db315fdfe70788a" }
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"

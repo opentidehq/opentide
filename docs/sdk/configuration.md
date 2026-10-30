@@ -31,6 +31,12 @@ model = configuration_model_for(".opentide/configurations/platforms/sentinel.tom
 model.model_validate({"platform": {"enabled": True}})
 ```
 
+## Declared datasets
+
+A `visibility.toml` log source may name the datasets it fills: `tables` (`sentinel`, `defender_for_endpoint`), `indexes`, `sourcetypes` and `macros` (`splunk`), `indices`, `data_views` and `ecs` (`elastic`). `VisibilityLogSource` rejects a field its `system` does not read, and an empty name, as a `schema_validation` issue on that field (`("logsources", "0", "tables")`). `opentide.models.visibility.DATASET_FIELDS` maps each system to its fields.
+
+The analysis engine reads the same fields from the file's text, so nothing is generated in between. `opentide.analysis.install_workspace_visibility(root)` hands it `root/.opentide/configurations/visibility.toml` for the query checks (`opentide validate`, `lint` and the TUI call it); `opentide._native.install_visibility(text)` takes the text directly, and `install_catalog(..., visibility=text)` installs it with the Tide catalogs. `*` in a name matches any run of characters.
+
 ## Exporting the JSON Schemas
 
 ```python
