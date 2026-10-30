@@ -24,7 +24,7 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 
 | Option | Purpose |
 |--------|---------|
-| `--name` | The object's `name`. The filename is its slug |
+| `--name` | The object's `name`. The filename is its slug, or follows the `style` set in `lint.toml` (see below) |
 | `--path` | A file to write, or a folder to write it in. A file name without `.yaml` or `.yml` gets `.yaml`, the only files the catalogue loads. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`) |
 | `--platform` | `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud` or `elastic` |
 | `--objective`, `--threat` | The UUID of an object already in the catalogue. A malformed UUID exits `2` with `usage_invalid_value`; one no object carries exits `2` with `reference_not_found` |
@@ -48,7 +48,7 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | `response` | The template's defaults (`alert_severity: Informational`), so a deploy never reads an empty block |
 | Any other required value | A placeholder: the first value the generated schema allows, or `...` for free text. A required block whose keys are all optional keeps the defaults the template shows, or else gets its first key as a placeholder, so uncommenting another key keeps the YAML valid |
 
-The filename follows the convention [`opentide lint`](./lint.md) checks: `slugify(name)`, with `-{uuid[:8]}` appended when that name is already taken in the folder. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`. A folder or file it cannot write (a read-only checkout, another user's folder) exits `1` with `path_not_writable`, naming the file and the system's reason, then `→ opentide explain path_not_writable`.
+The filename follows the convention [`opentide lint`](./lint.md#filename-convention) checks, set by `style` under `[filenames]` in `lint.toml`: `slugify(name)` by default (and under `style = "none"`), or the name itself, less the characters a file name cannot hold, under `style = "name"`. `-{uuid[:8]}` is appended when that stem is already taken in the folder. A file that misses `[filenames].pattern` is still written, with a warning, since no name derives from a pattern. An invalid `lint.toml` exits `2` before anything is written. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`. A folder or file it cannot write (a read-only checkout, another user's folder) exits `1` with `path_not_writable`, naming the file and the system's reason, then `→ opentide explain path_not_writable`.
 
 ### Placeholders
 

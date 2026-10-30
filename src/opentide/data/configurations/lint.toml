@@ -6,6 +6,14 @@
 enabled = true
 # Replace every finding's severity: "error", "warning" or "info".
 # severity = "warning"
+# How the file stem derives from the object's name:
+#   "slug" (default)  the stem is slugify(name), e.g. "simulated-actor"
+#   "name"            the stem is the name with characters a file name cannot hold removed
+#   "none"            the stem is not compared with the name
+style = "slug"
+# A regular expression the whole stem (no extension) must match, applied with `style`.
+# A stem that does not match is a non-fixable `filename_pattern` finding.
+# pattern = '^\[(SEN|XDR)\]\[[^\]]+\].+$'
 
 [metadata]
 enabled = true

@@ -1,6 +1,6 @@
 ---
 title: opentide lint
-description: Catalogue hygiene — filename slugs, recommended metadata, placeholders and query style, distinct from validation.
+description: Catalogue hygiene — filename convention, recommended metadata, placeholders and query style, distinct from validation.
 ---
 
 # opentide lint
@@ -19,14 +19,14 @@ opentide lint --strict
 
 | `--check` | What it does | `--fix` |
 |----------|----------------|---------|
-| `filenames` | Object YAML stem must equal `slugify(name)` | Renames files. On a collision in the same folder, appends `{uuid[:8]}` |
+| `filenames` | Object YAML stem must follow the [filename convention](#filename-convention): `slugify(name)` by default | Renames files to the stem `style` expects. On a collision in the same folder, appends `{uuid[:8]}`. A `pattern` finding is not fixed |
 | `metadata` | Reports each `metadata` key in [`required`](#configuration) that is missing or empty. By default `author` and `organisation` | Not auto-fixed |
 | `placeholders` | Reports each value [`opentide new`](./new.md) filled in for you, marked `# opentide:placeholder` | Not auto-fixed |
 | `queries` | Reports the analysis engine's warnings and notes on each query (slow shapes, deprecated commands) and Elastic block settings (see [Queries](#queries)) | Not auto-fixed |
 
 Default (no `--check`) runs every check that [`lint.toml`](#configuration) leaves enabled, which out of the box is all four. YAML formatting and orphan doc pages are not in this command yet. Vocabulary pins ship inside opentide, so lint does not check them: opentide's own CI checks the bundled pins against the specifications whenever they change.
 
-Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives,rules}/` and does not rebuild the object registry. A file in a subfolder is not an object: the `filenames` check reports it once as a `warning` with `code: nested_object_file` and checks nothing else in it.
+Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives,rules}/` and does not rebuild the object registry. A file in a subfolder is not an object: the `filenames` check reports it once as a `warning` with `code: nested_object_file` and checks nothing else in it. These findings do not depend on the filename convention: a catalogue with `style = "none"` still gets them.
 
 ## Flags
 
@@ -84,7 +84,7 @@ When more than one severity is left, the count splits them. Notes alone are no w
 | `yaml_line` | Zero-based line of the key the finding is about, like `yaml_line` in `validate`. `null` when the finding is about the whole file, or the key comes from a `<<:` merge and has no line of its own |
 | `uuid` | The object's `metadata.uuid`. `null` when the file did not parse or has no UUID |
 | `message` | What is wrong |
-| `code` | `filename_mismatch`, `name_missing`, `metadata_recommended`, `placeholder`, `yaml_parse`, or the engine's code for a `queries` finding (`kql_where_not_first`, `spl_wildcard`, `lookback_zero`, ...). `opentide explain <code>` describes it |
+| `code` | `filename_mismatch`, `filename_pattern`, `name_missing`, `metadata_recommended`, `placeholder`, `yaml_parse`, or the engine's code for a `queries` finding (`kql_where_not_first`, `spl_wildcard`, `lookback_zero`, ...). `opentide explain <code>` describes it |
 | `field_path` | The key the finding is about (`["metadata"]`, `["configurations", "sentinel", "query"]`), or `[]` |
 | `line`, `column`, `end_column` | One-based position of that key, of the YAML error, or of the engine's finding in the query. `null` when unknown |
 | `help` | What to do, or `null` |
@@ -93,13 +93,14 @@ When more than one severity is left, the count splits them. Notes alone are no w
 
 `summary` counts the object `files` read, the `findings` and the `fixed` ones.
 
-A placeholder's `help` is the step that clears it. A filename mismatch adds `expected`, the path the file should have. Under `--fix` it also has `fixed`, and `from` (the old path) when the file was renamed. `fixed` is `false` when a file already exists at `expected`.
+A placeholder's `help` is the step that clears it, and a `filename_pattern` finding's `help` shows the configured pattern. A filename mismatch adds `expected`, the path the file should have; a `filename_pattern` finding has none, because no name derives from a pattern. Under `--fix` it also has `fixed`, and `from` (the old path) when the file was renamed. `fixed` is `false` when a file already exists at `expected`.
 
 | Finding | `severity` | `yaml_line` |
 |---------|------------|-------------|
 | Object YAML does not parse, or is not a mapping | `error` | `null` |
 | Object has no `name` | `error` | The `name:` key when it is present but empty or not a string, else `null` |
-| Filename is not `slugify(name)` | `warning` | `null` |
+| Filename is not the stem `style` expects (`slugify(name)` by default) | `warning` | `null` |
+| Filename does not match `[filenames].pattern` | `warning` | `null` |
 | A `metadata.required` key missing or empty | `info` | The `metadata:` key, or `null` when there is no `metadata` block |
 | A value marked `# opentide:placeholder` | `warning` | The marked line |
 | An engine warning on a query or an Elastic block | `warning` | The finding's line |
@@ -115,6 +116,7 @@ Lint reads `lint.toml` like any other [configuration file](../usage/configuratio
 # Bundled defaults
 [filenames]
 enabled = true
+style = "slug"
 
 [metadata]
 enabled = true
@@ -131,6 +133,8 @@ enabled = true
 |-----|--------|-------|
 | `enabled` | `[filenames]`, `[metadata]`, `[placeholders]`, `[queries]` | `false` skips the check when no `--check` is given. `--check` wins: `opentide lint --check metadata` runs the metadata check even when it is disabled. The unparsable-file and missing-`name` findings belong to `filenames`, so disabling it drops them too (`validate` still reports both) |
 | `severity` | `[filenames]`, `[metadata]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included |
+| `style` | `[filenames]` | How the expected file stem derives from `name`: `slug` (the default), `name` or `none`. See [Filename convention](#filename-convention) |
+| `pattern` | `[filenames]` | A regular expression the whole stem must match. See [Filename convention](#filename-convention) |
 | `required` | `[metadata]` | The `metadata` keys every object must fill. It replaces the default list rather than adding to it, and `[]` turns the metadata check into a no-op |
 
 `required` takes any key a `metadata` block can hold: `uuid`, `schema`, `version`, `created`, `modified`, `tlp`, `author`, `contributors`, `organisation`, `reviewed`. A key counts as missing when it is absent, `null`, a blank string or an empty list; `organisation` needs a `name` (or the `organization` spelling). Each object is asked only for the keys its own schema accepts: `reviewed` exists on `rule::1.1` metadata alone, so it is never demanded of a threat, an objective or a `rule::1.0` rule, whose schemas reject it.
@@ -144,11 +148,42 @@ required = ["author"]
 severity = "error"
 ```
 
-A value lint cannot use fails the command with exit `2` and a message that names the key, before any object is read. That covers an unknown `required` field, an unknown table or key (a typo such as `requried`), a `severity` outside the three values, and an `enabled` that is not `true` or `false`. From a workspace whose `lint.toml` sets `required = ["owner"]`:
+A value lint cannot use fails the command with exit `2` and a message that names the key, before any object is read. That covers an unknown `required` field, an unknown table or key (a typo such as `requried`), a `severity` outside the three values, an `enabled` that is not `true` or `false`, a `style` that is not `slug`, `name` or `none`, and a `pattern` that is not a string or does not compile as a regular expression. From a workspace whose `lint.toml` sets `required = ["owner"]`:
 
 ```text illustrative
 FATAL: lint.toml [metadata].required: unknown metadata field(s) 'owner'. Known fields: uuid, schema, version, created, modified, tlp, author, contributors, organisation, reviewed
 ```
+
+### Filename convention
+
+The `filenames` check compares each object file's stem (the name without `.yaml` or `.yml`) with its `name`. `style` chooses the stem it expects, and `pattern` adds a rule the stem must follow:
+
+```toml
+# .opentide/configurations/lint.toml
+[filenames]
+style = "name"      # "slug" (default) | "name" | "none"
+pattern = '^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$'   # optional
+```
+
+| `style` | Expected stem | A different stem |
+|---------|---------------|------------------|
+| `slug` | `slugify(name)`: letters and digits in lower case, other runs replaced by `-`. `Simulated Actor` is `simulated-actor` | `filename_mismatch`, fixed by `--fix` |
+| `name` | The name, less the characters a file name cannot hold. `[SEN][AWS]Some rule[TenantA+TenantB]` stays as it is, and `Rule: part 1` is `Rule part 1` | `filename_mismatch` ("does not match name"), fixed by `--fix` |
+| `none` | None: the stem is not compared with `name` | No finding |
+
+With `style = "name"`, case counts (`some rule.yaml` does not match `Some rule`), and these characters are removed from the name: `< > : " / \ | ? *`, control characters, and spaces and dots at either end, which Windows would drop and Unix would hide. A name with nothing left (`???`) has no expected stem and is not compared. With both styles `--fix` renames the file and, when another object in the folder already has the expected stem (without regard to case, which macOS and Windows do not tell apart), appends `-{uuid[:8]}`. It is idempotent.
+
+`pattern` is a regular expression the whole stem must match (Python's `re.fullmatch`; the anchors `^` and `$` are allowed but not needed). A stem that does not match is a `filename_pattern` finding, with the severity of the `filenames` check. It cannot be fixed, so the finding has no `expected` and `--fix` leaves the file: its `help` shows the pattern. `pattern` applies together with `style`; with `style = "none"` it is the only comparison. When `--fix` renames a file, the pattern is checked against the new name.
+
+```text illustrative
+warning[filename_pattern]: Filename 'Some rule.yaml' does not match the configured filename pattern
+  ╭─▶ objects/rules/Some rule.yaml
+  ╰─ help: rename the file so its name matches the pattern ^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$
+```
+
+Unparsable files, objects without a `name` and files in subfolders are reported under every `style`. [`opentide new`](./new.md) names the file it writes by `style` too (`none` keeps the slug), so a new object and an existing one agree.
+
+`style` and `pattern` change only the check. [`opentide generate docs`](./generate.md) still names each page `slugify(name)`, so with `style = "name"` an object file and its documentation page no longer share a stem. That is the catalogue's trade-off to make; `slug` is the default because it keeps the two aligned.
 
 ### Templates follow `required`
 

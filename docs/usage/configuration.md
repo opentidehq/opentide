@@ -228,7 +228,7 @@ ecs = true   # these indices follow the Elastic Common Schema
 
 ## Lint
 
-`lint.toml` tunes [`opentide lint`](../cli/lint.md#configuration): switch a check off, change the severity of its findings, or choose which `metadata` keys every object must fill. Generated templates leave those keys uncommented, so a new object and the lint check agree.
+`lint.toml` tunes [`opentide lint`](../cli/lint.md#configuration): switch a check off, change the severity of its findings, choose which `metadata` keys every object must fill, or keep your own [file naming convention](../cli/lint.md#filename-convention). Generated templates leave those keys uncommented, so a new object and the lint check agree.
 
 ```toml
 # .opentide/configurations/lint.toml
@@ -238,6 +238,8 @@ severity = "warning"
 
 [filenames]
 enabled = false         # `opentide lint --check filenames` still runs it
+style = "name"          # the file stem is the object's name; "slug" (default) or "none"
+pattern = '^\[(SEN|XDR)\]'   # the whole stem must match this regular expression
 ```
 
 ## Paths

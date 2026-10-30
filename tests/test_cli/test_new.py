@@ -608,6 +608,37 @@ def test_target_path_with_a_file_path(tmp_path: Path) -> None:
     assert new_service.target_path(tmp_path, "Name", "abcdef12-0000", target) == target
 
 
+def test_target_path_names_the_file_by_the_configured_style(tmp_path: Path) -> None:
+    name = "[SEN][AWS]Some rule[TenantA+TenantB]"
+    uuid = "abcdef12-0000"
+    assert (
+        new_service.target_path(tmp_path, name, uuid, None)
+        == tmp_path / "sen-aws-some-rule-tenanta-tenantb.yaml"
+    )
+    assert new_service.target_path(tmp_path, name, uuid, None, "slug") == new_service.target_path(
+        tmp_path, name, uuid, None
+    )
+    assert new_service.target_path(tmp_path, name, uuid, None, "name") == tmp_path / f"{name}.yaml"
+    # "none" compares no stem, so a new file keeps the slug.
+    assert new_service.target_path(tmp_path, name, uuid, None, "none") == new_service.target_path(
+        tmp_path, name, uuid, None
+    )
+    assert (
+        new_service.target_path(tmp_path, "Who: me?", uuid, None, "name")
+        == tmp_path / "Who me.yaml"
+    )
+    # Nothing of the name is left to name a file after: the slug stands in.
+    assert new_service.target_path(tmp_path, "???", uuid, None, "name") == tmp_path / "object.yaml"
+
+
+def test_target_path_adds_the_uuid_when_the_name_is_taken_in_any_case(tmp_path: Path) -> None:
+    (tmp_path / "some rule.yml").write_text("name: x\n", encoding="utf-8")
+    taken = new_service.target_path(tmp_path, "Some Rule", "abcdef12-0000", None, "name")
+    assert taken == tmp_path / "Some Rule-abcdef12.yaml"
+    free = new_service.target_path(tmp_path / "missing", "Some Rule", "abcdef12-0000", None, "name")
+    assert free == tmp_path / "missing" / "Some Rule.yaml"
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
