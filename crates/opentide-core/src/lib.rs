@@ -606,10 +606,10 @@ pub mod codes {
             }
             SPL_PARSE_ERROR => "The SPL search does not parse.",
             SPL_WILDCARD => {
-                "A leading or mid-token wildcard cannot use the index and scans every event."
+                "A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event."
             }
             SPL_LEADING_NOT => {
-                "A search that starts with NOT scans every event before excluding any."
+                "A base search that starts with NOT scans every event before excluding any."
             }
             SPL_SUBSEARCH_TRUNCATION => {
                 "A subsearch is silently truncated at its result or time limit."
