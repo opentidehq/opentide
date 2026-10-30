@@ -148,7 +148,7 @@ Leading wildcards (`*password*`) force scans of `_raw` and are expensive. `TERM(
 The engine's `spl_wildcard` and `spl_leading_not` warnings describe that cost, which only a **base search** pays: the first stage of the query or of a subsearch (`| search` as the first stage counts). A later `| search` filters results already in the pipeline and is never flagged. Within a base search:
 
 - `field=*` and `field="*"` are the existence check (`isnotnull(field)`), not a scan, and are never flagged. A bare `*` term is.
-- A leading or mid-token wildcard is flagged only when nothing else narrows the read: no `index=`, `sourcetype=`, `source=` or `host=` value (other than `*` or a leading wildcard), no `IN` list on one of them, no `TERM()` or `PREFIX()`, and no macro (which usually expands to an index and sourcetype). `index=a src_user!="*$"` is fine; `index=* *foo*` is not.
+- A bare `*`, leading or mid-token wildcard is flagged only when nothing else in that base search, outside its subsearches, narrows the read: no `index=`, `sourcetype=`, `source=` or `host=` value (other than `*` or a leading wildcard), no `IN` list on one of them, no `TERM()` or `PREFIX()`, and no macro (which usually expands to an index and sourcetype). `index=a src_user!="*$"` is fine; `index=* *foo*` is not.
 - `spl_leading_not` fires when the base search starts with `NOT` (`NOT user=x`, `search NOT user=x`), not on `index=a NOT user=x`.
 
 CIDR matching works on IPv4/IPv6 fields: `src_ip="10.0.0.0/8"`. Equivalent eval: `cidrmatch("10.0.0.0/8", src_ip)`.

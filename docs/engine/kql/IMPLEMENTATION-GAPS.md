@@ -18,10 +18,10 @@ Detection-critical columns for SecurityEvent, SigninLogs, AuditLogs, Defender en
 
 **Missing primary operators vs inventory:** none.
 
-**SHOULD — richer `warning` metadata** (names already present):
+**Implemented slow-query warnings** (rules: [`DESIGN.md`](DESIGN.md#slow-query-warnings)): `search *` → `kql_unscoped_search`, `union *` → `kql_unscoped_union`, a `*` table → `kql_wildcard_table`, late `where` → `kql_where_not_first`, `join` / `summarize` before a later `project` → `kql_join_summarize_before_project`. They are warnings about cost, not a Sentinel legality check.
 
-- `search` — flag `search *` illegal in Sentinel analytics
-- `union` — flag `union *` illegal in Sentinel analytics
+**SHOULD — still not emitted:**
+
 - `join`, `union`, `externaldata` — Defender NRT ban
 - `fork`, `facet` — multi-result / not for detections
 - `find` — unbounded multi-table caveat

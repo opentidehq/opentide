@@ -74,22 +74,63 @@ join kind=Kind [hint.strategy=Strategy] RightTable on Predicate
 Other option-bearing operators (see `operator-options.toml`): `union kind=`,
 `parse kind=`, `lookup kind=`, `make-series`, `mv-expand`, `evaluate`.
 
-Signature help triggers on `(` for functions (`ago(`, `datetime(`, `dynamic(`)
-and on `join ` / `kind=` for tabular options.
+Signature help (`signature_help`) prefers the innermost open `(` call. An
+ASIM parser shows its filter parameters. A catalog function uses its
+`signature` string, or `{name}(…)` when it has none. An evaluate plugin
+uses its `signature` only when one is set. If no call matches, the first
+word after the last `|` uses the operator `signature` from `operators.toml`
+(`join`, `where`, `parse`, …). The server's trigger characters are `(`,
+`,`, `=` and `` ` ``.
 
 `dynamic([...])` is a **type constructor** (HighlightSpec `type`), not a
 user function.
 
-## Detection policy (diagnostics, not rewrite)
+Refresh function, operator, and plugin signatures from a checkout of
+[MicrosoftDocs/dataexplorer-docs](https://github.com/MicrosoftDocs/dataexplorer-docs)
+(`data-explorer/kusto/query`):
 
-| Pattern | Sentinel analytics | Defender custom / NRT |
-| --- | --- | --- |
-| `search *` / `union *` | illegal | illegal |
-| `join` / `union` / `externaldata` | allowed | **banned in NRT** |
-| Comments | allowed | banned in NRT |
-| Output columns | n/a | `Timestamp`/`TimeGenerated` + `DeviceId`/`ReportId` (see defender-tables.md) |
+```bash
+python3 scripts/sync_kql_learn_signatures.py --docs /path/to/dataexplorer-docs
+python3 scripts/sync_kql_learn_signatures.py --docs /path/to/dataexplorer-docs --write
+```
 
-The engine does **not** rewrite authored KQL.
+Without `--write` the script prints repaired, skipped, and suspicious rows
+and leaves the TOML files alone. A row whose article cannot be read is
+skipped and kept as-is, and a deprecated function is not touched.
+`encode_base64` / `decode_base64` are not on the cited Learn page: the
+script drops those rows and adds `base64_encodestring` /
+`base64_decodestring` when they are missing, instead of copying a neighbor
+signature. `column_names_of` and `project-by-names` are added when the
+article exists and the catalog row does not.
+
+## Slow-query warnings
+
+`crates/opentide-kql/src/perf.rs` emits **warnings**. The query text is left
+as authored. Every message cites
+[Kusto query best practices](https://learn.microsoft.com/en-us/kusto/query/best-practices).
+The same codes fire on a raw `.kql` file and inside every Tide block
+analysed as KQL (the injection table in
+[ARCHITECTURE.md](../ARCHITECTURE.md#injection-table)).
+
+The first two rules read each pipeline through the column pass
+([columns.md](columns.md)).
+
+| Code | Fires when |
+| --- | --- |
+| `kql_where_not_first` | The pipeline starts from a table or an ASIM parser (a custom or unknown name counts; a `let` does not), its first operator is not `where` or `filter`, and the first `where` / `filter` in it reads no column an earlier operator makes. The range is that `where` / `filter`. `SecurityEvent \| where … \| extend …` and `SigninLogs \| extend Domain = … \| where Domain == …` are clean. |
+| `kql_join_summarize_before_project` | `join` or `summarize` runs before any `project`, `project-keep` or `project-away`, **and** one of those comes later. `summarize` with no later project is clean, and so is a pipeline that starts from a `let` ending in `project`, `summarize` or `distinct`. `summarize arg_max(T, *)` / `arg_min(T, *)` needs every column and is never flagged. |
+| `kql_unscoped_search` | `search` starts a statement, has a predicate, and has no `in (Table, …)` list. `search *` uses this code. `search in (SecurityEvent) "error"` and `SecurityEvent \| search "error"` are clean. |
+| `kql_wildcard_table` | A `*` table starts a statement (`* \| take 1`), or a `*` is inside `search in (…)`. |
+| `kql_unscoped_union` | `union` starts a statement or follows `\|`, and a `*` appears in its arguments outside parentheses (`union *`). |
+
+Join cardinality and `hint.shufflekey` are omitted: the text does not say
+which side is larger.
+
+`kql_render_not_valid` is a warning too, but a separate rule: `render` is not
+valid in a detection. The engine does not check Defender's required output
+columns ([defender-tables.md](defender-tables.md)) or the Defender NRT bans
+(`join`, `union`, `externaldata`, comments):
+[IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).
 
 ## Highlight overlay
 

@@ -108,6 +108,37 @@ Inside `search` / `bare_search` (not only `eval` comparisons):
 | `(` on an eval or stats function | Search Reference `signature`. `stats` / `tstats` / `chart` / `timechart` (and the other aggregate commands) resolve `sum` / `avg` / `min` / `max` as aggregates |
 | `` `macro( `` | macro `signature` string |
 
+## Slow and truncated shapes
+
+`crates/opentide-spl/src/perf.rs` emits **warnings** and does not rewrite
+the query. The same codes fire on a raw `.spl` file and inside every Tide
+block analysed as SPL (the injection table in
+[ARCHITECTURE.md](../ARCHITECTURE.md#injection-table)).
+
+Stages come from splitting on `|` outside quotes, comments, macros and
+subsearch `[ ]` (`split_segments` in `crates/opentide-spl/src/scan.rs`).
+Parentheses do not hide a `|`, as in Splunk. Each `[ ]` subsearch is a
+pipeline of its own, checked with the same rules.
+
+`spl_wildcard` and `spl_leading_not` read only the **base search** of each
+pipeline (`base_search` in `scan.rs`): the first stage when the pipeline does
+not start with `|` and its first word is not a catalogued command other than
+`search` (`stats=1` is a field, so it starts a search), or a leading
+`| search`. A leading `| tstats` or `| inputlookup` has none. What they flag,
+and the `index=` / `sourcetype=` / `source=` / `host=` / `IN` / `TERM()` /
+`PREFIX()` / macro constraints that cover a wildcard:
+[search-syntax.md](search-syntax.md#wildcards). A constraint inside a
+subsearch does not cover the outer base search.
+
+### Truncated shapes
+
+| Code | Fires when |
+| --- | --- |
+| `spl_subsearch_truncation` | A stage's command word is `join` or `append`, in any case. Message: silent truncation at 50,000 events or 60 seconds ([About subsearches](https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)). `appendcols` is not flagged. |
+| `spl_subsearch_truncation` | A stage's command word is `transaction`. Different limit: events stay in memory until the group closes, and events past `maxopentxn` are dropped ([transaction](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transaction)). The message does not cite the 50,000-event subsearch cap. |
+
+The range is the command word.
+
 ## Highlight overlay
 
 After tree-sitter:
