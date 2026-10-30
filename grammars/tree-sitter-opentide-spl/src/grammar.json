@@ -2605,8 +2605,35 @@
           "type": "FIELD",
           "name": "name",
           "content": {
-            "type": "SYMBOL",
-            "name": "identifier"
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "identifier"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "string"
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_dynamic_name"
+                },
+                "named": true,
+                "value": "identifier"
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_template_name"
+                },
+                "named": true,
+                "value": "identifier"
+              }
+            ]
           }
         },
         {
@@ -2857,6 +2884,10 @@
                           {
                             "type": "STRING",
                             "value": "LIKE"
+                          },
+                          {
+                            "type": "STRING",
+                            "value": "like"
                           }
                         ]
                       },
@@ -2901,6 +2932,10 @@
                     {
                       "type": "STRING",
                       "value": "-"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "."
                     }
                   ]
                 },
@@ -2975,6 +3010,10 @@
                 },
                 {
                   "type": "STRING",
+                  "value": "!"
+                },
+                {
+                  "type": "STRING",
                   "value": "-"
                 },
                 {
@@ -3011,6 +3050,24 @@
           "name": "identifier"
         },
         {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_template_name"
+          },
+          "named": true,
+          "value": "identifier"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_token_name"
+          },
+          "named": true,
+          "value": "identifier"
+        },
+        {
           "type": "SYMBOL",
           "name": "string"
         },
@@ -3021,6 +3078,10 @@
         {
           "type": "SYMBOL",
           "name": "boolean"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "subsearch"
         },
         {
           "type": "SEQ",
@@ -3051,8 +3112,22 @@
             "type": "FIELD",
             "name": "name",
             "content": {
-              "type": "SYMBOL",
-              "name": "identifier"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "identifier"
+                },
+                {
+                  "type": "ALIAS",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "boolean"
+                  },
+                  "named": true,
+                  "value": "identifier"
+                }
+              ]
             }
           },
           {
@@ -3105,7 +3180,28 @@
     },
     "identifier": {
       "type": "PATTERN",
-      "value": "[A-Za-z_][A-Za-z0-9_:.]*"
+      "value": "[A-Za-z_][A-Za-z0-9_:]*(\\.[A-Za-z0-9_:]+)*"
+    },
+    "_dynamic_name": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "[A-Za-z0-9_]*\\{[A-Za-z_][A-Za-z0-9_.]*\\}[A-Za-z0-9_]*"
+      }
+    },
+    "_token_name": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "\\$[A-Za-z_][A-Za-z0-9_.:]*\\$"
+      }
+    },
+    "_template_name": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "([A-Za-z0-9_.]|<<[A-Z_0-9]+>>)*<<[A-Z_0-9]+>>([A-Za-z0-9_.]|<<[A-Z_0-9]+>>)*"
+      }
     },
     "string": {
       "type": "TOKEN",

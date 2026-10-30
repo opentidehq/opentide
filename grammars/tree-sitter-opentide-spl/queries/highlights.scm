@@ -80,6 +80,7 @@
 "==" @operator
 "!=" @operator
 "LIKE" @operator
+"like" @operator
 "IN" @operator
 
 "timechart" @keyword

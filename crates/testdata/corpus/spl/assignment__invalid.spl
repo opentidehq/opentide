@@ -1,0 +1,2 @@
+``` prod:assignment invalid
+index=main | eval k=host.
