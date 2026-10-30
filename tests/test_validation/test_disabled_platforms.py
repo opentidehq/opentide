@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from opentide.cli.exit_codes import report_outcome
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.disabled_platforms import platform_not_enabled_warnings
 from opentide.validation.issues import ValidationIssue
@@ -67,10 +67,8 @@ def _index(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.fixture
-def isolated_session(monkeypatch: pytest.MonkeyPatch) -> Iterator[MagicMock]:
+def isolated_session() -> Iterator[MagicMock]:
     """Only the platform and deprecated-field findings reach the report."""
-    for flag in ("VALIDATION_ERROR_RAISED", "VALIDATION_WARNING_RAISED"):
-        monkeypatch.delenv(flag, raising=False)
     graph = MagicMock()
     graph.resolve.return_value = MagicMock(file_path=None)
     with (
@@ -94,16 +92,16 @@ _SPLUNK_RULE = {"name": "Imported", "configurations": {"splunk": {"query": "x"}}
 
 
 @pytest.mark.usefixtures("isolated_session")
-def test_platform_warning_alone_does_not_raise_the_strict_flag() -> None:
+def test_platform_warning_alone_does_not_fail_strict() -> None:
     report = run_validation(
         checks=frozenset({ValidateCheck.schema}), index=_index(_SPLUNK_RULE), workers=0
     )
     assert report.ok
     assert [w.code for w in report.warnings] == ["platform_not_enabled"]
-    assert not os.environ.get("VALIDATION_WARNING_RAISED")
+    assert report_outcome(report, strict=True).exit_code == 0
 
 
-def test_other_warnings_still_raise_the_strict_flag(isolated_session: MagicMock) -> None:
+def test_other_warnings_still_fail_strict(isolated_session: MagicMock) -> None:
     isolated_session.return_value = [
         ValidationIssue(code="deprecated_field", severity="warning", message="old")
     ]
@@ -111,7 +109,7 @@ def test_other_warnings_still_raise_the_strict_flag(isolated_session: MagicMock)
         checks=frozenset({ValidateCheck.schema}), index=_index(_SPLUNK_RULE), workers=0
     )
     assert sorted(w.code for w in report.warnings) == ["deprecated_field", "platform_not_enabled"]
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
+    assert report_outcome(report, strict=True).exit_code == 1
 
 
 @pytest.mark.usefixtures("isolated_session")

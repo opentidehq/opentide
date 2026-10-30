@@ -35,6 +35,7 @@ from opentide.platforms.splunk.client import (
     connect_splunk,
     splunk_route,
 )
+from opentide.query.models import LiveCheck, QueryRefused, QueryRequest
 
 pytest.importorskip("cryptography")
 
@@ -159,45 +160,49 @@ def test_a_redirect_urllib_does_not_follow_fails_a_deploying_connection(
         deploying.parse("| makeresults |unreachable", output_mode="json")
 
 
-def test_query_validator_reports_an_invalid_query(
-    splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from opentide.platforms.splunk.validator import SplunkQueryValidator
-
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
-    service = _connect(splunk, ssl_enabled=False, allow_http_errors=True)
-
-    validator._validate_spl_query("| makeresults", "good", "uuid-1", service)
-    assert "VALIDATION_ERROR_RAISED" not in os.environ
-
-    validator._validate_spl_query("| makeresults |badcommand", "bad", "uuid-2", service)
-    assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
+def _splunk_tenant(splunk: SplunkStandIn) -> ConfigurationModels.Systems.Splunk.Tenant:
+    setup = ConfigurationModels.Systems.Splunk.Tenant.Setup(
+        url="localhost", port=splunk.port, token="token", app="search", ssl=False
+    )
+    return ConfigurationModels.Systems.Splunk.Tenant(name="local", description="", setup=setup)
 
 
-def test_query_validator_assumes_valid_on_a_network_error_redirect(
-    splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _check(text: str, tenant: ConfigurationModels.Systems.Splunk.Tenant) -> LiveCheck:
+    from opentide.platforms.splunk.runner import SplunkQueryRunner
+    from opentide.query.check import check_window
+
+    request = QueryRequest(platform="splunk", text=text, window=check_window(), limit=1)
+    return SplunkQueryRunner().check(request, tenant)
+
+
+def test_live_check_reports_an_invalid_query(splunk: SplunkStandIn) -> None:
+    tenant = _splunk_tenant(splunk)
+
+    assert _check("| makeresults", tenant) == LiveCheck()
+    with pytest.raises(QueryRefused) as refused:
+        _check("| makeresults |badcommand", tenant)
+    assert refused.value.message == "Splunk refused the query on local"
+    assert not any("/search/jobs" in path for _, path, _ in splunk.requests)
+
+
+def test_live_check_assumes_valid_on_a_network_error_redirect(splunk: SplunkStandIn) -> None:
     """urllib raises on a 307 answering a POST; it is a validation response, not a failure."""
-    from opentide.platforms.splunk.validator import SplunkQueryValidator
+    from opentide.platforms.splunk.runner import PARSER_TIMEOUT_WARNING
 
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
-    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
-    service = _connect(splunk, ssl_enabled=False, allow_http_errors=True)
+    found = _check("| makeresults |unreachable", _splunk_tenant(splunk))
 
-    validator._validate_spl_query("| makeresults |unreachable", "slow", "uuid-3", service)
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "True"
-    assert "VALIDATION_ERROR_RAISED" not in os.environ
+    assert found == LiveCheck(warnings=(PARSER_TIMEOUT_WARNING,))
 
 
-def test_query_validator_reads_a_redirected_refusal_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_live_check_reads_a_redirected_refusal_once(
+    splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A redirect that is not a network error is still a refusal, reported from its body.
 
     The body is a stream; reading it once for the network-error check left
     ``json.loads`` an empty one, and the check crashed instead of reporting.
     """
-    from opentide.platforms.splunk.validator import SplunkQueryValidator
+    from opentide.platforms.splunk.runner import SplunkQueryRunner
 
     class Body:
         def __init__(self, data: bytes) -> None:
@@ -215,11 +220,11 @@ def test_query_validator_reads_a_redirected_refusal_once(monkeypatch: pytest.Mon
                 "body": Body(b'{"messages": [{"type": "FATAL", "text": "Unknown command"}]}'),
             }
 
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
+    monkeypatch.setattr(SplunkQueryRunner, "_service", lambda *_a, **_k: Service())
 
-    validator._validate_spl_query("| makeresults |badcommand", "bad", "uuid-4", Service())  # type: ignore[arg-type]
-    assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
+    with pytest.raises(QueryRefused) as refused:
+        _check("| makeresults |badcommand", _splunk_tenant(splunk))
+    assert refused.value.detail == "Unknown command"
 
 
 # --- a proxy's HTML page is named, not parsed as XML ---------------------------

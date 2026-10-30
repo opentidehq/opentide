@@ -29,7 +29,7 @@ Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.
   names (`Objects` vs `objects`), console encoding.
 - **Only in one E2E shard** — run that shard; then `PYTEST_WORKERS=0` on the single test. A
   test that passes serially and fails under xdist leaks global state (registry caches,
-  `os.environ` flags such as `VALIDATION_ERROR_RAISED`, cwd) — fix the leak, don't pin order.
+  `os.environ` flags such as `DEPLOYMENT_ERROR_RAISED`, cwd) — fix the leak, don't pin order.
 - **Coverage gate** — the gate reads the 3.14 cell. Cover the new lines; do not add
   `pragma: no cover` to code that can be tested or widen `[tool.coverage.run].omit`.
 - **Snapshot (syrupy) failures** — update with `--snapshot-update` only when the output

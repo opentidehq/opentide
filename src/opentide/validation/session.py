@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -26,10 +25,7 @@ from opentide.validation.checks.cross_object import (
     check_references_for_object,
 )
 from opentide.validation.checks.kinds import ValidateCheck
-from opentide.validation.disabled_platforms import (
-    STRICT_EXEMPT_WARNINGS,
-    platform_not_enabled_warnings,
-)
+from opentide.validation.disabled_platforms import platform_not_enabled_warnings
 from opentide.validation.errors import (
     attach_yaml_lines,
     is_vocab_shape_duplicate,
@@ -266,12 +262,6 @@ def run_validation(
 
     issues = sort_issues(issues)
     stats["wall_ms"] = round((time.perf_counter() - started) * 1000, 2)
-
-    if issues:
-        os.environ["VALIDATION_ERROR_RAISED"] = "1"
-    # The flag fails --strict. A disabled platform's block is reported, not failed.
-    if any(warning.code not in STRICT_EXEMPT_WARNINGS for warning in warnings):
-        os.environ["VALIDATION_WARNING_RAISED"] = "1"
 
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
 

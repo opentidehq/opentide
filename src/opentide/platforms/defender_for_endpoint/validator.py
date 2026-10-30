@@ -1,17 +1,19 @@
-import os
+"""Live query validation for Defender XDR: each rule's KQL, run for one row on its tenants.
+
+On top of the hunting query's answer, the columns it returns must be the ones a
+custom detection needs (:func:`missing_required_column_groups`).
+"""
+
+from __future__ import annotations
+
 import re
 from collections.abc import Sequence
+from typing import ClassVar
 
-from opentide.core.debug import DebugEnvironment
 from opentide.core.logging import get_logger
-from opentide.core.registry import DetectionPlatforms
-from opentide.deployment import TideDeployment
-from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
-from opentide.models.system_config import ConfigurationModels, batch_tenant
-from opentide.platforms.defender_for_endpoint.client import DefenderForEndpointService
-from opentide.platforms.plugins import QueryValidator, resolve_rules
-from opentide.platforms.transport import reaching_tenant, transport_error
+from opentide.platforms.live_validation import LiveQueryValidator
+from opentide.query.models import LiveCheck, QueryRequest
 
 logger = get_logger(__name__)
 TIMESTAMP_COLUMNS = {"Timestamp", "TimeGenerated"}
@@ -132,79 +134,34 @@ def missing_required_column_groups(query: str, returned_columns: set[str]) -> li
     return missing
 
 
-def returned_schema_columns(response: dict) -> set[str]:
-    returned_columns = {
-        col.get("name") or col.get("Name")
-        for col in response.get("schema", response.get("Schema", []))
-    }
-    returned_columns.discard(None)
-    return returned_columns
+class DefenderForEndpointQueryValidator(LiveQueryValidator):
+    platform: ClassVar[str] = "defender_for_endpoint"
 
-
-class DefenderForEndpointQueryValidator(QueryValidator):
-    def check_query(self, mdr: DetectionRule, service: DefenderForEndpointService):
-        config = mdr.platform_configs().defender_for_endpoint
-        if not config:
-            raise ValueError(f"Missing MDE configuration for {mdr.name}")
-        query = config.query
-        mdr_name = mdr.name
-        mdr_uuid = mdr.metadata.uuid
-        try:
-            response = service.run_hunting_query(query)
-        except Exception as exc:
-            if transport_error(exc) is not None:
-                raise
-            os.environ["VALIDATION_ERROR_RAISED"] = "True"
-            return
-        returned_columns = returned_schema_columns(response)
-        missing = missing_required_column_groups(query, returned_columns)
-        if missing:
-            logger.critical(
-                "defender_xdr_custom_detection_query_is_missing_required_columns",
-                detail=str(f"{mdr_name} ({mdr_uuid})")
-                + " | "
-                + str(
-                    "Detected Defender XDR tables: "
-                    f"{', '.join(sorted(defender_xdr_tables_in_query(query))) or 'none'}"
-                )
-                + " | "
-                + (
-                    "Per Microsoft documentation, Defender XDR custom detection queries must "
-                    "include Timestamp or TimeGenerated, event identity columns for the queried "
-                    "table family, and a supported impacted asset identifier in the output. See: "
-                    "https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules"
-                ),
-            )
-            os.environ["VALIDATION_ERROR_RAISED"] = "True"
-
-    def validate(
-        self,
-        mdr_deployment: Sequence[DetectionRule] | Sequence[str],
-        strategies: RunStrategies | None = None,
-    ) -> None:
-        mdr_deployment = resolve_rules(mdr_deployment)
-        deployment = TideDeployment(
-            deployment=mdr_deployment,
-            system=DetectionPlatforms.DEFENDER_FOR_ENDPOINT,
-            strategies=strategies,
+    def inspect(
+        self, rule: DetectionRule, request: QueryRequest, found: LiveCheck
+    ) -> Sequence[str]:
+        """The custom-detection columns the query's output lacks, as one error."""
+        result = found.result
+        returned = {column.name for column in result.columns} if result is not None else set()
+        missing = missing_required_column_groups(request.text, returned)
+        if not missing:
+            return ()
+        logger.critical(
+            "defender_xdr_custom_detection_query_is_missing_required_columns",
+            detail=f"{rule.name} ({rule.metadata.uuid})"
+            " | "
+            "Detected Defender XDR tables: "
+            + (", ".join(sorted(defender_xdr_tables_in_query(request.text))) or "none")
+            + " | "
+            + (
+                "Per Microsoft documentation, Defender XDR custom detection queries must "
+                "include Timestamp or TimeGenerated, event identity columns for the queried "
+                "table family, and a supported impacted asset identifier in the output. See: "
+                "https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules"
+            ),
         )
-        for tenant_deployment in deployment.rule_deployment:
-            tenant = batch_tenant(
-                tenant_deployment, ConfigurationModels.Systems.DefenderForEndpoint.Tenant
-            )
-            # Fixed Microsoft endpoints: a requests error names the one that failed.
-            graph = "https://graph.microsoft.com"
-            with reaching_tenant("defender_for_endpoint", tenant.name, graph):
-                service = DefenderForEndpointService(tenant)
-                for mdr in tenant_deployment.rules:
-                    self.check_query(mdr=mdr, service=service)
+        return (f"the query's output lacks {'; '.join(missing)}",)
 
 
-def declare():
+def declare() -> DefenderForEndpointQueryValidator:
     return DefenderForEndpointQueryValidator()
-
-
-if __name__ == "__main__" and DebugEnvironment.ENABLED:
-    DefenderForEndpointQueryValidator().validate(
-        DebugEnvironment.MDR_DEPLOYMENT_TEST_UUIDS, (StatusStrategy.PREVIEW,)
-    )

@@ -30,14 +30,18 @@ class SentinelQueryRunner(QueryRunner):
         reject_unsubstituted_placeholders(
             setup.azure_tenant_id, setup.azure_client_id, setup.azure_client_secret, client="Azure"
         )
-        verify = tenant_tls_verify(setup.ssl, platform="sentinel", tenant=tenant.name)
-        credential = ClientSecretCredential(
-            setup.azure_tenant_id,
-            setup.azure_client_id,
-            setup.azure_client_secret,
-            connection_verify=verify,
-        )
-        client = LogsQueryClient(credential=credential, connection_verify=verify)
+
+        def _client() -> LogsQueryClient:
+            verify = tenant_tls_verify(setup.ssl, platform="sentinel", tenant=tenant.name)
+            credential = ClientSecretCredential(
+                setup.azure_tenant_id,
+                setup.azure_client_id,
+                setup.azure_client_secret,
+                connection_verify=verify,
+            )
+            return LogsQueryClient(credential=credential, connection_verify=verify)
+
+        client = self.client(tenant, _client)
         sent = kql_with_limit(request.text, request.limit)
         try:
             response = client.query_workspace(

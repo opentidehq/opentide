@@ -5,10 +5,14 @@ from __future__ import annotations
 import importlib
 import re
 from abc import ABC, abstractmethod
-from typing import ClassVar, cast
+from collections.abc import Callable
+from dataclasses import replace
+from typing import Any, ClassVar, TypeVar, cast
 
 from opentide.models.system_config import SystemConfig
-from opentide.query.models import QueryRequest, QueryResult
+from opentide.query.models import LiveCheck, QueryRequest, QueryResult
+
+_Client = TypeVar("_Client")
 
 #: Platforms with a query runner: every detection platform.
 QUERY_PLATFORMS: frozenset[str] = frozenset(
@@ -46,6 +50,31 @@ class QueryRunner(ABC):
         refuses the query, and lets a transport failure through for the caller
         to report as an unreachable tenant.
         """
+
+    def check(self, request: QueryRequest, tenant: SystemConfig.Tenant) -> LiveCheck:
+        """Whether *tenant* accepts *request*: ``validate query --live``'s question.
+
+        By default a search for one row over ``request.window``; a platform
+        with a parse-only call (Splunk, Carbon Black) asks that instead, so the
+        check runs no search. Raises like :meth:`run`.
+        """
+        return LiveCheck(result=self.run(replace(request, limit=1), tenant))
+
+    def client(
+        self, tenant: SystemConfig.Tenant, build: Callable[[], _Client], *, key: str = ""
+    ) -> _Client:
+        """The client *build* makes for *tenant*, made once per runner.
+
+        A live check sends every rule of a tenant through one runner: one
+        client (one sign-in) serves them all, as one deploy does.
+        """
+        clients: dict[tuple[int, str], tuple[Any, Any]] = self.__dict__.setdefault("_clients", {})
+        cached = clients.get((id(tenant), key))
+        # The tenant is kept with its client: an id is reused once its object is freed.
+        if cached is None or cached[0] is not tenant:
+            cached = (tenant, build())
+            clients[(id(tenant), key)] = cached
+        return cast(_Client, cached[1])
 
 
 class RunnerUnavailable(RuntimeError):

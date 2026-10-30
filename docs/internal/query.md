@@ -17,9 +17,10 @@ Defender, Splunk or Kibana console, read the hits, paste the edit back.
 
 `opentide validate query --live` already authenticated to every tenant, but it
 answered one question — *does the query run?* — and threw the answer away.
-Its validators are rule-centric (they take a deploy plan), signal failure only
-through the `VALIDATION_ERROR_RAISED` process flags, and Splunk and Carbon
-Black only parse. MCP `run_query` was an explicit stub.
+Its validators were rule-centric (they take a deploy plan), signalled failure
+only through the `VALIDATION_ERROR_RAISED` process flags, and Splunk and Carbon
+Black only parsed. MCP `run_query` was an explicit stub. The validators now run
+on these runners: see [`validate query --live`](#validate-query---live).
 
 ## Decisions
 
@@ -106,3 +107,32 @@ Live tenants are not exercised in CI (no credentials there).
 - A results pane in `opentide tui` ([#632](https://github.com/opentidehq/opentide/issues/632)).
 - Sigma-to-filter translation for `opentide query --rule` on HarfangLab, if a
   safe subset proves useful.
+
+## `validate query --live`
+
+[#673](https://github.com/opentidehq/opentide/issues/673) rebuilt the live check
+on the runners. `LiveQueryValidator` (`src/opentide/platforms/live_validation.py`)
+resolves the tenants a deploy sends each rule to (`TideDeployment`), builds the
+rule's queries as deploy sends them (`rule_queries`, `RuleQuery.text_for`), and
+calls `QueryRunner.check` on each, inside `reaching_tenant`. It returns a
+`LiveCheckReport` (`src/opentide/query/check.py`): one `RuleCheck` per rule,
+query and tenant, with its `errors` and `warnings`. The CLI grades the run from
+the report; `DetectionRule.validate_query` reads the same report.
+
+| Runner capability | Platforms |
+|-------------------|-----------|
+| `check` = `run` with `limit=1` over the last minute (`check_window`) | Sentinel, Defender, SentinelOne |
+| `check` = the parse-only call (`search/parser`, `search_validation`) | Splunk, Carbon Black |
+| `preview_rule` (the compiled rule, `invocationCount: 1`) | Elastic |
+
+Elastic keeps the preview of the compiled rule rather than a search of its
+query: the preview checks what a search cannot (threshold, new terms, machine
+learning, the rule schema). Validation-only logic stays in the validators, on
+top of the runner's answer: Defender's custom-detection columns
+(`DefenderForEndpointQueryValidator.inspect`), and Elastic's advisories and
+Elasticsearch checks. A `QueryRefused` is that rule's failure; an unreachable
+tenant, a refused credential and a broken SDK propagate, for the CLI to report
+once. A runner keeps one client per tenant (`QueryRunner.client`), so a
+tenant's rules share a sign-in. CrowdStrike and HarfangLab have no validator:
+`supported: false`.
+

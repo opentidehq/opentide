@@ -13,7 +13,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import structlog
 
@@ -22,6 +22,9 @@ from opentide.models.rule import DetectionRule
 
 # CrowdStrike and HarfangLab ship no validator module: `can_validate is False`.
 from opentide.validation.query_platforms import QUERY_VALIDATION_PLATFORMS
+
+if TYPE_CHECKING:
+    from opentide.query.check import LiveCheckReport
 
 logger = structlog.get_logger("opentide.platforms.plugins")
 
@@ -54,8 +57,12 @@ class QueryValidator(ValidationEngine, ABC):
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
-    ) -> None:
-        """Validate that queries can be executed on the target platform."""
+    ) -> LiveCheckReport:
+        """Check on the platform's tenants that each rule's queries run there.
+
+        Returns one verdict per rule, query and tenant; a refused query is a
+        failed check in the report, not an exception.
+        """
 
 
 def resolve_rules(rules: Sequence[DetectionRule] | Sequence[str]) -> list[DetectionRule]:

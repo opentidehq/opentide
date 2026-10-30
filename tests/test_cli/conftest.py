@@ -209,12 +209,17 @@ def mock_query_validators(monkeypatch: pytest.MonkeyPatch) -> None:
     covers ``--live`` only.
     """
 
+    from opentide.query.check import LiveCheckReport
+
     class _NoOpValidator:
-        def validate(self, **kwargs: object) -> None:
-            return None
+        def __init__(self, platform: str) -> None:
+            self.platform = platform
+
+        def validate(self, **kwargs: object) -> LiveCheckReport:
+            return LiveCheckReport(self.platform)
 
     validators = {
-        platform: _NoOpValidator()
+        platform: _NoOpValidator(platform)
         for platform in (
             "sentinel",
             "defender_for_endpoint",

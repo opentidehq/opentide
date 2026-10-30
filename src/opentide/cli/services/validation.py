@@ -44,11 +44,7 @@ if TYPE_CHECKING:
     from opentide.deployment.git_repo import RuleScope
     from opentide.models.deployment_enums import RunStrategies
     from opentide.platforms.transport import TenantUnreachableError
-
-
-def _reset_validation_env() -> None:
-    os.environ["VALIDATION_ERROR_RAISED"] = ""
-    os.environ["VALIDATION_WARNING_RAISED"] = ""
+    from opentide.query.check import LiveCheckReport
 
 
 def _build_scope(
@@ -255,8 +251,6 @@ def run_validate_check(
 ) -> dict[str, object]:
     """Run a single validation check."""
     report = run_validation(scope=scope or ValidationScope.full(), checks=frozenset({check}))
-    if not report.ok:
-        os.environ["VALIDATION_ERROR_RAISED"] = "1"
     payload = _validate_payload(report, (check.value,))
     payload["check"] = check.value
     payload["status"] = "passed" if report.ok else "failed"
@@ -265,7 +259,6 @@ def run_validate_check(
 
 def run_validate_all(*, scope: ValidationScope | None = None) -> dict[str, object]:
     """Run all default validation checks."""
-    _reset_validation_env()
     report = run_validation(scope=scope or ValidationScope.full())
     results: dict[str, object] = {}
     for name in DEFAULT_CHECK_NAMES:
@@ -311,12 +304,9 @@ def run_validate(
     )
     with reported:
         ctx.apply_environment()
-        _reset_validation_env()
         report = run_validation(
             scope=scope, checks=checks, queries_as_warnings=queries is QueriesMode.warn
         )
-    if not report.ok:
-        os.environ["VALIDATION_ERROR_RAISED"] = "1"
 
     # Both branches build the SAME document. A single check only narrows
     # `checks`; it used to relocate the report to `issues` (so consumers read
@@ -333,9 +323,9 @@ def run_validate(
     result["workspace"] = str(workspace)
     diagnostics = _annotate_report(result, report, workspace)
 
-    from opentide.cli.exit_codes import validation_outcome
+    from opentide.cli.exit_codes import report_outcome
 
-    outcome = validation_outcome(strict=strict)
+    outcome = report_outcome(report, strict=strict)
     result["status"] = "failed" if outcome.failed else "passed"
     if outcome.failed:
         result["message"] = "Validation failed"
@@ -856,7 +846,6 @@ def validate_query_platform(
     from opentide.deployment import make_deploy_plan
     from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 
-    _reset_validation_env()
     failed = {"platform": platform, "mode": "live", "status": "failed", "supported": True}
     removed = removed_plan_error()
     if removed is not None:
@@ -1258,7 +1247,7 @@ def _run_live_validator(
         "queries_per_tenant": dict(reach),
     }
     try:
-        query_validators = cast(dict[str, Any], DeployTide().query_validation_for(platform))
+        query_validators = DeployTide().query_validation_for(platform)
     except ValueError as exc:
         # Config parsing (a retired tenant ``proxy`` key) raises ValueError inside
         # engine load. Returning it keeps the FATAL panel instead of a traceback.
@@ -1283,8 +1272,9 @@ def _run_live_validator(
         system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
     from opentide.cli.ui.progress import Checklist
 
-    validator = cast(Any, query_validators[platform])
+    validator = query_validators[platform]
     early: dict[str, object] | None = None
+    report: LiveCheckReport | None = None
     with (
         Checklist(total=1) as checklist,
         checklist.step(f"{system_name} queries", unit="rule") as step,
@@ -1293,7 +1283,7 @@ def _run_live_validator(
         # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
         # was retried exists on no engine, and its own TypeError hid the real one.
         try:
-            validator.validate(mdr_deployment=rules, strategies=strategies)
+            report = validator.validate(mdr_deployment=rules, strategies=strategies)
         except ModuleNotFoundError as exc:
             early = _missing_sdk_result(platform, exc)
         except TenantUnreachableError as exc:
@@ -1325,13 +1315,16 @@ def _run_live_validator(
             step.status = "skipped" if early.get("status") == "skipped" else "failed"
     if early is not None:
         return early
+    if report is None:  # pragma: no cover -- validate() either returned or raised
+        raise AssertionError("the live check returned no report")
     from opentide.cli.exit_codes import validation_outcome
     from opentide.cli.ui.progress import plural
 
-    outcome = validation_outcome()
+    # A tenant accepts or rejects a query: --strict has nothing more to grade.
+    outcome = validation_outcome(failed=report.failed, warned=report.warned)
     queries = sum(reach.values())
-    # The validators report a rejection as a run flag, not per query, so a
-    # failure counts what was checked rather than what was rejected.
+    # The message counts what was checked; each rejected query was logged with
+    # the tenant's reason as it was checked.
     message = (
         f"Queries rejected on {platform} · {queries} checked on {plural(len(reach), 'tenant')}"
         if outcome.failed

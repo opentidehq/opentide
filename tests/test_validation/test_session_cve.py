@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
+from opentide.cli.exit_codes import report_outcome
 from opentide.validation.checks.kinds import ValidateCheck
 from opentide.validation.issues import ValidationIssue
 from opentide.validation.session import run_validation
@@ -37,12 +35,8 @@ def test_run_validation_includes_cve_check() -> None:
     assert report.issues[0].code == "invalid_cve"
 
 
-def test_run_validation_reports_an_unreachable_cve_lookup_as_a_warning(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The warning lands in ``warnings`` and raises the flag ``--strict`` fails on."""
-    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
+def test_run_validation_reports_an_unreachable_cve_lookup_as_a_warning() -> None:
+    """The warning lands in ``warnings``, which ``--strict`` fails on."""
     index = {
         "objects": {"rule": {}, "objective": {}, "threat": {}},
         "metaschemas": {},
@@ -61,5 +55,6 @@ def test_run_validation_reports_an_unreachable_cve_lookup_as_a_warning(
     assert report.ok
     assert report.issues == []
     assert [w.code for w in report.warnings] == ["cve_lookup_unavailable"]
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "1"
-    assert not os.environ.get("VALIDATION_ERROR_RAISED")
+    outcome = report_outcome(report, strict=True)
+    assert (outcome.failed, outcome.warned) == (True, True)
+    assert report_outcome(report).exit_code == 0

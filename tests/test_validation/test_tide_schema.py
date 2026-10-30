@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
 
 from opentide.validation import tide_schema
@@ -36,7 +35,7 @@ def test_run_prints_stats_when_validation_passes() -> None:
         patch("opentide.validation.tide_schema.is_json_output", return_value=False),
         patch.object(tide_schema.get_stdout_console(), "print") as mock_print,
     ):
-        tide_schema.run()
+        assert tide_schema.run() is report
 
     mock_opentide.initialise.assert_called_once()
 
@@ -45,7 +44,7 @@ def test_run_prints_stats_when_validation_passes() -> None:
     assert "2" in printed
 
 
-def test_run_sets_validation_error_flag_when_issues_present() -> None:
+def test_run_returns_the_failed_report_when_issues_present() -> None:
     report = MagicMock()
     issue = MagicMock()
     issue.object_uuid = "uuid-1"
@@ -64,7 +63,5 @@ def test_run_sets_validation_error_flag_when_issues_present() -> None:
         patch("opentide.validation.tide_schema.is_json_output", return_value=False),
         patch.object(tide_schema.get_stdout_console(), "print") as mock_print,
     ):
-        os.environ.pop("VALIDATION_ERROR_RAISED", None)
-        tide_schema.run()
-        assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
+        assert tide_schema.run() is report
     mock_print.assert_called_once_with("issues", markup=False)

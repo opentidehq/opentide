@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast
@@ -21,11 +20,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from opentide.query.service import QueryRun
-
-#: Environment flags a platform query validator raises on a failure or a warning.
-_ERROR_FLAG = "VALIDATION_ERROR_RAISED"
-_WARNING_FLAG = "VALIDATION_WARNING_RAISED"
-_QUERY_VALIDATION_FLAGS = (_ERROR_FLAG, _WARNING_FLAG)
 
 
 class TideRegistry(Protocol):
@@ -168,32 +162,17 @@ class DetectionRule(TideModel):
             return ValidationResult(
                 ok=False, errors=[f"Platform {platform!r} does not support query validation"]
             )
-        # Platform validators log each refused query and report the verdict
-        # only through these process-wide flags, which the CLI grades after a
-        # run. Clear them for the call so an earlier failure does not fail
-        # this rule, then put back what was there so the caller's run keeps
-        # its own verdict.
-        saved = {flag: os.environ.get(flag) for flag in _QUERY_VALIDATION_FLAGS}
-        for flag in _QUERY_VALIDATION_FLAGS:
-            os.environ[flag] = ""
-        try:
-            # The CLI default: without strategies no tenant is targeted and
-            # nothing would be checked (and most validators required them).
-            # Pass the rule itself: by UUID the validator re-read the registry
-            # copy, not this (possibly edited, possibly unregistered) object.
-            validator.validate([self], DEPLOYABLE_STRATEGIES)
-            failed = bool(os.environ.get(_ERROR_FLAG))
-            warned = bool(os.environ.get(_WARNING_FLAG))
-        finally:
-            for flag, value in saved.items():
-                if value is None:
-                    os.environ.pop(flag, None)
-                else:
-                    os.environ[flag] = value
+        # The CLI default: without strategies no tenant is targeted and nothing
+        # would be checked. Pass the rule itself: by UUID the validator re-read
+        # the registry copy, not this (possibly edited, possibly unregistered)
+        # object.
+        report = validator.validate([self], DEPLOYABLE_STRATEGIES)
         return ValidationResult(
-            ok=not failed,
-            errors=[f"Query validation failed for {platform}"] if failed else [],
-            warnings=[f"Query validation reported warnings for {platform}"] if warned else [],
+            ok=not report.failed,
+            errors=[f"Query validation failed for {platform}"] if report.failed else [],
+            warnings=(
+                [f"Query validation reported warnings for {platform}"] if report.warned else []
+            ),
         )
 
     def run_query(
