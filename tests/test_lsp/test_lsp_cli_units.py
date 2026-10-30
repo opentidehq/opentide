@@ -114,54 +114,6 @@ def test_doctor_checks_the_language_server_catalogs(
     )
 
 
-def test_doctor_says_when_the_committed_datasets_are_stale(tmp_path: Path) -> None:
-    """#695: a datasets.json generated before visibility.toml's names changed."""
-    from opentide.generation.lsp_catalog import CATALOG_DIR, datasets_text, write_catalog
-
-    ctx = DoctorContext(workspace=tmp_path)
-    configuration = tmp_path / ".opentide" / "configurations"
-    configuration.mkdir(parents=True)
-    visibility = configuration / "visibility.toml"
-    source = '[[logsources]]\nname = "l"\ndescription = "d"\nsystem = "sentinel"\n'
-    visibility.write_text(source, encoding="utf-8")
-    write_catalog(tmp_path)
-    assert check_lsp_catalog(ctx)[0].status == "pass"
-
-    visibility.write_text(source + 'tables = ["SecurityEvent"]\n', encoding="utf-8")
-    stale = check_lsp_catalog(ctx)[0]
-    assert (stale.status, stale.fix) == ("warn", "opentide generate schemas")
-    assert stale.message.startswith(".opentide/lsp/catalogs/generated/datasets.json was generated")
-    assert "before the dataset names in visibility.toml changed" in stale.message
-
-    datasets = tmp_path / CATALOG_DIR / "datasets.json"
-    datasets.write_text(datasets_text(tmp_path), encoding="utf-8")
-    assert check_lsp_catalog(ctx)[0].status == "pass"
-    # Another opentide's labels are not a difference.
-    relabelled = json.loads(datasets.read_text(encoding="utf-8")) | {"generator": "elsewhere"}
-    datasets.write_text(json.dumps(relabelled), encoding="utf-8")
-    assert check_lsp_catalog(ctx)[0].status == "pass"
-
-    # A catalog committed before datasets.json existed.
-    datasets.unlink()
-    missing = check_lsp_catalog(ctx)[0]
-    assert missing.status == "warn" and "datasets.json is missing" in missing.message
-    visibility.write_text(source, encoding="utf-8")
-    assert check_lsp_catalog(ctx)[0].status == "pass"
-
-    datasets.write_text("{", encoding="utf-8")
-    assert "datasets.json does not parse" in check_lsp_catalog(ctx)[0].message
-
-
-def test_doctor_needs_no_committed_datasets_without_a_committed_catalog(tmp_path: Path) -> None:
-    configuration = tmp_path / ".opentide" / "configurations"
-    configuration.mkdir(parents=True)
-    (configuration / "visibility.toml").write_text(
-        '[[logsources]]\nname = "l"\ndescription = "d"\nsystem = "splunk"\nindexes = ["main"]\n',
-        encoding="utf-8",
-    )
-    assert check_lsp_catalog(DoctorContext(workspace=tmp_path))[0].status == "pass"
-
-
 # diagnostics ------------------------------------------------------------------
 
 

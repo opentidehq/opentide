@@ -35,20 +35,7 @@ model.model_validate({"platform": {"enabled": True}})
 
 A `visibility.toml` log source may name the datasets it fills: `tables` (`sentinel`, `defender_for_endpoint`), `indexes`, `sourcetypes` and `macros` (`splunk`), `indices`, `data_views` and `ecs` (`elastic`). `VisibilityLogSource` rejects a field its `system` does not read, and an empty name, as a `schema_validation` issue on that field (`("logsources", "0", "tables")`). `opentide.models.visibility.DATASET_FIELDS` maps each system to its fields.
 
-`VisibilityConfig.declared_datasets()` returns the names by `system` and kind, as `datasets.json` holds them: names trimmed, de-duplicated and sorted, empty kinds and systems left out, and `ecs_indices` listing the `indices` of each log source with `ecs = true`. Wildcards (`*_CL`) pass through as written.
-
-```python
-from opentide.models.visibility import VisibilityConfig
-
-config = VisibilityConfig.model_validate(
-    {"logsources": [{"name": "VNet", "description": "Flow logs", "system": "sentinel",
-                     "tables": ["NTANetAnalytics", "*_CL"]}]}
-)
-config.declared_datasets()
-# {"sentinel": {"tables": ["*_CL", "NTANetAnalytics"]}}
-```
-
-`opentide.generation.lsp_catalog.datasets_text(root)` is the `datasets.json` document for a workspace (`{"opentide", "generator", "platforms"}`), and `opentide.analysis.install_workspace_datasets(root)` hands it to the analysis engine for the query checks.
+The analysis engine reads the same fields from the file's text, so nothing is generated in between. `opentide.analysis.install_workspace_visibility(root)` hands it `root/.opentide/configurations/visibility.toml` for the query checks (`opentide validate`, `lint` and the TUI call it); `opentide._native.install_visibility(text)` takes the text directly, and `install_catalog(..., visibility=text)` installs it with the Tide catalogs. `*` in a name matches any run of characters.
 
 ## Exporting the JSON Schemas
 

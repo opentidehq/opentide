@@ -488,13 +488,13 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
         DECLARED_DATASET_CODES,
         ELASTIC_ADVISORY_CODES,
         check_file,
-        install_workspace_datasets,
+        install_workspace_visibility,
         workspace,
     )
     from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
 
     # The datasets visibility.toml declares, as validate and the editor see them.
-    install_workspace_datasets(root)
+    install_workspace_visibility(root)
     space = workspace(root)
     findings: list[dict[str, object]] = []
     for record in records:

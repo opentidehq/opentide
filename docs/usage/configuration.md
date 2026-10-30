@@ -224,7 +224,7 @@ ecs = true   # these indices follow the Elastic Common Schema
 - `*` matches any run of characters (`*_CL`, `logs-azure.*`); the names are passed to the engine as written. Splunk names match regardless of case; tables and Elastic names do not.
 - Names are kept per `system`: a Splunk index never makes a Sentinel table known. A field that does not fit its log source's `system` (`tables` on a `splunk` log source, `ecs` anywhere but `elastic`) fails validation, and so does an empty name.
 - Checking is opt-in per platform and kind: once you name at least one Splunk index, a query that reads an index you did not name gets a warning; a workspace that names no Splunk index never gets one about an index.
-- `opentide generate schemas` writes the names to `.opentide/lsp/catalogs/generated/datasets.json`, for editors that run `opentide-lsp` on its own; commit it with the other catalogs. `opentide doctor` (`lsp_catalog`) warns when the committed copy no longer matches `visibility.toml`. `opentide lsp start` reads the names when it starts: restart the language server after changing them.
+- Nothing is generated: the analysis engine reads `.opentide/configurations/visibility.toml` itself. The language server (`opentide lsp start`, or `opentide-lsp` on its own) reads it again whenever it changes, in the editor before you save or on disk, and checks the open documents again; each CLI run reads it afresh. A quick fix on an undeclared name adds it to the log source of its platform.
 
 ## Lint
 

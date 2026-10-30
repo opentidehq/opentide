@@ -23,4 +23,4 @@ configurations:
 
 ## How to fix
 
-Correct the pattern, or add it to the `indices` (or the data view to `data_views`) of the log source that fills it in `visibility.toml`, then run `opentide generate schemas` so the committed `datasets.json` follows. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Correct the pattern, or add it to the `indices` (or the data view to `data_views`) of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).

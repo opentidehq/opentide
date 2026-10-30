@@ -86,6 +86,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`issues_found`](#issues_found) | The command ran and failed on what it found. |
 | [`kql_control_command_unsupported`](#kql_control_command_unsupported) | A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it. |
 | [`kql_deprecated_function`](#kql_deprecated_function) | The KQL function is a deprecated alias; Microsoft Learn names its replacement. |
+| [`kql_deprecated_operator`](#kql_deprecated_operator) | The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs). |
 | [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | join or summarize runs before project, so it carries every column. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
@@ -165,14 +166,18 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`share_unreachable`](#share_unreachable) | `share` could not authenticate to, or reach, any destination. |
 | [`sharing_config`](#sharing_config) | `sharing.toml` failed validation, so `share` did not run. |
 | [`sharing_directory`](#sharing_directory) | A `sharing/` configuration directory exists; sharing is configured in one `sharing.toml` file. |
+| [`spl_command_without_pipe`](#spl_command_without_pipe) | The query starts with a command name but no |, so Splunk searches for the word instead of running the command. |
 | [`spl_dataset_not_declared`](#spl_dataset_not_declared) | The index, sourcetype or macro is not one the workspace declares in visibility.toml. |
-| [`spl_leading_not`](#spl_leading_not) | A search that starts with NOT scans every event before excluding any. |
+| [`spl_empty_command`](#spl_empty_command) | A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time. |
+| [`spl_empty_stage`](#spl_empty_stage) | A trailing | with no command; Splunk ignores it. |
+| [`spl_leading_not`](#spl_leading_not) | A base search that starts with NOT scans every event before excluding any. |
 | [`spl_parse_error`](#spl_parse_error) | The SPL search does not parse. |
+| [`spl_search_operator`](#spl_search_operator) | A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`. |
 | [`spl_subsearch_truncation`](#spl_subsearch_truncation) | A subsearch is silently truncated at its result or time limit. |
-| [`spl_unknown_command`](#spl_unknown_command) | The SPL command is not in the Splunk Search Reference. |
+| [`spl_unknown_command`](#spl_unknown_command) | The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command. |
 | [`spl_unknown_datamodel`](#spl_unknown_datamodel) | The CIM data model or dataset is not one Splunk CIM defines. |
 | [`spl_unknown_datamodel_field`](#spl_unknown_datamodel_field) | The field is not in the CIM data model the search reads. |
-| [`spl_wildcard`](#spl_wildcard) | A leading or mid-token wildcard cannot use the index and scans every event. |
+| [`spl_wildcard`](#spl_wildcard) | A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event. |
 | [`technique_not_enterprise`](#technique_not_enterprise) | The ATT&CK technique is not in the Enterprise matrix that Elastic maps. |
 | [`template_missing`](#template_missing) | `opentide new` found no generated template or schema for the object type it was asked for. |
 | [`templates_fresh`](#templates_fresh) | Every template this opentide version generates exists and matches what it would write. |
@@ -732,7 +737,7 @@ configurations:
 
 ### How to fix
 
-Correct the pattern, or add it to the `indices` (or the data view to `data_views`) of the log source that fills it in `visibility.toml`, then run `opentide generate schemas` so the committed `datasets.json` follows. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Correct the pattern, or add it to the `indices` (or the data view to `data_views`) of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
 
 ## engine_unavailable
 
@@ -1433,6 +1438,22 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
 
+## kql_deprecated_operator
+
+The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).
+
+Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+
 ## kql_join_summarize_before_project
 
 join or summarize runs before project, so it carries every column.
@@ -1504,7 +1525,7 @@ NTAIpDetails   // not declared for sentinel
 
 ### How to fix
 
-Correct the table name, or add it (or a pattern such as `*_CL`) to the `tables` of the log source that fills it in `visibility.toml`, then run `opentide generate schemas` so the committed `datasets.json` follows. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Correct the table name, or add it (or a pattern such as `*_CL`) to the `tables` of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
 
 ## kql_type_mismatch
 
@@ -1814,17 +1835,12 @@ Change the block's setting the frame points at, then run `opentide lint --check 
 
 opentide can generate the language server's catalog for this workspace, and a committed copy is current.
 
-Reported by `opentide doctor`. `opentide lsp start` and `opentide tui` check objects with the catalog this opentide generates from its models and the workspace's configuration, cached under the user cache directory (`OPENTIDE_CACHE_DIR` overrides it). The copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/` is read only by editors that run the `opentide-lsp` binary on its own, and when generation fails. Warns when the catalog cannot be generated, or when a committed copy does not parse or comes from another opentide version, or when its `datasets.json` no longer matches the tables, indexes and index patterns `visibility.toml` declares (or is missing while `visibility.toml` declares some).
+Reported by `opentide doctor`. `opentide lsp start` and `opentide tui` check objects with the catalog this opentide generates from its models and the workspace's configuration, cached under the user cache directory (`OPENTIDE_CACHE_DIR` overrides it). The copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/` is read only by editors that run the `opentide-lsp` binary on its own, and when generation fails. Warns when the catalog cannot be generated, or when a committed copy does not parse or comes from another opentide version.
 
 ### Example
 
 ```text illustrative
 ! The language-server catalog committed in .opentide/lsp/catalogs/generated is from opentide 0.18.0, not 0.19.0: editors that run opentide-lsp on their own use it · lsp_catalog
-  → opentide generate schemas
-```
-
-```text illustrative
-! .opentide/lsp/catalogs/generated/datasets.json was generated before the dataset names in visibility.toml changed: editors that run opentide-lsp on their own check queries against the old names · lsp_catalog
   → opentide generate schemas
 ```
 
@@ -2743,6 +2759,22 @@ Severity: error. Reported by `opentide validate --check sharing-config` and `ope
 
 Move the blocks into `.opentide/configurations/sharing.toml` and remove the directory.
 
+## spl_command_without_pipe
+
+The query starts with a command name but no |, so Splunk searches for the word instead of running the command.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
 ## spl_dataset_not_declared
 
 The index, sourcetype or macro is not one the workspace declares in visibility.toml.
@@ -2765,11 +2797,43 @@ index=winevents EventCode=4688   # winevents is not declared
 
 ### How to fix
 
-Correct the name, or add it to the `indexes`, `sourcetypes` or `macros` of the log source that fills it in `visibility.toml`, then run `opentide generate schemas` so the committed `datasets.json` follows. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Correct the name, or add it to the `indexes`, `sourcetypes` or `macros` of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+
+## spl_empty_command
+
+A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## spl_empty_stage
+
+A trailing | with no command; Splunk ignores it.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
 
 ## spl_leading_not
 
-A search that starts with NOT scans every event before excluding any.
+A base search that starts with NOT scans every event before excluding any.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -2786,6 +2850,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 ## spl_parse_error
 
 The SPL search does not parse.
+
+Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## spl_search_operator
+
+A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -2817,7 +2897,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## spl_unknown_command
 
-The SPL command is not in the Splunk Search Reference.
+The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -2865,7 +2945,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## spl_wildcard
 
-A leading or mid-token wildcard cannot use the index and scans every event.
+A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event.
 
 Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

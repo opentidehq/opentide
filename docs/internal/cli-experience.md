@@ -363,7 +363,7 @@ What is built, and the APIs the next changes extend.
 | `opentide.cli.services.lsp` | `serve()` (`lsp start`), `run_lsp_check()`. |
 | `opentide.cli.ui.codeframe` (engine) | `QueryHighlighter` (the engine's tokens per file, read once; a `LineStyles` callable), `QUERY_STYLES`; `diagnostic_lines(..., styles=)` colours query findings' source lines, `render_diagnostics` passes one in `human` mode. |
 | `opentide.validation.queries` | The `queries` check: `query_issues(objects, root=)` → `QueryIssues(errors, warnings, queries)`; `ENGINE_SOURCE`. |
-| `opentide.generation.lsp_catalog` | `write_catalog(root)`, `fields_catalog()`, `deprecations_catalog()`; `CATALOG_DIR`. Ported from the language server's `scripts/sync_opentide_schemas.py` (same output for the same models). `datasets_text(root)` is the workspace's `datasets.json` (the names its `visibility.toml` log sources declare, #695): `write_catalog` writes it, `catalog_texts()` (what the engine bundles) does not. |
+| `opentide.generation.lsp_catalog` | `write_catalog(root)`, `fields_catalog()`, `deprecations_catalog()`; `CATALOG_DIR`. Ported from the language server's `scripts/sync_opentide_schemas.py` (same output for the same models). |
 
 A service payload may also carry `_outcome_kind` (`plan`, `warning`) when its status alone does not say how the outcome line reads, and `_next_numbered` for next steps that form a sequence.
 

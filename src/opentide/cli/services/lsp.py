@@ -65,9 +65,7 @@ def _supply_catalogs() -> None:
         catalogs = own_catalog(discover_workspace())
         module = engine()
         module.set_default_catalog(
-            fields=catalogs["fields.json"],
-            deprecations=catalogs["deprecations.json"],
-            datasets=catalogs["datasets.json"],
+            fields=catalogs["fields.json"], deprecations=catalogs["deprecations.json"]
         )
         module.use_host_catalogs()
     except Exception as exc:  # the server still starts, on the workspace's catalogs

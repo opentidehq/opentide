@@ -14,17 +14,11 @@
   checks, so they follow the revision an object names and this workspace's
   vocabulary rather than the snapshot compiled into the engine.
 - ``deprecations.json``: the fields marked deprecated (``deprecated_field``).
-- ``datasets.json``: the tables, indexes, sourcetypes, macros, index patterns
-  and data views the workspace's ``visibility.toml`` log sources declare, by
-  ``system`` (:meth:`opentide.models.visibility.VisibilityConfig.declared_datasets`).
-  The query checks know a declared name, and warn about an undeclared one
-  where the workspace declares names of that kind for the platform. It
-  depends on the workspace alone, so the engine bundles none.
 
 The shapes are the engine's own (``catalogs/tide/generated/`` in
 opentidehq/language-server), and this module is their only generator:
 language-server's ``scripts/sync_opentide_schemas.py`` runs it to write the
-catalogs compiled into the engine (``fields.json`` and ``deprecations.json``)::
+catalogs compiled into the engine::
 
     python -m opentide.generation.lsp_catalog --out catalogs/tide/generated
     python -m opentide.generation.lsp_catalog --out catalogs/tide/generated --check
@@ -54,7 +48,6 @@ logger = get_logger(__name__)
 CATALOG_DIR = Path(".opentide") / "lsp" / "catalogs" / "generated"
 FIELDS_FILE = "fields.json"
 DEPRECATIONS_FILE = "deprecations.json"
-DATASETS_FILE = "datasets.json"
 GENERATOR = "opentide.generation.lsp_catalog"
 #: Keys that say where a catalog came from rather than what it holds.
 LABEL_KEYS = ("opentide", "generator")
@@ -66,27 +59,14 @@ ENUM_DOC_MAX = 40
 
 
 def write_catalog(root: Path) -> list[Path]:
-    """Write ``fields.json``, ``deprecations.json`` and ``datasets.json`` under *root*.
-
-    Returns their paths. ``datasets.json`` holds *root*'s declared datasets,
-    and is written when it declares none too, so a name removed from
-    ``visibility.toml`` leaves the committed copy.
-    """
-    directory = root / CATALOG_DIR
-    paths = write_catalog_to(directory)
-    datasets = directory / DATASETS_FILE
-    datasets.write_text(datasets_text(root), encoding="utf-8")
-    paths.append(datasets)
-    logger.info("exported_lsp_catalogs", path=str(directory))
+    """Write ``fields.json`` and ``deprecations.json`` under *root*; return their paths."""
+    paths = write_catalog_to(root / CATALOG_DIR)
+    logger.info("exported_lsp_catalogs", path=str(root / CATALOG_DIR))
     return paths
 
 
 def catalog_texts() -> dict[str, str]:
-    """``fields.json`` and ``deprecations.json`` as written, by file name.
-
-    The catalogs the engine bundles too; ``datasets.json``, which depends on
-    the workspace alone, is :func:`datasets_text`.
-    """
+    """``fields.json`` and ``deprecations.json`` as written, by file name."""
     import opentide
 
     version = opentide.__version__
@@ -94,40 +74,6 @@ def catalog_texts() -> dict[str, str]:
         FIELDS_FILE: dump(fields_catalog(version)),
         DEPRECATIONS_FILE: dump(deprecations_catalog(version)),
     }
-
-
-def datasets_text(root: Path | None) -> str:
-    """``datasets.json`` for the workspace at *root*, as written.
-
-    No workspace declares nothing. Raises
-    :class:`~opentide.models.configuration.loading.ConfigurationError` when
-    the merged ``visibility.toml`` does not match its model, and
-    :class:`~opentide.core.errors.ConfigFileError` when a configuration
-    file is not TOML.
-    """
-    import opentide
-
-    return dump(datasets_catalog(opentide.__version__, workspace_datasets(root)))
-
-
-def workspace_datasets(root: Path | None) -> dict[str, dict[str, list[str]]]:
-    """The dataset names *root*'s merged ``visibility.toml`` declares, by ``system`` and kind."""
-    if root is None:
-        return {}
-    from opentide.core.files import resolve_configurations
-    from opentide.models.configuration.loading import validate_configuration
-    from opentide.models.visibility import VisibilityConfig
-
-    configuration = resolve_configurations(root).get("visibility")
-    if not configuration:
-        return {}
-    visibility = validate_configuration(VisibilityConfig, configuration, file_key="visibility.toml")
-    return visibility.declared_datasets()
-
-
-def datasets_catalog(version: str, platforms: dict[str, dict[str, list[str]]]) -> dict[str, Any]:
-    """The ``datasets.json`` document for *platforms* (``{system: {kind: [name, ...]}}``)."""
-    return {"opentide": version, "generator": GENERATOR, "platforms": platforms}
 
 
 def dump(payload: dict[str, Any]) -> str:

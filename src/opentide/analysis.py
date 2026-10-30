@@ -54,9 +54,8 @@ ELASTIC_ADVISORY_CODES = frozenset(
 
 #: The engine's warnings about a dataset a query reads that ``visibility.toml``
 #: does not declare, where the workspace declares names of that kind for the
-#: platform (``datasets.json``): ``opentide lint`` reports them with the query
-#: warnings, and their help is their ``opentide explain`` page, not a language
-#: reference.
+#: platform: ``opentide lint`` reports them with the query warnings, and their
+#: help is their ``opentide explain`` page, not a language reference.
 DECLARED_DATASET_CODES = frozenset(
     {
         "kql_table_not_declared",
@@ -64,6 +63,10 @@ DECLARED_DATASET_CODES = frozenset(
         "elastic_dataset_not_declared",
     }
 )
+
+#: The workspace's log sources, whose dataset fields (``tables``, ``indexes``,
+#: ``indices``, ...) the engine reads itself, as the language server does.
+VISIBILITY_CONFIGURATION = ".opentide/configurations/visibility.toml"
 
 #: Where the Elastic tenants' stack versions are read from; the engine matches
 #: this path's ending, so it is passed as written here.
@@ -212,29 +215,20 @@ def install_workspace_catalog(root: Path | None) -> CatalogState:
     :data:`opentide.generation.lsp_catalog.CATALOG_DIR`), else the engine's
     bundled ones; :attr:`CatalogState.problem` says why.
     """
-    from opentide.generation.lsp_catalog import (
-        CATALOG_DIR,
-        DATASETS_FILE,
-        DEPRECATIONS_FILE,
-        FIELDS_FILE,
-    )
+    from opentide.generation.lsp_catalog import CATALOG_DIR, DEPRECATIONS_FILE, FIELDS_FILE
 
     module = engine()
     directory = None if root is None else root / CATALOG_DIR
     present = tuple(
         name
-        for name in (FIELDS_FILE, DEPRECATIONS_FILE, DATASETS_FILE)
+        for name in (FIELDS_FILE, DEPRECATIONS_FILE)
         if directory is not None and (directory / name).is_file()
     )
     own_problem = None
     try:
         own = own_catalog(root)
-        _install(
-            module,
-            fields=own[FIELDS_FILE],
-            deprecations=own[DEPRECATIONS_FILE],
-            datasets=own[DATASETS_FILE],
-        )
+        module.install_catalog(fields=own[FIELDS_FILE], deprecations=own[DEPRECATIONS_FILE])
+        install_workspace_visibility(root)
     except Exception as exc:  # generating the catalog never fails a command
         own_problem = f"opentide's catalog could not be generated: {type(exc).__name__}: {exc}"
         logger.warning("own_catalog_unavailable", problem=own_problem)
@@ -246,6 +240,7 @@ def install_workspace_catalog(root: Path | None) -> CatalogState:
             files=present,
         )
     state = _install_committed_catalog(module, directory)
+    install_workspace_visibility(root)
     if own_problem is None:
         return state
     problem = own_problem if state.problem is None else f"{own_problem}; {state.problem}"
@@ -258,87 +253,56 @@ def install_workspace_catalog(root: Path | None) -> CatalogState:
     )
 
 
-#: The workspace catalog parts last installed (:func:`_install`), so the
-#: query checks can swap the declared datasets without dropping the fields.
-_installed: dict[str, str | None] = {}
-
-
-def _install(
-    module: ModuleType,
-    *,
-    fields: str | None = None,
-    deprecations: str | None = None,
-    datasets: str | None = None,
-) -> None:
-    """``install_catalog`` with these parts, remembered once the engine takes them."""
-    module.install_catalog(fields=fields, deprecations=deprecations, datasets=datasets)
-    _installed.clear()
-    _installed.update(fields=fields, deprecations=deprecations)
-
-
 def reset_catalog() -> None:
     """Back to the engine's bundled catalogs, as at start-up."""
     module = engine()
-    _install(module)
+    module.install_catalog()
     module.set_default_catalog()
 
 
-def install_workspace_datasets(root: Path | None) -> str | None:
-    """Install *root*'s declared datasets (``datasets.json``) for the query checks.
+def install_workspace_visibility(root: Path | None) -> str | None:
+    """Declare the datasets *root*'s ``visibility.toml`` names, for the query checks.
 
-    The query checks of ``opentide validate``, ``opentide validate query`` and
-    ``opentide lint`` then know the tables, indexes and index patterns the
-    workspace's ``visibility.toml`` declares, as the editor and the TUI do
-    (:func:`install_workspace_catalog`). The Tide catalogs in use stay. When
-    the datasets cannot be read (``visibility.toml`` does not match its model:
-    ``opentide validate`` reports that), none are declared, and the reason is
-    returned and logged. Raises :class:`EngineUnavailableError`.
+    The engine reads the file's dataset fields itself (``tables``,
+    ``indexes``, ``sourcetypes``, ``macros``, ``indices``, ``data_views``,
+    ``ecs``), as the language server does when it starts and whenever the file
+    changes, so the query checks of ``opentide validate``, ``opentide validate
+    query``, ``opentide lint`` and the TUI know what the editor knows. The Tide
+    catalogs in use stay. No workspace or no file declares nothing. When the
+    file cannot be read or is not TOML (``opentide validate`` reports that),
+    nothing is declared, and the reason is returned and logged. Raises
+    :class:`EngineUnavailableError`.
     """
-    from opentide.generation.lsp_catalog import datasets_text
-
     module = engine()
+    path = None if root is None else root / VISIBILITY_CONFIGURATION
+    text = None
     problem = None
     try:
-        datasets: str | None = datasets_text(root)
-    except Exception as exc:  # reported by the configuration check; nothing is declared
-        problem = f"the declared datasets could not be read: {type(exc).__name__}: {exc}"
-        logger.warning("declared_datasets_unavailable", problem=problem)
-        datasets = None
-    _install(
-        module,
-        fields=_installed.get("fields"),
-        deprecations=_installed.get("deprecations"),
-        datasets=datasets,
-    )
+        if path is not None and path.is_file():
+            text = path.read_text(encoding="utf-8-sig")
+        module.install_visibility(text)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:  # reported by the configuration check
+        problem = f"the declared datasets could not be read: {exc}"
+        logger.warning("declared_datasets_unavailable", path=str(path), problem=problem)
+        module.install_visibility(None)
     return problem
 
 
 def own_catalog(root: Path | None) -> dict[str, str]:
-    """The catalogs this opentide generates for *root*, by file name.
+    """``fields.json`` and ``deprecations.json`` for *root*, generated by this opentide.
 
-    ``fields.json``, ``deprecations.json`` and ``datasets.json``, as ``opentide
-    generate schemas`` would write them, from the models, the bundled
+    What ``opentide generate schemas`` would write: the models, the bundled
     vocabulary, and the workspace's configuration (log sources, statuses).
-    Generating the first two takes about two seconds, so they are cached
-    under the user cache directory (``OPENTIDE_CACHE_DIR`` overrides it),
-    keyed by a fingerprint of all three; a cache that cannot be written is
-    skipped. ``datasets.json`` reads ``visibility.toml`` alone and takes
-    milliseconds, so it is generated every time and never served stale.
+    Generating takes about two seconds, so the result is cached under the
+    user cache directory (``OPENTIDE_CACHE_DIR`` overrides it), keyed by a
+    fingerprint of all three; a cache that cannot be written is skipped.
     """
-    from opentide.generation.lsp_catalog import (
-        DATASETS_FILE,
-        DEPRECATIONS_FILE,
-        FIELDS_FILE,
-        catalog_texts,
-        datasets_text,
-    )
+    from opentide.generation.lsp_catalog import catalog_texts
 
-    datasets = datasets_text(root)
     directory = _catalog_cache() / _catalog_fingerprint(root)
-    cached = {name: _read(directory / name) for name in (FIELDS_FILE, DEPRECATIONS_FILE)}
+    cached = {name: _read(directory / name) for name in ("fields.json", "deprecations.json")}
     if all(text is not None for text in cached.values()):
-        texts = {name: text for name, text in cached.items() if text is not None}
-        return {**texts, DATASETS_FILE: datasets}
+        return {name: text for name, text in cached.items() if text is not None}
     texts = catalog_texts()
     try:
         directory.mkdir(parents=True, exist_ok=True)
@@ -348,7 +312,7 @@ def own_catalog(root: Path | None) -> dict[str, str]:
             os.replace(partial, directory / name)
     except OSError as exc:
         logger.debug("own_catalog_not_cached", path=str(directory), error=str(exc))
-    return {**texts, DATASETS_FILE: datasets}
+    return texts
 
 
 def _catalog_cache() -> Path:
@@ -393,9 +357,9 @@ def _catalog_fingerprint(root: Path | None) -> str:
 
 def _install_committed_catalog(module: ModuleType, directory: Path | None) -> CatalogState:
     """*directory*'s catalogs when they exist and parse, the bundled ones otherwise."""
-    from opentide.generation.lsp_catalog import DATASETS_FILE, DEPRECATIONS_FILE, FIELDS_FILE
+    from opentide.generation.lsp_catalog import DEPRECATIONS_FILE, FIELDS_FILE
 
-    texts: dict[str, str | None] = {FIELDS_FILE: None, DEPRECATIONS_FILE: None, DATASETS_FILE: None}
+    texts: dict[str, str | None] = {FIELDS_FILE: None, DEPRECATIONS_FILE: None}
     problem = None
     if directory is not None:
         for name in texts:
@@ -408,17 +372,12 @@ def _install_committed_catalog(module: ModuleType, directory: Path | None) -> Ca
     present = tuple(name for name, text in texts.items() if text is not None)
     if problem is None and present:
         try:
-            _install(
-                module,
-                fields=texts[FIELDS_FILE],
-                deprecations=texts[DEPRECATIONS_FILE],
-                datasets=texts[DATASETS_FILE],
-            )
+            module.install_catalog(fields=texts[FIELDS_FILE], deprecations=texts[DEPRECATIONS_FILE])
         except ValueError as exc:
             problem = str(exc)
     if problem is not None or not present:
-        _install(module)
-    # Any file counts: deprecations.json alone is a workspace catalog too.
+        module.install_catalog()
+    # Either file counts: deprecations.json alone is a workspace catalog too.
     source: CatalogSource = "workspace" if present and problem is None else "bundled"
     if problem:
         logger.debug("workspace_catalog_unused", path=str(directory), problem=problem)
@@ -517,7 +476,7 @@ def check_queries(
     unchecked.
     """
     wanted = None if platforms is None else frozenset(platforms)
-    install_workspace_datasets(root)
+    install_workspace_visibility(root)
     space = workspace(root)
     checks: list[QueryCheck] = []
     unreadable: list[UnreadableFile] = []

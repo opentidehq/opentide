@@ -10,8 +10,8 @@ from opentide.models.base import TideField, TideModel
 
 #: The dataset fields a log source may set, by the `system` that reads them.
 #: A field outside its system's list is a validation error, so a Splunk index
-#: never makes a Sentinel table known. Each field is a dataset kind of the
-#: workspace catalog's ``datasets.json`` (:mod:`opentide.generation.lsp_catalog`).
+#: never makes a Sentinel table known. The analysis engine reads the same
+#: fields from the file itself (:func:`opentide.analysis.install_workspace_visibility`).
 DATASET_FIELDS: dict[str, tuple[str, ...]] = {
     "sentinel": ("tables",),
     "defender_for_endpoint": ("tables",),
@@ -29,11 +29,6 @@ DATASET_FIELD_NAMES: tuple[str, ...] = (
     "data_views",
     "ecs",
 )
-
-
-#: The kinds of ``datasets.json``, in the engine's order: the list fields, and
-#: ``ecs_indices``, the `indices` of the log sources marked `ecs = true`.
-DATASET_KINDS: tuple[str, ...] = (*DATASET_FIELD_NAMES[:-1], "ecs_indices")
 
 
 def systems_for(field: str) -> tuple[str, ...]:
@@ -146,34 +141,6 @@ class VisibilityConfig(TideModel):
         schema_extra={"title": "External Detectors"},
     )
     """External detectors that already cover parts of the environment."""
-
-    def declared_datasets(self) -> dict[str, dict[str, list[str]]]:
-        """The dataset names the log sources declare, by `system` and kind.
-
-        The shape of ``datasets.json``'s ``platforms``: each kind
-        (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`,
-        `data_views`, and `ecs_indices`, the `indices` of a log source with
-        `ecs = true`) lists its names trimmed, de-duplicated and sorted.
-        Empty kinds and systems are left out. Wildcards pass through as
-        written: the engine expands them.
-        """
-        found: dict[str, dict[str, set[str]]] = {}
-        for source in self.logsources or []:
-            kinds: dict[str, list[str] | None] = {
-                field: getattr(source, field)
-                for field in DATASET_FIELDS.get(source.system, ())
-                if field != "ecs"
-            }
-            if source.ecs and source.indices:
-                kinds["ecs_indices"] = source.indices
-            for kind, names in kinds.items():
-                cleaned = {name.strip() for name in names or [] if name.strip()}
-                if cleaned:
-                    found.setdefault(source.system, {}).setdefault(kind, set()).update(cleaned)
-        return {
-            system: {kind: sorted(kinds[kind]) for kind in DATASET_KINDS if kind in kinds}
-            for system, kinds in sorted(found.items())
-        }
 
     def unknown_assets(self) -> list[tuple[str, int, str, int, str]]:
         """Asset names a log source or detector uses that `[[assets]]` does not declare.

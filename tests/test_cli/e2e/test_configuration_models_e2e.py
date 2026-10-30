@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -94,22 +93,6 @@ system = "elastic"
 indices = ["logs-endpoint.events.*"]
 ecs = true
 """
-
-
-def test_generate_schemas_writes_the_declared_datasets(invoke_cli, tide_corpus_repo: Path) -> None:
-    """#695: the names visibility.toml declares reach the workspace catalog."""
-    _write(tide_corpus_repo, "visibility.toml", _DECLARING)
-    result = invoke_cli("generate", "schemas")
-    assert result.exit_code == 0, result.stdout + result.stderr
-    catalogs = tide_corpus_repo / ".opentide" / "lsp" / "catalogs" / "generated"
-    datasets = json.loads((catalogs / "datasets.json").read_text(encoding="utf-8"))
-    assert datasets["platforms"] == {
-        "elastic": {
-            "indices": ["logs-endpoint.events.*"],
-            "ecs_indices": ["logs-endpoint.events.*"],
-        },
-        "sentinel": {"tables": ["*_CL", "NTANetAnalytics"]},
-    }
 
 
 def test_a_dataset_field_of_another_system_fails_validate(

@@ -11,10 +11,7 @@ language-server regenerates it and opentide pins that engine::
     uv run python scripts/build/check_engine_catalog.py
 
 The catalog is generated in an empty workspace, as language-server generates
-it, so no workspace configuration (log sources, statuses) enters it. Only
-``fields.json`` and ``deprecations.json`` are compared: ``datasets.json``
-names what one workspace's ``visibility.toml`` declares, and the engine
-bundles none.
+it, so no workspace configuration (log sources, statuses) enters it.
 """
 
 from __future__ import annotations

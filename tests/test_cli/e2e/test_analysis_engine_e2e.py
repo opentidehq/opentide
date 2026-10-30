@@ -161,6 +161,23 @@ def test_a_slow_query_shape_is_lints_finding_not_validates(invoke_cli, tutorial:
     assert "warning[kql_where_not_first]" in human.output, "the queries check runs by default"
 
 
+def test_lint_reads_visibility_toml_on_every_run(invoke_cli, tutorial: Path) -> None:
+    """#695: nothing is generated; an edit to visibility.toml applies at the next run."""
+    _set_query(tutorial / RULE, "NTAIpDetails\n| take 1")
+    visibility = tutorial / ".opentide" / "configurations" / "visibility.toml"
+    source = '[[logsources]]\nname = "Flows"\ndescription = "d"\nsystem = "sentinel"\n'
+
+    def codes() -> list[str]:
+        linted = invoke_cli("lint", "--check", "queries", repo=tutorial)
+        assert linted.exit_code == 0, linted.output
+        return [finding["code"] for finding in parse_cli_json(linted)["findings"]]
+
+    visibility.write_text(source + 'tables = ["NTANetAnalytics"]\n', encoding="utf-8")
+    assert codes() == ["kql_table_not_declared"]
+    visibility.write_text(source + 'tables = ["NTA*"]\n', encoding="utf-8")
+    assert codes() == []
+
+
 def test_lint_leaves_a_rejected_query_to_validate(invoke_cli, tutorial: Path) -> None:
     _set_query(tutorial / RULE, BROKEN)
     payload = parse_cli_json(invoke_cli("lint", "--check", "queries", repo=tutorial))

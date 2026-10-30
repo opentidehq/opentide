@@ -336,11 +336,10 @@ def _table(name: str) -> str:
     return engine().dataset_status("sentinel", "tables", name)
 
 
-def test_the_own_catalog_installs_the_declared_datasets(
+def test_the_workspace_catalog_declares_what_visibility_names(
     tmp_path: Path, bundled_catalog: None
 ) -> None:
-    from opentide.generation.lsp_catalog import DATASETS_FILE, datasets_text
-
+    """The TUI's catalog: the engine reads visibility.toml itself."""
     _declare(tmp_path)
     state = install_workspace_catalog(tmp_path)
     assert state.source == "opentide", state.problem
@@ -351,43 +350,23 @@ def test_the_own_catalog_installs_the_declared_datasets(
     )
     # Opt-in per platform and kind: nothing declared for Splunk.
     assert engine().dataset_status("splunk", "indexes", "main") == "unchecked"
-    # A name added to visibility.toml is known at the next install.
+    # An edit applies at the next install: there is nothing to regenerate.
     _declare(tmp_path, DECLARING.replace('"*_CL"', '"Other"'))
-    assert analysis.own_catalog(tmp_path)[DATASETS_FILE] == datasets_text(tmp_path)
     install_workspace_catalog(tmp_path)
     assert (_table("Other"), _table("Custom_CL")) == ("declared", "undeclared")
     reset_catalog()
     assert _table("Other") == "unchecked"
 
 
-def test_an_invalid_visibility_falls_back_and_says_why(
-    tmp_path: Path, bundled_catalog: None
-) -> None:
-    _declare(tmp_path, DECLARING.replace("tables", "indexes"))
-    state = install_workspace_catalog(tmp_path)
-    assert state.source == "bundled"
-    assert state.problem is not None and "logsources.0.indexes" in state.problem
-
-
-def test_the_committed_datasets_are_installed_when_opentide_cannot_generate(
+def test_the_committed_catalog_keeps_the_declared_datasets(
     tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
-    catalogs = tmp_path / CATALOG_DIR
-    catalogs.mkdir(parents=True)
-    datasets = {"platforms": {"sentinel": {"tables": ["NTANetAnalytics"]}}}
-    (catalogs / "datasets.json").write_text(json.dumps(datasets), encoding="utf-8")
-    state = install_workspace_catalog(tmp_path)
-    assert (state.source, state.files) == ("workspace", ("datasets.json",))
-    assert (_table("NTANetAnalytics"), _table("Other")) == ("declared", "undeclared")
-
-    (catalogs / "datasets.json").write_text("{", encoding="utf-8")
-    state = install_workspace_catalog(tmp_path)
-    assert state.source == "bundled"
-    assert state.problem is not None and "datasets.json" in state.problem
-    assert _table("Other") == "unchecked"
+    _declare(tmp_path)
+    assert install_workspace_catalog(tmp_path).source == "bundled"
+    assert _table("Other") == "undeclared"
 
 
-def test_the_query_checks_install_the_datasets_and_keep_the_fields(
+def test_the_query_checks_read_visibility_and_keep_the_fields(
     tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
     """validate's and lint's query checks see what the editor sees."""
@@ -407,50 +386,42 @@ def test_the_query_checks_install_the_datasets_and_keep_the_fields(
     # The workspace's field catalog stays installed.
     assert engine().catalog_version() == "9.9.9"
 
-    analysis.install_workspace_datasets(None)
+    analysis.install_workspace_visibility(None)
     assert _table("Other") == "unchecked"
     assert _query_findings(tmp_path, []) == []
     assert _table("Other") == "undeclared"
 
 
-def test_an_invalid_visibility_declares_nothing_for_the_query_checks(
+def test_a_visibility_that_is_not_toml_declares_nothing_and_says_why(
     tmp_path: Path, bundled_catalog: None
 ) -> None:
-    _declare(tmp_path)
-    assert analysis.install_workspace_datasets(tmp_path) is None
+    _declare(tmp_path, "\ufeff" + DECLARING)  # a byte order mark is not a problem
+    assert analysis.install_workspace_visibility(tmp_path) is None
     assert _table("Other") == "undeclared"
-    _declare(tmp_path, DECLARING.replace("tables", "macros"))
-    problem = analysis.install_workspace_datasets(tmp_path)
-    assert problem is not None and "logsources.0.macros" in problem
+    _declare(tmp_path, "[[logsources")
+    problem = analysis.install_workspace_visibility(tmp_path)
+    assert problem is not None and problem.startswith("the declared datasets could not be read")
+    assert _table("Other") == "unchecked"
+    # A field of another system is validate's error; the engine ignores it.
+    _declare(tmp_path, DECLARING.replace("tables", "indexes"))
+    assert analysis.install_workspace_visibility(tmp_path) is None
     assert _table("Other") == "unchecked"
 
 
-def test_the_language_server_gets_the_datasets_as_its_default(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bundled_catalog: None
-) -> None:
-    """``opentide lsp start`` hands the server the workspace's datasets too."""
-    from opentide.cli.services import lsp
-    from opentide.generation.lsp_catalog import datasets_text
-
-    _declare(tmp_path)
-    handed: dict[str, str | None] = {}
-
-    def set_default_catalog(**parts: str | None) -> None:
-        handed.update(parts)
-
-    fake = SimpleNamespace(set_default_catalog=set_default_catalog, use_host_catalogs=lambda: None)
-    monkeypatch.setattr(analysis, "engine", lambda: fake)
-    monkeypatch.setattr("opentide.registry.discovery.discover_workspace", lambda: tmp_path)
-    lsp._supply_catalogs()
-    assert handed["datasets"] == datasets_text(tmp_path)
-    monkeypatch.undo()
-
-    # The engine takes them as its default, under any workspace catalog.
-    engine().set_default_catalog(datasets=handed["datasets"])
+def test_the_engine_takes_visibility_text_in_each_layer(bundled_catalog: None) -> None:
+    """``install_visibility`` and ``install_catalog`` declare over ``set_default_catalog``."""
+    engine().set_default_catalog(visibility=DECLARING)
     assert _table("Other") == "undeclared"
-    engine().install_catalog(datasets='{"platforms": {"sentinel": {"tables": ["Other"]}}}')
+    engine().install_visibility(DECLARING.replace('"*_CL"', '"Other"'))
+    assert _table("Other") == "declared"
+    with pytest.raises(ValueError, match=r"^visibility\.toml: "):
+        engine().install_visibility("[[logsources")
     assert _table("Other") == "declared"
     engine().install_catalog()
+    assert _table("Other") == "undeclared"
+    engine().install_catalog(visibility=DECLARING.replace('"*_CL"', '"Other"'))
+    assert _table("Other") == "declared"
+    engine().install_visibility()
     assert _table("Other") == "undeclared"
 
 

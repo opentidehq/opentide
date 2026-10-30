@@ -210,46 +210,57 @@ fn highlight(py: Python<'_>, text: String, language: &str) -> PyResult<Vec<Token
 }
 
 /// Replace the bundled Tide catalogs, for the whole process, with a
-/// workspace's (`fields.json`, `deprecations.json` and `datasets.json` as
-/// `opentide generate schemas` writes them). `None` goes back to the bundled
-/// one; for `datasets`, which the engine does not bundle, to none declared.
-/// Raises `ValueError`, and changes nothing, when a part does not parse.
+/// workspace's (`fields.json`, `deprecations.json` as `opentide generate
+/// schemas` writes them), and declare the datasets of its `visibility.toml`
+/// (the file's text). `None` goes back to the bundled one; for `visibility`,
+/// to none declared. Raises `ValueError`, and changes nothing, when a part
+/// does not parse.
 #[pyfunction]
-#[pyo3(signature = (fields=None, deprecations=None, datasets=None))]
+#[pyo3(signature = (fields=None, deprecations=None, visibility=None))]
 fn install_catalog(
     fields: Option<String>,
     deprecations: Option<String>,
-    datasets: Option<String>,
+    visibility: Option<String>,
 ) -> PyResult<()> {
     opentide_analysis::install_catalog(&Catalog {
         fields,
         deprecations,
-        datasets,
+        visibility,
     })
     .map_err(PyValueError::new_err)
 }
 
 /// Use these catalogs wherever the engine would use its bundled ones (no
 /// workspace catalog installed), for the whole process: the catalogs opentide
-/// generates from its own models and the workspace's `visibility.toml`.
-/// `None` goes back to the bundled one (for `datasets`, to none declared).
-/// Raises `ValueError`, and changes nothing, when a part does not parse.
+/// generates from its own models. `None` goes back to the bundled one (for
+/// `visibility`, to none declared). Raises `ValueError`, and changes nothing,
+/// when a part does not parse.
 #[pyfunction]
-#[pyo3(signature = (fields=None, deprecations=None, datasets=None))]
+#[pyo3(signature = (fields=None, deprecations=None, visibility=None))]
 fn set_default_catalog(
     fields: Option<String>,
     deprecations: Option<String>,
-    datasets: Option<String>,
+    visibility: Option<String>,
 ) -> PyResult<()> {
     opentide_analysis::set_default_catalog(&Catalog {
         fields,
         deprecations,
-        datasets,
+        visibility,
     })
     .map_err(PyValueError::new_err)
 }
 
-/// Every dataset kind, by its key in `visibility.toml` and `datasets.json`.
+/// Declare the datasets a workspace's `visibility.toml` (the file's text)
+/// names, leaving the Tide catalogs in use as they are. `None` declares none.
+/// Raises `ValueError`, and changes nothing, when the text is not TOML.
+#[pyfunction]
+#[pyo3(signature = (text=None))]
+fn install_visibility(text: Option<&str>) -> PyResult<()> {
+    opentide_analysis::install_visibility(text).map_err(PyValueError::new_err)
+}
+
+/// Every dataset kind, by its key (`ecs_indices`: the `indices` of a log
+/// source with `ecs = true`).
 const DATASET_KINDS: [DatasetKind; 7] = [
     DatasetKind::Tables,
     DatasetKind::Indexes,
@@ -264,7 +275,7 @@ fn dataset_kind(key: &str) -> Option<DatasetKind> {
     DATASET_KINDS.into_iter().find(|kind| kind.key() == key)
 }
 
-/// What the declared datasets in use (the workspace's `datasets.json`, else
+/// What the declared datasets in use (the workspace's `visibility.toml`, else
 /// the host's) say about `name` of `kind` (`tables`, `indexes`, ...) on
 /// `platform`: `unchecked` when nothing of that kind is declared for the
 /// platform, else `declared` or `undeclared`. Raises `ValueError` for an
@@ -433,7 +444,7 @@ mod _native {
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
         catalog_version, dataset_status, describe_code, highlight, install_catalog,
-        language_for_path, serve_stdio, set_default_catalog, use_host_catalogs,
+        install_visibility, language_for_path, serve_stdio, set_default_catalog, use_host_catalogs,
     };
 
     #[pymodule_init]

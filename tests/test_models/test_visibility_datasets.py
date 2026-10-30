@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
@@ -87,50 +88,73 @@ def test_configuration_check_reports_the_field_that_does_not_fit() -> None:
     assert "applies to a log source of sentinel, defender_for_endpoint" in issues[0].message
 
 
-def test_no_dataset_fields_declare_nothing() -> None:
-    config = VisibilityConfig.model_validate({"logsources": [_source("splunk")]})
-    assert config.declared_datasets() == {}
+# What the engine declares from the same text: it reads visibility.toml itself.
 
 
-def test_declared_datasets_by_system_and_kind() -> None:
-    config = VisibilityConfig.model_validate(
-        {
-            "logsources": [
-                _source("sentinel", tables=["NTANetAnalytics", "*_CL", " NTANetAnalytics "]),
-                _source("sentinel", tables=["AzureActivity", "*_CL"]),
-                _source("defender_for_endpoint", tables=["DeviceProcessEvents"]),
-                _source(
-                    "splunk",
-                    indexes=["wineventlog"],
-                    sourcetypes=[],
-                    macros=["wineventlog_security"],
-                ),
-                _source(
-                    "elastic",
-                    indices=["custom-ecs-*", "logs-*"],
-                    data_views=["security-solution-default"],
-                    ecs=True,
-                ),
-                _source("elastic", indices=["legacy-*"], ecs=False),
-                _source("elastic", data_views=["only-a-view"], ecs=True),
-                _source("crowdstrike"),
-            ]
-        }
-    )
-    datasets = config.declared_datasets()
-    assert datasets == {
-        "defender_for_endpoint": {"tables": ["DeviceProcessEvents"]},
-        "elastic": {
-            "indices": ["custom-ecs-*", "legacy-*", "logs-*"],
-            "data_views": ["only-a-view", "security-solution-default"],
-            "ecs_indices": ["custom-ecs-*", "logs-*"],
-        },
-        "sentinel": {"tables": ["*_CL", "AzureActivity", "NTANetAnalytics"]},
-        "splunk": {"indexes": ["wineventlog"], "macros": ["wineventlog_security"]},
-    }
-    # Platforms sorted, kinds in the engine's order: the file is stable.
-    assert list(datasets) == sorted(datasets)
-    assert list(datasets["elastic"]) == ["indices", "data_views", "ecs_indices"]
+@pytest.fixture
+def declared() -> Iterator[Callable[[str, str, str], str]]:
+    """``status(platform, kind, name)`` of the declarations installed by the test."""
+    from opentide.analysis import engine
+
+    module = engine()
+    yield lambda platform, kind, name: module.dataset_status(platform, kind, name)
+    module.install_visibility()
+
+
+def _install(text: str) -> None:
+    from opentide.analysis import engine
+
+    engine().install_visibility(text)
+
+
+def test_no_dataset_fields_declare_nothing(declared: Callable[[str, str, str], str]) -> None:
+    _install('[[logsources]]\nname = "l"\ndescription = "d"\nsystem = "splunk"\n')
+    assert declared("splunk", "indexes", "main") == "unchecked"
+
+
+DECLARING = """\
+[[logsources]]
+name = "a"
+description = "d"
+system = "sentinel"
+tables = ["NTANetAnalytics", "*_CL", " AzureActivity "]
+
+[[logsources]]
+name = "b"
+description = "d"
+system = "splunk"
+indexes = ["wineventlog"]
+sourcetypes = []
+
+[[logsources]]
+name = "c"
+description = "d"
+system = "elastic"
+indices = ["custom-ecs-*"]
+ecs = true
+
+[[logsources]]
+name = "e"
+description = "d"
+system = "elastic"
+indices = ["legacy-*"]
+"""
+
+
+def test_the_engine_declares_by_system_and_kind(declared: Callable[[str, str, str], str]) -> None:
+    _install(DECLARING)
+    assert declared("sentinel", "tables", "Custom_CL") == "declared"
+    assert declared("sentinel", "tables", "AzureActivity") == "declared"  # trimmed
+    assert declared("sentinel", "tables", "Other") == "undeclared"
+    # Per system: a Sentinel table declares nothing for Defender.
+    assert declared("defender_for_endpoint", "tables", "NTANetAnalytics") == "unchecked"
+    assert declared("splunk", "indexes", "main") == "undeclared"
+    # Opt-in per kind: an empty list declares none.
+    assert declared("splunk", "sourcetypes", "anything") == "unchecked"
+    # `ecs = true` marks only its own log source's indices.
+    assert declared("elastic", "ecs_indices", "custom-ecs-1") == "declared"
+    assert declared("elastic", "ecs_indices", "legacy-1") == "undeclared"
+    assert declared("elastic", "indices", "legacy-1") == "declared"
 
 
 def _scaffold() -> str:
@@ -140,16 +164,28 @@ def _scaffold() -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_the_scaffold_declares_nothing() -> None:
+def test_the_scaffold_declares_nothing(declared: Callable[[str, str, str], str]) -> None:
     """The bundled file is every workspace's default: its examples stay commented out."""
-    config = VisibilityConfig.model_validate(tomllib.loads(_scaffold()))
-    assert config.declared_datasets() == {}
+    VisibilityConfig.model_validate(tomllib.loads(_scaffold()))
+    _install(_scaffold())
+    assert declared("splunk", "indexes", "main") == "unchecked"
 
 
-def test_the_scaffold_examples_are_valid_one_per_platform() -> None:
+def test_the_scaffold_examples_are_valid_one_per_platform(
+    declared: Callable[[str, str, str], str],
+) -> None:
     lines = _scaffold().splitlines()
     start = next(index for index, line in enumerate(lines) if line == "# [[logsources]]")
     example = "\n".join(line.removeprefix("#").removeprefix(" ") for line in lines[start:])
-    config = VisibilityConfig.model_validate(tomllib.loads(example))
-    assert set(config.declared_datasets()) == {"sentinel", "splunk", "elastic"}
-    assert set(config.declared_datasets()["elastic"]) == {"indices", "data_views", "ecs_indices"}
+    VisibilityConfig.model_validate(tomllib.loads(example))
+    _install(example)
+    for platform, kind in (
+        ("sentinel", "tables"),
+        ("splunk", "indexes"),
+        ("splunk", "sourcetypes"),
+        ("splunk", "macros"),
+        ("elastic", "indices"),
+        ("elastic", "data_views"),
+        ("elastic", "ecs_indices"),
+    ):
+        assert declared(platform, kind, "not-an-example") == "undeclared", (platform, kind)

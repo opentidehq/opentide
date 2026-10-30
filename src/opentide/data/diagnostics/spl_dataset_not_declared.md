@@ -20,4 +20,4 @@ index=winevents EventCode=4688   # winevents is not declared
 
 ## How to fix
 
-Correct the name, or add it to the `indexes`, `sourcetypes` or `macros` of the log source that fills it in `visibility.toml`, then run `opentide generate schemas` so the committed `datasets.json` follows. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Correct the name, or add it to the `indexes`, `sourcetypes` or `macros` of the log source that fills it in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).

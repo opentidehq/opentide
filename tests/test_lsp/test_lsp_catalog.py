@@ -11,48 +11,15 @@ import pytest
 from opentide.analysis import engine, install_workspace_catalog, reset_catalog
 from opentide.generation.lsp_catalog import (
     CATALOG_DIR,
-    DATASETS_FILE,
     DEPRECATIONS_FILE,
     FIELDS_FILE,
     catalog_differences,
     catalog_texts,
-    datasets_text,
     deprecations_catalog,
     fields_catalog,
     main,
     write_catalog,
 )
-
-DECLARING = """\
-[[logsources]]
-name = "VNet flow logs"
-description = "Traffic analytics."
-system = "sentinel"
-tables = ["NTANetAnalytics", "*_CL"]
-
-[[logsources]]
-name = "Security events"
-description = "Domain controllers."
-system = "splunk"
-indexes = ["wineventlog"]
-sourcetypes = ["WinEventLog:Security"]
-
-[[logsources]]
-name = "Endpoint"
-description = "ECS endpoint data."
-system = "elastic"
-indices = ["custom-ecs-*"]
-ecs = true
-"""
-
-
-def declare(root: Path, text: str = DECLARING) -> Path:
-    """Write *text* as *root*'s ``visibility.toml``; return its path."""
-    configuration = root / ".opentide" / "configurations"
-    configuration.mkdir(parents=True, exist_ok=True)
-    path = configuration / "visibility.toml"
-    path.write_text(text, encoding="utf-8")
-    return path
 
 
 @pytest.fixture(scope="module")
@@ -129,7 +96,6 @@ def test_the_written_catalogs_are_what_the_engine_installs(
     assert written == [
         tmp_path / CATALOG_DIR / FIELDS_FILE,
         tmp_path / CATALOG_DIR / DEPRECATIONS_FILE,
-        tmp_path / CATALOG_DIR / DATASETS_FILE,
     ]
     import opentide
 
@@ -168,7 +134,6 @@ def test_the_module_writes_and_checks_a_directory(
     assert "fields.json: missing" in capsys.readouterr().err
     assert main(["--out", str(out)]) == 0
     assert (out / FIELDS_FILE).read_text(encoding="utf-8") == catalog_texts()[FIELDS_FILE]
-    assert not (out / DATASETS_FILE).exists()
     assert main(["--out", str(out), "--check"]) == 0
     assert "match opentide's models" in capsys.readouterr().out
 
@@ -278,45 +243,3 @@ def test_references_are_not_a_snapshot_of_uuids(tmp_path: Path) -> None:
         clear_runtime_caches()
     row = _field(catalog, "rule::1.1", "detection_model")
     assert (row["ref"], row["enum"]) == ("objective", [])
-
-
-def test_datasets_json_names_what_visibility_declares(tmp_path: Path) -> None:
-    """#695: the shape the engine reads, per platform, ``ecs_indices`` apart."""
-    import opentide
-
-    declare(tmp_path)
-    [*_, written] = write_catalog(tmp_path)
-    assert written == tmp_path / CATALOG_DIR / DATASETS_FILE
-    assert json.loads(written.read_text(encoding="utf-8")) == {
-        "opentide": opentide.__version__,
-        "generator": "opentide.generation.lsp_catalog",
-        "platforms": {
-            "elastic": {"indices": ["custom-ecs-*"], "ecs_indices": ["custom-ecs-*"]},
-            "sentinel": {"tables": ["*_CL", "NTANetAnalytics"]},
-            "splunk": {"indexes": ["wineventlog"], "sourcetypes": ["WinEventLog:Security"]},
-        },
-    }
-    # Stable bytes: the same workspace writes the same file.
-    assert written.read_text(encoding="utf-8") == datasets_text(tmp_path)
-
-
-def test_a_workspace_that_declares_nothing_writes_no_names(tmp_path: Path) -> None:
-    for root in (tmp_path, None):
-        assert json.loads(datasets_text(root))["platforms"] == {}
-    declare(tmp_path, DECLARING)
-    declare(tmp_path, '[[logsources]]\nname = "l"\ndescription = "d"\nsystem = "splunk"\n')
-    assert json.loads(datasets_text(tmp_path))["platforms"] == {}
-
-
-def test_an_invalid_visibility_raises(tmp_path: Path) -> None:
-    from opentide.models.configuration.loading import ConfigurationError
-
-    declare(tmp_path, DECLARING.replace('indexes = ["wineventlog"]', 'tables = ["wineventlog"]'))
-    with pytest.raises(ConfigurationError, match=r"logsources\.1\.tables"):
-        datasets_text(tmp_path)
-
-
-def test_the_engines_catalogs_carry_no_datasets() -> None:
-    """language-server's sync script and the engine-catalog gate read these two
-    files only: the engine bundles no workspace's datasets."""
-    assert set(catalog_texts()) == {FIELDS_FILE, DEPRECATIONS_FILE}
