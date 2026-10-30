@@ -2109,6 +2109,114 @@ threat:
             diag.field_path.as_deref(),
             Some(["threat".to_string(), "impact".to_string()].as_slice())
         );
+        assert_eq!(diag.suggestion.as_deref(), Some("- Data Breach"));
+    }
+
+    fn threat_src(threat_body: &str) -> String {
+        format!(
+            r#"
+name: Simulated Actor
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000001
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+{threat_body}"#
+        )
+    }
+
+    fn analyze_threat(threat_body: &str) -> TideAnalyzeResult {
+        let src = threat_src(threat_body);
+        analyze(AnalyzeInput {
+            path: "objects/threats/t.yaml",
+            source: &src,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+    }
+
+    #[test]
+    fn empty_impact_list_fails_min_items() {
+        let r = analyze_threat(
+            "  severity: Substantial incident\n  impact: []\n  leverage:\n    - Information Gathering\n  viability: Likely\n",
+        );
+        let diag = r
+            .diagnostics
+            .iter()
+            .find(|d| {
+                d.field_path.as_deref()
+                    == Some(["threat".to_string(), "impact".to_string()].as_slice())
+            })
+            .expect("empty impact");
+        assert_eq!(diag.code, codes::SCHEMA_VALIDATION);
+        assert!(
+            diag.message.contains("threat.impact") && diag.message.contains("at least 1"),
+            "{}",
+            diag.message
+        );
+    }
+
+    #[test]
+    fn unknown_leverage_item_is_vocab_unknown() {
+        let r = analyze_threat(
+            "  severity: Substantial incident\n  impact:\n    - Data Breach\n  leverage:\n    - Not A Real Leverage\n  viability: Likely\n",
+        );
+        let diag = r
+            .diagnostics
+            .iter()
+            .find(|d| {
+                d.code == codes::VOCAB_UNKNOWN
+                    && d.field_path.as_deref()
+                        == Some(["threat".to_string(), "leverage".to_string()].as_slice())
+            })
+            .expect("unknown leverage");
+        assert!(
+            diag.message.contains("Not A Real Leverage"),
+            "{}",
+            diag.message
+        );
+    }
+
+    #[test]
+    fn leverage_string_must_be_a_list() {
+        let r = analyze_threat(
+            "  severity: Substantial incident\n  impact:\n    - Data Breach\n  leverage: Information Gathering\n  viability: Likely\n",
+        );
+        let diag = r
+            .diagnostics
+            .iter()
+            .find(|d| {
+                d.field_path.as_deref()
+                    == Some(["threat".to_string(), "leverage".to_string()].as_slice())
+            })
+            .expect("scalar leverage");
+        assert_eq!(diag.code, codes::SCHEMA_VALIDATION);
+        assert!(diag.message.contains("YAML list"), "{}", diag.message);
+        assert_eq!(diag.suggestion.as_deref(), Some("- Information Gathering"));
+    }
+
+    #[test]
+    fn valid_threat_lists_are_not_schema_errors() {
+        let r = analyze_threat(
+            "  severity: Substantial incident\n  impact:\n    - Data Breach\n  leverage:\n    - Information Gathering\n  viability: Likely\n",
+        );
+        let bad = ["impact", "leverage", "severity", "viability"];
+        assert!(
+            !r.diagnostics.iter().any(|d| {
+                matches!(
+                    d.code.as_str(),
+                    codes::SCHEMA_VALIDATION | codes::VOCAB_UNKNOWN
+                ) && d.field_path.as_ref().is_some_and(|path| {
+                    path.len() == 2 && path[0] == "threat" && bad.contains(&path[1].as_str())
+                })
+            }),
+            "{:?}",
+            r.diagnostics
+        );
     }
 
     #[test]

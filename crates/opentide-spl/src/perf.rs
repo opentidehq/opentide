@@ -631,6 +631,112 @@ mod tests {
     }
 
     #[test]
+    fn quoted_wildcards_macros_and_parenthesized_not() {
+        let quoted = warnings("process=\"*fail\"");
+        let wild = quoted
+            .iter()
+            .filter(|d| d.code == codes::SPL_WILDCARD)
+            .collect::<Vec<_>>();
+        assert_eq!(wild.len(), 1, "{quoted:?}");
+        assert!(
+            wild[0].message.contains("leading wildcard") && wild[0].message.contains("*fail"),
+            "{}",
+            wild[0].message
+        );
+        assert!(!has("process=\"fail*\"", codes::SPL_WILDCARD));
+        assert!(!has("index=main `my_search(*fail)`", codes::SPL_WILDCARD));
+        let both = warnings("*fail OR f*il");
+        assert_eq!(
+            both.iter()
+                .filter(|d| d.code == codes::SPL_WILDCARD)
+                .count(),
+            2,
+            "{both:?}"
+        );
+
+        for src in [
+            "search (NOT status=200)",
+            "search ((NOT status=200))",
+            "search ( ```hint``` NOT status=200 )",
+            "(NOT status=200)",
+        ] {
+            assert!(
+                has(src, codes::SPL_LEADING_NOT),
+                "parenthesized leading NOT should warn: {src}"
+            );
+        }
+    }
+
+    #[test]
+    fn quoted_pipe_does_not_invent_a_command_and_join_case_is_kept() {
+        let quoted = warnings("\"foo|*fail\" | head 1");
+        assert_eq!(
+            quoted
+                .iter()
+                .filter(|d| d.code == codes::SPL_WILDCARD)
+                .count(),
+            1,
+            "{quoted:?}"
+        );
+        assert!(
+            quoted.iter().any(|d| d.code == codes::SPL_WILDCARD
+                && d.message.contains("mid-token wildcard")
+                && d.message.contains("foo|*fail")),
+            "{quoted:?}"
+        );
+        assert!(
+            !quoted
+                .iter()
+                .any(|d| d.code == codes::SPL_SUBSEARCH_TRUNCATION),
+            "a pipe inside quotes must not become a command: {quoted:?}"
+        );
+
+        let join = warnings("index=main | JOIN host [ search index=other ]");
+        let found = join
+            .iter()
+            .find(|d| d.code == codes::SPL_SUBSEARCH_TRUNCATION)
+            .expect("JOIN warning");
+        assert!(found.message.contains("`JOIN`"), "{}", found.message);
+        assert!(found.message.contains("50,000"));
+        assert_eq!(
+            join.iter()
+                .filter(|d| d.code == codes::SPL_SUBSEARCH_TRUNCATION)
+                .count(),
+            1,
+            "{join:?}"
+        );
+
+        let txn = warnings("index=main | TRANSACTION user");
+        let found = txn
+            .iter()
+            .find(|d| d.code == codes::SPL_SUBSEARCH_TRUNCATION)
+            .expect("TRANSACTION warning");
+        assert!(found.message.contains("maxopentxn"), "{}", found.message);
+        assert!(
+            found.message.contains(TRANSACTION_CITE),
+            "{}",
+            found.message
+        );
+        assert!(!found.message.contains("50,000"), "{}", found.message);
+
+        let inner = warnings("index=main | join host [ search *fail ]");
+        assert!(
+            inner
+                .iter()
+                .any(|d| d.code == codes::SPL_SUBSEARCH_TRUNCATION),
+            "{inner:?}"
+        );
+        assert_eq!(
+            inner
+                .iter()
+                .filter(|d| d.code == codes::SPL_WILDCARD)
+                .count(),
+            1,
+            "inner wildcard must be reported once: {inner:?}"
+        );
+    }
+
+    #[test]
     fn ordinary_search_has_no_perf_warning() {
         let src = "index=main | stats count by host | head 1";
         assert!(warnings(src).is_empty(), "{:?}", warnings(src));

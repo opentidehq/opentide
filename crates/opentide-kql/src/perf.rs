@@ -693,4 +693,82 @@ SecurityEvent
             r.diagnostics
         );
     }
+
+    #[test]
+    fn late_filter_is_named_and_a_leading_filter_is_clean() {
+        let src = "SecurityEvent | extend Computer = tolower(Computer) | filter EventID == 4688";
+        let found = warnings(src)
+            .into_iter()
+            .find(|d| d.code == codes::KQL_WHERE_NOT_FIRST)
+            .expect("filter warning");
+        assert!(found.message.contains("`filter`"), "{}", found.message);
+        assert!(found.message.contains(CITE));
+        assert!(!has(
+            "SecurityEvent | filter EventID == 4688 | extend Computer = Computer",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+    }
+
+    #[test]
+    fn project_keep_and_away_narrow_but_project_rename_does_not() {
+        assert!(!has(
+            "SecurityEvent | project-keep Computer, EventID | join kind=inner SecurityAlert on EventID | project Computer",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        assert!(!has(
+            "SecurityEvent | where EventID == 4688 | project-away CommandLine | summarize count() by Computer | project Computer",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        assert!(has(
+            "SecurityEvent | where EventID == 4688 | summarize count() by Computer | project-away EventID",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+        assert!(has(
+            "SecurityEvent | project-rename Host = Computer | join kind=inner SecurityAlert on EventID | project Host",
+            codes::KQL_JOIN_SUMMARIZE_BEFORE_PROJECT
+        ));
+    }
+
+    #[test]
+    fn comments_and_a_later_statement_do_not_leak_scope() {
+        let commented = "// search \"error\"\n/* union * */\nSecurityEvent | take 1";
+        assert!(
+            warnings(commented).is_empty(),
+            "comments must not warn: {:?}",
+            warnings(commented)
+        );
+        assert!(!has(
+            "SecurityEvent\n// note\n| where EventID == 4688",
+            codes::KQL_WHERE_NOT_FIRST
+        ));
+        assert!(has(
+            "SecurityEvent | take 1;\nsearch \"error\"",
+            codes::KQL_UNSCOPED_SEARCH
+        ));
+        assert!(has(
+            "search kind=case_sensitive \"error\"",
+            codes::KQL_UNSCOPED_SEARCH
+        ));
+        assert!(
+            has("search kind=simple", codes::KQL_UNSCOPED_SEARCH),
+            "a kind value is not a table scope"
+        );
+        assert!(!has(
+            "search kind=case_sensitive in (SecurityEvent) \"error\"",
+            codes::KQL_UNSCOPED_SEARCH
+        ));
+        assert!(!has(
+            "search in (SecurityEvent) *",
+            codes::KQL_UNSCOPED_SEARCH
+        ));
+        assert!(!has(
+            "search in (SecurityEvent) *",
+            codes::KQL_WILDCARD_TABLE
+        ));
+        assert!(has("union withsource=Src *", codes::KQL_UNSCOPED_UNION));
+        assert!(!has(
+            "union (SecurityEvent, SecurityAlert)",
+            codes::KQL_UNSCOPED_UNION
+        ));
+    }
 }
