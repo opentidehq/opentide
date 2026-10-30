@@ -16,6 +16,7 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.join | `join_operator` | `join_operator__valid` | `keyword` |
 | kql.union | `union_operator` | `union_operator__valid` | `keyword` |
 | kql.parse | `parse_operator` | `parse_operator__valid` | `keyword` |
+| kql.parse-where | `parse_where_operator` | `parse_where_operator__valid`, `parse_where_operator__invalid` | `keyword` |
 | kql.lookup | `lookup_operator` | `lookup_operator__valid` | `keyword` |
 | kql.take | `take_operator` | `take_operator__valid` | `keyword` |
 | kql.limit | `limit_operator` | `limit_operator__valid` | `keyword` |
@@ -26,6 +27,7 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.pipe | `"\|"` | `take_operator__valid` | `operator.pipe` |
 | kql.function | `function_call` | `function_call__valid` | `function` |
 | kql.named-argument | `named_argument` | `named_argument__valid` | `variable` |
+| kql.quoted-identifier | `quoted_identifier` | `quoted_identifier__valid`, `quoted_identifier__invalid` | `variable` |
 | kql.string | `string` | `string__valid` | `string` |
 | kql.number | `number` | `number__valid` | `number` |
 | kql.comment | `comment` | `comment__valid` | `comment` |

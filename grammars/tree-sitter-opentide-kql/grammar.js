@@ -20,7 +20,7 @@ module.exports = grammar({
   // `extend` is an expression or a one-name tuple until `=` follows.
   conflicts: ($) => [
     [$.primary_expression, $.tabular_primary],
-    [$.primary_expression, $.assignment],
+    [$.primary_expression, $._column_name],
   ],
 
   rules: {
@@ -266,7 +266,7 @@ module.exports = grammar({
       seq("project", field("columns", commaSep1($.project_item))),
 
     project_away_operator: ($) =>
-      seq("project-away", field("columns", commaSep1($.identifier))),
+      seq("project-away", field("columns", commaSep1($._column_name))),
 
     project_rename_operator: ($) =>
       seq("project-rename", field("renames", commaSep1($.rename_item))),
@@ -323,14 +323,21 @@ module.exports = grammar({
     parse_column: ($) =>
       prec.right(seq($.identifier, optional(seq(":", $.type)))),
 
+    // `parse-where P with * "a" T`: parse, keeping only the rows that match.
     parse_where_operator: ($) =>
-      seq("parse-where", optional(field("args", $.expression))),
+      seq(
+        "parse-where",
+        repeat($.operator_option),
+        field("column", $.expression),
+        "with",
+        field("pattern", repeat1(choice($.string, "*", $.parse_column))),
+      ),
 
     parse_kv_operator: ($) =>
       seq("parse-kv", optional(field("args", $.expression))),
 
     project_keep_operator: ($) =>
-      seq("project-keep", field("columns", commaSep1($.identifier))),
+      seq("project-keep", field("columns", commaSep1($._column_name))),
 
     // `project-reorder a, b desc`: a column may carry the order its group is sorted in.
     project_reorder_operator: ($) =>
@@ -339,7 +346,7 @@ module.exports = grammar({
         field(
           "columns",
           commaSep1(
-            seq($.identifier, optional(choice("asc", "desc", "granny-asc", "granny-desc"))),
+            seq($._column_name, optional(choice("asc", "desc", "granny-asc", "granny-desc"))),
           ),
         ),
       ),
@@ -555,8 +562,13 @@ module.exports = grammar({
         optional(seq("nulls", choice("first", "last"))),
       ),
 
+    // `distinct a, b`, `distinct *`, or named expressions (`distinct b = tolower(a)`).
     distinct_operator: ($) =>
-      seq("distinct", optional(field("columns", commaSep1($.identifier)))),
+      seq(
+        "distinct",
+        repeat($.hint_option),
+        optional(field("columns", choice($.star, commaSep1($.column_item)))),
+      ),
 
     render_operator: ($) => seq("render", field("kind", $.identifier)),
 
@@ -568,13 +580,13 @@ module.exports = grammar({
     project_item: ($) => choice($.assignment, $.expression),
 
     rename_item: ($) =>
-      seq(field("new", $.identifier), "=", field("old", $.identifier)),
+      seq(field("new", $._column_name), "=", field("old", $._column_name)),
 
     // `(Anomalies, Score, Baseline) = series_decompose_anomalies(...)` names
     // every column a multi-value function returns.
     assignment: ($) =>
       seq(
-        field("name", choice($.identifier, seq("(", commaSep1($.identifier), ")"))),
+        field("name", choice($._column_name, seq("(", commaSep1($._column_name), ")"))),
         "=",
         field("value", $.expression),
       ),
@@ -689,6 +701,7 @@ module.exports = grammar({
       choice(
         $.function_call,
         $.identifier,
+        $.quoted_identifier,
         $.string,
         $.number,
         $.boolean,
@@ -705,10 +718,17 @@ module.exports = grammar({
     member_expression: ($) =>
       prec(11, seq(field("object", $.primary_expression), ".", field("member", $.identifier))),
 
+    // `a[0]`, `d["k"]`, and the dotted form `d.["a.b"]`, `d.[0]`.
     index_expression: ($) =>
       prec(
         11,
-        seq(field("object", $.primary_expression), "[", field("index", $.expression), "]"),
+        seq(
+          field("object", $.primary_expression),
+          optional("."),
+          "[",
+          field("index", $.expression),
+          "]",
+        ),
       ),
 
     function_call: ($) =>
@@ -784,13 +804,30 @@ module.exports = grammar({
     // `$left` / `$right` in join conditions
     identifier: (_) => /\$?[A-Za-z_][A-Za-z0-9_]*/,
 
+    // `['Display Name']`, `["c"]`: a name that is not a plain identifier.
+    quoted_identifier: (_) =>
+      token(
+        seq(
+          "[",
+          choice(
+            seq("'", repeat(choice(/[^'\\\r\n]/, /\\./)), "'"),
+            seq('"', repeat(choice(/[^"\\\r\n]/, /\\./)), '"'),
+          ),
+          "]",
+        ),
+      ),
+
+    // A column name where one is written: plain or quoted.
+    _column_name: ($) => choice($.identifier, $.quoted_identifier),
+
     string: (_) =>
       token(
         choice(
           seq('"', repeat(choice(/[^"\\]/, /\\./)), '"'),
           seq("'", repeat(choice(/[^'\\]/, /\\./)), "'"),
-          seq("@\"", repeat(/[^"]/), '"'),
-          seq("@'", repeat(/[^']/), "'"),
+          // Verbatim: no escapes, and a doubled quote is one quote (`@"a""b"`).
+          seq("@\"", repeat(choice(/[^"]/, '""')), '"'),
+          seq("@'", repeat(choice(/[^']/, "''")), "'"),
         ),
       ),
 

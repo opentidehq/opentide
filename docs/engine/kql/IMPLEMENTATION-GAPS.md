@@ -18,7 +18,7 @@ Detection-critical columns for SecurityEvent, SigninLogs, AuditLogs, Defender en
 
 **Missing primary operators vs inventory:** none.
 
-**Implemented slow-query warnings** (rules: [`DESIGN.md`](DESIGN.md#slow-query-warnings)): `search *` → `kql_unscoped_search`, `union *` → `kql_unscoped_union`, a `*` table → `kql_wildcard_table`, late `where` → `kql_where_not_first`, `join` / `summarize` before a later `project` → `kql_join_summarize_before_project`. They are warnings about cost, not a Sentinel legality check.
+**Implemented slow-query warnings** (rules: [`DESIGN.md`](DESIGN.md#slow-query-warnings)): `search *` → `kql_unscoped_search`, `union *` → `kql_unscoped_union`, a `*` table → `kql_wildcard_table`, late `where` → `kql_where_not_first`, a wide `join` before a later `project` → `kql_join_summarize_before_project`. They are warnings about cost, not a Sentinel legality check.
 
 **SHOULD — still not emitted:**
 

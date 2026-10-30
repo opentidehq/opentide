@@ -52,6 +52,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
           }
         ]
       },
@@ -189,11 +193,25 @@
             "named": false
           },
           {
-            "type": "identifier",
+            "type": "column_item",
+            "named": true
+          },
+          {
+            "type": "star",
             "named": true
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "hint_option",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1358,16 +1376,44 @@
     "type": "parse_where_operator",
     "named": true,
     "fields": {
-      "args": {
+      "column": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "expression",
             "named": true
           }
         ]
+      },
+      "pattern": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "*",
+            "named": false
+          },
+          {
+            "type": "parse_column",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "operator_option",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1475,6 +1521,10 @@
           "named": true
         },
         {
+          "type": "quoted_identifier",
+          "named": true
+        },
+        {
           "type": "string",
           "named": true
         },
@@ -1523,6 +1573,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
           }
         ]
       }
@@ -1561,6 +1615,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
             "named": true
           }
         ]
@@ -1637,6 +1695,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
             "named": true
           }
         ]
@@ -1731,6 +1793,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
           }
         ]
       },
@@ -1740,6 +1806,10 @@
         "types": [
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "quoted_identifier",
             "named": true
           }
         ]
@@ -3134,6 +3204,10 @@
   {
     "type": "project-reorder",
     "named": false
+  },
+  {
+    "type": "quoted_identifier",
+    "named": true
   },
   {
     "type": "range",

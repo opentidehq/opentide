@@ -116,6 +116,7 @@
 (function_call name: (identifier) @function)
 (tabular_primary (identifier) @type)
 (identifier) @variable
+(quoted_identifier) @variable
 (string) @string
 (number) @number
 (boolean) @boolean

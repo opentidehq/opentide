@@ -403,8 +403,14 @@ const ORDERING: &[&str] = &["<", ">", "<=", ">="];
 const NUMERIC: &[&str] = &["int", "long", "real", "decimal"];
 
 impl<'a> Pass<'a> {
+    /// The node's text; for a quoted name (`['Display Name']`), the name itself.
     fn text(&self, node: Node) -> &'a str {
-        &self.source[node.byte_range()]
+        let text = &self.source[node.byte_range()];
+        if node.kind() == "quoted_identifier" {
+            unquote_name(text)
+        } else {
+            text
+        }
     }
 
     fn span(node: Node) -> ByteSpan {
@@ -830,6 +836,8 @@ impl<'a> Pass<'a> {
         if let Some(name) = withsource {
             out.set(Column::new(name, Some("string".into())));
         }
+        // A union of narrowed legs (`let`s that end in project or summarize) is narrow.
+        out.narrowed = !legs.is_empty() && legs.iter().all(|leg| leg.narrowed);
         if legs.is_empty() {
             out.make_open();
         }
@@ -963,31 +971,7 @@ impl<'a> Pass<'a> {
                 out
             }
             "summarize_operator" => self.summarize(op, input, scope, made_by),
-            "distinct_operator" => {
-                let idents = self.identifiers(op, "columns");
-                if idents.is_empty() {
-                    return input;
-                }
-                let mut out = Schema {
-                    columns: Vec::new(),
-                    known: reshaped(input.known),
-                    narrowed: true,
-                    custom_columns: false,
-                    reshaped_by: Some(op.kind()),
-                    removed: HashMap::new(),
-                    ..input.clone()
-                };
-                for ident in idents {
-                    self.reference(ident, ctx, scope, span);
-                    let name = self.text(ident);
-                    let column = input
-                        .column(name)
-                        .cloned()
-                        .unwrap_or_else(|| Column::new(name, None));
-                    out.set(column);
-                }
-                out
-            }
+            "distinct_operator" => self.distinct(op, input, scope, made_by),
             "join_operator" => self.join(op, input, scope, made_by),
             "lookup_operator" => self.lookup(op, input, scope, made_by),
             "union_operator" => self.union(op, Some(input), scope),
@@ -1007,7 +991,8 @@ impl<'a> Pass<'a> {
                 out.make_open();
                 out
             }
-            "parse_operator" => {
+            // `parse-where` makes the same columns; it also drops the rows that do not match.
+            "parse_operator" | "parse_where_operator" => {
                 let mut out = input.clone();
                 if let Some(column) = op.child_by_field_name("column") {
                     self.expression(column, ctx, scope, span, &[]);
@@ -1081,8 +1066,7 @@ impl<'a> Pass<'a> {
                     }
                 }
             }
-            // parse-where, parse-kv, unknown operators: their columns are
-            // not modelled.
+            // parse-kv, unknown operators: their columns are not modelled.
             _ => {
                 let mut out = input;
                 out.make_open();
@@ -1094,7 +1078,7 @@ impl<'a> Pass<'a> {
     fn identifiers<'t>(&self, op: Node<'t>, field: &str) -> Vec<Node<'t>> {
         let mut cursor = op.walk();
         op.children_by_field_name(field, &mut cursor)
-            .filter(|n| n.kind() == "identifier")
+            .filter(|n| is_name(*n))
             .collect()
     }
 
@@ -1111,8 +1095,50 @@ impl<'a> Pass<'a> {
         let mut cursor = assignment.walk();
         assignment
             .children_by_field_name("name", &mut cursor)
-            .filter(|n| n.kind() == "identifier")
+            .filter(|n| is_name(*n))
             .collect()
+    }
+
+    /// `distinct a, b`, `distinct b = tolower(a)`, `distinct *`: the rows'
+    /// distinct values of the columns it names, named as `project` names them.
+    fn distinct(&mut self, op: Node, input: Schema, scope: &Scope, made_by: MadeBy) -> Schema {
+        let span = made_by.span;
+        let mut cursor = op.walk();
+        let items: Vec<Node> = op
+            .children_by_field_name("columns", &mut cursor)
+            .filter(|n| n.is_named())
+            .collect();
+        // `distinct *` keeps every column; no columns is a syntax error.
+        if items.is_empty() || items.iter().any(|n| n.kind() == "star") {
+            return input;
+        }
+        let mut out = Schema {
+            columns: Vec::new(),
+            known: reshaped(input.known),
+            narrowed: true,
+            custom_columns: false,
+            reshaped_by: Some(op.kind()),
+            removed: HashMap::new(),
+            ..input.clone()
+        };
+        for item in items {
+            match self.column_item(item, &input, scope, span, &[]) {
+                Item::Named(names, type_name) => {
+                    for (name, node) in names.into_iter().zip(self.assigned_names(item)) {
+                        let column = Column {
+                            made_by: Some(made_by),
+                            ..Column::new(name, type_name.clone())
+                        };
+                        self.define(node, &column);
+                        out.set(column);
+                    }
+                }
+                Item::Unnamed(Some(column)) => out.set(column),
+                // `distinct tolower(a)` names its column `Column1`.
+                Item::Unnamed(None) => out.make_open(),
+            }
+        }
+        out
     }
 
     fn project(&mut self, op: Node, input: Schema, scope: &Scope, made_by: MadeBy) -> Schema {
@@ -1577,7 +1603,7 @@ impl<'a> Pass<'a> {
     fn type_of(&self, expr: Node, input: &Schema) -> Option<String> {
         let node = simple_primary(expr)?;
         match node.kind() {
-            "identifier" => input.column(self.text(node))?.type_name.clone(),
+            "identifier" | "quoted_identifier" => input.column(self.text(node))?.type_name.clone(),
             "string" => Some("string".into()),
             "boolean" => Some("bool".into()),
             "timespan" => Some("timespan".into()),
@@ -1633,7 +1659,7 @@ impl<'a> Pass<'a> {
 
     fn expression(&mut self, node: Node, ctx: Ctx, scope: &Scope, op: ByteSpan, extra: &[&str]) {
         match node.kind() {
-            "identifier" => {
+            "identifier" | "quoted_identifier" => {
                 if node
                     .parent()
                     .is_some_and(|p| p.kind() == "primary_expression")
@@ -1990,9 +2016,27 @@ pub(crate) fn simple_primary(node: Node) -> Option<Node> {
     }
 }
 
-/// The identifier an expression is, if it is a bare name.
+/// The name an expression is, if it is a bare name (plain or quoted).
 pub(crate) fn simple_ident(node: Node) -> Option<Node> {
-    simple_primary(node).filter(|n| n.kind() == "identifier")
+    simple_primary(node).filter(|n| is_name(*n))
+}
+
+/// A name written where a column is expected: `Account` or `['Display Name']`.
+pub(crate) fn is_name(node: Node) -> bool {
+    matches!(node.kind(), "identifier" | "quoted_identifier")
+}
+
+/// The name a quoted identifier holds: `['a b']` and `["a b"]` are `a b`.
+pub(crate) fn unquote_name(text: &str) -> &str {
+    let inner = text
+        .strip_prefix('[')
+        .and_then(|t| t.strip_suffix(']'))
+        .unwrap_or(text)
+        .trim();
+    inner
+        .strip_prefix(['\'', '"'])
+        .and_then(|t| t.strip_suffix(['\'', '"']))
+        .unwrap_or(inner)
 }
 
 /// The call an expression is, if it is a bare call.

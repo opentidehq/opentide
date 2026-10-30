@@ -1,0 +1,1 @@
+Syslog | parse-where SyslogMessage with * "user=" User " port=" Port:long *
