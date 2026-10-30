@@ -82,7 +82,8 @@ def _validate_json(platform: str, *args: str) -> tuple[int, dict[str, Any]]:
     assert "Traceback" not in result.stderr
     payload = json.loads(result.stdout)
     # The one value that changes from run to run.
-    assert isinstance(payload.pop("duration_ms"), int)
+    duration_ms = payload.pop("duration_ms")
+    assert isinstance(duration_ms, int)
     return result.exit_code, payload
 
 
