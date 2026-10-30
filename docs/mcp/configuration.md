@@ -118,6 +118,35 @@ If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks up from cwd to the nea
 }
 ```
 
+## Agent Plugins
+
+The [opentidehq/skills](https://github.com/opentidehq/skills) repository is an [Agent Plugins 1.0](https://agent-plugins.org/specification) package: its root `plugin.json` names it, `skills/` holds the detection skills, and its `mcp.json` starts this server, so one install gives an agent both:
+
+```json
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "opentide": { "type": "stdio", "command": "opentide", "args": ["mcp", "start"] }
+  }
+}
+```
+
+Install it from the host, with `opentide` on the host's `PATH` (`pip install opentide`):
+
+| Host | Install |
+|------|---------|
+| VS Code (GitHub Copilot) | **Chat: Install Plugin from Source**, then `https://github.com/opentidehq/skills` |
+| Cursor | **Customize** → Plugins, install from the Git repository |
+| GitHub Copilot CLI | Install from the Git repository URL |
+
+An Agent Plugins client starts the server in the plugin's own directory, which is the skills package, not your detection repository. The server never serves the plugin as a catalogue. It serves, in order:
+
+1. `OPENTIDE_REPO_ROOT` or `OPENTIDE_TIDE_WORKSPACE`, when it names a detection workspace;
+2. the plugin directory, when it is itself a detection workspace;
+3. the host's project directory: `CLAUDE_PROJECT_DIR`, else `PWD` (the directory the host was started in), when it lies in a detection workspace.
+
+Otherwise the catalogue tools and resources (`search`, `validation_report`, `opentide://rules`, ...) fail with `workspace_not_found`, naming the plugin directory; `explain` and offline `validate_query` still work. Set `OPENTIDE_REPO_ROOT` in the host's settings for the server, or add the server to the detection repository itself with [`opentide setup mcp`](#automated-setup), whose files name the project directory.
+
 ## Multi-repo workspaces
 
 When the editor workspace is the **opentide package repo** but content lives elsewhere, always set `OPENTIDE_REPO_ROOT` to the detection content root (an absolute path, not an editor placeholder the host will not expand).
