@@ -25,12 +25,13 @@ def _config_preview(platform: str, rule: DetectionRule) -> dict[str, Any]:
 _PREVIEW_TENANT = "corpus-tenant"
 
 
-def compile_diagnostic(exc: Exception) -> tuple[str, str, str | None]:
+def compile_diagnostic(exc: Exception, platform: str = "Sentinel") -> tuple[str, str, str | None]:
     """``(code, message, help)`` for a rule that does not compile, in the reader's words.
 
     A compiler error that knows its cause carries ``code``, ``reason`` and
     ``hint``. A Python error (an ``AttributeError`` on an empty block, say) is
-    described, never printed as ``ClassName: text``.
+    described, never printed as ``ClassName: text``. *platform* is the
+    platform's display name.
     """
     code = getattr(exc, "code", None)
     reason = getattr(exc, "reason", None)
@@ -40,7 +41,7 @@ def compile_diagnostic(exc: Exception) -> tuple[str, str, str | None]:
     if isinstance(exc, AttributeError) and exc.name and getattr(exc, "obj", object()) is None:
         return (
             "compile_empty_block",
-            f"a block this rule needs is empty, so Sentinel cannot read `{exc.name}`",
+            f"a block this rule needs is empty, so {platform} cannot read `{exc.name}`",
             None,
         )
     from opentide.core.errors import Errors
@@ -50,7 +51,7 @@ def compile_diagnostic(exc: Exception) -> tuple[str, str, str | None]:
         return "compile_invalid_rule", text, None
     return (
         "compile_failed",
-        f"Sentinel cannot compile this rule: {text or 'no detail given'}",
+        f"{platform} cannot compile this rule: {text or 'no detail given'}",
         None,
     )
 
@@ -83,17 +84,35 @@ def _compile_failure(rule: DetectionRule, exc: Exception) -> dict[str, Any]:
     }
 
 
+#: Platforms whose request body opentide builds from the rule alone, with no
+#: tenant: ``validate`` compiles each rule they would deploy, so a rule that
+#: validates compiles.
+OFFLINE_COMPILERS = frozenset({"sentinel", "elastic"})
+
+
+def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
+    """The request body a deploy would send for *rule* on *platform*; raises when it cannot.
+
+    *platform* is one of :data:`OFFLINE_COMPILERS`.
+    """
+    if platform == "sentinel":
+        from opentide.platforms.sentinel.deployer import SentinelDeploy
+
+        return SentinelDeploy().compile_deployment(service=None, data=rule, tenant=_PREVIEW_TENANT)
+    if platform == "elastic":
+        from opentide.platforms.elastic.compile import compile_rule
+
+        return compile_rule(rule)
+    raise ValueError(f"{platform} has no offline compiler")
+
+
 def _sentinel_compile_preview(rule: DetectionRule) -> dict[str, Any]:
     """Compile the ARM request body offline, exactly as a deploy would send it.
 
     Any compilation error is a failure for the rule, never a silent fallback.
     """
-    from opentide.platforms.sentinel.deployer import SentinelDeploy
-
     try:
-        payload = SentinelDeploy().compile_deployment(
-            service=None, data=rule, tenant=_PREVIEW_TENANT
-        )
+        payload = compile_offline("sentinel", rule)
     except Exception as exc:
         return _compile_failure(rule, exc)
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
