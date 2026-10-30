@@ -453,3 +453,16 @@ def test_each_tenant_reports_the_rule_it_sends(
         ("splunk", "Staging", "deployed"),
         ("splunk", "Prod", "deployed"),
     ]
+
+
+def test_a_rule_without_a_splunk_block_names_the_block() -> None:
+    """The message reaches the deploy output: it names the key, not "MDR" (#617)."""
+    from opentide.platforms.splunk.client import create_query
+
+    rule = MagicMock()
+    rule.platform_configs.return_value.splunk = None
+
+    with pytest.raises(ValueError, match=r"^The rule has no configurations\.splunk block$"):
+        _deployer().config_mdr(rule, _tenant().setup)
+    with pytest.raises(ValueError, match=r"^The rule has no configurations\.splunk\.query$"):
+        create_query(rule)
