@@ -1,0 +1,2 @@
+``` prod:tojson_command valid
+index=main | tojson fill_null=true a, b* output_field=j

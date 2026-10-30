@@ -63,7 +63,7 @@ Control commands are parsed so the engine can reject them. They are not valid de
 | spl.search | `search_command` | `search_command__valid` | `keyword` |
 | spl.where | `where_command` | `where_command__valid` | `keyword` |
 | spl.eval | `eval_command` | `eval_command__valid` | `keyword` |
-| spl.stats | `stats_command` | `stats_command__valid` | `keyword` |
+| spl.stats | `stats_command` (`stats`, `eventstats`, `streamstats`, `sistats`, `chart`, `timechart`, `sichart`, `sitimechart`, `geostats`) | `stats_command__valid` | `keyword` |
 | spl.rex | `rex_command` | `rex_command__valid` | `keyword` |
 | spl.table | `table_command` | `table_command__valid` | `keyword` |
 | spl.rename | `rename_command` | `rename_command__valid` | `keyword` |
@@ -90,6 +90,20 @@ Control commands are parsed so the engine can reject them. They are not valid de
 | spl.case | `case_clause` | `case_clause__valid` | `function.builtin` |
 | spl.prefix | `prefix_clause` | `prefix_clause__valid` | `function.builtin` |
 | spl.comment | `comment` | `comment__valid` | `comment` |
+| spl.fillnull | `fillnull_command` | `fillnull_command__valid` | `keyword` |
+| spl.foreach | `foreach_command` | `foreach_command__valid` | `keyword` |
+| spl.spath | `spath_command` | `spath_command__valid` | `keyword` |
+| spl.tojson | `tojson_command` | `tojson_command__valid` | `keyword` |
+| spl.inputlookup | `inputlookup_command` | `inputlookup_command__valid` | `keyword` |
+| spl.outputlookup | `outputlookup_command` | `outputlookup_command__valid` | `keyword` |
+| spl.chart-where | `chart_where` | `chart_where__valid` | `keyword` |
+| spl.by | `by_clause` | `stats_command__valid.eventstats` | `keyword` |
+| spl.aggregate | `aggregate_item` | `stats_command__valid.eventstats` | `function` |
+| spl.rename-item | `rename_item` | `rename_item__valid` | `keyword` (`as`) |
+| spl.lookup-field | `lookup_field` | `lookup_field__valid` | `keyword` (`as`, `output`, `outputnew`) |
+| spl.option | `command_option` | `command_option__valid` | `property` |
+| spl.comparison | `comparison` | `command_option__valid` | `property` |
+| spl.arguments | `argument_list` | `command_option__valid` | `variable` |
 
 Authored text is tokenized as written. An implicit leading `| search` is a Splunk runtime default, not a rewrite of the source.
 

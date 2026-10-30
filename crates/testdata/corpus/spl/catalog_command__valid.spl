@@ -1,2 +1,2 @@
 ``` prod:catalog_command valid
-index=main | timechart count by host
+index=main | top limit=10 host

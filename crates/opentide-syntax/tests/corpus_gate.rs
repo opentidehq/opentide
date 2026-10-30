@@ -71,6 +71,12 @@ const SPL_REQUIRED: &[&str] = &[
     "makemv_command",
     "mvexpand_command",
     "tstats_command",
+    "fillnull_command",
+    "foreach_command",
+    "spath_command",
+    "tojson_command",
+    "inputlookup_command",
+    "outputlookup_command",
     "unknown_command",
 ];
 

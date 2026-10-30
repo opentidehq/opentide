@@ -1,0 +1,2 @@
+``` prod:outputlookup_command valid
+index=main | outputlookup append=true t-x.csv

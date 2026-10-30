@@ -177,3 +177,201 @@ fn eval_expression_faults_are_rejected() {
         "index=a | eval x=!",
     ]);
 }
+
+/// #122: field names, wildcards and command arguments.
+#[test]
+fn command_arguments_parse() {
+    assert_parses(&[
+        "index=a | rename a as b",
+        "index=a | rename DNS.* as *",
+        "index=a | rename a AS b, c As d,\n| eval x=1",
+        "index=a | rename IsOutlier(x) as o, f, as g",
+        "| tstats count where index=a by PREFIX(dst=) | rename dst= as dest, *= as *",
+        "index=a | rename a.$date as d",
+        "index=a | stats values(*) as * by user",
+        "index=a | stats earliest(_time) as \"earliest\"",
+        "index=a | stats count, dc(x) as y BY a, , b",
+        "index=a | stats values(*) as *,\n| eval x=1",
+        "index=a | lookup t ip as src OUTPUT x",
+        "index=a | lookup t ip AS src OUTPUTNEW x AS y, z",
+        "index=a | lookup t-include.csv ip OUTPUT x",
+        "index=a | lookup local=t t a as b OUTPUTNEW\n| stats count",
+        "index=a | eventstats dc(src) as c by user",
+        "index=a | eventstats values(dns_*) as dns_* by dest",
+        "index=a | eventstats min(eval(if(t==\"a\", _time, null()))) as e",
+        "index=a | fillnull value=\"-\" a, b",
+        "index=a | fillnull a value=-1",
+        "index=a | fillnull",
+        "index=a | foreach * [ eval <<FIELD>>=mvdedup(<<FIELD>>) ]",
+        "index=a | foreach user* [| eval r<<MATCHSTR>>=lower('<<FIELD>>') ]",
+        "index=a | foreach a, b mode=multifield [ eval <<FIELD>>=1 ]",
+        "| tstats count, values(a) as a\n    values(b) as b fillnull_value=\"-\" from datamodel=X.Y where index=a by _time host span=1h",
+        "| tstats count from datamodel=\"Web\" by _time PREFIX(dst=) span=1s",
+        "index=a | sort -lt limit=0",
+        "index=a | sort 0 host _time",
+        "index=a | sort limit=0 + src, _time",
+        "index=a | sort - et limit=0",
+        "index=a | sort num(x) desc",
+        "index=a | tojson * output_field=j",
+        "index=a | tojson fill_null=true a, b* output_field=j",
+        "index=a | spath a{}",
+        "index=a | spath input=x path=a{}.b output=y",
+        "index=a | spath path={}",
+        "index=a | rex mode=sed field=x \"s/a/b/g\"",
+        "index=a | rex field=x max_match=0 \"(?<y>.)\"",
+        "index=a | rex field=x, \"(?<y>.)\"",
+        "index=a | streamstats window=1 current=f values(_time) as t by user",
+        "index=a | streamstats count by user reset_on_change=true",
+        "index=a | streamstats time_window=3h count by user",
+        "index=a | streamstats count by src reset_after=\"(\"action==\\\"success\\\"\")\"",
+        "index=a | fields a{}.b",
+        "index=a | fields InsightData{}.Details{}.Name",
+        "index=a | fields alert.attack-time",
+        "index=a | fields a, , b",
+        "index=a | table a, \"b c\", d*",
+        "index=a | join type=left k [ search index=b | fields k ]",
+        "index=a | join type=left a, b [ search index=b ]",
+        "index=a | mvexpand a{}",
+        "index=a | mvexpand x limit=10",
+        "index=a | mvexpand(x)",
+        "| inputlookup append=t t where (x=\"a\" OR x=\"b\") AND y <= 60",
+        "index=a | outputlookup append=true t-x.csv",
+        "| rest /services/data/indexes count=0",
+        "index=a | convert timeformat=\"%Y\" ctime(_time) AS t",
+        "index=a | fromjson x prefix=y_",
+        "index=a | timechart span=1h count by host limit=0 useother=f",
+        "index=a | chart count over a by b",
+        "index=a | stats values(PREFIX(dpt=)) as p",
+        "index=a | dedup host user keepempty=true sortby -_time",
+        "index=a | bin _time span=1h",
+        "index=a | top limit=10 x by y showperc=f",
+        "index=a | regex _raw!=\"a\"",
+        "index=a | strcat a \"-\" b c",
+        "index=a | makemv delim=\",\" allowempty=t x",
+        "index=a | iplocation src",
+    ]);
+}
+
+#[test]
+fn command_argument_faults_are_rejected() {
+    assert_rejected(&[
+        "index=a | rename a as",
+        "index=a | rename a b",
+        "index=a | lookup t",
+        "index=a | lookup t a OUTPUT x AS",
+        "index=a | stats values(",
+        "index=a | stats count by",
+        "index=a | eventstats dc(src as c",
+        "index=a | foreach * eval x=1",
+        "index=a | sort",
+        "index=a | rex field=x",
+        "index=a | join type=left k",
+        "index=a | mvexpand",
+        "| inputlookup",
+    ]);
+}
+
+#[test]
+fn known_command_arguments_never_make_an_unknown_command() {
+    let r = analyze(
+        "index=a | bin _time span=1h | xyseries a b c | metasearch index=a OR index=b NOT c | notacommand x",
+    );
+    let unknown: Vec<&str> = r
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == codes::SPL_UNKNOWN_COMMAND)
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(
+        unknown,
+        ["unknown SPL command 'notacommand'"],
+        "{r:?}",
+        r = r.diagnostics
+    );
+}
+
+#[test]
+fn keywords_highlight_whatever_their_case() {
+    let src = "index=a | lookup t ip AS src OUTPUT x | rename a as b | stats count BY h";
+    let r = analyze(src);
+    let keywords: Vec<&str> = r
+        .tokens
+        .iter()
+        .filter(|t| t.capture == "keyword")
+        .map(|t| &src[t.span.start..t.span.end])
+        .collect();
+    for word in ["lookup", "AS", "OUTPUT", "rename", "as", "stats", "BY"] {
+        assert!(
+            keywords.contains(&word),
+            "{word} not a keyword: {keywords:?}"
+        );
+    }
+}
+
+/// chart and timechart end in an optional `where` clause.
+#[test]
+fn chart_where_clause_parses() {
+    assert_parses(&[
+        "index=a | timechart count by host where count > 10",
+        "index=a | timechart span=1h count by host where count < 5",
+        "index=a | chart count by host where count > 10",
+        "index=a | timechart count by host where max in top5",
+        "index=a | timechart count by host where sum(x) notin bottom10",
+    ]);
+    // Splunk's parser accepts a dangling comparison (`where count >`), so
+    // only a clause with nothing after `where` is a fault here.
+    assert_rejected(&[
+        "index=a | timechart count by host where",
+        "index=a | stats count by host where count > 10",
+    ]);
+}
+
+/// A macro may stand for a field, table or aggregate, and a quoted name
+/// for a by-field, wherever a dedicated rule replaced argument_list.
+#[test]
+fn macros_and_quoted_names_in_command_rules() {
+    assert_parses(&[
+        "index=a | spath `m`",
+        "index=a | fillnull value=0 `m`",
+        "index=a | tojson `m`",
+        "| inputlookup `m` where x=1",
+        "index=a | outputlookup `m`",
+        "index=a | foreach `m` [eval x=1]",
+        "index=a | eventstats count by `m`",
+        "index=a | timechart `m` count",
+        "index=a | timechart count by \"Source IP\"",
+        "index=a | eventstats count by \"Source IP\"",
+        "index=a | chart count over \"a b\"",
+        "index=a | stats count by x `m`",
+        "index=a | table `m`",
+        "index=a | fields `m`",
+        "index=a | dedup `m`",
+        "index=a | lookup `m` x",
+        "| tstats `m` count where index=a by host",
+        "index=a | spath input=x [search a]",
+        "index=a | timechart count by x [search a]",
+        "index=a | outputlookup t x=(a,b)",
+    ]);
+}
+
+#[test]
+fn inputlookup_options_and_geostats_without_aggregates() {
+    assert_parses(&[
+        "| inputlookup t.csv max=10",
+        "| inputlookup t start=0 max=10",
+        "| inputlookup t append=true",
+        "| inputlookup t [search a]",
+        "| geostats latfield=lat longfield=lon",
+        "| geostats latfield=lat longfield=lon by x",
+        "index=a | geostats count by x",
+    ]);
+}
+
+/// PREFIX() is valid in tstats aggregates and `by`, not in `where`.
+#[test]
+fn prefix_belongs_to_aggregates_and_by() {
+    assert_parses(&[
+        "| tstats count values(PREFIX(x=)) as p where index=a by _time PREFIX(dst=) span=1s",
+    ]);
+    assert_rejected(&["| tstats count where index=a PREFIX(src=) by host"]);
+}
