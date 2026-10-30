@@ -1195,9 +1195,9 @@ mod tests {
 
     #[test]
     fn recovery_fragments_are_not_unknown_commands() {
-        // The `-` breaks the table name; recovery strands `dest OUTPUT ...`,
-        // which is not in command position.
-        let src = "index=a | lookup t-x.csv key AS dest OUTPUT c AS m";
+        // The stray `=` breaks the stats by-list; recovery strands `head`,
+        // `x` and `y`, none of which is in command position.
+        let src = "index=a | stats count by host , , = head x y";
         let r = analyze(src);
         assert!(
             r.diagnostics

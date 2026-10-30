@@ -178,7 +178,12 @@ mod tests {
         let d = only_error(src);
         assert_eq!(d.range.start, at(src, ")", 0), "{d:?}");
         assert_eq!(d.range.end.character, d.range.start.character + 1);
-        assert!(d.message.contains("unexpected ')'"), "{}", d.message);
+        // The parenthesis pass names the cause (#135).
+        assert!(
+            d.message.contains("unbalanced parentheses"),
+            "{}",
+            d.message
+        );
     }
 
     #[test]
@@ -200,8 +205,8 @@ mod tests {
 
     #[test]
     fn eval_concatenation_error_is_on_its_line() {
-        // `.` after a string is not concatenation in this grammar yet (#121).
-        let src = "index=a\n| stats count\n| eval k=a.\"-\".b";
+        // `.` with nothing after it is not concatenation.
+        let src = "index=a\n| stats count\n| eval k=a..b";
         let errors = parse_errors(src);
         assert!(!errors.is_empty(), "{errors:?}");
         let d = &errors[0];
@@ -214,11 +219,11 @@ mod tests {
 
     #[test]
     fn recovery_around_valid_text_still_finds_the_bad_token() {
-        // A table name with `-` splits the identifier; the error is the `-`,
-        // not the start of the query that recovery wraps.
-        let src = "index=a | lookup t-x.csv key AS dest OUTPUT c AS m";
+        // The error is the stray `=`, not the start of the query that
+        // recovery wraps.
+        let src = "index=a | stats count by host , , = | head 1";
         let d = &parse_errors(src)[0];
-        assert_eq!(d.range.start, at(src, "-", 0), "{d:?}");
+        assert_eq!(d.range.start, at(src, "=", 8), "{d:?}");
     }
 
     #[test]
