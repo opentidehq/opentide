@@ -1,2 +1,2 @@
 ``` prod:bare_search invalid
-index
+index=main (a OR b

@@ -1,0 +1,45 @@
+name: Query Extraction Block Scalars
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000120
+  schema: rule::1.0
+  version: 1
+  created: "2026-10-29"
+  modified: "2026-10-29"
+  tlp: clear
+description: |
+  A folded scalar is analysed as its folded value, and an indentation
+  indicator keeps the deeper line's spaces (#118).
+response:
+  alert_severity: Low
+configurations:
+  sentinel:
+    enabled: true
+    status: STAGING
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Query Extraction Block Scalars
+    query: >-
+      SigninLogs
+      | take 1
+  defender_for_endpoint:
+    enabled: true
+    status: STAGING
+    alert:
+      category: Execution
+      title: Query Extraction Block Scalars
+    impacted_entities:
+      device: DeviceName
+    scheduling: 1H
+    query: >
+      DeviceProcessEvents
+      | where FileName == "cmd.exe"
+
+      | take 1
+  splunk:
+    enabled: true
+    status: STAGING
+    query: |2
+        index=a
+      | stats count by user

@@ -1,0 +1,1 @@
+print a = timespan(1d), b = time(0s), c = bool(true), d = int(1), e = real(1.5), f = double(0), g = decimal(1.5), h = guid(00000000-0000-0000-0000-000000000000)

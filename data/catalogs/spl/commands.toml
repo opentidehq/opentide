@@ -817,6 +817,51 @@ kind = "dataset"
 docs = "Same as transaction."
 citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Transaction"
 
+# Splunk Machine Learning Toolkit (MLTK, now the Splunk AI Toolkit) commands.
+# Stock Splunk lacks them: testdata/oracles/exceptions.toml lists them.
+
+[[commands]]
+name = "fit"
+kind = "transforming"
+docs = "Train a machine learning model on the search results and add its predictions as fields."
+citation = "https://docs.splunk.com/Documentation/MLApp/latest/User/Customsearchcommands"
+app = "MLTK"
+
+[[commands]]
+name = "apply"
+kind = "streaming"
+docs = "Apply a model saved by fit to the search results."
+citation = "https://docs.splunk.com/Documentation/MLApp/latest/User/Customsearchcommands"
+app = "MLTK"
+
+[[commands]]
+name = "score"
+kind = "transforming"
+docs = "Score a model's predictions against actual values with a statistical or ML metric."
+citation = "https://docs.splunk.com/Documentation/MLApp/latest/User/Customsearchcommands"
+app = "MLTK"
+
+[[commands]]
+name = "summary"
+kind = "generating"
+docs = "Describe a model saved by fit: its algorithm, features and parameters."
+citation = "https://docs.splunk.com/Documentation/MLApp/latest/User/Customsearchcommands"
+app = "MLTK"
+
+[[commands]]
+name = "listmodels"
+kind = "generating"
+docs = "List the models saved by fit."
+citation = "https://docs.splunk.com/Documentation/MLApp/latest/User/Customsearchcommands"
+app = "MLTK"
+
+[[commands]]
+name = "deletemodel"
+kind = "generating"
+docs = "Delete a model saved by fit."
+citation = "https://docs.splunk.com/Documentation/MLApp/latest/User/Customsearchcommands"
+app = "MLTK"
+
 [[functions]]
 name = "if"
 kind = "eval"

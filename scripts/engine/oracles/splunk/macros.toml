@@ -55,3 +55,8 @@ name = "drop_dm_object_name"
 args = ["object"]
 definition = "rename $object$.* AS *"
 source = "stand-in for Splunk_SA_CIM"
+
+[[macros]]
+name = "probe_field"
+definition = "host"
+source = "stand-in for a macro that names a field (testdata/oracles/spl/*_macro.spl)"

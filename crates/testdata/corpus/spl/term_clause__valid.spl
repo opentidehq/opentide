@@ -1,0 +1,2 @@
+``` prod:term_clause valid, prod:term_text
+index=main TERM(EventID=4688) TERM(user=)

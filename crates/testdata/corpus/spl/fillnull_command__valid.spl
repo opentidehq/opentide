@@ -1,0 +1,2 @@
+``` prod:fillnull_command valid
+index=main | fillnull value="-" a, b
