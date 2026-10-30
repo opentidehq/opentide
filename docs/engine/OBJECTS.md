@@ -33,6 +33,7 @@ Query extras (engine may add these inside `query: |`):
 - `kql_unknown_operator`
 - `kql_unknown_function`
 - `kql_deprecated_function`
+- `kql_deprecated_operator`
 - `kql_unknown_table`
 - `kql_render_not_valid`
 - `kql_parse_error`
@@ -46,6 +47,9 @@ Query extras (engine may add these inside `query: |`):
 - `spl_wildcard`
 - `spl_leading_not`
 - `spl_subsearch_truncation`
+- `spl_empty_command`
+- `spl_empty_stage`
+- `spl_command_without_pipe`
 - `crowdstrike_unsupported` (never faked)
 - `defender_output_columns`
 

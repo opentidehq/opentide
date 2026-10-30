@@ -1,0 +1,1 @@
+index=a | top | stats count by host

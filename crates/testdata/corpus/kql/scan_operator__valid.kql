@@ -1,0 +1,3 @@
+// prod:scan_operator prod:scan_step valid
+range x from 1 to 5 step 1
+| scan declare (cumulative_x: long = 0) with (step s1: true => cumulative_x = x + s1.cumulative_x;)

@@ -1,0 +1,2 @@
+``` prod:inputlookup_command valid
+| inputlookup append=t t.csv where (x="a" OR x="b") AND y<=60

@@ -1,2 +1,2 @@
 ``` prod:tstats_command invalid
-tstats
+| tstats

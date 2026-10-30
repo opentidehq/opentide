@@ -172,7 +172,14 @@ pub fn analyze_with_index(
 #[derive(Debug, Clone)]
 pub struct QueryReport {
     pub language: LanguageId,
-    /// YAML path of the query (`["configurations", "sentinel", "query"]`).
+    /// The platform the query runs on, as a `configurations` key
+    /// (`sentinel`, `splunk`, `elastic`): the block's key for a rule query,
+    /// the entry's `system` for a hunt
+    /// (`response.procedure.searches.<n>.query`), whose path does not name it.
+    pub platform: String,
+    /// YAML path of the query, list items by index
+    /// (`["configurations", "sentinel", "query"]`,
+    /// `["response", "procedure", "searches", "0", "query"]`).
     pub field_path: Vec<String>,
     /// The query text's range in the object file.
     pub range: Range,
@@ -192,6 +199,7 @@ pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport>
         .into_iter()
         .map(|query| QueryReport {
             language: query.query.language,
+            platform: query.query.platform,
             field_path: query.query.field_path,
             range: opentide_core::span_to_range(text, query.query.host_span),
             diagnostics: query.diagnostics,
@@ -219,14 +227,7 @@ pub struct QueryRequest {
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
-        LanguageId::Kql => {
-            let profile = if platform == "defender_for_endpoint" {
-                Profile::Defender
-            } else {
-                Profile::Sentinel
-            };
-            opentide_kql::analyze(&request.text, profile).diagnostics
-        }
+        LanguageId::Kql => opentide_kql::analyze(&request.text, kql_profile(platform)).diagnostics,
         LanguageId::Lucene => {
             let dialect = if platform == "carbon_black_cloud" {
                 opentide_lucene::Dialect::CarbonBlack
@@ -362,8 +363,10 @@ fn position_at_offset(text: &str, offset: usize) -> Position {
     opentide_core::span_to_range(text, opentide_core::ByteSpan::new(offset, offset.max(1))).start
 }
 
-fn defender_profile(field_path: &[String]) -> Profile {
-    if field_path.iter().any(|p| p == "defender_for_endpoint") {
+/// The KQL profile of a platform: Defender's schema for
+/// `defender_for_endpoint`, else Sentinel's.
+fn kql_profile(platform: &str) -> Profile {
+    if platform == "defender_for_endpoint" {
         Profile::Defender
     } else {
         Profile::Sentinel
@@ -381,24 +384,24 @@ pub fn hover(
             let offset = offset_at_position(text, position);
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
                 let inner_pos = position_at_offset(&inj.inner, inner);
-                return query_hover(inj.language, &inj.inner, inner_pos, &inj.field_path);
+                return query_hover(inj.language, &inj.inner, inner_pos, &inj.platform);
             }
             let workspace = index_workspace(host);
             opentide_tide::hover_tide(text, offset, &workspace)
         }
-        query => query_hover(query, text, position, &[]),
+        query => query_hover(query, text, position, ""),
     }
 }
 
-/// Hover inside one query language. `field_path` selects the KQL profile.
+/// Hover inside one query language. `platform` selects the KQL profile.
 fn query_hover(
     language: LanguageId,
     text: &str,
     position: Position,
-    field_path: &[String],
+    platform: &str,
 ) -> Option<String> {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, position, defender_profile(field_path)),
+        LanguageId::Kql => opentide_kql::hover(text, position, kql_profile(platform)),
         LanguageId::Spl => opentide_spl::hover(text, position),
         LanguageId::Esql => opentide_esql::hover(text, position)
             .or_else(|| ecs::hover(text, offset_at_position(text, position))),
@@ -421,12 +424,12 @@ pub fn completions(
     match language {
         LanguageId::TideYaml => {
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
-                return query_completions(inj.language, &inj.inner, inner, &inj.field_path);
+                return query_completions(inj.language, &inj.inner, inner, &inj.platform);
             }
             let workspace = index_workspace(host);
             opentide_tide::completions_tide(text, offset, &workspace)
         }
-        query => query_completions(query, text, offset, &[]),
+        query => query_completions(query, text, offset, ""),
     }
 }
 
@@ -434,10 +437,10 @@ fn query_completions(
     language: LanguageId,
     text: &str,
     offset: usize,
-    field_path: &[String],
+    platform: &str,
 ) -> Vec<CompletionItem> {
     match language {
-        LanguageId::Kql => opentide_kql::completions(text, offset, defender_profile(field_path)),
+        LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
         LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
             let mut items = match language {
@@ -472,9 +475,9 @@ pub fn signature_help(
     match language {
         LanguageId::TideYaml => {
             let (inj, inner) = opentide_tide::injection_at_offset(text, offset)?;
-            query_signature_help(inj.language, &inj.inner, inner, &inj.field_path)
+            query_signature_help(inj.language, &inj.inner, inner, &inj.platform)
         }
-        query => query_signature_help(query, text, offset, &[]),
+        query => query_signature_help(query, text, offset, ""),
     }
 }
 
@@ -482,10 +485,10 @@ fn query_signature_help(
     language: LanguageId,
     text: &str,
     offset: usize,
-    field_path: &[String],
+    platform: &str,
 ) -> Option<SignatureHelp> {
     match language {
-        LanguageId::Kql => opentide_kql::signature_help(text, offset, defender_profile(field_path)),
+        LanguageId::Kql => opentide_kql::signature_help(text, offset, kql_profile(platform)),
         LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::Esql => opentide_esql::signature_help(text, offset),
         LanguageId::Eql => opentide_eql::signature_help(text, offset),

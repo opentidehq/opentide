@@ -13,6 +13,10 @@ use serde::Deserialize;
 use std::sync::OnceLock;
 use tree_sitter::Node;
 
+mod parens;
+mod rejects;
+mod stages;
+
 const COMMANDS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/catalogs/spl/commands.toml"
@@ -266,6 +270,9 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     parse_errors::collect(tree.root_node(), source, &mut diagnostics);
     collect_unknown_commands(tree.root_node(), source, catalog, &mut diagnostics);
     perf::collect(source, catalog, &mut diagnostics);
+    parens::refine(source, &mut diagnostics);
+    stages::collect(tree.root_node(), source, catalog, &mut diagnostics);
+    rejects::collect(tree.root_node(), source, &mut diagnostics);
     let tokens = highlight_tree(&spec, source, tree.root_node()).unwrap_or_default();
     AnalyzeResult {
         diagnostics,
@@ -441,9 +448,28 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         | "makemv"
         | "mvexpand"
         | "tstats"
-        | "AS"
+        | "eventstats"
+        | "streamstats"
+        | "sistats"
+        | "chart"
+        | "timechart"
+        | "sichart"
+        | "sitimechart"
+        | "geostats"
+        | "fillnull"
+        | "foreach"
+        | "spath"
+        | "tojson"
+        | "inputlookup"
+        | "outputlookup"
         | "as"
         | "by"
+        | "over"
+        | "output"
+        | "outputnew"
+        | "desc"
+        | "in"
+        | "notin"
         | "from"
         | "datamodel"
         | "summariesonly"
@@ -452,8 +478,11 @@ fn collect_highlights(node: Node, _source: &str, out: &mut Vec<(ByteSpan, &'stat
         | "fillnull_value"
         | "TERM"
         | "CASE"
+        | "PREFIX"
         | "IN" => Some("keyword"),
-        "glob" => Some("variable"),
+        "glob" | "search_word" => Some("variable"),
+        "term_text" => Some("string"),
+        "search_boolean" => Some("operator"),
         "identifier" => {
             if node.parent().map(|p| p.kind()) == Some("function_call") {
                 Some("function")

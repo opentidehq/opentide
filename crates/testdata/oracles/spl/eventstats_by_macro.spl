@@ -1,0 +1,1 @@
+index=main | eventstats count by `probe_field`
