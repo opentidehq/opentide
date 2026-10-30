@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import re
 import shlex
-from collections.abc import Iterable, Iterator
+from collections.abc import Generator, Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 #: ``opentide …`` inside a code span.
@@ -88,21 +89,61 @@ def arguments(command: str) -> list[str]:
     return argv
 
 
+#: Root options whose eager callbacks act (write a shell rc file, detect the shell).
+_COMPLETION_OPTIONS = ("install_completion", "show_completion")
+
+
+def _accept(ctx: object, param: object, value: object) -> object:
+    """Stand in for a completion callback: a set flag ends parsing, as the real one does."""
+    import typer
+
+    if value:
+        raise typer.Exit(0)
+    return value
+
+
+@contextmanager
+def _completion_parsed_only(root: object) -> Generator[None]:
+    """Parse ``--install-completion`` and ``--show-completion`` without running them.
+
+    Their callbacks are eager, so making the context runs them: one writes to
+    the user's shell rc file, and both exit 1 when the shell cannot be detected.
+    """
+    params = [
+        param
+        for param in root.params  # ty: ignore[unresolved-attribute]
+        if param.name in _COMPLETION_OPTIONS
+    ]
+    callbacks = [param.callback for param in params]
+    for param in params:
+        param.callback = _accept
+    try:
+        yield
+    finally:
+        for param, callback in zip(params, callbacks, strict=True):
+            param.callback = callback
+
+
 def parse_error(root: object, command: str) -> str | None:
     """Why *command* would be a usage error, or ``None`` when Click accepts it.
 
     *command* starts with ``opentide``. Each group's context is made, then its
     subcommand's, until no arguments are left, as Click does before it runs
-    a command; no callback runs.
+    a command. No command callback runs, nor the completion options' eager ones.
     """
-    import typer
-    from typer import _click
-    from typer.core import TyperGroup
-
     try:
         argv = arguments(command)
     except ValueError as error:
         return f"cannot split: {error}"
+    with _completion_parsed_only(root):
+        return _parse_error(root, argv)
+
+
+def _parse_error(root: object, argv: list[str]) -> str | None:
+    import typer
+    from typer import _click
+    from typer.core import TyperGroup
+
     try:
         ctx = root.make_context("opentide", argv)  # ty: ignore[unresolved-attribute]
         args = [*ctx._protected_args, *ctx.args]

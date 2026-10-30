@@ -118,6 +118,26 @@ def real_rules_folder(repo: Path) -> Path:
     return link
 
 
+def drop_legacy_objects(repo: Path) -> Path:
+    """Leave only the current ``objects/`` folders, as real folders; return ``objects/``.
+
+    The corpus keeps its legacy ``Objects/`` tree. A case-insensitive file
+    system (macOS, Windows) makes it the same folder as ``objects/``, so git
+    records the rules under ``Objects/`` and no diff path matches a configured
+    object folder. Commit the corpus only after this.
+    """
+    staged = repo / ".objects-current"
+    staged.mkdir()
+    for family in ("threats", "objectives", "rules"):
+        (repo / "objects" / family).resolve().rename(staged / family)
+    # On a case-insensitive file system this also removes ``objects/``.
+    shutil.rmtree(repo / "Objects")
+    if (repo / "objects").exists():
+        shutil.rmtree(repo / "objects")
+    staged.rename(repo / "objects")
+    return repo / "objects"
+
+
 def write_rule_variant(rules: Path, relative: str, uuid: str, *, status: str = "STAGING") -> Path:
     """Write the corpus Sentinel rule to *rules*/*relative* under a new identity."""
     source = TIDE_CORPUS_ROOT / "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"

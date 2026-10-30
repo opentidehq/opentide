@@ -17,6 +17,7 @@ from tests.corpus_support import (
     SUBFOLDER_RULE_UUIDS,
     add_unplanned_rules,
     classify_deploy_scope,
+    drop_legacy_objects,
     real_rules_folder,
     write_rule_variant,
 )
@@ -711,7 +712,7 @@ def test_local_deploy_reads_the_files_the_last_commit_changed(
     """Outside CI and without ``--all``, a deploy reads ``HEAD^1..HEAD`` of the checkout."""
     for name in LOCAL_SHELL_UNSET:
         monkeypatch.delenv(name, raising=False)
-    rules = real_rules_folder(tide_corpus_repo)
+    rules = drop_legacy_objects(tide_corpus_repo) / "rules"
     uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
     _git(tide_corpus_repo, "init", "-q", "-b", "main")
     _git(tide_corpus_repo, "add", "-A")
