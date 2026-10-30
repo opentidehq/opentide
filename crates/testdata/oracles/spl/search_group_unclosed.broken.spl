@@ -1,0 +1,2 @@
+index=a (b OR c
+| stats count by host

@@ -44,6 +44,15 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.dynamic | `dynamic_literal` | `dynamic_literal__valid` | `type` |
 | kql.materialize | `materialize_expression` | `materialize_expression__valid` | `function.builtin` |
 | kql.toscalar | `toscalar_expression` | `toscalar_expression__valid` | `function.builtin` |
+| kql.typed-literal | `typed_literal` | `typed_literal__valid`, `typed_literal__invalid` | `constant` |
+| kql.externaldata | `externaldata_expression` | `externaldata_expression__valid`, `externaldata_expression__invalid` | `keyword` |
+| kql.range | `range_operator` | `range_operator__valid` | `keyword` |
+| kql.top-nested | `top_nested_operator`, `top_nested_clause` | `top_nested_operator__valid` | `keyword` |
+| kql.sample-distinct | `sample_distinct_operator` | `sample_distinct_operator__valid` | `keyword` |
+| kql.fork | `fork_operator`, `fork_branch` | `fork_operator__valid` | `keyword` |
+| kql.facet | `facet_operator` | `facet_operator__valid` | `keyword` |
+| kql.partition | `partition_operator` | `partition_operator__valid` | `keyword` |
+| kql.scan | `scan_operator`, `scan_step` | `scan_operator__valid` | `keyword` |
 
 Control commands are parsed so the engine can reject them. They are not valid detections.
 
@@ -55,7 +64,7 @@ Control commands are parsed so the engine can reject them. They are not valid de
 | spl.search | `search_command` | `search_command__valid` | `keyword` |
 | spl.where | `where_command` | `where_command__valid` | `keyword` |
 | spl.eval | `eval_command` | `eval_command__valid` | `keyword` |
-| spl.stats | `stats_command` | `stats_command__valid` | `keyword` |
+| spl.stats | `stats_command` (`stats`, `eventstats`, `streamstats`, `sistats`, `chart`, `timechart`, `sichart`, `sitimechart`, `geostats`) | `stats_command__valid` | `keyword` |
 | spl.rex | `rex_command` | `rex_command__valid` | `keyword` |
 | spl.table | `table_command` | `table_command__valid` | `keyword` |
 | spl.rename | `rename_command` | `rename_command__valid` | `keyword` |
@@ -74,6 +83,28 @@ Control commands are parsed so the engine can reject them. They are not valid de
 | spl.search-group | `search_group` | `search_group__valid` | `punctuation.bracket` |
 | spl.field-name | `field_name` | `field_name__valid` | `variable` |
 | spl.dedup-option | `dedup_option` | `dedup_option__valid` | `keyword` |
+| spl.search-expression | `search_expression` | `search_expression__valid` | `operator` (`AND`, `OR`, `NOT`) |
+| spl.field-value | `field_value` | `field_value__valid` | `property` |
+| spl.search-word | `search_word` | `field_value__valid` | `variable` |
+| spl.in | `in_clause` | `in_clause__valid` | `operator` |
+| spl.term | `term_clause` | `term_clause__valid` | `function.builtin` |
+| spl.case | `case_clause` | `case_clause__valid` | `function.builtin` |
+| spl.prefix | `prefix_clause` | `prefix_clause__valid` | `function.builtin` |
+| spl.comment | `comment` | `comment__valid` | `comment` |
+| spl.fillnull | `fillnull_command` | `fillnull_command__valid` | `keyword` |
+| spl.foreach | `foreach_command` | `foreach_command__valid` | `keyword` |
+| spl.spath | `spath_command` | `spath_command__valid` | `keyword` |
+| spl.tojson | `tojson_command` | `tojson_command__valid` | `keyword` |
+| spl.inputlookup | `inputlookup_command` | `inputlookup_command__valid` | `keyword` |
+| spl.outputlookup | `outputlookup_command` | `outputlookup_command__valid` | `keyword` |
+| spl.chart-where | `chart_where` | `chart_where__valid` | `keyword` |
+| spl.by | `by_clause` | `stats_command__valid.eventstats` | `keyword` |
+| spl.aggregate | `aggregate_item` | `stats_command__valid.eventstats` | `function` |
+| spl.rename-item | `rename_item` | `rename_item__valid` | `keyword` (`as`) |
+| spl.lookup-field | `lookup_field` | `lookup_field__valid` | `keyword` (`as`, `output`, `outputnew`) |
+| spl.option | `command_option` | `command_option__valid` | `property` |
+| spl.comparison | `comparison` | `command_option__valid` | `property` |
+| spl.arguments | `argument_list` | `command_option__valid` | `variable` |
 
 Authored text is tokenized as written. An implicit leading `| search` is a Splunk runtime default, not a rewrite of the source.
 

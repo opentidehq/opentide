@@ -5,7 +5,7 @@ Machine-oriented punch list. Inventory prose lives in the other `docs/spl/*.md` 
 Measured against:
 
 - `catalogs/spl/commands.toml` — **150** commands, **148** functions (**109** eval + **39** aggregate, including aggregate `sum` / `avg` / `min` / `max`)
-- `grammars/tree-sitter-opentide-spl/grammar.js` — 17 dedicated command rules + `catalog_command_name`
+- `grammars/tree-sitter-opentide-spl/grammar.js` — 23 dedicated command rules + `catalog_command_name`
 - `highlights/queries/spl/highlights.scm`
 - `crates/opentide-spl/src/lib.rs` — completions / hover / analyze / highlight
 
@@ -33,12 +33,15 @@ The previous 32 rare Search Reference names (`abstract` … `x11`) are now in th
 
 **None.** Every catalog command is either a dedicated rule or a `catalog_command_name` literal.
 
-### Dedicated grammar rules (17)
+### Dedicated grammar rules (23, plus the stats family)
 
 ```
 search where eval stats rex table rename fields dedup
 sort head tail join lookup makemv mvexpand tstats
+fillnull foreach spath tojson inputlookup outputlookup
 ```
+
+`stats_command` also covers `eventstats streamstats sistats chart timechart sichart sitimechart geostats`.
 
 ---
 
@@ -68,13 +71,21 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | --- | --- |
 | `bare_search` | Present; must stay non-rewriting |
 | `catalog_command` / `unknown_command` | Present |
-| Comments `` ```…``` `` | Triple-backtick comments only |
+| Comments `` ```…``` `` | Three or more backticks each side, may span lines |
 | Macros `` `macro` `` / `` `macro(args)` `` | First-class `macro` node + HighlightSpec `macro` |
 | Subsearch `[ pipeline ]` | `subsearch` rule (join + argument_list + search_term) |
-| `IN (...)` in **search** clauses | `in_clause` |
-| `TERM(...)` / `CASE(...)` | `term_clause` / `case_clause` |
+| Search clauses | One `search_expression` for the base search, `search`, `tstats ... where` and subsearches |
+| `IN (...)` in **search** clauses | `in_clause`, comma- or space-separated |
+| `TERM(...)` / `CASE(...)` / tstats `by PREFIX(...)` | `term_clause` / `case_clause` / `prefix_clause`, raw contents (`term_text`) up to `)` or whitespace; the `)` is optional, as in Splunk |
+| Eval expressions | `.` concatenation, `like`, `!`, `true()`/`false()`, quoted and `{f}` assignment names, `<<FIELD>>` templates |
+| Search values | `search_word`: any run of non-breaking characters (`-1h@h`, `2.0.0`, `svc-x`) |
+| Field names | `_field_name`: `identifier` plus `- { } @ $` (`a{}.b`, `alert.attack-time`), exposed as `identifier` |
+| Case-insensitive keywords | `as`, `by`, `over`, `output`, `outputnew`, `from`, `where`, `desc` |
+| Stats family | One `stats_command` for `stats`, `eventstats`, `streamstats`, `sistats`, `chart`, `timechart`, `sichart`, `sitimechart`, `geostats`; tstats shares `aggregate_item` and `by_clause` |
+| Other catalog commands | Permissive `argument_list`: options, fields, globs, strings, numbers, calls, commas, comparisons, subsearches |
 | `tstats` `from datamodel=...` | `from datamodel=` + dotted identifiers |
-| Leading `\|` generating command | Optional leading pipe on `pipeline` |
+| Leading `\|` generating command | Optional leading pipe on `pipeline`; without it the first stage is search terms (`spl_command_without_pipe` for a command word), and a trailing `\|` parses (`spl_empty_stage`) |
+| Argumentless commands | Parse where Splunk accepts them (`spl_empty_command`); a syntax error where it rejects them ([search-syntax.md](search-syntax.md#forms-splunk-accepts-that-are-mistakes)) |
 
 ---
 

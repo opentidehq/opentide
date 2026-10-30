@@ -88,8 +88,10 @@ pub enum Source {
     /// A name the catalog does not know and no `let` binds (a custom `_CL`
     /// table, a workspace function).
     Named(String),
-    /// `datatable`, `print`.
+    /// `datatable`, `externaldata`, `range`.
     Literal,
+    /// `print`.
+    Print,
     /// A `union` of several sources.
     Union,
     /// Anything else: an unknown name, `search`, `externaldata`.
@@ -191,6 +193,7 @@ impl Schema {
             Source::Asim { parser, schema } => format!("{parser} (ASIM {schema} schema)"),
             Source::Let(name) | Source::Named(name) => name.clone(),
             Source::Literal => "the datatable".into(),
+            Source::Print => "the print".into(),
             Source::Union => "the union".into(),
             Source::Unknown => "the source".into(),
         }
@@ -619,7 +622,16 @@ impl<'a> Pass<'a> {
                 .child_by_field_name("body")
                 .map(|b| self.tabular(b, scope))
                 .unwrap_or_else(Schema::open),
-            "datatable_expression" => self.datatable(inner),
+            // `datatable` and `externaldata` declare their columns.
+            "datatable_expression" | "externaldata_expression" => self.datatable(inner),
+            // `range x from 1 to 10 step 1`: one column.
+            "range_operator" => {
+                let column = inner
+                    .child_by_field_name("column")
+                    .map(|c| self.text(c).to_string())
+                    .unwrap_or_default();
+                Schema::closed(vec![Column::new(column, None)], Source::Literal)
+            }
             "print_operator" => self.print(inner, scope),
             "union_operator" => self.union(inner, None, scope),
             "function_call" => self.call_source(inner, scope),
@@ -703,7 +715,7 @@ impl<'a> Pass<'a> {
     }
 
     fn print(&mut self, node: Node, scope: &Scope) -> Schema {
-        let mut schema = Schema::closed(Vec::new(), Source::Literal);
+        let mut schema = Schema::closed(Vec::new(), Source::Print);
         let span = Self::span(node);
         let mut cursor = node.walk();
         for (index, item) in node.named_children(&mut cursor).enumerate() {
@@ -742,6 +754,8 @@ impl<'a> Pass<'a> {
                     legs.push(self.named_source(word, scope).unwrap_or_else(Schema::open));
                 }
                 "tabular_expression" => legs.push(self.tabular(child, scope)),
+                // `union g("a"), g("b")`: a tabular function's rows.
+                "function_call" => legs.push(self.call_source(child, scope)),
                 _ => {}
             }
         }
@@ -1539,6 +1553,19 @@ impl<'a> Pass<'a> {
             "boolean" => Some("bool".into()),
             "timespan" => Some("timespan".into()),
             "dynamic_literal" => Some("dynamic".into()),
+            // `datetime(2024-01-01)`, `long(null)`: the literal's type.
+            "typed_literal" => {
+                let text = self.text(node);
+                let name = text[..text.find('(')?].trim().to_ascii_lowercase();
+                Some(match name.as_str() {
+                    "date" => "datetime".into(),
+                    "time" => "timespan".into(),
+                    "double" => "real".into(),
+                    "boolean" => "bool".into(),
+                    "uniqueid" => "guid".into(),
+                    other => other.to_string(),
+                })
+            }
             "number" => Some(if self.text(node).contains(['.', 'e', 'E']) {
                 "real".into()
             } else {
@@ -1640,7 +1667,7 @@ impl<'a> Pass<'a> {
                 }
             }
             "string" | "number" | "timespan" | "boolean" | "null" | "dynamic_literal"
-            | "comment" | "type" | "star" => {}
+            | "typed_literal" | "comment" | "type" | "star" => {}
             _ => {
                 let mut cursor = node.walk();
                 for child in node.named_children(&mut cursor) {

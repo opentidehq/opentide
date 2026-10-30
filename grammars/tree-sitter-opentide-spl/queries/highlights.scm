@@ -26,6 +26,8 @@
 (tstats_command "datamodel" @keyword)
 (term_clause "TERM" @function.builtin)
 (case_clause "CASE" @function.builtin)
+(prefix_clause "PREFIX" @function.builtin)
+(term_text) @string
 (in_clause "IN" @operator)
 (search_boolean) @operator
 
@@ -33,8 +35,12 @@
 
 (function_call name: (identifier) @function)
 (field_value field: (identifier) @property)
+(field_value field: (search_word) @property)
+(command_option name: (identifier) @property)
+(comparison field: (identifier) @property)
 (assignment name: (identifier) @variable)
 (glob) @variable
+(search_word) @variable
 (identifier) @variable
 (string) @string
 (number) @number
@@ -47,14 +53,17 @@
 "and" @operator
 "or" @operator
 "not" @operator
-"AS" @keyword
 "as" @keyword
 "by" @keyword
-"BY" @keyword
+"over" @keyword
+"output" @keyword
+"outputnew" @keyword
+"desc" @keyword
+"in" @keyword
+"notin" @keyword
+"d" @keyword
 "from" @keyword
-"FROM" @keyword
 "where" @keyword
-"WHERE" @keyword
 "sortby" @keyword
 "keepevents" @keyword
 "keepempty" @keyword
@@ -76,6 +85,7 @@
 "==" @operator
 "!=" @operator
 "LIKE" @operator
+"like" @operator
 "IN" @operator
 
 "timechart" @keyword
@@ -104,3 +114,8 @@
 "map" @keyword
 "reverse" @keyword
 "table" @keyword
+"tojson" @keyword
+"sistats" @keyword
+"sichart" @keyword
+"sitimechart" @keyword
+"geostats" @keyword

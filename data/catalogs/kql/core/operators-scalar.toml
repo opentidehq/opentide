@@ -172,3 +172,23 @@ citation = "https://learn.microsoft.com/kusto/query/numerical-operators"
 name = "*"
 docs = "Multiplication"
 citation = "https://learn.microsoft.com/kusto/query/numerical-operators"
+
+# Legacy spellings Kusto's parser still accepts (containscs,
+# notcontains, notcontainscs). The engine warns and suggests `deprecated`.
+[[scalar_operators]]
+name = "containscs"
+docs = "Legacy spelling of contains_cs: RHS is a case-sensitive subsequence of LHS."
+citation = "https://learn.microsoft.com/kusto/query/contains-cs-operator"
+deprecated = "contains_cs"
+
+[[scalar_operators]]
+name = "notcontains"
+docs = "Legacy spelling of !contains: RHS is not a subsequence of LHS."
+citation = "https://learn.microsoft.com/kusto/query/not-contains-operator"
+deprecated = "!contains"
+
+[[scalar_operators]]
+name = "notcontainscs"
+docs = "Legacy spelling of !contains_cs: RHS is not a case-sensitive subsequence of LHS."
+citation = "https://learn.microsoft.com/kusto/query/not-contains-cs-operator"
+deprecated = "!contains_cs"

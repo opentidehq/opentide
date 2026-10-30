@@ -176,3 +176,24 @@ fn clean_hunt_and_trailing_wildcard_stay_clean() {
         "{spl:?}"
     );
 }
+
+/// #124: the lints describe reading the index, which only a base search does.
+#[test]
+fn spl_perf_fixtures_in_both_directions() {
+    let spl_perf = |name: &str| -> Vec<String> {
+        codes_for(LanguageId::Spl, &read(name))
+            .into_iter()
+            .filter(|c| c == "spl_wildcard" || c == "spl_leading_not")
+            .collect()
+    };
+    for clean in [
+        "constrained-wildcard.spl",
+        "later-stage-search.spl",
+        "existence-check.spl",
+        "trailing-wildcard.spl",
+    ] {
+        assert!(spl_perf(clean).is_empty(), "{clean}: {:?}", spl_perf(clean));
+    }
+    assert_eq!(spl_perf("leading-wildcard.spl"), ["spl_wildcard"]);
+    assert_eq!(spl_perf("leading-not.spl"), ["spl_leading_not"]);
+}

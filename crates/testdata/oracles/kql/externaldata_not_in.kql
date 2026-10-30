@@ -1,0 +1,1 @@
+print x = "a" | where x !in ((externaldata(c:string) [@"https://example.com/x.csv"] with (format="csv")))

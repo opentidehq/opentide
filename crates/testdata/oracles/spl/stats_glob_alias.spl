@@ -1,0 +1,1 @@
+index=main | stats values(*) as * by user

@@ -5,12 +5,20 @@
 //! Subsearch limits (50,000 events / 60 seconds, silent truncation):
 //! <https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches>
 //!
+//! `spl_wildcard` and `spl_leading_not` describe the cost of reading the
+//! index, which only a base search pays: the first stage of the query or of a
+//! subsearch. A later `| search` filters results already in the pipeline.
+//! Stages are found by splitting on top-level `|` (outside quotes, comments,
+//! macros and subsearch brackets), not from grammar rule names. Parentheses do
+//! not hide a `|`: Splunk splits `index=a TERM("x" | stats count` into two
+//! stages, so an unclosed `(` must not pull later stages into the base search.
+//!
 //! The query text is not rewritten.
 
 use super::Catalog;
 use super::scan::{
-    command_word, end_of_macro, end_quoted, read_word, skip_comment, skip_ws_and_comments,
-    split_segments, subsearches,
+    base_search, command_word, end_of_macro, end_quoted, read_word, skip_comment,
+    skip_ws_and_comments, split_segments, subsearches,
 };
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 
@@ -37,7 +45,11 @@ fn walk_pipeline(
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
 ) {
-    for (seg_start, seg_end) in split_segments(source, start, end) {
+    let segments = split_segments(source, start, end);
+    if let Some((base_start, base_end)) = base_search(source, &segments, catalog) {
+        scan_search(source, base_start, base_end, out);
+    }
+    for &(seg_start, seg_end) in &segments {
         if seg_start >= seg_end {
             continue;
         }
@@ -53,9 +65,6 @@ fn walk_pipeline(
                     cmd_end,
                 );
             }
-        }
-        if is_search_context(&word, catalog) {
-            scan_search(source, seg_start, seg_end, out);
         }
         for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
             walk_pipeline(source, inner_start, inner_end, catalog, out);
@@ -77,20 +86,6 @@ fn truncation_message(word: &str) -> Option<String> {
     }
 }
 
-fn is_truncating(word: &str) -> bool {
-    truncation_message(word).is_some()
-}
-
-fn is_search_context(word: &str, catalog: &Catalog) -> bool {
-    if word.is_empty() || word.eq_ignore_ascii_case("search") {
-        return true;
-    }
-    if is_truncating(word) {
-        return false;
-    }
-    catalog.command(word).is_none()
-}
-
 fn scan_search(source: &str, start: usize, end: usize, out: &mut Vec<Diagnostic>) {
     if let Some((not_start, not_end)) = leading_not_span(source, start, end) {
         push(
@@ -104,16 +99,24 @@ fn scan_search(source: &str, start: usize, end: usize, out: &mut Vec<Diagnostic>
             not_end,
         );
     }
-    for (wild_start, wild_end) in wildcard_spans(source, start, end) {
-        let value = &source[wild_start..wild_end];
-        push(
-            out,
-            source,
-            codes::SPL_WILDCARD,
-            wildcard_message(value),
-            wild_start,
-            wild_end,
-        );
+    let terms = search_terms(source, start, end);
+    // `index=`, `sourcetype=`, `TERM()` or a macro already narrow the read,
+    // so a wildcard on another term costs little (`src_user!="*$"`).
+    if has_indexed_constraint(source, &terms) {
+        return;
+    }
+    for term in &terms {
+        for (wild_start, wild_end) in wildcard_spans(source, term) {
+            let value = &source[wild_start..wild_end];
+            push(
+                out,
+                source,
+                codes::SPL_WILDCARD,
+                wildcard_message(value),
+                wild_start,
+                wild_end,
+            );
+        }
     }
 }
 
@@ -159,7 +162,23 @@ fn leading_not_span(source: &str, start: usize, end: usize) -> Option<(usize, us
     }
 }
 
-fn wildcard_spans(source: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
+/// A search term outside subsearches: a word (`field=value`, with a quoted
+/// value when one follows `=`), a quoted phrase, or a macro call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Term {
+    start: usize,
+    end: usize,
+    kind: TermKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TermKind {
+    Word,
+    Quoted,
+    Macro,
+}
+
+fn search_terms(source: &str, start: usize, end: usize) -> Vec<Term> {
     let bytes = source.as_bytes();
     let mut i = start;
     let mut brackets = 0i32;
@@ -173,8 +192,16 @@ fn wildcard_spans(source: &str, start: usize, end: usize) -> Vec<(usize, usize)>
             i = next;
             continue;
         }
-        if brackets == 0 && bytes[i] == b'`' {
-            i = end_of_macro(bytes, i, end);
+        if bytes[i] == b'`' {
+            let next = end_of_macro(bytes, i, end);
+            if brackets == 0 {
+                out.push(Term {
+                    start: i,
+                    end: next,
+                    kind: TermKind::Macro,
+                });
+            }
+            i = next;
             continue;
         }
         if bytes[i] == b'[' {
@@ -190,16 +217,24 @@ fn wildcard_spans(source: &str, start: usize, end: usize) -> Vec<(usize, usize)>
             continue;
         }
         if brackets > 0 {
-            i += 1;
+            if bytes[i] == b'"' || bytes[i] == b'\'' {
+                i = end_quoted(bytes, i, end);
+            } else {
+                i += 1;
+            }
             continue;
         }
         if bytes[i] == b'"' || bytes[i] == b'\'' {
             let next = end_quoted(bytes, i, end);
-            consider_term(source, i, next, &mut out);
+            out.push(Term {
+                start: i,
+                end: next,
+                kind: TermKind::Quoted,
+            });
             i = next;
             continue;
         }
-        if matches!(bytes[i], b'(' | b')' | b',' | b'|' | b'[' | b']') {
+        if matches!(bytes[i], b'(' | b')' | b',' | b'|') {
             i += 1;
             continue;
         }
@@ -216,40 +251,82 @@ fn wildcard_spans(source: &str, start: usize, end: usize) -> Vec<(usize, usize)>
             }
             i += 1;
         }
-        consider_term(source, term_start, i, &mut out);
+        // `field="value"` is one term.
+        if i < end && bytes[i - 1] == b'=' && (bytes[i] == b'"' || bytes[i] == b'\'') {
+            i = end_quoted(bytes, i, end);
+        }
+        out.push(Term {
+            start: term_start,
+            end: i,
+            kind: TermKind::Word,
+        });
     }
     out
 }
 
-fn consider_term(source: &str, start: usize, end: usize, out: &mut Vec<(usize, usize)>) {
-    if start >= end {
-        return;
-    }
-    let term = &source[start..end];
-    let pieces: Vec<(&str, usize)> = if term.starts_with('"') || term.starts_with('\'') {
-        let (inner, rel) = strip_quotes(term);
-        vec![(inner, rel)]
-    } else if let Some(eq) = term.find('=') {
-        // `process=*fail` is a leading wildcard on the value, not a mid-token
-        // wildcard on the whole field=value token.
-        vec![(&term[..eq], 0), (&term[eq + 1..], eq + 1)]
-    } else {
-        vec![(term, 0)]
+/// Fields Splunk indexes for every event, so a value narrows the read.
+const INDEXED_FIELDS: &[&str] = &["index", "sourcetype", "source", "host"];
+
+/// `index=a`, `sourcetype IN (...)`, `TERM(...)`, `PREFIX(...)` or a macro,
+/// which usually expands to an index and sourcetype. `index=*` and a value
+/// with a leading wildcard narrow nothing.
+fn has_indexed_constraint(source: &str, terms: &[Term]) -> bool {
+    terms.iter().enumerate().any(|(n, term)| {
+        let text = &source[term.start..term.end];
+        match term.kind {
+            TermKind::Macro => true,
+            TermKind::Quoted => false,
+            TermKind::Word => {
+                let indexed =
+                    |name: &str| INDEXED_FIELDS.iter().any(|f| f.eq_ignore_ascii_case(name));
+                if let Some((field, value)) = text.split_once('=') {
+                    let value = strip_quotes(value).0;
+                    return indexed(field) && !value.is_empty() && !value.starts_with('*');
+                }
+                if (text.eq_ignore_ascii_case("TERM") || text.eq_ignore_ascii_case("PREFIX"))
+                    && source[term.end..].starts_with('(')
+                {
+                    return true;
+                }
+                indexed(text)
+                    && terms.get(n + 1).is_some_and(|next| {
+                        next.kind == TermKind::Word
+                            && source[next.start..next.end].eq_ignore_ascii_case("IN")
+                    })
+            }
+        }
+    })
+}
+
+/// Wildcards in a term that cannot use the term index. `field=*` and
+/// `field="*"` are the existence check, not a scan of every event.
+fn wildcard_spans(source: &str, term: &Term) -> Vec<(usize, usize)> {
+    let text = &source[term.start..term.end];
+    let pieces: Vec<(&str, usize)> = match term.kind {
+        TermKind::Macro => Vec::new(),
+        TermKind::Quoted => {
+            let (inner, rel) = strip_quotes(text);
+            vec![(inner, rel)]
+        }
+        TermKind::Word => match text.find('=') {
+            // `process=*fail` is a leading wildcard on the value, not a
+            // mid-token wildcard on the whole field=value token.
+            Some(eq) => {
+                let (value, rel) = strip_quotes(&text[eq + 1..]);
+                let value_piece =
+                    (!value.chars().all(|c| c == '*')).then_some((value, eq + 1 + rel));
+                std::iter::once((&text[..eq], 0))
+                    .chain(value_piece)
+                    .collect()
+            }
+            None => vec![(text, 0)],
+        },
     };
-    for (value, value_rel) in pieces {
-        if value.is_empty() || !is_inefficient_wildcard(value) {
-            continue;
-        }
-        let value_start = start + value_rel;
-        let value_end = value_start + value.len();
-        if value_end <= source.len()
-            && !out
-                .iter()
-                .any(|(s, e)| *s == value_start && *e == value_end)
-        {
-            out.push((value_start, value_end));
-        }
-    }
+    pieces
+        .into_iter()
+        .filter(|(value, _)| !value.is_empty() && is_inefficient_wildcard(value))
+        .map(|(value, rel)| (term.start + rel, term.start + rel + value.len()))
+        .collect()
 }
 
 fn strip_quotes(term: &str) -> (&str, usize) {
@@ -319,13 +396,22 @@ mod tests {
         warnings(src).iter().any(|d| d.code == code)
     }
 
+    fn count(src: &str, code: &str) -> usize {
+        warnings(src).iter().filter(|d| d.code == code).count()
+    }
+
     #[test]
-    fn wildcards_warn_except_trailing() {
+    fn wildcards_warn_in_an_unconstrained_base_search() {
         for src in [
-            "index=main *fail",
-            "index=main f*il",
-            "index=main *",
+            "*fail",
+            "f*il",
+            "*",
             "search *fail",
+            "| search *fail",
+            "index=* *foo*",
+            "index=\"*\" *foo*",
+            "sourcetype=*sysmon user=x",
+            "eventtype=x \"*fail\"",
         ] {
             let found = warnings(src)
                 .into_iter()
@@ -338,9 +424,9 @@ mod tests {
                     || found.range.end.line > found.range.start.line
             );
         }
-        assert!(!has("index=main process=fail*", codes::SPL_WILDCARD));
-        assert!(!has("index=main host=webserver*", codes::SPL_WILDCARD));
-        let leading_value = warnings("index=main process=*fail");
+        assert!(!has("process=fail*", codes::SPL_WILDCARD));
+        assert!(!has("host=webserver*", codes::SPL_WILDCARD));
+        let leading_value = warnings("process=*fail");
         let wild = leading_value
             .iter()
             .filter(|d| d.code == codes::SPL_WILDCARD)
@@ -363,19 +449,153 @@ mod tests {
     }
 
     #[test]
+    fn field_star_is_the_existence_check() {
+        for src in [
+            "api_key_name=*",
+            "description.acknowledged=\"*\"",
+            "user=* src!=*",
+            "index=a api_key_name=*",
+        ] {
+            assert_eq!(
+                count(src, codes::SPL_WILDCARD),
+                0,
+                "{src}: {:?}",
+                warnings(src)
+            );
+        }
+        // A bare `*` term is still every event.
+        assert_eq!(count("user=* *", codes::SPL_WILDCARD), 1);
+    }
+
+    #[test]
+    fn an_indexed_constraint_covers_wildcards_on_other_terms() {
+        for src in [
+            "index=a sourcetype=b TERM(EventID=4688) src_user!=\"*$\"",
+            "index=a *foo*",
+            "INDEX=a *foo*",
+            "sourcetype=b user=*adm*",
+            "source=\"/var/log/x\" *foo*",
+            "host=web* *foo*",
+            "`m` description=\"*x\"",
+            "TERM(10.0.0.1) *foo*",
+            "PREFIX(user=) *foo*",
+            "index IN (a, b) *foo*",
+            "(index=a OR index=b) *foo*",
+            "search index=a *foo*",
+            "index=a *",
+        ] {
+            assert_eq!(
+                count(src, codes::SPL_WILDCARD),
+                0,
+                "{src}: {:?}",
+                warnings(src)
+            );
+        }
+        // A constraint in a subsearch does not narrow the outer search.
+        assert_eq!(
+            count(
+                "*foo* [ search index=a | fields user ]",
+                codes::SPL_WILDCARD
+            ),
+            1
+        );
+    }
+
+    #[test]
+    fn later_stages_are_not_scanned() {
+        for src in [
+            "index=a | spath | search valueExtracted=\"*@*.*\"",
+            "index=a sourcetype=b | stats count by user, outcome | search NOT outcome=\"Failure\"",
+            "| tstats count where index=a by user | search user=*adm*",
+            "| inputlookup t.csv | search NOT user=x",
+            "* | search *foo*",
+            "index=a | where NOT status=200",
+        ] {
+            let found: Vec<_> = warnings(src)
+                .into_iter()
+                .filter(|d| d.code == codes::SPL_WILDCARD || d.code == codes::SPL_LEADING_NOT)
+                .collect();
+            let expected = usize::from(src.starts_with("* "));
+            assert_eq!(found.len(), expected, "{src}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn an_unclosed_paren_does_not_swallow_later_stages() {
+        // Splunk 10.6 splits on `|` regardless of parentheses.
+        let src = r#"index=a TERM("x" | search NOT x=1 | search y=*z"#;
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+        // Not covered by a constraint: the later `y=*z` must still be skipped.
+        let src = "index=* (x=1 | search NOT x=1 | search y=*z";
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+        let src = "| search (x=1 | search NOT x=1 | search y=*z";
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+        // The base search before the `|` is still scanned.
+        assert_eq!(count("index=* (*foo | search y=*z", codes::SPL_WILDCARD), 1);
+        // And a later `join` is still found.
+        assert!(has(
+            "index=a (x=1 | join d [search index=b]",
+            codes::SPL_SUBSEARCH_TRUNCATION
+        ));
+        // In a subsearch, the bracket still bounds the stages.
+        let src = "index=a [search index=* (c=1 | search NOT x=1 | search e=*f] | stats count";
+        assert!(warnings(src).is_empty(), "{:?}", warnings(src));
+    }
+
+    #[test]
+    fn a_subsearch_has_its_own_base_search() {
+        assert_eq!(
+            count("index=a | join k [ search *foo* ]", codes::SPL_WILDCARD),
+            1
+        );
+        assert_eq!(
+            count(
+                "index=a | join k [ search index=b *foo* ]",
+                codes::SPL_WILDCARD
+            ),
+            0
+        );
+        assert_eq!(
+            count(
+                "index=a | join k [ search NOT x=1 ]",
+                codes::SPL_LEADING_NOT
+            ),
+            1
+        );
+        assert_eq!(
+            count(
+                "index=a [ | inputlookup t.csv | search NOT x=1 | fields user ]",
+                codes::SPL_LEADING_NOT
+            ),
+            0
+        );
+    }
+
+    #[test]
     fn leading_not_is_the_search_filter() {
-        let src = "search NOT status=200";
-        let found = warnings(src)
-            .into_iter()
-            .find(|d| d.code == codes::SPL_LEADING_NOT)
-            .expect("leading not");
-        assert!(found.message.contains(NOT_CITE));
-        assert_eq!(found.severity, Severity::Warning);
+        for src in [
+            "search NOT status=200",
+            "NOT status=200",
+            "| search NOT status=200",
+        ] {
+            let found = warnings(src)
+                .into_iter()
+                .find(|d| d.code == codes::SPL_LEADING_NOT)
+                .unwrap_or_else(|| panic!("leading not in {src}"));
+            assert!(found.message.contains(NOT_CITE));
+            assert_eq!(found.severity, Severity::Warning);
+        }
         assert!(!has("index=main NOT status=200", codes::SPL_LEADING_NOT));
         assert!(!has(
             "index=main | where NOT status=200",
             codes::SPL_LEADING_NOT
         ));
+    }
+
+    #[test]
+    fn a_field_named_like_a_command_starts_a_search() {
+        // Without a leading `|`, `stats=1` is a field, not the stats command.
+        assert_eq!(count("stats=1 *foo*", codes::SPL_WILDCARD), 1);
     }
 
     #[test]

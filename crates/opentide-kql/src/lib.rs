@@ -121,6 +121,9 @@ pub struct ScalarOperatorRow {
     pub name: String,
     pub docs: Option<String>,
     pub citation: Option<String>,
+    /// The operator that replaces this legacy spelling (`containscs` → `contains_cs`).
+    #[serde(default)]
+    pub deprecated: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -426,6 +429,12 @@ impl Catalog {
         self.table_index.get(name).map(|&i| &self.tables[i])
     }
 
+    pub fn scalar_operator(&self, name: &str) -> Option<&ScalarOperatorRow> {
+        self.scalar_operators
+            .iter()
+            .find(|o| o.name.eq_ignore_ascii_case(name))
+    }
+
     pub fn plugin(&self, name: &str) -> Option<&PluginRow> {
         self.plugins
             .iter()
@@ -717,6 +726,7 @@ pub fn analyze_with_catalog(source: &str, catalog: &Catalog) -> AnalyzeResult {
     let mut lets = BTreeSet::new();
     let_names(tree.root_node(), source, &mut lets);
     collect_function_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
+    collect_scalar_operator_diagnostics(tree.root_node(), source, catalog, &mut diagnostics);
     collect_table_diagnostics(tree.root_node(), source, catalog, &lets, &mut diagnostics);
     let columns = schema::analyze(tree.root_node(), source, catalog);
     diagnostics.extend(columns.diagnostics.iter().cloned());
@@ -816,10 +826,8 @@ fn collect_operator_diagnostics(
 
 /// Names bound by `let` anywhere in the query: tables, scalars and functions the
 /// author declared, which the catalog cannot know.
-/// Names `let` binds, and the parameters of `let` functions (`T:(*)` is
-/// read as a table in the body).
 fn let_names(node: Node, source: &str, out: &mut BTreeSet<String>) {
-    if matches!(node.kind(), "let_statement" | "parameter") {
+    if node.kind() == "let_statement" {
         if let Some(name) = child_text(node, "name", source) {
             out.insert(name);
         }
@@ -829,6 +837,13 @@ fn let_names(node: Node, source: &str, out: &mut BTreeSet<String>) {
         let_names(child, source, out);
     }
 }
+
+/// Type names that begin a typed scalar literal, `datetime(2024-01-01)`, as
+/// Kusto's lexer reads them (the `typed_literal` token in grammar.js).
+const TYPED_LITERAL_TYPES: &[&str] = &[
+    "bool", "date", "datetime", "decimal", "double", "guid", "int", "int32", "int64", "long",
+    "real", "time", "timespan",
+];
 
 /// The range of a call's name, which a quick fix replaces with the suggestion
 /// without touching the arguments.
@@ -849,6 +864,17 @@ fn collect_function_diagnostics(
             let function = catalog.function(&name);
             if lets.contains(&name) {
                 // A function the query declares with `let`.
+            } else if !is_plugin && TYPED_LITERAL_TYPES.contains(&name.as_str()) {
+                // The grammar lexes `datetime(...)` closed on its line as one
+                // literal token. A call shape here is a literal Kusto rejects: a
+                // space before `(`, or a value that runs onto the next line.
+                out.push(Diagnostic::error(
+                    codes::KQL_PARSE_ERROR,
+                    format!(
+                        "'{name}(' starts a typed literal: write the value and ')' on the same line, directly after '{name}'"
+                    ),
+                    node_range(source, node),
+                ));
             } else if is_plugin {
                 if catalog.plugin(&name).is_none() {
                     let mut d = Diagnostic::error(
@@ -907,6 +933,66 @@ fn collect_function_diagnostics(
     }
 }
 
+/// `containscs`, `notcontains` and `notcontainscs` are legacy spellings Kusto
+/// still parses; the catalog names the current operator.
+fn collect_scalar_operator_diagnostics(
+    node: Node,
+    source: &str,
+    catalog: &Catalog,
+    out: &mut Vec<Diagnostic>,
+) {
+    if node.kind() == "comparison_expression" {
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.is_named() {
+                continue;
+            }
+            let Ok(text) = child.utf8_text(source.as_bytes()) else {
+                continue;
+            };
+            if let Some(replacement) = catalog
+                .scalar_operator(text)
+                .and_then(|op| op.deprecated.as_ref())
+            {
+                out.push(
+                    Diagnostic::warning(
+                        codes::KQL_DEPRECATED_OPERATOR,
+                        format!("'{text}' is a legacy spelling; use {replacement}"),
+                        node_range(source, child),
+                    )
+                    .with_suggestion(replacement.clone()),
+                );
+            }
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_scalar_operator_diagnostics(child, source, catalog, out);
+    }
+}
+
+/// Parameters of a function definition that take a table, `(T:(x:string))` or
+/// `(T:(*))`: inside the body their names are tables.
+fn tabular_parameters(definition: Node, source: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut cursor = definition.walk();
+    for parameter in definition.children(&mut cursor) {
+        if parameter.kind() != "parameter" {
+            continue;
+        }
+        let tabular = parameter
+            .child_by_field_name("type")
+            .and_then(|t| t.child(0))
+            .is_some_and(|first| first.kind() == "(");
+        if tabular {
+            if let Some(name) = child_text(parameter, "name", source) {
+                names.push(name);
+            }
+        }
+    }
+    names
+}
+
 fn collect_table_diagnostics(
     node: Node,
     source: &str,
@@ -916,6 +1002,18 @@ fn collect_table_diagnostics(
 ) {
     if catalog.tables.is_empty() {
         return;
+    }
+    if node.kind() == "function_definition" {
+        let params = tabular_parameters(node, source);
+        if !params.is_empty() {
+            let mut scoped = lets.clone();
+            scoped.extend(params);
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                collect_table_diagnostics(child, source, catalog, &scoped, out);
+            }
+            return;
+        }
     }
     match node.kind() {
         "tabular_primary" => {
@@ -1485,6 +1583,7 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
         catalog
             .scalar_operators
             .iter()
+            .filter(|o| o.deprecated.is_none())
             .map(|o| complete_item(o.name.clone(), "operator", o.docs.clone(), o.docs.clone())),
     );
     items.extend(

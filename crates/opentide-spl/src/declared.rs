@@ -18,16 +18,17 @@
 //! that kind for Splunk; an undeclared one is `spl_dataset_not_declared`, a
 //! warning. Fields of raw sourcetypes are never checked.
 
+use super::Catalog;
 use super::scan::{
-    command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_ws, split_segments,
-    subsearches,
+    base_search, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_ws,
+    split_segments, subsearches,
 };
 use opentide_core::datasets::{DatasetKind, Declaration, DeclaredDatasets, current};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 
 const PLATFORM: &str = "splunk";
 
-pub(crate) fn collect(source: &str, out: &mut Vec<Diagnostic>) {
+pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let datasets = current();
     let kinds = [
         DatasetKind::Indexes,
@@ -37,36 +38,32 @@ pub(crate) fn collect(source: &str, out: &mut Vec<Diagnostic>) {
     if source.is_empty() || !kinds.iter().any(|k| datasets.declares(PLATFORM, *k)) {
         return;
     }
-    walk(source, 0, source.len(), &datasets, out);
+    walk(source, 0, source.len(), catalog, &datasets, out);
 }
 
 fn walk(
     source: &str,
     start: usize,
     end: usize,
+    catalog: &Catalog,
     datasets: &DeclaredDatasets,
     out: &mut Vec<Diagnostic>,
 ) {
-    let leading_pipe = source[start..end].trim_start().starts_with('|');
-    let mut first_command = true;
-    for (index, (seg_start, seg_end)) in split_segments(source, start, end).into_iter().enumerate()
-    {
+    let segments = split_segments(source, start, end);
+    // The stage that reads the index, as the wildcard lints see it (perf.rs).
+    let base = base_search(source, &segments, catalog);
+    for &(seg_start, seg_end) in &segments {
         for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk(source, inner_start, inner_end, datasets, out);
+            walk(source, inner_start, inner_end, catalog, datasets, out);
         }
-        let (word, _) = command_word(source, seg_start, seg_end);
-        let word = word.to_ascii_lowercase();
-        if index == 0 && leading_pipe {
-            // The empty text before a leading pipe.
-            continue;
-        }
-        let base = (index == 0 && !leading_pipe) || (first_command && word == "search");
-        if base {
+        if base == Some((seg_start, seg_end)) {
             scan_terms(source, seg_start, seg_end, true, datasets, out);
-        } else if word == "tstats" {
+        } else if command_word(source, seg_start, seg_end)
+            .0
+            .eq_ignore_ascii_case("tstats")
+        {
             scan_terms(source, seg_start, seg_end, false, datasets, out);
         }
-        first_command = false;
     }
 }
 
@@ -377,7 +374,7 @@ mod tests {
     /// The names warned about, in order.
     fn undeclared(src: &str, datasets: &DeclaredDatasets) -> Vec<String> {
         let mut out = Vec::new();
-        walk(src, 0, src.len(), datasets, &mut out);
+        walk(src, 0, src.len(), Catalog::cached(), datasets, &mut out);
         for d in &out {
             assert_eq!(d.code, codes::SPL_DATASET_NOT_DECLARED);
             assert_eq!(d.severity, Severity::Warning);

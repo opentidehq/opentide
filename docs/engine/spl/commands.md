@@ -218,7 +218,24 @@ Documented in Search Reference but unusual (or dangerous) inside ES correlation 
 | `localize`, `rtorder` | Time localization / real-time ordering. | same |
 | `scrub` | Anonymize results. | [Scrub](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Scrub) |
 
-Third-party / app commands (`dbxquery`, `snowincident`, `awssnsalert`, ESCU macros that expand to custom commands) are **not** core Search Reference and are out of scope for the catalog until explicitly added.
+Other third-party / app commands (`dbxquery`, `snowincident`, `awssnsalert`, ESCU macros that expand to custom commands) are **not** core Search Reference and are out of scope for the catalog until explicitly added (see [App commands](#app-commands)).
+
+---
+
+## App commands
+
+Commands a Splunk app adds to the search head. Catalogued with `app = "<App>"` in `catalogs/spl/commands.toml` because detections use them widely; stock Splunk lacks them, so `testdata/oracles/exceptions.toml` lists them.
+
+| Name | App | Kind | Short docs | Citation |
+| --- | --- | --- | --- | --- |
+| `fit` | MLTK | transforming | Train a machine learning model on the search results and add its predictions as fields. | [Search commands for machine learning](https://docs.splunk.com/Documentation/MLApp/latest/User/Customsearchcommands) |
+| `apply` | MLTK | streaming | Apply a model saved by `fit` to the search results. | same |
+| `score` | MLTK | transforming | Score a model's predictions against actual values with a statistical or ML metric. | same |
+| `summary` | MLTK | generating | Describe a model saved by `fit`: its algorithm, features and parameters. | same |
+| `listmodels` | MLTK | generating | List the models saved by `fit`. | same |
+| `deletemodel` | MLTK | generating | Delete a model saved by `fit`. | same |
+
+A command in neither the Search Reference nor this table is `spl_unknown_command`: a **warning**, because an app on the search head may provide it (`'mispsearch' is not a command opentide knows; if an app on the search head provides it, declare it`), with the nearest known command as a suggestion. One edit from a known command (`statz`, `stast`), it is an **error**: almost certainly a typo, which Splunk rejects.
 
 ---
 

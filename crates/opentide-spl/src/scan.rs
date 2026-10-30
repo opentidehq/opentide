@@ -2,12 +2,13 @@
 //! comments, quoted strings and macros. They work on byte offsets into the
 //! authored text and never rewrite it.
 
+use super::Catalog;
+
 pub(crate) fn split_segments(source: &str, start: usize, end: usize) -> Vec<(usize, usize)> {
     let bytes = source.as_bytes();
     let mut i = start;
     let mut seg_start = start;
     let mut brackets = 0i32;
-    let mut parens = 0i32;
     let mut segs = Vec::new();
     while i < end {
         if let Some(next) = skip_hidden(source, i, end) {
@@ -15,33 +16,16 @@ pub(crate) fn split_segments(source: &str, start: usize, end: usize) -> Vec<(usi
             continue;
         }
         match bytes[i] {
-            b'|' if brackets == 0 && parens == 0 => {
+            // Parentheses are not counted: Splunk splits on `|` inside them.
+            b'|' if brackets == 0 => {
                 segs.push((seg_start, i));
-                i += 1;
-                seg_start = i;
+                seg_start = i + 1;
             }
-            b'[' => {
-                brackets += 1;
-                i += 1;
-            }
-            b']' => {
-                if brackets > 0 {
-                    brackets -= 1;
-                }
-                i += 1;
-            }
-            b'(' => {
-                parens += 1;
-                i += 1;
-            }
-            b')' => {
-                if parens > 0 {
-                    parens -= 1;
-                }
-                i += 1;
-            }
-            _ => i += 1,
+            b'[' => brackets += 1,
+            b']' if brackets > 0 => brackets -= 1,
+            _ => {}
         }
+        i += 1;
     }
     if seg_start < end {
         segs.push((seg_start, end));
@@ -213,4 +197,34 @@ pub(crate) fn skip_ws(bytes: &[u8], mut i: usize, end: usize) -> usize {
         i += 1;
     }
     i
+}
+
+/// The stage that reads the index: the first stage when the pipeline does
+/// not start with `|` (Splunk runs it as `search`), or a leading
+/// `| search ...`. A leading `| tstats`, `| inputlookup` and the like read no
+/// raw events, and every later stage filters results already in the pipeline.
+pub(crate) fn base_search(
+    source: &str,
+    segments: &[(usize, usize)],
+    catalog: &Catalog,
+) -> Option<(usize, usize)> {
+    let blank = |&(s, e): &(usize, usize)| skip_ws_and_comments(source, s, e) >= e;
+    let first = *segments.first()?;
+    if !blank(&first) {
+        let (word, span) = command_word(source, first.0, first.1);
+        let is_command = span.is_some_and(|(_, word_end)| {
+            catalog.command(&word).is_some() && !is_field(source, word_end, first.1)
+        });
+        return (!is_command || word.eq_ignore_ascii_case("search")).then_some(first);
+    }
+    // A leading `|`: only an explicit `search` reads the index.
+    let second = *segments.get(1)?;
+    let (word, _) = command_word(source, second.0, second.1);
+    word.eq_ignore_ascii_case("search").then_some(second)
+}
+
+/// Whether the word ending at `at` is a field (`stats=1`), not a command.
+pub(crate) fn is_field(source: &str, at: usize, end: usize) -> bool {
+    let i = skip_ws_and_comments(source, at, end);
+    matches!(source.as_bytes().get(i), Some(b'=' | b'!' | b'<' | b'>'))
 }

@@ -29,12 +29,12 @@
     },
     {
       "comment": "capture:keyword",
-      "match": "(?i)(?<![A-Za-z0-9_])(?:and|as|asc|by|consume|datatable|default|desc|distinct|evaluate|extend|externaldata|facet|filter|find|first|fork|from|getschema|graph\\-mark\\-components|graph\\-match|graph\\-shortest\\-paths|graph\\-to\\-table|invoke|join|kind|last|let|limit|lookup|make\\-graph|make\\-series|mv\\-apply|mv\\-expand|mvexpand|nulls|on|order|parse|parse\\-kv|parse\\-where|partition|print|project|project\\-away|project\\-keep|project\\-rename|project\\-reorder|range|reduce|render|sample|sample\\-distinct|scan|search|serialize|sort|step|summarize|take|to|top|top\\-hitters|top\\-nested|typeof|union|where|with)(?![A-Za-z0-9_])",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:and|as|asc|by|consume|datatable|declare|default|desc|distinct|evaluate|extend|external_data|externaldata|facet|filter|find|first|fork|from|getschema|granny\\-asc|granny\\-desc|graph\\-mark\\-components|graph\\-match|graph\\-shortest\\-paths|graph\\-to\\-table|invoke|join|kind|last|let|limit|lookup|make\\-graph|make\\-series|mv\\-apply|mv\\-expand|mvexpand|nulls|of|on|optional|order|others|output|parse|parse\\-kv|parse\\-where|partition|print|project|project\\-away|project\\-keep|project\\-rename|project\\-reorder|range|reduce|render|sample|sample\\-distinct|scan|search|serialize|sort|step|summarize|take|to|top|top\\-hitters|top\\-nested|typeof|union|where|with)(?![A-Za-z0-9_])",
       "name": "keyword.control.opentide"
     },
     {
       "comment": "capture:operator",
-      "match": "(?i)(?<![A-Za-z0-9_])(?:\\-|between|contains|contains_cs|endswith|endswith_cs|has|has_all|has_any|has_any_ipv4|has_any_ipv4_prefix|has_cs|has_ipv4|has_ipv4_prefix|hasprefix|hasprefix_cs|hassuffix|hassuffix_cs|in|matches|not|or|regex|startswith|startswith_cs)(?![A-Za-z0-9_])",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:\\-|between|contains|contains_cs|containscs|endswith|endswith_cs|has|has_all|has_any|has_any_ipv4|has_any_ipv4_prefix|has_cs|has_ipv4|has_ipv4_prefix|hasprefix|hasprefix_cs|hassuffix|hassuffix_cs|in|matches|not|notcontains|notcontainscs|or|regex|startswith|startswith_cs)(?![A-Za-z0-9_])",
       "name": "keyword.operator.opentide"
     },
     {
@@ -170,6 +170,11 @@
     {
       "comment": "capture:operator",
       "match": "==",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "=>",
       "name": "keyword.operator.opentide"
     },
     {

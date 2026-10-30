@@ -230,8 +230,19 @@ mod tests {
     }
 
     #[test]
-    fn parses_spl_catalog_command() {
+    fn parses_spl_stats_family() {
         let tree = parse(LanguageId::Spl, "index=main | timechart count by host").unwrap();
+        assert!(!has_error(&tree), "{}", tree.root_node().to_sexp());
+        assert!(
+            tree.root_node().to_sexp().contains("stats_command"),
+            "{}",
+            tree.root_node().to_sexp()
+        );
+    }
+
+    #[test]
+    fn parses_spl_catalog_command() {
+        let tree = parse(LanguageId::Spl, "index=main | top limit=10 host").unwrap();
         assert!(!has_error(&tree), "{}", tree.root_node().to_sexp());
         assert!(
             tree.root_node().to_sexp().contains("catalog_command"),

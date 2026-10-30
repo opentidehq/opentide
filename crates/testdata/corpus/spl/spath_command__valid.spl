@@ -1,0 +1,2 @@
+``` prod:spath_command valid
+index=main | spath input=x path=a{}.b output=y

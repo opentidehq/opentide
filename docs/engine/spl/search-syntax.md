@@ -27,6 +27,8 @@ search index=wineventlog EventCode=4688 process_name=powershell.exe
 
 Generating commands that **replace** implied search must be written with a leading pipe: `| tstats …`, `| makeresults`, `| inputlookup …`, `| from …`, `| rest …`, `| metadata …`.
 
+Without the pipe Splunk accepts the query and searches for the words: `tstats count where index=a by sourcetype` runs `search tstats count where index=a by sourcetype` and returns nothing. The engine parses it as search terms, as Splunk does, and reports `spl_command_without_pipe` (error) when the first word is a catalogued command followed by two or more terms; the fix adds `| `. A lone word (`error`, `tstats`) or a command word with one term (`delete user`) may be a real search and is not reported. A subsearch is different: Splunk runs a leading command word there as the command (`[makeresults | eval a=1]`, `[inputlookup t.csv]`).
+
 Citation: [search — The implied search command](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search).
 
 ## Field-value pairs
@@ -46,6 +48,25 @@ NOT field IN (v1, v2)
 - Field names with non-alphanumerics (other than `_`) need single quotes in `eval`/`where`: `'process-name'`.
 
 Citation: [search](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search), [Field expressions](https://docs.splunk.com/Documentation/Splunk/latest/Search/Fieldexpressions).
+
+### Operators search does not have
+
+`==`, `<>`, `=>`, `=<` and `!~` are not search operators. Splunk parses them without complaint and splits the comparison into separate terms (`status==200` runs as `status == 200`), so it never matches and a detection that uses one never fires. Tested on Splunk 10.6.1 with four rows whose `status` is 200, 200, 404 and 404:
+
+| Clause | Rows matched |
+| --- | --- |
+| `\| search status=200` | 2 |
+| `\| search status==200`, `status=="200"` | 0 |
+| `\| search status<>200` | 0 (`status!=200` matches 2) |
+| `\| search status!~200` | 0 |
+| `\| search status=>300`, `status=<300` | 0 (`>=` and `<=` match 2) |
+| `\| search NOT status==200` | 0 |
+| `\| search status==200 OR status=404` | 0 |
+| `\| where status==200` | 2 (`==` is valid in `eval` and `where`) |
+
+In `tstats … where` the same operators fail the search at run time (`WHERE clause is not an exact query`); in `inputlookup … where` the comparison is ignored, so every row passes. `=~` is `=` with a value that starts with `~`: `status=~200` matches the value `~200`, not a regular expression.
+
+The engine reports each one as `spl_search_operator` in a search clause (the base search, `| search`, a subsearch's search, `tstats … where` up to `by`, and `inputlookup … where`), never in `eval` or `where` and never inside a quoted value, a comment or a macro's arguments. `==`, `<>`, `=>` and `=<` are errors with a quick fix to `=`, `!=`, `>=` and `<=`. `!~` is an error with no fix: use `| where NOT match(field, "regex")`. `=~` is a warning with no fix, since a value can start with a tilde (`~/.ssh`, `~$report.docx`): use `| where match(field, "regex")` for a regular expression, or quote the value (`file="~$*"`) to keep the literal comparison.
 
 ### Default indexed fields
 
@@ -124,6 +145,12 @@ process_name=*.exe
 
 Leading wildcards (`*password*`) force scans of `_raw` and are expensive. `TERM()` forces a single indexed term; `CASE()` makes a term case-sensitive.
 
+The engine's `spl_wildcard` and `spl_leading_not` warnings describe that cost, which only a **base search** pays: the first stage of the query or of a subsearch (`| search` as the first stage counts). A later `| search` filters results already in the pipeline and is never flagged. Within a base search:
+
+- `field=*` and `field="*"` are the existence check (`isnotnull(field)`), not a scan, and are never flagged. A bare `*` term is.
+- A leading or mid-token wildcard is flagged only when nothing else narrows the read: no `index=`, `sourcetype=`, `source=` or `host=` value (other than `*` or a leading wildcard), no `IN` list on one of them, no `TERM()` or `PREFIX()`, and no macro (which usually expands to an index and sourcetype). `index=a src_user!="*$"` is fine; `index=* *foo*` is not.
+- `spl_leading_not` fires when the base search starts with `NOT` (`NOT user=x`, `search NOT user=x`), not on `index=a NOT user=x`.
+
 CIDR matching works on IPv4/IPv6 fields: `src_ip="10.0.0.0/8"`. Equivalent eval: `cidrmatch("10.0.0.0/8", src_ip)`.
 
 Citation: [search](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search).
@@ -153,6 +180,22 @@ index=web status>=400
 ```
 
 Citation: [search](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search) — “Use the vertical bar (`|`) to apply a command”.
+
+### Forms Splunk accepts that are mistakes
+
+`spl_parse_error` means Splunk's parser rejects the query. Checked against Splunk 10.6.1 (`search/parser` with `parse_only=t`, and as a real search), these forms parse and get their own code instead:
+
+| Form | Splunk | Diagnostic |
+| --- | --- | --- |
+| `\| where`, `\| search`, `\| fields`, `\| eventstats`, `\| streamstats`, `\| sistats`, `\| lookup` with no arguments | runs; keeps every row (`sistats` returns one summary row) | `spl_empty_command` (warning) |
+| `\| stats` with no arguments | runs; returns no results | `spl_empty_command` (error) |
+| `\| inputlookup` with no table, first in the search | runs; fails: the lookup table `''` needs a definition | `spl_empty_command` (error) |
+| `… \| stats count \|` | ignores the empty last stage | `spl_empty_stage` (warning) |
+| `tstats count where index=a by sourcetype` (no leading `\|`) | searches for the words, returns nothing | `spl_command_without_pipe` (error, with a fix) |
+
+Splunk also parses `==`, `<>`, `=>`, `=<` and `!~` in a search (`status==200`, `status == 200`, even `a==` or `==1`) and in `inputlookup ... where`, but splits each into separate terms (`status == 200`), so the comparison never matches. They parse here too; `tstats ... where` rejects them ("WHERE clause is not an exact query"), and so does the engine (`spl_parse_error`). `x=~1` is `=` with the value `~1`. A `|` ends the stage even inside an open `(` or `TERM(` (`TERM(x|y)` runs a command `y)`), but not inside quotes, comments, macros or a subsearch's `[ ]`.
+
+`head`, `spath`, `fillnull`, `tojson` and `tail` have defaults and are not reported. Splunk rejects, and the engine reports `spl_parse_error` for: an empty stage before another (`… \| \| stats count`) or at the end of a subsearch (`[search a \|]`), `inputlookup` with no table later in a pipeline, `\| index=a`, and these commands with no arguments: `chart`, `timechart`, `sichart`, `sitimechart`, `geostats`, `foreach`, `outputlookup`, `sort`, `rename`, `dedup`, `table`, `eval`, `rex`, `mvexpand`, `makemv`, `join`, `append`, `top`, `rare`, `transaction`, `bin`, `tstats`, and other catalogued commands Splunk requires arguments for (`xyseries`, `regex`, `iplocation`, `rest`, `metadata`, …). Unbalanced parentheses are a syntax error at the parenthesis (`unbalanced parentheses: this ')' has no matching '('`); an unclosed `TERM(x` is not, since Splunk matches it like `TERM(x)`.
 
 ## Subsearches `[ ]`
 
