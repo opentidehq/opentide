@@ -7,7 +7,7 @@ v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations
 ## Product hierarchy
 
 1. **Query languages** — standalone files and YAML-injected `query: |` / `search` blocks (KQL, SPL, and the Elastic languages selected by `type` and `language`).
-2. **Tide objects** — DetectionOps product (schema, vocabs, UUID graph, CLI-equivalent diagnostics).
+2. **Tide objects** — the opentide catalogue (schema, vocabs, UUID graph, CLI-equivalent diagnostics).
 3. **Hosts** consume the engine plus frozen HighlightSpec artifacts.
 
 ## Install
