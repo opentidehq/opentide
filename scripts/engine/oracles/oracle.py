@@ -399,7 +399,9 @@ def kql_schema() -> dict:
     hunting tables, and each ASIM parser returning its schema."""
     reference = load_toml("catalogs/kql/azure-monitor/tables.toml")
     tables: dict[str, list[list[str]]] = {
-        t["name"]: [list(c) for c in t["columns"]] for t in reference["tables"] if t.get("columns")
+        t["name"]: [[c["name"], c["type"]] for c in t["columns"]]
+        for t in reference["tables"]
+        if t.get("columns")
     }
     standard = [
         ["TenantId", "string"], ["TimeGenerated", "datetime"], ["Type", "string"],
@@ -423,7 +425,7 @@ def kql_schema() -> dict:
     schemas = {s["name"]: s for s in asim["schemas"]}
     functions = {
         p["name"]: {
-            "columns": [[c[0], c[1]] for c in schemas[p["schema"]]["columns"]],
+            "columns": [[c["name"], c["type"]] for c in schemas[p["schema"]]["columns"]],
             "params": [[q["name"], q["type"]] for q in p.get("params", [])],
         }
         for p in asim["parsers"]

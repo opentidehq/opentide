@@ -182,8 +182,22 @@ pub struct ColumnRow {
     pub name: String,
     #[serde(default, rename = "type")]
     pub type_name: Option<String>,
+    /// The column's description (Markdown): hand-written, or the first
+    /// sentence of the Azure Monitor Logs reference's.
     pub docs: Option<String>,
     pub citation: Option<String>,
+    /// Added from the Azure Monitor Logs reference
+    /// (`catalogs/kql/azure-monitor/tables.toml`), not the hand-written catalog.
+    #[serde(skip)]
+    pub from_reference: bool,
+}
+
+impl ColumnRow {
+    /// A column of the hand-written catalog with its docs: the columns offered
+    /// before the query names a table, out of the whole reference's.
+    fn hand_written(&self) -> bool {
+        !self.from_reference && self.docs.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -326,12 +340,12 @@ impl Catalog {
             if row.citation.is_none() {
                 row.citation = Some(reference.citation.clone());
             }
-            for (column, type_name) in listed {
-                let key = (row.name.clone(), column.clone());
+            for column in listed {
+                let key = (row.name.clone(), column.name.clone());
                 if let Some(&i) = hand.get(&key) {
                     // Where the hand-written type disagrees with the
                     // reference, neither is trusted for type checks.
-                    if columns[i].type_name.as_deref() != Some(type_name) {
+                    if columns[i].type_name.as_deref() != Some(column.type_name.as_str()) {
                         columns[i].type_name = None;
                     }
                     continue;
@@ -340,10 +354,11 @@ impl Catalog {
                 columns.push(ColumnRow {
                     table: row.name.clone(),
                     profile: Some(profile_name.into()),
-                    name: column.clone(),
-                    type_name: Some(type_name.clone()),
-                    docs: None,
+                    name: column.name.clone(),
+                    type_name: Some(column.type_name.clone()),
+                    docs: column.description.clone(),
                     citation: Some(reference.citation.clone()),
+                    from_reference: true,
                 });
             }
         }
@@ -361,6 +376,7 @@ impl Catalog {
                     type_name: Some("datetime".into()),
                     docs: Some("Event time in advanced hunting.".into()),
                     citation: row.citation.clone(),
+                    from_reference: false,
                 });
             }
         }
@@ -492,7 +508,7 @@ impl Catalog {
         // catalog's, not every column of every table in the reference.
         self.columns
             .iter()
-            .find(|c| c.name == name && c.docs.is_some())
+            .find(|c| c.name == name && c.hand_written())
     }
 
     pub fn option_values(&self, operator: &str, option: &str) -> &[String] {
@@ -1528,7 +1544,7 @@ pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<Complet
                 catalog
                     .columns
                     .iter()
-                    .filter(|c| c.docs.is_some())
+                    .filter(|c| c.hand_written())
                     .collect()
             } else {
                 mentioned
@@ -1851,17 +1867,35 @@ fn column_hover(source: &str, offset: usize, catalog: &Catalog) -> Option<String
             md.push_str(&format!("\n\nRenamed from `{old}` by `{}`.", by.keyword()));
         }
         (None, Some(by)) => md.push_str(&format!("\n\nMade by `{}`.", by.keyword())),
-        (_, None) => {
-            if let Some(row) = catalog.resolve_column(source, &column.name) {
-                md.push_str(&format!("\n\nOn `{}`.", row.table));
-                if let Some(docs) = &row.docs {
-                    md.push_str(&format!(" {docs}"));
-                }
-                if let Some(c) = &row.citation {
-                    md.push_str(&format!("\n\n[Microsoft Learn]({c})"));
+        (_, None) => match &column.origin {
+            Some(schema::Origin::Asim { schema, class }) => {
+                md.push_str(&format!("\n\n{class} field of the ASIM `{schema}` schema."));
+                if let Some(c) = tables::asim().citation(schema) {
+                    md.push_str(&format!("\n\n[ASIM {schema} schema]({c})"));
                 }
             }
-        }
+            origin => {
+                // The origin table's own row: a column of `union A, B` or of
+                // the right side of a `join` is described from its table.
+                let row = match origin {
+                    Some(schema::Origin::Table(table)) => catalog
+                        .columns_for_table(table)
+                        .into_iter()
+                        .find(|c| &c.table == table && c.name == column.name),
+                    _ => None,
+                }
+                .or_else(|| catalog.resolve_column(source, &column.name));
+                if let Some(row) = row {
+                    md.push_str(&format!("\n\nOn `{}`.", row.table));
+                    if let Some(docs) = &row.docs {
+                        md.push_str(&format!(" {docs}"));
+                    }
+                    if let Some(c) = &row.citation {
+                        md.push_str(&format!("\n\n[Microsoft Learn]({c})"));
+                    }
+                }
+            }
+        },
     }
     Some(md)
 }

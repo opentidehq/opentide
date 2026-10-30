@@ -3,7 +3,7 @@
 
 use opentide_core::{Position, Severity, codes};
 use opentide_kql::schema::Known;
-use opentide_kql::{Profile, analyze, columns, hover, signature_help};
+use opentide_kql::{Profile, analyze, columns, completions, hover, signature_help};
 
 fn errors(src: &str, profile: Profile) -> Vec<(String, String, Option<String>)> {
     analyze(src, profile)
@@ -338,6 +338,78 @@ fn hover_on_a_renamed_column_shows_its_new_name_and_type() {
         md.contains("unifying ASIM parser") && md.contains("dstportnumber: int"),
         "{md}"
     );
+}
+
+#[test]
+fn hover_on_a_reference_column_shows_its_description() {
+    let src = "SigninLogs | where isnotempty(AppliedEventListeners)";
+    let md = hover_at(src, "AppliedEventListeners", 0);
+    assert!(
+        md.starts_with("**AppliedEventListeners** column (`dynamic`)"),
+        "{md}"
+    );
+    assert!(
+        md.contains(
+            "On `SigninLogs`. Detailed information about the listeners, such as Azure Logic Apps \
+             and Azure Functions, that were triggered by the corresponding events in the sign-in event."
+        ),
+        "{md}"
+    );
+    assert!(
+        md.contains(
+            "(https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs)"
+        ),
+        "{md}"
+    );
+    // The column is described from the table it comes from, not from the
+    // first table the query names.
+    let src = "SigninLogs | take 1 | union (AADNonInteractiveUserSignInLogs | where isnotempty(AppliedEventListeners))";
+    let md = hover_at(src, "AppliedEventListeners", 0);
+    assert!(
+        md.contains("On `AADNonInteractiveUserSignInLogs`. Detailed information about the applied event listeners"),
+        "{md}"
+    );
+}
+
+#[test]
+fn hover_on_an_asim_column_shows_its_schema_and_class() {
+    let md = hover_at(
+        "_Im_NetworkSession | where SrcIpAddr == '10.0.0.1'",
+        "SrcIpAddr",
+        0,
+    );
+    assert!(md.starts_with("**SrcIpAddr** column (`string`)"), "{md}");
+    assert!(
+        md.contains("Recommended field of the ASIM `NetworkSession` schema."),
+        "{md}"
+    );
+    assert!(
+        md.contains("(https://aka.ms/ASimNetworkSessionDoc)"),
+        "{md}"
+    );
+}
+
+#[test]
+fn column_completion_documents_reference_columns() {
+    let src = "SigninLogs | where ";
+    let items = completions(src, src.len(), Profile::Sentinel);
+    let item = items
+        .iter()
+        .find(|i| i.label == "AppliedEventListeners")
+        .expect("column item");
+    assert_eq!(item.detail.as_deref(), Some("SigninLogs (dynamic)"));
+    assert!(
+        item.documentation
+            .as_deref()
+            .is_some_and(|d| d.starts_with("Detailed information about the listeners")),
+        "{item:?}"
+    );
+    // With no table named, only the hand-written columns are offered, not
+    // every documented column of the reference.
+    let src = "print x = 1 | where ";
+    let items = completions(src, src.len(), Profile::Sentinel);
+    assert!(items.iter().any(|i| i.label == "UserPrincipalName"));
+    assert!(!items.iter().any(|i| i.label == "AppliedEventListeners"));
 }
 
 #[test]
