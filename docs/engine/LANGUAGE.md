@@ -43,6 +43,15 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.dynamic | `dynamic_literal` | `dynamic_literal__valid` | `type` |
 | kql.materialize | `materialize_expression` | `materialize_expression__valid` | `function.builtin` |
 | kql.toscalar | `toscalar_expression` | `toscalar_expression__valid` | `function.builtin` |
+| kql.typed-literal | `typed_literal` | `typed_literal__valid`, `typed_literal__invalid` | `constant` |
+| kql.externaldata | `externaldata_expression` | `externaldata_expression__valid`, `externaldata_expression__invalid` | `keyword` |
+| kql.range | `range_operator` | `range_operator__valid` | `keyword` |
+| kql.top-nested | `top_nested_operator`, `top_nested_clause` | `top_nested_operator__valid` | `keyword` |
+| kql.sample-distinct | `sample_distinct_operator` | `sample_distinct_operator__valid` | `keyword` |
+| kql.fork | `fork_operator`, `fork_branch` | `fork_operator__valid` | `keyword` |
+| kql.facet | `facet_operator` | `facet_operator__valid` | `keyword` |
+| kql.partition | `partition_operator` | `partition_operator__valid` | `keyword` |
+| kql.scan | `scan_operator`, `scan_step` | `scan_operator__valid` | `keyword` |
 
 Control commands are parsed so the engine can reject them. They are not valid detections.
 
