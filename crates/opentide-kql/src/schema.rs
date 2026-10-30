@@ -52,6 +52,9 @@ pub struct Column {
     pub made_by: Option<MadeBy>,
     /// The column it renames (`project-rename New = Old`, `project New = Old`).
     pub renamed_from: Option<String>,
+    /// The catalog table or ASIM schema it comes from; `None` for a column
+    /// the query makes or a source the catalog does not know.
+    pub origin: Option<Origin>,
 }
 
 impl Column {
@@ -61,8 +64,23 @@ impl Column {
             type_name,
             made_by: None,
             renamed_from: None,
+            origin: None,
         }
     }
+
+    fn with_origin(mut self, origin: Origin) -> Self {
+        self.origin = Some(origin);
+        self
+    }
+}
+
+/// Where a column of a source comes from: what hover describes it with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Origin {
+    /// A catalog table (`SigninLogs`): its catalog row has the column's docs.
+    Table(String),
+    /// An ASIM schema, with the column's class (`Mandatory`, `Optional`, ...).
+    Asim { schema: String, class: String },
 }
 
 /// How completely the pass knows a pipeline's columns.
@@ -502,7 +520,10 @@ impl<'a> Pass<'a> {
             .columns_for_table(name)
             .into_iter()
             .filter(|c| c.table == name)
-            .map(|c| Column::new(c.name.clone(), c.type_name.clone()))
+            .map(|c| {
+                Column::new(c.name.clone(), c.type_name.clone())
+                    .with_origin(Origin::Table(name.to_string()))
+            })
             .collect();
         // The documented columns are reliable but not complete: tables gain
         // columns before the reference lists them. A near miss of one is a
@@ -524,9 +545,10 @@ impl<'a> Pass<'a> {
         if self.catalog.profile == Profile::Sentinel && table.documented {
             for (column, type_name) in tables::STANDARD_COLUMNS {
                 if !schema.has(column) {
-                    schema
-                        .columns
-                        .push(Column::new(*column, Some((*type_name).to_string())));
+                    schema.columns.push(
+                        Column::new(*column, Some((*type_name).to_string()))
+                            .with_origin(Origin::Table(name.to_string())),
+                    );
                 }
             }
         }
@@ -541,7 +563,14 @@ impl<'a> Pass<'a> {
             columns: schema
                 .columns
                 .iter()
-                .map(|c| Column::new(c.0.clone(), Some(c.1.clone())))
+                .map(|c| {
+                    Column::new(c.name.clone(), Some(c.type_name.clone())).with_origin(
+                        Origin::Asim {
+                            schema: parser.schema.clone(),
+                            class: c.class.clone(),
+                        },
+                    )
+                })
                 .collect(),
             known: Known::Typos,
             source: Source::Asim {

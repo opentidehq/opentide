@@ -35,7 +35,7 @@ Machine-readable catalogs live under [`/workspace/catalogs/kql/`](../../catalogs
 | `catalogs/kql/sentinel/columns.toml` | Sentinel table columns (hover / `| where` completions) | [`DESIGN.md`](DESIGN.md) |
 | `catalogs/kql/defender/columns.toml` | Defender hunting columns | [`DESIGN.md`](DESIGN.md) |
 | `catalogs/kql/core/operator-options.toml` | `join kind=` and related options | [`DESIGN.md`](DESIGN.md) |
-| `catalogs/kql/azure-monitor/tables.toml` | 943 Azure Monitor Logs tables with their columns, generated | [`columns.md`](columns.md) |
+| `catalogs/kql/azure-monitor/tables.toml` | 943 Azure Monitor Logs tables with their columns and column descriptions, generated | [`columns.md`](columns.md) |
 | `catalogs/kql/asim/asim.toml` | 14 ASIM schemas and 1019 parsers, generated | [`columns.md`](columns.md) |
 | *(design)* | — | [`DESIGN.md`](DESIGN.md) |
 

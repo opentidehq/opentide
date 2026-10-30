@@ -16,7 +16,14 @@ Azure-Sentinel (MIT) describe it in machine-readable form:
   the source parsers a unifying parser calls.
 
 The catalog keeps the facts: names, types, classes, parameters with their
-type and default, and each schema's documentation link from its parser.
+type and default, and each schema's documentation link from its parser. Each
+column is a `[[schemas.columns]]` sub-table, one key per line.
+
+The columns carry no description: the checkout has no machine-readable one.
+ASimTester.csv has none, and the field descriptions live only in the schema
+articles' prose tables on Microsoft Learn (MicrosoftDocs/azure-docs, outside
+Azure-Sentinel). Hover names a column's schema and class and links the
+schema's documentation.
 
 Usage (a sparse checkout is enough):
     git clone --depth 1 --filter=blob:none --sparse https://github.com/Azure/Azure-Sentinel.git
@@ -66,21 +73,25 @@ def kusto_type(raw: str, where: str) -> str:
 
 
 def read_schemas(sentinel: Path) -> dict[str, dict]:
-    rows: dict[str, dict[str, list[str]]] = {}
-    common: dict[str, list[str]] = {}
+    rows: dict[str, dict[str, dict[str, str]]] = {}
+    common: dict[str, dict[str, str]] = {}
     with (sentinel / TESTER).open(encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
             column = row["ColumnName"].strip()
             schema = row["Schema"].strip()
             if not NAME.fullmatch(column) or not schema:
                 continue
-            entry = [column, kusto_type(row["ColumnType"], f"{schema}.{column}"), row["Class"].strip()]
+            entry = {
+                "name": column,
+                "type": kusto_type(row["ColumnType"], f"{schema}.{column}"),
+                "class": row["Class"].strip(),
+            }
             target = common if schema == "Common" else rows.setdefault(schema, {})
             target[column] = entry
     schemas = {}
     for schema, columns in rows.items():
         merged = {**common, **columns}
-        schemas[schema] = {"columns": sorted(merged.values(), key=lambda c: c[0].lower())}
+        schemas[schema] = {"columns": sorted(merged.values(), key=lambda c: c["name"].lower())}
     return schemas
 
 
@@ -164,8 +175,10 @@ def dump(payload: dict) -> str:
         lines += ["", "[[schemas]]", f"name = {toml_string(name)}"]
         if "citation" in schema:
             lines.append(f"citation = {toml_string(schema['citation'])}")
-        columns = ", ".join("[" + ", ".join(toml_string(v) for v in c) + "]" for c in schema["columns"])
-        lines.append(f"columns = [{columns}]")
+        for column in schema["columns"]:
+            lines.append("[[schemas.columns]]")
+            for key in ("name", "type", "class"):
+                lines.append(f"{key} = {toml_string(column[key])}")
     for parser in payload["parsers"]:
         lines += ["", "[[parsers]]", f"name = {toml_string(parser['name'])}"]
         lines.append(f"schema = {toml_string(parser['schema'])}")

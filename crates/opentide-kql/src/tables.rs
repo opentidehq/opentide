@@ -25,10 +25,24 @@ pub struct AzureMonitorTable {
     #[serde(default)]
     pub categories: Vec<String>,
     pub citation: String,
-    /// `[name, type]` for every column; `None` for a table whose columns
-    /// depend on what writes to it (AzureDiagnostics).
+    /// Every column; `None` for a table whose columns depend on what writes
+    /// to it (AzureDiagnostics).
     #[serde(default)]
-    pub columns: Option<Vec<(String, String)>>,
+    pub columns: Option<Vec<AzureMonitorColumn>>,
+}
+
+/// One column of an Azure Monitor Logs table.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AzureMonitorColumn {
+    pub name: String,
+    /// The Kusto scalar type.
+    #[serde(rename = "type")]
+    pub type_name: String,
+    /// The first sentence of the reference's description (Markdown); `None`
+    /// where the reference has none or the column comes from Azure-Sentinel's
+    /// validation schemas.
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,10 +84,16 @@ pub fn is_custom_column(name: &str) -> bool {
     name.ends_with("_CF")
 }
 
-/// One ASIM schema column: name, Kusto type, and class (`Mandatory`,
-/// `Recommended`, `Optional`, `Conditional`, `Alias`).
+/// One ASIM schema column.
 #[derive(Debug, Clone, Deserialize)]
-pub struct AsimColumn(pub String, pub String, pub String);
+pub struct AsimColumn {
+    pub name: String,
+    /// The Kusto scalar type.
+    #[serde(rename = "type")]
+    pub type_name: String,
+    /// `Mandatory`, `Recommended`, `Optional`, `Conditional` or `Alias`.
+    pub class: String,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AsimSchema {
@@ -195,9 +215,11 @@ mod tests {
             );
         }
         let (_, ns) = a.schema_of("_Im_NetworkSession").unwrap();
-        assert!(ns.columns.iter().any(|c| c.0 == "DstPortNumber"));
+        let dst = ns.columns.iter().find(|c| c.name == "DstPortNumber");
+        assert_eq!(dst.map(|c| c.type_name.as_str()), Some("int"));
         // Common fields are part of every schema.
-        assert!(ns.columns.iter().any(|c| c.0 == "EventProduct"));
+        let product = ns.columns.iter().find(|c| c.name == "EventProduct");
+        assert_eq!(product.map(|c| c.class.as_str()), Some("Mandatory"));
         let im = a.parser("_Im_NetworkSession").unwrap();
         assert!(im.params.iter().any(|p| p.name == "dstportnumber"));
     }

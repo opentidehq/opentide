@@ -16,7 +16,8 @@ scripts/sync_azure_monitor_tables.py)
 Copyright Microsoft Corporation
 Licensed under the Creative Commons Attribution 4.0 International License
 (https://creativecommons.org/licenses/by/4.0/). The table and column names
-and types are reformatted; table descriptions are cut to their first sentence.
+and types are reformatted; table and column descriptions are cut to their
+first sentence.
 
 Microsoft Sentinel (catalogs/kql/asim/asim.toml, generated from
 Azure/Azure-Sentinel by scripts/sync_asim_schemas.py; and the columns of its
