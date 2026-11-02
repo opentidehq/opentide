@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Fixed
 
 - **`opentide lint` checks the queries of an object file that starts with a UTF-8 byte-order mark** ([#719](https://github.com/opentidehq/opentide/issues/719)). `lint` read object files as `utf-8`, so the BOM reached the engine, which found no query in the file: none of that rule's queries was analysed, and `lint` reported nothing for it while `validate` did. Object and query files are now read as `utf-8-sig` wherever opentide hands their text to the engine or parses them (`lint`, `validate`, `validate query`, `tui`, code frames, `opentide query --query-file`), so a BOM changes no finding. A query file (`.kql`, `.spl`, ...) that starts with one no longer has its line-1 findings one column off.
+- **MCP `validate_query` knows the datasets the workspace's `visibility.toml` declares** ([#720](https://github.com/opentidehq/opentide/issues/720)). The offline check ran the engine without the workspace's declarations, so an agent got other findings than `opentide validate query` and `lint` on the same query: a declared custom table was unknown (an error under `defender_for_endpoint`), and a table it did not declare was not reported. The tool now hands the engine `.opentide/configurations/visibility.toml` before each check, read afresh on every call so an edit applies at once; a server started as an Agent Plugin with no workspace declares nothing. See [validate_query](docs/mcp/tools.md#validate_query).
 
 ## [0.20.0] — 2026-11-02
 
