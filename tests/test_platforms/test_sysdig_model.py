@@ -175,3 +175,11 @@ def test_legacy_external_id_keys_are_dropped_by_the_loader_only() -> None:
     with pytest.raises(ValidationError):
         SysdigConfig.model_validate(block)
     assert isinstance(load_platform_config("sysdig", block), SysdigConfig)
+
+
+@pytest.mark.parametrize(("raw", "text"), [(0.37, "0.37"), (17, "17"), ("0.39.0", "0.39.0")])
+def test_required_engine_version_reads_a_yaml_number_as_text(raw: object, text: str) -> None:
+    block = SysdigConfig.model_validate(
+        {"status": "STAGING", "condition": "proc.name = sh", "required_engine_version": raw}
+    )
+    assert block.required_engine_version == text

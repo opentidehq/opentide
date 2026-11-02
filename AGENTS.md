@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across eight security platforms.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across nine security platforms.
 
 **Entry point:** this file, then a domain skill from [`.agents/skills/`](.agents/skills/) when the task matches.
 
@@ -102,7 +102,7 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | Carbon Black | ✅ | ✅ Lucene | ✅ Lucene | ✅ Lucene |
 | CrowdStrike | ✅ | ❌ | ❌ | ✅ CQL (Next-Gen SIEM) |
 | HarfangLab | ✅ | ❌ | ❌ | ✅ telemetry filters (no `--rule`) |
-| Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco (pending engine) | ❌ |
+| Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
 
 CrowdStrike, HarfangLab and Sysdig: `can_validate is False` — return `supported: False`, never fake validation.
 Sysdig (`src/opentide/platforms/sysdig/`) delivers per tenant: `api` (Sysdig Secure, rule id in deployment

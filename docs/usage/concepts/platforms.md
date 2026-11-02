@@ -19,7 +19,7 @@ opentide integrates with **nine detection platforms** through built-in adapters 
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | yes | yes | Lucene |
 | CrowdStrike Falcon | `crowdstrike` | yes | no | no | yes | correlation filter (CQL) |
 | HarfangLab | `harfanglab` | yes | no | no | telemetry filters | Sigma or YARA |
-| Sysdig Secure (Falco) | `sysdig` | yes | no | not yet (engine) | no | Falco condition |
+| Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 

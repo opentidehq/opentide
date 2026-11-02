@@ -279,6 +279,7 @@ _DEFAULT_QUERY_LANGUAGE = {
     "splunk": "spl",
     "carbon_black_cloud": "lucene",
     "elastic": "kuery",
+    "sysdig": "falco",
 }
 
 
@@ -289,7 +290,12 @@ def tool_validate_query(
 
     ``live=True`` validates the catalogue rules for ``platform``, not ``query``.
     """
-    if platform not in QUERY_VALIDATION_PLATFORMS:
+    from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
+
+    # Sysdig is checked offline (Falco) but has no tenant check.
+    if platform not in QUERY_VALIDATION_PLATFORMS and (
+        live or platform not in OFFLINE_QUERY_PLATFORMS
+    ):
         return {
             "valid": None,
             "supported": False,

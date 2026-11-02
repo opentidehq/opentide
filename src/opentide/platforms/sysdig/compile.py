@@ -66,6 +66,7 @@ DEFAULT_OUTPUT_FIELDS: dict[str, str] = {
 #: Status strategy → the Falco maturity tag (sysdig-1.0, Tags).
 MATURITY_TAG: dict[StatusStrategy, str] = {
     StatusStrategy.RELEASE: "maturity_stable",
+    StatusStrategy.UNIVERSAL: "maturity_stable",
     StatusStrategy.PREVIEW: "maturity_incubating",
 }
 SANDBOX_TAG = "maturity_sandbox"

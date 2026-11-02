@@ -77,6 +77,32 @@ def test_validate_query_reports_sysdig_unsupported(invoke_cli) -> None:
     assert payload["platform"] == "sysdig"
 
 
+def test_validate_query_checks_a_falco_file_offline(invoke_cli, tmp_path: Path) -> None:
+    clean = tmp_path / "shell.falco"
+    clean.write_text("spawned_process and container and proc.name = bash\n", encoding="utf-8")
+    assert_json_ok(invoke_cli("validate", "query", "--platform", "sysdig", "--file", str(clean)))
+    broken = tmp_path / "broken.falco"
+    broken.write_text("spawned_process and (proc.name = bash\n", encoding="utf-8")
+    result = invoke_cli("validate", "query", "--platform", "sysdig", "--file", str(broken))
+    assert result.exit_code == 1
+    assert "falco_parse_error" in result.output
+
+
+def test_validate_fails_a_rule_whose_condition_does_not_parse(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    path = tide_corpus_repo / "objects" / "rules" / RULE
+    text = path.read_text(encoding="utf-8")
+    assert "proc.name in (corpus_shells)" in text
+    path.write_text(
+        text.replace("proc.name in (corpus_shells)", "proc.name in (corpus_shells"),
+        encoding="utf-8",
+    )
+    result = invoke_cli("validate", "--file", RULE)
+    assert result.exit_code == 1
+    assert "falco_parse_error" in result.output
+
+
 def test_query_names_the_platforms_it_supports(invoke_cli) -> None:
     result = invoke_cli("query", "--platform", "sysdig", "evt.type = execve")
     assert result.exit_code == 2

@@ -143,7 +143,7 @@ def test_default_output_of_another_source_is_the_rule_name() -> None:
     [
         (StatusStrategy.RELEASE, "maturity_stable"),
         (StatusStrategy.PREVIEW, "maturity_incubating"),
-        (StatusStrategy.UNIVERSAL, "maturity_sandbox"),
+        (StatusStrategy.UNIVERSAL, "maturity_stable"),
         (StatusStrategy.DISABLEMENT, "maturity_sandbox"),
     ],
 )

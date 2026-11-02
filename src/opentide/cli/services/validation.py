@@ -809,7 +809,15 @@ def validate_query_platform(
     rules they select; without them every rule file is read.
     """
     ctx.apply_environment()
-    if platform is not None and platform not in QUERY_VALIDATION_PLATFORMS:
+    from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
+
+    # Sysdig has no tenant check but an offline one (the Falco engine): only
+    # --live is unsupported there. CrowdStrike and HarfangLab have neither.
+    if (
+        platform is not None
+        and platform not in QUERY_VALIDATION_PLATFORMS
+        and (live or platform not in OFFLINE_QUERY_PLATFORMS)
+    ):
         # Returned rather than emitted directly: a raw `emit` skips the
         # ok/status envelope every other command promises, so a caller parsing
         # `--json` got a differently-shaped document for this one branch.

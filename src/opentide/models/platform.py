@@ -16,7 +16,7 @@ import re
 from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, cast
 
-from pydantic import AfterValidator, model_validator
+from pydantic import AfterValidator, BeforeValidator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
@@ -684,6 +684,15 @@ def _sysdig_definitions(
     return macros, lists
 
 
+def _engine_version_text(value: Any) -> Any:
+    """A Falco engine version written as a YAML number (`0.37`, `17`) is its text."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return str(value)
+    return value
+
+
 class SysdigConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::sysdig::1.0"
     # Its before-validator reports the constraint codes; it accepts no extra key.
@@ -722,8 +731,9 @@ class SysdigConfig(PlatformConfigBase):
     policies: list[str] | None = None
     """Names of Sysdig runtime policies the rule joins (`api` delivery). Default: the tenant
     `policies`."""
-    required_engine_version: str | None = None
-    """Falco engine version the rule needs (`0.39.0`), written to rules files."""
+    required_engine_version: Annotated[str, BeforeValidator(_engine_version_text)] | None = None
+    """Falco engine version the rule needs (`0.39.0`), written to rules files. A YAML
+    number (`0.37`, or a legacy integer engine version such as `17`) is read as its text."""
     required_plugin_versions: list[SysdigPluginVersion] | None = None
     """Plugins the rule needs, written to rules files."""
 

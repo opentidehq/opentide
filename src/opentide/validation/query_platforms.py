@@ -18,6 +18,7 @@ QUERY_VALIDATION_PLATFORMS: frozenset[str] = frozenset(
 )
 
 #: Platforms whose rule queries the analysis engine checks offline, and their languages.
+#: Sysdig's Falco condition is checked offline only: Sysdig has no rule preview.
 #: SentinelOne (S1QL) is checked on the tenant only (``validate query --live``).
 #: CrowdStrike and HarfangLab are never checked: no fake validation.
 OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
@@ -26,5 +27,6 @@ OFFLINE_QUERY_LANGUAGES: dict[str, tuple[str, ...]] = {
     "splunk": ("spl",),
     "elastic": ("esql", "eql", "kuery", "lucene"),
     "carbon_black_cloud": ("lucene",),
+    "sysdig": ("falco",),
 }
 OFFLINE_QUERY_PLATFORMS = frozenset(OFFLINE_QUERY_LANGUAGES)

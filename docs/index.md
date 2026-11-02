@@ -1,6 +1,6 @@
 ---
 title: opentide
-description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across eight security platforms.
+description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across nine security platforms.
 ---
 
 # opentide
