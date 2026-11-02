@@ -98,6 +98,12 @@ fn each_finding_is_placed_on_its_key() {
             "Field required",
         ),
         issue(
+            "missing_field",
+            &["misp", "1", "api_key"],
+            Severity::Error,
+            "[[misp]] block 'misp-lab' is missing api_key.",
+        ),
+        issue(
             "sharing_directory",
             &[],
             Severity::Error,
@@ -106,7 +112,7 @@ fn each_finding_is_placed_on_its_key() {
     ]);
     let found = configuration_diagnostics(SHARING, text, &[]);
     set_configuration_checker(None);
-    assert_eq!(found.len(), 4);
+    assert_eq!(found.len(), 5);
 
     let unknown = &found[0];
     assert_eq!(unknown.code, "unknown_key");
@@ -130,8 +136,15 @@ fn each_finding_is_placed_on_its_key() {
     assert_eq!(missing.range.start.line, 5, "{missing:?}");
     assert_eq!(missing.message, "misp[1].url: Field required");
 
+    // A message that names the key is left as it is.
+    assert_eq!(found[3].range.start.line, 5);
+    assert_eq!(
+        found[3].message,
+        "[[misp]] block 'misp-lab' is missing api_key."
+    );
+
     // About the whole file: its first line.
-    let directory = &found[3];
+    let directory = &found[4];
     assert_eq!(directory.range.start.line, 0);
     assert_eq!(directory.range.end.character, "# Sharing".len() as u32);
     assert_eq!(directory.field_path, None);

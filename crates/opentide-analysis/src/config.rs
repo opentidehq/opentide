@@ -133,7 +133,13 @@ fn place(
         Err(error) if issue.field_path.is_empty() => (error.span(), true),
         Err(_) => (None, false),
     };
-    let message = if resolved || issue.field_path.is_empty() {
+    // A finding the buffer cannot hold at its key says which key it is about,
+    // unless its message already names it ("block 'a' is missing url.").
+    let named = issue
+        .field_path
+        .last()
+        .is_some_and(|key| names_word(&issue.message, key));
+    let message = if resolved || issue.field_path.is_empty() || named {
         issue.message
     } else {
         format!("{}: {}", display_path(&issue.field_path), issue.message)
@@ -163,6 +169,16 @@ fn place(
 fn first_line(text: &str) -> Range {
     let end = text.find(['\r', '\n']).unwrap_or(text.len());
     span_to_range(text, ByteSpan::new(0, end))
+}
+
+/// Whether `text` holds `word` on its own, not inside a longer name.
+fn names_word(text: &str, word: &str) -> bool {
+    let is_name = |ch: char| ch.is_alphanumeric() || ch == '_' || ch == '-';
+    text.match_indices(word).any(|(start, _)| {
+        let before = text[..start].chars().next_back();
+        let after = text[start + word.len()..].chars().next();
+        !before.is_some_and(is_name) && !after.is_some_and(is_name)
+    })
 }
 
 /// `misp[0].max_tlp` for `["misp", "0", "max_tlp"]`.
@@ -941,6 +957,13 @@ mod tests {
         assert_eq!(dotted("a.b"), ["a", "b"]);
         assert_eq!(dotted(" a . \"b.c\" .d"), ["a", "b.c", "d"]);
         assert_eq!(dotted("'x.y'"), ["x.y"]);
+    }
+
+    #[test]
+    fn a_message_names_a_key_only_as_a_whole_word() {
+        assert!(names_word("block 'a' is missing url.", "url"));
+        assert!(!names_word("block 'a' is missing url_base.", "url"));
+        assert!(!names_word("Field required", "url"));
     }
 
     #[test]
