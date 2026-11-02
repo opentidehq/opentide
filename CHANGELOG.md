@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- **`opentide lint` checks the queries of an object file that starts with a UTF-8 byte-order mark** ([#719](https://github.com/opentidehq/opentide/issues/719)). `lint` read object files as `utf-8`, so the BOM reached the engine, which found no query in the file: none of that rule's queries was analysed, and `lint` reported nothing for it while `validate` did. Object and query files are now read as `utf-8-sig` wherever opentide hands their text to the engine or parses them (`lint`, `validate`, `validate query`, `tui`, code frames, `opentide query --query-file`), so a BOM changes no finding. A query file (`.kql`, `.spl`, ...) that starts with one no longer has its line-1 findings one column off.
+
 ## [0.20.0] — 2026-11-02
 
 Minor release: `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns (language-server 0.7.0), a workspace's `visibility.toml` declares its own datasets, and `lint.toml` sets the filename convention. It is a minor because `validate` can now fail a rule that passed under 0.19.0, and because `validate query --live` drops the `VALIDATION_*` environment flags and the `validation_exit_code` / `exit_on_validation_errors` helpers. After upgrading:
