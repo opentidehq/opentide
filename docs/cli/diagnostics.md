@@ -73,6 +73,15 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`esql_unknown_type`](#esql_unknown_type) | The ::type cast names a type no Elasticsearch release can cast to. |
 | [`external_id_in_rule`](#external_id_in_rule) | A rule still carries a vendor rule id key, which belongs in deployment state. |
 | [`external_id_shape`](#external_id_shape) | A vendor rule id in deployment state has the wrong form. |
+| [`falco_append_condition`](#falco_append_condition) | A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not. |
+| [`falco_misplaced_list`](#falco_misplaced_list) | A list is used where Falco expects a macro: a list belongs inside a value list, `in (name)`. |
+| [`falco_parse_error`](#falco_parse_error) | The Falco condition does not parse. |
+| [`falco_type_mismatch`](#falco_type_mismatch) | The operator or value does not apply to the field's type, which Falco rejects when it loads the rule. |
+| [`falco_unknown_event`](#falco_unknown_event) | The event type is not a Falco syscall, tracepoint, plugin, or meta event. |
+| [`falco_unknown_field`](#falco_unknown_field) | The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it. |
+| [`falco_unknown_list`](#falco_unknown_list) | The name after `in`, `intersects`, or `pmatch` is not a list of the block or of the Falco default rules. |
+| [`falco_unknown_macro`](#falco_unknown_macro) | The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros. |
+| [`falco_unknown_source`](#falco_unknown_source) | The event source is not one Falco or its published plugins define, so its fields are not checked. |
 | [`filename_mismatch`](#filename_mismatch) | An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default. |
 | [`filename_pattern`](#filename_pattern) | An object file's name does not match the regular expression `lint.toml` sets for it. |
 | [`filename_slug`](#filename_slug) | The file name is not the slug of the object's name. |
@@ -1228,6 +1237,150 @@ Severity: error. Reported by `opentide validate` (schema check).
 ### How to fix
 
 Write the id the platform returned. Defender and SentinelOne ids are canonical decimal integers (no sign, no leading zeroes); an id is never empty. A deploy writes these shards; edit them by hand only to repair one.
+
+## falco_append_condition
+
+A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_misplaced_list
+
+A list is used where Falco expects a macro: a list belongs inside a value list, `in (name)`.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_parse_error
+
+The Falco condition does not parse.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_type_mismatch
+
+The operator or value does not apply to the field's type, which Falco rejects when it loads the rule.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_unknown_event
+
+The event type is not a Falco syscall, tracepoint, plugin, or meta event.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_unknown_field
+
+The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_unknown_list
+
+The name after `in`, `intersects`, or `pmatch` is not a list of the block or of the Falco default rules.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_unknown_macro
+
+The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_unknown_source
+
+The event source is not one Falco or its published plugins define, so its fields are not checked.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
 
 ## filename_mismatch
 
