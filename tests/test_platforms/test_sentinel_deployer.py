@@ -37,6 +37,7 @@ from opentide.platforms.sentinel.deployer import (
     SENTINEL_TACTICS,
     SentinelDeploy,
     sentinel_tactic,
+    split_techniques,
 )
 
 CORPUS_SENTINEL_RULE = TIDE_CORPUS_ROOT / "Objects/Detection Rules/rule-0001-sentinel-kql.yaml"
@@ -474,6 +475,7 @@ def test_new_attack_stages_are_sent_as_defense_evasion(
 
     assert body["properties"]["tactics"] == ["Execution", "DefenseEvasion"]
     assert body["properties"]["techniques"] == ["T1059", "T1027", "T1685", "T1562", "T0820"]
+    assert body["properties"]["subTechniques"] == ["T1685.002", "T1562.001"]
 
 
 def test_stage_without_a_sentinel_tactic_is_dropped_with_a_warning(
@@ -497,3 +499,73 @@ def test_stage_without_a_sentinel_tactic_is_dropped_with_a_warning(
     logger.warning.assert_called_once_with(
         "dropping_attack_stage_without_sentinel_tactic", technique="T1059", stage="Not A Tactic"
     )
+
+
+@pytest.mark.parametrize(
+    ("identifiers", "techniques", "sub_techniques"),
+    [
+        (["T1556.009"], ["T1556"], ["T1556.009"]),
+        (["T1059"], ["T1059"], []),
+        (
+            ["T1556", "T1556.009", "T1078.004", "T1556.006", "T1078.004"],
+            ["T1556", "T1078"],
+            ["T1556.009", "T1078.004", "T1556.006"],
+        ),
+        ([], [], []),
+    ],
+)
+def test_split_techniques_sends_parents_and_sub_techniques_apart(
+    identifiers: list[str], techniques: list[str], sub_techniques: list[str]
+) -> None:
+    assert split_techniques(identifiers) == (techniques, sub_techniques)
+
+
+def test_resolved_sub_technique_is_sent_in_sub_techniques(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``T1556.009`` was deployed as ``T1556`` alone: the sub-technique was lost (#686)."""
+    monkeypatch.setattr(deployer_module, "techniques_resolver", lambda uuid: ["T1556.009"])
+    rule = _corpus_rule()
+
+    body, _ = _sent_body(rule)
+    compiled = SentinelDeploy().compile_deployment(service=None, data=rule, tenant="tenant-a")
+
+    props = body["properties"]
+    assert props["techniques"] == ["T1556"]
+    assert props["subTechniques"] == ["T1556.009"]
+    assert props["tactics"] == ["DefenseEvasion", "Persistence", "CredentialAccess"]
+    assert compiled == body
+
+
+def test_rule_without_sub_techniques_sends_no_sub_techniques_key(tide_corpus_repo: Path) -> None:
+    body, _ = _sent_body(_corpus_rule())
+
+    assert body["properties"]["techniques"] == ["T1059"]
+    assert "subTechniques" not in body["properties"]
+
+
+def test_alert_block_sub_techniques_are_split_when_nothing_resolves(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ARM rejects ``T1098.003`` in ``techniques``; the alert block's ids are split too."""
+    monkeypatch.setattr(deployer_module, "techniques_resolver", lambda uuid: [])
+    alert = {"suppression": False, "techniques": ["T1098.003", "T1098"], "tactics": ["Persistence"]}
+
+    body, _ = _sent_body(_corpus_rule(alert=alert))
+
+    assert body["properties"]["techniques"] == ["T1098"]
+    assert body["properties"]["subTechniques"] == ["T1098.003"]
+    assert body["properties"]["tactics"] == ["Persistence"]
+
+
+def test_resolved_techniques_replace_the_alert_block_sub_techniques(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Resolved techniques replace the alert block's, sub-techniques included."""
+    monkeypatch.setattr(deployer_module, "techniques_resolver", lambda uuid: ["T1059"])
+    alert = {"suppression": False, "techniques": ["T1098.003"]}
+
+    body, _ = _sent_body(_corpus_rule(alert=alert))
+
+    assert body["properties"]["techniques"] == ["T1059"]
+    assert "subTechniques" not in body["properties"]

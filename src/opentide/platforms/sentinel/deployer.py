@@ -65,6 +65,23 @@ def sentinel_tactic(stage: str) -> str | None:
     return tactic if tactic in SENTINEL_TACTICS else None
 
 
+def split_techniques(identifiers: Sequence[str]) -> tuple[list[str], list[str]]:
+    """Split ATT&CK ids into the ARM ``techniques`` and ``subTechniques`` lists.
+
+    ARM rejects a sub-technique in ``techniques`` ("The technique 'T1098.003'
+    is invalid. The expected format is 'T####'"), so ``techniques`` carries
+    each id's parent and ``subTechniques`` the sub-technique ids themselves,
+    both deduplicated in order: ``T1556.009`` is sent as ``T1556`` plus
+    ``T1556.009`` (#686). This is the split Microsoft's own solution packager
+    makes. The API publishes no pattern or list for ``subTechniques``, so the
+    ids go as given: what an id may be is the ``att&ck`` vocabulary's call at
+    validate time.
+    """
+    techniques = [identifier.split(".")[0] for identifier in identifiers]
+    sub_techniques = [identifier for identifier in identifiers if "." in identifier]
+    return list(dict.fromkeys(techniques)), list(dict.fromkeys(sub_techniques))
+
+
 def _technique_tactics(technique: str) -> list[str]:
     """Sentinel tactics for one technique; stages Sentinel lacks are dropped with a warning."""
     stages = get_vocab_entry("att&ck", technique, "tide.vocab.stages") or []
@@ -210,8 +227,10 @@ class SentinelDeploy(RuleDeployer):
             if alert_dynamic_properties:
                 details_overrides["alertDynamicProperties"] = alert_dynamic_properties
         properties["alertDetailsOverride"] = details_overrides
-        if techniques := configuration.alert.techniques:
-            properties["techniques"] = techniques
+        if alert_techniques := configuration.alert.techniques:
+            properties["techniques"], sub_techniques = split_techniques(alert_techniques)
+            if sub_techniques:
+                properties["subTechniques"] = sub_techniques
         if tactics := configuration.alert.tactics:
             properties["tactics"] = tactics
         if custom_details := configuration.alert.custom_details:
@@ -272,16 +291,15 @@ class SentinelDeploy(RuleDeployer):
         properties["severity"] = severity
         properties["displayName"] = data.name
         properties["description"] = data.description
-        techniques = techniques_resolver(data.metadata.uuid)
-        if techniques:
-            tactics = list()
-            for t in techniques:
-                tactics.extend(_technique_tactics(t))
-            techniques = [t.split(".")[0] for t in techniques]
-            techniques = list(dict.fromkeys(techniques))
-            tactics = list(dict.fromkeys(tactics))
-            properties["tactics"] = tactics
-            properties["techniques"] = techniques
+        if resolved := techniques_resolver(data.metadata.uuid):
+            resolved_tactics: list[str] = []
+            for technique in resolved:
+                resolved_tactics.extend(_technique_tactics(technique))
+            properties["tactics"] = list(dict.fromkeys(resolved_tactics))
+            properties["techniques"], sub_techniques = split_techniques(resolved)
+            # Replaces the alert block's sub-techniques with the resolved ones,
+            # as `techniques` and `tactics` are replaced.
+            properties["subTechniques"] = sub_techniques or None
         rule["properties"] = {key: value for key, value in properties.items() if value is not None}
         logger.info("compiled_rule", detail=json.dumps(rule))
         return rule
