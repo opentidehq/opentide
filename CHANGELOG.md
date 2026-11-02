@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **`threat.actors.name` is pinned to `actors::1.2`**: 60 groups and threat-actor clusters from ATT&CK 20.0 and the current MISP galaxy validate, and ATT&CK group names take their Enterprise prefix. Run `opentide generate schemas` so the editor offers them. Additive minor; `actors::1.1` keys are unaffected.
+
 ## [0.20.0] — 2026-11-02
 
 Minor release: `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns (language-server 0.7.0), a workspace's `visibility.toml` declares its own datasets, and `lint.toml` sets the filename convention. It is a minor because `validate` can now fail a rule that passed under 0.19.0, and because `validate query --live` drops the `VALIDATION_*` environment flags and the `validation_exit_code` / `exit_on_validation_errors` helpers. After upgrading:
