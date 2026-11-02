@@ -8,8 +8,8 @@
 //! position is converted here, against the text it points into.
 
 use opentide_analysis::{
-    AnalyzeRequest, Catalog, DatasetKind, Declaration, IndexedObject, LanguageId, MemoryWorkspace,
-    QueryRequest, Range, codes,
+    AnalyzeRequest, Catalog, Declaration, IndexedObject, LanguageId, MemoryWorkspace, QueryRequest,
+    Range, codes,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -259,38 +259,19 @@ fn install_visibility(text: Option<&str>) -> PyResult<()> {
     opentide_analysis::install_visibility(text).map_err(PyValueError::new_err)
 }
 
-/// Every dataset kind, by its key (`ecs_indices`: the `indices` of a log
-/// source with `ecs = true`).
-const DATASET_KINDS: [DatasetKind; 7] = [
-    DatasetKind::Tables,
-    DatasetKind::Indexes,
-    DatasetKind::Sourcetypes,
-    DatasetKind::Macros,
-    DatasetKind::Indices,
-    DatasetKind::DataViews,
-    DatasetKind::EcsIndices,
-];
-
-fn dataset_kind(key: &str) -> Option<DatasetKind> {
-    DATASET_KINDS.into_iter().find(|kind| kind.key() == key)
-}
-
 /// What the declared datasets in use (the workspace's `visibility.toml`, else
-/// the host's) say about `name` of `kind` (`tables`, `indexes`, ...) on
-/// `platform`: `unchecked` when nothing of that kind is declared for the
-/// platform, else `declared` or `undeclared`. Raises `ValueError` for an
-/// unknown kind.
+/// the host's) say about `name` on `platform`: a log source's `name` is its
+/// dataset, whose kind follows from the system (a table for `sentinel` and
+/// `defender_for_endpoint`, a sourcetype for `splunk`, an index pattern for
+/// `elastic`). `unchecked` when the platform has no log source (or declares
+/// no datasets), else `declared` or `undeclared`.
 #[pyfunction]
-fn dataset_status(platform: &str, kind: &str, name: &str) -> PyResult<&'static str> {
-    let kind = dataset_kind(kind)
-        .ok_or_else(|| PyValueError::new_err(format!("unknown dataset kind: {kind}")))?;
-    Ok(
-        match opentide_analysis::declared_datasets().status(platform, kind, name) {
-            Declaration::Unchecked => "unchecked",
-            Declaration::Declared => "declared",
-            Declaration::Undeclared => "undeclared",
-        },
-    )
+fn dataset_status(platform: &str, name: &str) -> &'static str {
+    match opentide_analysis::declared_datasets().status(platform, name) {
+        Declaration::Unchecked => "unchecked",
+        Declaration::Declared => "declared",
+        Declaration::Undeclared => "undeclared",
+    }
 }
 
 /// The Tide catalogs compiled into the engine, `(fields, deprecations)`, as
@@ -494,13 +475,5 @@ mod tests {
         assert_eq!(language_of("hunt.esql"), Some(LanguageId::Esql));
         assert_eq!(language_of("notes.txt"), None);
         assert_eq!(language_of("Makefile"), None);
-    }
-
-    #[test]
-    fn every_dataset_kind_is_found_by_its_key() {
-        for kind in DATASET_KINDS {
-            assert_eq!(dataset_kind(kind.key()), Some(kind));
-        }
-        assert_eq!(dataset_kind("ecs"), None);
     }
 }

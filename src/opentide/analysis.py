@@ -53,9 +53,9 @@ ELASTIC_ADVISORY_CODES = frozenset(
 )
 
 #: The engine's warnings about a dataset a query reads that ``visibility.toml``
-#: does not declare, where the workspace declares names of that kind for the
-#: platform: ``opentide lint`` reports them with the query warnings, and their
-#: help is their ``opentide explain`` page, not a language reference.
+#: does not declare, where the workspace has a log source for the platform:
+#: ``opentide lint`` reports them with the query warnings, and their help is
+#: their ``opentide explain`` page, not a language reference.
 DECLARED_DATASET_CODES = frozenset(
     {
         "kql_table_not_declared",
@@ -64,8 +64,9 @@ DECLARED_DATASET_CODES = frozenset(
     }
 )
 
-#: The workspace's log sources, whose dataset fields (``tables``, ``indexes``,
-#: ``indices``, ...) the engine reads itself, as the language server does.
+#: The workspace's log sources, each naming one dataset (a table, sourcetype
+#: or index pattern) with its columns, which the engine reads itself, as the
+#: language server does.
 VISIBILITY_CONFIGURATION = ".opentide/configurations/visibility.toml"
 
 #: Where the Elastic tenants' stack versions are read from; the engine matches

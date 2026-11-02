@@ -329,14 +329,6 @@ description = "Custom tables."
 system = "sentinel"
 """
 
-#: The pinned engine (language-server 0.7.0) still reads the 0.20.0 plural
-#: lists, so it declares nothing from a log source's `name`. These flip
-#: when opentide pins the engine that reads visibility::1.0's singular keys.
-NEEDS_ENGINE = pytest.mark.xfail(
-    reason="needs language-server with visibility::1.0 singular datasets (language-server#146)",
-    strict=True,
-)
-
 
 def _declare(root: Path, text: str = DECLARING) -> None:
     configuration = root / ".opentide" / "configurations"
@@ -345,10 +337,9 @@ def _declare(root: Path, text: str = DECLARING) -> None:
 
 
 def _table(name: str) -> str:
-    return engine().dataset_status("sentinel", "tables", name)
+    return engine().dataset_status("sentinel", name)
 
 
-@NEEDS_ENGINE
 def test_the_workspace_catalog_declares_what_visibility_names(
     tmp_path: Path, bundled_catalog: None
 ) -> None:
@@ -361,8 +352,8 @@ def test_the_workspace_catalog_declares_what_visibility_names(
         "declared",
         "undeclared",
     )
-    # Opt-in per platform and kind: nothing declared for Splunk.
-    assert engine().dataset_status("splunk", "indexes", "main") == "unchecked"
+    # Opt-in per platform: nothing declared for Splunk.
+    assert engine().dataset_status("splunk", "main") == "unchecked"
     # An edit applies at the next install: there is nothing to regenerate.
     _declare(tmp_path, DECLARING.replace('"*_CL"', '"Other"'))
     install_workspace_catalog(tmp_path)
@@ -371,7 +362,6 @@ def test_the_workspace_catalog_declares_what_visibility_names(
     assert _table("Other") == "unchecked"
 
 
-@NEEDS_ENGINE
 def test_the_committed_catalog_keeps_the_declared_datasets(
     tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
@@ -380,7 +370,6 @@ def test_the_committed_catalog_keeps_the_declared_datasets(
     assert _table("Other") == "undeclared"
 
 
-@NEEDS_ENGINE
 def test_the_query_checks_read_visibility_and_keep_the_fields(
     tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
@@ -407,7 +396,6 @@ def test_the_query_checks_read_visibility_and_keep_the_fields(
     assert _table("Other") == "undeclared"
 
 
-@NEEDS_ENGINE
 def test_a_visibility_that_is_not_toml_declares_nothing_and_says_why(
     tmp_path: Path, bundled_catalog: None
 ) -> None:
@@ -424,7 +412,6 @@ def test_a_visibility_that_is_not_toml_declares_nothing_and_says_why(
     assert _table("Other") == "unchecked"
 
 
-@NEEDS_ENGINE
 def test_the_engine_takes_visibility_text_in_each_layer(bundled_catalog: None) -> None:
     """``install_visibility`` and ``install_catalog`` declare over ``set_default_catalog``."""
     engine().set_default_catalog(visibility=DECLARING)
@@ -442,6 +429,9 @@ def test_the_engine_takes_visibility_text_in_each_layer(bundled_catalog: None) -
     assert _table("Other") == "undeclared"
 
 
-def test_an_unknown_dataset_kind_is_refused() -> None:
-    with pytest.raises(ValueError, match="unknown dataset kind: ecs"):
-        engine().dataset_status("elastic", "ecs", "logs-*")
+def test_a_system_that_declares_no_dataset_is_unchecked(bundled_catalog: None) -> None:
+    """A log source's kind of dataset follows from its system; some systems have none."""
+    engine().install_visibility(DECLARING.replace('"sentinel"', '"sentinel_one"'))
+    assert engine().dataset_status("sentinel_one", "NTANetAnalytics") == "unchecked"
+    assert _table("NTANetAnalytics") == "unchecked"
+    engine().install_visibility()

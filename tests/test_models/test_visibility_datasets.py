@@ -29,13 +29,6 @@ from opentide.validation.configuration import configuration_file_issues
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "specifications" / "visibility"
 
-#: Engine tests that read the new shape: the pinned engine (language-server
-#: 0.7.0) still reads the 0.20.0 plural lists. They flip when it is repinned.
-NEEDS_ENGINE = pytest.mark.xfail(
-    reason="needs language-server with visibility::1.0 singular datasets (language-server#146)",
-    strict=True,
-)
-
 
 def _source(system: str = "sentinel", **fields: object) -> dict[str, Any]:
     return {"name": "Contoso_Audit_CL", "description": "d", "system": system, **fields}
@@ -231,12 +224,12 @@ def test_the_scaffold_examples_are_valid_one_per_platform_one_with_columns() -> 
 
 
 @pytest.fixture
-def declared() -> Iterator[Callable[[str, str, str], str]]:
-    """``status(platform, kind, name)`` of the declarations installed by the test."""
+def declared() -> Iterator[Callable[[str, str], str]]:
+    """``status(platform, name)`` of the declarations installed by the test."""
     from opentide.analysis import engine
 
     module = engine()
-    yield lambda platform, kind, name: module.dataset_status(platform, kind, name)
+    yield lambda platform, name: module.dataset_status(platform, name)
     module.install_visibility()
 
 
@@ -247,11 +240,11 @@ def _install(text: str) -> None:
 
 
 def test_the_scaffold_declares_nothing_to_the_engine(
-    declared: Callable[[str, str, str], str],
+    declared: Callable[[str, str], str],
 ) -> None:
     _install(_scaffold())
-    assert declared("splunk", "sourcetypes", "anything") == "unchecked"
-    assert declared("sentinel", "tables", "Anything") == "unchecked"
+    assert declared("splunk", "anything") == "unchecked"
+    assert declared("sentinel", "Anything") == "unchecked"
 
 
 DECLARING = """\
@@ -277,29 +270,23 @@ system = "elastic"
 """
 
 
-@NEEDS_ENGINE
-def test_the_engine_declares_by_system(declared: Callable[[str, str, str], str]) -> None:
+def test_the_engine_declares_by_system(declared: Callable[[str, str], str]) -> None:
     _install(DECLARING)
-    assert declared("sentinel", "tables", "Custom_CL") == "declared"
-    assert declared("sentinel", "tables", "NTANetAnalytics") == "declared"
-    assert declared("sentinel", "tables", "Other") == "undeclared"
+    assert declared("sentinel", "Custom_CL") == "declared"
+    assert declared("sentinel", "NTANetAnalytics") == "declared"
+    assert declared("sentinel", "Other") == "undeclared"
     # Per system: a Sentinel table declares nothing for Defender.
-    assert declared("defender_for_endpoint", "tables", "NTANetAnalytics") == "unchecked"
+    assert declared("defender_for_endpoint", "NTANetAnalytics") == "unchecked"
     # Splunk names are sourcetypes, matched regardless of case.
-    assert declared("splunk", "sourcetypes", "wineventlog:security") == "declared"
-    assert declared("splunk", "sourcetypes", "other") == "undeclared"
-    assert declared("elastic", "indices", "logs-endpoint.events.process") == "declared"
-    assert declared("elastic", "indices", "winlogbeat-*") == "undeclared"
+    assert declared("splunk", "wineventlog:security") == "declared"
+    assert declared("splunk", "other") == "undeclared"
+    assert declared("elastic", "logs-endpoint.events.process") == "declared"
+    assert declared("elastic", "winlogbeat-*") == "undeclared"
 
 
-@NEEDS_ENGINE
 def test_the_engine_declares_the_scaffold_examples(
-    declared: Callable[[str, str, str], str],
+    declared: Callable[[str, str], str],
 ) -> None:
     _install(_scaffold_examples())
-    for platform, kind in (
-        ("sentinel", "tables"),
-        ("splunk", "sourcetypes"),
-        ("elastic", "indices"),
-    ):
-        assert declared(platform, kind, "not-an-example") == "undeclared", (platform, kind)
+    for platform in ("sentinel", "splunk", "elastic"):
+        assert declared(platform, "not-an-example") == "undeclared", platform

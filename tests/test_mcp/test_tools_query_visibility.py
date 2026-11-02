@@ -17,14 +17,14 @@ from typer.testing import CliRunner
 from opentide.cli import app
 from opentide.mcp_server import tools, workspace
 
-#: The workspace's ``visibility.toml``: one Defender log source declaring one custom table.
-#: Kept as one string so a change to the file's shape is a change here only.
+#: The workspace's ``visibility.toml``: one Defender log source, whose ``name`` is the
+#: custom table it declares (``visibility::1.0``). Kept as one string so a change to the
+#: file's shape is a change here only.
 VISIBILITY = """\
 [[logsources]]
-name = "Application"
+name = "MyApp_CL"
 description = "The application's own events"
 system = "defender_for_endpoint"
-tables = ["MyApp_CL"]
 """
 
 PLATFORM = "defender_for_endpoint"
