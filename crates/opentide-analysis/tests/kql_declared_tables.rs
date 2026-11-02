@@ -139,14 +139,27 @@ tables = ["Custom_CL"]
         findings("sentinel", "Custom_CL | join (AuditLogs) on OperationName"),
         warning(codes::KQL_TABLE_NOT_DECLARED)
     );
-    // A near miss of a declared table suggests it.
+    // Undeclared and unknown to the catalog: still `kql_unknown_table` at
+    // the profile's severity (#147), its help naming the declaration, and a
+    // near miss of a declared table suggests it.
     let d = analyze_query(&QueryRequest {
         language: LanguageId::Kql,
         platform: Some("sentinel".into()),
         stack: None,
         text: "Custom_C | take 1".into(),
     });
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].code, codes::KQL_UNKNOWN_TABLE);
+    assert_eq!(d[0].severity, opentide_analysis::Severity::Warning);
     assert_eq!(d[0].suggestion.as_deref(), Some("Custom_CL"));
+    assert_eq!(
+        d[0].message,
+        "'Custom_C' is not a table opentide knows; if the workspace holds it, declare it for sentinel in visibility.toml"
+    );
+    assert_eq!(
+        findings("sentinel", "Other_CL | take 1"),
+        warning(codes::KQL_UNKNOWN_TABLE)
+    );
 
     // Declared columns are checked as a documented table's: a near miss is
     // an unknown column, an operator the declared type lacks a mismatch.
@@ -226,6 +239,34 @@ tables = ["Custom_CL"]
 
     // Sentinel's declarations are not Defender's: Defender keeps #111.
     assert!(findings("defender_for_endpoint", "DeviceProcessEvents | take 1").is_empty());
+
+    // Defender, opted in: an undeclared catalog table warns; an unknown one
+    // stays an error, whose help names the declaration (#147).
+    declare(Some(
+        r#"[[logsources]]
+name = "DeviceProcessEvents"
+description = "Processes."
+system = "defender_for_endpoint"
+"#,
+    ));
+    assert!(findings("defender_for_endpoint", "DeviceProcessEvents | take 1").is_empty());
+    assert_eq!(
+        findings("defender_for_endpoint", "DeviceFileEvents | take 1"),
+        warning(codes::KQL_TABLE_NOT_DECLARED)
+    );
+    let d = analyze_query(&QueryRequest {
+        language: LanguageId::Kql,
+        platform: Some("defender_for_endpoint".into()),
+        stack: None,
+        text: "Custom_CL | take 1".into(),
+    });
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].code, codes::KQL_UNKNOWN_TABLE);
+    assert_eq!(d[0].severity, opentide_analysis::Severity::Error);
+    assert_eq!(
+        d[0].message,
+        "unknown table 'Custom_CL'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml"
+    );
 
     declare(None);
     assert_eq!(

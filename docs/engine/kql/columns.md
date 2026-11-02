@@ -2,17 +2,18 @@
 
 What the engine knows about the datasets a KQL query reads, and what it reports. Epic [#110](https://github.com/opentidehq/language-server/issues/110).
 
-## Three tiers
+## Tiers
 
 | Tier | What | Check | Severity |
 | --- | --- | --- | --- |
 | 1. Documented schema | Azure Monitor Logs tables, Defender XDR and advanced hunting tables, ASIM parsers | name, columns, types | error on a near miss of a documented column (`kql_unknown_column`, with the column it misspells) or on an operator Kusto does not define for a column's type (`kql_type_mismatch`) |
 | 2. Declared in `visibility.toml` | the `name` of a `sentinel` or `defender_for_endpoint` log source, with its `columns` when it lists them | name; with `columns`, columns and types as tier 1 | none for the name; with `columns`, as tier 1 |
-| 3. Neither | any other name | name | warning: `kql_unknown_table` (`sentinel`), or `kql_table_not_declared` once the workspace declares tables for the platform |
+| 3. Not declared | a catalog table the workspace does not declare | name | `kql_table_not_declared` (warning), once the workspace declares tables for the platform; nothing otherwise |
+| 4. Neither | a name neither the catalog nor `visibility.toml` knows | name | `kql_unknown_table` at the profile's severity, declarations or not: a warning under `sentinel`, an error under `defender_for_endpoint`; once the workspace declares tables for the platform, its message names the declaration |
 
 - An unknown table is never an error under `sentinel`: the engine cannot see the workspace. Under `defender_for_endpoint`, advanced hunting is a closed schema and an unknown table stays an error.
-- Declarations are per platform. A Splunk index never makes a Sentinel table known.
-- Opt-in: a built-in table that is not declared warns only when the workspace declares at least one table for that platform.
+- Declarations are per platform. A Splunk sourcetype never makes a Sentinel table known.
+- Opt-in: a catalog table that is not declared warns only when the workspace declares at least one table for that platform. An unknown name is reported either way (the spec's precedence, [#147](https://github.com/opentidehq/language-server/issues/147)).
 - Declared columns (`[logsources.columns]`, keyed by the column name as the platform spells it, each `{ type = "<KQL scalar type>", description = "..." }`) make a declared table a documented one: a near miss of one is `kql_unknown_column`, an operator its type lacks `kql_type_mismatch`, and hover and completion show its type and description. On a table the catalog knows they extend its columns; one with a catalog column's name replaces that column's type (and its description, when it has one). A table declared without `columns`, or by a pattern (`Vendor*_CL`), is known by name only.
 - `union isfuzzy=true` reads whichever legs exist, so its legs are not checked.
 

@@ -1233,9 +1233,10 @@ fn dataset_platform(profile: Profile) -> &'static str {
 }
 
 /// One table a query reads (#110's tiers): a table the workspace declares in
-/// `visibility.toml` is known; one it does not declare warns when it declares
-/// others for the platform (`kql_table_not_declared`); otherwise a name the
-/// catalog lacks is `kql_unknown_table` (#111).
+/// `visibility.toml` is known; a catalog table it does not declare warns
+/// when it declares others for the platform (`kql_table_not_declared`); a
+/// name neither knows is `kql_unknown_table` (#111, #147), whose help names
+/// the declaration once the workspace declares tables.
 fn check_table(
     name: Node,
     at: Node,
@@ -1259,45 +1260,57 @@ fn check_table(
     let platform = dataset_platform(catalog.profile);
     let datasets = opentide_core::datasets::current();
     let range = node_range(source, at);
-    match datasets.status(platform, table) {
-        Declaration::Declared => {}
-        Declaration::Undeclared => {
-            let declared = datasets.names(platform);
-            let suggestion = declared
-                .iter()
-                .filter(|d| !d.contains('*'))
-                .map(|d| {
-                    (
-                        d,
-                        strsim_distance(&d.to_ascii_lowercase(), &table.to_ascii_lowercase()),
-                    )
-                })
-                .filter(|(_, d)| *d <= 2)
-                .min_by_key(|(_, d)| *d)
-                .map(|(n, _)| n.clone())
-                .or_else(|| (!known).then(|| catalog.suggest_table(table)).flatten());
-            let mut d = Diagnostic::warning(
-                codes::KQL_TABLE_NOT_DECLARED,
-                format!(
-                    "'{table}' is not a table the workspace declares for {platform} in visibility.toml"
-                ),
-                range,
-            );
-            if let Some(s) = suggestion {
-                d = d.with_suggestion(s);
-            }
-            out.push(d);
-        }
-        Declaration::Unchecked if !known => {
-            let mut d = match catalog.profile {
+    let status = datasets.status(platform, table);
+    // A near miss of a declared table, else of a catalog table.
+    let suggest = |catalog_too: bool| {
+        datasets
+            .names(platform)
+            .iter()
+            .filter(|d| !d.contains('*'))
+            .map(|d| {
+                (
+                    d,
+                    strsim_distance(&d.to_ascii_lowercase(), &table.to_ascii_lowercase()),
+                )
+            })
+            .filter(|(_, d)| *d <= 2)
+            .min_by_key(|(_, d)| *d)
+            .map(|(n, _)| n.clone())
+            .or_else(|| catalog_too.then(|| catalog.suggest_table(table)).flatten())
+    };
+    // The spec's precedence (visibility::1.0, Query checks): only a name the
+    // catalog knows is "not declared"; one it does not know is unknown,
+    // opted in or not, at the profile's severity.
+    let mut d = match (status, known) {
+        (Declaration::Declared, _) | (Declaration::Unchecked, true) => return,
+        (Declaration::Undeclared, true) => Diagnostic::warning(
+            codes::KQL_TABLE_NOT_DECLARED,
+            format!(
+                "'{table}' is not a table the workspace declares for {platform} in visibility.toml"
+            ),
+            range,
+        ),
+        (status, false) => {
+            let opted_in = status == Declaration::Undeclared;
+            let help = if opted_in {
+                format!("; if the workspace holds it, declare it for {platform} in visibility.toml")
+            } else {
+                "; if the workspace holds it, declare it in visibility.toml".to_string()
+            };
+            match catalog.profile {
                 // A Sentinel workspace holds tables no catalog lists (custom `_CL`
                 // tables, every Azure Monitor connector), so a name missing here is
                 // the engine's gap, not a mistake in the query.
                 Profile::Sentinel => Diagnostic::warning(
                     codes::KQL_UNKNOWN_TABLE,
-                    format!(
-                        "'{table}' is not a table opentide knows; if the workspace holds it, declare it in visibility.toml"
-                    ),
+                    format!("'{table}' is not a table opentide knows{help}"),
+                    range,
+                ),
+                // Advanced hunting is a closed schema: an unknown table is an
+                // error, and with declarations its help names them.
+                Profile::Core | Profile::Defender if opted_in => Diagnostic::error(
+                    codes::KQL_UNKNOWN_TABLE,
+                    format!("unknown table '{table}'{help}"),
                     range,
                 ),
                 Profile::Core | Profile::Defender => Diagnostic::error(
@@ -1305,14 +1318,13 @@ fn check_table(
                     format!("unknown table '{table}'"),
                     range,
                 ),
-            };
-            if let Some(s) = catalog.suggest_table(table) {
-                d = d.with_suggestion(s);
             }
-            out.push(d);
         }
-        Declaration::Unchecked => {}
+    };
+    if let Some(s) = suggest(!known) {
+        d = d.with_suggestion(s);
     }
+    out.push(d);
 }
 
 fn highlight_tree(

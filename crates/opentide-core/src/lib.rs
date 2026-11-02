@@ -628,7 +628,7 @@ pub mod codes {
                 "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs)."
             }
             KQL_UNKNOWN_TABLE => {
-                "The table is not one the engine knows for the platform: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema."
+                "The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known."
             }
             KQL_RENDER_NOT_VALID => "render draws a chart; it has no effect in a detection rule.",
             KQL_PARSE_ERROR => "The KQL query does not parse.",
@@ -781,7 +781,7 @@ pub mod codes {
             ESQL_PATTERN => "A LIKE or RLIKE pattern escapes or matches differently than it reads.",
             ESQL_EXPRESSION_DEPTH => "The expression nests deeper than Elasticsearch accepts.",
             KQL_TABLE_NOT_DECLARED => {
-                "The table is not one the workspace declares in visibility.toml for the platform."
+                "The engine knows the table, but the workspace, which declares its tables for the platform in visibility.toml, does not declare it."
             }
             KQL_UNKNOWN_COLUMN => {
                 "The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table."

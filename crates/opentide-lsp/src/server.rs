@@ -926,10 +926,16 @@ fn undeclared_dataset(d: &opentide_core::Diagnostic) -> Option<(&'static str, St
             },
             name,
         )),
-        // #111's warning points at visibility.toml too (Sentinel only).
-        codes::KQL_UNKNOWN_TABLE if d.severity == opentide_core::Severity::Warning => {
-            Some(("sentinel", name))
-        }
+        // An unknown table whose message names the declaration: Sentinel's
+        // warning (#111), and Defender's error once it declares tables (#147).
+        codes::KQL_UNKNOWN_TABLE if d.message.contains("visibility.toml") => Some((
+            if in_defender {
+                "defender_for_endpoint"
+            } else {
+                "sentinel"
+            },
+            name,
+        )),
         // `sourcetype `syslog` is not declared ...`
         codes::SPL_DATASET_NOT_DECLARED => Some(("splunk", backticked(&d.message)?)),
         // `index pattern `logs-*` is not declared ...`
