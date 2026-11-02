@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **ATT&CK 20.0 group labels.** 32 ATT&CK groups in the actors vocabulary take their current label (`[Enterprise] APT28` where it said `[Mobile] APT28`) in generated docs and editor schemas. `threat::1.0` still pins `actors::1.1` and accepts the same values; the 60 actors added at `actors::1.2` wait for a new threat revision.
+
 ### Fixed
 
 - **MCP `validate_query` knows the datasets the workspace's `visibility.toml` declares** ([#720](https://github.com/opentidehq/opentide/issues/720)). The offline check ran the engine without the workspace's declarations, so an agent got other findings than `opentide validate query` and `lint` on the same query: a declared custom table was unknown (an error under `defender_for_endpoint`), and a table it did not declare was not reported. The tool now hands the engine `.opentide/configurations/visibility.toml` before each check, read afresh on every call so an edit applies at once; a server started as an Agent Plugin with no workspace declares nothing. See [validate_query](docs/mcp/tools.md#validate_query).

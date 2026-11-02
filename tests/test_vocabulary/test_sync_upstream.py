@@ -107,7 +107,8 @@ def test_sync_upstream_apply_writes_when_dirty(
     report = sync_upstream(fetch=False, apply=True, specifications=tmp_path)
     assert report.wrote is True
     assert True in calls
-    assert "att&ck::1.1" in (pins / "threat.toml").read_text(encoding="utf-8")
+    assert report.new_contracts == {"att&ck": "1.1"}
+    assert (pins / "threat.toml").read_text(encoding="utf-8") == '"threat.att&ck" = "att&ck::1.0"\n'
 
 
 def test_schema_pinned_versions_drops_catalog_vocabs(tmp_path: Path) -> None:
@@ -174,10 +175,65 @@ def test_sync_upstream_does_not_bump_pins_for_attack_groups(
 
     report = sync_upstream(fetch=False, apply=True, specifications=tmp_path)
     assert report.wrote is True
-    assert "att&ck.groups" not in report.pin_versions
-    assert "mitigations" not in report.pin_versions
-    assert report.pin_changes == []
+    assert "att&ck.groups" not in report.new_contracts
+    assert "mitigations" not in report.new_contracts
     assert (pins / "threat.toml").read_text(encoding="utf-8") == original
+
+
+def test_sync_upstream_apply_never_moves_a_shipped_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """New actors open actors::1.2, but threat::1.0 keeps pinning actors::1.1.
+
+    Moving a pin changes what a shipped schema revision accepts; that is a new
+    revision (threat::1.1), never an ingest side effect (#717).
+    """
+    (tmp_path / "vocabularies").mkdir()
+    spec_pins = tmp_path / "schemas" / "pins"
+    bundle_pins = tmp_path / "bundle" / "pins"
+    original = (
+        '["threat::1.0"]\n'
+        '"threat.mitre_attack" = "att&ck::1.2"\n'
+        '"threat.actors.name" = "actors::1.1"\n'
+    )
+    for directory in (spec_pins, bundle_pins):
+        directory.mkdir(parents=True)
+        (directory / "threat.toml").write_text(original, encoding="utf-8")
+        (directory / "rule.toml").write_text(
+            '["rule::1.1"]\n"techniques" = "att&ck::1.2"\n', encoding="utf-8"
+        )
+    attack = GenerateReport(
+        lifecycles={
+            "att&ck": _lifecycle(
+                added=("T9999",), introducing_version="1.3", keys=({"id": "T9999"},)
+            )
+        }
+    )
+    actors = GenerateReport(
+        lifecycles={
+            "actors": _lifecycle(
+                added=("G9999",), introducing_version="1.2", keys=({"id": "G9999"},)
+            )
+        }
+    )
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream.generate_attack_vocabs", lambda **_kwargs: attack
+    )
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream.generate_actors_vocabs", lambda **_kwargs: actors
+    )
+    monkeypatch.setattr(
+        "opentide.vocabulary.sync_upstream._sync_bundled_vocabularies", lambda _root: None
+    )
+    monkeypatch.setattr("opentide.vocabulary.sync_upstream.pin_data_dir", lambda: bundle_pins)
+
+    report = sync_upstream(fetch=False, apply=True, specifications=tmp_path)
+
+    assert report.wrote is True
+    assert report.new_contracts == {"att&ck": "1.3", "actors": "1.2"}
+    for directory in (spec_pins, bundle_pins):
+        assert (directory / "threat.toml").read_text(encoding="utf-8") == original
+        assert "att&ck::1.2" in (directory / "rule.toml").read_text(encoding="utf-8")
 
 
 def test_cli_main_rejects_check_and_apply_together() -> None:
@@ -240,7 +296,7 @@ def test_sync_upstream_apply_skips_write_when_clean(
     assert written["sync"] is False
 
 
-def test_sync_report_summary_includes_pin_contract() -> None:
+def test_sync_report_summary_lists_unpinned_contracts() -> None:
     report = SyncReport(
         attack=GenerateReport(
             lifecycles={
@@ -252,11 +308,12 @@ def test_sync_report_summary_includes_pin_contract() -> None:
             }
         ),
         actors=GenerateReport(lifecycles={"actors": _lifecycle()}, source_changed=True),
-        pin_versions={"att&ck": "1.1"},
+        new_contracts={"att&ck": "1.1"},
     )
     text = "\n".join(report.summary_lines())
     assert "att&ck:" in text
-    assert "pin → att&ck::1.1" in text
+    assert "new contract att&ck::1.1" in text
     assert "source provenance changed (actors)" in text
-    assert "pin bumps: att&ck::1.1" in text
+    assert "unpinned contracts: att&ck::1.1 (adopting one is a new schema revision)" in text
+    assert "pin" + " bumps" not in text
     assert report.dirty is True

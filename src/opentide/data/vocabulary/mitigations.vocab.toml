@@ -5,7 +5,7 @@ reference = "https://attack.mitre.org/mitigations/enterprise/"
 key = "name"
 source = "mitre-attack"
 source_version = "20.0"
-source_fetched_at = "2026-10-19T09:25:00Z"
+source_fetched_at = "2026-11-02T14:23:27.420Z"
 [[keys]]
 id = "M1036"
 name = "Account Use Policies"

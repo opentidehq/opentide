@@ -1,6 +1,8 @@
 # Weekly ATT&CK + MISP vocabulary ingest.
-# Opens PRs on specifications (canonical vocabs + pins) and opentide (bundle + pins + lockfile).
-# Human review of those PRs is the release gate — pins bump in the same run.
+# Opens PRs on specifications (canonical vocabs) and opentide (bundle + lockfile).
+# Human review of those PRs is the release gate. Schema pins never move here: new
+# keys open a vocabulary contract (actors::1.2) that a shipped revision does not
+# pin, and adopting it is a new schema revision (threat::1.1), made by hand.
 name: Vocab upstream
 
 on:
@@ -128,7 +130,7 @@ jobs:
           OPENTIDE_ATTACK_STIX_DIR: ${{ runner.temp }}/attack-stix
         run: |
           set -euo pipefail
-          uv run python scripts/vocabulary/sync_upstream.py --apply
+          uv run python scripts/vocabulary/sync_upstream.py --apply | tee "$RUNNER_TEMP/ingest-summary.txt"
 
       - name: Open specifications PR
         if: steps.skip.outputs.skip != 'true' && steps.app.outputs.token != ''
@@ -139,7 +141,7 @@ jobs:
           cd specifications
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add vocabularies schemas/pins
+          git add vocabularies
           if git diff --cached --quiet; then
             echo "No specifications changes."
             exit 0
@@ -159,10 +161,16 @@ jobs:
               --body "$(cat <<'EOF'
           Automated ingest of the latest MITRE ATT&CK STIX release and MISP threat-actor galaxy.
 
-          Vocabularies are merged with RFC 0003 per-key versions (new keys open the next minor; disappeared keys get `removed` at the next major). Matching schema pins (`att&ck`, `actors`, `datasources`, …) bump in this same PR.
+          Vocabularies are merged with RFC 0003 per-key versions (new keys open the next minor; disappeared keys get `removed` at the next major). Schema pins do not move: every shipped revision keeps the contracts it pins, so new keys stay unreachable until a new schema revision (for example `threat::1.1`) pins their contract.
 
           Review and merge is the release gate. The companion opentide PR syncs the bundled copy and lockfile.
+
+          Ingest summary:
+
+          ```
           EOF
+          cat "$RUNNER_TEMP/ingest-summary.txt"
+          echo '```'
           )"
           fi
 
@@ -183,11 +191,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/opentide/data/vocabulary src/opentide/data/pins data/specifications.lock.json
           if git diff --cached --quiet; then
-            echo "No opentide bundle/pin changes."
+            echo "No opentide bundle changes."
             exit 0
           fi
           git checkout -B "$UPSTREAM_BRANCH"
-          git commit -m "chore(vocab): sync ATT&CK and actor vocabularies and pins"
+          git commit -m "chore(vocab): sync ATT&CK and actor vocabularies"
           git fetch origin "$UPSTREAM_BRANCH:refs/remotes/origin/$UPSTREAM_BRANCH" || true
           git push --force-with-lease origin "$UPSTREAM_BRANCH"
           # Only skip create when an OPEN PR still exists for this head (merged cycles must open a new PR).
@@ -196,9 +204,9 @@ jobs:
             gh pr create --base development --head "$UPSTREAM_BRANCH" \
               --title "chore(vocab): sync ATT&CK techniques and MISP actors" \
               --body "$(cat <<'EOF'
-          Companion to the specifications ingest PR. Bundles the regenerated vocabularies, refreshes `data/specifications.lock.json`, and bumps schema pins so new ATT&CK techniques and actors are proposed on existing schema revisions.
+          Companion to the specifications ingest PR. Bundles the regenerated vocabularies and refreshes `data/specifications.lock.json`. Schema pins do not move: new keys open an unpinned contract that only a new schema revision adopts.
 
-          Merge after the specifications PR (canonical vocabs) is accepted. Pin bumps are additive minors only; removals stay in the current major.
+          Merge after the specifications PR (canonical vocabs) is accepted.
           EOF
           )"
           fi

@@ -110,7 +110,7 @@ def test_generate_actors_merges_and_versions_keys(
 
     report = generate_actors.generate_actors_vocabs(vocab_dir=vocab_dir)
     assert report.lifecycles["actors"].added == ("G0002",)
-    assert report.pin_versions["actors"] == "1.1"
+    assert report.new_contracts["actors"] == "1.1"
     written = read_vocab_document(vocab_dir / "actors.vocab.toml")
     assert "version" not in written
     assert written["source"] == "mitre-attack+misp"
