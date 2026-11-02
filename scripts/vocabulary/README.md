@@ -22,36 +22,39 @@ export OPENTIDE_ATTACK_STIX_DIR="/tmp/attack-stix"
 Weekly GitHub Actions (`.github/workflows/vocab-upstream.yml`) plus:
 
 ```bash
-# Dry-run: exit 1 when vocabs or pins would change
+# Dry-run: exit 1 when vocabularies would change
 uv run python scripts/vocabulary/sync_upstream.py --check
 
-# Fetch latest ATT&CK STIX + MISP galaxy, merge, bump pins, sync bundle
+# Fetch latest ATT&CK STIX + MISP galaxy, merge, sync bundle
 uv run python scripts/vocabulary/sync_upstream.py --apply
 ```
 
 `--apply` writes:
 
 1. `specifications/vocabularies/{att&ck,att&ck.groups,mitigations,datasources,actors}.vocab.toml`
-2. Schema pin files in `specifications/schemas/pins/` and `src/opentide/data/pins/`
-3. The opentide bundle + `data/specifications.lock.json`
+2. The opentide bundle + `data/specifications.lock.json`
 
-Pin bumps are **additive minors only** (for example `att&ck::1.0` → `att&ck::1.1`)
-and only for vocab fields already referenced in schema pin files (`att&ck`,
-`actors`, `datasources`). `att&ck.groups` and `mitigations` are catalog vocabs
-with no schema pin: ATT&CK groups still version-gate live objects through
-`threat.actors.name` → `actors::*` (STIX intrusion-sets merge into `actors`).
+It never writes a schema pin. New keys open the next minor contract (for example
+`actors::1.2`), and the run reports it as an unpinned contract for the vocab
+fields schema pin files reference (`att&ck`, `actors`, `datasources`). A shipped
+revision keeps the contracts it pins, so a new key stays unreachable until a new
+schema revision (`threat::1.1`) pins its contract: that revision is a deliberate
+specifications and opentide change ([versioning](https://github.com/opentidehq/specifications/blob/main/specs/versioning.md),
+RFC 0003), never an ingest side effect. `att&ck.groups` and `mitigations` are
+catalog vocabs with no schema pin: ATT&CK groups still version-gate objects
+through `threat.actors.name` → `actors::*` (STIX intrusion-sets merge into `actors`).
 Keys that disappear from upstream keep their `version` and get `removed` at the
 next major, so existing schema revisions still accept them. The ingest PRs are
 the review gate — nothing auto-merges.
 
-Merge order: specifications PR first (canonical vocabs + `schemas/pins/`), then
-the opentide companion PR (bundle, pins, lockfile).
+Merge order: specifications PR first (canonical vocabs), then the opentide
+companion PR (bundle, lockfile).
 
 ### Per-key bump rules (RFC 0003)
 
-| Upstream change | Key metadata | Pin |
-|-----------------|--------------|-----|
-| New id | `version` = next minor for this cycle | bump matching pins to that minor |
+| Upstream change | Key metadata | Contract |
+|-----------------|--------------|----------|
+| New id | `version` = next minor for this cycle | opens that minor, unpinned |
 | Description/name/link only | keep `version` | none |
 | Id gone | `removed` = next major | none |
 | First fill of an empty file | `version = "1.0"` | none (pins already `::1.0`) |

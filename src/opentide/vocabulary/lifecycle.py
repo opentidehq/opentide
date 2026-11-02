@@ -30,10 +30,11 @@ class LifecycleResult:
         return bool(self.added or self.updated or self.removed or self.backfilled)
 
     @property
-    def pin_contract(self) -> str | None:
-        """New minor to pin when this merge added keys to an already-populated vocabulary.
+    def new_contract(self) -> str | None:
+        """The minor contract this merge opened by adding keys to a populated vocabulary.
 
-        First fill of an empty file uses ``1.0`` and does not move pins.
+        No schema revision pins it yet: adopting it is a new schema revision.
+        First fill of an empty file uses ``1.0`` and opens none.
         """
         if not self.added or self.introducing_version in (None, DEFAULT_VERSION):
             return None
