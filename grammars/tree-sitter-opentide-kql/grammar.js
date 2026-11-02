@@ -266,7 +266,7 @@ module.exports = grammar({
       seq("project", field("columns", commaSep1($.project_item))),
 
     project_away_operator: ($) =>
-      seq("project-away", field("columns", commaSep1($._column_name))),
+      seq("project-away", field("columns", commaSep1($._column_name_or_pattern))),
 
     project_rename_operator: ($) =>
       seq("project-rename", field("renames", commaSep1($.rename_item))),
@@ -337,16 +337,20 @@ module.exports = grammar({
       seq("parse-kv", optional(field("args", $.expression))),
 
     project_keep_operator: ($) =>
-      seq("project-keep", field("columns", commaSep1($._column_name))),
+      seq("project-keep", field("columns", commaSep1($._column_name_or_pattern))),
 
     // `project-reorder a, b desc`: a column may carry the order its group is sorted in.
+    // `project-reorder *, a`: a pattern stands for the columns it matches.
     project_reorder_operator: ($) =>
       seq(
         "project-reorder",
         field(
           "columns",
           commaSep1(
-            seq($._column_name, optional(choice("asc", "desc", "granny-asc", "granny-desc"))),
+            seq(
+              $._column_name_or_pattern,
+              optional(choice("asc", "desc", "granny-asc", "granny-desc")),
+            ),
           ),
         ),
       ),
@@ -819,6 +823,12 @@ module.exports = grammar({
 
     // A column name where one is written: plain or quoted.
     _column_name: ($) => choice($.identifier, $.quoted_identifier),
+
+    // `*`, `User*`, `*Id`, `Device*Name`: a glob over the input columns, as
+    // project-away, project-keep and project-reorder take them.
+    column_pattern: (_) => token(/[A-Za-z0-9_]*\*[A-Za-z0-9_*]*/),
+
+    _column_name_or_pattern: ($) => choice($._column_name, $.column_pattern),
 
     string: (_) =>
       token(

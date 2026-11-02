@@ -1571,6 +1571,10 @@
             "named": false
           },
           {
+            "type": "column_pattern",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -1612,6 +1616,10 @@
           {
             "type": ",",
             "named": false
+          },
+          {
+            "type": "column_pattern",
+            "named": true
           },
           {
             "type": "identifier",
@@ -1680,6 +1688,10 @@
           {
             "type": "asc",
             "named": false
+          },
+          {
+            "type": "column_pattern",
+            "named": true
           },
           {
             "type": "desc",
@@ -2859,6 +2871,10 @@
   {
     "type": "by",
     "named": false
+  },
+  {
+    "type": "column_pattern",
+    "named": true
   },
   {
     "type": "comment",

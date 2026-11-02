@@ -37,7 +37,7 @@ Azure Monitor does not support ADX-only plugins (`python`, `sql_request`, …) o
 | Name | Aliases | Category | Short docs | Citation | Detections |
 | --- | --- | --- | --- | --- | --- |
 | `project` | — | Project | Select, rename, and compute columns; drops unspecified columns. | [project](https://learn.microsoft.com/kusto/query/project-operator) | **Yes** — required to keep `Timestamp`/`DeviceId`/`ReportId` |
-| `project-away` | — | Project | Drop named columns; keep the rest. | [project-away](https://learn.microsoft.com/kusto/query/project-away-operator) | **Yes** |
+| `project-away` | — | Project | Drop named columns or columns matching wildcards (`User*`); keep the rest. | [project-away](https://learn.microsoft.com/kusto/query/project-away-operator) | **Yes** |
 | `project-keep` | — | Project | Keep columns matching wildcards; drop the rest. | [project-keep](https://learn.microsoft.com/kusto/query/project-keep-operator) | **Yes** |
 | `project-rename` | — | Project | Rename columns; keep others. | [project-rename](https://learn.microsoft.com/kusto/query/project-rename-operator) | **Yes** |
 | `project-reorder` | — | Project | Reorder columns (`asc`, `desc`, wildcards). | [project-reorder](https://learn.microsoft.com/kusto/query/project-reorder-operator) | **Yes** |
