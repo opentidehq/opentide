@@ -2,7 +2,7 @@
 
 A rule's Sentinel block lacks a setting Sentinel needs to build the alert rule.
 
-Severity: error. Reported by `opentide deploy --dry-run` (and a real deploy) for one rule on one platform; the dry run lists the rule as failed and exits 1. The message names the key (`configurations.sentinel.grouping.alert is missing`) and the help says when it is required.
+Severity: error. Reported by `opentide validate` (the `schema` check compiles each rule a deploy would send) and by `opentide deploy --dry-run` (and a real deploy) for one rule on one platform; the dry run lists the rule as failed, and both exit 1. The message names the key (`configurations.sentinel.grouping.alert is missing`) and the help says when it is required.
 
 ## Example
 

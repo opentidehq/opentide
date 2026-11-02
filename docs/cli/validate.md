@@ -291,6 +291,22 @@ warning[platform_not_enabled]: this block will not deploy while splunk is disabl
 
 In `--json` mode a line naming it is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
 
+### What a platform compiler needs
+
+A rule that validates must deploy. Some of a platform's requirements are not in its schema: Sentinel builds no alert rule without `grouping.alert`, without `scheduling.frequency` and `scheduling.lookback` unless `scheduling.nrt` is true, or with `alert.suppression: true`. The `schema` check therefore compiles each rule for every enabled platform that opentide compiles offline (Sentinel and Elastic), exactly as `deploy --dry-run` does, and fails a rule the compiler rejects with the dry run's code, message and help (`compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, ...):
+
+```text illustrative
+error[compile_missing_field]: configurations.sentinel.grouping.alert is missing
+   ╭─▶ objects/rules/lsass-access.yaml:41:5
+   │
+41 │     grouping:
+   │     ━━━━━━━━
+   │
+   ╰─ help: Sentinel deploy requires incident grouping (grouping.alert.enabled)
+```
+
+`field_path` names the key at fault; when the key is missing, the frame is the nearest block the file has, and `context.platform` names the platform. Only a rule a deploy would compile is compiled: its block's status deploys (`PREVIEW`, `RELEASE`, `UNIVERSAL` or `DISABLEMENT` strategy), and its platform is enabled. A `DESIGN` (inert) rule, a `REMOVED` rule and a block for a disabled platform are not. Rules are compiled once the run has no other error, so a malformed rule, or one that names an object that failed to load, is reported once, for its cause.
+
 ### CVE check
 
 `opentide validate --check cve` looks up each `threat.cve` identifier on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu) (`GET /api/vulnerability/{id}`). Unknown IDs (empty JSON body) fail the check. Links in generated docs use the same aggregator: `https://vulnerability.circl.lu/vuln/{id}`.
@@ -336,7 +352,7 @@ When no `--check` is specified, the pipeline runs:
 
 - `id-uniqueness`
 - `uuid-format`
-- `schema` (includes vocabulary and cross-object references)
+- `schema` (includes vocabulary, cross-object references and [what a platform compiler needs](#what-a-platform-compiler-needs))
 - `configuration` (the merged files under `.opentide/configurations/`, against their models)
 - `queries` (every query, offline, with the analysis engine; `--queries off` leaves it out)
 

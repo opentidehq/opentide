@@ -226,6 +226,8 @@ def run_validation(
                 issues.extend(item_issues)
                 warnings.extend(item_warnings)
         stats["objects_checked"] = len(work_items)
+        if enabled_platforms and not issues:
+            issues.extend(_compile_issues(work_items, graph, enabled_platforms))
 
     if ValidateCheck.queries in checks:
         from opentide.registry.discovery import discover_workspace
@@ -280,6 +282,31 @@ def _not_in(
 ) -> list[ValidationIssue]:
     """*found*, without the issues on a query another check already rejected."""
     return [item for item in found if _query_place(item) not in rejected]
+
+
+def _compile_issues(
+    work_items: list[ObjectWorkItem], graph: PreflightGraph, enabled: frozenset[str]
+) -> list[ValidationIssue]:
+    """What a deploy would compile must compile (#660).
+
+    Run only once every object passed the schema check: a rule that is
+    malformed, or that names an object which failed to load, would fail to
+    compile for the same cause, reported again as a worse message.
+    """
+    from opentide.loading.object_loader import load_object_for_validation
+    from opentide.validation.compile_check import compile_issues
+
+    issues: list[ValidationIssue] = []
+    for item in work_items:
+        if item.object_type != "rule":
+            continue
+        ref = graph.resolve(item.uuid)
+        file_path = ref.file_path if ref else None
+        rule = load_object_for_validation(item.body, item.object_type, file=file_path)
+        issues.extend(
+            compile_issues(rule, item.body, enabled, object_uuid=item.uuid, file_path=file_path)
+        )
+    return issues
 
 
 def _enabled_platforms(
