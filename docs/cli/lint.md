@@ -135,6 +135,7 @@ enabled = true
 | `severity` | `[filenames]`, `[metadata]`, `[placeholders]`, `[queries]` | `error`, `warning` or `info`. Replaces the severity of every finding the check reports, an unparsable file included |
 | `style` | `[filenames]` | How the expected file stem derives from `name`: `slug` (the default), `name` or `none`. See [Filename convention](#filename-convention) |
 | `pattern` | `[filenames]` | A regular expression the whole stem must match. See [Filename convention](#filename-convention) |
+| `style`, `pattern` | `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` | The same keys for one kind of object, over `[filenames]`. See [A convention per object kind](#a-convention-per-object-kind) |
 | `required` | `[metadata]` | The `metadata` keys every object must fill. It replaces the default list rather than adding to it, and `[]` turns the metadata check into a no-op |
 
 `required` takes any key a `metadata` block can hold: `uuid`, `schema`, `version`, `created`, `modified`, `tlp`, `author`, `contributors`, `organisation`, `reviewed`. A key counts as missing when it is absent, `null`, a blank string or an empty list; `organisation` needs a `name` (or the `organization` spelling). Each object is asked only for the keys its own schema accepts: `reviewed` exists on `rule::1.1` metadata alone, so it is never demanded of a threat, an objective or a `rule::1.0` rule, whose schemas reject it.
@@ -148,7 +149,7 @@ required = ["author"]
 severity = "error"
 ```
 
-A value lint cannot use fails the command with exit `2` and a message that names the key, before any object is read. That covers an unknown `required` field, an unknown table or key (a typo such as `requried`), a `severity` outside the three values, an `enabled` that is not `true` or `false`, a `style` that is not `slug`, `name` or `none`, and a `pattern` that is not a string or does not compile as a regular expression. From a workspace whose `lint.toml` sets `required = ["owner"]`:
+A value lint cannot use fails the command with exit `2` and a message that names the key, before any object is read. That covers an unknown `required` field, an unknown table or key (a typo such as `requried`), a `severity` outside the three values, an `enabled` that is not `true` or `false`, a `style` that is not `slug`, `name` or `none`, a `pattern` that is not a string or does not compile as a regular expression, and a `[filenames.<kind>]` table for a kind other than `threats`, `objectives` and `rules`. From a workspace whose `lint.toml` sets `required = ["owner"]`:
 
 ```text illustrative
 FATAL: lint.toml [metadata].required: unknown metadata field(s) 'owner'. Known fields: uuid, schema, version, created, modified, tlp, author, contributors, organisation, reviewed
@@ -181,7 +182,27 @@ warning[filename_pattern]: Filename 'Some rule.yaml' does not match the configur
   ╰─ help: rename the file so its name matches the pattern ^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$
 ```
 
-Unparsable files, objects without a `name` and files in subfolders are reported under every `style`. [`opentide new`](./new.md) names the file it writes by `style` too (`none` keeps the slug), so a new object and an existing one agree.
+Unparsable files, objects without a `name` and files in subfolders are reported under every `style`. [`opentide new`](./new.md) names the file it writes by its kind's `style` too (`none` keeps the slug), so a new object and an existing one agree.
+
+#### A convention per object kind
+
+`[filenames.threats]`, `[filenames.objectives]` and `[filenames.rules]` set `style` and `pattern` for one kind of object, the files under `objects/threats/`, `objects/objectives/` or `objects/rules/`. A key a kind's table leaves unset is taken from `[filenames]`, and a kind with no table follows `[filenames]`. A catalogue whose rules are named after their name, and whose threats and objectives keep slugs:
+
+```toml
+# .opentide/configurations/lint.toml
+[filenames]
+style = "slug"
+
+[filenames.rules]
+style = "name"
+pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem: a prefix ends in .+
+```
+
+Each file is compared, and renamed by `--fix`, by its own kind's `style`, and held to its own kind's `pattern`: `objects/threats/simulated-actor.yaml` and `objects/rules/[SEN][Identity]Some rule[TenantA].yaml` both pass, `objects/rules/sen-identity-some-rule.yaml` is a `filename_mismatch` and a `filename_pattern` finding, and the rules' pattern does not apply to a threat. A kind's table takes only `style` and `pattern`: `enabled` and `severity` stay with `[filenames]`, for every kind. A table for another kind exits `2` naming it:
+
+```text illustrative
+FATAL: lint.toml [filenames.hunts]: unknown object kind(s) 'hunts'. Known kinds: threats, objectives, rules
+```
 
 `style` and `pattern` change only the check. [`opentide generate docs`](./generate.md) still names each page `slugify(name)`, so with `style = "name"` an object file and its documentation page no longer share a stem. That is the catalogue's trade-off to make; `slug` is the default because it keeps the two aligned.
 

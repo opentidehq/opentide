@@ -27,12 +27,19 @@ FilenameStyle = Literal["slug", "name", "none"]
 
 FILENAME_STYLES: tuple[FilenameStyle, ...] = ("slug", "name", "none")
 
+#: The object kinds a ``[filenames.<kind>]`` table configures, named as their folders under
+#: ``objects/``.
+FILENAME_KINDS: tuple[str, ...] = ("threats", "objectives", "rules")
+
+#: The keys a ``[filenames.<kind>]`` table takes; an unset one falls back to ``[filenames]``.
+_FILENAME_KIND_KEYS = frozenset({"style", "pattern"})
+
 #: ``metadata.required`` when nothing configures it (the behaviour before #489).
 DEFAULT_REQUIRED_METADATA: tuple[str, ...] = ("author", "organisation")
 
 _COMMON_KEYS = frozenset({"enabled", "severity"})
 _CHECK_KEYS: dict[str, frozenset[str]] = {
-    "filenames": _COMMON_KEYS | {"style", "pattern"},
+    "filenames": _COMMON_KEYS | {"style", "pattern"} | set(FILENAME_KINDS),
     "metadata": _COMMON_KEYS | {"required"},
     "placeholders": _COMMON_KEYS,
     "queries": _COMMON_KEYS,
@@ -64,10 +71,21 @@ class FilenameConfig:
     style: FilenameStyle = "slug"
     #: Compiled from ``pattern``; the whole stem must match it (``re.fullmatch``).
     pattern: re.Pattern[str] | None = None
+    #: The convention of each kind with a ``[filenames.<kind>]`` table, its unset keys
+    #: already taken from ``[filenames]``. A kind without a table follows this one.
+    kinds: Mapping[str, FilenameConfig] = field(default_factory=dict, hash=False)
+    #: The ``lint.toml`` key ``pattern`` came from, for messages.
+    pattern_key: str = field(default="[filenames].pattern", compare=False)
 
     def stem_for(self, name: str) -> str | None:
         """The stem an object called *name* should have, or ``None`` when none is expected."""
         return expected_stem(name, self.style)
+
+    def for_kind(self, kind: str | None) -> FilenameConfig:
+        """The convention for objects of *kind* (``threats``, ``objectives``, ``rules``)."""
+        if kind is None:
+            return self
+        return self.kinds.get(kind, self)
 
 
 @dataclass(frozen=True)
@@ -152,6 +170,8 @@ def parse_lint_config(raw: object, *, source: str = _SOURCE) -> LintConfig:
         if not isinstance(table, Mapping):
             raise LintConfigError(f"{where} must be a table")
         unknown_keys = sorted(str(key) for key in table if key not in _CHECK_KEYS[name])
+        if name == "filenames":
+            _reject_unknown_kinds(table, unknown_keys, source=source)
         if unknown_keys:
             raise LintConfigError(
                 f"{where}: unknown key(s) {_quoted(unknown_keys)}. "
@@ -169,17 +189,36 @@ def parse_lint_config(raw: object, *, source: str = _SOURCE) -> LintConfig:
         if name == "metadata" and "required" in table:
             required = _required_metadata(table["required"], where=where)
         if name == "filenames":
-            filenames = _filename_config(table, where=where)
+            filenames = _filename_config(table, source=source)
     return LintConfig(checks=checks, required_metadata=required, filenames=filenames)
 
 
-def _filename_config(table: Mapping[str, object], *, where: str) -> FilenameConfig:
-    style = table.get("style", "slug")
+def _reject_unknown_kinds(table: Mapping[str, object], unknown: list[str], *, source: str) -> None:
+    """Name a ``[filenames.<kind>]`` table whose kind lint does not know."""
+    tables = [key for key in unknown if isinstance(table[key], Mapping)]
+    if tables:
+        raise LintConfigError(
+            f"{source} [filenames.{tables[0]}]: unknown object kind(s) {_quoted(tables)}. "
+            f"Known kinds: {', '.join(FILENAME_KINDS)}"
+        )
+
+
+def _filename_config(
+    table: Mapping[str, object],
+    *,
+    source: str,
+    key: str = "filenames",
+    base: FilenameConfig | None = None,
+) -> FilenameConfig:
+    """``[filenames]``, or with *base* the ``[filenames.<kind>]`` table *key* over it."""
+    where = f"{source} [{key}]"
+    style = table.get("style", "slug" if base is None else base.style)
     if style not in FILENAME_STYLES:
         raise LintConfigError(
             f"{where}.style must be one of {', '.join(FILENAME_STYLES)}, got {style!r}"
         )
-    pattern: re.Pattern[str] | None = None
+    pattern = None if base is None else base.pattern
+    pattern_key = f"[{key}].pattern" if base is None else base.pattern_key
     if "pattern" in table:
         raw = table["pattern"]
         if not isinstance(raw, str):
@@ -192,7 +231,27 @@ def _filename_config(table: Mapping[str, object], *, where: str) -> FilenameConf
             raise LintConfigError(
                 f"{where}.pattern: invalid regular expression '{raw}': {exc}"
             ) from exc
-    return FilenameConfig(style=cast("FilenameStyle", style), pattern=pattern)
+        pattern_key = f"[{key}].pattern"
+    if base is not None:
+        return FilenameConfig(
+            style=cast("FilenameStyle", style), pattern=pattern, pattern_key=pattern_key
+        )
+    base = FilenameConfig(style=cast("FilenameStyle", style), pattern=pattern)
+    kinds: dict[str, FilenameConfig] = {}
+    for kind in FILENAME_KINDS:
+        if kind not in table:
+            continue
+        own = table[kind]
+        if not isinstance(own, Mapping):
+            raise LintConfigError(f"{where}.{kind} must be a table, got {own!r}")
+        unknown = sorted(str(name) for name in own if name not in _FILENAME_KIND_KEYS)
+        if unknown:
+            raise LintConfigError(
+                f"{source} [{key}.{kind}]: unknown key(s) {_quoted(unknown)}. "
+                f"Known keys: {', '.join(sorted(_FILENAME_KIND_KEYS))}"
+            )
+        kinds[kind] = _filename_config(own, source=source, key=f"{key}.{kind}", base=base)
+    return FilenameConfig(style=base.style, pattern=base.pattern, kinds=kinds)
 
 
 def _required_metadata(value: object, *, where: str) -> tuple[str, ...]:

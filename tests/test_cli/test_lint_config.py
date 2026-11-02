@@ -455,3 +455,154 @@ def test_check_filenames_runs_a_disabled_check_with_its_style(tmp_path: Path) ->
     assert run_lint(tmp_path)["checks"] == ["metadata", "placeholders", "queries"]
     (finding,) = run_lint(tmp_path, checks=[LintCheck.filenames])["findings"]
     assert finding["expected"] == f"objects/threats/{_BRACKETED_STEM}.yaml"
+
+
+# --- [filenames.<kind>] (#721) ---------------------------------------------------------------
+
+#: The issue's example: slugs for threats and objectives, the name for rules. ``pattern``
+#: matches the whole stem, so the issue's prefix ``^\[(SEN|XDR)\]\[`` ends in ``.+``.
+_PER_KIND = """\
+[filenames]
+style = "slug"
+
+[filenames.rules]
+style = "name"
+pattern = '^\\[(SEN|XDR)\\]\\[.+'
+"""
+_RULE_NAME = "[SEN][Identity]Some rule[TenantA]"
+
+
+def _object(root: Path, family: str, filename: str, name: str, number: int) -> None:
+    dest = root / "objects" / family / filename
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    uuid = f"00000000-0000-4000-8001-{number:012d}"
+    dest.write_text(f"name: '{name}'\nmetadata:\n  uuid: {uuid}\n", encoding="utf-8")
+
+
+def _files(root: Path, family: str) -> list[str]:
+    return sorted(path.name for path in (root / "objects" / family).iterdir())
+
+
+def test_a_kind_table_overrides_the_filenames_keys_it_sets() -> None:
+    config = parse_lint_config(
+        {"filenames": {"style": "slug", "pattern": "[a-z-]+", "rules": {"style": "name"}}}
+    ).filenames
+    rules = config.for_kind("rules")
+    assert (rules.style, rules.pattern) == ("name", config.pattern), "pattern falls back"
+    assert config.for_kind("threats") is config
+    assert config.for_kind(None) is config
+    own = parse_lint_config({"filenames": {"rules": {"pattern": "R.*"}}}).filenames
+    assert own.for_kind("rules").style == "slug", "style falls back"
+    assert own.for_kind("rules").pattern_key == "[filenames.rules].pattern"
+    assert own.for_kind("objectives").pattern is None
+
+
+def test_the_per_kind_example_lints_a_mixed_catalogue_clean(tmp_path: Path) -> None:
+    _write_lint_toml(tmp_path, _PER_KIND)
+    _object(tmp_path, "threats", "simulated-actor.yaml", "Simulated Actor", 1)
+    _object(tmp_path, "objectives", "credential-access.yaml", "Credential Access", 2)
+    _object(tmp_path, "rules", f"{_RULE_NAME}.yaml", _RULE_NAME, 3)
+    result = run_lint(tmp_path, checks=[LintCheck.filenames])
+    assert result["count"] == 0, result["findings"]
+
+
+def test_each_kind_is_checked_and_fixed_by_its_own_style(tmp_path: Path) -> None:
+    _write_lint_toml(tmp_path, _PER_KIND)
+    _object(tmp_path, "threats", "Simulated Actor.yaml", "Simulated Actor", 1)
+    _object(tmp_path, "objectives", "Credential Access.yaml", "Credential Access", 2)
+    _object(tmp_path, "rules", "sen-identity-some-rule-tenanta.yaml", _RULE_NAME, 3)
+    findings = run_lint(tmp_path, checks=[LintCheck.filenames])["findings"]
+    assert sorted((item["code"], item["path"], item.get("expected")) for item in findings) == [
+        (
+            "filename_mismatch",
+            "objects/objectives/Credential Access.yaml",
+            "objects/objectives/credential-access.yaml",
+        ),
+        (
+            "filename_mismatch",
+            "objects/rules/sen-identity-some-rule-tenanta.yaml",
+            f"objects/rules/{_RULE_NAME}.yaml",
+        ),
+        (
+            "filename_mismatch",
+            "objects/threats/Simulated Actor.yaml",
+            "objects/threats/simulated-actor.yaml",
+        ),
+        # The rules' own pattern, which the slug misses; the threats' file is not held to it.
+        ("filename_pattern", "objects/rules/sen-identity-some-rule-tenanta.yaml", None),
+    ]
+    rule = next(
+        item
+        for item in findings
+        if item["code"] == "filename_mismatch" and "rules" in str(item["path"])
+    )
+    assert "does not match name" in str(rule["message"])
+
+    fixed = run_lint(tmp_path, checks=[LintCheck.filenames], fix=True)
+    assert fixed["fixed"] == 3
+    assert _files(tmp_path, "threats") == ["simulated-actor.yaml"]
+    assert _files(tmp_path, "objectives") == ["credential-access.yaml"]
+    assert _files(tmp_path, "rules") == [f"{_RULE_NAME}.yaml"]
+    assert run_lint(tmp_path, checks=[LintCheck.filenames])["count"] == 0
+
+
+def test_a_kind_pattern_applies_to_that_kind_only(tmp_path: Path) -> None:
+    _write_lint_toml(tmp_path, _PER_KIND)
+    _object(tmp_path, "threats", "simulated-actor.yaml", "Simulated Actor", 1)
+    _object(tmp_path, "rules", "Some rule.yaml", "Some rule", 3)
+    (finding,) = run_lint(tmp_path, checks=[LintCheck.filenames])["findings"]
+    assert (finding["code"], finding["path"]) == (
+        "filename_pattern",
+        "objects/rules/Some rule.yaml",
+    )
+
+
+def test_kinds_without_a_table_follow_the_filenames_keys(tmp_path: Path) -> None:
+    _write_lint_toml(
+        tmp_path, '[filenames]\nstyle = "name"\n\n[filenames.threats]\nstyle = "slug"\n'
+    )
+    _object(tmp_path, "threats", "Simulated Actor.yaml", "Simulated Actor", 1)
+    _object(tmp_path, "objectives", "credential-access.yaml", "Credential Access", 2)
+    findings = run_lint(tmp_path, checks=[LintCheck.filenames])["findings"]
+    assert sorted(str(item["expected"]) for item in findings) == [
+        "objects/objectives/Credential Access.yaml",
+        "objects/threats/simulated-actor.yaml",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("raw", "match"),
+    [
+        (
+            {"filenames": {"hunts": {"style": "name"}}},
+            r"lint\.toml \[filenames\.hunts\]: unknown object kind\(s\) 'hunts'\. "
+            r"Known kinds: threats, objectives, rules",
+        ),
+        ({"filenames": {"rules": "name"}}, r"lint\.toml \[filenames\]\.rules must be a table"),
+        (
+            {"filenames": {"rules": {"enabled": False}}},
+            r"lint\.toml \[filenames\.rules\]: unknown key\(s\) 'enabled'\. "
+            r"Known keys: pattern, style",
+        ),
+        (
+            {"filenames": {"rules": {"style": "camel"}}},
+            r"lint\.toml \[filenames\.rules\]\.style must be one of slug, name, none",
+        ),
+        (
+            {"filenames": {"threats": {"pattern": "(["}}},
+            r"lint\.toml \[filenames\.threats\]\.pattern: invalid regular expression",
+        ),
+    ],
+)
+def test_bad_kind_table_names_the_key(raw: object, match: str) -> None:
+    with pytest.raises(LintConfigError, match=match):
+        parse_lint_config(raw)
+
+
+def test_an_unknown_kind_table_fails_the_command(tmp_path: Path) -> None:
+    _write_object(tmp_path, "simulated-actor.yaml")
+    _write_lint_toml(tmp_path, '[filenames.hunts]\nstyle = "name"\n')
+    result = runner.invoke(app, ["--json", "--repo", str(tmp_path), "lint"])
+    assert result.exit_code == 2, result.output
+    message = json.loads(result.stdout)["message"]
+    assert "lint.toml [filenames.hunts]: unknown object kind(s) 'hunts'" in message
