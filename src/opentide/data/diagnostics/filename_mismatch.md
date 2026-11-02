@@ -1,6 +1,6 @@
 # filename_mismatch
 
-An object file's name is not the stem `lint.toml` `[filenames].style` asks for: `slugify(name)` by default.
+An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.
 
 Severity: warning. Reported by `opentide lint` (filenames check).
 
@@ -20,4 +20,4 @@ objects/threats/actor.yaml   # name: Simulated Actor → Simulated Actor.yaml
 
 Run `opentide lint --fix`, which renames the file. When another file already has the expected name (compared without regard to case), the object gets the first eight characters of its UUID as a suffix.
 
-If the catalogue keeps another convention, set `style` in `.opentide/configurations/lint.toml`: `"name"` for the object's name as the file name, `"none"` to stop comparing the stem with the name. `pattern` checks the stem against a regular expression (`opentide explain filename_pattern`).
+If the catalogue keeps another convention, set `style` in `.opentide/configurations/lint.toml`: `"name"` for the object's name as the file name, `"none"` to stop comparing the stem with the name. `pattern` checks the stem against a regular expression (`opentide explain filename_pattern`). `[filenames.threats]`, `[filenames.objectives]` and `[filenames.rules]` set either key for one kind of object.

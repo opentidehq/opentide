@@ -2,7 +2,7 @@
 
 An object file's name does not match the regular expression `lint.toml` sets for it.
 
-Severity: warning, or the severity `[filenames]` sets. Reported by `opentide lint` (filenames check), only when `[filenames].pattern` is set.
+Severity: warning, or the severity `[filenames]` sets. Reported by `opentide lint` (filenames check), only when `[filenames].pattern`, or the object kind's `[filenames.<kind>].pattern`, is set.
 
 ## Example
 

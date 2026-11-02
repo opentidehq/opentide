@@ -870,7 +870,7 @@ def scaffold_object(
     model = resolve_model(schema_id)
 
     try:
-        filenames = load_lint_config(workspace).filenames
+        filenames = load_lint_config(workspace).filenames.for_kind(f"{family}s")
     except LintConfigError as exc:
         raise NewError(str(exc), code=COMMAND_FAILED, exit_code=2) from exc
 
@@ -989,7 +989,7 @@ def scaffold_object(
         )
     if filenames.pattern is not None and not filenames.pattern.fullmatch(destination.stem):
         warnings.append(
-            f"{destination.name} does not match lint.toml [filenames].pattern "
+            f"{destination.name} does not match lint.toml {filenames.pattern_key} "
             f"{filenames.pattern.pattern}; rename it before opentide lint runs"
         )
     if warnings:

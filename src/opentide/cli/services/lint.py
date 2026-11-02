@@ -46,6 +46,9 @@ _OBJECT_FAMILIES = ("threats", "objectives", "rules")
 class _ObjectRecord:
     path: Path
     relative: str
+    #: The folder under ``objects/`` (``threats``, ``objectives``, ``rules``), which picks
+    #: its ``[filenames.<kind>]`` convention.
+    kind: str | None = None
     name: str | None = None
     uuid: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -201,7 +204,9 @@ def _placeholder_lines(text: str) -> list[_Marked]:
 
 def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
-    record = _ObjectRecord(path=path, relative=relative)
+    parts = path.relative_to(root).parts
+    kind = parts[1] if len(parts) == 3 and parts[0] == "objects" else None
+    record = _ObjectRecord(path=path, relative=relative, kind=kind)
     try:
         text = path.read_text(encoding="utf-8")
         data: Any = parse_yaml(text)
@@ -310,14 +315,14 @@ def _finding(
     }
 
 
-def _assign_expected_stems(records: list[_ObjectRecord], config: FilenameConfig) -> None:
+def _assign_expected_stems(records: list[_ObjectRecord], filenames: FilenameConfig) -> None:
     """Give each named object the stem its file should have, unique within its folder.
 
     A stem already in use claims itself first. Another object that wants it gets
     ``-{uuid[:8]}`` appended. Stems are compared case-insensitively: ``Rule`` and
     ``rule`` are one file on macOS and Windows (``slug`` stems are lower case, so
     this never changes them). Nothing is assigned when the style compares no
-    stem, or leaves none to expect.
+    stem, or leaves none to expect. Each folder follows its kind's convention.
     """
     grouped: dict[Path, list[_ObjectRecord]] = defaultdict(list)
     for record in records:
@@ -326,6 +331,8 @@ def _assign_expected_stems(records: list[_ObjectRecord], config: FilenameConfig)
         grouped[record.path.parent].append(record)
     for group in grouped.values():
         taken: set[str] = set()
+        # One folder holds one kind of object.
+        config = filenames.for_kind(group[0].kind)
         for record in group:
             if record.name and config.stem_for(record.name) == record.path.stem:
                 record.expected_stem = record.path.stem
@@ -355,11 +362,12 @@ def _filename_findings(
     records: list[_ObjectRecord],
     *,
     fix: bool,
-    config: FilenameConfig,
+    filenames: FilenameConfig,
 ) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
-    _assign_expected_stems(records, config)
+    _assign_expected_stems(records, filenames)
     for record in records:
+        config = filenames.for_kind(record.kind)
         if record.parse_error:
             findings.append(
                 _finding(
@@ -677,7 +685,7 @@ def run_lint(
                 exc, path=str(target), checks=[item.value for item in selected], findings=[]
             )
     if LintCheck.filenames in selected:
-        findings.extend(_filename_findings(target, records, fix=fix, config=config.filenames))
+        findings.extend(_filename_findings(target, records, fix=fix, filenames=config.filenames))
         _rewrite_renamed_paths(findings)
         findings.extend(_nested_findings(target, nested))
     _apply_severity(findings, config)
