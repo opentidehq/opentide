@@ -208,7 +208,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     kind = parts[1] if len(parts) == 3 and parts[0] == "objects" else None
     record = _ObjectRecord(path=path, relative=relative, kind=kind)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
         data: Any = parse_yaml(text)
     except yaml.YAMLError as exc:
         problem = describe_yaml_error(exc)

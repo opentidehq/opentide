@@ -1,4 +1,9 @@
-"""Fetch ATT&CK + MISP, regenerate versioned vocabs, bump pins, sync the bundle."""
+"""Fetch ATT&CK + MISP, regenerate versioned vocabs, and sync the bundle.
+
+New keys open a minor contract (``actors::1.2``). The ingest never moves a
+schema pin: a shipped revision keeps the contracts it pins, and adopting a new
+one is a new schema revision (``threat::1.1``), made by hand in specifications.
+"""
 
 from __future__ import annotations
 
@@ -12,15 +17,9 @@ from pathlib import Path
 from opentide.models.vocab_pins import pin_data_dir
 from opentide.vocabulary.generate_actors import generate_actors_vocabs
 from opentide.vocabulary.generate_attack import GenerateReport, generate_attack_vocabs
-from opentide.vocabulary.pins import (
-    PinChange,
-    bump_pin_contents,
-    bump_pin_dir,
-    vocab_fields_in_pin_directories,
-)
+from opentide.vocabulary.pins import vocab_fields_in_pin_directories
 
 SPECIFICATIONS_ENV = "OPENTIDE_SPECIFICATIONS_ROOT"
-_PIN_FAMILIES = ("threat", "objective", "rule")
 
 
 @dataclass
@@ -29,13 +28,12 @@ class SyncReport:
 
     attack: GenerateReport
     actors: GenerateReport
-    pin_changes: list[PinChange] = field(default_factory=list)
-    pin_versions: dict[str, str] = field(default_factory=dict)
+    new_contracts: dict[str, str] = field(default_factory=dict)
     wrote: bool = False
 
     @property
     def dirty(self) -> bool:
-        return self.attack.dirty or self.actors.dirty or bool(self.pin_versions)
+        return self.attack.dirty or self.actors.dirty
 
     def summary_lines(self) -> list[str]:
         lines: list[str] = []
@@ -47,15 +45,15 @@ class SyncReport:
                     f"(+{len(lifecycle.added)} ~{len(lifecycle.updated)} "
                     f"-{len(lifecycle.removed)} backfill={len(lifecycle.backfilled)})"
                 )
-                if lifecycle.pin_contract:
-                    lines.append(f"    pin → {vocab_field}::{lifecycle.pin_contract}")
+                if lifecycle.new_contract:
+                    lines.append(f"    new contract {vocab_field}::{lifecycle.new_contract}")
             if report.source_changed:
                 lines.append(f"  source provenance changed ({name})")
-        if self.pin_versions:
-            pinned = ", ".join(
-                f"{key}::{value}" for key, value in sorted(self.pin_versions.items())
+        if self.new_contracts:
+            opened = ", ".join(
+                f"{key}::{value}" for key, value in sorted(self.new_contracts.items())
             )
-            lines.append(f"pin bumps: {pinned}")
+            lines.append(f"unpinned contracts: {opened} (adopting one is a new schema revision)")
         return lines
 
 
@@ -82,9 +80,9 @@ def pin_directories(root: Path) -> list[Path]:
 
 
 def _schema_pinned_versions(
-    pin_versions: dict[str, str], directories: list[Path]
+    new_contracts: dict[str, str], directories: list[Path]
 ) -> dict[str, str]:
-    """Keep ingest pin bumps for vocab fields that appear in schema pin files.
+    """Keep new contracts for vocab fields that appear in schema pin files.
 
     Catalog vocabs such as ``att&ck.groups`` and ``mitigations`` have no
     ``field::M.m`` pin. ATT&CK groups still version-gate live objects through
@@ -93,29 +91,8 @@ def _schema_pinned_versions(
     """
     pinned_fields = vocab_fields_in_pin_directories(directories)
     if not pinned_fields:
-        return pin_versions
-    return {field: version for field, version in pin_versions.items() if field in pinned_fields}
-
-
-def _preview_pin_changes(
-    directories: list[Path], field_versions: dict[str, str]
-) -> list[PinChange]:
-    changes: list[PinChange] = []
-    if not field_versions:
-        return changes
-    for directory in directories:
-        if not directory.is_dir():
-            continue
-        for family in _PIN_FAMILIES:
-            path = directory / f"{family}.toml"
-            if not path.is_file():
-                continue
-            _rewritten, raw = bump_pin_contents(path.read_text(encoding="utf-8"), field_versions)
-            changes.extend(
-                PinChange(path=path, field=field_name, old_version=old, new_version=new)
-                for field_name, old, new in raw
-            )
-    return changes
+        return new_contracts
+    return {field: version for field, version in new_contracts.items() if field in pinned_fields}
 
 
 def sync_upstream(
@@ -125,32 +102,25 @@ def sync_upstream(
     misp_url: str | None = None,
     specifications: Path | None = None,
 ) -> SyncReport:
-    """Fetch upstream datasets, merge vocabs, and optionally write + bump pins."""
+    """Fetch upstream datasets, merge vocabs, and optionally write them; pins stay."""
     root = specifications if specifications is not None else specifications_root()
     vocab_dir = root / "vocabularies"
     attack = generate_attack_vocabs(fetch=fetch, vocab_dir=vocab_dir, write=False)
     actors = generate_actors_vocabs(misp_url=misp_url, vocab_dir=vocab_dir, write=False)
-    pin_versions = dict(attack.pin_versions)
-    pin_versions.update(actors.pin_versions)
-    directories = pin_directories(root)
-    pin_versions = _schema_pinned_versions(pin_versions, directories)
+    new_contracts = dict(attack.new_contracts)
+    new_contracts.update(actors.new_contracts)
     report = SyncReport(
         attack=attack,
         actors=actors,
-        pin_changes=_preview_pin_changes(directories, pin_versions),
-        pin_versions=pin_versions,
+        new_contracts=_schema_pinned_versions(new_contracts, pin_directories(root)),
     )
     if not (apply and report.dirty):
         return report
 
     generate_attack_vocabs(fetch=False, vocab_dir=vocab_dir, write=True)
     generate_actors_vocabs(misp_url=misp_url, vocab_dir=vocab_dir, write=True)
-    written: list[PinChange] = []
-    for directory in directories:
-        written.extend(bump_pin_dir(directory, pin_versions))
     _sync_bundled_vocabularies(root)
     report.wrote = True
-    report.pin_changes = written
     return report
 
 
@@ -159,18 +129,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=(
             "Fetch the latest MITRE ATT&CK STIX release and MISP threat-actor galaxy, "
             "merge them into specifications vocabularies with per-key versions, "
-            "bump matching schema pins, and sync the opentide bundle."
+            "and sync the opentide bundle. Schema pins never move."
         )
     )
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Compute the ingest without writing; exit 1 when vocabs or pins would change.",
+        help="Compute the ingest without writing; exit 1 when vocabularies would change.",
     )
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Write vocabularies, bump pins, and refresh the bundled copy + lockfile.",
+        help="Write vocabularies and refresh the bundled copy + lockfile.",
     )
     parser.add_argument(
         "--no-fetch",

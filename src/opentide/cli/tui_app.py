@@ -731,7 +731,7 @@ def _yaml(path: Any, diagnostics: Iterable[Diagnostic] = ()) -> RenderableType:
     if path is None:
         return Text("The index does not record this object's file.", style="dim")
     try:
-        code = path.read_text(encoding="utf-8")
+        code = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as exc:
         return Text(f"Cannot read {path}: {exc}", style="red")
     diagnostics = list(diagnostics)
