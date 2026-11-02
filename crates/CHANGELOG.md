@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-02
+
+The table and column release: the KQL engine knows every Azure Monitor Logs, Defender XDR and ASIM table with its columns and tracks them through a query (`kql_unknown_column`, `kql_type_mismatch`, column hover with descriptions), SPL knows the whole CIM and accepts what Splunk's parser accepts, Elastic queries over ECS indices are checked against ECS, and a workspace's `visibility.toml` declares its own tables, indexes and index patterns.
+
 ### Added
 
 - The KQL engine tracks columns through a query ([#112](https://github.com/opentidehq/language-server/issues/112)): at every operator it knows the columns, their types and the operator that made each one, through `let` values and tabular functions, `union`, `join`, `lookup`, `summarize` (named as Kusto names them: `count_`, `dcount_X`, `arg_max(T, *)`), the `project` family, `extend`, `mv-expand`, `parse` and `distinct`. Hover on a column shows its type and the operator that made or renamed it. `opentide_kql::columns` returns what the pass found, and the slow-query heuristics use it: a `where` on a column an earlier operator makes is no longer `kql_where_not_first`, a pipeline that starts from a `let` is not a table reference, a `let` that ends in `project`, `summarize` or `distinct` counts as narrowed, and `summarize arg_max(T, *)` is not `kql_join_summarize_before_project` (part of [#109](https://github.com/opentidehq/language-server/issues/109) B2 and B3).
@@ -195,6 +199,7 @@ The first working server: KQL, SPL, and Tide YAML over stdio and WASM, with the 
 - A frozen HighlightSpec with generated editor maps, and semantic tokens on the standard LSP legend.
 - Stdio and WASM hosts, and Zed, Helix, and Neovim samples.
 
+[0.7.0]: https://github.com/opentidehq/language-server/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/opentidehq/language-server/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/opentidehq/language-server/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/opentidehq/language-server/compare/v0.3.0...v0.4.0
