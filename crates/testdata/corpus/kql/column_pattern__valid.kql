@@ -1,0 +1,2 @@
+// prod:column_pattern valid
+SigninLogs | project-away *Id | project-keep User*Name, IPAddress | project-reorder *, IPAddress asc

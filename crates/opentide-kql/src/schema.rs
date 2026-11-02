@@ -891,6 +891,17 @@ impl<'a> Pass<'a> {
                     self.reference(ident, ctx, scope, span);
                     out.remove(&name, op.kind());
                 }
+                // `project-away User*`: a pattern drops every column it matches.
+                let patterns = self.column_patterns(op);
+                let dropped: Vec<String> = out
+                    .columns
+                    .iter()
+                    .filter(|c| patterns.iter().any(|p| glob_matches(p, &c.name)))
+                    .map(|c| c.name.clone())
+                    .collect();
+                for name in dropped {
+                    out.remove(&name, op.kind());
+                }
                 out
             }
             "project_keep_operator" | "project_reorder_operator" => {
@@ -900,21 +911,31 @@ impl<'a> Pass<'a> {
                     self.reference(ident, ctx, scope, span);
                     kept.push(self.text(ident).to_string());
                 }
+                // `*`, `User*`: a glob over the input columns, not a reference.
+                // `project-reorder` keeps every column whatever it names.
+                let patterns = self.column_patterns(op);
                 let mut out = input.clone();
                 if keep {
                     let dropped: Vec<String> = out
                         .columns
                         .iter()
-                        .filter(|c| !kept.contains(&c.name))
+                        .filter(|c| {
+                            !kept.contains(&c.name)
+                                && !patterns.iter().any(|p| glob_matches(p, &c.name))
+                        })
                         .map(|c| c.name.clone())
                         .collect();
                     for name in dropped {
                         out.remove(&name, op.kind());
                     }
-                    out.known = reshaped(input.known);
                     out.narrowed = true;
-                    out.custom_columns = false;
                     out.reshaped_by = Some(op.kind());
+                    // A pattern may keep columns the source does not document,
+                    // so it does not make the schema any more exact than it was.
+                    if patterns.is_empty() {
+                        out.known = reshaped(input.known);
+                        out.custom_columns = false;
+                    }
                 }
                 out
             }
@@ -1079,6 +1100,15 @@ impl<'a> Pass<'a> {
         let mut cursor = op.walk();
         op.children_by_field_name(field, &mut cursor)
             .filter(|n| is_name(*n))
+            .collect()
+    }
+
+    /// The column patterns (`*`, `User*`) an operator's `columns` list holds.
+    fn column_patterns(&self, op: Node) -> Vec<&'a str> {
+        let mut cursor = op.walk();
+        op.children_by_field_name("columns", &mut cursor)
+            .filter(|n| n.kind() == "column_pattern")
+            .map(|n| self.text(n))
             .collect()
     }
 
@@ -1961,6 +1991,29 @@ fn reshaped(input: Known) -> Known {
     }
 }
 
+/// Whether `name` matches a column pattern: `*` stands for any run of
+/// characters, everything else matches itself (case-sensitive, as Kusto
+/// column names are).
+fn glob_matches(pattern: &str, name: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or("");
+    let Some(mut rest) = name.strip_prefix(first) else {
+        return false;
+    };
+    let parts: Vec<&str> = parts.collect();
+    let Some((last, middle)) = parts.split_last() else {
+        // No `*` at all: the pattern is a plain name.
+        return rest.is_empty();
+    };
+    for part in middle {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    rest.len() >= last.len() && rest.ends_with(last)
+}
+
 /// The keyword an operator node is written with.
 fn operator_keyword(kind: &str) -> &'static str {
     match kind {
@@ -2042,4 +2095,25 @@ pub(crate) fn unquote_name(text: &str) -> &str {
 /// The call an expression is, if it is a bare call.
 pub(crate) fn simple_call(node: Node) -> Option<Node> {
     simple_primary(node).filter(|n| n.kind() == "function_call")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glob_matches;
+
+    #[test]
+    fn column_patterns_glob_over_names() {
+        assert!(glob_matches("*", "Anything"));
+        assert!(glob_matches("User*", "UserPrincipalName"));
+        assert!(glob_matches("User*", "User"));
+        assert!(glob_matches("*Id", "TenantId"));
+        assert!(glob_matches("Device*Name", "DeviceName"));
+        assert!(glob_matches("Device*Name", "DeviceHostName"));
+        assert!(glob_matches("a*b*c", "aXbYc"));
+        assert!(!glob_matches("User*", "user"));
+        assert!(!glob_matches("User*", "AppUser"));
+        assert!(!glob_matches("*Id", "Identity"));
+        assert!(!glob_matches("a*a", "a"));
+        assert!(!glob_matches("a*b*c", "acb"));
+    }
 }
