@@ -40,8 +40,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`doctor_checks_failed`](#doctor_checks_failed) | At least one `opentide doctor` check failed. |
 | [`duplicate_id`](#duplicate_id) | Two object files carry the same UUID. |
 | [`duplicate_name`](#duplicate_name) | Two `sharing.toml` blocks share a name. |
-| [`ecs_type_mismatch`](#ecs_type_mismatch) | The operation cannot apply to the ECS field's type. |
-| [`ecs_unknown_field`](#ecs_unknown_field) | The field is not in the Elastic Common Schema, on indices that use it; ECS allows custom fields. |
+| [`ecs_type_mismatch`](#ecs_type_mismatch) | The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index. |
+| [`ecs_unknown_field`](#ecs_unknown_field) | The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields. |
 | [`elastic_dataset_not_declared`](#elastic_dataset_not_declared) | The index pattern is not one the workspace declares in visibility.toml. |
 | [`engine_unavailable`](#engine_unavailable) | The analysis engine (the Rust module compiled into opentide) does not load, so the command cannot check queries or serve the language server. |
 | [`eql_argument_type`](#eql_argument_type) | A literal has a type the EQL verifier rejects in this position. |
@@ -92,11 +92,11 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
 | [`kql_table_not_declared`](#kql_table_not_declared) | The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml. |
-| [`kql_type_mismatch`](#kql_type_mismatch) | The operator cannot apply to the column's documented type. |
-| [`kql_unknown_column`](#kql_unknown_column) | The column is not in the documented schema of the table or ASIM parser it comes from. |
+| [`kql_type_mismatch`](#kql_type_mismatch) | The operator cannot apply to the column's documented or declared type. |
+| [`kql_unknown_column`](#kql_unknown_column) | The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table. |
 | [`kql_unknown_function`](#kql_unknown_function) | The KQL function is not in the Kusto function catalog. |
 | [`kql_unknown_operator`](#kql_unknown_operator) | The KQL tabular operator is not one Kusto knows. |
-| [`kql_unknown_table`](#kql_unknown_table) | The table is not one the engine knows for the platform: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. |
+| [`kql_unknown_table`](#kql_unknown_table) | The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known. |
 | [`kql_unscoped_search`](#kql_unscoped_search) | search without a table scans every table in the workspace. |
 | [`kql_unscoped_union`](#kql_unscoped_union) | union * or an unscoped union reads every table. |
 | [`kql_where_not_first`](#kql_where_not_first) | A filter comes after a more expensive operator; filtering first scans fewer rows. |
@@ -683,7 +683,7 @@ Give each block a unique `name`; `share --target` selects blocks by it.
 
 ## ecs_type_mismatch
 
-The operation cannot apply to the ECS field's type.
+The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index.
 
 Reported by the analysis engine in an ECS field query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -699,7 +699,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## ecs_unknown_field
 
-The field is not in the Elastic Common Schema, on indices that use it; ECS allows custom fields.
+The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields.
 
 Reported by the analysis engine in an ECS field query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -1575,7 +1575,7 @@ system = "sentinel"
 
 ## kql_type_mismatch
 
-The operator cannot apply to the column's documented type.
+The operator cannot apply to the column's documented or declared type.
 
 Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -1591,7 +1591,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## kql_unknown_column
 
-The column is not in the documented schema of the table or ASIM parser it comes from.
+The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table.
 
 Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -1639,7 +1639,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## kql_unknown_table
 
-The table is not one the engine knows for the platform: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema.
+The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known.
 
 Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

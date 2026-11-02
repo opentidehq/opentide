@@ -8,6 +8,7 @@ engine to prove that a missing one fails rather than skips.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -161,10 +162,6 @@ def test_a_slow_query_shape_is_lints_finding_not_validates(invoke_cli, tutorial:
     assert "warning[kql_where_not_first]" in human.output, "the queries check runs by default"
 
 
-@pytest.mark.xfail(
-    reason="needs language-server with visibility::1.0 singular datasets (language-server#146)",
-    strict=True,
-)
 def test_lint_reads_visibility_toml_on_every_run(invoke_cli, tutorial: Path) -> None:
     """#695: nothing is generated; an edit to visibility.toml applies at the next run."""
     _set_query(tutorial / RULE, "NTAIpDetails\n| take 1")
@@ -180,6 +177,66 @@ def test_lint_reads_visibility_toml_on_every_run(invoke_cli, tutorial: Path) -> 
     assert codes() == ["kql_table_not_declared"]
     visibility.write_text(source + 'name = "NTA*"\n', encoding="utf-8")
     assert codes() == []
+
+
+AUDIT_TABLE = """\
+[[logsources]]
+name = "Contoso_Audit_CL"
+description = "Administrative audit events"
+system = "sentinel"
+
+[logsources.columns]
+Actor_s = { type = "string", description = "UPN of the account that made the change" }
+EventCount_d = { type = "long" }
+"""
+
+
+def _visibility(repo: Path, text: str) -> None:
+    (repo / ".opentide" / "configurations" / "visibility.toml").write_text(text, encoding="utf-8")
+
+
+def _errors(result) -> list[str]:
+    payload = parse_cli_json(result)
+    return [item["code"] for item in payload["diagnostics"] if item["severity"] == "error"]
+
+
+def test_a_declared_tables_columns_are_checked_by_validate(invoke_cli, tutorial: Path) -> None:
+    """A KQL table declared with ``columns`` is checked like a documented table (#718)."""
+    _visibility(tutorial, AUDIT_TABLE)
+    _set_query(tutorial / RULE, 'Contoso_Audit_CL\n| where Actor_s == "admin@contoso.com"')
+    assert_json_ok(invoke_cli("validate", "query", repo=tutorial))
+
+    _set_query(tutorial / RULE, 'Contoso_Audit_CL\n| where Actr_s == "admin@contoso.com"')
+    near_miss = invoke_cli("validate", repo=tutorial)
+    assert near_miss.exit_code == 1, near_miss.output
+    (issue,) = parse_cli_json(near_miss)["report"]["issues"]
+    assert (issue["code"], issue["context"]["language"]) == ("kql_unknown_column", "kql")
+    assert "Actor_s" in json.dumps(issue), "the declared column is suggested"
+
+    _set_query(tutorial / RULE, 'Contoso_Audit_CL\n| where EventCount_d has "4"')
+    misused = invoke_cli("validate", "query", repo=tutorial)
+    assert misused.exit_code == 1, misused.output
+    assert _errors(misused) == ["kql_type_mismatch"]
+
+
+def test_an_unknown_table_is_an_error_under_a_declared_defender_source(
+    invoke_cli, tutorial: Path
+) -> None:
+    """Declaring a Defender table keeps Defender's severity for a typo: an error."""
+    _visibility(
+        tutorial,
+        '[[logsources]]\nname = "MyApp_CL"\ndescription = "d"\nsystem = "defender_for_endpoint"\n',
+    )
+    query = tutorial / "hunting" / "devices.kql"
+    query.parent.mkdir()
+    argv = ("validate", "query", "--platform", "defender_for_endpoint", "--file", str(query))
+
+    query.write_text("MyApp_CL\n| take 1\n", encoding="utf-8")
+    assert_json_ok(invoke_cli(*argv, repo=tutorial))
+    query.write_text("DeviceProcesEvents\n| take 1\n", encoding="utf-8")
+    typo = invoke_cli(*argv, repo=tutorial)
+    assert typo.exit_code == 1, typo.output
+    assert _errors(typo) == ["kql_unknown_table"]
 
 
 def test_lint_leaves_a_rejected_query_to_validate(invoke_cli, tutorial: Path) -> None:
