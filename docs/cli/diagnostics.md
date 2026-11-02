@@ -26,6 +26,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`compile_invalid_rule`](#compile_invalid_rule) | The rule does not load as a detection rule the platform can compile. |
 | [`compile_invalid_value`](#compile_invalid_value) | A setting in the rule's platform block holds a value the platform cannot use. |
 | [`compile_missing_field`](#compile_missing_field) | A rule's Sentinel block lacks a setting Sentinel needs to build the alert rule. |
+| [`config_check_failed`](#config_check_failed) | opentide could not check this configuration file in the editor; the message says why. Its other findings are missing. |
 | [`config_enum_unknown`](#config_enum_unknown) | A value is not one of those your deployment configuration declares. |
 | [`config_parse`](#config_parse) | A configuration file could not be read as TOML. |
 | [`configuration`](#configuration) | The workspace configuration files under `.opentide/configurations/` load. |
@@ -446,6 +447,22 @@ error[compile_missing_field]: configurations.sentinel.scheduling.frequency is mi
 ### How to fix
 
 Add the key under `configurations.sentinel` in the rule. The generated rule template, and a rule from `opentide new rule --platform sentinel`, show each one with its default.
+
+## config_check_failed
+
+opentide could not check this configuration file in the editor; the message says why. Its other findings are missing.
+
+Severity: warning. Reported by the language server (`opentide lsp start`) on the first line of a file under `.opentide/configurations/` when the configuration check itself fails, for example because opentide raised an error while reading the parent instance's file. Nothing about the file is reported until the check runs again, so the file may still have problems `opentide validate` finds.
+
+### Example
+
+```text
+opentide could not check this file: ImportError: cannot import name 'configuration_buffer_issues'
+```
+
+### How to fix
+
+Run `opentide validate` in the workspace to see the file's findings and any error behind this one. If the message names an import or version error, the editor runs a different opentide than the one you installed: point the editor at it, or reinstall with `pip install --force-reinstall opentide`. Then edit the file or restart the language server to check it again.
 
 ## config_enum_unknown
 
