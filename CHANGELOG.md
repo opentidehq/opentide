@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
-- **`threat.actors.name` is pinned to `actors::1.2`**: 60 groups and threat-actor clusters from ATT&CK 20.0 and the current MISP galaxy validate, and ATT&CK group names take their Enterprise prefix. Run `opentide generate schemas` so the editor offers them. Additive minor; `actors::1.1` keys are unaffected.
+- **ATT&CK 20.0 group labels.** 32 ATT&CK groups in the actors vocabulary take their current label (`[Enterprise] APT28` where it said `[Mobile] APT28`) in generated docs and editor schemas. `threat::1.0` still pins `actors::1.1` and accepts the same values; the 60 actors added at `actors::1.2` wait for a new threat revision.
 
 ## [0.20.0] — 2026-11-02
 

@@ -108,7 +108,7 @@ def test_apply_vocab_pins_sets_nested_contracts() -> None:
 def test_get_pins_for_shipped_threat_revision() -> None:
     pins_10 = get_pins("threat::1.0")
     assert pins_10["threat.killchain"] == "killchain::1.0"
-    assert pins_10["threat.actors.name"] == "actors::1.2"
+    assert pins_10["threat.actors.name"] == "actors::1.1"
     assert "threat.actors" not in pins_10
     assert get_pins("threat::2.1") == {}
 
@@ -116,7 +116,7 @@ def test_get_pins_for_shipped_threat_revision() -> None:
 def test_threat_schema_pins_actors_name_on_object_items() -> None:
     source = build_schema_source_for_identifier("threat::1.0")
     actor = source["$defs"]["ThreatActor"]["properties"]["name"]
-    assert actor["tide.vocab"] == "actors::1.2"
+    assert actor["tide.vocab"] == "actors::1.1"
     assert actor.get("tide.vocab.scoped") is True
     actors_field = source["$defs"]["ThreatBody"]["properties"]["actors"]
     assert "tide.vocab" not in actors_field
