@@ -364,6 +364,8 @@ fn handle_did_open(session: &mut Session, writer: &mut impl Write, params: &Valu
         return visibility_edited(session, writer);
     }
     let language = session.language_for(uri, lang);
+    // A byte-order mark is not text: the editor counts no column for it.
+    let text = opentide_core::strip_bom(text);
     session
         .docs
         .insert(uri.to_string(), (language, text.to_string()));
@@ -445,6 +447,7 @@ fn handle_did_change(session: &mut Session, writer: &mut impl Write, params: &Va
         .cloned()
         .unwrap_or_default();
     let text = apply_content_changes(&current, &changes);
+    let text = opentide_core::strip_bom(&text).to_string();
     session.docs.insert(uri.to_string(), (language, text));
     publish_diagnostics(session, writer, uri)?;
     Ok(())
@@ -1400,6 +1403,7 @@ fn collect_objects(root: &Path) -> Vec<(String, String)> {
                 rec(&p, out);
             } else if matches!(p.extension().and_then(|s| s.to_str()), Some("yaml" | "yml")) {
                 if let Ok(text) = std::fs::read_to_string(&p) {
+                    let text = opentide_core::strip_bom(&text).to_string();
                     out.push((p.display().to_string(), text));
                 }
             }

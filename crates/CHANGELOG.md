@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Fixed
+
+- A Tide document that starts with a UTF-8 byte-order mark (`EF BB BF`, as some Windows editors save) is analysed like the same document without it ([#150](https://github.com/opentidehq/language-server/issues/150)). Before, its YAML failed to parse, so none of its queries was checked, a mark right before `configurations` hid the queries from `analyze_queries`, and the object was missing from the workspace index. The engine (`opentide_tide::analyze`, `analyze_queries`, `extract_injections`, `index_object`, and hover and completion in `opentide-analysis`), the language server's open documents and workspace files, and the `analyze` and `highlight` commands drop the mark; offsets and positions are those of the text after it, as an editor shows them. `opentide_core::strip_bom` and `strip_bom_at` are the helpers.
+
 ## [0.7.0] - 2026-11-02
 
 The table and column release: the KQL engine knows every Azure Monitor Logs, Defender XDR and ASIM table with its columns and tracks them through a query (`kql_unknown_column`, `kql_type_mismatch`, column hover with descriptions), SPL knows the whole CIM and accepts what Splunk's parser accepts, Elastic queries over ECS indices are checked against ECS, and a workspace's `visibility.toml` declares its own tables, indexes and index patterns.

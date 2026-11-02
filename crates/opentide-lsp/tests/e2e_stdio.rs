@@ -1060,3 +1060,86 @@ fn editing_visibility_toml_rechecks_open_queries() {
         vec!["kql_table_not_declared"]
     );
 }
+
+/// A Tide document that starts with a UTF-8 byte-order mark gets the same
+/// diagnostics, at the same places, as without it, and hover and completion
+/// work in its query (#150). The editor counts no column for the mark.
+#[test]
+fn a_bom_tide_document_is_analysed_like_one_without() {
+    let rule = "name: BOM Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000150\n  schema: rule::1.0\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | frobnicate EventID\n      | where \n";
+    // One server per copy, so the two are not each other's `duplicate_id`.
+    let uri = "file:///tmp/objects/rules/bom-rule.yaml";
+    let mut published = Vec::new();
+    let mut last = None;
+    for text in [rule.to_string(), format!("\u{feff}{rule}")] {
+        let lsp = last.insert(Lsp::spawn());
+        lsp.request("initialize", json!({ "capabilities": {} }));
+        lsp.notify("initialized", json!({}));
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "opentide-yaml",
+                    "version": 1,
+                    "text": text
+                }
+            }),
+        );
+        let msg = lsp.read();
+        assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
+        let mut diagnostics: Vec<(String, Value)> = msg["params"]["diagnostics"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .map(|d| {
+                (
+                    d["code"].as_str().unwrap_or("").to_string(),
+                    d["range"].clone(),
+                )
+            })
+            .collect();
+        diagnostics.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.to_string().cmp(&b.1.to_string())));
+        published.push(diagnostics);
+    }
+    assert!(
+        published[0]
+            .iter()
+            .any(|(code, range)| code == "kql_unknown_operator" && range["start"]["line"] == 8),
+        "{:?}",
+        published[0]
+    );
+    assert_eq!(published[1], published[0]);
+    let mut lsp = last.expect("the BOM copy's server");
+
+    let hover = lsp.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 7, "character": 8 }
+        }),
+    );
+    assert!(
+        hover["result"]["contents"]["value"]
+            .as_str()
+            .unwrap_or("")
+            .contains("SecurityEvent"),
+        "{hover}"
+    );
+    let completion = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 9, "character": 14 }
+        }),
+    );
+    assert!(
+        completion["result"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["label"] == "EventID"),
+        "{completion}"
+    );
+}

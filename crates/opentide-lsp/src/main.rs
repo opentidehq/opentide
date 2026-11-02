@@ -87,7 +87,7 @@ fn detect_language(path: &Path, override_lang: Option<&str>) -> Result<LanguageI
 }
 
 fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
-    let text = std::fs::read_to_string(file)?;
+    let text = read_document(file)?;
     let language = detect_language(file, language)?;
     let mut files = vec![(file.display().to_string(), text.clone())];
     // Only Tide YAML resolves references across the workspace; a raw query
@@ -119,7 +119,7 @@ fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
 }
 
 fn cmd_highlight(file: &Path, language: Option<&str>, html: bool) -> Result<()> {
-    let text = std::fs::read_to_string(file)?;
+    let text = read_document(file)?;
     let language = detect_language(file, language)?;
     let result = highlight(language, &text);
     if html {
@@ -205,6 +205,13 @@ fn find_objects_root(file: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+/// A document's text without its byte-order mark, which an editor neither
+/// shows nor counts as a column ([`opentide_core::strip_bom`]).
+fn read_document(path: &Path) -> std::io::Result<String> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(opentide_core::strip_bom(&text).to_string())
+}
+
 /// The workspace YAML under `root`. A file that cannot be read as UTF-8 is
 /// left out rather than failing the file being analysed.
 fn collect_yaml(root: &Path, files: &mut Vec<(String, String)>) {
@@ -218,7 +225,7 @@ fn collect_yaml(root: &Path, files: &mut Vec<(String, String)>) {
         ) {
             continue;
         }
-        if let Ok(text) = std::fs::read_to_string(&entry) {
+        if let Ok(text) = read_document(&entry) {
             files.push((entry.display().to_string(), text));
         }
     }

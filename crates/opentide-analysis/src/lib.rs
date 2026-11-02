@@ -199,6 +199,8 @@ pub struct QueryReport {
 /// [`analyze`] with [`LanguageId::TideYaml`]. CrowdStrike and HarfangLab
 /// queries are not injected, so they never appear.
 pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport> {
+    // Ranges are those of the text after a byte-order mark, as an editor shows them.
+    let text = opentide_core::strip_bom(text);
     opentide_tide::analyze_queries(text, &elastic_tenants(host))
         .into_iter()
         .map(|query| QueryReport {
@@ -443,6 +445,8 @@ pub fn hover(
 ) -> Option<String> {
     match language {
         LanguageId::TideYaml => {
+            // An editor does not count a byte-order mark as a column.
+            let text = opentide_core::strip_bom(text);
             let offset = offset_at_position(text, position);
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
                 let inner_pos = position_at_offset(&inj.inner, inner);
@@ -485,6 +489,7 @@ pub fn completions(
 ) -> Vec<CompletionItem> {
     match language {
         LanguageId::TideYaml => {
+            let (text, offset) = opentide_core::strip_bom_at(text, offset);
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
                 return query_completions(inj.language, &inj.inner, inner, &inj.platform);
             }
@@ -533,6 +538,11 @@ pub fn signature_help(
     text: &str,
     position: Position,
 ) -> Option<SignatureHelp> {
+    let text = if language == LanguageId::TideYaml {
+        opentide_core::strip_bom(text)
+    } else {
+        text
+    };
     let offset = offset_at_position(text, position);
     match language {
         LanguageId::TideYaml => {
