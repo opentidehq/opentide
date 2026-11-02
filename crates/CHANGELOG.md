@@ -6,6 +6,13 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- The language server runs in a browser worker ([#14](https://github.com/opentidehq/language-server/issues/14)). The browser build (`opentide-wasm`) carries the server itself: `LanguageServer` is the `opentide-lsp` server `--stdio` runs, driven one JSON-RPC message at a time (`opentide_lsp::MessageSession`), so a browser editor gets the same diagnostics, hover, completion, code actions and semantic tokens as a native one, with no second implementation. `version()` is exported too. The artifact still imports nothing but wasm-bindgen's glue, and `scripts/wasm-smoke.mjs` checks that its server answers `initialize`, diagnostics, hover and completion.
+- `@opentide/lsp-worker`: `serveLanguageServer(port, server)` serves it inside a Web Worker, one JSON-RPC message (JSON text, no `Content-Length` header) per `postMessage` each way, which is what `@codemirror/lsp-client`'s `Transport` sends. Messages that arrive while the module loads wait for it, and a module that fails to load answers every request with the reason, so a client's `initialize` fails at once. `loadLanguageServer` loads it, and both loaders take the glue as a URL or as the module a bundler has already imported.
+- `createOpentideClient({ transport: "worker", worker })` speaks JSON-RPC to that worker, as `stdio` does to the process, so `analyze` works on the worker transport and gives the CLI's diagnostics. A loaded `module` still highlights in the same thread.
+- A host with no filesystem supplies its workspace on `initialize`, in `initializationOptions.workspace`: `documents` (object files, indexed as if on disk), `objects` (`{ uuid, schema, name }` for objects it knows by their metadata alone, so a `detection_model` or a threat reference resolves instead of being `invalid_ref`) and `visibility` (the text of `visibility.toml`). `createOpentideClient` sends it from its `workspace` option.
+
 ## [0.8.0] - 2026-11-03
 
 Falco, the language of Sysdig Secure rules. A `configurations.sysdig` block's condition, macros, exceptions and output are checked as Falco itself loads them: the parser and compiler are ported from libsinsp, the rule-level checks from Falco's rule loader, and the verdicts agree with real `falco --validate` (Falco 0.45.2) on all 364 oracle cases and with every libsinsp parser and compiler unit test. What Falco refuses is an error; what depends on the agent or tenant is a warning. Editors get highlighting, hover and context-aware completion, and the bundled Tide catalog lists `configurations.sysdig` and Sentinel's ATT&CK v18 techniques.

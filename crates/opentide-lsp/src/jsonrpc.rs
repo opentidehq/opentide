@@ -69,6 +69,29 @@ pub fn write_message(writer: &mut impl Write, body: &impl Serialize) -> Result<(
     Ok(())
 }
 
+/// The bodies of the frames [`write_message`] wrote into `bytes`, in order:
+/// what a host with no stdio posts on, one message at a time.
+pub fn frame_bodies(mut bytes: &[u8]) -> Vec<String> {
+    let mut bodies = Vec::new();
+    while let Some(sep) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+        let length = std::str::from_utf8(&bytes[..sep])
+            .ok()
+            .and_then(|header| {
+                header
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length:"))
+            })
+            .and_then(|value| value.trim().parse::<usize>().ok());
+        let start = sep + 4;
+        let Some(body) = length.and_then(|length| bytes.get(start..start + length)) else {
+            break;
+        };
+        bodies.push(String::from_utf8_lossy(body).into_owned());
+        bytes = &bytes[start + body.len()..];
+    }
+    bodies
+}
+
 pub fn success(id: Option<Value>, result: Value) -> Response {
     Response {
         jsonrpc: "2.0",
@@ -156,6 +179,20 @@ mod tests {
     #[test]
     fn eof_before_a_frame_is_none() {
         assert!(read_message(&mut Cursor::new(&b""[..])).unwrap().is_none());
+    }
+
+    #[test]
+    fn frame_bodies_splits_what_write_message_wrote() {
+        let mut buf = Vec::new();
+        write_message(&mut buf, &notify("a", serde_json::json!("é😀"))).unwrap();
+        write_message(&mut buf, &success(Some(serde_json::json!(2)), Value::Null)).unwrap();
+        let bodies = frame_bodies(&buf);
+        assert_eq!(bodies.len(), 2);
+        let first: Value = serde_json::from_str(&bodies[0]).unwrap();
+        assert_eq!(first["params"], "é😀");
+        let second: Value = serde_json::from_str(&bodies[1]).unwrap();
+        assert_eq!(second["id"], 2);
+        assert!(frame_bodies(b"").is_empty());
     }
 
     #[test]

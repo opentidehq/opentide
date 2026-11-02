@@ -77,7 +77,7 @@ name. The Elastic engines attach suggestions too ([LANGUAGE.md](LANGUAGE.md)).
 | Transport | Runs | `analyze` |
 | --- | --- | --- |
 | `stdio` | `opentide-lsp --stdio` (`command`, default `opentide-lsp` on `PATH`), started once, over JSON-RPC | yes |
-| `worker` | the `opentide-wasm` module you pass as `module` | no: the browser module only highlights |
+| `worker` | the language server in a Web Worker you pass as `worker` (`serveLanguageServer` from `@opentide/lsp-worker`), over JSON-RPC; or, given a `module` instead, `highlight()` in this thread | yes with `worker`; no with `module` |
 | `wasi` | the `wasm32-wasip1` CLI you pass as `wasi`, under `node:wasi`, once per call | yes |
 
 ```ts
@@ -88,7 +88,24 @@ const { diagnostics } = await client.analyze("kql", "SecurityEvent | take 1");
 await client.dispose();
 ```
 
-For Monaco, load the module inside your Web Worker with `@opentide/lsp-worker`, then hand it to the client:
+In a browser, run the language server itself in a Web Worker. `serveLanguageServer` answers one JSON-RPC message per `postMessage`, the messages any LSP client sends without `Content-Length` headers, so `@codemirror/lsp-client` talks to it through a `Transport` that posts and receives them, and `createOpentideClient` through its `worker` option:
+
+```ts
+// worker.ts
+import * as glue from "./opentide_wasm.js"; // wasm-bindgen --target web
+import { loadLanguageServer, serveLanguageServer } from "@opentide/lsp-worker";
+
+serveLanguageServer(self, loadLanguageServer(glue, new URL("./opentide_wasm_bg.wasm", import.meta.url)));
+
+// the page
+const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+const client = createOpentideClient({ transport: "worker", worker });
+const { diagnostics } = await client.analyze("kql", "SecurityEvent | take 1");
+```
+
+The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`.
+
+To highlight in the same thread instead, load the module with `loadHighlightModule` and hand it over as `module`:
 
 ```ts
 import { loadHighlightModule } from "@opentide/lsp-worker";

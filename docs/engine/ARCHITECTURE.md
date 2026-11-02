@@ -69,7 +69,7 @@ Pydantic remains CLI authority. The LSP emits the same `{code, field_path, sever
 ## Hosts
 
 - Native: `opentide-lsp --stdio` or `--listen 127.0.0.1:2087`
-- Web: `wasm32-unknown-unknown` `highlight(language_id, bytes)` — do **not** mix WASI + wasm-bindgen in one artifact
+- Web: `wasm32-unknown-unknown`: the language server itself (`LanguageServer`, `opentide_lsp::MessageSession` one JSON-RPC message at a time, served in a Web Worker by `@opentide/lsp-worker`), and `highlight(language_id, bytes)` — do **not** mix WASI + wasm-bindgen in one artifact. With no filesystem, the client supplies the workspace on `initialize` (`initializationOptions.workspace`)
 - vscode.dev: `wasm32-wasip1` of the same binary
 - TypeScript: `createOpentideClient({ transport: "stdio" | "worker" | "wasi" })`
 

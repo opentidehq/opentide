@@ -4,11 +4,13 @@
 //!
 //! [`run_stdio`] speaks LSP on the process's stdin and stdout until the client
 //! sends `exit` or closes stdin. Nothing else may write to stdout meanwhile.
+//! [`MessageSession`] is the same server for a host with no stdio (the
+//! browser build, `opentide-wasm`): one JSON-RPC message in, its replies out.
 
 mod jsonrpc;
 pub mod server;
 
-pub use server::{WORKSPACE_CATALOGS, run_listen, run_stdio, use_host_catalogs};
+pub use server::{MessageSession, WORKSPACE_CATALOGS, run_listen, run_stdio, use_host_catalogs};
 
 /// The server's version: the crate version every `opentide-*` crate shares.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

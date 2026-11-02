@@ -75,7 +75,7 @@ The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |
 | `opentide-lsp` | stdio LSP + CLI |
-| `opentide-wasm` | `wasm32-unknown-unknown` `highlight()` (no WASI mix-in) |
+| `opentide-wasm` | `wasm32-unknown-unknown`: the language server for a browser worker, and `highlight()` (no WASI mix-in) |
 
 ## Editors
 

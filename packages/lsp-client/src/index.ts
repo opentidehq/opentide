@@ -7,8 +7,11 @@
  *
  * - `stdio` runs `opentide-lsp --stdio` once and speaks JSON-RPC to it
  *   (`opentide/analyze`, `opentide/highlight`).
- * - `worker` calls a loaded `opentide-wasm` module (wasm-bindgen, see
- *   `@opentide/lsp-worker`). It highlights; it does not analyze.
+ * - `worker` speaks the same JSON-RPC to the same server running in a Web
+ *   Worker (`worker`: `serveLanguageServer` from `@opentide/lsp-worker`, over
+ *   `opentide-wasm`), one message per `postMessage`. Given a loaded `module`
+ *   instead, it calls `highlight()` and `legend()` in this thread and does not
+ *   analyze.
  * - `wasi` runs the `wasm32-wasip1` `opentide-lsp` CLI under `node:wasi`, one
  *   `analyze` or `highlight` per call. Under Node 22, run the process with
  *   `--no-turbo-fast-api-calls`: `node:wasi`'s fast `path_open` call can start
@@ -55,10 +58,37 @@ export const DOCUMENT_SELECTOR: ReadonlyArray<{ language: string } | { scheme: s
     ...l.patterns.map((pattern) => ({ scheme: "file", pattern })),
   ]);
 
-/** The `opentide-wasm` exports the `worker` transport calls. */
+/** The `opentide-wasm` exports the `worker` transport calls when given a `module`. */
 export interface HighlightModule {
   highlight(language_id: string, bytes: Uint8Array): unknown;
   legend(): unknown;
+}
+
+/**
+ * The client's end of a channel to a worker serving the language server: a
+ * `Worker`, or one port of a `MessageChannel`. Each message is one JSON-RPC
+ * message as JSON text.
+ */
+export interface WorkerPort {
+  postMessage(message: string): void;
+  addEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
+  start?(): void;
+  /** A `MessagePort`'s. */
+  close?(): void;
+  /** A `Worker`'s. */
+  terminate?(): void;
+}
+
+/**
+ * What a host with no filesystem tells the server about its workspace on
+ * `initialize` (`initializationOptions.workspace`), so references resolve and
+ * declared datasets apply: whole object documents, objects known by their
+ * metadata alone, and the text of `visibility.toml`.
+ */
+export interface SuppliedWorkspace {
+  documents?: { uri: string; text: string }[];
+  objects?: { uuid: string; schema: string; name?: string; uri?: string }[];
+  visibility?: string;
 }
 
 export interface OpentideClientOptions {
@@ -69,7 +99,11 @@ export interface OpentideClientOptions {
   args?: string[];
   /** stdio: workspace root sent on `initialize` (a `file:` URI). */
   rootUri?: string;
-  /** worker: the loaded module (`loadHighlightModule` in `@opentide/lsp-worker`). */
+  /** stdio and worker: the workspace sent on `initialize`, for a server that cannot read one from disk. */
+  workspace?: SuppliedWorkspace;
+  /** worker: a worker serving the language server (`serveLanguageServer` in `@opentide/lsp-worker`). */
+  worker?: WorkerPort;
+  /** worker, without `worker`: the loaded module (`loadHighlightModule` in `@opentide/lsp-worker`). */
   module?: HighlightModule;
   /** wasi: the `wasm32-wasip1` `opentide-lsp` build, as a path, its bytes, or a compiled module. */
   wasi?: string | URL | Uint8Array | WebAssembly.Module;
@@ -181,19 +215,30 @@ interface RpcResponse {
   error?: { code: number; message: string };
 }
 
-/** One `opentide-lsp --stdio` process, started on first use. */
-class StdioConnection {
-  private child: import("node:child_process").ChildProcessWithoutNullStreams | undefined;
+/**
+ * One JSON-RPC session with the server, started on first use: the
+ * `initialize` handshake, requests matched to their responses, and
+ * `shutdown`/`exit` on dispose. A subclass opens the channel and writes to it.
+ */
+abstract class Connection {
   private ready: Promise<void> | undefined;
   private nextId = 1;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
-  private stderr = "";
   private closed: Error | undefined;
-  private readonly options: OpentideClientOptions;
+  protected readonly options: OpentideClientOptions;
 
   constructor(options: OpentideClientOptions) {
     this.options = options;
   }
+
+  /** Start the server and pass each message it sends to `receive`. */
+  protected abstract open(): Promise<void>;
+  /** Send one message to the server. */
+  protected abstract write(message: object): void;
+  /** The process id sent on `initialize`. */
+  protected abstract processId(): number | null;
+  /** Wait for the server to go after `exit`, then make sure it has. */
+  protected abstract close(): Promise<void>;
 
   request(method: string, params: unknown): Promise<unknown> {
     return this.start().then(() => this.send(method, params));
@@ -201,25 +246,13 @@ class StdioConnection {
 
   private start(): Promise<void> {
     this.ready ??= (async () => {
-      const { spawn } = await import("node:child_process");
-      const command = this.options.command ?? "opentide-lsp";
-      const child = spawn(command, this.options.args ?? ["--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
-      this.child = child;
-      const decoder = new MessageDecoder();
-      child.stdout.on("data", (chunk: Uint8Array) => {
-        for (const message of decoder.push(chunk) as RpcResponse[]) this.receive(message);
+      await this.open();
+      await this.send("initialize", {
+        processId: this.processId(),
+        rootUri: this.options.rootUri ?? null,
+        capabilities: {},
+        ...(this.options.workspace ? { initializationOptions: { workspace: this.options.workspace } } : {}),
       });
-      child.stderr.on("data", (chunk: Uint8Array) => {
-        this.stderr = (this.stderr + new TextDecoder().decode(chunk)).slice(-4096);
-      });
-      child.on("error", (e) => this.fail(new Error(`cannot start ${command}: ${e.message}`)));
-      // A write to a server that died (EPIPE) is reported through `close`.
-      child.stdin.on("error", () => {});
-      child.on("close", (code, signal) => {
-        const detail = this.stderr.trim() ? `: ${this.stderr.trim()}` : "";
-        this.fail(new Error(`${command} exited (${signal ?? code})${detail}`));
-      });
-      await this.send("initialize", { processId: process.pid, rootUri: this.options.rootUri ?? null, capabilities: {} });
       this.notify("initialized", {});
     })();
     return this.ready;
@@ -230,15 +263,15 @@ class StdioConnection {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      this.child!.stdin.write(encodeMessage({ jsonrpc: "2.0", id, method, params }));
+      this.write({ jsonrpc: "2.0", id, method, params });
     });
   }
 
   private notify(method: string, params: unknown): void {
-    if (!this.closed) this.child!.stdin.write(encodeMessage({ jsonrpc: "2.0", method, params }));
+    if (!this.closed) this.write({ jsonrpc: "2.0", method, params });
   }
 
-  private receive(message: RpcResponse): void {
+  protected receive(message: RpcResponse): void {
     // Notifications from the server (publishDiagnostics) carry no id.
     if (message.id === undefined || message.method !== undefined) return;
     const waiter = this.pending.get(message.id);
@@ -248,7 +281,7 @@ class StdioConnection {
     else waiter.resolve(message.result);
   }
 
-  private fail(error: Error): void {
+  protected fail(error: Error): void {
     this.closed ??= error;
     for (const waiter of this.pending.values()) waiter.reject(error);
     this.pending.clear();
@@ -256,31 +289,103 @@ class StdioConnection {
 
   async dispose(): Promise<void> {
     if (!this.ready) return;
-    const child = this.child;
     try {
       await this.ready;
-      const exited = new Promise<void>((resolve) => child!.once("close", () => resolve()));
       await this.send("shutdown", null);
       this.notify("exit", null);
-      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 2000).unref());
-      await Promise.race([exited, timeout]);
     } catch {
       // Already gone: nothing to shut down.
     } finally {
-      if (child && child.exitCode === null && child.signalCode === null) child.kill();
+      await this.close();
       this.fail(new Error("client disposed"));
     }
   }
 }
 
-function stdioClient(options: OpentideClientOptions): OpentideClient {
-  const connection = new StdioConnection(options);
+/** One `opentide-lsp --stdio` process. */
+class StdioConnection extends Connection {
+  private child: import("node:child_process").ChildProcessWithoutNullStreams | undefined;
+  private stderr = "";
+
+  protected async open(): Promise<void> {
+    const { spawn } = await import("node:child_process");
+    const command = this.options.command ?? "opentide-lsp";
+    const child = spawn(command, this.options.args ?? ["--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
+    this.child = child;
+    const decoder = new MessageDecoder();
+    child.stdout.on("data", (chunk: Uint8Array) => {
+      for (const message of decoder.push(chunk) as RpcResponse[]) this.receive(message);
+    });
+    child.stderr.on("data", (chunk: Uint8Array) => {
+      this.stderr = (this.stderr + new TextDecoder().decode(chunk)).slice(-4096);
+    });
+    child.on("error", (e) => this.fail(new Error(`cannot start ${command}: ${e.message}`)));
+    // A write to a server that died (EPIPE) is reported through `close`.
+    child.stdin.on("error", () => {});
+    child.on("close", (code, signal) => {
+      const detail = this.stderr.trim() ? `: ${this.stderr.trim()}` : "";
+      this.fail(new Error(`${command} exited (${signal ?? code})${detail}`));
+    });
+  }
+
+  protected write(message: object): void {
+    this.child!.stdin.write(encodeMessage(message));
+  }
+
+  protected processId(): number | null {
+    return process.pid;
+  }
+
+  protected async close(): Promise<void> {
+    const child = this.child;
+    if (!child) return;
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = new Promise<void>((resolve) => child.once("close", () => resolve()));
+      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 2000).unref());
+      await Promise.race([exited, timeout]);
+    }
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+  }
+}
+
+/** The language server in a worker (`serveLanguageServer` in `@opentide/lsp-worker`), one message per `postMessage`. */
+class WorkerConnection extends Connection {
+  protected async open(): Promise<void> {
+    const port = this.options.worker!;
+    port.addEventListener("message", (event) => {
+      const text = typeof event.data === "string" ? event.data : JSON.stringify(event.data);
+      try {
+        this.receive(JSON.parse(text) as RpcResponse);
+      } catch {
+        this.fail(new Error(`the worker posted something that is not JSON-RPC: ${text.slice(0, 200)}`));
+      }
+    });
+    port.start?.();
+  }
+
+  protected write(message: object): void {
+    this.options.worker!.postMessage(JSON.stringify(message));
+  }
+
+  protected processId(): number | null {
+    return null;
+  }
+
+  protected async close(): Promise<void> {
+    const port = this.options.worker!;
+    port.close?.();
+    port.terminate?.();
+  }
+}
+
+/** A client of a JSON-RPC connection to the server: the stdio process, or the worker. */
+function connectionClient(transport: Transport, connection: Connection): OpentideClient {
   const highlight = async (languageId: string, text: string): Promise<HighlightResult> => {
     checkLanguage(languageId);
     return (await connection.request("opentide/highlight", { language: languageId, text })) as HighlightResult;
   };
   return {
-    transport: "stdio",
+    transport,
     highlight,
     async legend() {
       return (await highlight("kql", "")).legend;
@@ -294,10 +399,17 @@ function stdioClient(options: OpentideClientOptions): OpentideClient {
   };
 }
 
+function stdioClient(options: OpentideClientOptions): OpentideClient {
+  return connectionClient("stdio", new StdioConnection(options));
+}
+
 function workerClient(options: OpentideClientOptions): OpentideClient {
+  if (options.worker) return connectionClient("worker", new WorkerConnection(options));
   const module = options.module;
   if (!module) {
-    throw new Error("the worker transport needs `module`: load it with loadHighlightModule from @opentide/lsp-worker");
+    throw new Error(
+      "the worker transport needs `worker` (a worker running serveLanguageServer from @opentide/lsp-worker) or `module` (loadHighlightModule)",
+    );
   }
   return {
     transport: "worker",
@@ -309,7 +421,9 @@ function workerClient(options: OpentideClientOptions): OpentideClient {
       return [...(module.legend() as Iterable<string>)];
     },
     async analyze() {
-      throw new Error("analyze is not available on the worker transport: opentide-wasm exports highlight() and legend() only");
+      throw new Error(
+        "analyze needs the language server: pass `worker` (serveLanguageServer from @opentide/lsp-worker), not a highlight `module`",
+      );
     },
     async dispose() {},
   };

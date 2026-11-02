@@ -25,6 +25,11 @@ struct Session {
     visibility: Option<String>,
     /// The client can watch files for the server (`didChangeWatchedFiles`).
     watch_files: bool,
+    /// Workspace files the client supplies on `initialize`
+    /// (`initializationOptions.workspace`), for a host with no filesystem to
+    /// index (a browser worker). They are read like the files under the
+    /// root: indexed, never checked or published.
+    supplied: Vec<(String, String)>,
 }
 
 impl Session {
@@ -34,6 +39,11 @@ impl Session {
             .iter()
             .map(|(uri, (_, text))| (uri_to_path(uri), text.clone()))
             .collect();
+        for (path, text) in &self.supplied {
+            if !files.iter().any(|(e, _)| e == path) {
+                files.push((path.clone(), text.clone()));
+            }
+        }
         if let Some(root) = &self.root {
             for (p, t) in collect_objects(root) {
                 if !files.iter().any(|(e, _)| e == &p) {
@@ -79,6 +89,112 @@ pub fn run_stdio() -> Result<()> {
     Ok(())
 }
 
+/// The language server driven one message at a time, for a host that has no
+/// stdio to give it: a browser worker hands [`MessageSession::handle`] each
+/// JSON-RPC message it receives and posts back the messages it returns. A
+/// session holds what [`run_stdio`] keeps between messages: the open
+/// documents and the workspace.
+///
+/// Such a host has no filesystem, so it supplies the workspace on
+/// `initialize`, in `initializationOptions.workspace`:
+///
+/// - `documents`: `[{ "uri", "text" }]`, object files indexed as if they were
+///   on disk (references resolve to them; they are not checked);
+/// - `objects`: `[{ "uuid", "schema", "name", "uri"? }]`, objects the host
+///   knows by their metadata alone, indexed with just those keys, so a
+///   reference to one resolves and hover names it;
+/// - `visibility`: the text of the workspace's `visibility.toml`.
+#[derive(Default)]
+pub struct MessageSession {
+    session: Session,
+    closed: bool,
+}
+
+impl MessageSession {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Handle one JSON-RPC message: its JSON text, without the
+    /// `Content-Length` header. Returns what the server sends in reply, each
+    /// message as JSON text and in order: the response to a request, the
+    /// notifications it publishes (`textDocument/publishDiagnostics`), and the
+    /// requests it makes of the client (`client/registerCapability`). Text that
+    /// is not a JSON-RPC message is answered with a parse error (`-32700`).
+    /// After `exit` the session is closed and handles nothing more.
+    pub fn handle(&mut self, message: &str) -> Vec<String> {
+        if self.closed {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        match serde_json::from_str::<Incoming>(message) {
+            Ok(incoming) => {
+                let id = incoming.id.clone();
+                match dispatch(&mut self.session, &mut out, incoming) {
+                    Ok(open) => self.closed = !open,
+                    Err(err) if id.is_some() => {
+                        jsonrpc::write_message(
+                            &mut out,
+                            &jsonrpc::failure(id, -32603, err.to_string()),
+                        )
+                        .ok();
+                    }
+                    Err(_) => {}
+                }
+            }
+            Err(err) => {
+                jsonrpc::write_message(
+                    &mut out,
+                    &jsonrpc::failure(None, -32700, format!("parse error: {err}")),
+                )
+                .ok();
+            }
+        }
+        jsonrpc::frame_bodies(&out)
+    }
+
+    /// Whether the client has sent `exit`.
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+}
+
+/// The workspace a client with no filesystem supplies on `initialize`
+/// ([`MessageSession`]), as the paths and texts [`Session::host`] indexes.
+fn supplied_workspace(workspace: Option<&Value>) -> Vec<(String, String)> {
+    let Some(workspace) = workspace else {
+        return Vec::new();
+    };
+    let entries = |key: &str| {
+        workspace
+            .get(key)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+    };
+    let mut files = Vec::new();
+    for document in entries("documents") {
+        let field = |key: &str| document.get(key).and_then(Value::as_str);
+        if let (Some(uri), Some(text)) = (field("uri"), field("text")) {
+            files.push((uri_to_path(uri), opentide_core::strip_bom(text).to_string()));
+        }
+    }
+    for object in entries("objects") {
+        let field = |key: &str| object.get(key).and_then(Value::as_str);
+        let (Some(uuid), Some(schema)) = (field("uuid"), field("schema")) else {
+            continue;
+        };
+        let path = field("uri").map_or_else(|| format!("opentide-object:{uuid}"), uri_to_path);
+        // JSON is YAML: the stub indexes like an object file with these keys alone.
+        let stub = json!({
+            "name": field("name").unwrap_or(""),
+            "metadata": { "uuid": uuid, "schema": schema },
+        });
+        files.push((path, stub.to_string()));
+    }
+    files
+}
+
 pub fn run_listen(addr: &str) -> Result<()> {
     let listener = TcpListener::bind(addr)?;
     eprintln!("opentide-lsp listening on {addr}");
@@ -118,7 +234,22 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 .pointer("/capabilities/workspace/didChangeWatchedFiles/dynamicRegistration")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            reload_visibility(session);
+            let supplied = params.pointer("/initializationOptions/workspace");
+            session.supplied = supplied_workspace(supplied);
+            match supplied
+                .and_then(|w| w.get("visibility"))
+                .and_then(|v| v.as_str())
+            {
+                // A host with no filesystem hands over visibility.toml itself.
+                Some(text) => {
+                    session.visibility = Some(text.to_string());
+                    if let Err(err) = install_visibility(Some(text)) {
+                        eprintln!("opentide-lsp: {err}; no datasets are declared");
+                        let _ = install_visibility(None);
+                    }
+                }
+                None => reload_visibility(session),
+            }
             jsonrpc::write_message(
                 writer,
                 &jsonrpc::success(

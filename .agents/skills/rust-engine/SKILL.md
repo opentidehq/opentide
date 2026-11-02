@@ -30,7 +30,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
 | `opentide-analysis` | no | — | `WorkspaceHost` orchestrator |
 | `opentide-lsp` | yes | `anyhow` | stdio host and CLI |
-| `opentide-wasm` | no (host is JS) | `JsValue` | `highlight` / `legend` only |
+| `opentide-wasm` | no (host is JS) | `JsValue` | `highlight` / `legend`, and `LanguageServer` over `opentide-lsp`'s `MessageSession` |
 
 `scripts/check-io-free.sh` greps `use std::fs` and `std::fs::` under those engine `src/` trees. `build.rs` and `tests/` may touch the filesystem. `opentide-lsp` and `main.rs` are the native host.
 
