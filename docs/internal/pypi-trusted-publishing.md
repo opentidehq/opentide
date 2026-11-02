@@ -5,7 +5,7 @@ description: First publish of opentide 0.1.0 via OIDC — no API tokens.
 
 # PyPI trusted publishing
 
-[`.github/workflows/publish-pypi.yml`](../../.github/workflows/publish-pypi.yml) publishes on **GitHub Release** (`release: published`) using [OIDC trusted publishing](https://docs.pypi.org/trusted-publishers/). There is no PyPI token in GitHub secrets.
+[`.github/workflows/publish-pypi.yml`](../../.github/workflows/publish-pypi.yml) releases from **Run workflow** on `development`, and publishes on a **GitHub Release** (`release: published`), using [OIDC trusted publishing](https://docs.pypi.org/trusted-publishers/). There is no PyPI token in GitHub secrets.
 
 Version comes from hatch-vcs. Tag **`v0.1.0`** (or a later `v*`) on the commit you release. A Release without a matching tag publishes a `0.1.dev…` version.
 
@@ -54,9 +54,22 @@ The PyPI account that saved the pending publisher **owns** the project.
 
 ## Later releases
 
-After the first upload, the pending publisher becomes a normal publisher. Further GitHub Releases on `v*` tags publish new versions. Do not add a PyPI API token.
+After the first upload, the pending publisher becomes a normal publisher. Do not add a PyPI API token.
 
-Cut a patch on `development` after the changelog and release notes land (example: **0.1.8**):
+### Run workflow on `development` (the default, and the cloud path)
+
+Once the notes PR has merged, run **Publish to PyPI** on `development` with `checkout_ref` empty: Actions → Publish to PyPI → Run workflow, or `workflow_dispatch` through the API (an agent's GitHub tools run it with workflow `publish-pypi.yml`, ref `development`, no inputs). It is language-server's Release button:
+
+1. The guard reads the version from the newest dated `CHANGELOG.md` heading and runs `scripts/build/release.py check vX.Y.Z`: the changelog section and links, `.github/release-notes/vX.Y.Z.md`, the top of `docs/usage/releases.md` and the README pin. It refuses a version that is already tagged or released, and a run from another branch.
+2. The wheels and sdist build from the run's commit with the version from the changelog (`SETUPTOOLS_SCM_PRETEND_VERSION`).
+3. The **GitHub Release** job creates tag `vX.Y.Z` on that commit, with the notes file as its body, marked Latest.
+4. **Publish to PyPI** uploads, and refuses files of any other version than the guard approved.
+
+The Release is created with `GITHUB_TOKEN`, which starts no `release: published` run, so the version is published once. The trusted publisher does not change: same workflow file, same `pypi` environment. If the publish fails after the Release exists, retry with `checkout_ref=vX.Y.Z` (Run workflow again, now naming the tag); do not delete the tag.
+
+### A GitHub Release published by hand
+
+Publishing a Release still publishes its tag, as before (example: **0.1.8**):
 
 ```bash
 gh release create v0.1.8 \
@@ -95,7 +108,7 @@ Optional TestPyPI dry run: a separate pending publisher on [test.pypi.org](https
     -f event_type=publish-pypi \
     -f client_payload[checkout_ref]=v0.x.y
   ```
-  The Actions UI `workflow_dispatch` input `checkout_ref` is the same path. Do not retag.
+  The Actions UI `workflow_dispatch` input `checkout_ref` is the same path, and the one an agent without `gh` uses (workflow `publish-pypi.yml`, ref `development`, input `checkout_ref=v0.x.y`). Do not retag.
 - PyPI 5xx (`502 Bad Gateway`) or a partial upload, where PyPI kept the wheel but not the sdist (0.4.0): re-run with the same `repository_dispatch` command. The publish step sets `skip-existing: true`, so the retry uploads only the files PyPI is missing instead of failing with `400 File already exists`. The **Verify PyPI lists every built file** step then fails the job unless `https://pypi.org/pypi/opentide/<version>/json` lists both the wheel and the sdist, and its log prints the retry command. `gh run rerun` does not work with the GitHub App token (403, no `actions:write`).
 - Release exists but Publish to PyPI never starts: the workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag.
 
