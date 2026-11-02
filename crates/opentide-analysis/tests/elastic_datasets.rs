@@ -1,6 +1,6 @@
-//! Declared Elastic index patterns and data views (#116, tiers 2 and 3) and
-//! `ecs_indices`, through `install_catalog`. One test: the declared datasets
-//! are process-wide.
+//! Declared Elastic index patterns (#116, tiers 2 and 3) and their columns
+//! (#146), through `install_catalog`. One test: the declared datasets are
+//! process-wide.
 
 use opentide_analysis::{
     AnalyzeRequest, Catalog, Diagnostic, LanguageId, MemoryWorkspace, QueryRequest, Severity,
@@ -8,18 +8,32 @@ use opentide_analysis::{
 };
 
 const DATASETS: &str = r#"[[logsources]]
-name = "elastic datasets"
-description = "Test log source."
+name = "logs-*"
+description = "Integration data streams."
 system = "elastic"
-indices = ["logs-*", "winlogbeat-x"]
-data_views = ["security-solution-default"]
 
 [[logsources]]
-name = "elastic datasets"
-description = "Test log source."
+name = "winlogbeat-x"
+description = "Winlogbeat."
 system = "elastic"
-indices = ["custom-ecs-*"]
-ecs = true
+
+[[logsources]]
+name = "logs-custom.app-*"
+description = "Custom app."
+system = "elastic"
+
+[logsources.columns]
+"process.nmae" = { type = "keyword" }
+"process.pid" = { type = "keyword" }
+"app.score" = { type = "long" }
+
+[[logsources]]
+name = "logs-custom.app-prod"
+description = "Production custom app."
+system = "elastic"
+
+[logsources.columns]
+"app.score" = { type = "keyword" }
 "#;
 
 fn esql(text: &str) -> Vec<Diagnostic> {
@@ -60,7 +74,7 @@ fn install(datasets: Option<&str>) {
 }
 
 #[test]
-fn declared_index_patterns_and_data_views() {
+fn declared_index_patterns_and_their_columns() {
     let undeclared = codes::ELASTIC_DATASET_NOT_DECLARED;
     let rule = "    type: query\n    index:\n      - logs-azure.signinlogs-*\n      - filebeat-*\n    query: event.action:x\n";
 
@@ -71,10 +85,9 @@ fn declared_index_patterns_and_data_views() {
     // Declaring another platform's datasets is no opt-in for Elastic.
     install(Some(
         r#"[[logsources]]
-name = "sentinel datasets"
+name = "SigninLogs"
 description = "Test log source."
 system = "sentinel"
-tables = ["SigninLogs"]
 "#,
     ));
     assert!(codes_of(&tide(rule).1, undeclared).is_empty());
@@ -104,14 +117,10 @@ tables = ["SigninLogs"]
         )
     );
 
-    // Data views: declared or not.
-    let (_, found) = tide(
-        "    type: query\n    data_view_id: security-solution-default\n    query: event.action:x\n",
-    );
-    assert!(codes_of(&found, undeclared).is_empty(), "{found:?}");
+    // Data views are not declarable: a `data_view_id` is never checked.
     let (_, found) =
         tide("    type: query\n    data_view_id: my-view\n    query: event.action:x\n");
-    assert_eq!(codes_of(&found, undeclared).len(), 1, "{found:?}");
+    assert!(codes_of(&found, undeclared).is_empty(), "{found:?}");
 
     // The indicator index of a threat-match rule.
     let (_, found) = tide(
@@ -126,18 +135,53 @@ tables = ["SigninLogs"]
     assert_eq!(warned.len(), 1, "{found:?}");
     assert_eq!(warned[0].range.start.character, 13);
 
-    // `ecs_indices`: a declared ECS index gets the field checks; a pattern
-    // that only reaches it does not.
+    // ECS checks run on `logs-*` data streams only: declaring an index
+    // pattern does not make it ECS.
     let mismatch = |found: &[Diagnostic]| !codes_of(found, codes::ECS_TYPE_MISMATCH).is_empty();
     assert!(mismatch(&esql(
-        "FROM custom-ecs-prod | WHERE source.ip LIKE \"10.*\""
+        "FROM logs-endpoint.events.process-default | WHERE source.ip LIKE \"10.*\""
     )));
     assert!(!mismatch(&esql(
-        "FROM custom-* | WHERE source.ip LIKE \"10.*\""
+        "FROM winlogbeat-x | WHERE source.ip LIKE \"10.*\""
+    )));
+
+    // Declared columns are mapped fields of their index pattern: no
+    // `ecs_unknown_field`, and their declared type for `ecs_type_mismatch`.
+    let unknown = |found: &[Diagnostic]| !codes_of(found, codes::ECS_UNKNOWN_FIELD).is_empty();
+    assert!(unknown(&esql(
+        "FROM logs-other-default | WHERE process.nmae == \"x\""
+    )));
+    assert!(!unknown(&esql(
+        "FROM logs-custom.app-default | WHERE process.nmae == \"x\""
+    )));
+    // `process.pid` is a long in ECS, a keyword here.
+    assert!(mismatch(&esql(
+        "FROM logs-other-default | WHERE process.pid LIKE \"12*\""
+    )));
+    assert!(!mismatch(&esql(
+        "FROM logs-custom.app-default | WHERE process.pid LIKE \"12*\""
+    )));
+    let found = esql("FROM logs-custom.app-default | WHERE app.score LIKE \"1*\"");
+    let mismatched = codes_of(&found, codes::ECS_TYPE_MISMATCH);
+    assert_eq!(mismatched.len(), 1, "{found:?}");
+    assert!(
+        mismatched[0].message.contains("visibility.toml"),
+        "{found:?}"
+    );
+    // An index both an exact log source and a pattern declare gets both's
+    // fields; the exact one's type wins.
+    assert!(!unknown(&esql(
+        "FROM logs-custom.app-prod | WHERE process.nmae == \"x\""
+    )));
+    assert!(!mismatch(&esql(
+        "FROM logs-custom.app-prod | WHERE app.score LIKE \"1*\""
     )));
     let (_, found) =
-        tide("    type: query\n    index: [custom-ecs-*]\n    query: source.ip:10.*\n");
-    assert!(mismatch(&found), "{found:?}");
+        tide("    type: query\n    index: [logs-custom.app-*]\n    query: process.nmae:x\n");
+    assert!(!unknown(&found), "{found:?}");
+    let (_, found) =
+        tide("    type: query\n    index: [logs-other-*]\n    query: process.nmae:x\n");
+    assert!(unknown(&found), "{found:?}");
 
     // The query report opentide validate reads has the block's warnings too.
     let (source, _) = tide(rule);

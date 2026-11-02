@@ -1,82 +1,127 @@
-//! Indexes, sourcetypes and macros a search reads, checked against the ones
-//! the workspace declares on its `system = "splunk"` log sources in
-//! `visibility.toml` (#115, tiers 2 and 3 of #110).
+//! Sourcetypes a search reads, checked against the ones the workspace
+//! declares as the `name` of its `system = "splunk"` log sources in
+//! `visibility.toml` (#115, tiers 2 and 3 of #110; `visibility::1.0`).
 //!
-//! - `index=`, `index::`, `index IN (...)`, and the same for `sourcetype`, in
-//!   the base search (the text before the first pipe, or a `search` command
-//!   that starts the query, and the same in each subsearch) and in a
-//!   `tstats` `where` clause. A negated term (`NOT index=x`, `index!=x`) is
+//! - `sourcetype=`, `sourcetype::` and `sourcetype IN (...)` in the base
+//!   search (the text before the first pipe, or a `search` command that
+//!   starts the query, and the same in each subsearch) and in a `tstats`
+//!   `where` clause. A negated term (`NOT sourcetype=x`, `sourcetype!=x`) is
 //!   not checked: excluding a dataset reads nothing from it.
-//! - A macro call in the base search (`` `wineventlog_security` ``,
-//!   `` `cim_Endpoint_indexes` ``): that is where a dataset macro expands to
-//!   indexes and sourcetypes. A macro after a pipe is a utility
-//!   (`drop_dm_object_name`, `security_content_ctime`) or filter macro and is
-//!   never checked; neither is `comment` or a `*_filter` macro.
-//! - `source=` is not checked: `visibility.toml` declares no kind for it.
+//! - `index=`, `source=` and macros are not checked: `visibility.toml`
+//!   declares sourcetypes only.
 //!
-//! A name is checked only when the workspace declares at least one name of
-//! that kind for Splunk; an undeclared one is `spl_dataset_not_declared`, a
-//! warning. Fields of raw sourcetypes are never checked.
+//! A sourcetype is checked only when the workspace has at least one Splunk
+//! log source; an undeclared one is `spl_dataset_not_declared`, a warning.
+//! Fields of raw sourcetypes are never checked: the columns a log source
+//! lists are offered in hover and completion ([`declared_fields`]) only.
 
 use super::Catalog;
 use super::scan::{
     base_search, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_ws,
     split_segments, subsearches,
 };
-use opentide_core::datasets::{DatasetKind, Declaration, DeclaredDatasets, current};
+use opentide_core::datasets::{DatasetKind, DeclaredColumn, DeclaredDatasets, current};
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
 
 const PLATFORM: &str = "splunk";
 
-pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let datasets = current();
-    let kinds = [
-        DatasetKind::Indexes,
-        DatasetKind::Sourcetypes,
-        DatasetKind::Macros,
-    ];
-    if source.is_empty() || !kinds.iter().any(|k| datasets.declares(PLATFORM, *k)) {
-        return;
-    }
-    walk(source, 0, source.len(), catalog, &datasets, out);
-}
-
-fn walk(
-    source: &str,
+/// A sourcetype value a search reads, by its byte span.
+struct Read {
     start: usize,
     end: usize,
-    catalog: &Catalog,
-    datasets: &DeclaredDatasets,
-    out: &mut Vec<Diagnostic>,
-) {
+}
+
+impl Read {
+    fn name<'s>(&self, source: &'s str) -> &'s str {
+        &source[self.start..self.end]
+    }
+
+    fn covered_by(&self, source: &str, declared: &str) -> bool {
+        DatasetKind::Sourcetypes.covers(declared, self.name(source))
+    }
+}
+
+pub(crate) fn collect(source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    let datasets = current();
+    if source.is_empty() || !datasets.declares(PLATFORM) {
+        return;
+    }
+    check(source, catalog, &datasets, out);
+}
+
+fn check(source: &str, catalog: &Catalog, datasets: &DeclaredDatasets, out: &mut Vec<Diagnostic>) {
+    let declared = datasets.names(PLATFORM);
+    if declared.is_empty() {
+        return;
+    }
+    let mut reads = Vec::new();
+    walk(source, 0, source.len(), catalog, &mut reads);
+    for read in reads {
+        if declared.iter().any(|d| read.covered_by(source, d)) {
+            continue;
+        }
+        let name = read.name(source);
+        out.push(Diagnostic::warning(
+            codes::SPL_DATASET_NOT_DECLARED,
+            format!(
+                "sourcetype `{name}` is not declared: no Splunk log source in visibility.toml names it"
+            ),
+            span_to_range(source, ByteSpan::new(read.start, read.end.max(read.start + 1))),
+        ));
+    }
+}
+
+/// The columns `visibility.toml` lists for the sourcetypes `source` reads,
+/// with the log source each comes from; every declared Splunk column when
+/// the search names no sourcetype. The first declaration of a name
+/// (ignoring case) wins.
+pub(crate) fn declared_fields(source: &str, catalog: &Catalog) -> Vec<(String, DeclaredColumn)> {
+    let datasets = current();
+    let mut sources = datasets.sources_with_columns(PLATFORM).peekable();
+    if sources.peek().is_none() {
+        return Vec::new();
+    }
+    let mut reads = Vec::new();
+    walk(source, 0, source.len(), catalog, &mut reads);
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = Vec::new();
+    // An exact sourcetype's columns win over a pattern's.
+    let mut sources: Vec<_> = sources.collect();
+    sources.sort_by_key(|s| s.name.contains('*'));
+    for declared in sources {
+        if !reads.is_empty() && !reads.iter().any(|r| r.covered_by(source, &declared.name)) {
+            continue;
+        }
+        for column in &declared.columns {
+            if seen.insert(column.name.to_ascii_lowercase()) {
+                out.push((declared.name.clone(), column.clone()));
+            }
+        }
+    }
+    out
+}
+
+fn walk(source: &str, start: usize, end: usize, catalog: &Catalog, out: &mut Vec<Read>) {
     let segments = split_segments(source, start, end);
     // The stage that reads the index, as the wildcard lints see it (perf.rs).
     let base = base_search(source, &segments, catalog);
     for &(seg_start, seg_end) in &segments {
         for (inner_start, inner_end) in subsearches(source, seg_start, seg_end) {
-            walk(source, inner_start, inner_end, catalog, datasets, out);
+            walk(source, inner_start, inner_end, catalog, out);
         }
-        if base == Some((seg_start, seg_end)) {
-            scan_terms(source, seg_start, seg_end, true, datasets, out);
-        } else if command_word(source, seg_start, seg_end)
-            .0
-            .eq_ignore_ascii_case("tstats")
+        // The base search, and a `tstats` `where` clause.
+        if base == Some((seg_start, seg_end))
+            || command_word(source, seg_start, seg_end)
+                .0
+                .eq_ignore_ascii_case("tstats")
         {
-            scan_terms(source, seg_start, seg_end, false, datasets, out);
+            scan_terms(source, seg_start, seg_end, out);
         }
     }
 }
 
-/// Walks search terms, tracking `NOT`, and checks dataset terms and (in the
-/// base search) macro calls.
-fn scan_terms(
-    source: &str,
-    start: usize,
-    end: usize,
-    macros: bool,
-    datasets: &DeclaredDatasets,
-    out: &mut Vec<Diagnostic>,
-) {
+/// Walks search terms, tracking `NOT`, and collects sourcetype values.
+fn scan_terms(source: &str, start: usize, end: usize, out: &mut Vec<Read>) {
     let bytes = source.as_bytes();
     let mut i = start;
     let mut negate_next = false;
@@ -111,11 +156,7 @@ fn scan_terms(
                 continue;
             }
             b'`' => {
-                let close = end_of_macro(bytes, i, end);
-                if macros && !negated {
-                    check_macro(source, i, close, datasets, out);
-                }
-                i = close;
+                i = end_of_macro(bytes, i, end);
                 negate_next = false;
                 continue;
             }
@@ -141,24 +182,17 @@ fn scan_terms(
             negate_next = true;
             continue;
         }
-        let kind = if word.eq_ignore_ascii_case("index") {
-            Some(DatasetKind::Indexes)
-        } else if word.eq_ignore_ascii_case("sourcetype") {
-            Some(DatasetKind::Sourcetypes)
-        } else {
-            None
-        };
-        let Some(kind) = kind else {
+        if !word.eq_ignore_ascii_case("sourcetype") {
             i = end_of_term(bytes, i, end);
             negate_next = false;
             continue;
-        };
+        }
         let (values, next) = term_values(source, i, end);
         i = next;
         if let Some((values, operator_negates)) = values {
             if !negated && !operator_negates {
                 for (value_start, value_end) in values {
-                    check_name(source, kind, value_start, value_end, datasets, out);
+                    read_name(source, value_start, value_end, out);
                 }
             }
         }
@@ -250,96 +284,13 @@ fn value(bytes: &[u8], i: usize, end: usize) -> (Option<(usize, usize)>, usize) 
     if j == i { (None, i) } else { (Some((i, j)), j) }
 }
 
-fn check_name(
-    source: &str,
-    kind: DatasetKind,
-    start: usize,
-    end: usize,
-    datasets: &DeclaredDatasets,
-    out: &mut Vec<Diagnostic>,
-) {
+fn read_name(source: &str, start: usize, end: usize, out: &mut Vec<Read>) {
     let name = &source[start..end];
-    // Dashboard tokens (`$index$`) and empty values are not names.
+    // Dashboard tokens (`$st$`) and empty values are not names.
     if name.trim().is_empty() || name.contains('$') {
         return;
     }
-    if datasets.status(PLATFORM, kind, name) != Declaration::Undeclared {
-        return;
-    }
-    warn(source, kind, name, start, end, out);
-}
-
-fn warn(
-    source: &str,
-    kind: DatasetKind,
-    name: &str,
-    start: usize,
-    end: usize,
-    out: &mut Vec<Diagnostic>,
-) {
-    let label = match kind {
-        DatasetKind::Indexes => "index",
-        DatasetKind::Sourcetypes => "sourcetype",
-        _ => "macro",
-    };
-    out.push(Diagnostic::warning(
-        codes::SPL_DATASET_NOT_DECLARED,
-        format!(
-            "{label} `{name}` is not declared on a Splunk log source in visibility.toml ({})",
-            kind.key()
-        ),
-        span_to_range(source, ByteSpan::new(start, end.max(start + 1))),
-    ));
-}
-
-/// A macro call `` `name` `` or `` `name(a, b)` `` between `start` and `close`.
-fn check_macro(
-    source: &str,
-    start: usize,
-    close: usize,
-    datasets: &DeclaredDatasets,
-    out: &mut Vec<Diagnostic>,
-) {
-    let inner_start = start + 1;
-    let inner_end = if close > inner_start && source.as_bytes()[close - 1] == b'`' {
-        close - 1
-    } else {
-        close
-    };
-    let Some(text) = source.get(inner_start..inner_end) else {
-        return;
-    };
-    let (name, args) = match text.find('(') {
-        Some(open) => (&text[..open], Some(text[open + 1..].trim_end_matches(')'))),
-        None => (text, None),
-    };
-    let name = name.trim();
-    if name.is_empty() || name == "comment" || name.ends_with("_filter") {
-        return;
-    }
-    let declared = |n: &str| datasets.status(PLATFORM, DatasetKind::Macros, n);
-    if declared(name) != Declaration::Undeclared {
-        return;
-    }
-    if let Some(args) = args {
-        let count = if args.trim().is_empty() {
-            0
-        } else {
-            args.split(',').count()
-        };
-        if declared(&format!("{name}({count})")) != Declaration::Undeclared {
-            return;
-        }
-    }
-    let name_start = inner_start + (text.len() - text.trim_start().len());
-    warn(
-        source,
-        DatasetKind::Macros,
-        name,
-        name_start,
-        name_start + name.len(),
-        out,
-    );
+    out.push(Read { start, end });
 }
 
 #[cfg(test)]
@@ -348,33 +299,16 @@ mod tests {
     use opentide_core::Severity;
 
     fn declared() -> DeclaredDatasets {
-        DeclaredDatasets::from_names([
-            (
-                "splunk",
-                DatasetKind::Indexes,
-                &["wineventlog", "edr_*"][..],
-            ),
-            (
-                "splunk",
-                DatasetKind::Sourcetypes,
-                &["XmlWinEventLog:*"][..],
-            ),
-            (
-                "splunk",
-                DatasetKind::Macros,
-                &[
-                    "wineventlog_security",
-                    "cim_Endpoint_indexes",
-                    "sysmon_for(1)",
-                ][..],
-            ),
-        ])
+        DeclaredDatasets::from_names([(
+            "splunk",
+            &["WinEventLog:Security", "XmlWinEventLog:*"][..],
+        )])
     }
 
     /// The names warned about, in order.
     fn undeclared(src: &str, datasets: &DeclaredDatasets) -> Vec<String> {
         let mut out = Vec::new();
-        walk(src, 0, src.len(), Catalog::cached(), datasets, &mut out);
+        check(src, Catalog::cached(), datasets, &mut out);
         for d in &out {
             assert_eq!(d.code, codes::SPL_DATASET_NOT_DECLARED);
             assert_eq!(d.severity, Severity::Warning);
@@ -390,37 +324,34 @@ mod tests {
     }
 
     #[test]
-    fn declared_names_pass_and_undeclared_ones_warn() {
+    fn declared_sourcetypes_pass_and_undeclared_ones_warn() {
         let d = declared();
-        assert!(undeclared("index=wineventlog EventCode=4688 | stats count", &d).is_empty());
-        assert!(
-            undeclared(
-                "index=WinEventLog sourcetype=\"XmlWinEventLog:Security\"",
-                &d
-            )
-            .is_empty()
-        );
-        assert!(undeclared("index=edr_crowd* OR index=edr_s1", &d).is_empty());
+        assert!(undeclared("sourcetype=wineventlog:security EventCode=4688", &d).is_empty());
+        assert!(undeclared("sourcetype=\"XmlWinEventLog:Security\"", &d).is_empty());
+        assert!(undeclared("sourcetype=WinEventLog:* | stats count", &d).is_empty());
         assert_eq!(
             undeclared("index=main sourcetype=syslog | stats count", &d),
-            ["main", "syslog"]
+            ["syslog"]
         );
-        assert_eq!(undeclared("search index::main", &d), ["main"]);
+        assert_eq!(undeclared("search sourcetype::syslog", &d), ["syslog"]);
         assert_eq!(
-            undeclared("index IN (wineventlog, \"main\", firewall)", &d),
-            ["main", "firewall"]
+            undeclared(
+                "sourcetype IN (WinEventLog:Security, \"syslog\", pan:traffic)",
+                &d
+            ),
+            ["syslog", "pan:traffic"]
         );
-        // tstats reads indexes in its where clause.
+        // tstats reads sourcetypes in its where clause.
         assert_eq!(
-            undeclared("| tstats count where index=main by host", &d),
-            ["main"]
+            undeclared("| tstats count where sourcetype=syslog by host", &d),
+            ["syslog"]
         );
         // A leading `| search` is the base search.
-        assert_eq!(undeclared("| search index=main", &d), ["main"]);
+        assert_eq!(undeclared("| search sourcetype=syslog", &d), ["syslog"]);
         // Each subsearch has its own base search.
         assert_eq!(
             undeclared(
-                "index=wineventlog [search index=other | fields user] | stats count",
+                "sourcetype=WinEventLog:Security [search sourcetype=other | fields user] | stats count",
                 &d
             ),
             ["other"]
@@ -428,18 +359,20 @@ mod tests {
     }
 
     #[test]
-    fn negated_and_later_terms_are_not_checked() {
+    fn negated_later_and_other_terms_are_not_checked() {
         let d = declared();
         for src in [
-            "index=wineventlog NOT index=main",
-            "index=wineventlog index!=main",
-            "index=wineventlog NOT (index=main OR sourcetype=syslog)",
-            "index=wineventlog | search index=main",
-            "index=wineventlog | where index=\"main\"",
-            "index=$index$ sourcetype=$st$",
-            "index=wineventlog source=WinEventLog:Security",
-            // A three-byte character right after `index` is not `IN`.
-            "index=wineventlog index€",
+            "sourcetype=WinEventLog:Security NOT sourcetype=syslog",
+            "sourcetype=WinEventLog:Security sourcetype!=syslog",
+            "sourcetype=WinEventLog:Security NOT (sourcetype=syslog OR index=x)",
+            "sourcetype=WinEventLog:Security | search sourcetype=syslog",
+            "sourcetype=WinEventLog:Security | where sourcetype=\"syslog\"",
+            "sourcetype=$st$",
+            // Indexes, sources and macros are not declarable.
+            "index=main source=WinEventLog:Security `sysmon` | `drop_dm_object_name(P)`",
+            "`wineventlog_security` ```a `sourcetype=x` comment```",
+            // A three-byte character right after `sourcetype` is not `IN`.
+            "sourcetype=WinEventLog:Security sourcetype€",
         ] {
             assert!(
                 undeclared(src, &d).is_empty(),
@@ -450,41 +383,8 @@ mod tests {
     }
 
     #[test]
-    fn only_base_search_macros_are_checked() {
-        let d = declared();
-        assert!(undeclared("`wineventlog_security` EventCode=4625 | stats count", &d).is_empty());
-        assert!(undeclared("`sysmon_for(1)` | stats count", &d).is_empty());
-        assert_eq!(
-            undeclared("`sysmon` EventCode=1 | stats count", &d),
-            ["sysmon"]
-        );
-        assert_eq!(
-            undeclared("`powershell(4104)` | stats count", &d),
-            ["powershell"]
-        );
-        for src in [
-            "| tstats `security_content_summariesonly` count from datamodel=Endpoint.Processes by Processes.dest | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)` | `my_detection_filter`",
-            "`wineventlog_security` `comment(\"x\")` `my_detection_filter`",
-            "`wineventlog_security` ```a `notamacro` comment```",
-        ] {
-            assert!(
-                undeclared(src, &d).is_empty(),
-                "{src}: {:?}",
-                undeclared(src, &d)
-            );
-        }
-    }
-
-    #[test]
-    fn opt_in_per_kind() {
-        let only_indexes =
-            DeclaredDatasets::from_names([("splunk", DatasetKind::Indexes, &["wineventlog"][..])]);
-        assert_eq!(
-            undeclared("index=main sourcetype=syslog `sysmon`", &only_indexes),
-            ["main"]
-        );
-        let other_platform =
-            DeclaredDatasets::from_names([("sentinel", DatasetKind::Tables, &["SigninLogs"][..])]);
-        assert!(undeclared("index=main sourcetype=syslog `sysmon`", &other_platform).is_empty());
+    fn opt_in_per_platform() {
+        let other_platform = DeclaredDatasets::from_names([("sentinel", &["SigninLogs"][..])]);
+        assert!(undeclared("sourcetype=syslog", &other_platform).is_empty());
     }
 }

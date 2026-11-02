@@ -45,7 +45,7 @@ Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `ku
 Code actions:
 
 - **Apply a suggestion.** A diagnostic with a `suggestion` gets `Apply suggestion: {suggestion}`. The edit replaces the diagnostic's range with the suggestion string.
-- **Declare a dataset.** When the server has a workspace root, `kql_table_not_declared`, the `kql_unknown_table` warning, `spl_dataset_not_declared` and `elastic_dataset_not_declared` get `Declare '{name}' in log source "{log source}" (visibility.toml)`. The edit adds the name to `.opentide/configurations/visibility.toml`, and creates the file when it is missing. The server reads that file live: [kql/columns.md](kql/columns.md).
+- **Declare a dataset.** When the server has a workspace root, `kql_table_not_declared`, a `kql_unknown_table` whose message names `visibility.toml` (the Sentinel warning, and the Defender error once the workspace declares Defender tables), `spl_dataset_not_declared` and `elastic_dataset_not_declared` get `Add a [[logsources]] entry declaring '{name}' to visibility.toml`. The edit appends a new log source (`name` = the table, sourcetype or index pattern, an empty `description` to fill in, and `system`) to `.opentide/configurations/visibility.toml`, never edits an existing one, and creates the file when it is missing. The server reads that file live: [kql/columns.md](kql/columns.md).
 
 Suggestions the KQL, SPL and Tide engines attach:
 

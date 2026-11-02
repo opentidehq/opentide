@@ -4,9 +4,9 @@
 use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
-    AnalyzeRequest, Catalog, DatasetKind, MemoryWorkspace, VISIBILITY_CONFIGURATION, WorkspaceHost,
-    analyze, codes, compiled_kql, compiled_spl, completions, declare_dataset, hover,
-    index_workspace, install_catalog, install_visibility, signature_help,
+    AnalyzeRequest, Catalog, MemoryWorkspace, VISIBILITY_CONFIGURATION, WorkspaceHost, analyze,
+    codes, compiled_kql, compiled_spl, completions, declare_dataset, hover, index_workspace,
+    install_catalog, install_visibility, signature_help,
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
@@ -877,13 +877,13 @@ fn handle_code_action(session: &Session, params: &Value) -> Value {
         let target = path_to_uri(&path.display().to_string());
         let mut seen = std::collections::BTreeSet::new();
         for d in &in_range {
-            let Some((platform, kind, name)) = undeclared_dataset(d) else {
+            let Some((platform, name)) = undeclared_dataset(d) else {
                 continue;
             };
-            if !seen.insert((platform, kind, name.clone())) {
+            if !seen.insert((platform, name.clone())) {
                 continue;
             }
-            let edit = declare_dataset(existing.as_deref(), platform, kind, &name);
+            let edit = declare_dataset(existing.as_deref(), platform, &name);
             let text_edit = json!({ "range": range_json(edit.range), "newText": edit.new_text });
             let workspace_edit = if existing.is_some() {
                 json!({ "changes": { target.clone(): [text_edit] } })
@@ -909,11 +909,9 @@ fn handle_code_action(session: &Session, params: &Value) -> Value {
 }
 
 /// The dataset a "declare it in visibility.toml" diagnostic names: its
-/// platform, kind and name (quoted in the message: `'X'` for KQL, `` `X` ``
-/// for SPL and Elastic).
-fn undeclared_dataset(
-    d: &opentide_core::Diagnostic,
-) -> Option<(&'static str, DatasetKind, String)> {
+/// platform and name (quoted in the message: `'X'` for KQL, `` `X` `` for
+/// SPL and Elastic).
+fn undeclared_dataset(d: &opentide_core::Diagnostic) -> Option<(&'static str, String)> {
     let name = d.message.split('\'').nth(1).unwrap_or_default().to_string();
     let in_defender = d
         .field_path
@@ -926,32 +924,22 @@ fn undeclared_dataset(
             } else {
                 "sentinel"
             },
-            DatasetKind::Tables,
             name,
         )),
-        // #111's warning points at visibility.toml too (Sentinel only).
-        codes::KQL_UNKNOWN_TABLE if d.severity == opentide_core::Severity::Warning => {
-            Some(("sentinel", DatasetKind::Tables, name))
-        }
-        // `index `wineventlog` is not declared ...`, `macro `sysmon` ...`
-        codes::SPL_DATASET_NOT_DECLARED => {
-            let kind = match d.message.split(' ').next()? {
-                "index" => DatasetKind::Indexes,
-                "sourcetype" => DatasetKind::Sourcetypes,
-                "macro" => DatasetKind::Macros,
-                _ => return None,
-            };
-            Some(("splunk", kind, backticked(&d.message)?))
-        }
-        // `index pattern `logs-*` ...`, `data view `x` ...`
-        codes::ELASTIC_DATASET_NOT_DECLARED => {
-            let kind = if d.message.starts_with("data view") {
-                DatasetKind::DataViews
+        // An unknown table whose message names the declaration: Sentinel's
+        // warning (#111), and Defender's error once it declares tables (#147).
+        codes::KQL_UNKNOWN_TABLE if d.message.contains("visibility.toml") => Some((
+            if in_defender {
+                "defender_for_endpoint"
             } else {
-                DatasetKind::Indices
-            };
-            Some(("elastic", kind, backticked(&d.message)?))
-        }
+                "sentinel"
+            },
+            name,
+        )),
+        // `sourcetype `syslog` is not declared ...`
+        codes::SPL_DATASET_NOT_DECLARED => Some(("splunk", backticked(&d.message)?)),
+        // `index pattern `logs-*` is not declared ...`
+        codes::ELASTIC_DATASET_NOT_DECLARED => Some(("elastic", backticked(&d.message)?)),
         _ => None,
     }
 }

@@ -15,9 +15,9 @@ use std::sync::OnceLock;
 mod check;
 
 pub use check::{
-    ValueType, data_view_not_declared, field_type, index_not_declared, indices_are_ecs,
-    is_ecs_index, is_object, merge, type_mismatch, unknown_field, unknown_field_diagnostic,
-    value_problem,
+    ValueType, declared_fields, field_type, index_not_declared, indices_are_ecs, is_ecs_index,
+    is_object, merge, type_mismatch, unknown_field, unknown_field_diagnostic, value_problem,
+    with_declared_fields,
 };
 
 const FIELDS_JSON: &str = include_str!(concat!(

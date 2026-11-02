@@ -42,14 +42,13 @@ Where the check applies:
 
 ## Indexes, sourcetypes and macros
 
-`spl_dataset_not_declared` (warning) checks the names a search reads against the `indexes`, `sourcetypes` and `macros` a workspace declares on its `system = "splunk"` log sources in `visibility.toml`:
+`spl_dataset_not_declared` (warning) checks the sourcetypes a search reads against the `name` of the workspace's `system = "splunk"` log sources in `visibility.toml` (for Splunk, a log source's `name` is a sourcetype):
 
-- `index=`, `index::`, `index IN (...)` and the same for `sourcetype`, in the base search (before the first pipe, or a `search` command that starts the query; each subsearch has its own) and in a `tstats` `where` clause. Negated terms (`NOT index=x`, `index!=x`) are not checked.
-- Macro calls in the base search, before the first pipe: `` `wineventlog_security` ``, `` `cim_Endpoint_indexes` ``. A macro with arguments matches a declared `name` or `name(N)`. Macros after a pipe are utilities (`drop_dm_object_name`, `security_content_ctime`, `security_content_summariesonly`) or filters and are never checked; neither is `comment` or a `*_filter` macro.
-- `source=` is not checked: `visibility.toml` declares no kind for it.
+- `sourcetype=`, `sourcetype::` and `sourcetype IN (...)`, in the base search (before the first pipe, or a `search` command that starts the query; each subsearch has its own) and in a `tstats` `where` clause. Negated terms (`NOT sourcetype=x`, `sourcetype!=x`) are not checked.
+- Indexes, `source=` and macros are not checked: `visibility.toml` declares sourcetypes only.
 - Declared names may hold `*`; Splunk names match without regard to case.
 
-A kind is checked only in a workspace that declares at least one name of that kind for Splunk, so a workspace that declares nothing sees no warning. Fields of raw sourcetypes are never checked. A search with no index and no macro at all is the slow-query checks' concern (#56), not this one.
+Sourcetypes are checked only in a workspace with at least one Splunk log source, so a workspace that declares nothing sees no warning. Fields of raw sourcetypes are never checked: the `columns` a log source lists (`[logsources.columns]`, `Field = { type = "string" | "number" | "boolean", description = "..." }`) are offered in hover and completion for a search that reads its sourcetype (every declared Splunk column for a search that names none), and nothing more. A search with no index and no macro at all is the slow-query checks' concern (#56), not this one.
 
 ## `tstats` prefix map
 

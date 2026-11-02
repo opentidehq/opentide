@@ -824,6 +824,20 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
                 }
             }
             if wants_fields {
+                for (dataset, column) in declared::declared_fields(source, catalog) {
+                    if seen.insert(column.name.to_ascii_lowercase()) {
+                        let detail = format!(
+                            "{dataset} ({})",
+                            column.type_name.as_deref().unwrap_or("field")
+                        );
+                        items.push(complete_item(
+                            column.name,
+                            "column",
+                            Some(detail),
+                            column.description,
+                        ));
+                    }
+                }
                 if let Some(dm) = catalog.active_datamodel(source) {
                     for (prefixed, f) in cim::visible_fields(dm) {
                         if seen.insert(prefixed.to_ascii_lowercase()) {
@@ -984,6 +998,20 @@ pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> 
             d.prefix,
             d.docs.clone().unwrap_or_default()
         ));
+    }
+    if let Some((dataset, column)) = declared::declared_fields(source, catalog)
+        .into_iter()
+        .find(|(_, c)| c.name == word)
+    {
+        let mut md = format!(
+            "**{}** field (`{}`), declared in visibility.toml on `{dataset}`",
+            column.name,
+            column.type_name.as_deref().unwrap_or("field")
+        );
+        if let Some(description) = &column.description {
+            md.push_str(&format!("\n\n{description}"));
+        }
+        return Some(md);
     }
     if let Some(field) = catalog.field(&word) {
         let models = field.models.join(", ");

@@ -1,173 +1,220 @@
-//! Datasets a workspace declares in `visibility.toml` (tables, indexes,
-//! sourcetypes, macros, index patterns, data views), per platform.
+//! Datasets a workspace declares in `visibility.toml`, per platform, and the
+//! columns a log source lists for its dataset (`visibility::1.0`, #146).
 //!
-//! The engine reads them from the `visibility.toml` text itself
-//! ([`DeclaredDatasets::from_visibility`]); a host installs them for the
-//! process ([`install`]), again whenever the file changes. The query engines
-//! ask [`current`] whether a name a query reads is declared. Checking is opt-in per platform and kind: a
-//! workspace that declares no index for Splunk never gets a warning about an
-//! index.
+//! A log source's `name` is its dataset: a KQL table (or workspace function)
+//! for `sentinel` and `defender_for_endpoint`, a sourcetype for `splunk`, an
+//! index pattern or data stream for `elastic`. The engine reads them from the
+//! `visibility.toml` text itself ([`DeclaredDatasets::from_visibility`]); a
+//! host installs them for the process ([`install`]), again whenever the file
+//! changes. The query engines ask [`current`] whether a name a query reads is
+//! declared. Checking is opt-in per platform: a workspace with no Splunk log
+//! source never gets a warning about a sourcetype.
 //!
-//! Declarations are per `system`, so a Splunk index never makes a Sentinel
-//! table known.
+//! Declarations are per `system`, so a Splunk sourcetype never makes a
+//! Sentinel table known.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock, RwLock};
 
-/// A kind of dataset a log source can name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// The kind of dataset a log source's `name` is, by its `system`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DatasetKind {
     /// KQL tables and functions (`sentinel`, `defender_for_endpoint`).
     Tables,
-    /// Splunk `index=`.
-    Indexes,
-    /// Splunk `sourcetype=` and `source=`.
+    /// Splunk `sourcetype=`.
     Sourcetypes,
-    /// Splunk macros (`` `wineventlog_security` ``).
-    Macros,
     /// Elastic index patterns and data streams (`index`, ES|QL `FROM`).
     Indices,
-    /// Elastic data views (`data_view_id`).
-    DataViews,
-    /// Elastic indices a log source marks as following ECS (`ecs = true`):
-    /// the field checks apply to them as to `logs-*` integration data streams.
-    EcsIndices,
 }
 
 impl DatasetKind {
-    /// The key in a `visibility.toml` log source.
-    pub fn key(self) -> &'static str {
+    /// The kind a log source of `system` declares; `None` for a system
+    /// whose log sources declare nothing to the query checks.
+    pub fn of_system(system: &str) -> Option<Self> {
+        match system {
+            "sentinel" | "defender_for_endpoint" => Some(Self::Tables),
+            "splunk" => Some(Self::Sourcetypes),
+            "elastic" => Some(Self::Indices),
+            _ => None,
+        }
+    }
+
+    /// What a name of this kind is called in a message (`table`,
+    /// `sourcetype`, `index pattern`).
+    pub fn label(self) -> &'static str {
         match self {
-            Self::Tables => "tables",
-            Self::Indexes => "indexes",
-            Self::Sourcetypes => "sourcetypes",
-            Self::Macros => "macros",
-            Self::Indices => "indices",
-            Self::DataViews => "data_views",
-            Self::EcsIndices => "ecs_indices",
+            Self::Tables => "table",
+            Self::Sourcetypes => "sourcetype",
+            Self::Indices => "index pattern",
         }
     }
 
     /// Splunk names match without regard to case; KQL tables and Elastic
     /// indices do not.
     fn case_insensitive(self) -> bool {
-        matches!(self, Self::Indexes | Self::Sourcetypes | Self::Macros)
+        self == Self::Sourcetypes
+    }
+
+    /// Whether `declared`, a name or pattern a log source declares, covers
+    /// `used`, a name (or pattern) a query reads: `*` in either matches any
+    /// run of characters, Splunk names ignore case ([`DeclaredDatasets::status`]).
+    pub fn covers(self, declared: &str, used: &str) -> bool {
+        let (declared, used) = if self.case_insensitive() {
+            (
+                declared.to_ascii_lowercase(),
+                used.trim().to_ascii_lowercase(),
+            )
+        } else {
+            (declared.to_string(), used.trim().to_string())
+        };
+        glob_matches(&declared, &used) || (used.contains('*') && glob_matches(&used, &declared))
     }
 }
 
 /// What the workspace says about one name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Declaration {
-    /// The workspace declares nothing of this kind for the platform, so the
-    /// name is not checked.
+    /// The workspace has no log source for the platform, so the name is not
+    /// checked.
     Unchecked,
     /// A declared name, or a declared pattern, covers it.
     Declared,
-    /// The workspace declares names of this kind for the platform, and none
-    /// covers this one.
+    /// The workspace has log sources for the platform, and none covers this
+    /// name.
     Undeclared,
 }
 
-/// The `visibility.toml` fields each `system` may name datasets in
-/// (opentide validates the file; a field that does not fit is ignored here).
-const FIELDS: &[(&str, &[DatasetKind])] = &[
-    ("sentinel", &[DatasetKind::Tables]),
-    ("defender_for_endpoint", &[DatasetKind::Tables]),
-    (
-        "splunk",
-        &[
-            DatasetKind::Indexes,
-            DatasetKind::Sourcetypes,
-            DatasetKind::Macros,
-        ],
-    ),
-    ("elastic", &[DatasetKind::Indices, DatasetKind::DataViews]),
-];
+/// One column a log source lists for its dataset
+/// (`[logsources.columns]`, `Name = { type = "...", description = "..." }`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclaredColumn {
+    /// The column name as the platform spells it: the key, kept as written.
+    pub name: String,
+    /// The type, from the system's type set (KQL scalar types, Splunk
+    /// `string`/`number`/`boolean`, Elasticsearch field types). `None` when
+    /// the entry has none (opentide's validation reports it).
+    pub type_name: Option<String>,
+    pub description: Option<String>,
+}
 
-/// The declared datasets, by platform (`sentinel`, `splunk`, ...) and kind.
+/// A `[[logsources]]` entry of a system that declares datasets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclaredSource {
+    /// The `system` (`sentinel`, `splunk`, ...).
+    pub system: String,
+    /// The `name`: the dataset (a table, sourcetype or index pattern).
+    pub name: String,
+    pub description: Option<String>,
+    /// The dataset's columns, in key order.
+    pub columns: Vec<DeclaredColumn>,
+}
+
+impl DeclaredSource {
+    /// The kind of dataset `name` is.
+    pub fn kind(&self) -> DatasetKind {
+        DatasetKind::of_system(&self.system).expect("only systems with a dataset kind are kept")
+    }
+}
+
+/// The declared datasets: the log sources, by platform, in file order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DeclaredDatasets {
-    platforms: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    platforms: BTreeMap<String, Vec<String>>,
+    sources: Vec<DeclaredSource>,
+}
+
+/// A trimmed, non-empty string value of `key`.
+fn string(table: &toml::Table, key: &str) -> Option<String> {
+    let value = table.get(key)?.as_str()?.trim();
+    (!value.is_empty()).then(|| value.to_string())
 }
 
 impl DeclaredDatasets {
-    /// The datasets the `[[logsources]]` of a `visibility.toml` declare:
+    /// The datasets the `[[logsources]]` of a `visibility.toml` declare,
+    /// with the columns each lists:
     ///
     /// ```toml
     /// [[logsources]]
-    /// name = "VNet flow logs"
+    /// name = "Contoso_Audit_CL"
+    /// description = "Administrative audit events"
     /// system = "sentinel"
-    /// tables = ["NTANetAnalytics", "*_CL"]
     ///
-    /// [[logsources]]
-    /// name = "Endpoint"
-    /// system = "elastic"
-    /// indices = ["logs-endpoint.*"]
-    /// ecs = true
+    /// [logsources.columns]
+    /// Actor_s = { type = "string", description = "UPN of the account that made the change" }
     /// ```
     ///
-    /// The `indices` of an elastic log source with `ecs = true` are also
-    /// [`DatasetKind::EcsIndices`]. Text that is not TOML is an error; a
-    /// field that does not fit its `system`, or a name that is not a
-    /// string, is left out (opentide's validation reports it).
+    /// A leading byte-order mark is skipped. Text that is not TOML is an
+    /// error; a log source without a `name`, of a system that declares no
+    /// dataset, or a column that is not a table, is left out (opentide's
+    /// validation reports it), and so are the keys of opentide 0.20.0
+    /// (`tables = [...]`, `indexes`, `sourcetypes`, `macros`, `indices`,
+    /// `data_views`, `ecs`), which the format no longer has.
     pub fn from_visibility(text: &str) -> Result<Self, String> {
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         let file: toml::Table = toml::from_str(text).map_err(|err| err.to_string())?;
-        let mut platforms: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
+        let mut out = Self::default();
         let sources = file.get("logsources").and_then(|v| v.as_array());
         for source in sources.into_iter().flatten().filter_map(|v| v.as_table()) {
             let Some(system) = source.get("system").and_then(|v| v.as_str()) else {
                 continue;
             };
-            let Some((_, kinds)) = FIELDS.iter().find(|(s, _)| *s == system) else {
+            if DatasetKind::of_system(system).is_none() {
+                continue;
+            }
+            let Some(name) = string(source, "name") else {
                 continue;
             };
-            let ecs = source.get("ecs").and_then(|v| v.as_bool()) == Some(true);
-            for kind in kinds.iter() {
-                let names: Vec<String> = source
-                    .get(kind.key())
-                    .and_then(|v| v.as_array())
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|v| v.as_str())
-                    .map(|n| n.trim().to_string())
-                    .filter(|n| !n.is_empty())
-                    .collect();
-                if names.is_empty() {
-                    continue;
-                }
-                let platform = platforms.entry(system.to_string()).or_default();
-                if ecs && *kind == DatasetKind::Indices {
-                    platform
-                        .entry(DatasetKind::EcsIndices.key().to_string())
-                        .or_default()
-                        .extend(names.iter().cloned());
-                }
-                platform
-                    .entry(kind.key().to_string())
-                    .or_default()
-                    .extend(names);
-            }
+            let columns = source
+                .get("columns")
+                .and_then(|v| v.as_table())
+                .into_iter()
+                .flatten()
+                .filter(|(column, _)| !column.trim().is_empty())
+                .filter_map(|(column, value)| {
+                    let value = value.as_table()?;
+                    Some(DeclaredColumn {
+                        name: column.clone(),
+                        type_name: string(value, "type"),
+                        description: string(value, "description"),
+                    })
+                })
+                .collect();
+            out.push(DeclaredSource {
+                system: system.to_string(),
+                name,
+                description: string(source, "description"),
+                columns,
+            });
         }
-        Ok(Self { platforms })
+        Ok(out)
     }
 
-    /// Declarations built in code, for tests and hosts that have them already.
-    pub fn from_names<'a>(
-        entries: impl IntoIterator<Item = (&'a str, DatasetKind, &'a [&'a str])>,
-    ) -> Self {
-        let mut platforms: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
-        for (platform, kind, names) in entries {
-            if names.is_empty() {
+    fn push(&mut self, source: DeclaredSource) {
+        self.platforms
+            .entry(source.system.clone())
+            .or_default()
+            .push(source.name.clone());
+        self.sources.push(source);
+    }
+
+    /// Declarations built in code, for tests and hosts that have them already:
+    /// one log source, without columns, per `(platform, name)`.
+    pub fn from_names<'a>(entries: impl IntoIterator<Item = (&'a str, &'a [&'a str])>) -> Self {
+        let mut out = Self::default();
+        for (platform, names) in entries {
+            if DatasetKind::of_system(platform).is_none() {
                 continue;
             }
-            platforms
-                .entry(platform.to_string())
-                .or_default()
-                .entry(kind.key().to_string())
-                .or_default()
-                .extend(names.iter().map(|n| n.to_string()));
+            for name in names {
+                out.push(DeclaredSource {
+                    system: platform.to_string(),
+                    name: name.to_string(),
+                    description: None,
+                    columns: Vec::new(),
+                });
+            }
         }
-        Self { platforms }
+        out
     }
 
     /// Nothing declared for any platform.
@@ -175,47 +222,46 @@ impl DeclaredDatasets {
         self.platforms.is_empty()
     }
 
-    /// The names (and patterns) declared for `platform` and `kind`.
-    pub fn names(&self, platform: &str, kind: DatasetKind) -> &[String] {
+    /// The names (and patterns) the log sources of `platform` declare.
+    pub fn names(&self, platform: &str) -> &[String] {
         self.platforms
             .get(platform)
-            .and_then(|kinds| kinds.get(kind.key()))
             .map(Vec::as_slice)
             .unwrap_or(&[])
     }
 
-    /// Whether the workspace declares any name of `kind` for `platform`: the
-    /// opt-in for warning about undeclared ones.
-    pub fn declares(&self, platform: &str, kind: DatasetKind) -> bool {
-        !self.names(platform, kind).is_empty()
+    /// The log sources of `platform`, in file order.
+    pub fn sources(&self, platform: &str) -> impl Iterator<Item = &DeclaredSource> {
+        self.sources.iter().filter(move |s| s.system == platform)
+    }
+
+    /// The log sources of `platform` that list columns.
+    pub fn sources_with_columns(&self, platform: &str) -> impl Iterator<Item = &DeclaredSource> {
+        self.sources(platform).filter(|s| !s.columns.is_empty())
+    }
+
+    /// Whether the workspace has a log source for `platform`: the opt-in for
+    /// warning about undeclared names.
+    pub fn declares(&self, platform: &str) -> bool {
+        !self.names(platform).is_empty()
     }
 
     /// Whether `name`, as a query reads it, is declared for `platform`.
     ///
     /// A declared name may hold `*` (`*_CL`, `logs-*`), which matches any run
     /// of characters. A name the query reads may hold `*` too (an index
-    /// pattern, `index=win*`): it is declared when a declared pattern covers
-    /// it (`logs-*` covers `logs-azure.*`) or when it reaches a declared name
-    /// (`win*` reaches `wineventlog`).
-    pub fn status(&self, platform: &str, kind: DatasetKind, name: &str) -> Declaration {
-        let declared = self.names(platform, kind);
+    /// pattern, `sourcetype=win*`): it is declared when a declared pattern
+    /// covers it (`logs-*` covers `logs-azure.*`) or when it reaches a
+    /// declared name (`win*` reaches `wineventlog`).
+    pub fn status(&self, platform: &str, name: &str) -> Declaration {
+        let declared = self.names(platform);
+        let Some(kind) = DatasetKind::of_system(platform) else {
+            return Declaration::Unchecked;
+        };
         if declared.is_empty() {
             return Declaration::Unchecked;
         }
-        let fold = kind.case_insensitive();
-        let norm = |s: &str| {
-            if fold {
-                s.to_ascii_lowercase()
-            } else {
-                s.to_string()
-            }
-        };
-        let used = norm(name.trim());
-        let covered = declared.iter().any(|d| {
-            let d = norm(d);
-            glob_matches(&d, &used) || (used.contains('*') && glob_matches(&used, &d))
-        });
-        if covered {
+        if declared.iter().any(|d| kind.covers(d, name)) {
             Declaration::Declared
         } else {
             Declaration::Undeclared
@@ -293,57 +339,132 @@ mod tests {
     }
 
     #[test]
-    fn opt_in_per_platform_and_kind() {
+    fn opt_in_per_platform() {
         let d = DeclaredDatasets::from_visibility(
             r#"
 [[assets]]
 name = "Prod"
 
 [[logsources]]
-name = "Flows"
+name = "NTANetAnalytics"
 description = "VNet flows."
 system = "sentinel"
-tables = ["NTANetAnalytics", "*_CL"]
 
 [[logsources]]
-name = "Windows"
+name = "*_CL"
+description = "Custom tables."
+system = "sentinel"
+
+[[logsources]]
+name = "WinEventLog:Security"
 description = "Security events."
 system = "splunk"
-indexes = ["WinEventLog"]
-macros = []
-tables = ["NotASplunkKind"]
 
 [[logsources]]
-name = "Endpoint"
-description = "Endpoint."
+name = "logs-*"
+description = "Integrations."
 system = "elastic"
-indices = ["logs-*"]
+
+[[logsources]]
+name = "Okta"
+description = "Not a query platform."
+system = "okta"
 "#,
         )
         .unwrap();
-        use DatasetKind::*;
         use Declaration::*;
-        assert_eq!(d.status("sentinel", Tables, "NTANetAnalytics"), Declared);
-        assert_eq!(d.status("sentinel", Tables, "Custom_CL"), Declared);
-        assert_eq!(d.status("sentinel", Tables, "SigninLogs"), Undeclared);
-        assert_eq!(d.status("sentinel", Tables, "ntanetanalytics"), Undeclared);
+        assert_eq!(d.status("sentinel", "NTANetAnalytics"), Declared);
+        assert_eq!(d.status("sentinel", "Custom_CL"), Declared);
+        assert_eq!(d.status("sentinel", "SigninLogs"), Undeclared);
+        assert_eq!(d.status("sentinel", "ntanetanalytics"), Undeclared);
         // Another platform's names never count.
         assert_eq!(
-            d.status("defender_for_endpoint", Tables, "NTANetAnalytics"),
+            d.status("defender_for_endpoint", "NTANetAnalytics"),
             Unchecked
         );
-        assert_eq!(d.status("splunk", Indexes, "wineventlog"), Declared);
-        assert_eq!(d.status("splunk", Indexes, "win*"), Declared);
-        assert_eq!(d.status("splunk", Indexes, "main"), Undeclared);
-        // An empty list is not an opt-in.
-        assert_eq!(d.status("splunk", Macros, "anything"), Unchecked);
-        assert_eq!(d.status("splunk", Sourcetypes, "anything"), Unchecked);
+        assert_eq!(d.status("splunk", "wineventlog:security"), Declared);
+        assert_eq!(d.status("splunk", "WinEventLog:*"), Declared);
+        assert_eq!(d.status("splunk", "syslog"), Undeclared);
+        assert_eq!(d.status("elastic", "logs-azure.signinlogs-*"), Declared);
+        assert_eq!(d.status("elastic", "winlogbeat-*"), Undeclared);
+        assert_eq!(d.status("okta", "Okta"), Unchecked);
+        assert_eq!(d.sources("okta").count(), 0);
+    }
+
+    #[test]
+    fn the_keys_of_0_20_0_declare_nothing() {
+        let d = DeclaredDatasets::from_visibility(
+            r#"
+[[logsources]]
+description = "x"
+system = "sentinel"
+tables = ["SigninLogs"]
+
+[[logsources]]
+description = "x"
+system = "splunk"
+indexes = ["main"]
+sourcetypes = ["syslog"]
+macros = ["sysmon"]
+
+[[logsources]]
+description = "x"
+system = "elastic"
+indices = ["logs-*"]
+data_views = ["x"]
+ecs = true
+"#,
+        )
+        .unwrap();
+        assert!(d.is_empty(), "{d:?}");
+    }
+
+    #[test]
+    fn columns_are_keyed_by_name_as_written() {
+        let d = DeclaredDatasets::from_visibility(
+            r#"
+[[logsources]]
+name = "Contoso_Audit_CL"
+description = "Audit events."
+system = "sentinel"
+
+[logsources.columns]
+Actor_s = { type = "string", description = "UPN of the account that made the change" }
+ResultCode_d = { type = "real" }
+NotATable = "string"
+
+[[logsources]]
+name = "logs-endpoint.events.*"
+description = "Endpoint."
+system = "elastic"
+
+[logsources.columns]
+"process.name" = { type = "keyword" }
+"#,
+        )
+        .unwrap();
+        let with: Vec<&DeclaredSource> = d.sources_with_columns("sentinel").collect();
+        assert_eq!(with.len(), 1);
+        assert_eq!(with[0].name, "Contoso_Audit_CL");
+        assert_eq!(with[0].kind(), DatasetKind::Tables);
+        assert_eq!(with[0].description.as_deref(), Some("Audit events."));
         assert_eq!(
-            d.status("elastic", Indices, "logs-azure.signinlogs-*"),
-            Declared
+            with[0].columns,
+            [
+                DeclaredColumn {
+                    name: "Actor_s".into(),
+                    type_name: Some("string".into()),
+                    description: Some("UPN of the account that made the change".into()),
+                },
+                DeclaredColumn {
+                    name: "ResultCode_d".into(),
+                    type_name: Some("real".into()),
+                    description: None,
+                },
+            ]
         );
-        assert_eq!(d.status("elastic", Indices, "winlogbeat-*"), Undeclared);
-        assert_eq!(d.status("elastic", DataViews, "x"), Unchecked);
+        let elastic: Vec<&DeclaredSource> = d.sources_with_columns("elastic").collect();
+        assert_eq!(elastic[0].columns[0].name, "process.name");
     }
 
     #[test]
@@ -351,15 +472,7 @@ indices = ["logs-*"]
         assert!(DeclaredDatasets::from_visibility("").unwrap().is_empty());
         assert!(
             DeclaredDatasets::from_visibility(
-                "[[logsources]]\nname = \"x\"\nsystem = \"sentinel\"\ntables = []\n"
-            )
-            .unwrap()
-            .is_empty()
-        );
-        // A system without dataset fields, and one the engine does not know.
-        assert!(
-            DeclaredDatasets::from_visibility(
-                "[[logsources]]\nsystem = \"crowdstrike\"\ntables = [\"x\"]\n"
+                "[[logsources]]\nname = \"  \"\ndescription = \"x\"\nsystem = \"sentinel\"\n"
             )
             .unwrap()
             .is_empty()
@@ -368,15 +481,11 @@ indices = ["logs-*"]
     }
 
     #[test]
-    fn ecs_marks_an_elastic_log_sources_indices() {
+    fn a_byte_order_mark_is_skipped() {
         let d = DeclaredDatasets::from_visibility(
-            "[[logsources]]\nsystem = \"elastic\"\nindices = [\"custom-*\"]\necs = true\n\n[[logsources]]\nsystem = \"elastic\"\nindices = [\"raw-*\"]\n",
+            "\u{feff}[[logsources]]\nname = \"SigninLogs\"\ndescription = \"x\"\nsystem = \"sentinel\"\n",
         )
         .unwrap();
-        use DatasetKind::*;
-        assert_eq!(d.names("elastic", EcsIndices), ["custom-*"]);
-        assert_eq!(d.names("elastic", Indices), ["custom-*", "raw-*"]);
-        // Another platform's names never make Splunk names known.
-        assert_eq!(d.status("splunk", Tables, "x"), Declaration::Unchecked);
+        assert_eq!(d.status("sentinel", "SigninLogs"), Declaration::Declared);
     }
 }

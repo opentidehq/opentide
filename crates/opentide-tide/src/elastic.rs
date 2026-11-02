@@ -321,11 +321,15 @@ pub(crate) fn query_indices(
     (!indices.is_empty()).then_some(indices)
 }
 
-/// Whether the query at `field_path` reads only ECS indices
+/// The indices of the query at `field_path` when it reads only ECS indices
 /// (`opentide_ecs::indices_are_ecs`), so its fields are checked against
-/// ECS. A query whose indices are not known is not.
-pub(crate) fn reads_ecs(configurations: Option<&serde_yaml::Value>, field_path: &[String]) -> bool {
-    query_indices(configurations, field_path).is_some_and(|i| opentide_ecs::indices_are_ecs(&i))
+/// ECS and the fields `visibility.toml` declares for them. A query whose
+/// indices are not known reads none.
+pub(crate) fn ecs_indices(
+    configurations: Option<&serde_yaml::Value>,
+    field_path: &[String],
+) -> Option<Vec<String>> {
+    query_indices(configurations, field_path).filter(|i| opentide_ecs::indices_are_ecs(i))
 }
 
 /// Range of `item`, a value listed under the key at `path`: the first place
@@ -347,9 +351,10 @@ fn item_range(source: &str, path: &[&str], item: &str) -> Range {
     path_range(source, path)
 }
 
-/// `elastic_dataset_not_declared` for the block's `index`, `threat.index`,
-/// and `data_view_id`, against the workspace's declared Elastic datasets
-/// (opt-in per kind: nothing when it declares no index, or no data view).
+/// `elastic_dataset_not_declared` for the block's `index` and
+/// `threat.index`, against the index patterns the workspace's elastic log
+/// sources name (opt-in: nothing when it has none). A `data_view_id` is not
+/// checked: `visibility.toml` declares no data views.
 pub(crate) fn dataset_declarations(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let threat_index = block.get("threat").and_then(|t| t.get("index"));
@@ -368,12 +373,6 @@ pub(crate) fn dataset_declarations(source: &str, block: &serde_yaml::Value) -> V
             if let Some(d) = opentide_ecs::index_not_declared(&name, range) {
                 out.push(d.with_field_path(path.iter().map(|p| p.to_string()).collect()));
             }
-        }
-    }
-    let path = ["configurations", "elastic", "data_view_id"];
-    if let Some(id) = block.get("data_view_id").and_then(|v| v.as_str()) {
-        if let Some(d) = opentide_ecs::data_view_not_declared(id, item_range(source, &path, id)) {
-            out.push(d.with_field_path(path.iter().map(|p| p.to_string()).collect()));
         }
     }
     out

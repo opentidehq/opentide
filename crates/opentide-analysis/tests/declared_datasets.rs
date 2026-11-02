@@ -3,25 +3,23 @@
 //! declarations win (#114).
 
 use opentide_analysis::{
-    Catalog, DatasetKind, Declaration, declared_datasets, install_catalog, install_visibility,
+    Catalog, Declaration, declared_datasets, install_catalog, install_visibility,
     set_default_catalog,
 };
 
 const HOST: &str = r#"[[logsources]]
-name = "sentinel datasets"
+name = "HostTable"
 description = "Test log source."
 system = "sentinel"
-tables = ["HostTable"]
 "#;
 const WORKSPACE: &str = r#"[[logsources]]
-name = "sentinel datasets"
+name = "NTANetAnalytics"
 description = "Test log source."
 system = "sentinel"
-tables = ["NTANetAnalytics"]
 "#;
 
 fn sentinel(name: &str) -> Declaration {
-    declared_datasets().status("sentinel", DatasetKind::Tables, name)
+    declared_datasets().status("sentinel", name)
 }
 
 // One test: the datasets are process-wide.
@@ -59,6 +57,16 @@ fn workspace_datasets_win_over_the_hosts_and_a_bad_file_changes_nothing() {
     assert_eq!(sentinel("HostTable"), Declaration::Declared);
     install_visibility(Some(WORKSPACE)).unwrap();
     assert_eq!(sentinel("NTANetAnalytics"), Declaration::Declared);
+    // A file saved with a byte-order mark parses.
+    install_visibility(Some(&format!("\u{feff}{HOST}"))).unwrap();
+    assert_eq!(sentinel("HostTable"), Declaration::Declared);
+    // The plural lists of opentide 0.20.0 declare nothing.
+    install_visibility(Some(
+        "[[logsources]]\ndescription = \"x\"\nsystem = \"sentinel\"\ntables = [\"NTANetAnalytics\"]\n",
+    ))
+    .unwrap();
+    assert_eq!(sentinel("NTANetAnalytics"), Declaration::Unchecked);
+    install_visibility(Some(WORKSPACE)).unwrap();
 
     // No workspace datasets: the host's apply again.
     install_catalog(&Catalog::default()).unwrap();
