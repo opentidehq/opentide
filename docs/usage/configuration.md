@@ -294,9 +294,14 @@ severity = "warning"
 
 [filenames]
 enabled = false         # `opentide lint --check filenames` still runs it
-style = "name"          # the file stem is the object's name; "slug" (default) or "none"
-pattern = '^\[(SEN|XDR)\]'   # the whole stem must match this regular expression
+style = "slug"          # the file stem is slugify(name) (default); "name" or "none"
+
+[filenames.rules]       # rules only; also [filenames.threats] and [filenames.objectives]
+style = "name"          # the file stem is the rule's name
+pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem must match this regular expression
 ```
+
+A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
 
 ## Paths
 

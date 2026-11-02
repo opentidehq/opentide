@@ -262,3 +262,49 @@ def test_new_with_an_invalid_lint_toml_exits_2_before_writing(invoke_cli, tutori
     assert result.exit_code == 2, result.output
     assert "lint.toml [filenames].style" in parse_cli_json(result)["message"]
     assert sorted(path.name for path in (tutorial / "objects" / "threats").iterdir()) == before
+
+
+def test_new_names_each_kind_by_its_own_style(invoke_cli, tutorial: Path) -> None:
+    """#721: ``[filenames.rules]`` gives rules the name as their stem; threats keep slugs."""
+    name = "[SEN][Identity]Some rule[TenantA]"
+    _configure_filenames(
+        tutorial,
+        'style = "slug"\n\n[filenames.rules]\nstyle = "name"\npattern = \'^\\[(SEN|XDR)\\]\\[.+\'',
+    )
+    rule = assert_json_ok(
+        invoke_cli(
+            "new",
+            "rule",
+            "--name",
+            name,
+            "--platform",
+            "sentinel",
+            "--objective",
+            OBJECTIVE_UUID,
+            repo=tutorial,
+            extra_env=GIT_AUTHOR,
+        )
+    )
+    assert rule["path"] == f"objects/rules/{name}.yaml"
+    assert "warnings" not in rule or not any("pattern" in text for text in rule["warnings"])
+    threat = assert_json_ok(
+        invoke_cli("new", "threat", "--name", "Some Actor", repo=tutorial, extra_env=GIT_AUTHOR)
+    )
+    assert threat["path"] == "objects/threats/some-actor.yaml"
+    assert not any("pattern" in text for text in threat.get("warnings", []))
+    missed = assert_json_ok(
+        invoke_cli(
+            "new",
+            "rule",
+            "--name",
+            "Plain rule",
+            "--platform",
+            "sentinel",
+            "--objective",
+            OBJECTIVE_UUID,
+            repo=tutorial,
+            extra_env=GIT_AUTHOR,
+        )
+    )
+    assert missed["path"] == "objects/rules/Plain rule.yaml"
+    assert any("[filenames.rules].pattern" in text for text in missed["warnings"])

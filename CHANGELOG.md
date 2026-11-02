@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`lint.toml` sets the filename convention per object kind** ([#721](https://github.com/opentidehq/opentide/issues/721)). `[filenames] style` and `pattern` applied to every kind, so a catalogue whose rules keep their name as the file stem (`[SEN][Identity]Some rule[TenantA].yaml`) while threats and objectives use slugs had to fall back to `style = "none"` and one pattern for both shapes. `[filenames.threats]`, `[filenames.objectives]` and `[filenames.rules]` now take `style` and `pattern` for that kind; a key a kind's table leaves unset comes from `[filenames]`, and a kind without a table follows `[filenames]` as before. `lint` compares, renames under `--fix` and pattern-checks each file by its own kind's convention, and `opentide new <kind>` names the file by its kind's `style` (its pattern warning names the table the pattern came from). A table for another kind, or a key other than `style` and `pattern` in a kind's table, exits `2` naming it. Without a kind table nothing changes. See [A convention per object kind](docs/cli/lint.md#a-convention-per-object-kind).
+
 ### Changed
 
 - **ATT&CK 20.0 group labels.** 32 ATT&CK groups in the actors vocabulary take their current label (`[Enterprise] APT28` where it said `[Mobile] APT28`) in generated docs and editor schemas. `threat::1.0` still pins `actors::1.1` and accepts the same values; the 60 actors added at `actors::1.2` wait for a new threat revision.

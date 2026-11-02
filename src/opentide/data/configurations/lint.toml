@@ -14,6 +14,11 @@ style = "slug"
 # A regular expression the whole stem (no extension) must match, applied with `style`.
 # A stem that does not match is a non-fixable `filename_pattern` finding.
 # pattern = '^\[(SEN|XDR)\]\[[^\]]+\].+$'
+# A kind of object can have its own `style` and `pattern`; a key it leaves unset
+# comes from [filenames]. Kinds: threats, objectives, rules.
+# [filenames.rules]
+# style = "name"
+# pattern = '^\[(SEN|XDR)\]\[.+'
 
 [metadata]
 enabled = true
