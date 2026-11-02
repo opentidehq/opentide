@@ -36,11 +36,11 @@ class GenerateReport:
         return {field: len(result.keys) for field, result in self.lifecycles.items()}
 
     @property
-    def pin_versions(self) -> dict[str, str]:
-        """Field → new minor contract for fields that opened a pin bump."""
+    def new_contracts(self) -> dict[str, str]:
+        """Field → the minor contract this run opened, for fields that added keys."""
         versions: dict[str, str] = {}
         for field, result in self.lifecycles.items():
-            contract = result.pin_contract
+            contract = result.new_contract
             if contract is not None:
                 versions[field] = contract
         return versions
