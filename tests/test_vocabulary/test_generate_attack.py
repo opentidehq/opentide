@@ -189,7 +189,7 @@ def test_generate_attack_merges_and_versions_keys(
 
     report = generate_attack.generate_attack_vocabs(vocab_dir=vocab_dir)
     assert report.lifecycles["att&ck"].added == ("T1002",)
-    assert report.pin_versions["att&ck"] == "1.1"
+    assert report.new_contracts["att&ck"] == "1.1"
     written = read_vocab_document(vocab_dir / "att&ck.vocab.toml")
     assert "version" not in written
     assert written["source"] == "mitre-attack"
