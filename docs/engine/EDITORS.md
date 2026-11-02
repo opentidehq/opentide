@@ -2,9 +2,18 @@
 
 The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.
 
-Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene` (never `sql`).
+Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene` (never `sql`), and `opentide-config`.
 
 Semantic tokens come from the server. TextMate grammars must be **copied from the language-server highlight zip**, never hand-authored.
+
+## Configuration TOML
+
+`.opentide/configurations/**/*.toml` is `opentide-config`, whatever language id the editor sends. Any other `.toml` (`Cargo.toml`, `pyproject.toml`) is not read.
+
+- **opentide checks it.** The findings are opentide's own (`configuration_text_issues`, the check `opentide validate` runs), placed on the keys they name. Only `opentide lsp start` has them. `opentide-lsp` on its own has no checker, so it reports nothing for these files and never guesses. Hover and completion come from the schemas `opentide lsp start` hands the server, so they need it too. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
+- **The editor's TOML grammar highlights it.** The server sends no semantic tokens for `opentide-config`, and there is no opentide TOML grammar.
+- **Keep generic TOML language servers off `.opentide/configurations/**`** (taplo, Even Better TOML, tombi), so a file is not reported twice. Give the glob its own language (`opentide-config`), as the samples do.
+- Editing one configuration file re-checks the others that are open: a status added to `deployment.toml` is one `sharing.toml` may name. `visibility.toml` still declares datasets live, and is checked like the other files.
 
 ## Helix
 
@@ -22,7 +31,7 @@ See `editors/zed/opentide.json`.
 
 Lives in **opentidehq/vscode-extension** (other repository, #17). MIT client, EUPL engine notices.
 
-Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern.
+Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern.
 
 `esql` is also the id of Elastic's own ES|QL extension. The ids are the shared vocabulary, so the opentide extension registers `esql` too, never a second id for the same language. Its TextMate grammar uses the scope `source.opentide.esql`, not Elastic's `source.esql`, so the two grammars never collide. The server's semantic tokens are authoritative for colour either way. The other three Elastic ids (`eql`, `kuery`, `lucene`) have no prior VS Code owner.
 

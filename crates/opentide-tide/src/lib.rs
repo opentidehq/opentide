@@ -717,7 +717,7 @@ fn analyze_injections(
                 }
                 (r.diagnostics, r.tokens)
             }
-            LanguageId::TideYaml => (Vec::new(), Vec::new()),
+            LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         let mut diagnostics: Vec<Diagnostic> = found
             .into_iter()

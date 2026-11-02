@@ -25,7 +25,8 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Eql => Some(unsafe { from_raw(tree_sitter_opentide_eql()) }),
         LanguageId::Kuery => Some(unsafe { from_raw(tree_sitter_opentide_kuery()) }),
         LanguageId::Lucene => Some(unsafe { from_raw(tree_sitter_opentide_lucene()) }),
-        LanguageId::TideYaml => None,
+        // Tide YAML has its own parser; configuration TOML is the host's.
+        LanguageId::TideYaml | LanguageId::Config => None,
     }
 }
 

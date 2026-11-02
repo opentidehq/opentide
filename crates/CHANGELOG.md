@@ -6,6 +6,21 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- Configuration TOML in the editor, checked by opentide ([#158](https://github.com/opentidehq/language-server/issues/158)). `.opentide/configurations/**/*.toml` is a new language, `opentide-config`, whatever id the editor sends. The engine does not check these files itself: a host installs a checker (`opentide_analysis::set_configuration_checker`). `opentide lsp start` installs opentide's own check ([opentidehq/opentide#730](https://github.com/opentidehq/opentide/issues/730)), so the editor reports what `opentide validate` reports. The engine places each finding on the key its `field_path` names, or on the block's `[[header]]` when the key is missing, and the message names the path.
+  - The host's schemas (`install_configuration_schemas`) give hover (title, type, description, allowed values, default, never the value) and completion (the keys a table may still take, table names, allowed values).
+  - Editing one configuration file re-checks the others that are open, so a status added to `deployment.toml` clears `sharing.toml`.
+  - `visibility.toml` is checked too.
+  - A checker that fails gives one `config_check_failed` warning.
+  - `opentide-lsp` on its own has no checker and no schemas, so it reports nothing for these files.
+  - There is no TOML highlighting: the editor's TOML grammar stays.
+  - API: `opentide_analysis::config` (`ConfigRequest`, `ConfigIssue`, `configuration_diagnostics`, `configuration_hover`, `configuration_completions`, `configuration_path`), `LanguageId::Config`, `Severity::parse`, `opentide_lsp::serve`. The editor samples associate the glob and start `opentide lsp start` for it.
+
+### Changed
+
+- A `.toml` file outside `.opentide/configurations/` (`Cargo.toml`, `pyproject.toml`) is no longer read. The server used to analyse it as Tide YAML when an editor sent it.
+
 ## [0.7.1] - 2026-11-03
 
 Declared datasets carry their columns. `visibility.toml` follows the corrected `visibility::1.0`: a log source's `name` is its dataset (KQL table, Splunk sourcetype, Elastic index pattern) and it may list the dataset's columns, which the query checks, hover and completion use like the columns of a catalog table. An unknown table is `kql_unknown_table` at its profile's severity again once tables are declared, so a Defender typo fails validation; lower-case table names are checked; column patterns in `project-reorder`, `project-away` and `project-keep` parse; and a document that starts with a UTF-8 byte-order mark is analysed.

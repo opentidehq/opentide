@@ -1156,3 +1156,51 @@ fn a_bom_tide_document_is_analysed_like_one_without() {
         "{completion}"
     );
 }
+
+/// The standalone binary has no configuration checker: a configuration file
+/// is `opentide-config`, never parsed as YAML, and gets no diagnostics, no
+/// tokens and no hover. Other TOML is not read at all.
+#[test]
+fn configuration_toml_without_a_host_checker_reports_nothing() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let open = |lsp: &mut Lsp, uri: &str, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": {
+                "uri": uri, "languageId": "toml", "version": 1, "text": text
+            }}),
+        );
+    };
+    open(
+        &mut lsp,
+        "file:///w/Cargo.toml",
+        "[package]\nname = \"x\"\n",
+    );
+    let sharing = "file:///w/.opentide/configurations/sharing.toml";
+    open(
+        &mut lsp,
+        sharing,
+        "[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\n",
+    );
+    // Cargo.toml published nothing: the first frame is sharing.toml's.
+    let msg = lsp.read();
+    assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
+    assert_eq!(msg["params"]["uri"], sharing, "{msg}");
+    assert_eq!(msg["params"]["diagnostics"], json!([]), "{msg}");
+
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": sharing } }),
+    );
+    assert_eq!(tokens["result"]["data"], json!([]), "{tokens}");
+    let hover = lsp.request(
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": sharing }, "position": { "line": 2, "character": 2 } }),
+    );
+    assert_eq!(hover["result"], Value::Null, "{hover}");
+}

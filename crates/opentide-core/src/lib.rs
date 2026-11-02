@@ -28,6 +28,11 @@ pub enum LanguageId {
     /// Lucene query string syntax (Elastic `language: lucene`).
     #[serde(rename = "lucene", alias = "opentide-lucene")]
     Lucene,
+    /// A configuration TOML file under `.opentide/configurations/`. The host
+    /// checks it (opentide's models); the engine places the findings. Not an
+    /// alias of `toml`: only those files are this language.
+    #[serde(rename = "opentide-config")]
+    Config,
 }
 
 impl LanguageId {
@@ -40,6 +45,7 @@ impl LanguageId {
             Self::Eql => "eql",
             Self::Kuery => "kuery",
             Self::Lucene => "lucene",
+            Self::Config => "opentide-config",
         }
     }
 
@@ -52,6 +58,7 @@ impl LanguageId {
             "eql" | "opentide-eql" | "EQL" => Some(Self::Eql),
             "kuery" | "opentide-kuery" | "kibana-kql" => Some(Self::Kuery),
             "lucene" | "opentide-lucene" | "Lucene" => Some(Self::Lucene),
+            "opentide-config" => Some(Self::Config),
             _ => None,
         }
     }
@@ -282,6 +289,18 @@ impl Severity {
             Self::Hint => "hint",
         }
     }
+
+    /// A severity named the way hosts name it (`error`, `warning`,
+    /// `information` or `info`, `hint`), case-insensitively.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "error" => Some(Self::Error),
+            "warning" | "warn" => Some(Self::Warning),
+            "information" | "info" => Some(Self::Information),
+            "hint" => Some(Self::Hint),
+            _ => None,
+        }
+    }
 }
 
 /// Machine-stable diagnostic. CLI Pydantic issues map onto `{code, field_path, severity}`.
@@ -500,6 +519,8 @@ pub mod codes {
     pub const ECS_TYPE_MISMATCH: &str = "ecs_type_mismatch";
     pub const ECS_UNKNOWN_FIELD: &str = "ecs_unknown_field";
     pub const ELASTIC_DATASET_NOT_DECLARED: &str = "elastic_dataset_not_declared";
+    /// The host's configuration checker failed on a configuration file.
+    pub const CONFIG_CHECK_FAILED: &str = "config_check_failed";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -599,6 +620,7 @@ pub mod codes {
         ECS_TYPE_MISMATCH,
         ECS_UNKNOWN_FIELD,
         ELASTIC_DATASET_NOT_DECLARED,
+        CONFIG_CHECK_FAILED,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -804,6 +826,9 @@ pub mod codes {
             }
             ELASTIC_DATASET_NOT_DECLARED => {
                 "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml."
+            }
+            CONFIG_CHECK_FAILED => {
+                "opentide could not check this configuration file; the message says why. Its other findings are missing."
             }
             _ => return None,
         })

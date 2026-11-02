@@ -49,7 +49,8 @@ pub const LUCENE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     "/highlights/queries/lucene/highlights.scm"
 ));
 
-/// The tree-sitter highlight query for a language.
+/// The tree-sitter highlight query for a language. Configuration TOML has
+/// none: the editor's TOML grammar highlights it.
 pub fn highlights_scm(language: LanguageId) -> &'static str {
     match language {
         LanguageId::Kql => KQL_HIGHLIGHTS_SCM,
@@ -59,6 +60,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Eql => EQL_HIGHLIGHTS_SCM,
         LanguageId::Kuery => KUERY_HIGHLIGHTS_SCM,
         LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
+        LanguageId::Config => "",
     }
 }
 
@@ -777,6 +779,7 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         LanguageId::Spl => Some("```[^`]*```"),
         // Kibana KQL and Lucene have no comment syntax.
         LanguageId::Kuery | LanguageId::Lucene => None,
+        LanguageId::Config => Some("(?m)^\\s*#.*$"),
     };
     if let Some(comment_match) = comment_match {
         patterns.push(serde_json::json!({

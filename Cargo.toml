@@ -42,6 +42,9 @@ opentide-analysis = { path = "crates/opentide-analysis", version = "=0.7.1" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
+# Spans of configuration TOML keys (opentide-analysis `config`). The version
+# `toml` 0.8 already locks.
+toml_edit = { version = "0.22", default-features = false, features = ["parse"] }
 thiserror = "2"
 anyhow = "1"
 regex = "1"

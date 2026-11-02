@@ -31,7 +31,7 @@ Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript pack
 - There is no `opentide-sql` crate, no `.sql` language id, and no stub SQL highlighter.
 - Do not hand-edit `grammars/**/src/parser.c`, `grammar.json`, or `node-types.json`. Regenerate with `tree-sitter-cli` **0.25.10**.
 - Do not commit a rewritten `Cargo.lock`. Resolution prunes entries the lock keeps on purpose. Restore the committed lock if Cargo rewrites it.
-- Configuration TOML (`#64`) is post-v1. No tree-sitter TOML grammar, no HighlightSpec captures, no hand-written JSON Schema. It waits on `opentide#374`.
+- Configuration TOML (`opentide-config`, #158) is checked by the host, never by Rust. The engine places the host checker's `{code, field_path, severity}` findings and reads the host's schemas for hover and completion. No configuration check logic in Rust, no vendored or hand-written configuration schema, no TOML grammar, no HighlightSpec captures. Without a host checker there are no configuration diagnostics.
 - Pydantic in the pinned `opentide` package remains CLI authority for Tide objects. The LSP matches `{code, field_path, severity}` and adds ranges.
 
 ## Verify

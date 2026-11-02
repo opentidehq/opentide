@@ -28,13 +28,22 @@
     "lucene": {
       "language_servers": ["opentide-lsp"],
       "path_suffixes": ["lucene"]
+    },
+    "opentide-config": {
+      "language_servers": ["opentide"],
+      "path_globs": [".opentide/configurations/**/*.toml"],
+      "grammar": "toml"
     }
   },
   "lsp": {
     "opentide-lsp": {
       "command": "opentide-lsp",
       "args": ["--stdio"]
+    },
+    "opentide": {
+      "command": "opentide",
+      "args": ["lsp", "start"]
     }
   },
-  "notes": "Disable yamlls on objects/**. Copy TextMate from highlights-v*.zip, never hand-author."
+  "notes": "Disable yamlls on objects/** and generic TOML servers on .opentide/configurations/**. Configuration checks need `opentide lsp start`. Copy TextMate from highlights-v*.zip, never hand-author."
 }

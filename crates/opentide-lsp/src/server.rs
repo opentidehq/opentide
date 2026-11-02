@@ -5,14 +5,15 @@ use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
     AnalyzeRequest, Catalog, MemoryWorkspace, VISIBILITY_CONFIGURATION, WorkspaceHost, analyze,
-    codes, compiled_kql, compiled_spl, completions, declare_dataset, hover, index_workspace,
-    install_catalog, install_visibility, signature_help,
+    codes, compiled_kql, compiled_spl, completions, configuration_completions, configuration_hover,
+    declare_dataset, hover, index_workspace, install_catalog, install_visibility,
+    is_configuration_path, signature_help,
 };
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::io::{BufReader, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 
@@ -52,39 +53,49 @@ impl Session {
         MemoryWorkspace { files }
     }
 
-    fn language_for(&self, uri: &str, reported: Option<&str>) -> LanguageId {
-        if let Some(id) = reported.and_then(LanguageId::parse) {
-            return id;
+    /// The language of a document, or `None` for a document this server does
+    /// not read. A TOML file under `.opentide/configurations/` is
+    /// `opentide-config` whatever id the client reports; any other `.toml`
+    /// (`Cargo.toml`) is not read, and `opentide-config` is only those files.
+    fn language_for(&self, uri: &str, reported: Option<&str>) -> Option<LanguageId> {
+        let path = uri_to_path(uri);
+        if is_configuration_path(&path) {
+            return Some(LanguageId::Config);
         }
-        uri.rsplit_once('.')
-            .and_then(|(_, ext)| LanguageId::from_extension(ext))
-            .unwrap_or(LanguageId::TideYaml)
+        match reported.and_then(LanguageId::parse) {
+            Some(LanguageId::Config) => return None,
+            Some(id) => return Some(id),
+            None => {}
+        }
+        if path.to_ascii_lowercase().ends_with(".toml") {
+            return None;
+        }
+        Some(
+            uri.rsplit_once('.')
+                .and_then(|(_, ext)| LanguageId::from_extension(ext))
+                .unwrap_or(LanguageId::TideYaml),
+        )
     }
 }
 
 pub fn run_stdio() -> Result<()> {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
-    let mut reader = BufReader::new(stdin.lock());
-    let mut writer = stdout.lock();
-    let mut session = Session::default();
-    loop {
-        let Some(msg) = jsonrpc::read_message(&mut reader)? else {
-            break;
-        };
-        if !dispatch(&mut session, &mut writer, msg)? {
-            break;
-        }
-    }
-    Ok(())
+    serve(BufReader::new(stdin.lock()), stdout.lock())
 }
 
 pub fn run_listen(addr: &str) -> Result<()> {
     let listener = TcpListener::bind(addr)?;
     eprintln!("opentide-lsp listening on {addr}");
     let (stream, _) = listener.accept()?;
-    let mut reader = BufReader::new(stream.try_clone()?);
-    let mut writer = stream;
+    serve(BufReader::new(stream.try_clone()?), stream)
+}
+
+/// Serve one client: read LSP frames from `reader` and write the replies to
+/// `writer` until the client sends `exit` or the input ends. [`run_stdio`]
+/// and [`run_listen`] are this on stdio and on a socket; a host with its own
+/// streams calls it directly.
+pub fn serve(mut reader: impl BufRead, mut writer: impl Write) -> Result<()> {
     let mut session = Session::default();
     loop {
         let Some(msg) = jsonrpc::read_message(&mut reader)? else {
@@ -202,13 +213,8 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
         }
         "textDocument/didClose" => {
             let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str());
-            if uri.is_some_and(is_visibility) {
-                // Back to the file on disk (unsaved edits are dropped).
-                session.visibility = None;
-                reload_visibility(session);
-                republish_all(session, writer)?;
-            } else if let Some(uri) = uri {
-                session.docs.remove(uri);
+            if let Some(uri) = uri {
+                let closed = session.docs.remove(uri).map(|(language, _)| language);
                 jsonrpc::write_message(
                     writer,
                     &jsonrpc::notify(
@@ -216,6 +222,15 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                         json!({ "uri": uri, "diagnostics": [] }),
                     ),
                 )?;
+                if is_visibility(uri) {
+                    // Back to the file on disk (unsaved edits are dropped).
+                    session.visibility = None;
+                    reload_visibility(session);
+                    republish_all(session, writer)?;
+                } else if closed == Some(LanguageId::Config) {
+                    // The others read the file on disk again.
+                    republish_all(session, writer)?;
+                }
             }
         }
         "textDocument/hover" => {
@@ -359,18 +374,35 @@ fn handle_did_open(session: &mut Session, writer: &mut impl Write, params: &Valu
     let lang = params
         .pointer("/textDocument/languageId")
         .and_then(|v| v.as_str());
+    let Some(language) = session.language_for(uri, lang) else {
+        // Not a document this server reads (`Cargo.toml`).
+        return Ok(());
+    };
+    // A byte-order mark is not text: the editor counts no column for it.
+    let text = opentide_core::strip_bom(text).to_string();
+    session.docs.insert(uri.to_string(), (language, text));
+    document_changed(session, writer, uri, language)
+}
+
+/// Publish what an opened or edited document changes. `visibility.toml`
+/// declares datasets every open document is checked against, and one
+/// configuration file changes what another may say (a `deployment.toml`
+/// status names what `sharing.toml` may share), so those re-check every open
+/// document. Anything else re-checks itself.
+fn document_changed(
+    session: &mut Session,
+    writer: &mut impl Write,
+    uri: &str,
+    language: LanguageId,
+) -> Result<()> {
     if is_visibility(uri) {
-        session.visibility = Some(text.to_string());
+        session.visibility = session.docs.get(uri).map(|(_, text)| text.clone());
         return visibility_edited(session, writer);
     }
-    let language = session.language_for(uri, lang);
-    // A byte-order mark is not text: the editor counts no column for it.
-    let text = opentide_core::strip_bom(text);
-    session
-        .docs
-        .insert(uri.to_string(), (language, text.to_string()));
-    publish_diagnostics(session, writer, uri)?;
-    Ok(())
+    if language == LanguageId::Config {
+        return republish_all(session, writer);
+    }
+    publish_diagnostics(session, writer, uri)
 }
 
 /// Whether `uri` is the workspace's `visibility.toml`.
@@ -382,10 +414,21 @@ fn is_visibility(uri: &str) -> bool {
 
 /// `visibility.toml` changed in the editor: its declared datasets apply at
 /// once, and every open document is checked again. A buffer that is not
-/// TOML yet (mid-edit) keeps the declarations in use.
+/// TOML yet (mid-edit) keeps the declarations in use; the configuration
+/// documents, `visibility.toml` among them, are still checked again.
 fn visibility_edited(session: &mut Session, writer: &mut impl Write) -> Result<()> {
     if install_visibility(session.visibility.as_deref()).is_ok() {
-        republish_all(session, writer)?;
+        return republish_all(session, writer);
+    }
+    let mut uris: Vec<String> = session
+        .docs
+        .iter()
+        .filter(|(_, (language, _))| *language == LanguageId::Config)
+        .map(|(uri, _)| uri.clone())
+        .collect();
+    uris.sort();
+    for uri in uris {
+        publish_diagnostics(session, writer, &uri)?;
     }
     Ok(())
 }
@@ -421,21 +464,14 @@ fn handle_did_change(session: &mut Session, writer: &mut impl Write, params: &Va
         .pointer("/textDocument/uri")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    if is_visibility(uri) {
-        let changes = params
-            .get("contentChanges")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default();
-        let current = session.visibility.clone().unwrap_or_default();
-        session.visibility = Some(apply_content_changes(&current, &changes));
-        return visibility_edited(session, writer);
-    }
-    let language = session
+    let Some(language) = session
         .docs
         .get(uri)
         .map(|(l, _)| *l)
-        .unwrap_or(LanguageId::TideYaml);
+        .or_else(|| session.language_for(uri, None))
+    else {
+        return Ok(());
+    };
     let current = session
         .docs
         .get(uri)
@@ -449,8 +485,7 @@ fn handle_did_change(session: &mut Session, writer: &mut impl Write, params: &Va
     let text = apply_content_changes(&current, &changes);
     let text = opentide_core::strip_bom(&text).to_string();
     session.docs.insert(uri.to_string(), (language, text));
-    publish_diagnostics(session, writer, uri)?;
-    Ok(())
+    document_changed(session, writer, uri, language)
 }
 
 fn apply_content_changes(text: &str, changes: &[Value]) -> String {
@@ -545,9 +580,15 @@ fn publish_diagnostics(session: &Session, writer: &mut impl Write, uri: &str) ->
 }
 
 fn handle_hover(session: &Session, params: &Value) -> Value {
-    let Some((_uri, language, text, pos)) = doc_pos(session, params) else {
+    let Some((uri, language, text, pos)) = doc_pos(session, params) else {
         return Value::Null;
     };
+    if language == LanguageId::Config {
+        let offset = position_to_offset(&text, pos);
+        return configuration_hover(&uri_to_path(&uri), &text, offset)
+            .map(|value| json!({ "contents": { "kind": "markdown", "value": value } }))
+            .unwrap_or(Value::Null);
+    }
     let host = session.host();
     hover(&host, language, &text, pos)
         .map(|value| json!({ "contents": { "kind": "markdown", "value": value } }))
@@ -555,7 +596,7 @@ fn handle_hover(session: &Session, params: &Value) -> Value {
 }
 
 fn handle_completion(session: &Session, params: &Value) -> Value {
-    let Some((_uri, language, text, pos)) = doc_pos(session, params) else {
+    let Some((uri, language, text, pos)) = doc_pos(session, params) else {
         return json!([]);
     };
     let offset = position_to_offset(&text, pos);
@@ -571,7 +612,12 @@ fn handle_completion(session: &Session, params: &Value) -> Value {
         "line": pos.line,
         "character": pos.character.saturating_sub(dotted.encode_utf16().count() as u32),
     });
-    let items: Vec<Value> = completions(&host, language, &text, offset)
+    let found = if language == LanguageId::Config {
+        configuration_completions(&uri_to_path(&uri), &text, offset)
+    } else {
+        completions(&host, language, &text, offset)
+    };
+    let items: Vec<Value> = found
         .into_iter()
         .map(|c| {
             let edit = (c.label.contains('.') && !dotted.is_empty() && c.label.starts_with(dotted))
@@ -1488,26 +1534,38 @@ mod tests {
     #[test]
     fn language_for_ignores_unknown_ids_and_sql() {
         let session = Session::default();
+        let lang = |uri: &str, reported: Option<&str>| session.language_for(uri, reported);
         assert_eq!(
-            session.language_for("file:///q.sql", Some("sql")),
-            LanguageId::TideYaml
+            lang("file:///q.sql", Some("sql")),
+            Some(LanguageId::TideYaml)
         );
         assert_eq!(
-            session.language_for("file:///q.kql", Some("not-a-language")),
-            LanguageId::Kql
+            lang("file:///q.kql", Some("not-a-language")),
+            Some(LanguageId::Kql)
         );
+        assert_eq!(lang("file:///q.yaml", Some("kusto")), Some(LanguageId::Kql));
+        assert_eq!(lang("file:///q.spl", Some("SPL")), Some(LanguageId::Spl));
+        assert_eq!(lang("file:///q.txt", None), Some(LanguageId::TideYaml));
+    }
+
+    #[test]
+    fn configuration_toml_is_opentide_config_and_other_toml_is_not_read() {
+        let session = Session::default();
+        let lang = |uri: &str, reported: Option<&str>| session.language_for(uri, reported);
+        let sharing = "file:///w/.opentide/configurations/sharing.toml";
+        assert_eq!(lang(sharing, Some("toml")), Some(LanguageId::Config));
+        assert_eq!(lang(sharing, Some("kql")), Some(LanguageId::Config));
         assert_eq!(
-            session.language_for("file:///q.yaml", Some("kusto")),
-            LanguageId::Kql
+            lang(
+                "file:///w/.opentide/configurations/platforms/sentinel.toml",
+                None
+            ),
+            Some(LanguageId::Config)
         );
-        assert_eq!(
-            session.language_for("file:///q.spl", Some("SPL")),
-            LanguageId::Spl
-        );
-        assert_eq!(
-            session.language_for("file:///q.txt", None),
-            LanguageId::TideYaml
-        );
+        assert_eq!(lang("file:///w/Cargo.toml", Some("toml")), None);
+        assert_eq!(lang("file:///w/pyproject.toml", None), None);
+        // The id alone does not make a file a configuration file.
+        assert_eq!(lang("file:///w/Cargo.toml", Some("opentide-config")), None);
     }
 
     #[test]

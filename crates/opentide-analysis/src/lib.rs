@@ -11,6 +11,14 @@ pub use opentide_core::datasets::{
 pub use visibility::{DatasetEdit, VISIBILITY_CONFIGURATION, declare_dataset};
 
 mod visibility;
+
+pub mod config;
+pub use config::{
+    CONFIGURATIONS_DIRECTORY, ConfigChecker, ConfigIssue, ConfigRequest, configuration_completions,
+    configuration_diagnostics, configuration_hover, configuration_path, has_configuration_checker,
+    has_configuration_schemas, install_configuration_schemas, is_configuration_path,
+    set_configuration_checker,
+};
 pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
@@ -154,6 +162,20 @@ pub fn analyze_with_index(
             AnalyzeResponse {
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Config => {
+            // The other open configuration buffers: an unsaved
+            // deployment.toml decides what sharing.toml may name.
+            let open: Vec<(String, String)> = host
+                .documents()
+                .into_iter()
+                .filter(|(path, _)| path != &request.uri && is_configuration_path(path))
+                .collect();
+            AnalyzeResponse {
+                diagnostics: configuration_diagnostics(&request.uri, &request.text, &open),
+                tokens: Vec::new(),
                 symbols: Vec::new(),
             }
         }
@@ -481,7 +503,8 @@ fn query_hover(
             .or_else(|| ecs::hover(text, offset_at_position(text, position))),
         LanguageId::Lucene => opentide_lucene::hover(text, position)
             .or_else(|| ecs::hover(text, offset_at_position(text, position))),
-        LanguageId::TideYaml => None,
+        // Configuration hover needs the file's path: configuration_hover.
+        LanguageId::TideYaml | LanguageId::Config => None,
     }
 }
 
@@ -523,7 +546,8 @@ fn query_completions(
             ecs::complete(language, text, offset, &mut items);
             items
         }
-        LanguageId::TideYaml => Vec::new(),
+        // Configuration completion needs the file's path: configuration_completions.
+        LanguageId::TideYaml | LanguageId::Config => Vec::new(),
     }
 }
 
@@ -568,7 +592,7 @@ fn query_signature_help(
         LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::Esql => opentide_esql::signature_help(text, offset),
         LanguageId::Eql => opentide_eql::signature_help(text, offset),
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::TideYaml => None,
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::TideYaml | LanguageId::Config => None,
     }
 }
 
