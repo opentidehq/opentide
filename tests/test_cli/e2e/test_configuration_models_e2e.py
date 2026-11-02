@@ -81,23 +81,21 @@ def test_validate_check_configuration_alone(invoke_cli) -> None:
 
 _DECLARING = """\
 [[logsources]]
-name = "VNet flow logs"
+name = "NTANetAnalytics"
 description = "Traffic analytics."
 system = "sentinel"
-tables = ["NTANetAnalytics", "*_CL"]
+
+[logsources.columns]
+Bytes_d = { type = "real" }
 
 [[logsources]]
-name = "Endpoint telemetry"
+name = "logs-endpoint.events.*"
 description = "ECS endpoint data."
 system = "elastic"
-indices = ["logs-endpoint.events.*"]
-ecs = true
 """
 
 
-def test_a_dataset_field_of_another_system_fails_validate(
-    invoke_cli, tide_corpus_repo: Path
-) -> None:
+def test_a_column_type_of_another_system_fails_validate(invoke_cli, tide_corpus_repo: Path) -> None:
     _write(tide_corpus_repo, "visibility.toml", _DECLARING.replace('"sentinel"', '"splunk"'))
     result = invoke_cli("validate", "--check", "configuration")
     assert result.exit_code == 1, result.stdout + result.stderr
@@ -105,6 +103,36 @@ def test_a_dataset_field_of_another_system_fails_validate(
     assert payload["checks"]["configuration"]["status"] == "failed"
     issues = [i for i in payload["report"]["issues"] if i["object_type"] == "configuration"]
     assert [(i["code"], i["field_path"], i["context"]["file"]) for i in issues] == [
-        ("schema_validation", ["logsources", "0", "tables"], "visibility.toml")
+        (
+            "schema_validation",
+            ["logsources", "0", "columns", "Bytes_d", "type"],
+            "visibility.toml",
+        )
     ]
-    assert "applies to a log source of sentinel, defender_for_endpoint" in issues[0]["message"]
+    assert "is not a splunk type" in issues[0]["message"]
+
+
+def test_a_log_source_with_columns_validates(invoke_cli, tide_corpus_repo: Path) -> None:
+    _write(tide_corpus_repo, "visibility.toml", _DECLARING)
+    result = invoke_cli("validate", "--check", "configuration")
+    assert result.exit_code == 0, result.stdout + result.stderr
+
+
+def test_a_0_20_0_dataset_list_fails_validate_saying_what_to_do(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    """#718: the plural lists are not visibility::1.0; the message says what replaces them."""
+    plural = _DECLARING.replace(
+        'name = "NTANetAnalytics"', 'name = "Flows"\ntables = ["NTANetAnalytics"]'
+    ).replace('Bytes_d = { type = "real" }\n', "")
+    plural = plural.replace("[logsources.columns]\n", "")
+    _write(tide_corpus_repo, "visibility.toml", plural)
+    result = invoke_cli("validate", "--check", "configuration")
+    assert result.exit_code == 1, result.stdout + result.stderr
+    issues = [
+        i for i in parse_cli_json(result)["report"]["issues"] if i["object_type"] == "configuration"
+    ]
+    assert [(i["code"], i["field_path"]) for i in issues] == [
+        ("schema_validation", ["logsources", "0", "tables"])
+    ]
+    assert "whose `name` is the table" in issues[0]["message"]

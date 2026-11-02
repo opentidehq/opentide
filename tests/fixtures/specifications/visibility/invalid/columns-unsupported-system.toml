@@ -1,0 +1,7 @@
+[[logsources]]
+name = "Badge readers"
+description = "Physical access logs"
+system = "sentinel_one"
+
+[logsources.columns]
+BadgeId = { type = "string" }

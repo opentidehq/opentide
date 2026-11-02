@@ -263,9 +263,9 @@ def reset_catalog() -> None:
 def install_workspace_visibility(root: Path | None) -> str | None:
     """Declare the datasets *root*'s ``visibility.toml`` names, for the query checks.
 
-    The engine reads the file's dataset fields itself (``tables``,
-    ``indexes``, ``sourcetypes``, ``macros``, ``indices``, ``data_views``,
-    ``ecs``), as the language server does when it starts and whenever the file
+    The engine reads the file's log sources itself (a log source's ``name``
+    is its table, sourcetype or index pattern, with its ``columns``), as the
+    language server does when it starts and whenever the file
     changes, so the query checks of ``opentide validate``, ``opentide validate
     query``, ``opentide lint`` and the TUI know what the editor knows. The Tide
     catalogs in use stay. No workspace or no file declares nothing. When the

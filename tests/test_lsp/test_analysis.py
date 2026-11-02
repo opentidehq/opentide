@@ -315,15 +315,27 @@ def test_the_language_server_checks_the_revision_an_object_names(
     assert _shape(tmp_path, legacy) == []
 
 
-# Declared datasets (#695) -------------------------------------------------------
+# Declared datasets (#695, #718) -------------------------------------------------
 
 DECLARING = """\
 [[logsources]]
-name = "VNet flow logs"
+name = "NTANetAnalytics"
 description = "Traffic analytics."
 system = "sentinel"
-tables = ["NTANetAnalytics", "*_CL"]
+
+[[logsources]]
+name = "*_CL"
+description = "Custom tables."
+system = "sentinel"
 """
+
+#: The pinned engine (language-server 0.7.0) still reads the 0.20.0 plural
+#: lists, so it declares nothing from a log source's `name`. These flip
+#: when opentide pins the engine that reads visibility::1.0's singular keys.
+NEEDS_ENGINE = pytest.mark.xfail(
+    reason="needs language-server with visibility::1.0 singular datasets (language-server#146)",
+    strict=True,
+)
 
 
 def _declare(root: Path, text: str = DECLARING) -> None:
@@ -336,6 +348,7 @@ def _table(name: str) -> str:
     return engine().dataset_status("sentinel", "tables", name)
 
 
+@NEEDS_ENGINE
 def test_the_workspace_catalog_declares_what_visibility_names(
     tmp_path: Path, bundled_catalog: None
 ) -> None:
@@ -358,6 +371,7 @@ def test_the_workspace_catalog_declares_what_visibility_names(
     assert _table("Other") == "unchecked"
 
 
+@NEEDS_ENGINE
 def test_the_committed_catalog_keeps_the_declared_datasets(
     tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
@@ -366,6 +380,7 @@ def test_the_committed_catalog_keeps_the_declared_datasets(
     assert _table("Other") == "undeclared"
 
 
+@NEEDS_ENGINE
 def test_the_query_checks_read_visibility_and_keep_the_fields(
     tmp_path: Path, bundled_catalog: None, no_own_catalog: None
 ) -> None:
@@ -392,6 +407,7 @@ def test_the_query_checks_read_visibility_and_keep_the_fields(
     assert _table("Other") == "undeclared"
 
 
+@NEEDS_ENGINE
 def test_a_visibility_that_is_not_toml_declares_nothing_and_says_why(
     tmp_path: Path, bundled_catalog: None
 ) -> None:
@@ -402,12 +418,13 @@ def test_a_visibility_that_is_not_toml_declares_nothing_and_says_why(
     problem = analysis.install_workspace_visibility(tmp_path)
     assert problem is not None and problem.startswith("the declared datasets could not be read")
     assert _table("Other") == "unchecked"
-    # A field of another system is validate's error; the engine ignores it.
-    _declare(tmp_path, DECLARING.replace("tables", "indexes"))
+    # Splunk names declare sourcetypes: nothing for Sentinel.
+    _declare(tmp_path, DECLARING.replace('"sentinel"', '"splunk"'))
     assert analysis.install_workspace_visibility(tmp_path) is None
     assert _table("Other") == "unchecked"
 
 
+@NEEDS_ENGINE
 def test_the_engine_takes_visibility_text_in_each_layer(bundled_catalog: None) -> None:
     """``install_visibility`` and ``install_catalog`` declare over ``set_default_catalog``."""
     engine().set_default_catalog(visibility=DECLARING)

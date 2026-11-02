@@ -391,46 +391,47 @@ _Vocabulary_ : `{source_vocab}`
     # ==================================================================
 
     class Logsources:
-        """Resolve log source entries from visibility configuration."""
+        """Resolve log source entries from visibility configuration.
 
-        def resolve(self, *, qualified: bool = True) -> tuple[list[str], list[str]] | None:
+        A signal names a log source as ``<name>``, ``<system>::<name>`` or
+        ``<system>::<tenant>::<name>``. A name two systems declare
+        (`DeviceEvents` for `sentinel` and `defender_for_endpoint`) is one bare
+        value that refers to both, and its description covers both.
+        """
+
+        @staticmethod
+        def _describe(ls, asset_map: dict) -> str:
+            text = f"### {ls.name}\n**System**: {ls.system}\n**Description**: {ls.description}\n\n"
+            if ls.tenants:
+                text += "**Tenants**: " + ", ".join(ls.tenants) + "\n\n"
+            if ls.assets:
+                text += "### Associated Assets:\n"
+                for a in ls.assets:
+                    text += VocabularyResolver._format_asset(a, asset_map) + "\n"
+            return text
+
+        def resolve(self) -> tuple[list[str], list[str]] | None:
             visibility = VocabularyResolver._visibility()
             if not visibility or not visibility.logsources:
                 return None
             asset_map = VocabularyResolver._asset_map(visibility)
             enums: list[str] = []
             descriptions: list[str] = []
-
+            qualified: list[tuple[str, str]] = []
             for ls in visibility.logsources:
-                base = (
-                    f"### {ls.name}\n**System**: {ls.system}\n**Description**: {ls.description}\n\n"
-                )
-                if ls.assets:
-                    base += "### Associated Assets:\n"
-                    for a in ls.assets:
-                        base += VocabularyResolver._format_asset(a, asset_map) + "\n"
-
-                # Signal logsources are authored as the visibility ``name``.
-                # Qualified ``system::name`` values stay for the visibility schema.
-                if not qualified:
-                    if ls.name not in enums:
-                        enums.append(ls.name)
-                        descriptions.append(base)
-                    continue
-
-                if ls.tenants:
-                    for tenant in ls.tenants:
-                        enums.append(f"{ls.system}::{tenant}::{ls.name}")
-                        descriptions.append(
-                            base.replace(
-                                "**System**:",
-                                f"**System**: {ls.system}\n**Tenant**: {tenant}",
-                            )
-                        )
+                text = self._describe(ls, asset_map)
+                if ls.name in enums:
+                    descriptions[enums.index(ls.name)] += "---\n\n" + text
                 else:
-                    enums.append(f"{ls.system}::{ls.name}")
-                    descriptions.append(base)
-
+                    enums.append(ls.name)
+                    descriptions.append(text)
+                qualified.append((f"{ls.system}::{ls.name}", text))
+                for tenant in ls.tenants or []:
+                    qualified.append((f"{ls.system}::{tenant}::{ls.name}", text))
+            for value, text in qualified:
+                if value not in enums:
+                    enums.append(value)
+                    descriptions.append(text)
             return enums, descriptions
 
     # ==================================================================
@@ -788,11 +789,8 @@ def gen_json_schema(dictionary: dict[str, Any], *, schema_id: str | None = None)
                     dictionary[field]["properties"] = temp
 
                 # Handles retrieval of logsources
-                logsource_names = dict_foo[field].get("tide.config.visibility.logsource-names")
-                if dict_foo[field].get("tide.config.visibility.logsources") or logsource_names:
-                    logsources_result = VocabularyResolver.Logsources().resolve(
-                        qualified=not logsource_names
-                    )
+                if dict_foo[field].get("tide.config.visibility.logsource-names"):
+                    logsources_result = VocabularyResolver.Logsources().resolve()
                     if logsources_result:
                         enums, descriptions = logsources_result
                         dictionary[field]["items"] = {}

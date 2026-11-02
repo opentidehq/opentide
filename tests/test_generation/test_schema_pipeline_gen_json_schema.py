@@ -7,18 +7,6 @@ from unittest.mock import MagicMock, patch
 from opentide.generation import schema_pipeline as sp
 
 
-def test_gen_json_schema_resolves_logsources_array() -> None:
-    schema = {"sources": {"type": "array", "tide.config.visibility.logsources": True}}
-    with patch.object(
-        sp.VocabularyResolver.Logsources,
-        "resolve",
-        return_value=(["sentinel::logs"], ["Log source"]),
-    ) as resolve:
-        result = sp.gen_json_schema(schema)
-    assert result["sources"]["items"]["enum"] == ["sentinel::logs"]
-    resolve.assert_called_once_with(qualified=True)
-
-
 def test_gen_json_schema_resolves_logsource_names() -> None:
     schema = {"sources": {"type": "array", "tide.config.visibility.logsource-names": True}}
     with patch.object(
@@ -28,7 +16,7 @@ def test_gen_json_schema_resolves_logsource_names() -> None:
     ) as resolve:
         result = sp.gen_json_schema(schema)
     assert result["sources"]["items"]["enum"] == ["Placeholder Logsource"]
-    resolve.assert_called_once_with(qualified=False)
+    resolve.assert_called_once_with()
 
 
 def test_gen_json_schema_resolves_detectors_string() -> None:

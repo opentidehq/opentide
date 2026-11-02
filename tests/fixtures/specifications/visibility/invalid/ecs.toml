@@ -1,0 +1,5 @@
+[[logsources]]
+name = "logs-endpoint.events.*"
+description = "Endpoint telemetry"
+system = "elastic"
+ecs = true
