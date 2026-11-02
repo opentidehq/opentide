@@ -764,3 +764,41 @@ class ElasticMachineLearning(TideModel):
     create jobs."""
     anomaly_threshold: int
     """Anomaly score cutoff on Kibana's 0–100 scale."""
+
+
+# --- Sysdig Secure (platform::sysdig::1.0) ---------------------------------------------
+
+
+class SysdigException(TideModel):
+    name: str
+    """Exception name, unique in the block."""
+    fields: str | list[str]
+    """One Falco field (the single-field form) or a list of fields (the tuple form)."""
+    comps: str | list[str] | None = None
+    """Comparison operators. Tuple form: a list aligned with `fields`; default `=` for each field.
+    Single-field form: one of `in`, `pmatch`, or `intersects`; default `in`."""
+    values: list[Any] | None = None
+    """Tuple form: a list of rows, each a list aligned with `fields`. Where the aligned comparison
+    is `in`, `pmatch`, or `intersects`, the item is a list. Single-field form: a flat list of
+    values."""
+
+
+class SysdigMacro(TideModel):
+    name: str
+    """Macro name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
+    condition: str = TideField(schema_extra={"tide.template.multiline": True})
+    """Falco condition. It may reference other macros and lists of this block."""
+
+
+class SysdigList(TideModel):
+    name: str
+    """List name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
+    items: list[str | int | float]
+    """List items. An item may name another list of this block."""
+
+
+class SysdigPluginVersion(TideModel):
+    name: str
+    """Plugin name (`k8saudit`, `cloudtrail`)."""
+    version: str
+    """Minimum plugin version, semver."""

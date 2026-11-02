@@ -1,0 +1,24 @@
+{
+  "description": "A shell was used as the entrypoint or exec point into a container with an attached terminal. Common when using kubectl exec in Kubernetes.",
+  "details": {
+    "append": false,
+    "condition": {
+      "components": [],
+      "condition": "spawned_process and container and shell_procs and proc.tty != 0 and container_entrypoint and not container.image.repository in (busybox, registry.example.com/ops/toolbox)"
+    },
+    "exceptions": [
+      {
+        "comps": ["=", "startswith"],
+        "fields": ["proc.pname", "container.image.repository"],
+        "name": "known_shell_parents",
+        "values": [["kubectl", "registry.example.com/ops/"]]
+      }
+    ],
+    "output": "A shell was spawned in a container with an attached terminal | user=%user.name process=%proc.name parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id image=%container.image.repository",
+    "priority": "notice",
+    "ruleType": "FALCO",
+    "source": "syscall"
+  },
+  "name": "Terminal shell in container",
+  "tags": ["container", "shell", "T1059.004", "mitre_execution", "maturity_incubating"]
+}

@@ -23,6 +23,7 @@ class DetectionPlatforms(Enum):
     CROWDSTRIKE = auto()
     HARFANGLAB = auto()
     ELASTIC = auto()
+    SYSDIG = auto()
 
 
 DetectionSystems = DetectionPlatforms

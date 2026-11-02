@@ -1,0 +1,41 @@
+  #enabled: false
+  #name: 
+  schema: platform::sysdig::1.0
+  status: 
+  #flags:
+    #- 
+  #tenants:
+    #- 
+  #contributors:
+    #- 
+
+  condition: |
+    ...
+  #append_to_rule: 
+  #source: 
+  #output: 
+  #priority: 
+  #tags:
+    #- 
+  #exceptions:
+    #- name: 
+      #fields:
+        #- 
+      #comps:
+        #- 
+      #values:
+        #- 
+  #macros:
+    #- name: 
+      #condition: |
+        #...
+  #lists:
+    #- name: 
+      #items:
+        #- 
+  #policies:
+    #- 
+  #required_engine_version: 
+  #required_plugin_versions:
+    #- name: 
+      #version: 

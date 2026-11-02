@@ -127,6 +127,7 @@ defender_for_endpoint = "opentide.platforms.defender_for_endpoint:declare"
 sentinel_one = "opentide.platforms.sentinel_one:declare"
 harfanglab = "opentide.platforms.harfanglab:declare"
 elastic = "opentide.platforms.elastic:declare"
+sysdig = "opentide.platforms.sysdig:declare"
 
 [tool.hatch.version]
 source = "vcs"

@@ -15,6 +15,7 @@ from opentide.models.platform import (
     SentinelConfig,
     SentinelOneConfig,
     SplunkConfig,
+    SysdigConfig,
 )
 
 _COMMON_PLATFORM_EXTRAS: dict[str, Any] = {
@@ -177,6 +178,14 @@ _PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
             "tenants": {"tide.config.system.tenants": "elastic"},
         },
     },
+    SysdigConfig: {
+        "required": ["status"],
+        "property_extras": {
+            **_COMMON_PLATFORM_EXTRAS["property_extras"],
+            "platform_schema": {"default": "platform::sysdig::1.0"},
+            "tenants": {"tide.config.system.tenants": "sysdig"},
+        },
+    },
 }
 
 
@@ -201,5 +210,6 @@ def platform_model_for_subschema_name(subschema_name: str) -> type[TideModel] | 
         "HarfangLab": HarfangLabConfig,
         "CBC EDR Sub Schema": CarbonBlackConfig,
         "Elastic Security": ElasticConfig,
+        "Sysdig Secure": SysdigConfig,
     }
     return mapping.get(subschema_name)

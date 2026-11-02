@@ -1,0 +1,33 @@
+name: Console Login Without MFA
+metadata:
+  uuid: 4c1a7e93-2d5b-4f08-8e6c-3b9a1d7f5e40
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A console login without MFA, from AWS CloudTrail.
+techniques:
+- T1078
+response:
+  alert_severity: Critical
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    source: aws_cloudtrail
+    condition: >
+      ct.name="ConsoleLogin" and not ct.error exists
+      and ct.user.identitytype!="AssumedRole"
+      and json.value[/responseElements/ConsoleLogin]="Success"
+      and json.value[/additionalEventData/MFAUsed]="No"
+    output: >
+      Detected a console login without MFA
+      (requesting user=%ct.user, requesting IP=%ct.srcip, AWS region=%ct.region)
+    required_plugin_versions:
+    - name: cloudtrail
+      version: 0.12.0
+    tags: [cloud, aws, aws_console, aws_iam]

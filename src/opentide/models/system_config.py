@@ -247,6 +247,24 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None = None
 
+        @dataclass
+        class Sysdig(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    #: ``api`` (Sysdig Secure) or ``file`` (Falco rules files).
+                    delivery: str = "api"
+                    url: str = ""
+                    api_token: str = ""
+                    policies: Sequence[str] | None = None
+                    rules_dir: str = ""
+                    tags: Sequence[str] | None = None
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -301,3 +319,7 @@ class TenantDeployment:
     @dataclass
     class Elastic(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Elastic.Tenant
+
+    @dataclass
+    class Sysdig(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.Sysdig.Tenant

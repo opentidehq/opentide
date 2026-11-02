@@ -1,0 +1,40 @@
+name: Netcat Remote Code Execution in Container
+metadata:
+  uuid: 5d2f6a1e-8b4c-4e7a-9f13-2c6b8e0d4a71
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Netcat runs inside a container with an option that executes a program on
+  connection, the usual reverse shell payload.
+techniques:
+- T1059
+references:
+  public:
+    1: https://github.com/falcosecurity/rules/blob/main/rules/falco_rules.yaml
+response:
+  alert_severity: Medium
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: STAGING
+    condition: >
+      spawned_process
+      and container
+      and ((proc.name = "nc" and (proc.cmdline contains " -e" or
+                                  proc.cmdline contains " -c")) or
+           (proc.name = "ncat" and (proc.args contains "--sh-exec" or
+                                    proc.args contains "--exec" or proc.args contains "-e " or
+                                    proc.args contains "-c " or proc.args contains "--lua-exec"))
+           )
+    output: >
+      Netcat runs inside container that allows remote code execution |
+      evt_type=%evt.type user=%user.name user_uid=%user.uid
+      user_loginuid=%user.loginuid process=%proc.name proc_exepath=%proc.exepath
+      parent=%proc.pname command=%proc.cmdline terminal=%proc.tty
+      exe_flags=%evt.arg.flags
+    tags: [container, network, process]

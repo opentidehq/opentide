@@ -12,6 +12,7 @@ reports any other drift.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, cast
 
@@ -57,6 +58,10 @@ from opentide.models.platform_configs import (
     SplunkActions,
     SplunkScheduling,
     SplunkTrigger,
+    SysdigException,
+    SysdigList,
+    SysdigMacro,
+    SysdigPluginVersion,
 )
 from opentide.models.splunk_legacy import SPLUNK_V2_KEYS, normalize_splunk_v2
 from opentide.platforms.elastic.durations import duration_seconds
@@ -569,6 +574,215 @@ class ElasticConfig(PlatformConfigBase):
         return raw
 
 
+_FALCO_PRIORITIES = frozenset(
+    {
+        "emergency",
+        "alert",
+        "critical",
+        "error",
+        "warning",
+        "notice",
+        "informational",
+        "info",
+        "debug",
+    }
+)
+_FALCO_SOURCE = re.compile(r"[a-z][a-z0-9_]*")
+_MULTI_VALUE_COMPS = frozenset({"in", "pmatch", "intersects"})
+#: Keys a tuning inherits from the rule it tunes (``sysdig_tuning_keys``).
+_TUNING_FORBIDDEN = ("output", "priority", "policies", "source", "name")
+
+
+def _non_blank(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _sysdig_exception_codes(exceptions: Any) -> set[str]:
+    """``sysdig_exception_shape`` for each malformed entry of ``exceptions``."""
+    from opentide.platforms.sysdig.expansion import EXCEPTION_OPERATORS
+
+    if exceptions is None:
+        return set()
+    if not isinstance(exceptions, list):
+        return {"sysdig_exception_shape"}
+    names: set[str] = set()
+    for entry in exceptions:
+        if not isinstance(entry, dict) or not _non_blank(entry.get("name")):
+            return {"sysdig_exception_shape"}
+        if entry["name"] in names:
+            return {"sysdig_exception_shape"}
+        names.add(entry["name"])
+        fields = entry.get("fields")
+        comps = entry.get("comps")
+        values = entry.get("values")
+        if isinstance(fields, str):
+            if not fields.strip():
+                return {"sysdig_exception_shape"}
+            if comps is not None and comps not in _MULTI_VALUE_COMPS:
+                return {"sysdig_exception_shape"}
+            if values is not None and (
+                not isinstance(values, list) or any(isinstance(v, (list, dict)) for v in values)
+            ):
+                return {"sysdig_exception_shape"}
+            continue
+        if (
+            not isinstance(fields, list)
+            or not fields
+            or not all(_non_blank(f) for f in fields)
+            or len(set(fields)) != len(fields)
+        ):
+            return {"sysdig_exception_shape"}
+        if comps is None:
+            comp_list = ["="] * len(fields)
+        elif isinstance(comps, list) and len(comps) == len(fields):
+            comp_list = comps
+        else:
+            return {"sysdig_exception_shape"}
+        if not all(isinstance(c, str) and c in EXCEPTION_OPERATORS for c in comp_list):
+            return {"sysdig_exception_shape"}
+        if values is None:
+            continue
+        if not isinstance(values, list):
+            return {"sysdig_exception_shape"}
+        for row in values:
+            if not isinstance(row, list) or len(row) != len(fields):
+                return {"sysdig_exception_shape"}
+            for comp, item in zip(comp_list, row, strict=True):
+                if comp in _MULTI_VALUE_COMPS and not isinstance(item, list):
+                    return {"sysdig_exception_shape"}
+    return set()
+
+
+def _sysdig_definitions(
+    raw: dict[str, Any], codes: set[str]
+) -> tuple[dict[str, str], dict[str, list[Any]]]:
+    """The block's macros and lists by name; ``sysdig_definition_*`` codes into *codes*."""
+    from opentide.platforms.sysdig.expansion import DEFINITION_NAME, RESERVED_WORDS
+
+    macros: dict[str, str] = {}
+    lists: dict[str, list[Any]] = {}
+    seen: set[str] = set()
+    for key, target in (("macros", macros), ("lists", lists)):
+        entries = raw.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue  # the field type reports it
+            name = entry.get("name")
+            if not isinstance(name, str):
+                continue
+            if not DEFINITION_NAME.fullmatch(name) or name in RESERVED_WORDS:
+                codes.add("sysdig_definition_name")
+            if name in seen:
+                codes.add("sysdig_definition_duplicate")
+            seen.add(name)
+            body = entry.get("condition") if key == "macros" else entry.get("items")
+            wanted = str if key == "macros" else list
+            if isinstance(body, wanted):
+                target[name] = body
+    return macros, lists
+
+
+class SysdigConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::sysdig::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    condition: str | None = TideField(
+        None,
+        schema_extra={
+            "tide.template.multiline": True,
+            "tide.template.spacer": True,
+            "tide.template.required": True,
+        },
+    )
+    """Falco condition. Required for a new rule. With `append_to_rule`, the text appended to the
+    tuned rule's condition, usually starting with `and not`. Multiline; deploy joins lines with
+    single spaces."""
+    append_to_rule: str | None = None
+    """Name of an existing Falco or Sysdig rule this block tunes."""
+    source: str | None = None
+    """Falco event source: `syscall` (the default), `k8s_audit`, `aws_cloudtrail`,
+    `gcp_auditlog`, `azure_platformlogs`, `okta`, `github`, or another plugin's source."""
+    output: str | None = None
+    """Falco output template, with `%field` references. Derived from the event source when
+    omitted."""
+    priority: str | None = None
+    """Falco priority: `EMERGENCY`, `ALERT`, `CRITICAL`, `ERROR`, `WARNING`, `NOTICE`,
+    `INFORMATIONAL`, or `DEBUG`. Derived from `response.alert_severity` when omitted."""
+    tags: list[str] | None = None
+    """Extra Falco tags. Deploy adds the derived ATT&CK, maturity, and tenant tags."""
+    exceptions: list[SysdigException] | None = None
+    """Falco exceptions."""
+    macros: list[SysdigMacro] | None = None
+    """Macros only this rule uses, expanded into the condition at deploy."""
+    lists: list[SysdigList] | None = None
+    """Lists only this rule uses, expanded into the condition at deploy."""
+    policies: list[str] | None = None
+    """Names of Sysdig runtime policies the rule joins (`api` delivery). Default: the tenant
+    `policies`."""
+    required_engine_version: str | None = None
+    """Falco engine version the rule needs (`0.39.0`), written to rules files."""
+    required_plugin_versions: list[SysdigPluginVersion] | None = None
+    """Plugins the rule needs, written to rules files."""
+
+    @property
+    def is_tuning(self) -> bool:
+        """Whether the block tunes an existing rule (`append_to_rule`)."""
+        return bool(self.append_to_rule)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_sysdig_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        codes: set[str] = set()
+        tuning = raw.get("append_to_rule")
+        condition = raw.get("condition")
+        if tuning is None:
+            if not _non_blank(condition):
+                codes.add("sysdig_rule_shape")
+        else:
+            has_condition = _non_blank(condition)
+            exceptions = raw.get("exceptions")
+            if (
+                not _non_blank(tuning)
+                or (condition is not None and not has_condition)
+                or not (has_condition or (isinstance(exceptions, list) and exceptions))
+            ):
+                codes.add("sysdig_rule_shape")
+            if any(raw.get(key) not in (None, "") for key in _TUNING_FORBIDDEN):
+                codes.add("sysdig_tuning_keys")
+        priority = raw.get("priority")
+        if priority is not None and (
+            not isinstance(priority, str) or priority.strip().lower() not in _FALCO_PRIORITIES
+        ):
+            codes.add("sysdig_priority")
+        source = raw.get("source")
+        if source is not None and (
+            not isinstance(source, str) or not _FALCO_SOURCE.fullmatch(source)
+        ):
+            codes.add("sysdig_source")
+        codes |= _sysdig_exception_codes(raw.get("exceptions"))
+        macros, lists = _sysdig_definitions(raw, codes)
+        if "sysdig_definition_duplicate" not in codes and "sysdig_definition_name" not in codes:
+            from opentide.platforms.sysdig.expansion import ExpansionError, check_cycles
+
+            try:
+                check_cycles(macros, lists, [condition] if isinstance(condition, str) else [])
+            except ExpansionError as exc:
+                codes.add(exc.code)
+        if codes:
+            raise ValueError(
+                f"SysdigConfig validation failed with code(s): {', '.join(sorted(codes))}"
+            )
+        return raw
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -578,6 +792,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "harfanglab": HarfangLabConfig,
     "carbon_black_cloud": CarbonBlackConfig,
     "elastic": ElasticConfig,
+    "sysdig": SysdigConfig,
 }
 
 
@@ -607,6 +822,8 @@ class RuleConfigurations(TideModel):
     """Carbon Black Cloud watchlist report (`platform::carbon_black_cloud::1.0`)."""
     elastic: ElasticConfig | None = None
     """Elastic Security detection rule (`platform::elastic::1.0`)."""
+    sysdig: SysdigConfig | None = None
+    """Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."""
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

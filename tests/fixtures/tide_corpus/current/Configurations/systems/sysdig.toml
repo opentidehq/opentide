@@ -1,0 +1,15 @@
+[platform]
+enabled = true
+identifier = "sysdig"
+name = "Sysdig Secure"
+subschema = "Sysdig Secure"
+
+[[tenants]]
+name = "staging"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+delivery = "api"
+url = "https://eu1.app.sysdig.example"
+api_token = "$SYSDIG_SECURE_API_TOKEN"
+policies = ["opentide managed detections"]

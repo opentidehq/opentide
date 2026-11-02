@@ -8,9 +8,9 @@ tenant loads, not here.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from opentide.models.configuration.base import (
     ConfigurationModel,
@@ -398,6 +398,59 @@ class ElasticConfiguration(PlatformConfigurationBase):
     tenants: list[ElasticTenant] = Field(default_factory=list, description="Elastic tenants.")
 
 
+# --- Sysdig Secure --------------------------------------------------------------------
+
+
+class SysdigSetup(TenantSetup):
+    """`[tenants.setup]` for Sysdig Secure (`api`) or Falco rules files (`file`)."""
+
+    delivery: Literal["api", "file"] = Field(
+        default="api",
+        description="api: Sysdig Secure custom Falco rules. file: one Falco rules file per rule.",
+    )
+    url: str | None = Field(
+        default=None,
+        description="Sysdig Secure base URL for the account's region. Required for api.",
+    )
+    api_token: EnvPlaceholder | None = Field(
+        default=None, description="Sysdig Secure API token. Must be a $NAME placeholder."
+    )
+    policies: list[str] = Field(
+        default_factory=list,
+        description="Runtime policies every new rule joins when its block names none (api).",
+    )
+    rules_dir: str | None = Field(
+        default=None,
+        description=(
+            "Directory that receives the rules files. Relative to the workspace root. "
+            "Required for file."
+        ),
+    )
+    tags: list[str] | None = Field(default=None, description="Tags added to every rule.")
+
+    @model_validator(mode="after")
+    def _delivery_keys(self) -> SysdigSetup:
+        if self.delivery == "api":
+            missing = [key for key in ("url", "api_token") if not getattr(self, key)]
+            if missing:
+                raise ValueError(f"delivery api needs {', '.join(missing)}")
+        elif not self.rules_dir:
+            raise ValueError("delivery file needs rules_dir")
+        return self
+
+
+class SysdigTenant(TenantBase):
+    """`[[tenants]]` for Sysdig Secure."""
+
+    setup: SysdigSetup = Field(description="Connection settings.")
+
+
+class SysdigConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/sysdig.toml`."""
+
+    tenants: list[SysdigTenant] = Field(default_factory=list, description="Sysdig tenants.")
+
+
 # --- Any other platform file ----------------------------------------------------------
 
 
@@ -441,4 +494,5 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "crowdstrike": CrowdstrikeConfiguration,
     "harfanglab": HarfangLabConfiguration,
     "elastic": ElasticConfiguration,
+    "sysdig": SysdigConfiguration,
 }

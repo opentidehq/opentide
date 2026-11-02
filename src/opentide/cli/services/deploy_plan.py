@@ -5,11 +5,11 @@ tenant yet), with one action:
 
 ``create`` / ``update``
     Platforms that keep vendor ids in ``.opentide/states/deployment/``
-    (CrowdStrike, Defender for Endpoint, SentinelOne): ``update`` when the
+    (CrowdStrike, Defender for Endpoint, SentinelOne, Sysdig ``api`` tenants): ``update`` when the
     shard holds an id for the tenant, otherwise ``create``.
 ``upsert``
     Platforms that address a rule by its own UUID (Sentinel, Splunk, Elastic,
-    Carbon Black, HarfangLab) write it whether or not it exists; opentide
+    Carbon Black, HarfangLab, Sysdig ``file`` tenants) write it whether or not it exists; opentide
     cannot tell a create from an update without asking the vendor, so it does
     not claim either.
 ``disable`` / ``delete``
@@ -84,6 +84,19 @@ def _rule_status(rule: Any, platform: str) -> str:
     return str(getattr(config, "status", "") or "")
 
 
+def _stateless_tenant(platform: str, tenant: str | None) -> bool:
+    """A Sysdig ``file`` tenant: its rules files are named by uuid, with no vendor id."""
+    if platform != "sysdig" or tenant is None:
+        return False
+    try:
+        from opentide.core.registry import Opentide
+
+        tenants = Opentide.Configurations.Systems.Sysdig.tenants or []
+    except Exception:
+        return False
+    return any(t.name == tenant and t.setup.delivery == "file" for t in tenants)
+
+
 def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action:
     from opentide.models.deployment_enums import StatusStrategy
     from opentide.states.deployment import STATE_PLATFORMS, DeploymentState
@@ -98,7 +111,7 @@ def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action
         return "delete"
     if strategy is StatusStrategy.DISABLEMENT:
         return "disable"
-    if platform not in STATE_PLATFORMS:
+    if platform not in STATE_PLATFORMS or _stateless_tenant(platform, tenant):
         return "upsert"
     if tenant is None:
         return "create"

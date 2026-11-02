@@ -29,10 +29,22 @@ from opentide.core.root import OPENTIDE_DIR
 SCHEMA_ID = "deployment.state::1.0"
 
 #: Platforms whose deployer addresses the remote rule by a vendor-assigned id.
-STATE_PLATFORMS: tuple[str, ...] = ("crowdstrike", "defender_for_endpoint", "sentinel_one")
+STATE_PLATFORMS: tuple[str, ...] = (
+    "crowdstrike",
+    "defender_for_endpoint",
+    "sentinel_one",
+    "sysdig",
+)
+
+#: Platforms whose legacy rule-YAML ids ``opentide deploy migrate-state`` moves into shards.
+#: Sysdig is state-backed but never had a legacy key: one found on its block is dropped
+#: as ``external_id_unused`` like any other platform's.
+MIGRATED_PLATFORMS: tuple[str, ...] = ("crowdstrike", "defender_for_endpoint", "sentinel_one")
 
 #: Platforms whose external id is a canonical decimal integer, stored as a string.
-INTEGER_ID_PLATFORMS: frozenset[str] = frozenset({"defender_for_endpoint", "sentinel_one"})
+INTEGER_ID_PLATFORMS: frozenset[str] = frozenset(
+    {"defender_for_endpoint", "sentinel_one", "sysdig"}
+)
 
 #: Platform-block keys that used to carry the vendor id on the rule.
 LEGACY_MAP_KEYS: tuple[str, ...] = ("rule_id", "rule_id_bundle")

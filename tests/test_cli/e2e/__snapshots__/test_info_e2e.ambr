@@ -3,7 +3,7 @@
   dict({
     'counts': dict({
       'objectives': 1,
-      'rules': 9,
+      'rules': 10,
       'threats': 1,
     }),
     'platforms': list([
@@ -62,6 +62,13 @@
         'can_validate': True,
         'enabled': True,
         'name': 'splunk',
+      }),
+      dict({
+        'can_deploy': True,
+        'can_query': False,
+        'can_validate': False,
+        'enabled': True,
+        'name': 'sysdig',
       }),
     ]),
   })

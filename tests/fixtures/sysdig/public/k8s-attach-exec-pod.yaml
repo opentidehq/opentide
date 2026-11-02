@@ -1,0 +1,40 @@
+name: Attach or exec to a pod
+metadata:
+  uuid: 2b8e4d16-9c3a-4f57-b0e1-6a4d2c8f1b93
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Any attempt to attach or exec into a pod, from Kubernetes audit logs.
+techniques:
+- T1609
+response:
+  alert_severity: Low
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: STAGING
+    name: Attach/Exec Pod
+    source: k8s_audit
+    condition: >
+      kevt_started and pod_subresource and (kcreate or kget)
+      and ka.target.subresource in (exec,attach)
+      and not user_known_exec_pod_activities
+    output: >
+      Attach/Exec to pod (user=%ka.user.name pod=%ka.target.name
+      resource=%ka.target.resource ns=%ka.target.namespace
+      action=%ka.target.subresource command=%ka.uri.param[command])
+    macros:
+    - name: user_known_exec_pod_activities
+      condition: ka.user.name in (break_glass_users)
+    lists:
+    - name: break_glass_users
+      items: [oncall-admin, "system:serviceaccount:ops:debugger"]
+    required_plugin_versions:
+    - name: k8saudit
+      version: 0.7.0
+    tags: [k8s]

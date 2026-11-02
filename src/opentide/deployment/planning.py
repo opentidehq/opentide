@@ -142,6 +142,8 @@ class TideDeployment:
                 return registry.Opentide.Configurations.Systems.HarfangLab
             case DetectionPlatforms.ELASTIC:
                 return registry.Opentide.Configurations.Systems.Elastic
+            case DetectionPlatforms.SYSDIG:
+                return registry.Opentide.Configurations.Systems.Sysdig
         raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
 
     def mdr_configuration_resolver(
@@ -167,6 +169,8 @@ class TideDeployment:
                     mdr_config = configurations.carbon_black_cloud
                 case DetectionPlatforms.ELASTIC:
                     mdr_config = configurations.elastic
+                case DetectionPlatforms.SYSDIG:
+                    mdr_config = configurations.sysdig
                 case _:
                     logger.critical(
                         "could_not_resolve_rule_configuration_for_system", detail=str(system)
