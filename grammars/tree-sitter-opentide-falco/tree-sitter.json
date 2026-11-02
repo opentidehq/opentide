@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_falco",
+      "camelcase": "OpentideFalco",
+      "scope": "source.falco",
+      "file-types": ["falco"],
+      "highlights": "../../highlights/queries/falco/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

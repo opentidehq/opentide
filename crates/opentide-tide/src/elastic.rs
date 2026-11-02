@@ -267,7 +267,7 @@ pub(crate) fn stack_target(
 
 /// Range of the key at `path` (`["configurations", "elastic", ...]`), or of
 /// the nearest ancestor key that is written.
-fn path_range(source: &str, path: &[&str]) -> Range {
+pub(crate) fn path_range(source: &str, path: &[&str]) -> Range {
     let keys = mapping_keys(source);
     for depth in (1..=path.len()).rev() {
         let want = &path[..depth];

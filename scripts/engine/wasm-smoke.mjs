@@ -23,6 +23,7 @@ if (mode === 'imports') {
     eql: 'process where process.name : "cmd.exe"',
     kuery: 'event.category:process and not user.name:SYSTEM',
     lucene: 'event.category:process AND process.name:/power.*/',
+    falco: 'spawned_process and container and proc.name in (shell_binaries)',
   };
   for (const [id, text] of Object.entries(samples)) {
     const result = wasm.highlight(id, new TextEncoder().encode(text));

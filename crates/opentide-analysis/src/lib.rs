@@ -157,6 +157,14 @@ pub fn analyze_with_index(
                 symbols: Vec::new(),
             }
         }
+        LanguageId::Falco => {
+            let r = opentide_falco::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
         LanguageId::TideYaml => {
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
@@ -454,6 +462,10 @@ pub fn hover(
             let offset = offset_at_position(text, position);
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
                 let inner_pos = position_at_offset(&inj.inner, inner);
+                if inj.language == LanguageId::Falco {
+                    let ctx = opentide_tide::falco_context(text, &inj.field_path);
+                    return opentide_falco::hover(&inj.inner, inner_pos, &ctx);
+                }
                 return query_hover(inj.language, &inj.inner, inner_pos, &inj.platform);
             }
             let workspace = index_workspace(host);
@@ -481,6 +493,7 @@ fn query_hover(
             .or_else(|| ecs::hover(text, offset_at_position(text, position))),
         LanguageId::Lucene => opentide_lucene::hover(text, position)
             .or_else(|| ecs::hover(text, offset_at_position(text, position))),
+        LanguageId::Falco => opentide_falco::hover(text, position, &Default::default()),
         LanguageId::TideYaml => None,
     }
 }
@@ -495,6 +508,13 @@ pub fn completions(
         LanguageId::TideYaml => {
             let (text, offset) = opentide_core::strip_bom_at(text, offset);
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
+                if inj.language == LanguageId::Falco {
+                    let ctx = opentide_tide::falco_context(text, &inj.field_path);
+                    if inj.field_path.last().map(String::as_str) == Some("output") {
+                        return Vec::new();
+                    }
+                    return opentide_falco::completions(&inj.inner, inner, &ctx);
+                }
                 return query_completions(inj.language, &inj.inner, inner, &inj.platform);
             }
             let workspace = index_workspace(host);
@@ -523,6 +543,7 @@ fn query_completions(
             ecs::complete(language, text, offset, &mut items);
             items
         }
+        LanguageId::Falco => opentide_falco::completions(text, offset, &Default::default()),
         LanguageId::TideYaml => Vec::new(),
     }
 }
@@ -568,7 +589,7 @@ fn query_signature_help(
         LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::Esql => opentide_esql::signature_help(text, offset),
         LanguageId::Eql => opentide_eql::signature_help(text, offset),
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::TideYaml => None,
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco | LanguageId::TideYaml => None,
     }
 }
 

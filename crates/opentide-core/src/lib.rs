@@ -28,6 +28,9 @@ pub enum LanguageId {
     /// Lucene query string syntax (Elastic `language: lucene`).
     #[serde(rename = "lucene", alias = "opentide-lucene")]
     Lucene,
+    /// Falco rule conditions (Sysdig Secure `configurations.sysdig`).
+    #[serde(rename = "falco", alias = "opentide-falco")]
+    Falco,
 }
 
 impl LanguageId {
@@ -40,6 +43,7 @@ impl LanguageId {
             Self::Eql => "eql",
             Self::Kuery => "kuery",
             Self::Lucene => "lucene",
+            Self::Falco => "falco",
         }
     }
 
@@ -52,6 +56,7 @@ impl LanguageId {
             "eql" | "opentide-eql" | "EQL" => Some(Self::Eql),
             "kuery" | "opentide-kuery" | "kibana-kql" => Some(Self::Kuery),
             "lucene" | "opentide-lucene" | "Lucene" => Some(Self::Lucene),
+            "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
             _ => None,
         }
     }
@@ -66,18 +71,20 @@ impl LanguageId {
             "eql" => Some(Self::Eql),
             "kuery" => Some(Self::Kuery),
             "lucene" => Some(Self::Lucene),
+            "falco" => Some(Self::Falco),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 6] = [
+    pub const QUERY_LANGUAGES: [Self; 7] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
         Self::Eql,
         Self::Kuery,
         Self::Lucene,
+        Self::Falco,
     ];
 }
 
@@ -500,6 +507,16 @@ pub mod codes {
     pub const ECS_TYPE_MISMATCH: &str = "ecs_type_mismatch";
     pub const ECS_UNKNOWN_FIELD: &str = "ecs_unknown_field";
     pub const ELASTIC_DATASET_NOT_DECLARED: &str = "elastic_dataset_not_declared";
+    // Falco conditions (sysdig-1.0, "Falco language").
+    pub const FALCO_PARSE_ERROR: &str = "falco_parse_error";
+    pub const FALCO_UNKNOWN_FIELD: &str = "falco_unknown_field";
+    pub const FALCO_UNKNOWN_MACRO: &str = "falco_unknown_macro";
+    pub const FALCO_UNKNOWN_LIST: &str = "falco_unknown_list";
+    pub const FALCO_MISPLACED_LIST: &str = "falco_misplaced_list";
+    pub const FALCO_TYPE_MISMATCH: &str = "falco_type_mismatch";
+    pub const FALCO_UNKNOWN_EVENT: &str = "falco_unknown_event";
+    pub const FALCO_UNKNOWN_SOURCE: &str = "falco_unknown_source";
+    pub const FALCO_APPEND_CONDITION: &str = "falco_append_condition";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -599,6 +616,15 @@ pub mod codes {
         ECS_TYPE_MISMATCH,
         ECS_UNKNOWN_FIELD,
         ELASTIC_DATASET_NOT_DECLARED,
+        FALCO_PARSE_ERROR,
+        FALCO_UNKNOWN_FIELD,
+        FALCO_UNKNOWN_MACRO,
+        FALCO_UNKNOWN_LIST,
+        FALCO_MISPLACED_LIST,
+        FALCO_TYPE_MISMATCH,
+        FALCO_UNKNOWN_EVENT,
+        FALCO_UNKNOWN_SOURCE,
+        FALCO_APPEND_CONDITION,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -805,6 +831,31 @@ pub mod codes {
             ELASTIC_DATASET_NOT_DECLARED => {
                 "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml."
             }
+            FALCO_PARSE_ERROR => "The Falco condition does not parse.",
+            FALCO_UNKNOWN_FIELD => {
+                "The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it."
+            }
+            FALCO_UNKNOWN_MACRO => {
+                "The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros."
+            }
+            FALCO_UNKNOWN_LIST => {
+                "The name after `in`, `intersects`, or `pmatch` is not a list of the block or of the Falco default rules."
+            }
+            FALCO_MISPLACED_LIST => {
+                "A list is used where Falco expects a macro: a list belongs inside a value list, `in (name)`."
+            }
+            FALCO_TYPE_MISMATCH => {
+                "The operator or value does not apply to the field's type, which Falco rejects when it loads the rule."
+            }
+            FALCO_UNKNOWN_EVENT => {
+                "The event type is not a Falco syscall, tracepoint, plugin, or meta event."
+            }
+            FALCO_UNKNOWN_SOURCE => {
+                "The event source is not one Falco or its published plugins define, so its fields are not checked."
+            }
+            FALCO_APPEND_CONDITION => {
+                "A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not."
+            }
             _ => return None,
         })
     }
@@ -884,6 +935,8 @@ mod tests {
         assert_eq!(LanguageId::parse("esql"), Some(LanguageId::Esql));
         assert_eq!(LanguageId::from_extension("sql"), None);
         assert_eq!(LanguageId::from_extension("eql"), Some(LanguageId::Eql));
+        assert_eq!(LanguageId::from_extension("falco"), Some(LanguageId::Falco));
+        assert_eq!(LanguageId::parse("falco"), Some(LanguageId::Falco));
     }
 
     #[test]

@@ -31,4 +31,5 @@ assets = [
     "grammars/tree-sitter-opentide-eql/src",
     "grammars/tree-sitter-opentide-kuery/src",
     "grammars/tree-sitter-opentide-lucene/src",
+    "grammars/tree-sitter-opentide-falco/src",
 ]
