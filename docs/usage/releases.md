@@ -7,6 +7,35 @@ description: Public package versions of opentide on PyPI.
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.20.0 — 2 November 2026
+
+Minor release. `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns, a workspace's `visibility.toml` declares its own tables, indexes and index patterns, and `lint.toml` sets the filename convention. Run `opentide validate` after upgrading: a rule the platform compiler cannot build, or a query with a near miss of a documented column, now fails it.
+
+**Install**
+
+```bash
+pip install opentide==0.20.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **`validate` compiles each rule** a deploy would compile, with the dry run's offline compiler, and reports the key at fault (`compile_missing_field`, ...), so a rule that validates deploys.
+- **The query checks know tables and columns** ([language-server 0.7.0](https://github.com/opentidehq/language-server/releases/tag/v0.7.0)): `kql_unknown_column`, `kql_type_mismatch`, `spl_unknown_datamodel_field` and `ecs_type_mismatch` are errors; under Sentinel an unknown table is a warning. The Azure Monitor Logs, Defender XDR and ASIM tables are known, and KQL hover shows column descriptions.
+- **`visibility.toml` declares a log source's datasets** (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), read by `validate`, `lint`, `tui` and the language server.
+- **`lint.toml` sets the filename convention**: `[filenames] style` (`slug`, `name`, `none`) and `pattern`.
+- **Agent Plugins**: `opentide setup skills --plugin` enables the opentidehq/skills plugin for a project's Claude Code users, the MCP server finds the workspace when a plugin starts it, and `setup mcp --generic` writes an Agent Plugins 1.0.0 `mcp.json`.
+- **`validate query --live` runs on the `opentide query` runners**; the `VALIDATION_ERROR_RAISED` / `VALIDATION_WARNING_RAISED` environment flags are gone. Read the exit code instead.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0200--2026-11-02) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.20.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.20.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.19.0 — 29 October 2026
 
 Minor release. The language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. Run `opentide validate` after upgrading: a rule whose query the platform would reject now fails it.

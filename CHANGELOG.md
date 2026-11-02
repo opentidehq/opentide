@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-02
+
+Minor release: `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns (language-server 0.7.0), a workspace's `visibility.toml` declares its own datasets, and `lint.toml` sets the filename convention. It is a minor because `validate` can now fail a rule that passed under 0.19.0, and because `validate query --live` drops the `VALIDATION_*` environment flags and the `validation_exit_code` / `exit_on_validation_errors` helpers. After upgrading:
+
+- **Run `opentide validate`.** A rule the Sentinel or Elastic compiler cannot build (a Sentinel rule without `grouping.alert`, say) fails it where only its deploy failed before, and a query with a near miss of a documented column (`kql_unknown_column`), a type Kusto does not accept (`kql_type_mismatch`) or a near miss of a CIM field (`spl_unknown_datamodel_field`) is an error. `--queries warn` reports the queries as warnings while you fix them.
+- **Scripts that read `VALIDATION_ERROR_RAISED` or `VALIDATION_WARNING_RAISED`, or call `validation_exit_code`, read the exit code instead** (or `report_outcome(report)` from Python). `--json` and the exit codes are unchanged.
+- **Optionally, declare your own tables, indexes and index patterns** in `visibility.toml`, so the query checks know them.
+
 ### Added
 
 - **The MCP server finds your detection repository when an Agent Plugin starts it** ([#431](https://github.com/opentidehq/opentide/issues/431)). An Agent Plugins 1.0 client (VS Code, Cursor, GitHub Copilot) starts a plugin's server in the plugin's directory, so the [opentidehq/skills](https://github.com/opentidehq/skills) plugin's `opentide mcp start` served the skills package as an empty catalogue. Started in a directory whose `plugin.json` is an Agent Plugins manifest, the server now serves `OPENTIDE_REPO_ROOT` or `OPENTIDE_TIDE_WORKSPACE` when it names a workspace, the plugin directory when it is one, or else the host's project directory (`CLAUDE_PROJECT_DIR`, then `PWD`). With none, the catalogue tools and resources fail with `workspace_not_found` and say how to name the repository; `explain` and offline `validate_query` still answer. A server started anywhere else resolves its workspace as before. See [Agent Plugins](docs/mcp/configuration.md#agent-plugins).
@@ -1383,7 +1391,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/opentidehq/opentide/releases/tag/v0.20.0
 [0.19.0]: https://github.com/opentidehq/opentide/releases/tag/v0.19.0
 [0.18.0]: https://github.com/opentidehq/opentide/releases/tag/v0.18.0
 [0.17.2]: https://github.com/opentidehq/opentide/releases/tag/v0.17.2
