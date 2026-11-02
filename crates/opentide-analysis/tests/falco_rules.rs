@@ -5,8 +5,8 @@
 //! them; a fault in any of them is reported on the source text that holds it.
 //!
 //! Each file names the public rule it is converted from. The Tide checks of
-//! the object itself come from opentide's field catalog; this test asserts the
-//! Falco findings only.
+//! the object itself come from opentide's field catalog, which knows
+//! `configurations.sysdig`: every converted rule is clean end to end.
 
 use opentide_analysis::{
     AnalyzeRequest, LanguageId, MemoryWorkspace, Position, analyze, analyze_queries, codes,
@@ -66,6 +66,28 @@ fn falco_codes(path: &str, text: &str) -> Vec<(String, String)> {
         (d.code, at)
     })
     .collect()
+}
+
+#[test]
+fn the_converted_rules_have_no_finding_of_any_kind() {
+    for (path, text) in rules() {
+        let host = MemoryWorkspace {
+            files: vec![(path.clone(), text.clone())],
+        };
+        let found: Vec<String> = analyze(
+            &host,
+            AnalyzeRequest {
+                uri: path.clone(),
+                language: LanguageId::TideYaml,
+                text,
+            },
+        )
+        .diagnostics
+        .into_iter()
+        .map(|d| format!("{}: {}", d.code, d.message))
+        .collect();
+        assert!(found.is_empty(), "{path}: {found:?}");
+    }
 }
 
 fn position_of(text: &str, needle: &str) -> (usize, Position) {

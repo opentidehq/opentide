@@ -10,6 +10,9 @@ metadata:
   modified: '2026-11-02'
   tlp: clear
   author: Detection Engineering
+  organisation:
+    uuid: 5f3c2a10-7b6e-4c1d-9a8f-2e4b6d0c1a73
+    name: Detection Engineering
 description: |
   CI runners open shells in build containers on every job.
 response:
