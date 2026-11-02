@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Fixed
+
+- **MCP `validate_query` knows the datasets the workspace's `visibility.toml` declares** ([#720](https://github.com/opentidehq/opentide/issues/720)). The offline check ran the engine without the workspace's declarations, so an agent got other findings than `opentide validate query` and `lint` on the same query: a declared custom table was unknown (an error under `defender_for_endpoint`), and a table it did not declare was not reported. The tool now hands the engine `.opentide/configurations/visibility.toml` before each check, read afresh on every call so an edit applies at once; a server started as an Agent Plugin with no workspace declares nothing. See [validate_query](docs/mcp/tools.md#validate_query).
+
 ## [0.20.0] — 2026-11-02
 
 Minor release: `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns (language-server 0.7.0), a workspace's `visibility.toml` declares its own datasets, and `lint.toml` sets the filename convention. It is a minor because `validate` can now fail a rule that passed under 0.19.0, and because `validate query --live` drops the `VALIDATION_*` environment flags and the `validation_exit_code` / `exit_on_validation_errors` helpers. After upgrading:

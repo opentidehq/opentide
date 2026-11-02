@@ -111,6 +111,15 @@ def apply_plugin_launch(launch: PluginLaunch | None) -> None:
     get_repo_root.cache_clear()
 
 
+def served_workspace() -> Path | None:
+    """The workspace the server serves, or ``None`` when an Agent Plugin launch found none."""
+    if _problem is not None:
+        return None
+    from opentide.registry.discovery import discover_workspace
+
+    return discover_workspace()
+
+
 def require_workspace() -> None:
     """Refuse a catalogue tool or resource when the server has no workspace."""
     if _problem is not None:
