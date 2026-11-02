@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.20.1] — 2026-11-03
+
+Patch release. A `visibility.toml` log source is one dataset, named by its `name` and declaring its columns, and the query checks read them ([language-server 0.7.1](https://github.com/opentidehq/language-server/releases/tag/v0.7.1)); `lint` checks files that start with a UTF-8 byte-order mark, MCP `validate_query` reads `visibility.toml`, and `lint.toml` sets the filename convention per object kind. A patch by maintainer decision, although the release-management rule makes a change to accepted input a minor: the 0.20.0 `visibility.toml` dataset lists were a defect of `visibility::1.0`, shipped the same day, and are corrected in place. After upgrading, a workspace that used the 0.20.0 dataset lists (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), which now fail validation with a message that says what to do, rewrites `visibility.toml` with one `[[logsources]]` per table, sourcetype or index pattern, named after it, and updates the signals' `data.logsources` references to the new names ([Upgrading from 0.20.0](docs/usage/configuration.md#upgrading-from-0200)). Everything else needs nothing.
+
 ### Added
 
 - **`lint.toml` sets the filename convention per object kind** ([#721](https://github.com/opentidehq/opentide/issues/721)). `[filenames] style` and `pattern` applied to every kind, so a catalogue whose rules keep their name as the file stem (`[SEN][Identity]Some rule[TenantA].yaml`) while threats and objectives use slugs had to fall back to `style = "none"` and one pattern for both shapes. `[filenames.threats]`, `[filenames.objectives]` and `[filenames.rules]` now take `style` and `pattern` for that kind; a key a kind's table leaves unset comes from `[filenames]`, and a kind without a table follows `[filenames]` as before. `lint` compares, renames under `--fix` and pattern-checks each file by its own kind's convention, and `opentide new <kind>` names the file by its kind's `style` (its pattern warning names the table the pattern came from). A table for another kind, or a key other than `style` and `pattern` in a kind's table, exits `2` naming it. Without a kind table nothing changes. See [A convention per object kind](docs/cli/lint.md#a-convention-per-object-kind).
@@ -19,6 +23,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **`opentide lint` checks the queries of an object file that starts with a UTF-8 byte-order mark** ([#719](https://github.com/opentidehq/opentide/issues/719)). `lint` read object files as `utf-8`, so the BOM reached the engine, which found no query in the file: none of that rule's queries was analysed, and `lint` reported nothing for it while `validate` did. Object and query files are now read as `utf-8-sig` wherever opentide hands their text to the engine or parses them (`lint`, `validate`, `validate query`, `tui`, code frames, `opentide query --query-file`), so a BOM changes no finding. A query file (`.kql`, `.spl`, ...) that starts with one no longer has its line-1 findings one column off.
 - **MCP `validate_query` knows the datasets the workspace's `visibility.toml` declares** ([#720](https://github.com/opentidehq/opentide/issues/720)). The offline check ran the engine without the workspace's declarations, so an agent got other findings than `opentide validate query` and `lint` on the same query: a declared custom table was unknown (an error under `defender_for_endpoint`), and a table it did not declare was not reported. The tool now hands the engine `.opentide/configurations/visibility.toml` before each check, read afresh on every call so an edit applies at once; a server started as an Agent Plugin with no workspace declares nothing. See [validate_query](docs/mcp/tools.md#validate_query).
 - **A `visibility.toml` log source is one dataset, named by its `name`, with its columns: `visibility::1.0` is corrected in place** ([#718](https://github.com/opentidehq/opentide/issues/718), [opentidehq/specifications#63](https://github.com/opentidehq/specifications/issues/63)). 0.20.0 let one log source list datasets (`tables = ["A", "B"]`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), so a workspace that declared its tables had to invent groups for them ("Custom tables"), signals then named those groups in `data.logsources`, and a dataset had nowhere to declare its columns. A log source's `name` is now its dataset: the KQL table (`sentinel`, `defender_for_endpoint`), the sourcetype (`splunk`), the index pattern (`elastic`); Splunk indexes and macros and Elastic data views are no longer declarable. It takes `name`, `description`, `system`, `tenants`, `assets`, `references` and `columns`, a table keyed by column name whose values set `type` (from the system's type set) and an optional `description`. Names are unique per `system`. The 0.20.0 keys fail validation (`schema_validation` on the key) with a message that says what to do instead. A name two systems declare is offered once to signals and describes both, where the first one used to hide the other. The bundled `visibility.toml` declares no log source (it held a placeholder) and shows one commented example per platform, one with columns; the `*_not_declared` explain pages say what the engine does: the warning is for a name no log source declares once the system has one, including a table the engine knows. The schema identifier stays `visibility::1.0`. The query checks read the new shape, and the declared columns, once opentide pins the language-server release that carries [opentidehq/language-server#146](https://github.com/opentidehq/language-server/issues/146). **Upgrade:** a workspace that declared datasets in 0.20.0 rewrites `visibility.toml` with one `[[logsources]]` per table, sourcetype or index pattern, named after it, removes `indexes`, `macros`, `data_views` and `ecs`, and updates the signals' `data.logsources` references to the new names. See [Upgrading from 0.20.0](docs/usage/configuration.md#upgrading-from-0200).
+
+### Install
+
+```bash
+pip install opentide==0.20.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.20.0] — 2026-11-02
 
@@ -1405,7 +1417,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/opentidehq/opentide/releases/tag/v0.20.1
 [0.20.0]: https://github.com/opentidehq/opentide/releases/tag/v0.20.0
 [0.19.0]: https://github.com/opentidehq/opentide/releases/tag/v0.19.0
 [0.18.0]: https://github.com/opentidehq/opentide/releases/tag/v0.18.0
