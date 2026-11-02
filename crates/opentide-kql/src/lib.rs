@@ -1224,6 +1224,19 @@ fn is_fuzzy_union(node: Node, source: &str) -> bool {
         })
 }
 
+/// A name in the form of an ASIM parser (`_Im_Dns`, `_ASim_Dns`, `imDns`,
+/// `ASimDns`, `vimDnsMicrosoftOMS`), when the catalog does not list it: a
+/// workspace may deploy parsers of its own.
+fn asim_shaped(name: &str) -> bool {
+    if name.starts_with("_Im_") || name.starts_with("_ASim_") {
+        return true;
+    }
+    ["im", "vim", "ASim"].iter().any(|prefix| {
+        name.strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_uppercase()))
+    })
+}
+
 /// The platform whose `visibility.toml` declarations a profile reads.
 fn dataset_platform(profile: Profile) -> &'static str {
     match profile {
@@ -1246,19 +1259,31 @@ fn check_table(
     out: &mut Vec<Diagnostic>,
 ) {
     let table = &source[name.byte_range()];
-    if lets.contains(table)
+    // `let` bindings, tabular parameters, functions the engine knows
+    // (`_GetWatchlist`) and ASIM parsers are not tables.
+    if table.starts_with('$')
+        || lets.contains(table)
         || catalog.asim_parser(table).is_some()
+        || (catalog.profile == Profile::Sentinel && asim_shaped(table))
         || catalog.operator(table).is_some()
+        || catalog.functions.iter().any(|f| f.name == table)
     {
         return;
     }
     let known = catalog.table(table).is_some();
-    // A lower-case unknown name is more likely a workspace function.
-    if !known && !table.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
-        return;
-    }
     let platform = dataset_platform(catalog.profile);
     let datasets = opentide_core::datasets::current();
+    // Without declarations, a name that starts with a lower-case letter is
+    // more likely a workspace function; `_CL` still marks a custom table
+    // (#149). With them, a workspace function is declared like a table, so
+    // every name is checked whatever its case.
+    if !known
+        && !datasets.declares(platform)
+        && table.starts_with(|c: char| c.is_ascii_lowercase())
+        && !table.ends_with("_CL")
+    {
+        return;
+    }
     let range = node_range(source, at);
     let status = datasets.status(platform, table);
     // A near miss of a declared table, else of a catalog table.

@@ -54,6 +54,11 @@ description = "Vendor tables."
 system = "sentinel"
 
 [[logsources]]
+name = "myWorkspaceFunction"
+description = "A workspace function, declared like a table."
+system = "sentinel"
+
+[[logsources]]
 name = "SigninLogs"
 description = "Sign-ins."
 system = "sentinel"
@@ -78,6 +83,18 @@ fn declared_tables_are_known_and_undeclared_ones_warn_once_a_workspace_declares_
     assert_eq!(
         findings("sentinel", "SigninLogs | where ResultType > 5"),
         error(codes::KQL_TYPE_MISMATCH)
+    );
+    // Without declarations a lower-case name may be a workspace function,
+    // unless it ends in `_CL` (#149).
+    assert!(findings("sentinel", "myWorkspaceFunction | take 1").is_empty());
+    assert!(findings("sentinel", "otherFunction | take 1").is_empty());
+    assert_eq!(
+        findings("sentinel", "custom_CL | take 1"),
+        warning(codes::KQL_UNKNOWN_TABLE)
+    );
+    assert_eq!(
+        findings("defender_for_endpoint", "custom_CL | take 1"),
+        error(codes::KQL_UNKNOWN_TABLE)
     );
 
     // A Splunk sourcetype never makes a KQL table known.
@@ -160,6 +177,33 @@ tables = ["Custom_CL"]
         findings("sentinel", "Other_CL | take 1"),
         warning(codes::KQL_UNKNOWN_TABLE)
     );
+    // With declarations every source name is checked, whatever its case
+    // (#149), except `let` bindings, tabular parameters, functions the
+    // engine knows and ASIM parsers.
+    assert!(findings("sentinel", "myWorkspaceFunction | take 1").is_empty());
+    assert_eq!(
+        findings("sentinel", "otherFunction | take 1"),
+        warning(codes::KQL_UNKNOWN_TABLE)
+    );
+    assert_eq!(
+        findings("sentinel", "union Custom_CL, otherFunction | take 1"),
+        warning(codes::KQL_UNKNOWN_TABLE)
+    );
+    for query in [
+        "let recent = Custom_CL | take 1; recent | take 1",
+        "let f = (T:(TimeGenerated:datetime)) { T | take 1 }; f(Custom_CL)",
+        "_GetWatchlist('allow') | take 1",
+        "_Im_Dns | take 1",
+        "imDns | take 1",
+        "imMyOwnParser | take 1",
+        "_ASim_MyOwnParser | take 1",
+    ] {
+        assert!(
+            findings("sentinel", query).is_empty(),
+            "{query}: {:?}",
+            findings("sentinel", query)
+        );
+    }
 
     // Declared columns are checked as a documented table's: a near miss is
     // an unknown column, an operator the declared type lacks a mismatch.
