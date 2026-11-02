@@ -127,7 +127,7 @@ def is_placeholder_query(check: QueryCheck, lines: dict[Path, list[str]]) -> boo
     """
     if check.file_path not in lines:
         try:
-            lines[check.file_path] = check.file_path.read_text(encoding="utf-8").splitlines()
+            lines[check.file_path] = check.file_path.read_text(encoding="utf-8-sig").splitlines()
         except (OSError, UnicodeDecodeError):
             lines[check.file_path] = []
     text = lines[check.file_path]

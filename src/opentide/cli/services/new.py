@@ -205,7 +205,7 @@ def _object_files(root: Path) -> list[Path]:
 
 def _load(path: Path) -> dict[str, Any]:
     try:
-        data = parse_yaml(path.read_text(encoding="utf-8"))
+        data = parse_yaml(path.read_text(encoding="utf-8-sig"))
     except (yaml.YAMLError, UnicodeDecodeError, OSError):
         return {}
     return data if isinstance(data, dict) else {}

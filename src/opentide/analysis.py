@@ -392,7 +392,7 @@ def _install_committed_catalog(module: ModuleType, directory: Path | None) -> Ca
 
 def _read(path: Path) -> str | None:
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
         return None
 
@@ -448,7 +448,7 @@ def _unreadable(path: Path, text: str | None) -> UnreadableFile | None:
 
     if text is None:
         try:
-            path.read_text(encoding="utf-8")
+            path.read_text(encoding="utf-8-sig")
         except UnicodeDecodeError as exc:
             return UnreadableFile(path, not_utf8_problem(exc))
         except OSError as exc:
@@ -543,7 +543,7 @@ def check_query_file(path: Path, *, platform: str | None = None) -> QueryCheck |
     A file with no query is unreadable: there is nothing to pass.
     """
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except UnicodeDecodeError as exc:
         from opentide.core.io import not_utf8_problem
 
