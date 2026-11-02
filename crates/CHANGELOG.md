@@ -9,6 +9,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 ### Fixed
 
 - KQL: `project-reorder`, `project-away` and `project-keep` accept column patterns (`*`, `User*`, `*Id`), as Kusto does, instead of reporting `kql_parse_error` ([#148](https://github.com/opentidehq/language-server/issues/148)). The Sentinel threat-intelligence idiom `| project-reorder *, IsActive, ...` parses. A pattern is a glob over the input columns, never `kql_unknown_column`: `project-away User*` removes the columns it matches, `project-keep` keeps the columns a name or pattern matches, and `project-reorder` keeps every column.
+- A Tide document that starts with a UTF-8 byte-order mark (`EF BB BF`, as some Windows editors save) is analysed like the same document without it ([#150](https://github.com/opentidehq/language-server/issues/150)). Before, its YAML failed to parse, so none of its queries was checked, a mark right before `configurations` hid the queries from `analyze_queries`, and the object was missing from the workspace index. The engine (`opentide_tide::analyze`, `analyze_queries`, `extract_injections`, `index_object`, and hover and completion in `opentide-analysis`), the language server's open documents and workspace files, and the `analyze` and `highlight` commands drop the mark; offsets and positions are those of the text after it, as an editor shows them. `opentide_core::strip_bom` and `strip_bom_at` are the helpers.
 
 ## [0.7.0] - 2026-11-02
 

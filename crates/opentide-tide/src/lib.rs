@@ -105,7 +105,11 @@ pub struct InjectedQuery {
 }
 
 /// Locate the injected query (if any) covering a host byte offset.
+///
+/// Offsets are in the text after a leading byte-order mark
+/// ([`opentide_core::strip_bom`]); `offset` may count the mark.
 pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery, usize)> {
+    let (source, offset) = opentide_core::strip_bom_at(source, offset);
     for inj in extract_injections(source) {
         if let Some(inner) = inj.host_map.iter().position(|&h| h == offset) {
             return Some((inj, inner));
@@ -130,8 +134,12 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
 /// legacy `configurations.splunk.search`, Elastic's queries, and each hunt's
 /// `response.procedure.searches.<n>.query` in the language its `system`
 /// names ([`hunt_query_language`]). A drilldown search is not a query.
+///
+/// A leading byte-order mark is not part of the document: offsets are in the
+/// text after it ([`opentide_core::strip_bom`]), so positions are the ones an
+/// editor shows.
 pub fn extract_injections(source: &str) -> Vec<InjectedQuery> {
-    injection::extract_injections(source)
+    injection::extract_injections(opentide_core::strip_bom(source))
 }
 
 pub fn remap_span(query: &InjectedQuery, inner: ByteSpan) -> ByteSpan {
@@ -213,7 +221,13 @@ pub struct DocumentSymbol {
     pub detail: Option<String>,
 }
 
+/// Spans and ranges are in the text after a leading byte-order mark
+/// ([`opentide_core::strip_bom`]).
 pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
+    let input = AnalyzeInput {
+        source: opentide_core::strip_bom(input.source),
+        ..input
+    };
     let spec = HighlightSpec::load().expect("spec");
     let vocabs = bundled_vocabs();
     let mut diagnostics = Vec::new();
@@ -596,8 +610,10 @@ pub struct QueryAnalysis {
 /// Every query injected into a Tide object, each analyzed in its language,
 /// including queries with no diagnostic (so a host can count what it checked).
 /// The object's other fields are not checked. A file that is not YAML has no
-/// queries.
+/// queries. Spans and ranges are in the text after a leading byte-order mark
+/// ([`opentide_core::strip_bom`]).
 pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
+    let source = opentide_core::strip_bom(source);
     let configurations = serde_yaml::from_str::<TideObject>(source)
         .ok()
         .and_then(|object| object.configurations);
@@ -1598,7 +1614,7 @@ pub fn snippet(kind: &str) -> Option<&'static str> {
 }
 
 pub fn index_object(path: &str, source: &str) -> Option<IndexedObject> {
-    let value: serde_yaml::Value = serde_yaml::from_str(source).ok()?;
+    let value: serde_yaml::Value = serde_yaml::from_str(opentide_core::strip_bom(source)).ok()?;
     let meta = value.get("metadata")?;
     let uuid = meta.get("uuid")?.as_str()?.to_string();
     let schema = meta.get("schema")?.as_str().unwrap_or("");

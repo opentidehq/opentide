@@ -142,6 +142,22 @@ impl ByteSpan {
     }
 }
 
+/// The text of a document without its leading UTF-8 byte-order mark
+/// (U+FEFF, `EF BB BF`), if it has one. Some Windows editors save files with
+/// one; an editor neither shows it nor counts it as a column, so a document's
+/// offsets and positions are those of the text after it.
+pub fn strip_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+/// [`strip_bom`], with `offset` (a byte offset into `text`) moved onto the
+/// text it returns. An offset inside the mark is the start of the text.
+pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
+    let stripped = strip_bom(text);
+    let shift = text.len() - stripped.len();
+    (stripped, offset.saturating_sub(shift))
+}
+
 /// Convert a UTF-8 byte offset to an LSP position.
 pub fn offset_to_position(source: &str, offset: usize) -> Position {
     let offset = offset.min(source.len());
@@ -864,6 +880,24 @@ mod tests {
         assert_eq!(LanguageId::parse("esql"), Some(LanguageId::Esql));
         assert_eq!(LanguageId::from_extension("sql"), None);
         assert_eq!(LanguageId::from_extension("eql"), Some(LanguageId::Eql));
+    }
+
+    #[test]
+    fn a_byte_order_mark_is_not_text() {
+        let src = "\u{feff}a: é😀";
+        assert_eq!(strip_bom(src), "a: é😀");
+        assert_eq!(strip_bom("a: 1"), "a: 1");
+        // Only one leading mark is a byte-order mark.
+        assert_eq!(strip_bom("\u{feff}\u{feff}a"), "\u{feff}a");
+        assert_eq!(strip_bom("a\u{feff}"), "a\u{feff}");
+        assert_eq!(strip_bom_at(src, 4), ("a: é😀", 1));
+        assert_eq!(strip_bom_at(src, 1), ("a: é😀", 0));
+        assert_eq!(strip_bom_at("a: 1", 2), ("a: 1", 2));
+        let stripped = strip_bom(src);
+        assert_eq!(
+            offset_to_position(stripped, stripped.len()),
+            Position::new(0, 6)
+        );
     }
 
     #[test]
