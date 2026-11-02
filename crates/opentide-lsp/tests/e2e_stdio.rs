@@ -481,14 +481,17 @@ fn highlight_html_contains_spans() {
 
 #[test]
 fn tide_structure_methods_are_not_whole_buffer_stubs() {
+    // An empty root: the server indexes its workspace, and `/tmp` can hold anything.
+    let scratch = Scratch::new("structure");
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": "file:///tmp" }),
+        json!({ "capabilities": {}, "rootUri": format!("file://{}", scratch.0.display()) }),
     );
     lsp.notify("initialized", json!({}));
     let yaml = "name: Sentinel Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: clear\ndescription: |\n  hello\n  world\n";
-    let uri = "file:///tmp/struct-rule.yaml";
+    let uri = format!("file://{}", scratch.0.join("struct-rule.yaml").display());
+    let uri = uri.as_str();
     lsp.notify(
         "textDocument/didOpen",
         json!({
