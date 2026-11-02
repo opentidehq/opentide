@@ -30,6 +30,7 @@ def serve() -> int:
     if sys.stdin.isatty():
         print(TERMINAL_HINT, file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
     _supply_catalogs()
+    _supply_configuration_checks()
     failure: list[BaseException] = []
 
     def run() -> None:
@@ -72,5 +73,22 @@ def _supply_catalogs() -> None:
         print(  # noqa: T201 -- stderr, outside the protocol
             f"warning: opentide's catalogs could not be generated ({type(exc).__name__}: {exc}); "
             "using the workspace's, or the engine's bundled ones",
+            file=sys.stderr,
+        )
+
+
+def _supply_configuration_checks() -> None:
+    """Have the server check configuration TOML with this opentide's models.
+
+    Without them, the server reports nothing for `.opentide/configurations/`
+    files; stderr says why.
+    """
+    from opentide.analysis import install_configuration_checks
+
+    try:
+        install_configuration_checks()
+    except Exception as exc:  # the server still starts, without configuration checks
+        print(  # noqa: T201 -- stderr, outside the protocol
+            f"warning: configuration files will not be checked ({type(exc).__name__}: {exc})",
             file=sys.stderr,
         )

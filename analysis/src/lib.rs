@@ -8,8 +8,8 @@
 //! position is converted here, against the text it points into.
 
 use opentide_analysis::{
-    AnalyzeRequest, Catalog, Declaration, IndexedObject, LanguageId, MemoryWorkspace, QueryRequest,
-    Range, codes,
+    AnalyzeRequest, Catalog, ConfigIssue, ConfigRequest, Declaration, IndexedObject, LanguageId,
+    MemoryWorkspace, QueryRequest, Range, Severity, codes,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -250,6 +250,64 @@ fn set_default_catalog(
     .map_err(PyValueError::new_err)
 }
 
+/// Check configuration TOML (`.opentide/configurations/**/*.toml`) with
+/// `checker`, for the whole process; `None` removes it. The language server
+/// calls `checker(path, text, open)` for each configuration buffer, on its own
+/// thread, holding the GIL only for the call. `open` lists the other open
+/// configuration buffers as `(path, text)`. It returns
+/// `[(code, field_path, severity, message)]`, which the engine places on the
+/// buffer's keys. An exception, or a result of another shape, becomes one
+/// `config_check_failed` warning.
+#[pyfunction]
+#[pyo3(signature = (checker=None))]
+fn set_configuration_checker(checker: Option<Py<PyAny>>) {
+    let Some(checker) = checker else {
+        opentide_analysis::set_configuration_checker(None);
+        return;
+    };
+    opentide_analysis::set_configuration_checker(Some(Box::new(
+        move |request: &ConfigRequest<'_>| {
+            Python::attach(|py| {
+                let found = checker
+                    .call1(py, (request.path, request.text, request.open.to_vec()))
+                    .map_err(|err| err.to_string())?;
+                let issues: Vec<(String, Vec<String>, String, String)> =
+                    found
+                        .bind(py)
+                        .extract()
+                        .map_err(|err| format!("the checker returned {err}"))?;
+                issues
+                    .into_iter()
+                    .map(|(code, field_path, severity, message)| {
+                        let severity = Severity::parse(&severity)
+                            .ok_or_else(|| format!("unknown severity {severity:?} for {code}"))?;
+                        Ok(ConfigIssue {
+                            code,
+                            field_path,
+                            severity,
+                            message,
+                        })
+                    })
+                    .collect()
+            })
+        },
+    )));
+}
+
+/// Install the configuration schemas hover and completion read, for the
+/// whole process: the router (`configurations.router.json`) and the schema
+/// documents as `(file name, text)`. `None` removes them. Raises
+/// `ValueError`, and changes nothing, when a document is not JSON.
+#[pyfunction]
+#[pyo3(signature = (router=None, schemas=Vec::new()))]
+fn install_configuration_schemas(
+    router: Option<String>,
+    schemas: Vec<(String, String)>,
+) -> PyResult<()> {
+    opentide_analysis::install_configuration_schemas(router.as_deref(), &schemas)
+        .map_err(PyValueError::new_err)
+}
+
 /// Declare the datasets a workspace's `visibility.toml` (the file's text)
 /// names, leaving the Tide catalogs in use as they are. `None` declares none.
 /// Raises `ValueError`, and changes nothing, when the text is not TOML.
@@ -425,7 +483,8 @@ mod _native {
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
         catalog_version, dataset_status, describe_code, highlight, install_catalog,
-        install_visibility, language_for_path, serve_stdio, set_default_catalog, use_host_catalogs,
+        install_configuration_schemas, install_visibility, language_for_path, serve_stdio,
+        set_configuration_checker, set_default_catalog, use_host_catalogs,
     };
 
     #[pymodule_init]

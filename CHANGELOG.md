@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **The editor checks configuration files** ([#730](https://github.com/opentidehq/opentide/issues/730), [language-server#158](https://github.com/opentidehq/language-server/issues/158)). `opentide lsp start` checks each open TOML file under `.opentide/configurations/` with the models and checks `opentide validate` runs, as you type, and puts each finding on the key it names.
+  - The file is merged onto the bundled file and the parent instance first, so a partial override is not reported for keys it inherits.
+  - An open `deployment.toml`, saved or not, decides the statuses `sharing.toml` may name.
+  - Hover shows a key's title, type, description, allowed values and default, never its value. Completion offers keys and allowed values from the files' JSON Schema.
+  - Your editor's TOML grammar keeps highlighting. Turn other TOML language servers off for `.opentide/configurations/**`.
+
+  `opentide.validation.configuration.configuration_buffer_issues(path, text, open_buffers)` is the check the editor runs. See [Configuration files](docs/cli/lsp.md#configuration-files).
+
 ## [0.20.1] — 2026-11-03
 
 Patch release. A `visibility.toml` log source is one dataset, named by its `name` and declaring its columns, and the query checks read them ([language-server 0.7.1](https://github.com/opentidehq/language-server/releases/tag/v0.7.1)); `lint` checks files that start with a UTF-8 byte-order mark, MCP `validate_query` reads `visibility.toml`, and `lint.toml` sets the filename convention per object kind. A patch by maintainer decision, although the release-management rule makes a change to accepted input a minor: the 0.20.0 `visibility.toml` dataset lists were a defect of `visibility::1.0`, shipped the same day, and are corrected in place. After upgrading, a workspace that used the 0.20.0 dataset lists (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), which now fail validation with a message that says what to do, rewrites `visibility.toml` with one `[[logsources]]` per table, sourcetype or index pattern, named after it, and updates the signals' `data.logsources` references to the new names ([Upgrading from 0.20.0](docs/usage/configuration.md#upgrading-from-0200)). Everything else needs nothing.

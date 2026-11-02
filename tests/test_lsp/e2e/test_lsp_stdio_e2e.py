@@ -191,3 +191,115 @@ def test_the_server_checks_with_opentides_catalog_not_a_committed_copy(tmp_path:
         if process.poll() is None:
             process.kill()
             process.wait()
+
+
+SHARING = """\
+[[misp]]
+name = "misp-internal"
+url = "https://misp.example"
+api_key = "${MISP_KEY}"
+max_tlp = "amber"
+distribution = "this-community"
+"""
+
+
+def _until_diagnostics(stream: IO[bytes], uri: str) -> list[dict[str, Any]]:
+    while True:
+        message = _read(stream)
+        if (
+            message.get("method") == "textDocument/publishDiagnostics"
+            and message["params"]["uri"] == uri
+        ):
+            return message["params"]["diagnostics"]
+
+
+def _until_reply(stream: IO[bytes], request_id: int) -> dict[str, Any]:
+    while True:
+        message = _read(stream)
+        if message.get("id") == request_id:
+            return message
+
+
+def test_configuration_toml_is_checked_with_opentides_models(tmp_path: Path) -> None:
+    """#730: a configuration buffer gets what `configuration_text_issues`
+    finds, on the key it names, and completion from the exported schema."""
+    configurations = tmp_path / ".opentide" / "configurations"
+    configurations.mkdir(parents=True)
+    sharing = configurations / "sharing.toml"
+    lab = tmp_path / "lab" / ".opentide" / "configurations" / "sharing.toml"
+    lab.parent.mkdir(parents=True)
+    # The parent instance holds misp-internal: an override in a nested
+    # workspace may restate only `name` and what it changes.
+    sharing.write_text(SHARING.replace('distribution = "this-community"\n', ""), encoding="utf-8")
+    process = subprocess.Popen(
+        _server(),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=tmp_path,
+    )
+    assert process.stdin is not None and process.stdout is not None
+    try:
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"capabilities": {}, "rootUri": tmp_path.as_uri()},
+            },
+        )
+        _read(process.stdout)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "initialized", "params": {}})
+
+        def open_document(path: Path, text: str) -> None:
+            assert process.stdin is not None
+            _send(
+                process.stdin,
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": path.as_uri(),
+                            "languageId": "toml",
+                            "version": 1,
+                            "text": text,
+                        }
+                    },
+                },
+            )
+
+        open_document(sharing, SHARING)
+        diagnostics = _until_diagnostics(process.stdout, sharing.as_uri())
+        assert [(item["code"], item["range"]["start"]["line"]) for item in diagnostics] == [
+            ("unknown_key", 5)
+        ], diagnostics
+
+        open_document(lab, '[[misp]]\nname = "misp-internal"\nmax_tlp = "red"\n')
+        assert _until_diagnostics(process.stdout, lab.as_uri()) == []
+
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "textDocument/completion",
+                "params": {
+                    "textDocument": {"uri": sharing.as_uri()},
+                    "position": {"line": 4, "character": len("max_tlp = ")},
+                },
+            },
+        )
+        labels = [item["label"] for item in _until_reply(process.stdout, 2)["result"]]
+        assert labels == ['"clear"', '"green"', '"amber"', '"amber+strict"', '"red"']
+
+        _send(process.stdin, {"jsonrpc": "2.0", "id": 3, "method": "shutdown"})
+        _until_reply(process.stdout, 3)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "exit"})
+        process.stdin.close()
+        assert process.wait(timeout=60) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()

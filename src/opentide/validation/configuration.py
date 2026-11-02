@@ -511,6 +511,90 @@ def configuration_text_issues(
     )
 
 
+def configuration_buffer_issues(
+    path: str | Path,
+    text: str,
+    open_buffers: Sequence[tuple[str, str]] = (),
+) -> list[ValidationIssue]:
+    """`configuration_text_issues` for an editor buffer, with the layers an editor has.
+
+    What the language server shows for a file under `.opentide/configurations/`
+    (`opentide lsp start`): the buffer merged onto the bundled file, then the
+    parent instance's file of the same name, as `resolve_configurations`
+    merges them. For `sharing.toml`, the statuses `rule_statuses` may name
+    come from an open `deployment.toml` buffer of the same workspace when
+    there is one (merged onto the bundled file), else from the file on disk;
+    and `sharing_directory` is reported when `configurations/sharing/`
+    exists. A file with no model gets nothing (`not_a_configuration_file` is
+    for the command line).
+    """
+    native = Path(path)
+    configurations = _configurations_directory(native)
+    later_layers: list[Mapping[str, Any]] = []
+    status_names: frozenset[str] | None = None
+    sharing_directory = False
+    if configurations is not None:
+        relative = native.relative_to(configurations)
+        parent = _parent_layer(configurations, relative)
+        if parent is not None:
+            later_layers.append(parent)
+        if relative.as_posix() == "sharing.toml":
+            status_names = _open_status_names(configurations, open_buffers)
+            sharing_directory = (configurations / "sharing").is_dir()
+    issues = configuration_text_issues(
+        path,
+        text,
+        later_layers=later_layers,
+        status_names=status_names,
+        sharing_directory=sharing_directory,
+    )
+    return [issue for issue in issues if issue.code != NOT_A_CONFIGURATION_FILE]
+
+
+def _configurations_directory(path: Path) -> Path | None:
+    """The `.opentide/configurations` directory an absolute *path* sits in."""
+    parts = path.parts
+    if not path.is_absolute():
+        return None
+    for index in range(len(parts) - 2, 0, -1):
+        if parts[index] == ".opentide" and parts[index + 1] == "configurations":
+            return Path(*parts[: index + 2])
+    return None
+
+
+def _parent_layer(configurations: Path, relative: Path) -> dict[str, Any] | None:
+    """The parent instance's file of the same name, as `resolve_configurations` reads it."""
+    workspace = configurations.parent.parent
+    parent = workspace.parent / ".opentide" / "configurations"
+    if parent == configurations or not parent.is_dir():
+        return None
+    candidate = parent / relative
+    try:
+        if candidate.is_file():
+            return tomllib.loads(candidate.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError):
+        # `opentide validate` reports the parent's own problems.
+        return None
+    return None
+
+
+def _open_status_names(
+    configurations: Path, open_buffers: Sequence[tuple[str, str]]
+) -> frozenset[str] | None:
+    """Statuses of an open `deployment.toml` buffer in *configurations*, if any parses."""
+    deployment = configurations / "deployment.toml"
+    for buffer_path, buffer_text in open_buffers:
+        if Path(buffer_path) != deployment:
+            continue
+        try:
+            layer = tomllib.loads(buffer_text)
+        except (ValueError, RecursionError):
+            return None
+        # As `_workspace_status_names`: no statuses at all is not a list to check against.
+        return _status_names(merge_layers([bundled_layer("deployment.toml"), layer])) or None
+    return None
+
+
 # --- Every merged file of a workspace (validate --check configuration) -----------------
 
 
@@ -603,6 +687,7 @@ def _named(issue: ValidationIssue, file_key: str) -> ValidationIssue:
 __all__ = [
     "CONFIGURATION_OBJECT_TYPE",
     "bundled_layer",
+    "configuration_buffer_issues",
     "configuration_file_issues",
     "configuration_text_issues",
     "deployment_cross_issues",
