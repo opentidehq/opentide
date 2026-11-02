@@ -324,7 +324,7 @@ def make_deploy_plan(
 
 def _object_file_error(path: Path, problem: str) -> ObjectFileError:
     """A rule file that is not one mapping, pointing at where its document starts."""
-    position = first_content_span(path.read_text(encoding="utf-8"))
+    position = first_content_span(path.read_text(encoding="utf-8-sig"))
     if position is None:
         return ObjectFileError(path, problem)
     line, column, end_column = position

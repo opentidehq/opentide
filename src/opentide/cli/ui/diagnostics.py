@@ -265,7 +265,7 @@ class SourceFiles:
     def text(self, path: Path) -> str | None:
         if path not in self._texts:
             try:
-                with path.open(encoding="utf-8", newline="") as handle:
+                with path.open(encoding="utf-8-sig", newline="") as handle:
                     self._texts[path] = handle.read()
             except (OSError, UnicodeDecodeError):
                 self._texts[path] = None

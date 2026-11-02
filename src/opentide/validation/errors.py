@@ -180,7 +180,7 @@ def load_yaml_with_lines(file_path: Path) -> Any:
     yaml = YAML()
     yaml.preserve_quotes = True
     try:
-        return yaml.load(file_path.read_text(encoding="utf-8"))
+        return yaml.load(file_path.read_text(encoding="utf-8-sig"))
     except Exception:
         return None
 

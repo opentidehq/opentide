@@ -218,7 +218,7 @@ def language_server_report() -> LanguageServerReport:
         space = workspace(root, objects)
         for path in objects:
             try:
-                text = path.read_text(encoding="utf-8")
+                text = path.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeDecodeError):
                 continue
             found = [

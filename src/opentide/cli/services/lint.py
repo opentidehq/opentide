@@ -203,7 +203,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
     record = _ObjectRecord(path=path, relative=relative)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
         data: Any = parse_yaml(text)
     except yaml.YAMLError as exc:
         problem = describe_yaml_error(exc)

@@ -124,7 +124,7 @@ def _query_text(cli: CliContext, query: str | None, query_file: str | None) -> s
     if query_file is not None:
         path = Path(query_file)
         try:
-            return path.read_text(encoding="utf-8")
+            return path.read_text(encoding="utf-8-sig")
         except OSError as exc:
             emit_usage_error(
                 cli,
