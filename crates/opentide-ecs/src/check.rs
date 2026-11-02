@@ -106,7 +106,10 @@ thread_local! {
 /// a query reads (`index` names, `FROM` patterns): those of every declared
 /// index a read name or pattern covers, or that covers it. A comma-separated
 /// entry is split; exclusions (`-x*`), a `::` selector and a cross-cluster
-/// prefix are dropped. The first declaration of a name wins.
+/// prefix are dropped. Columns on a pattern (`logs-custom.*`) apply to every
+/// index it matches. Where several log sources declare a field, an exact
+/// name's declaration wins over a pattern's, and an earlier one over a
+/// later one.
 pub fn declared_fields<S: AsRef<str>>(indices: &[S]) -> BTreeMap<String, Option<String>> {
     let datasets = datasets::current();
     let read: Vec<&str> = indices
@@ -118,7 +121,9 @@ pub fn declared_fields<S: AsRef<str>>(indices: &[S]) -> BTreeMap<String, Option<
         .map(|n| n.rsplit_once(':').map_or(n, |(_, n)| n))
         .collect();
     let mut out = BTreeMap::new();
-    for source in datasets.sources_with_columns("elastic") {
+    let mut sources: Vec<_> = datasets.sources_with_columns("elastic").collect();
+    sources.sort_by_key(|s| s.name.contains('*'));
+    for source in sources {
         if !read
             .iter()
             .any(|r| DatasetKind::Indices.covers(&source.name, r))

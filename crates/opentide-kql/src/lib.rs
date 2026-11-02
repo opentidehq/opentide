@@ -12,7 +12,7 @@ pub mod tables;
 
 use opentide_syntax::{has_error, parse as ts_parse};
 use serde::Deserialize;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, OnceLock};
 use tree_sitter::Node;
 
@@ -462,98 +462,169 @@ impl Catalog {
     }
 
     /// The profile's catalog ([`Catalog::cached`]) with the columns the
-    /// workspace lists for its tables in `visibility.toml` (#146): what every
-    /// query check, hover and completion reads. Without declared columns for
-    /// the profile's platform it is the cached catalog itself; with them, a
-    /// copy built once per set of declarations. `Core` has no tables and
-    /// takes none.
-    pub fn for_workspace(profile: Profile) -> CatalogRef {
+    /// workspace lists for its tables in `visibility.toml` (#146), for a
+    /// query whose text is `source`: what every query check, hover and
+    /// completion reads. Without declared columns for the profile's platform
+    /// it is the cached catalog itself; with them, a copy built once per set
+    /// of declarations ([`Catalog::with_declared_columns`]). A name the query
+    /// reads that is in neither, but that a declared pattern with columns
+    /// matches (`Vendor*_CL`), gets a copy of that copy with the name's
+    /// table added, kept until the query reads another such name. `Core` has
+    /// no tables and takes none.
+    pub fn for_workspace(profile: Profile, source: &str) -> CatalogRef {
         let bundled = Self::cached(profile);
         if profile == Profile::Core {
             return CatalogRef::Bundled(bundled);
         }
         let datasets = opentide_core::datasets::current();
-        let declared: Vec<DeclaredSource> = datasets
-            .sources_with_columns(dataset_platform(profile))
-            .filter(|s| !s.name.contains('*'))
-            .cloned()
-            .collect();
+        let platform = dataset_platform(profile);
+        let declared: Vec<DeclaredSource> =
+            datasets.sources_with_columns(platform).cloned().collect();
         if declared.is_empty() {
             return CatalogRef::Bundled(bundled);
         }
+        let exact: Vec<String> = datasets
+            .names(platform)
+            .iter()
+            .filter(|n| !n.contains('*'))
+            .cloned()
+            .collect();
         type Cache = Mutex<Option<(Vec<DeclaredSource>, Arc<Catalog>)>>;
+        type QueryCache = Mutex<Option<(Vec<DeclaredSource>, Vec<String>, Arc<Catalog>)>>;
         static SENTINEL: OnceLock<Cache> = OnceLock::new();
         static DEFENDER: OnceLock<Cache> = OnceLock::new();
-        let cache = match profile {
-            Profile::Defender => &DEFENDER,
-            _ => &SENTINEL,
+        static SENTINEL_QUERY: OnceLock<QueryCache> = OnceLock::new();
+        static DEFENDER_QUERY: OnceLock<QueryCache> = OnceLock::new();
+        let (cache, query_cache) = match profile {
+            Profile::Defender => (&DEFENDER, &DEFENDER_QUERY),
+            _ => (&SENTINEL, &SENTINEL_QUERY),
+        };
+        let workspace = {
+            let mut cached = cache
+                .get_or_init(Default::default)
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            match cached.as_ref() {
+                Some((sources, catalog)) if *sources == declared => catalog.clone(),
+                _ => {
+                    let catalog = Arc::new(bundled.with_declared_columns(&declared, &exact));
+                    *cached = Some((declared.clone(), catalog.clone()));
+                    catalog
+                }
+            }
+        };
+        // Names the query reads that only a declared pattern knows.
+        let patterns: Vec<&DeclaredSource> =
+            declared.iter().filter(|s| s.name.contains('*')).collect();
+        let mut extra: Vec<String> = identifiers(source)
+            .filter(|word| workspace.table(word).is_none())
+            .filter(|word| {
+                patterns
+                    .iter()
+                    .any(|p| opentide_core::datasets::glob_matches(&p.name, word))
+            })
+            .map(str::to_string)
+            .collect();
+        if extra.is_empty() {
+            return CatalogRef::Declared(workspace);
         }
-        .get_or_init(Default::default);
-        let mut cached = cache
+        extra.sort();
+        extra.dedup();
+        let mut cached = query_cache
+            .get_or_init(Default::default)
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some((sources, catalog)) = cached.as_ref() {
-            if *sources == declared {
+        if let Some((sources, names, catalog)) = cached.as_ref() {
+            if *sources == declared && *names == extra {
                 return CatalogRef::Declared(catalog.clone());
             }
         }
-        let catalog = Arc::new(bundled.with_declared_columns(&declared));
-        *cached = Some((declared, catalog.clone()));
+        let mut catalog = (*workspace).clone();
+        let targets = declared_targets(&patterns, extra.iter().map(String::as_str));
+        catalog.apply_declared(targets);
+        let catalog = Arc::new(catalog);
+        *cached = Some((declared, extra, catalog.clone()));
         CatalogRef::Declared(catalog)
     }
 
-    /// This catalog with the tables and columns `sources` declare: a declared
-    /// table the catalog lacks is added; one it has keeps its columns and
-    /// gains the declared ones. A declared column named like a catalog
-    /// column replaces its type, and its description when it has one.
-    /// Either way the table's columns are then checked as a documented
-    /// table's: a near miss of one is `kql_unknown_column`. A pattern
-    /// (`Vendor*_CL`) names no one table, so its columns are not used.
-    pub fn with_declared_columns(&self, sources: &[DeclaredSource]) -> Self {
+    /// This catalog with the tables and columns `sources` declare, for
+    /// every table each names: its own name, or for a pattern (`Vendor*_CL`)
+    /// each catalog table and each of `declared` (the platform's other
+    /// declared names) it matches. A declared table the catalog lacks is
+    /// added; one it has keeps its columns and gains the declared ones. A
+    /// declared column named like a catalog column replaces its type, and
+    /// its description when it has one. Where several log sources give a
+    /// table columns, an exact name's win over a pattern's, and an earlier
+    /// pattern's over a later one's. The table's columns are then checked as
+    /// a documented table's: a near miss of one is `kql_unknown_column`.
+    pub fn with_declared_columns(&self, sources: &[DeclaredSource], declared: &[String]) -> Self {
         let mut catalog = self.clone();
+        let exact: Vec<&DeclaredSource> =
+            sources.iter().filter(|s| !s.name.contains('*')).collect();
+        let patterns: Vec<&DeclaredSource> =
+            sources.iter().filter(|s| s.name.contains('*')).collect();
+        let mut targets: BTreeMap<String, Vec<&DeclaredSource>> = BTreeMap::new();
+        for source in exact {
+            targets.entry(source.name.clone()).or_default().push(source);
+        }
+        let names = self
+            .tables
+            .iter()
+            .map(|t| t.name.as_str())
+            .chain(declared.iter().map(String::as_str));
+        for (table, matched) in declared_targets(&patterns, names) {
+            targets.entry(table).or_default().extend(matched);
+        }
+        catalog.apply_declared(targets);
+        catalog
+    }
+
+    /// Give each table the columns of its log sources, in order: the first
+    /// to declare a column decides its type and description.
+    fn apply_declared(&mut self, targets: BTreeMap<String, Vec<&DeclaredSource>>) {
         let profile_name = match self.profile {
             Profile::Defender => "defender",
             _ => "sentinel",
         };
-        for source in sources {
-            let table = source.name.as_str();
-            if table.contains('*') || source.columns.is_empty() {
+        for (table, sources) in targets {
+            let table = table.as_str();
+            if sources.iter().all(|s| s.columns.is_empty()) {
                 continue;
             }
-            match catalog.table_index.get(table) {
+            match self.table_index.get(table) {
                 Some(&i) => {
-                    let row = &mut catalog.tables[i];
+                    let row = &mut self.tables[i];
                     row.documented = true;
                     row.declared = true;
                 }
                 None => {
-                    catalog
-                        .table_index
-                        .insert(table.to_string(), catalog.tables.len());
-                    catalog.tables.push(TableRow {
+                    self.table_index
+                        .insert(table.to_string(), self.tables.len());
+                    self.tables.push(TableRow {
                         name: table.to_string(),
                         profile: Some(profile_name.into()),
                         category: None,
-                        docs: source.description.clone(),
+                        docs: sources.iter().find_map(|s| s.description.clone()),
                         citation: None,
                         documented: true,
                         declared: true,
                     });
                 }
             }
-            for column in &source.columns {
-                let existing = catalog
+            for column in sources.iter().flat_map(|s| s.columns.iter()) {
+                let existing = self
                     .column_index
                     .get(&table.to_ascii_lowercase())
                     .and_then(|ids| {
                         ids.iter().copied().find(|&i| {
-                            catalog.columns[i].table == table
-                                && catalog.columns[i].name == column.name
+                            self.columns[i].table == table && self.columns[i].name == column.name
                         })
                     });
                 match existing {
+                    // An earlier log source declared it already.
+                    Some(i) if self.columns[i].declared => {}
                     Some(i) => {
-                        let row = &mut catalog.columns[i];
+                        let row = &mut self.columns[i];
                         row.type_name = column.type_name.clone();
                         if let Some(description) = &column.description {
                             row.docs = Some(description.clone());
@@ -562,12 +633,11 @@ impl Catalog {
                         row.declared = true;
                     }
                     None => {
-                        catalog
-                            .column_index
+                        self.column_index
                             .entry(table.to_ascii_lowercase())
                             .or_default()
-                            .push(catalog.columns.len());
-                        catalog.columns.push(ColumnRow {
+                            .push(self.columns.len());
+                        self.columns.push(ColumnRow {
                             table: table.to_string(),
                             profile: Some(profile_name.into()),
                             name: column.name.clone(),
@@ -581,7 +651,6 @@ impl Catalog {
                 }
             }
         }
-        catalog
     }
 
     pub fn operator(&self, name: &str) -> Option<&OperatorRow> {
@@ -852,7 +921,7 @@ pub struct AnalyzeResult {
 }
 
 pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
-    let catalog = Catalog::for_workspace(profile);
+    let catalog = Catalog::for_workspace(profile, source);
     analyze_with_catalog(source, &catalog)
 }
 
@@ -860,7 +929,7 @@ pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
 /// definitions the column pass found (#112). Empty for a query that does not
 /// parse at all.
 pub fn columns(source: &str, profile: Profile) -> schema::Analysis {
-    let catalog = Catalog::for_workspace(profile);
+    let catalog = Catalog::for_workspace(profile, source);
     ts_parse(LanguageId::Kql, source)
         .map(|tree| schema::analyze(tree.root_node(), source, &catalog))
         .unwrap_or_default()
@@ -1235,6 +1304,29 @@ fn asim_shaped(name: &str) -> bool {
         name.strip_prefix(prefix)
             .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_uppercase()))
     })
+}
+
+/// The tables among `names` each pattern log source matches, with the
+/// patterns that match it, in file order.
+fn declared_targets<'d, 'n>(
+    patterns: &[&'d DeclaredSource],
+    names: impl Iterator<Item = &'n str>,
+) -> BTreeMap<String, Vec<&'d DeclaredSource>> {
+    let mut out: BTreeMap<String, Vec<&'d DeclaredSource>> = BTreeMap::new();
+    for name in names {
+        if name.contains('*') || out.contains_key(name) {
+            continue;
+        }
+        let matched: Vec<&DeclaredSource> = patterns
+            .iter()
+            .copied()
+            .filter(|p| opentide_core::datasets::glob_matches(&p.name, name))
+            .collect();
+        if !matched.is_empty() {
+            out.insert(name.to_string(), matched);
+        }
+    }
+    out
 }
 
 /// The platform whose `visibility.toml` declarations a profile reads.
@@ -1643,7 +1735,7 @@ const COLUMN_OPERATORS: &[&str] = &[
 ];
 
 pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<CompletionItem> {
-    let workspace = Catalog::for_workspace(profile);
+    let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let before = &source[..offset.min(source.len())];
     let trimmed = before.trim_end();
@@ -1893,7 +1985,7 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
 }
 
 pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) -> Option<String> {
-    let workspace = Catalog::for_workspace(profile);
+    let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let offset = position_to_offset(source, position);
     let word = word_at(source, offset)?;
@@ -2012,7 +2104,7 @@ pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) 
 }
 
 pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<SignatureHelp> {
-    let workspace = Catalog::for_workspace(profile);
+    let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
     let before = &source[..offset.min(source.len())];
     if let Some((name, active)) = innermost_call(before) {

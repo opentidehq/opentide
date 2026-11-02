@@ -53,6 +53,27 @@ name = "Vendor*_CL"
 description = "Vendor tables."
 system = "sentinel"
 
+[logsources.columns]
+DeviceAction_s = { type = "string", description = "What the vendor device did." }
+Severity_d = { type = "real" }
+
+[[logsources]]
+name = "VendorProxy_CL"
+description = "Vendor proxy."
+system = "sentinel"
+
+[logsources.columns]
+Severity_d = { type = "string", description = "Severity as the proxy writes it." }
+Url_s = { type = "string" }
+
+[[logsources]]
+name = "SecurityInciden*"
+description = "Incidents."
+system = "sentinel"
+
+[logsources.columns]
+CustomTriage = { type = "string" }
+
 [[logsources]]
 name = "myWorkspaceFunction"
 description = "A workspace function, declared like a table."
@@ -135,6 +156,62 @@ tables = ["Custom_CL"]
         .is_empty()
     );
     assert!(findings("sentinel", "NTANetAnalytics | take 1").is_empty());
+    // Columns on a pattern apply to every table it matches: one only the
+    // query names, a declared one, and a catalog table. An exact entry's
+    // column wins over a pattern's of the same name; the rest merge.
+    assert!(
+        findings(
+            "sentinel",
+            "VendorFirewall_CL | where DeviceAction_s == \"deny\" and Severity_d > 1"
+        )
+        .is_empty()
+    );
+    let d = analyze_query(&QueryRequest {
+        language: LanguageId::Kql,
+        platform: Some("sentinel".into()),
+        stack: None,
+        text: "VendorFirewall_CL | where DeviceActon_s == \"deny\"".into(),
+    });
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].code, codes::KQL_UNKNOWN_COLUMN);
+    assert_eq!(d[0].suggestion.as_deref(), Some("DeviceAction_s"));
+    assert!(
+        findings(
+            "sentinel",
+            "VendorProxy_CL | where DeviceAction_s == \"deny\" and Url_s has \"x\""
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        findings("sentinel", "VendorProxy_CL | where Severity_d > 1"),
+        error(codes::KQL_TYPE_MISMATCH)
+    );
+    assert_eq!(
+        findings("sentinel", "VendorProxy_CL | where DeviceActon_s == \"a\""),
+        error(codes::KQL_UNKNOWN_COLUMN)
+    );
+    assert!(findings("sentinel", "SecurityIncident | where CustomTriage == \"x\"").is_empty());
+    assert_eq!(
+        findings("sentinel", "SecurityIncident | where CustomTriag == \"x\""),
+        error(codes::KQL_UNKNOWN_COLUMN)
+    );
+    let md = hover(
+        &MemoryWorkspace::default(),
+        LanguageId::Kql,
+        "VendorFirewall_CL | where DeviceAction_s == 1",
+        Position::new(0, 30),
+    )
+    .unwrap();
+    assert!(md.contains("What the vendor device did."), "{md}");
+    let md = hover(
+        &MemoryWorkspace::default(),
+        LanguageId::Kql,
+        "VendorProxy_CL | where Severity_d == 1",
+        Position::new(0, 25),
+    )
+    .unwrap();
+    assert!(md.contains("Severity as the proxy writes it."), "{md}");
+
     // Undeclared and built in: a warning.
     assert_eq!(
         findings("sentinel", "AuditLogs | take 1"),

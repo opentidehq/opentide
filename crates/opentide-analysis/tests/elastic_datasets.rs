@@ -26,6 +26,14 @@ system = "elastic"
 "process.nmae" = { type = "keyword" }
 "process.pid" = { type = "keyword" }
 "app.score" = { type = "long" }
+
+[[logsources]]
+name = "logs-custom.app-prod"
+description = "Production custom app."
+system = "elastic"
+
+[logsources.columns]
+"app.score" = { type = "keyword" }
 "#;
 
 fn esql(text: &str) -> Vec<Diagnostic> {
@@ -160,6 +168,14 @@ system = "sentinel"
         mismatched[0].message.contains("visibility.toml"),
         "{found:?}"
     );
+    // An index both an exact log source and a pattern declare gets both's
+    // fields; the exact one's type wins.
+    assert!(!unknown(&esql(
+        "FROM logs-custom.app-prod | WHERE process.nmae == \"x\""
+    )));
+    assert!(!mismatch(&esql(
+        "FROM logs-custom.app-prod | WHERE app.score LIKE \"1*\""
+    )));
     let (_, found) =
         tide("    type: query\n    index: [logs-custom.app-*]\n    query: process.nmae:x\n");
     assert!(!unknown(&found), "{found:?}");

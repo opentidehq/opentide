@@ -85,6 +85,9 @@ pub(crate) fn declared_fields(source: &str, catalog: &Catalog) -> Vec<(String, D
     walk(source, 0, source.len(), catalog, &mut reads);
     let mut seen = std::collections::BTreeSet::new();
     let mut out = Vec::new();
+    // An exact sourcetype's columns win over a pattern's.
+    let mut sources: Vec<_> = sources.collect();
+    sources.sort_by_key(|s| s.name.contains('*'));
     for declared in sources {
         if !reads.is_empty() && !reads.iter().any(|r| r.covered_by(source, &declared.name)) {
             continue;
