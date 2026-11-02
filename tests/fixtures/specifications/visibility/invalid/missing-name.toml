@@ -1,0 +1,3 @@
+[[logsources]]
+description = "Administrative audit events"
+system = "sentinel"

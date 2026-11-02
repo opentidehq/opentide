@@ -1,0 +1,5 @@
+[[logsources]]
+name = "Custom tables"
+description = "Custom connector tables"
+system = "sentinel"
+tables = ["Contoso_Audit_CL", "Fabrikam_Proxy_CL"]

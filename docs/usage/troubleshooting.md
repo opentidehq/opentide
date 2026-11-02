@@ -475,7 +475,7 @@ run `pip install --force-reinstall opentide`.
 
 ### `kql_unknown_column`, `kql_type_mismatch` or `spl_unknown_datamodel_field` after upgrading
 
-**0.20.0** ships language-server 0.7.0, whose query checks know the documented tables and their columns: a near miss of a column (`DstPortNumbr`), an operator Kusto does not define for a column's type (`EventID has "46"`), or a near miss of a CIM field is now an error, and `opentide explain <code>` describes each. The finding suggests the documented name. Under the `sentinel` profile an unknown table is now a warning, as a workspace holds tables no catalog lists; to make your own tables, indexes and index patterns known, name them in `visibility.toml` ([the datasets a log source fills](./configuration.md#the-datasets-a-log-source-fills)). While you fix the queries, `opentide validate --queries warn` reports them as warnings.
+**0.20.0** ships language-server 0.7.0, whose query checks know the documented tables and their columns: a near miss of a column (`DstPortNumbr`), an operator Kusto does not define for a column's type (`EventID has "46"`), or a near miss of a CIM field is now an error, and `opentide explain <code>` describes each. The finding suggests the documented name. Under the `sentinel` profile an unknown table is now a warning, as a workspace holds tables no catalog lists; to make your own tables, sourcetypes and index patterns known, declare each as a log source in `visibility.toml` ([the datasets a log source fills](./configuration.md#the-datasets-a-log-source-fills)). While you fix the queries, `opentide validate --queries warn` reports them as warnings.
 
 ### Live query validation in CI takes most of an hour
 

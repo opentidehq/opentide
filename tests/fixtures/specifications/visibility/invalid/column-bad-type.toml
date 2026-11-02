@@ -1,0 +1,7 @@
+[[logsources]]
+name = "Contoso_Audit_CL"
+description = "Administrative audit events"
+system = "sentinel"
+
+[logsources.columns]
+Actor_s = { type = "keyword" }

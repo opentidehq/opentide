@@ -205,7 +205,10 @@ def test_visibility_schema_accepts_the_bundled_configuration(corpus: dict[str, A
     VisibilityConfig.model_validate(body)
     validator = Draft202012Validator(corpus["visibility"])
     assert [error.message for error in validator.iter_errors(body)] == []
-    misspelled = {"logsources": [{**body["logsources"][0], "sytem": "splunk"}]}
+    # The bundled file declares no log source (#718): check a log source of its own.
+    source = {"name": "WinEventLog:Security", "description": "d", "system": "splunk"}
+    assert validator.is_valid({"logsources": [source]})
+    misspelled = {"logsources": [{**source, "sytem": "splunk"}]}
     assert not validator.is_valid(misspelled)
 
 

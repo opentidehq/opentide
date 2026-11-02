@@ -1,9 +1,14 @@
-"""``visibility.toml`` log sources name the datasets they fill, per ``system`` (#695)."""
+"""A ``visibility.toml`` log source is one dataset, named by ``name``, with its columns (#718).
+
+The spec's conformance fixtures (``specifications/fixtures/visibility``) are
+copied verbatim under ``tests/fixtures/specifications/visibility``.
+"""
 
 from __future__ import annotations
 
 import sys
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,80 +20,214 @@ else:
     import tomli as tomllib
 
 from opentide.models.visibility import (
-    DATASET_FIELD_NAMES,
-    DATASET_FIELDS,
+    COLUMN_TYPES,
+    LEGACY_DATASET_KEYS,
     VisibilityConfig,
     VisibilityLogSource,
 )
 from opentide.validation.configuration import configuration_file_issues
 
-#: Every system the dataset fields know, and one they do not.
-SYSTEMS = (*DATASET_FIELDS, "crowdstrike")
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "specifications" / "visibility"
 
-
-def _value(field: str) -> object:
-    return True if field == "ecs" else ["name-*"]
-
-
-def _source(system: str | None, **fields: object) -> dict[str, Any]:
-    return {"name": "logs", "description": "d", "system": system, **fields}
-
-
-@pytest.mark.parametrize(
-    ("system", "field"),
-    [(system, field) for system, fields in DATASET_FIELDS.items() for field in fields],
+#: Engine tests that read the new shape: the pinned engine (language-server
+#: 0.7.0) still reads the 0.20.0 plural lists. They flip when it is repinned.
+NEEDS_ENGINE = pytest.mark.xfail(
+    reason="needs language-server with visibility::1.0 singular datasets (language-server#146)",
+    strict=True,
 )
-def test_each_field_fits_its_system(system: str, field: str) -> None:
-    source = VisibilityLogSource.model_validate(_source(system, **{field: _value(field)}))
-    assert getattr(source, field) == _value(field)
 
 
-@pytest.mark.parametrize(
-    ("system", "field"),
-    [
-        (system, field)
-        for system in SYSTEMS
-        for field in DATASET_FIELD_NAMES
-        if field not in DATASET_FIELDS.get(system, ())
-    ],
-)
-def test_a_field_of_another_system_is_an_error(system: str, field: str) -> None:
-    """A Splunk index can never make a Sentinel table known."""
-    with pytest.raises(ValidationError) as raised:
-        VisibilityLogSource.model_validate(_source(system, **{field: _value(field)}))
-    [error] = raised.value.errors()
-    assert error["loc"] == (field,)
-    assert f"`{field}` does not apply to system {system!r}" in error["msg"]
+def _source(system: str = "sentinel", **fields: object) -> dict[str, Any]:
+    return {"name": "Contoso_Audit_CL", "description": "d", "system": system, **fields}
 
 
-def test_ecs_false_on_another_system_is_an_error_too() -> None:
-    with pytest.raises(ValidationError, match="`ecs` does not apply to system 'splunk'"):
-        VisibilityLogSource.model_validate(_source("splunk", ecs=False))
+def _issues(*sources: dict[str, Any]) -> list[tuple[str, tuple[str, ...]]]:
+    issues = configuration_file_issues("visibility.toml", {"logsources": list(sources)})
+    return [(issue.code, issue.field_path) for issue in issues]
 
 
-def test_an_empty_name_is_an_error() -> None:
-    with pytest.raises(ValidationError, match="`tables` holds an empty name"):
-        VisibilityLogSource.model_validate(_source("sentinel", tables=["SecurityEvent", "  "]))
+# --- Keys ----------------------------------------------------------------------------------
+
+
+def test_a_log_source_takes_its_keys_and_nothing_else() -> None:
+    source = VisibilityLogSource.model_validate(
+        _source(tenants=["Production"], assets=["IdP"], references=["https://example.org"])
+    )
+    assert (source.name, source.columns) == ("Contoso_Audit_CL", None)
+    assert _issues(_source(table="Contoso_Audit_CL")) == [
+        ("unknown_key", ("logsources", "0", "table"))
+    ]
+
+
+@pytest.mark.parametrize("key", ["name", "description", "system"])
+def test_name_description_and_system_are_required(key: str) -> None:
+    source = _source()
+    del source[key]
+    assert _issues(source) == [("missing_field", ("logsources", "0", key))]
+
+
+@pytest.mark.parametrize("name", ["", "  "])
+def test_an_empty_name_is_an_error(name: str) -> None:
+    assert _issues(_source(name=name)) == [("schema_validation", ("logsources", "0", "name"))]
+
+
+@pytest.mark.parametrize("key", LEGACY_DATASET_KEYS)
+def test_a_0_20_0_key_says_what_to_do_instead(key: str) -> None:
+    value = True if key == "ecs" else ["A", "B"]
+    issues = configuration_file_issues("visibility.toml", {"logsources": [_source(**{key: value})]})
+    assert [(issue.code, issue.field_path) for issue in issues] == [
+        ("schema_validation", ("logsources", "0", key))
+    ]
+    message = issues[0].message
+    assert message.startswith(f"`{key}` ")
+    if key in ("tables", "sourcetypes", "indices"):
+        assert "its own [[logsources]] entry whose `name` is the" in message
+    else:
+        assert message.endswith("remove it")
+    assert "migrate" not in message
 
 
 def test_the_system_error_is_the_one_reported_when_system_is_wrong() -> None:
     with pytest.raises(ValidationError) as raised:
-        VisibilityLogSource.model_validate(_source(None, tables=["T"]))
+        VisibilityLogSource.model_validate(
+            _source(system=None, columns={"A": {"type": "string"}})  # type: ignore[arg-type]
+        )
     assert [error["loc"] for error in raised.value.errors()] == [("system",)]
 
 
-def test_configuration_check_reports_the_field_that_does_not_fit() -> None:
-    issues = configuration_file_issues(
-        "visibility.toml",
-        {"logsources": [_source("splunk", indexes=["main"], tables=["SecurityEvent"])]},
-    )
-    assert [(issue.code, issue.field_path) for issue in issues] == [
-        ("schema_validation", ("logsources", "0", "tables"))
+def test_names_are_unique_per_system() -> None:
+    assert _issues(_source(), _source(description="again")) == [
+        ("schema_validation", ("logsources", "1", "name"))
     ]
-    assert "applies to a log source of sentinel, defender_for_endpoint" in issues[0].message
+    # The same name under two systems is fine.
+    assert (
+        _issues(_source(name="DeviceEvents"), _source("defender_for_endpoint", name="DeviceEvents"))
+        == []
+    )
 
 
-# What the engine declares from the same text: it reads visibility.toml itself.
+# --- Columns -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("system", sorted(COLUMN_TYPES))
+def test_every_type_of_a_system_is_accepted(system: str) -> None:
+    columns = {f"c{i}": {"type": kind} for i, kind in enumerate(COLUMN_TYPES[system])}
+    source = VisibilityLogSource.model_validate(_source(system, columns=columns))
+    assert [column.type for column in (source.columns or {}).values()] == list(COLUMN_TYPES[system])
+
+
+@pytest.mark.parametrize(
+    ("system", "kind"),
+    [("sentinel", "keyword"), ("splunk", "datetime"), ("elastic", "string")],
+)
+def test_a_type_of_another_system_is_an_error_on_that_column(system: str, kind: str) -> None:
+    columns = {"ok": {"type": COLUMN_TYPES[system][0]}, "process.name": {"type": kind}}
+    assert _issues(_source(system, columns=columns)) == [
+        ("schema_validation", ("logsources", "0", "columns", "process.name", "type"))
+    ]
+
+
+def test_columns_on_a_system_without_a_type_set_are_an_error() -> None:
+    assert _issues(_source("crowdstrike", columns={"a": {"type": "string"}})) == [
+        ("schema_validation", ("logsources", "0", "columns"))
+    ]
+
+
+def test_a_column_takes_a_type_and_a_description_only() -> None:
+    source = VisibilityLogSource.model_validate(
+        _source(columns={"Actor_s": {"type": "string", "description": "UPN"}})
+    )
+    assert source.columns is not None and source.columns["Actor_s"].description == "UPN"
+    assert _issues(_source(columns={"Actor_s": {}})) == [
+        ("missing_field", ("logsources", "0", "columns", "Actor_s", "type"))
+    ]
+    assert _issues(_source(columns={"Actor_s": {"type": "string", "nullable": True}})) == [
+        ("unknown_key", ("logsources", "0", "columns", "Actor_s", "nullable"))
+    ]
+    assert _issues(_source(columns={"": {"type": "string"}})) == [
+        ("schema_validation", ("logsources", "0", "columns", ""))
+    ]
+
+
+# --- The spec's conformance fixtures --------------------------------------------------------
+
+#: The finding each invalid fixture raises, and where.
+INVALID = {
+    "column-bad-type.toml": (
+        "schema_validation",
+        ("logsources", "0", "columns", "Actor_s", "type"),
+    ),
+    "column-missing-type.toml": (
+        "missing_field",
+        ("logsources", "0", "columns", "Actor_s", "type"),
+    ),
+    "column-unknown-key.toml": (
+        "unknown_key",
+        ("logsources", "0", "columns", "Actor_s", "nullable"),
+    ),
+    "columns-not-a-table.toml": ("schema_validation", ("logsources", "0", "columns")),
+    "columns-unsupported-system.toml": ("schema_validation", ("logsources", "0", "columns")),
+    "duplicate-name.toml": ("schema_validation", ("logsources", "1", "name")),
+    "ecs.toml": ("schema_validation", ("logsources", "0", "ecs")),
+    "empty-name.toml": ("schema_validation", ("logsources", "0", "name")),
+    "missing-description.toml": ("missing_field", ("logsources", "0", "description")),
+    "missing-name.toml": ("missing_field", ("logsources", "0", "name")),
+    "missing-system.toml": ("missing_field", ("logsources", "0", "system")),
+    "plural-key.toml": ("schema_validation", ("logsources", "0", "tables")),
+    "unknown-asset.toml": ("asset_unknown", ("logsources", "0", "assets", "0")),
+    "unknown-key.toml": ("unknown_key", ("logsources", "0", "table")),
+    "unknown-top-level.toml": ("unknown_key", ("datasets",)),
+}
+
+
+def _fixture(*parts: str) -> dict[str, Any]:
+    return tomllib.loads(FIXTURES.joinpath(*parts).read_text(encoding="utf-8"))
+
+
+def test_every_invalid_fixture_is_listed() -> None:
+    assert sorted(path.name for path in (FIXTURES / "invalid").glob("*.toml")) == sorted(INVALID)
+
+
+@pytest.mark.parametrize("name", sorted(INVALID))
+def test_an_invalid_fixture_fails_with_its_code(name: str) -> None:
+    issues = configuration_file_issues("visibility.toml", _fixture("invalid", name))
+    assert [(issue.code, issue.field_path) for issue in issues] == [INVALID[name]]
+
+
+def test_the_valid_fixture_validates() -> None:
+    document = _fixture("valid", "visibility.toml")
+    assert configuration_file_issues("visibility.toml", document) == []
+    VisibilityConfig.model_validate(document)
+
+
+# --- The bundled file -----------------------------------------------------------------------
+
+
+def _scaffold() -> str:
+    from opentide.core.root import get_data_root
+
+    path = get_data_root() / "configurations" / "visibility.toml"
+    return path.read_text(encoding="utf-8")
+
+
+def _scaffold_examples() -> str:
+    lines = _scaffold().splitlines()
+    start = next(index for index, line in enumerate(lines) if line == "# [[logsources]]")
+    return "\n".join(line.removeprefix("#").removeprefix(" ") for line in lines[start:])
+
+
+def test_the_scaffold_declares_no_log_source() -> None:
+    """The bundled file is every workspace's default: its examples stay commented out."""
+    assert VisibilityConfig.model_validate(tomllib.loads(_scaffold())).logsources == []
+
+
+def test_the_scaffold_examples_are_valid_one_per_platform_one_with_columns() -> None:
+    config = VisibilityConfig.model_validate(tomllib.loads(_scaffold_examples()))
+    assert {source.system for source in config.logsources} == {"sentinel", "splunk", "elastic"}
+    assert any(source.columns for source in config.logsources)
+
+
+# --- What the engine declares from the same text: it reads visibility.toml itself --------
 
 
 @pytest.fixture
@@ -107,85 +246,60 @@ def _install(text: str) -> None:
     engine().install_visibility(text)
 
 
-def test_no_dataset_fields_declare_nothing(declared: Callable[[str, str, str], str]) -> None:
-    _install('[[logsources]]\nname = "l"\ndescription = "d"\nsystem = "splunk"\n')
-    assert declared("splunk", "indexes", "main") == "unchecked"
+def test_the_scaffold_declares_nothing_to_the_engine(
+    declared: Callable[[str, str, str], str],
+) -> None:
+    _install(_scaffold())
+    assert declared("splunk", "sourcetypes", "anything") == "unchecked"
+    assert declared("sentinel", "tables", "Anything") == "unchecked"
 
 
 DECLARING = """\
 [[logsources]]
-name = "a"
+name = "NTANetAnalytics"
 description = "d"
 system = "sentinel"
-tables = ["NTANetAnalytics", "*_CL", " AzureActivity "]
 
 [[logsources]]
-name = "b"
+name = "*_CL"
+description = "d"
+system = "sentinel"
+
+[[logsources]]
+name = "WinEventLog:Security"
 description = "d"
 system = "splunk"
-indexes = ["wineventlog"]
-sourcetypes = []
 
 [[logsources]]
-name = "c"
+name = "logs-endpoint.events.*"
 description = "d"
 system = "elastic"
-indices = ["custom-ecs-*"]
-ecs = true
-
-[[logsources]]
-name = "e"
-description = "d"
-system = "elastic"
-indices = ["legacy-*"]
 """
 
 
-def test_the_engine_declares_by_system_and_kind(declared: Callable[[str, str, str], str]) -> None:
+@NEEDS_ENGINE
+def test_the_engine_declares_by_system(declared: Callable[[str, str, str], str]) -> None:
     _install(DECLARING)
     assert declared("sentinel", "tables", "Custom_CL") == "declared"
-    assert declared("sentinel", "tables", "AzureActivity") == "declared"  # trimmed
+    assert declared("sentinel", "tables", "NTANetAnalytics") == "declared"
     assert declared("sentinel", "tables", "Other") == "undeclared"
     # Per system: a Sentinel table declares nothing for Defender.
     assert declared("defender_for_endpoint", "tables", "NTANetAnalytics") == "unchecked"
-    assert declared("splunk", "indexes", "main") == "undeclared"
-    # Opt-in per kind: an empty list declares none.
-    assert declared("splunk", "sourcetypes", "anything") == "unchecked"
-    # `ecs = true` marks only its own log source's indices.
-    assert declared("elastic", "ecs_indices", "custom-ecs-1") == "declared"
-    assert declared("elastic", "ecs_indices", "legacy-1") == "undeclared"
-    assert declared("elastic", "indices", "legacy-1") == "declared"
+    # Splunk names are sourcetypes, matched regardless of case.
+    assert declared("splunk", "sourcetypes", "wineventlog:security") == "declared"
+    assert declared("splunk", "sourcetypes", "other") == "undeclared"
+    assert declared("elastic", "indices", "logs-endpoint.events.process") == "declared"
+    assert declared("elastic", "indices", "winlogbeat-*") == "undeclared"
 
 
-def _scaffold() -> str:
-    from opentide.core.root import get_data_root
-
-    path = get_data_root() / "configurations" / "visibility.toml"
-    return path.read_text(encoding="utf-8")
-
-
-def test_the_scaffold_declares_nothing(declared: Callable[[str, str, str], str]) -> None:
-    """The bundled file is every workspace's default: its examples stay commented out."""
-    VisibilityConfig.model_validate(tomllib.loads(_scaffold()))
-    _install(_scaffold())
-    assert declared("splunk", "indexes", "main") == "unchecked"
-
-
-def test_the_scaffold_examples_are_valid_one_per_platform(
+@NEEDS_ENGINE
+def test_the_engine_declares_the_scaffold_examples(
     declared: Callable[[str, str, str], str],
 ) -> None:
-    lines = _scaffold().splitlines()
-    start = next(index for index, line in enumerate(lines) if line == "# [[logsources]]")
-    example = "\n".join(line.removeprefix("#").removeprefix(" ") for line in lines[start:])
-    VisibilityConfig.model_validate(tomllib.loads(example))
-    _install(example)
+    _install(_scaffold_examples())
     for platform, kind in (
         ("sentinel", "tables"),
-        ("splunk", "indexes"),
         ("splunk", "sourcetypes"),
-        ("splunk", "macros"),
         ("elastic", "indices"),
-        ("elastic", "data_views"),
-        ("elastic", "ecs_indices"),
     ):
         assert declared(platform, kind, "not-an-example") == "undeclared", (platform, kind)

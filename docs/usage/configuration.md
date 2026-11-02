@@ -187,44 +187,100 @@ Each file is checked against its model when a command reads it, after your file 
 
 ### The datasets a log source fills
 
-A log source can name the tables, indexes and index patterns it fills. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know those names, so a custom table or index is not reported as unknown. Which fields a log source takes depends on its `system`:
+A log source is **one dataset**, and its `name` is that dataset: the KQL table (or workspace function) for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern or data stream for `elastic`. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know that name, so a custom table is not reported as unknown, and a log source can list the dataset's columns so the checks know them too.
 
-| `system` | Fields | What they match in a query |
-|----------|--------|----------------------------|
-| `sentinel`, `defender_for_endpoint` | `tables` | The table or function a KQL query starts from, `union`, `join` |
-| `splunk` | `indexes`, `sourcetypes`, `macros` | `index=`, `sourcetype=`, macro calls (without backticks) |
-| `elastic` | `indices` (index patterns and data streams), `data_views`, `ecs` | A rule's `index`, `data_view_id`, a threat match's `index`, ES\|QL `FROM` |
+| `system` | `name` declares | What it matches in a query |
+|----------|-----------------|----------------------------|
+| `sentinel`, `defender_for_endpoint` | a KQL table or workspace function | The names a KQL query reads: a pipeline's first source, a `union` leg, a `join` or `lookup` right side |
+| `splunk` | a sourcetype | `sourcetype=` |
+| `elastic` | an index pattern or data stream | A rule's `index`, a threat match's `index`, ES\|QL `FROM` |
+| any other | nothing | — |
 
 ```toml
 # .opentide/configurations/visibility.toml
 [[logsources]]
-name = "VNet flow logs"
-description = "Traffic analytics on the production VNet flow logs."
+name = "Contoso_Audit_CL"
+description = "Administrative audit events from the Contoso connector."
 system = "sentinel"
-tables = ["NTANetAnalytics", "NTAIpDetails", "*_CL"]
+tenants = ["Production"]
+
+[logsources.columns]
+TimeGenerated = { type = "datetime" }
+Actor_s = { type = "string", description = "UPN of the account that made the change" }
 
 [[logsources]]
-name = "Windows security events"
+name = "*_CL"
+description = "Every custom table."
+system = "sentinel"
+
+[[logsources]]
+name = "WinEventLog:Security"          # splunk: the sourcetype
 description = "Security event log of the domain controllers."
 system = "splunk"
-indexes = ["wineventlog"]
-sourcetypes = ["WinEventLog:Security"]
-macros = ["wineventlog_security"]
 
 [[logsources]]
-name = "Endpoint telemetry"
-description = "Elastic Defend and custom ECS endpoint data."
+name = "logs-endpoint.events.*"        # elastic: the index pattern
+description = "Elastic Defend endpoint data."
 system = "elastic"
-indices = ["logs-endpoint.events.*", "custom-ecs-*"]
-data_views = ["security-solution-default"]
-ecs = true   # these indices follow the Elastic Common Schema
+
+[logsources.columns]
+"process.name" = { type = "keyword" }
 ```
 
-- Every field is optional. A workspace that names no dataset is checked as before.
-- `*` matches any run of characters (`*_CL`, `logs-azure.*`); the names are passed to the engine as written. Splunk names match regardless of case; tables and Elastic names do not.
-- Names are kept per `system`: a Splunk index never makes a Sentinel table known. A field that does not fit its log source's `system` (`tables` on a `splunk` log source, `ecs` anywhere but `elastic`) fails validation, and so does an empty name.
-- Checking is opt-in per platform and kind: once you name at least one Splunk index, a query that reads an index you did not name gets a warning; a workspace that names no Splunk index never gets one about an index.
-- Nothing is generated: the analysis engine reads `.opentide/configurations/visibility.toml` itself. The language server (`opentide lsp start`, or `opentide-lsp` on its own) reads it again whenever it changes, in the editor before you save or on disk, and checks the open documents again; each CLI run reads it afresh. A quick fix on an undeclared name adds it to the log source of its platform.
+- **Keys.** A log source takes `name`, `description` and `system` (required), and `tenants`, `assets`, `references` and `columns`. Any other key fails validation. `name` cannot be empty and is unique per `system`; the same name may appear under two systems (`DeviceEvents` under `sentinel` and `defender_for_endpoint`).
+- **Signals** name a log source in `data.logsources` as `<name>`, `<system>::<name>` or `<system>::<tenant>::<name>`; a bare name two systems declare refers to both.
+- **Patterns.** `*` matches any run of characters (`*_CL`, `logs-azure.*`). KQL and Elastic names match case-sensitively, Splunk names regardless of case. Splunk indexes and macros and Elastic data views are not declarable.
+- **Opt-in per system.** A system with at least one log source is checked against its names; a system with none is checked as if nothing were declared. The bundled `visibility.toml` declares no log source.
+- **Nothing is generated:** the analysis engine reads `.opentide/configurations/visibility.toml` itself. The language server (`opentide lsp start`, or `opentide-lsp` on its own) reads it again whenever it changes, in the editor before you save or on disk, and checks the open documents again; each CLI run reads it afresh. A quick fix on an undeclared name appends a new log source with that `name`, the system and an empty `description` for you to fill; it never edits another log source.
+
+How a KQL source name is reported:
+
+| The name is | Opted in | Report |
+|---|---|---|
+| declared | yes | nothing |
+| known to the engine's catalog, not declared | yes | [`kql_table_not_declared`](../cli/diagnostics.md#kql_table_not_declared), warning |
+| known to the engine's catalog | no | nothing |
+| unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `defender_for_endpoint` |
+
+Under opt-in a name is checked whatever its case; without, a name that starts with a lowercase letter is checked only when it ends in `_CL`, as it may be a workspace function. Under opt-in, a Splunk sourcetype that is not declared is [`spl_dataset_not_declared`](../cli/diagnostics.md#spl_dataset_not_declared), and an Elastic index pattern that is not declared is [`elastic_dataset_not_declared`](../cli/diagnostics.md#elastic_dataset_not_declared), both warnings; neither has an unknown-dataset error.
+
+#### Columns
+
+`columns` is a table keyed by column name, as the platform spells it (quote a name with a dot: `"process.name"`). Each value takes a `type` from the system's type set and an optional `description`; any other key fails validation, and so does `columns` on a system with no type set. Columns on a name with `*` apply to every dataset the name matches.
+
+| `system` | Types |
+|----------|-------|
+| `sentinel`, `defender_for_endpoint` | KQL scalar types: `bool`, `datetime`, `decimal`, `dynamic`, `guid`, `int`, `long`, `real`, `string`, `timespan` |
+| `splunk` | `string`, `number`, `boolean` |
+| `elastic` | Elasticsearch field types: `binary`, `boolean`, `byte`, `constant_keyword`, `date`, `date_nanos`, `double`, `flattened`, `float`, `geo_point`, `half_float`, `integer`, `ip`, `keyword`, `long`, `match_only_text`, `nested`, `object`, `scaled_float`, `short`, `text`, `unsigned_long`, `version`, `wildcard` |
+
+- KQL: a declared table with `columns` is checked like a documented table: a near miss of a declared column is `kql_unknown_column`, an operator the declared type does not support is `kql_type_mismatch`, and hover and completion show the declared columns. On a table the engine's catalog also knows, the declared columns extend the catalog's, and a declared column with a catalog column's name replaces its type and description. A table declared without `columns` is known by name only.
+- Elastic: declared columns are fields the index pattern maps, so `ecs_unknown_field` is not reported for them and `ecs_type_mismatch` uses their declared type.
+- Splunk: declared columns are offered in hover and completion where the engine has them, and are not checked.
+
+#### Upgrading from 0.20.0
+
+opentide 0.20.0 let one log source list datasets under `tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views` and `ecs`. `visibility::1.0` is corrected in place, and those keys now fail validation, each with a message that says what to do instead. Rewrite `visibility.toml` with one `[[logsources]]` per table, sourcetype or index pattern, named after it (copy the entry's `description`, `system`, `tenants`, `assets` and `references`), remove `indexes`, `macros`, `data_views` and `ecs`, and update the signals' `data.logsources` that named the old entry to the new names:
+
+```toml
+# 0.20.0
+[[logsources]]
+name = "Custom tables"
+description = "Custom connector tables"
+system = "sentinel"
+tables = ["Contoso_Audit_CL", "Fabrikam_Proxy_CL"]
+
+# 0.20.1
+[[logsources]]
+name = "Contoso_Audit_CL"
+description = "Custom connector tables"
+system = "sentinel"
+
+[[logsources]]
+name = "Fabrikam_Proxy_CL"
+description = "Custom connector tables"
+system = "sentinel"
+```
 
 ## Lint
 

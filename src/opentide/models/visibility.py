@@ -1,39 +1,105 @@
-"""Visibility configuration Pydantic model — replaces visibility.meta.yaml."""
+"""Visibility configuration Pydantic model (``visibility::1.0``).
+
+A `[[logsources]]` entry is one dataset, and its `name` is that dataset: the
+KQL table (or workspace function) for `sentinel` and `defender_for_endpoint`,
+the sourcetype for `splunk`, the index pattern or data stream for `elastic`.
+It may list the dataset's columns, keyed by column name. The query checks of
+the analysis engine read the same file themselves
+(:func:`opentide.analysis.install_workspace_visibility`).
+"""
 
 from __future__ import annotations
 
-from typing import ClassVar
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
-from pydantic import ValidationInfo, field_validator
+from pydantic import ValidationError, ValidationInfo, field_validator, model_validator
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from opentide.models.base import TideField, TideModel
 
-#: The dataset fields a log source may set, by the `system` that reads them.
-#: A field outside its system's list is a validation error, so a Splunk index
-#: never makes a Sentinel table known. The analysis engine reads the same
-#: fields from the file itself (:func:`opentide.analysis.install_workspace_visibility`).
-DATASET_FIELDS: dict[str, tuple[str, ...]] = {
-    "sentinel": ("tables",),
-    "defender_for_endpoint": ("tables",),
-    "splunk": ("indexes", "sourcetypes", "macros"),
-    "elastic": ("indices", "data_views", "ecs"),
+#: What a log source's `name` declares to the query checks, by `system`.
+#: A system that is not listed declares nothing.
+DATASET_KINDS: dict[str, str] = {
+    "sentinel": "KQL table",
+    "defender_for_endpoint": "KQL table",
+    "splunk": "sourcetype",
+    "elastic": "index pattern",
 }
 
-#: Every dataset field, in the order the model declares them.
-DATASET_FIELD_NAMES: tuple[str, ...] = (
-    "tables",
-    "indexes",
-    "sourcetypes",
-    "macros",
-    "indices",
-    "data_views",
-    "ecs",
-)
+#: The opentide 0.20.0 dataset keys, which `visibility::1.0` does not accept,
+#: and the message each fails with: what to do instead.
+LEGACY_DATASET_KEYS: dict[str, str] = {
+    "tables": "`tables` was removed in 0.20.1: declare each table as its own [[logsources]] "
+    "entry whose `name` is the table",
+    "sourcetypes": "`sourcetypes` was removed in 0.20.1: declare each sourcetype as its own "
+    "[[logsources]] entry whose `name` is the sourcetype",
+    "indices": "`indices` was removed in 0.20.1: declare each index pattern as its own "
+    "[[logsources]] entry whose `name` is the index pattern",
+    "indexes": "`indexes` is no longer supported (Splunk indexes are not declared); remove it",
+    "macros": "`macros` is no longer supported (Splunk macros are not declared); remove it",
+    "data_views": "`data_views` is no longer supported (Elastic data views are not declared); "
+    "remove it",
+    "ecs": "`ecs` is no longer supported; remove it",
+}
+
+#: The column types each system takes in a log source's `columns`.
+COLUMN_TYPES: dict[str, tuple[str, ...]] = {
+    "sentinel": (
+        "bool",
+        "datetime",
+        "decimal",
+        "dynamic",
+        "guid",
+        "int",
+        "long",
+        "real",
+        "string",
+        "timespan",
+    ),
+    "splunk": ("string", "number", "boolean"),
+    "elastic": (
+        "binary",
+        "boolean",
+        "byte",
+        "constant_keyword",
+        "date",
+        "date_nanos",
+        "double",
+        "flattened",
+        "float",
+        "geo_point",
+        "half_float",
+        "integer",
+        "ip",
+        "keyword",
+        "long",
+        "match_only_text",
+        "nested",
+        "object",
+        "scaled_float",
+        "short",
+        "text",
+        "unsigned_long",
+        "version",
+        "wildcard",
+    ),
+}
+COLUMN_TYPES["defender_for_endpoint"] = COLUMN_TYPES["sentinel"]
 
 
-def systems_for(field: str) -> tuple[str, ...]:
-    """The `system` values whose log sources may set *field*."""
-    return tuple(system for system, fields in DATASET_FIELDS.items() if field in fields)
+def _error(loc: tuple[str | int, ...], message: str) -> InitErrorDetails:
+    """One `value_error` at *loc*, with *message* as written."""
+    return InitErrorDetails(
+        type=PydanticCustomError("value_error", "{message}", {"message": message}),
+        loc=loc,
+        input=None,
+    )
+
+
+def _invalid(message: str) -> PydanticCustomError:
+    """A `value_error` with *message* as written (no "Value error, " prefix)."""
+    return PydanticCustomError("value_error", "{message}", {"message": message})
 
 
 class VisibilityAsset(TideModel):
@@ -46,61 +112,90 @@ class VisibilityAsset(TideModel):
     criticality: str
     """Criticality vocabulary value."""
     custom_details: dict[str, str | bool | int | float] | None = None
-    """Free-form key and value details."""
+    """Free-form keys with string, boolean or number values."""
     surface: list[str] | None = None
     """Threat surface vocabulary values the asset exposes."""
 
 
+class VisibilityColumn(TideModel):
+    """One column of a log source's dataset, under `columns.<name>`."""
+
+    type: str
+    """Column type, from the system's type set."""
+    description: str | None = None
+    """What the column holds."""
+
+
 class VisibilityLogSource(TideModel):
-    """One `[[logsources]]` entry: a log source a rule's signals can name."""
+    """One `[[logsources]]` entry: one dataset a rule's signals can name."""
 
     name: str
-    """Log source name. Signals reference it in `data.logsources`."""
+    """The dataset: the KQL table or workspace function (`sentinel`, `defender_for_endpoint`), the
+    sourcetype (`splunk`), the index pattern or data stream (`elastic`). Unique per `system`.
+    Signals reference it."""
     description: str
     """What the log source records."""
     system: str
-    """Detection system that holds the logs."""
-    assets: list[str] | None = None
-    """Names of the assets that produce these logs."""
+    """Platform identifier of the system that holds the logs."""
     tenants: list[str] | None = None
     """Tenants of `system` that hold the logs."""
+    assets: list[str] | None = None
+    """Names of the `[[assets]]` that produce the logs."""
     references: list[str] | None = None
     """Reference links."""
-    # The dataset fields: what the query checks know a log source by. Each fits
-    # the systems DATASET_FIELDS lists; `*` matches any run of characters.
-    tables: list[str] | None = None
-    """KQL tables and functions the logs fill (`sentinel`, `defender_for_endpoint`)."""
-    indexes: list[str] | None = None
-    """Splunk indexes the logs fill, as `index=` names them (`splunk`)."""
-    sourcetypes: list[str] | None = None
-    """Splunk sourcetypes the logs carry, as `sourcetype=` names them (`splunk`)."""
-    macros: list[str] | None = None
-    """Splunk macros that search the logs, without backticks (`splunk`)."""
-    indices: list[str] | None = None
-    """Elastic index patterns and data streams the logs fill, as `index` names them (`elastic`)."""
-    data_views: list[str] | None = None
-    """Elastic data view ids that cover the logs, as `data_view_id` names them (`elastic`)."""
-    ecs: bool | None = None
-    """Whether the `indices` follow the Elastic Common Schema (`elastic`)."""
+    columns: dict[str, VisibilityColumn] | None = None
+    """The dataset's columns, keyed by column name as-is."""
 
-    @field_validator(*DATASET_FIELD_NAMES)
+    @model_validator(mode="before")
     @classmethod
-    def _fits_system(cls, value: object, info: ValidationInfo) -> object:
-        """A dataset field is set only on a log source of a system that reads it."""
-        if value is None or info.field_name is None:
+    def _no_legacy_keys(cls, data: Any) -> Any:
+        """The 0.20.0 dataset keys fail on their key, saying what to do instead."""
+        if not isinstance(data, Mapping):
+            return data
+        errors = [
+            _error((key,), LEGACY_DATASET_KEYS[key]) for key in data if key in LEGACY_DATASET_KEYS
+        ]
+        if errors:
+            raise ValidationError.from_exception_data(cls.__name__, errors)
+        return data
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise _invalid("`name` cannot be empty")
+        return value
+
+    @field_validator("columns")
+    @classmethod
+    def _columns_fit_system(
+        cls, value: dict[str, VisibilityColumn] | None, info: ValidationInfo
+    ) -> dict[str, VisibilityColumn] | None:
+        """Columns take the type set of the log source's system; other systems take none."""
+        if value is None:
             return value
         system = info.data.get("system")
         if not isinstance(system, str):
             # `system` failed validation itself: that error is the one to read.
             return value
-        if info.field_name not in DATASET_FIELDS.get(system, ()):
-            fits = ", ".join(systems_for(info.field_name))
-            raise ValueError(
-                f"`{info.field_name}` does not apply to system {system!r}; "
-                f"it applies to a log source of {fits}"
+        types = COLUMN_TYPES.get(system)
+        if types is None:
+            raise _invalid(
+                f"`columns` does not apply to system {system!r}; it applies to a log source "
+                f"of {', '.join(COLUMN_TYPES)}"
             )
-        if isinstance(value, list) and any(not name.strip() for name in value):
-            raise ValueError(f"`{info.field_name}` holds an empty name")
+        errors = [_error((name,), "a column name cannot be empty") for name in value if not name]
+        errors += [
+            _error(
+                (name, "type"),
+                f"column type {column.type!r} is not a {system} type; "
+                f"use one of {', '.join(types)}",
+            )
+            for name, column in value.items()
+            if column.type not in types
+        ]
+        if errors:
+            raise ValidationError.from_exception_data(cls.__name__, errors)
         return value
 
 
@@ -135,12 +230,31 @@ class VisibilityConfig(TideModel):
         ...,
         schema_extra={"title": "Log Sources"},
     )
-    """Log sources available to detection signals."""
+    """Log sources available to detection signals, one dataset each."""
     detectors: list[VisibilityDetector] | None = TideField(
         default=None,
         schema_extra={"title": "External Detectors"},
     )
     """External detectors that already cover parts of the environment."""
+
+    @model_validator(mode="after")
+    def _unique_per_system(self) -> VisibilityConfig:
+        """`name` is unique per `system`; the same name under two systems is fine."""
+        seen: dict[tuple[str, str], int] = {}
+        errors: list[InitErrorDetails] = []
+        for position, source in enumerate(self.logsources):
+            first = seen.setdefault((source.system, source.name), position)
+            if first != position:
+                errors.append(
+                    _error(
+                        ("logsources", position, "name"),
+                        f"log source {source.name!r} is already declared for {source.system} "
+                        f"by log source {first + 1}; names are unique per system",
+                    )
+                )
+        if errors:
+            raise ValidationError.from_exception_data(type(self).__name__, errors)
+        return self
 
     def unknown_assets(self) -> list[tuple[str, int, str, int, str]]:
         """Asset names a log source or detector uses that `[[assets]]` does not declare.
@@ -150,13 +264,12 @@ class VisibilityConfig(TideModel):
         """
         known = {asset.name for asset in self.assets or []}
         found: list[tuple[str, int, str, int, str]] = []
-        tables: tuple[tuple[str, list[VisibilityLogSource] | list[VisibilityDetector]], ...] = (
-            ("logsources", self.logsources or []),
-            ("detectors", self.detectors or []),
-        )
-        for table, items in tables:
-            for index, item in enumerate(items):
-                for position, asset in enumerate(item.assets or []):
-                    if asset not in known:
-                        found.append((table, index, item.name, position, asset))
+        for index, source in enumerate(self.logsources or []):
+            for position, asset in enumerate(source.assets or []):
+                if asset not in known:
+                    found.append(("logsources", index, source.name, position, asset))
+        for index, detector in enumerate(self.detectors or []):
+            for position, asset in enumerate(detector.assets or []):
+                if asset not in known:
+                    found.append(("detectors", index, detector.name, position, asset))
         return found

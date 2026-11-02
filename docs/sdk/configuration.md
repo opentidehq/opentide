@@ -33,9 +33,11 @@ model.model_validate({"platform": {"enabled": True}})
 
 ## Declared datasets
 
-A `visibility.toml` log source may name the datasets it fills: `tables` (`sentinel`, `defender_for_endpoint`), `indexes`, `sourcetypes` and `macros` (`splunk`), `indices`, `data_views` and `ecs` (`elastic`). `VisibilityLogSource` rejects a field its `system` does not read, and an empty name, as a `schema_validation` issue on that field (`("logsources", "0", "tables")`). `opentide.models.visibility.DATASET_FIELDS` maps each system to its fields.
+A `visibility.toml` log source (`VisibilityLogSource`) is one dataset, and its `name` is that dataset: the KQL table for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern for `elastic` (`opentide.models.visibility.DATASET_KINDS`). It takes `name`, `description`, `system`, `tenants`, `assets`, `references` and `columns`, a mapping of column name to `VisibilityColumn` (`type` from `COLUMN_TYPES[system]`, optional `description`).
 
-The analysis engine reads the same fields from the file's text, so nothing is generated in between. `opentide.analysis.install_workspace_visibility(root)` hands it `root/.opentide/configurations/visibility.toml` for the query checks (`opentide validate`, `lint` and the TUI call it); `opentide._native.install_visibility(text)` takes the text directly, and `install_catalog(..., visibility=text)` installs it with the Tide catalogs. `*` in a name matches any run of characters.
+Each violation is an issue on the key at fault: an empty `name` or a name declared twice for one `system` (`schema_validation`, `("logsources", "1", "name")`), a column type outside the system's set (`("logsources", "0", "columns", "Actor_s", "type")`), `columns` on a system with no type set, and an unknown key (`unknown_key`). The 0.20.0 keys (`LEGACY_DATASET_KEYS`: `tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`) fail as `schema_validation` on that key, with the message `LEGACY_DATASET_KEYS` maps the key to: what to do instead.
+
+The analysis engine reads the same keys from the file's text, so nothing is generated in between. `opentide.analysis.install_workspace_visibility(root)` hands it `root/.opentide/configurations/visibility.toml` for the query checks (`opentide validate`, `lint` and the TUI call it); `opentide._native.install_visibility(text)` takes the text directly, and `install_catalog(..., visibility=text)` installs it with the Tide catalogs. `*` in a name matches any run of characters.
 
 ## Exporting the JSON Schemas
 
