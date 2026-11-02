@@ -7,6 +7,35 @@ description: Public package versions of opentide on PyPI.
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.20.1 — 3 November 2026
+
+Patch release. A `visibility.toml` log source is one dataset, named by its `name`, and can declare its columns; the query checks ([language-server 0.7.1](https://github.com/opentidehq/language-server/releases/tag/v0.7.1)) read them. A patch by maintainer decision: the 0.20.0 dataset lists were a defect of `visibility::1.0`, shipped the same day, and are corrected in place. If your `visibility.toml` uses the 0.20.0 lists (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), rewrite it with one `[[logsources]]` per table, sourcetype or index pattern, named after it, and update the signals' `data.logsources` references ([Upgrading from 0.20.0](./configuration.md#upgrading-from-0200)). Everything else needs nothing.
+
+**Install**
+
+```bash
+pip install opentide==0.20.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **One log source per dataset, with its columns** ([#718](https://github.com/opentidehq/opentide/issues/718)). A log source's `name` is its KQL table, Splunk sourcetype or Elastic index pattern, and `columns` declares the dataset's columns (`{ type, description }`). The 0.20.0 keys fail validation and say what to do instead; there is no migration command.
+- **The query checks know the declared columns** (language-server 0.7.1): a near miss of a declared column, or an operator its type does not support, is reported, and hover and completion show them. Once tables are declared, an unknown table keeps its profile's severity again, so a Defender typo fails `validate`; lower-case table names are checked; column patterns in `project-reorder`, `project-away` and `project-keep` parse.
+- **`lint` checks a file that starts with a UTF-8 byte-order mark** ([#719](https://github.com/opentidehq/opentide/issues/719)); before, none of its queries was analysed.
+- **MCP `validate_query` reads `visibility.toml`** ([#720](https://github.com/opentidehq/opentide/issues/720)), so it reports what `opentide validate query` reports.
+- **`lint.toml` sets the filename convention per object kind** ([#721](https://github.com/opentidehq/opentide/issues/721)): `[filenames.threats]`, `[filenames.objectives]` and `[filenames.rules]` take `style` and `pattern`.
+- **ATT&CK 20.0 group labels** in generated docs and editor schemas (`[Enterprise] APT28`); the accepted values are unchanged.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0201--2026-11-03) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.20.1/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.20.1)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.20.0 — 2 November 2026
 
 Minor release. `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns, a workspace's `visibility.toml` declares its own tables, indexes and index patterns, and `lint.toml` sets the filename convention. Run `opentide validate` after upgrading: a rule the platform compiler cannot build, or a query with a near miss of a documented column, now fails it.
