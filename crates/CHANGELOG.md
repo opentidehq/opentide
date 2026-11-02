@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Changed
+
+- The bundled Tide catalog takes the current ATT&CK group labels (`[Enterprise] APT28` where it said `[Mobile] APT28`) for `threat.actors.name`. The values `threat::1.0` accepts are unchanged: it still pins `actors::1.1`.
+
 ### Fixed
 
 - KQL: `project-reorder`, `project-away` and `project-keep` accept column patterns (`*`, `User*`, `*Id`), as Kusto does, instead of reporting `kql_parse_error` ([#148](https://github.com/opentidehq/language-server/issues/148)). The Sentinel threat-intelligence idiom `| project-reorder *, IsActive, ...` parses. A pattern is a glob over the input columns, never `kql_unknown_column`: `project-away User*` removes the columns it matches, `project-keep` keeps the columns a name or pattern matches, and `project-reorder` keeps every column.
