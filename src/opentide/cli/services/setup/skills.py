@@ -54,6 +54,8 @@ class SkillsSetupOptions:
     name: str | None = None
     org: str | None = None
     description: str | None = None
+    #: Register the opentidehq/skills Agent Plugin for Claude Code (#431).
+    plugin: bool = False
     yes: bool = False
 
 
@@ -262,6 +264,7 @@ class _Entrypoints:
 def _install_claude_code(
     target: Path, slugs: list[str], context: dict[str, str], entrypoints: _Entrypoints
 ) -> list[str]:
+    """CLAUDE.md, and the skills under ``.claude/skills/`` unless *slugs* is empty."""
     claude_md = render_agent_entrypoint("CLAUDE.md.template", context)
     written = entrypoints.write(target, "CLAUDE.md", claude_md)
     for slug in slugs:
@@ -289,22 +292,43 @@ def _install_github_copilot(
 
 def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     """Install agent skills and entrypoints for selected harnesses."""
-    if not options.targets:
+    if not options.targets and not options.plugin:
         raise typer.BadParameter(
             "Choose at least one skills target "
-            "(--cursor, --claude-code, --generic, --github-copilot)"
+            "(--cursor, --claude-code, --generic, --github-copilot, --plugin)"
         )
     target = options.path.resolve()
-    slugs = _resolve_skill_slugs(options)
+    written: list[str] = []
+    plugin_warnings: list[str] = []
+    if options.plugin:
+        from opentide.cli.services.setup.plugin import (
+            CLAUDE_SETTINGS,
+            PluginConfigError,
+            register_claude_code_plugin,
+        )
+
+        try:
+            written.append(register_claude_code_plugin(target))
+        except PluginConfigError as exc:
+            plugin_warnings.append(
+                f"{CLAUDE_SETTINGS} {exc}; left unchanged. Install the plugin in Claude "
+                "Code with /plugin marketplace add opentidehq/skills."
+            )
+    # With the plugin, Claude Code takes the skills from it: copying them into
+    # .claude/skills/ as well would load every skill twice.
+    copies = [t for t in options.targets if not (options.plugin and t is SkillTarget.claude_code)]
+    slugs = _resolve_skill_slugs(options) if copies else []
     context = _entrypoint_context(options, target)
-    written = _install_skill_trees(target, slugs)
+    if slugs:
+        written.extend(_install_skill_trees(target, slugs))
     entrypoints = _Entrypoints()
     also_applied: list[str] = []
     for skill_target in options.targets:
         if skill_target is SkillTarget.cursor:
             written.extend(_install_cursor(target, slugs))
         elif skill_target is SkillTarget.claude_code:
-            written.extend(_install_claude_code(target, slugs, context, entrypoints))
+            own = [] if options.plugin else slugs
+            written.extend(_install_claude_code(target, own, context, entrypoints))
         elif skill_target is SkillTarget.generic:
             written.extend(_install_generic(target, context, entrypoints))
         elif skill_target is SkillTarget.github_copilot:
@@ -323,8 +347,19 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
         result["also_applied"] = also_applied
     if entrypoints.skipped:
         result["skipped"] = entrypoints.skipped
-    if entrypoints.warnings:
-        result["warnings"] = entrypoints.warnings
+    if options.plugin:
+        from opentide.cli.services.setup.plugin import OTHER_HOSTS, PLUGIN_ID
+
+        result["plugin"] = PLUGIN_ID
+        result["advice"] = (
+            "Claude Code offers the opentide plugin to whoever opens this project. "
+            "The plugin starts opentide mcp start itself: other agents install it with "
+            + "; ".join(f"{host}: {how}" for host, how in OTHER_HOSTS.items())
+            + "."
+        )
+    warnings = plugin_warnings + entrypoints.warnings
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 

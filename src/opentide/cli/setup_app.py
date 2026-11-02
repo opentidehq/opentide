@@ -758,6 +758,14 @@ def setup_skills_install_cmd(
         help="Skill slug to install (repeatable); default: the rule and engineering skills",
     ),
     all_skills: bool = typer.Option(False, "--all", help="Install every skill in the catalogue"),
+    plugin: bool = typer.Option(
+        False,
+        "--plugin",
+        help=(
+            "Register the opentidehq/skills Agent Plugin (skills and MCP server) for "
+            "Claude Code in .claude/settings.json"
+        ),
+    ),
     name: str | None = typer.Option(
         None, "--name", help="Heading of the agent files; default: the folder name"
     ),
@@ -797,16 +805,16 @@ def setup_skills_install_cmd(
     if github_copilot:
         targets.append(SkillTarget.github_copilot)
 
-    if yes and not targets:
+    if yes and not targets and not plugin:
         emit_error(
             cli,
             "Choose at least one skills target "
-            "(--cursor, --claude-code, --generic, --github-copilot)",
+            "(--cursor, --claude-code, --generic, --github-copilot, --plugin)",
             exit_code=USAGE_EXIT_CODE,
             code=USAGE_MISSING_OPTION,
         )
 
-    if yes or targets:
+    if yes or targets or plugin:
         if not _confirm_write(cli, base, "Install these agent skills?", yes=yes):
             emit_success(cli, {"message": "Agent skills setup cancelled", "status": "skipped"})
             return
@@ -818,6 +826,7 @@ def setup_skills_install_cmd(
             name=name,
             org=org,
             description=description,
+            plugin=plugin,
             yes=yes,
         )
         cli.apply_environment()

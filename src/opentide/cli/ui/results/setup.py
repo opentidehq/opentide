@@ -95,6 +95,9 @@ class SetupSkillsResult(CommandDocument, SetupFiles):
 
     skills: list[str] | None = Field(None, description="Skills installed, by slug")
     also_applied: list[str] | None = None
+    plugin: str | None = Field(
+        None, description="The Agent Plugin registered for Claude Code, with --plugin"
+    )
 
 
 class SkillInfo(ResultModel):
