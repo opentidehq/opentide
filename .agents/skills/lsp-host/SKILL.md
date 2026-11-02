@@ -28,7 +28,7 @@ The server is also a library: `opentide_lsp::run_stdio()` is what the `opentide`
 
 ## Session
 
-`Session` maps URI → (`LanguageId`, text). `language_for` uses a reported language id when `LanguageId::parse` accepts it, otherwise the URI suffix through `LanguageId::from_extension` (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, else Tide YAML). An unknown reported id is ignored. `.sql` is Tide YAML and is not validated as SQL.
+`Session` maps URI → (`LanguageId`, text). `language_for` uses a reported language id when `LanguageId::parse` accepts it, otherwise the URI suffix through `LanguageId::from_extension` (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, else Tide YAML). An unknown reported id is ignored. `.sql` is Tide YAML and is not validated as SQL.
 
 The analysis crate sees a `MemoryWorkspace` built from open documents plus YAML files under the workspace `objects/` directory. The engine still does not call `std::fs`. The host does.
 
@@ -66,7 +66,7 @@ CrowdStrike paths produce `crowdstrike_unsupported` or no fake success. Do not p
 
 `editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is `opentidehq/vscode-extension`, a different repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
-Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`. Not `sql`. Not `otide`.
+Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`. Not `sql`. Not `otide`.
 
 ## Tests
 

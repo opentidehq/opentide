@@ -264,6 +264,40 @@ Engine checks below the grammar (Elastic dialect unless noted):
 | lucene.term-query | `term_query` | `term_query__valid`, `term_query__invalid` | `string` |
 | lucene.wildcard-term | `wildcard_term` | `wildcard_term__valid`, `wildcard_term__invalid` | `string` |
 
+## Falco
+
+Language id `falco` (`.falco`). Falco rule conditions, which Sysdig Secure runs: `configurations.sysdig.condition` and `macros[].condition` in Tide (sysdig-1.0). The grammar follows libsinsp's filter parser: `or` < `and` < `not`, lower case; a check is a field comparison, a transformer comparison (`tolower(proc.name) = bash`), a macro name, or a parenthesised expression. A field has at least one dot and may take an argument (`proc.aname[2]`, `evt.arg.flags`, `json.value[/user/name]`). Values are quoted strings, numbers, or bare strings up to whitespace, `(`, `)`, `,`, `=`, or a quote (`evt.dir = <` compares with `<`). A value list follows `in`, `intersects`, or `pmatch`; a bare item that names a list is expanded. A tuning's condition (`append_to_rule`) is a fragment that starts with `and` or `or` (`append_fragment`). There are no comments.
+
+Checks beyond the grammar, from `catalogs/falco/` (`scripts/sync_falco_catalog.py`). The block's `source` picks the field catalogue (`syscall` default; `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`), and its `macros` and `lists` are in scope, as deploy expands them:
+
+- `falco_parse_error` (error): the condition does not parse.
+- `falco_unknown_field` (warning): the field is not one Falco or its plugins define for the source, or belongs to another source (`ka.verb` in a `syscall` rule). A near miss is suggested. `%field` references in `configurations.sysdig.output` get the same check. Not reported for a source the catalogue does not know, which is `falco_unknown_source` (warning) on the block's `source`.
+- `falco_unknown_macro` (warning): a bare name that is no macro of the block or of the Falco default rules. A warning because Sysdig tenants have managed macros of their own.
+- `falco_unknown_list` (warning): `in name` with no parentheses, and `name` is no list.
+- `falco_misplaced_list` (error): a list used where Falco expects a macro.
+- `falco_type_mismatch` (warning): an operator the field's type does not take (`<` on a string, `contains` on a number, anything but `=`/`!=`/`in` on a boolean), or a value it cannot hold (`proc.pid = abc`, `evt.failed = maybe`). `len(...)` is a number; the other transformers are strings.
+- `falco_unknown_event` (warning): an `evt.type` value that is no syscall, tracepoint, plugin, or meta event, with a near miss suggested. Only for `syscall`.
+- `falco_append_condition` (error): a tuning's condition that does not start with `and` or `or`, or a new rule's that does.
+
+Every condition of the Falco default rules (`testdata/conformance/external/falco/`, 241 rules across the six sources) comes out with no finding. Hover explains fields (type, sources, description), macros and lists (the block's, or the default rules' with the defining file), operators, transformers, and event types; completion offers the source's fields, macros and transformers in condition position, operators after a field, and lists (and event types after `evt.type`) inside a value list.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| falco.and-expression | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| falco.or-expression | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| falco.not-expression | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| falco.append-fragment | `append_fragment` | `append_fragment__valid`, `append_fragment__invalid` | `keyword` |
+| falco.parenthesized | `parenthesized_expression` | `parenthesized_expression__valid`, `parenthesized_expression__invalid` | `punctuation.bracket` |
+| falco.macro | `macro_reference` | `macro_reference__valid`, `macro_reference__invalid` | `macro` |
+| falco.comparison | `comparison` | `comparison__valid`, `comparison__invalid` | `operator`, `keyword` |
+| falco.field | `field` | `field__valid`, `field__invalid` | `property` |
+| falco.field-argument | `field_argument` | `field_argument__valid`, `field_argument__invalid` | `string` |
+| falco.field-transformer | `field_transformer` | `field_transformer__valid`, `field_transformer__invalid` | `function.builtin` |
+| falco.value-transformer | `value_transformer` | `value_transformer__valid`, `value_transformer__invalid` | `function.builtin` |
+| falco.value-list | `value_list` | `value_list__valid`, `value_list__invalid` | `string`, `variable` (a list) |
+| falco.list-reference | `list_reference` | `list_reference__valid`, `list_reference__invalid` | `variable` |
+| falco.quoted-string | `quoted_string` | `quoted_string__valid`, `quoted_string__invalid` | `string` |
+
 ## Elastic indices and ECS
 
 ES|QL, EQL, kuery, and Lucene know which indices a query reads where it is written down: ES|QL from its `FROM` (or `TS`) command, the others from the Tide rule's elastic block, `index` for `query` and `threat.index` for `threat.query`. A `data_view_id`, an omitted `index` (the tenant's `setup.index`), a hunt, or a raw `.kuery`, `.lucene`, or `.eql` file leaves them unknown.
