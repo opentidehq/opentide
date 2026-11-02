@@ -5,7 +5,9 @@
 //! types its functions take and return are re-exported here, so a host never needs
 //! the per-language crates behind it.
 
-pub use opentide_core::datasets::{DatasetKind, Declaration, DeclaredDatasets};
+pub use opentide_core::datasets::{
+    DatasetKind, Declaration, DeclaredColumn, DeclaredDatasets, DeclaredSource,
+};
 pub use visibility::{DatasetEdit, VISIBILITY_CONFIGURATION, declare_dataset};
 
 mod visibility;
@@ -273,10 +275,12 @@ pub struct Catalog {
     /// `deprecations.json`: `deprecated_field` warnings on top of the bundled
     /// ones.
     pub deprecations: Option<String>,
-    /// The text of the workspace's `visibility.toml`: the tables, indexes,
-    /// sourcetypes, macros, index patterns and data views its log sources
-    /// declare. The query checks know a declared name, and warn about an
-    /// undeclared one where the workspace declares names of that kind.
+    /// The text of the workspace's `visibility.toml`: the table, index,
+    /// sourcetype, macro, index pattern or data view each of its log sources
+    /// declares (`table = "X"`, one per `[[logsources]]` entry), and the
+    /// columns it lists. The query checks know a declared name, and warn
+    /// about an undeclared one where the workspace declares names of that
+    /// kind; KQL and Elastic checks use declared columns.
     pub visibility: Option<String>,
 }
 

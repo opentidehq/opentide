@@ -784,22 +784,26 @@ pub mod codes {
                 "The table is not one the workspace declares in visibility.toml for the platform."
             }
             KQL_UNKNOWN_COLUMN => {
-                "The column is not in the documented schema of the table or ASIM parser it comes from."
+                "The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table."
             }
-            KQL_TYPE_MISMATCH => "The operator cannot apply to the column's documented type.",
+            KQL_TYPE_MISMATCH => {
+                "The operator cannot apply to the column's documented or declared type."
+            }
             SPL_UNKNOWN_DATAMODEL => "The CIM data model or dataset is not one Splunk CIM defines.",
             SPL_UNKNOWN_DATAMODEL_FIELD => {
                 "The field is not in the CIM data model the search reads."
             }
             SPL_DATASET_NOT_DECLARED => {
-                "The index, sourcetype or macro is not one the workspace declares in visibility.toml."
+                "The sourcetype is not one the workspace's Splunk log sources name in visibility.toml."
             }
-            ECS_TYPE_MISMATCH => "The operation cannot apply to the ECS field's type.",
+            ECS_TYPE_MISMATCH => {
+                "The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index."
+            }
             ECS_UNKNOWN_FIELD => {
-                "The field is not in the Elastic Common Schema, on indices that use it; ECS allows custom fields."
+                "The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields."
             }
             ELASTIC_DATASET_NOT_DECLARED => {
-                "The index pattern or data view is not one the workspace declares in visibility.toml."
+                "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml."
             }
             _ => return None,
         })

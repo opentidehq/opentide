@@ -841,7 +841,7 @@ fn a_raw_query_file_ignores_the_yaml_around_it() {
 fn an_undeclared_table_has_a_code_action_that_declares_it() {
     let scratch = Scratch::new("declare-table");
     let root = &scratch.0;
-    let visibility = "[[logsources]]\nname = \"VNet flow logs\"\ndescription = \"Flows.\"\nsystem = \"sentinel\"\ntables = [\"NTANetAnalytics\"]\n";
+    let visibility = "\u{feff}[[logsources]]\nname = \"NTANetAnalytics\"\ndescription = \"Flows.\"\nsystem = \"sentinel\"\n";
     std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
     std::fs::write(
         root.join(".opentide/configurations/visibility.toml"),
@@ -869,10 +869,7 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
         .unwrap()
         .iter()
         .find(|a| {
-            a["title"]
-                .as_str()
-                .unwrap()
-                .starts_with("Declare 'NTAIpDetails'")
+            a["title"] == "Add a [[logsources]] entry declaring 'NTAIpDetails' to visibility.toml"
         })
         .unwrap_or_else(|| panic!("{actions}"))
         .clone();
@@ -882,18 +879,23 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
         target.ends_with("/.opentide/configurations/visibility.toml"),
         "{target}"
     );
-    assert_eq!(edits[0]["newText"], ", \"NTAIpDetails\"");
+    // A new log source after the last line; the existing one is not edited.
+    assert_eq!(
+        edits[0]["newText"],
+        "\n[[logsources]]\nname = \"NTAIpDetails\"\ndescription = \"\"\nsystem = \"sentinel\"\n"
+    );
     assert_eq!(edits[0]["range"]["start"]["line"], 4);
+    assert_eq!(edits[0]["range"]["start"]["character"], 0);
 }
 
 #[test]
-fn an_undeclared_splunk_index_has_a_code_action_that_adds_it() {
+fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
     let scratch = Scratch::new("declare-index");
     let root = &scratch.0;
     std::fs::create_dir_all(root.join(".opentide/configurations")).unwrap();
     std::fs::write(
         root.join(".opentide/configurations/visibility.toml"),
-        "[[logsources]]\nname = \"Windows\"\ndescription = \"Events.\"\nsystem = \"splunk\"\nindexes = [\"wineventlog\"]\n",
+        "[[logsources]]\nname = \"WinEventLog:Security\"\ndescription = \"Events.\"\nsystem = \"splunk\"\n",
     )
     .unwrap();
     let uri = format!("file://{}/hunt.spl", root.display());
@@ -902,7 +904,7 @@ fn an_undeclared_splunk_index_has_a_code_action_that_adds_it() {
         "initialize",
         json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
     );
-    let codes = published_codes(&mut lsp, &uri, "spl", "index=sysmon EventCode=1");
+    let codes = published_codes(&mut lsp, &uri, "spl", "sourcetype=sysmon EventCode=1");
     assert!(
         codes.contains(&"spl_dataset_not_declared".to_string()),
         "{codes:?}"
@@ -911,19 +913,22 @@ fn an_undeclared_splunk_index_has_a_code_action_that_adds_it() {
         "textDocument/codeAction",
         json!({
             "textDocument": { "uri": uri },
-            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 12 } }
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 17 } }
         }),
     );
     let action = actions["result"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| a["title"] == "Declare 'sysmon' in log source \"Windows\" (visibility.toml)")
+        .find(|a| a["title"] == "Add a [[logsources]] entry declaring 'sysmon' to visibility.toml")
         .unwrap_or_else(|| panic!("{actions}"))
         .clone();
     let changes = &action["edit"]["changes"];
     let (_, edits) = changes.as_object().unwrap().iter().next().unwrap();
-    assert_eq!(edits[0]["newText"], ", \"sysmon\"");
+    assert_eq!(
+        edits[0]["newText"],
+        "\n[[logsources]]\nname = \"sysmon\"\ndescription = \"\"\nsystem = \"splunk\"\n"
+    );
 }
 
 /// No visibility.toml: the quick fix on `kql_unknown_table` creates it.
@@ -959,7 +964,7 @@ fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
     assert_eq!(changes[0]["kind"], "create");
     let text = changes[1]["edits"][0]["newText"].as_str().unwrap();
     assert!(
-        text.contains("system = \"sentinel\"\ntables = [\"MyCustom_CL\"]"),
+        text.contains("name = \"MyCustom_CL\"\ndescription = \"\"\nsystem = \"sentinel\""),
         "{text}"
     );
 }
@@ -988,10 +993,15 @@ fn editing_visibility_toml_rechecks_open_queries() {
     std::fs::create_dir_all(&config).unwrap();
     let path = config.join("visibility.toml");
     let visibility_uri = format!("file://{}", path.display());
-    let declare = |tables: &str| {
-        format!(
-            "[[logsources]]\nname = \"Flows\"\ndescription = \"Flows.\"\nsystem = \"sentinel\"\ntables = [{tables}]\n"
-        )
+    let declare = |tables: &[&str]| {
+        tables
+            .iter()
+            .map(|t| {
+                format!(
+                    "[[logsources]]\nname = \"{t}\"\ndescription = \"x\"\nsystem = \"sentinel\"\n\n"
+                )
+            })
+            .collect::<String>()
     };
     let uri = format!("file://{}/hunt.kql", root.display());
 
@@ -1018,7 +1028,7 @@ fn editing_visibility_toml_rechecks_open_queries() {
         "textDocument/didOpen",
         json!({ "textDocument": {
             "uri": visibility_uri, "languageId": "toml", "version": 1,
-            "text": declare("\"NTANetAnalytics\"")
+            "text": declare(&["NTANetAnalytics"])
         } }),
     );
     assert_eq!(
@@ -1037,7 +1047,7 @@ fn editing_visibility_toml_rechecks_open_queries() {
         "textDocument/didChange",
         json!({
             "textDocument": { "uri": visibility_uri, "version": 3 },
-            "contentChanges": [{ "text": declare("\"NTANetAnalytics\", \"NTAIpDetails\"") }]
+            "contentChanges": [{ "text": declare(&["NTANetAnalytics", "NTAIpDetails"]) }]
         }),
     );
     assert!(next_diagnostics(&mut lsp, &uri).is_empty());
@@ -1050,7 +1060,7 @@ fn editing_visibility_toml_rechecks_open_queries() {
     assert!(next_diagnostics(&mut lsp, &uri).is_empty());
 
     // Written outside the editor.
-    std::fs::write(&path, declare("\"NTANetAnalytics\"")).unwrap();
+    std::fs::write(&path, declare(&["NTANetAnalytics"])).unwrap();
     lsp.notify(
         "workspace/didChangeWatchedFiles",
         json!({ "changes": [{ "uri": visibility_uri, "type": 1 }] }),

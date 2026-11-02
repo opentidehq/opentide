@@ -1,8 +1,8 @@
 //! The indices an ES|QL query reads (`FROM`, `TS`), and the checks that
 //! follow from them: ECS field types and near-miss names where every index
-//! holds ECS documents (`logs-*` data streams, or indices a log source
-//! declares with `ecs = true`), and `elastic_dataset_not_declared` where the
-//! workspace declares Elastic indices.
+//! holds ECS documents (`logs-*` data streams; the fields `visibility.toml`
+//! declares for an index pattern count as mapped there), and
+//! `elastic_dataset_not_declared` where the workspace has elastic log sources.
 //!
 //! Field types are known only for columns the query reads straight from the
 //! indices. The pipeline is followed command by command: a name `EVAL`,
@@ -91,7 +91,8 @@ pub(crate) fn dataset_diagnostics(root: Node, source: &str) -> Vec<Diagnostic> {
     let names: Vec<&str> = indices.iter().map(|(n, _)| n.as_str()).collect();
     if opentide_ecs::indices_are_ecs(&names) {
         if let Some(query) = query_node(root) {
-            out.extend(Walker::new(source).run(query));
+            let ecs = opentide_ecs::with_declared_fields(&names, || Walker::new(source).run(query));
+            out.extend(ecs);
         }
     }
     out

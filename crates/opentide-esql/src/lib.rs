@@ -23,8 +23,8 @@
 //! [`analyze_for`] reads the indices `FROM` names ([`source_indices`]). Where
 //! the workspace declares Elastic indices, an undeclared one is
 //! `elastic_dataset_not_declared`. Where every one holds ECS documents
-//! (`logs-*`, or declared `ecs_indices`), columns read straight from them are
-//! checked against ECS ([`ecs_diagnostics`]).
+//! (`logs-*`), columns read straight from them are checked against ECS
+//! ([`ecs_diagnostics`]) and the columns `visibility.toml` declares for them.
 
 pub mod catalog;
 mod columns;

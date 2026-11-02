@@ -681,16 +681,20 @@ fn analyze_injections(
                 if inj.field_path.first().map(String::as_str) == Some("configurations") {
                     extra = elastic::maxspan_advisories(source, configurations, &inj);
                 }
-                if elastic::reads_ecs(configurations, &inj.field_path) {
-                    let ecs = opentide_eql::ecs_diagnostics(&inj.inner);
+                if let Some(indices) = elastic::ecs_indices(configurations, &inj.field_path) {
+                    let ecs = opentide_ecs::with_declared_fields(&indices, || {
+                        opentide_eql::ecs_diagnostics(&inj.inner)
+                    });
                     opentide_ecs::merge(&mut r.diagnostics, ecs);
                 }
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Kuery => {
                 let mut r = opentide_kuery::analyze(&inj.inner);
-                if elastic::reads_ecs(configurations, &inj.field_path) {
-                    let ecs = opentide_kuery::ecs_diagnostics(&inj.inner);
+                if let Some(indices) = elastic::ecs_indices(configurations, &inj.field_path) {
+                    let ecs = opentide_ecs::with_declared_fields(&indices, || {
+                        opentide_kuery::ecs_diagnostics(&inj.inner)
+                    });
                     opentide_ecs::merge(&mut r.diagnostics, ecs);
                 }
                 (r.diagnostics, r.tokens)
@@ -702,10 +706,13 @@ fn analyze_injections(
                     opentide_lucene::Dialect::Elastic
                 };
                 let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
-                if dialect == opentide_lucene::Dialect::Elastic
-                    && elastic::reads_ecs(configurations, &inj.field_path)
-                {
-                    let ecs = opentide_lucene::ecs_diagnostics(&inj.inner);
+                let indices = (dialect == opentide_lucene::Dialect::Elastic)
+                    .then(|| elastic::ecs_indices(configurations, &inj.field_path))
+                    .flatten();
+                if let Some(indices) = indices {
+                    let ecs = opentide_ecs::with_declared_fields(&indices, || {
+                        opentide_lucene::ecs_diagnostics(&inj.inner)
+                    });
                     opentide_ecs::merge(&mut r.diagnostics, ecs);
                 }
                 (r.diagnostics, r.tokens)

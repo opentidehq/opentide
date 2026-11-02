@@ -13,7 +13,9 @@
 use crate::{EcsField, field, fields, version, with_prefix};
 use opentide_core::datasets::{self, DatasetKind};
 use opentide_core::{Diagnostic, Range, Severity, codes};
-use std::collections::BTreeSet;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 use std::sync::OnceLock;
 
 /// What Elasticsearch can do with a field of a type, in a query.
@@ -61,6 +63,109 @@ impl ValueType {
     }
 }
 
+/// The Elasticsearch field types `visibility.toml` columns may have, so a
+/// declared type can be named with the catalog's `'static` strings.
+const ELASTIC_TYPES: &[&str] = &[
+    "binary",
+    "boolean",
+    "byte",
+    "constant_keyword",
+    "date",
+    "date_nanos",
+    "double",
+    "flattened",
+    "float",
+    "geo_point",
+    "half_float",
+    "integer",
+    "ip",
+    "keyword",
+    "long",
+    "match_only_text",
+    "nested",
+    "object",
+    "scaled_float",
+    "short",
+    "text",
+    "unsigned_long",
+    "version",
+    "wildcard",
+];
+
+/// Declared field name to declared type.
+type Fields = Rc<BTreeMap<String, Option<String>>>;
+
+thread_local! {
+    /// The fields the workspace declares for the indices of the query being
+    /// checked ([`with_declared_fields`]): name to declared type.
+    static DECLARED: RefCell<Option<Fields>> =
+        const { RefCell::new(None) };
+}
+
+/// The columns elastic log sources in `visibility.toml` list for the indices
+/// a query reads (`index` names, `FROM` patterns): those of every declared
+/// index a read name or pattern covers, or that covers it. A comma-separated
+/// entry is split; exclusions (`-x*`), a `::` selector and a cross-cluster
+/// prefix are dropped. The first declaration of a name wins.
+pub fn declared_fields<S: AsRef<str>>(indices: &[S]) -> BTreeMap<String, Option<String>> {
+    let datasets = datasets::current();
+    let read: Vec<&str> = indices
+        .iter()
+        .flat_map(|i| i.as_ref().split(','))
+        .map(str::trim)
+        .filter(|n| !n.is_empty() && !n.starts_with('-'))
+        .map(|n| n.split_once("::").map_or(n, |(n, _)| n))
+        .map(|n| n.rsplit_once(':').map_or(n, |(_, n)| n))
+        .collect();
+    let mut out = BTreeMap::new();
+    for source in datasets.sources_with_columns("elastic") {
+        if !read
+            .iter()
+            .any(|r| DatasetKind::Indices.covers(&source.name, r))
+        {
+            continue;
+        }
+        for column in &source.columns {
+            out.entry(column.name.clone())
+                .or_insert_with(|| column.type_name.clone());
+        }
+    }
+    out
+}
+
+/// Run `f`, the ECS checks of a query that reads `indices`, with the fields
+/// the workspace declares for them ([`declared_fields`]) counted as mapped:
+/// [`unknown_field`] never reports one, and [`field_type`] gives its declared
+/// type (#146).
+pub fn with_declared_fields<S: AsRef<str>, R>(indices: &[S], f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<Fields>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let previous = self.0.take();
+            DECLARED.with(|d| *d.borrow_mut() = previous);
+        }
+    }
+    let fields = declared_fields(indices);
+    let previous = DECLARED.with(|d| d.borrow_mut().replace(Rc::new(fields)));
+    let _restore = Restore(previous);
+    f()
+}
+
+/// The declared type of `name` in the current scope: `None` when the field
+/// is not declared, `Some(None)` when it is, with a type the checks do not
+/// know.
+fn declared_type(name: &str) -> Option<Option<&'static str>> {
+    DECLARED.with(|d| {
+        let fields = d.borrow();
+        let type_name = fields.as_ref()?.get(name)?;
+        Some(
+            type_name
+                .as_deref()
+                .and_then(|t| ELASTIC_TYPES.iter().find(|k| **k == t).copied()),
+        )
+    })
+}
+
 /// Multi-field suffixes ECS and Elastic integrations add under a field:
 /// `.text` (ECS), `.keyword`, and Elastic Defend's `.caseless`.
 const MULTI_FIELDS: &[&str] = &["text", "keyword", "caseless"];
@@ -70,6 +175,19 @@ const MULTI_FIELDS: &[&str] = &["text", "keyword", "caseless"];
 /// for a field outside ECS, a multi-field of a non-string field, or a type
 /// that is not checked.
 pub fn field_type(name: &str) -> Option<(ValueType, &'static str)> {
+    if let Some(declared) = declared_type(name) {
+        let type_name = declared?;
+        return ValueType::of(type_name).map(|t| (t, type_name));
+    }
+    if let Some((parent, suffix)) = name.rsplit_once('.') {
+        if MULTI_FIELDS.contains(&suffix) {
+            if let Some(declared) = declared_type(parent) {
+                return declared
+                    .filter(|t| ValueType::of(t) == Some(ValueType::String))
+                    .map(|t| (ValueType::String, t));
+            }
+        }
+    }
     if let Some(f) = field(name) {
         return ValueType::of(&f.type_name).map(|t| (t, f.type_name.as_str()));
     }
@@ -85,6 +203,9 @@ pub fn field_type(name: &str) -> Option<(ValueType, &'static str)> {
 /// Whether `name` is an object in ECS (a field set such as `host`, or an
 /// `object` field such as `labels`) rather than a field that holds a value.
 pub fn is_object(name: &str) -> bool {
+    if let Some(declared) = declared_type(name) {
+        return matches!(declared, Some("object" | "nested" | "flattened"));
+    }
     match field(name) {
         Some(f) => f.type_name == "object",
         None => !with_prefix(&format!("{name}.")).is_empty(),
@@ -110,6 +231,14 @@ fn field_sets() -> &'static BTreeSet<&'static str> {
 /// near miss of an ECS field (`process.nmae` → `process.name`). `None`
 /// otherwise: ECS allows custom fields, so only a near miss is reported.
 pub fn unknown_field(name: &str) -> Option<String> {
+    // A field the workspace declares is mapped, and so are its multi-fields.
+    if declared_type(name).is_some()
+        || name
+            .rsplit_once('.')
+            .is_some_and(|(parent, s)| MULTI_FIELDS.contains(&s) && declared_type(parent).is_some())
+    {
+        return None;
+    }
     // `process.nmae.caseless`: the near miss is in the parent.
     if let Some((parent, suffix)) = name.rsplit_once('.') {
         if MULTI_FIELDS.contains(&suffix) && field(name).is_none() && field(parent).is_none() {
@@ -206,11 +335,20 @@ pub fn unknown_field_diagnostic(name: &str, range: impl FnOnce() -> Range) -> Op
 /// `ecs_type_mismatch` (error): `name`, an ECS field of `type_name`, cannot
 /// take `what` (`a wildcard`, `LIKE`, ...).
 pub fn type_mismatch(name: &str, type_name: &str, what: &str, range: Range) -> Diagnostic {
+    let parent = name
+        .rsplit_once('.')
+        .filter(|(_, s)| MULTI_FIELDS.contains(s))
+        .map(|(p, _)| p);
+    let source =
+        if declared_type(name).is_some() || parent.is_some_and(|p| declared_type(p).is_some()) {
+            "visibility.toml".to_string()
+        } else {
+            format!("ECS {}", version())
+        };
     Diagnostic::error(
         codes::ECS_TYPE_MISMATCH,
         format!(
-            "`{name}` is a `{type_name}` field in ECS {}: Elasticsearch rejects {what} on it",
-            version()
+            "`{name}` is a `{type_name}` field in {source}: Elasticsearch rejects {what} on it"
         ),
         range,
     )
@@ -267,10 +405,9 @@ fn is_ip_or_cidr(value: &str) -> bool {
 }
 
 /// Whether one index name or pattern, as a rule or `FROM` names it, holds ECS
-/// documents: an integration data stream (`logs-*`, `logs-endpoint.events.*`)
-/// or a name a log source declares with `ecs = true` (a declared pattern must
-/// cover it). A cross-cluster prefix (`remote:`) is ignored; the failure
-/// store (`::failures`) is not ECS.
+/// documents: an integration data stream (`logs-*`, `logs-endpoint.events.*`).
+/// A cross-cluster prefix (`remote:`) is ignored; the failure store
+/// (`::failures`) is not ECS.
 pub fn is_ecs_index(name: &str) -> bool {
     let name = name.trim();
     let (name, selector) = match name.split_once("::") {
@@ -281,13 +418,7 @@ pub fn is_ecs_index(name: &str) -> bool {
         return false;
     }
     let name = name.rsplit_once(':').map_or(name, |(_, n)| n);
-    if name.starts_with("logs-") {
-        return true;
-    }
-    datasets::current()
-        .names("elastic", DatasetKind::EcsIndices)
-        .iter()
-        .any(|d| datasets::glob_matches(d, name))
+    name.starts_with("logs-")
 }
 
 /// Whether every index a query reads holds ECS documents: at least one name,
@@ -304,9 +435,9 @@ pub fn indices_are_ecs<S: AsRef<str>>(indices: &[S]) -> bool {
 }
 
 /// `elastic_dataset_not_declared` (warning) for an index name or pattern a
-/// rule or `FROM` reads, when the workspace declares Elastic `indices` and
-/// none covers or reaches it. Opt-in: a workspace that declares no index
-/// gets nothing. An exclusion (`-logs-test*`) only narrows, and the `::data`
+/// rule or `FROM` reads, when the workspace has elastic log sources and no
+/// `name` of one covers or reaches it. Opt-in: a workspace with no elastic
+/// log source gets nothing. An exclusion (`-logs-test*`) only narrows, and the `::data`
 /// or `::failures` selector reads the same index.
 pub fn index_not_declared(name: &str, range: Range) -> Option<Diagnostic> {
     let name = name.trim();
@@ -314,28 +445,12 @@ pub fn index_not_declared(name: &str, range: Range) -> Option<Diagnostic> {
         return None;
     }
     let bare = name.split_once("::").map_or(name, |(n, _)| n);
-    let status = datasets::current().status("elastic", DatasetKind::Indices, bare);
+    let status = datasets::current().status("elastic", bare);
     (status == datasets::Declaration::Undeclared).then(|| {
         Diagnostic::warning(
             codes::ELASTIC_DATASET_NOT_DECLARED,
             format!(
-                "index pattern `{bare}` is not declared: no `indices` of an elastic log source in visibility.toml covers it"
-            ),
-            range,
-        )
-    })
-}
-
-/// `elastic_dataset_not_declared` (warning) for a `data_view_id` no elastic
-/// log source declares in `data_views`, when the workspace declares any.
-pub fn data_view_not_declared(id: &str, range: Range) -> Option<Diagnostic> {
-    let id = id.trim();
-    let status = datasets::current().status("elastic", DatasetKind::DataViews, id);
-    (!id.is_empty() && status == datasets::Declaration::Undeclared).then(|| {
-        Diagnostic::warning(
-            codes::ELASTIC_DATASET_NOT_DECLARED,
-            format!(
-                "data view `{id}` is not declared: no `data_views` of an elastic log source in visibility.toml names it"
+                "index pattern `{bare}` is not declared: no elastic log source in visibility.toml names it or a pattern that covers it"
             ),
             range,
         )
@@ -374,6 +489,62 @@ pub fn merge(found: &mut Vec<Diagnostic>, ecs: Vec<Diagnostic>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn declared_fields_are_mapped_with_their_type() {
+        // The only test in this crate that installs datasets.
+        datasets::install(Some(
+            datasets::DeclaredDatasets::from_visibility(
+                r#"
+[[logsources]]
+name = "logs-custom.app-*"
+description = "Custom app."
+system = "elastic"
+
+[logsources.columns]
+"process.custom_flag" = { type = "boolean" }
+"process.pid" = { type = "keyword" }
+"process.nmae" = { type = "keyword" }
+"#,
+            )
+            .unwrap(),
+        ));
+        assert_eq!(
+            unknown_field("process.nmae").as_deref(),
+            Some("process.name")
+        );
+        assert_eq!(field_type("process.pid").unwrap().0, ValueType::Numeric);
+        for indices in [
+            &["logs-custom.app-default"][..],
+            &["logs-custom.*"],
+            &["remote:logs-custom.app-x::data"],
+        ] {
+            with_declared_fields(indices, || {
+                assert_eq!(unknown_field("process.nmae"), None);
+                assert_eq!(unknown_field("process.nmae.keyword"), None);
+                assert_eq!(
+                    field_type("process.custom_flag"),
+                    Some((ValueType::Boolean, "boolean"))
+                );
+                // The declared type replaces ECS's.
+                assert_eq!(
+                    field_type("process.pid"),
+                    Some((ValueType::String, "keyword"))
+                );
+                let d = type_mismatch("process.pid", "keyword", "x", Range::point(0, 0));
+                assert!(d.message.contains("in visibility.toml"), "{}", d.message);
+            });
+        }
+        // Another index's fields are not declared, and the scope ends.
+        with_declared_fields(&["logs-other-*"], || {
+            assert_eq!(
+                unknown_field("process.nmae").as_deref(),
+                Some("process.name")
+            );
+        });
+        assert_eq!(field_type("process.pid").unwrap().0, ValueType::Numeric);
+        datasets::install(None);
+    }
 
     #[test]
     fn types_and_multi_fields() {

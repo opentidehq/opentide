@@ -7,15 +7,16 @@ What the engine knows about the datasets a KQL query reads, and what it reports.
 | Tier | What | Check | Severity |
 | --- | --- | --- | --- |
 | 1. Documented schema | Azure Monitor Logs tables, Defender XDR and advanced hunting tables, ASIM parsers | name, columns, types | error on a near miss of a documented column (`kql_unknown_column`, with the column it misspells) or on an operator Kusto does not define for a column's type (`kql_type_mismatch`) |
-| 2. Declared in `visibility.toml` | the `tables` of a `sentinel` or `defender_for_endpoint` log source | name | none |
+| 2. Declared in `visibility.toml` | the `name` of a `sentinel` or `defender_for_endpoint` log source, with its `columns` when it lists them | name; with `columns`, columns and types as tier 1 | none for the name; with `columns`, as tier 1 |
 | 3. Neither | any other name | name | warning: `kql_unknown_table` (`sentinel`), or `kql_table_not_declared` once the workspace declares tables for the platform |
 
 - An unknown table is never an error under `sentinel`: the engine cannot see the workspace. Under `defender_for_endpoint`, advanced hunting is a closed schema and an unknown table stays an error.
 - Declarations are per platform. A Splunk index never makes a Sentinel table known.
 - Opt-in: a built-in table that is not declared warns only when the workspace declares at least one table for that platform.
+- Declared columns (`[logsources.columns]`, keyed by the column name as the platform spells it, each `{ type = "<KQL scalar type>", description = "..." }`) make a declared table a documented one: a near miss of one is `kql_unknown_column`, an operator its type lacks `kql_type_mismatch`, and hover and completion show its type and description. On a table the catalog knows they extend its columns; one with a catalog column's name replaces that column's type (and its description, when it has one). A table declared without `columns`, or by a pattern (`Vendor*_CL`), is known by name only.
 - `union isfuzzy=true` reads whichever legs exist, so its legs are not checked.
 
-The engine reads `.opentide/configurations/visibility.toml` itself (`DeclaredDatasets::from_visibility`). The language server reads it at start-up and again whenever it changes, in the editor (before it is saved) or on disk, and checks every open document again; `opentide validate` and `opentide tui` pass the file to the engine (`Catalog.visibility`, `install_visibility`). The code action on `kql_table_not_declared` (and on the `kql_unknown_table` warning) adds the table to the `tables` of the first log source of the platform in `.opentide/configurations/visibility.toml`, or appends a log source when none fits.
+The engine reads `.opentide/configurations/visibility.toml` itself (`DeclaredDatasets::from_visibility`). The language server reads it at start-up and again whenever it changes, in the editor (before it is saved) or on disk, and checks every open document again; `opentide validate` and `opentide tui` pass the file to the engine (`Catalog.visibility`, `install_visibility`). A log source's `name` is its table; the plural `tables = [...]` lists of opentide 0.20.0 are not part of the format and declare nothing (`opentide migrate visibility` rewrites them). A file that starts with a UTF-8 byte-order mark parses. The code action on `kql_table_not_declared` (and on a `kql_unknown_table` that names the declaration) appends a new `[[logsources]]` entry with `name`, an empty `description` and `system` to `.opentide/configurations/visibility.toml`; it never edits an existing entry.
 
 ## Catalogs
 
