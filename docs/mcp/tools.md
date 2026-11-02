@@ -301,7 +301,7 @@ Checks a query offline with the analysis engine, the same engine as `opentide va
 | `language` | string | `""` | Elastic only: `esql`, `eql`, `kuery` (the default) or `lucene` |
 | `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, such as `9.5` or `serverless`. Empty: every supported stack |
 
-Offline, the result has `valid` (`false` when the engine found an error), `status`, `language`, `errors`, `warnings`, every finding under `diagnostics` (`code`, `severity`, `message`, `line`, `column`, `end_line`, `end_column` in the query, 1-based, columns in code points; `suggestion`, the language's `reference` and `explain`), and the `engine` versions. Warnings (slow query shapes) leave `valid` true. `next_actions` names the first finding's `explain` page, then the live check.
+Offline, the result has `valid` (`false` when the engine found an error), `status`, `language`, `errors`, `warnings`, every finding under `diagnostics` (`code`, `severity`, `message`, `line`, `column`, `end_line`, `end_column` in the query, 1-based, columns in code points; `suggestion`, the language's `reference` and `explain`), and the `engine` versions. Warnings (slow query shapes) leave `valid` true. The offline check knows the tables, indexes and index patterns the workspace's [`visibility.toml`](../usage/configuration.md#the-datasets-a-log-source-fills) declares, read afresh on each call as `opentide validate` and `lint` read it, so a declared table is known and, once a platform declares one, an undeclared one is a warning (`kql_table_not_declared`). A server with no workspace declares nothing. `next_actions` names the first finding's `explain` page, then the live check.
 
 ```json
 {

@@ -315,8 +315,10 @@ def _offline_query_check(query: str, platform: str, *, language: str, stack: str
         EngineUnavailableError,
         check_query,
         engine_versions,
+        install_workspace_visibility,
     )
     from opentide.cli.ui.diagnostics import engine_reference, explain_command
+    from opentide.mcp_server.workspace import served_workspace
 
     live_step = next_action(
         "validate_query",
@@ -361,6 +363,9 @@ def _offline_query_check(query: str, platform: str, *, language: str, stack: str
             ),
         }
     try:
+        # The datasets visibility.toml declares, read afresh on each call as lint and
+        # validate read them, so an edit to the file applies at the next check.
+        install_workspace_visibility(served_workspace())
         findings = check_query(query, language=chosen, platform=platform, stack=stack or None)
         versions = engine_versions()
     except EngineUnavailableError as exc:
