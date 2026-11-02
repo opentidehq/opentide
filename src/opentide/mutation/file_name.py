@@ -21,7 +21,7 @@ def run():
         "file_name_aligner_started",
         detail=(
             "Aligns the file name with the YAML Content and assigns "
-            "ID if missing (non-MDR objects only)"
+            "ID if missing (every object but rules)"
         ),
     )
 

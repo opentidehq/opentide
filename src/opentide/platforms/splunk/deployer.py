@@ -63,7 +63,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         config: dict[str, Any] = {}
         splunk_config = data.platform_configs().splunk
         if not splunk_config:
-            raise ValueError("Missing Splunk configuration in MDR")
+            raise ValueError("The rule has no configurations.splunk block")
 
         name = data.name.strip()
         uuid = data.metadata.uuid
