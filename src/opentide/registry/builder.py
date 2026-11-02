@@ -103,7 +103,7 @@ def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | N
     """
     path = Path(path_str)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except OSError as exc:
         return path_str, None, str(exc), "oserror"
     except UnicodeDecodeError as exc:

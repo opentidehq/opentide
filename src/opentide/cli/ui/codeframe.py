@@ -383,7 +383,7 @@ class QueryHighlighter:
             language = language_for_path(path)
             if language is None:
                 return by_line
-            tokens = highlight(path.read_text(encoding="utf-8"), language)
+            tokens = highlight(path.read_text(encoding="utf-8-sig"), language)
         except (EngineUnavailableError, OSError, UnicodeDecodeError, ValueError):
             return by_line
         for token in tokens:

@@ -246,7 +246,7 @@ def parse_yaml(text: str) -> Any:
 
 def load_yaml(path: Path) -> Any:
     """Load YAML from *path*."""
-    return parse_yaml(path.read_text(encoding="utf-8"))
+    return parse_yaml(path.read_text(encoding="utf-8-sig"))
 
 
 def not_utf8_problem(exc: UnicodeDecodeError) -> str:

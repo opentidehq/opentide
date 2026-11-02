@@ -655,3 +655,49 @@ def test_a_quoted_query_key_is_checked(invoke_cli, tutorial: Path) -> None:
     assert result.exit_code == 1, result.output
     codes = [issue["code"] for issue in parse_cli_json(result)["report"]["issues"]]
     assert codes == ["kql_unknown_operator"]
+
+
+BOM = b"\xef\xbb\xbf"
+
+
+def test_a_byte_order_mark_changes_no_query_finding(invoke_cli, tutorial: Path) -> None:
+    """#719: lint read a rule that starts with a UTF-8 BOM as ``utf-8`` and handed the
+    BOM to the engine, which then found no query in it: the rule was silently clean."""
+    rule = tutorial / RULE
+
+    def findings(query: str, *, bom: bool) -> dict[str, list[tuple]]:
+        _set_query(rule, query)
+        text = rule.read_text(encoding="utf-8-sig")
+        rule.write_bytes((BOM if bom else b"") + text.encode())
+        keys = ("code", "path", "line", "column", "end_line", "end_column")
+        linted = parse_cli_json(invoke_cli("lint", "--check", "queries", repo=tutorial))
+        checked = parse_cli_json(invoke_cli("validate", "query", repo=tutorial))
+        validated = parse_cli_json(invoke_cli("validate", "--file", RULE.name, repo=tutorial))
+        issues = validated["report"]["issues"]
+        return {
+            "lint": [tuple(item.get(key) for key in keys) for item in linted["findings"]],
+            "validate query": [
+                tuple(item.get(key) for key in keys) for item in checked["diagnostics"]
+            ],
+            "validate": [(item["code"], item.get("line"), item.get("column")) for item in issues],
+            "checked": [checked["queries_validated"]],
+        }
+
+    for query, expected in ((SLOW, "kql_where_not_first"), (BROKEN, "kql_unknown_operator")):
+        plain = findings(query, bom=False)
+        assert expected in str(plain), plain
+        assert findings(query, bom=True) == plain, query
+
+
+def test_a_byte_order_mark_moves_no_finding_in_a_query_file(invoke_cli, tutorial: Path) -> None:
+    """#719: the BOM counted as a character, so a finding on line 1 was one column off."""
+    query = tutorial / "lsass.kql"
+
+    def finding(prefix: bytes) -> tuple:
+        query.write_bytes(prefix + b"SecurityEvent | wher EventID == 4688\n")
+        result = invoke_cli("validate", "query", "--file", str(query), repo=tutorial)
+        assert result.exit_code == 1, result.output
+        (found,) = parse_cli_json(result)["diagnostics"]
+        return found["code"], found["line"], found["column"], found["end_column"]
+
+    assert finding(BOM) == finding(b"") == ("kql_unknown_operator", 1, 17, 37)
