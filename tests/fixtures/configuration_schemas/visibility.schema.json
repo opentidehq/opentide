@@ -46,7 +46,7 @@
             }
           ],
           "default": null,
-          "description": "Free-form key and value details.",
+          "description": "Free-form keys with string, boolean or number values.",
           "title": "Custom Details"
         },
         "surface": {
@@ -72,6 +72,35 @@
         "criticality"
       ],
       "title": "VisibilityAsset",
+      "type": "object"
+    },
+    "VisibilityColumn": {
+      "additionalProperties": false,
+      "description": "One column of a log source's dataset, under `columns.<name>`.",
+      "properties": {
+        "type": {
+          "description": "Column type, from the system's type set.",
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the column holds.",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "VisibilityColumn",
       "type": "object"
     },
     "VisibilityDetector": {
@@ -130,10 +159,10 @@
     },
     "VisibilityLogSource": {
       "additionalProperties": false,
-      "description": "One `[[logsources]]` entry: a log source a rule's signals can name.",
+      "description": "One `[[logsources]]` entry: one dataset a rule's signals can name.",
       "properties": {
         "name": {
-          "description": "Log source name. Signals reference it in `data.logsources`.",
+          "description": "The dataset: the KQL table or workspace function (`sentinel`, `defender_for_endpoint`), the\nsourcetype (`splunk`), the index pattern or data stream (`elastic`). Unique per `system`.\nSignals reference it.",
           "title": "Name",
           "type": "string"
         },
@@ -143,25 +172,9 @@
           "type": "string"
         },
         "system": {
-          "description": "Detection system that holds the logs.",
+          "description": "Platform identifier of the system that holds the logs.",
           "title": "System",
           "type": "string"
-        },
-        "assets": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Names of the assets that produce these logs.",
-          "title": "Assets"
         },
         "tenants": {
           "anyOf": [
@@ -179,6 +192,22 @@
           "description": "Tenants of `system` that hold the logs.",
           "title": "Tenants"
         },
+        "assets": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Names of the `[[assets]]` that produce the logs.",
+          "title": "Assets"
+        },
         "references": {
           "anyOf": [
             {
@@ -195,114 +224,21 @@
           "description": "Reference links.",
           "title": "References"
         },
-        "tables": {
+        "columns": {
           "anyOf": [
             {
-              "items": {
-                "type": "string"
+              "additionalProperties": {
+                "$ref": "#/$defs/VisibilityColumn"
               },
-              "type": "array"
+              "type": "object"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "KQL tables and functions the logs fill (`sentinel`, `defender_for_endpoint`).",
-          "title": "Tables"
-        },
-        "indexes": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Splunk indexes the logs fill, as `index=` names them (`splunk`).",
-          "title": "Indexes"
-        },
-        "sourcetypes": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Splunk sourcetypes the logs carry, as `sourcetype=` names them (`splunk`).",
-          "title": "Sourcetypes"
-        },
-        "macros": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Splunk macros that search the logs, without backticks (`splunk`).",
-          "title": "Macros"
-        },
-        "indices": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Elastic index patterns and data streams the logs fill, as `index` names them (`elastic`).",
-          "title": "Indices"
-        },
-        "data_views": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Elastic data view ids that cover the logs, as `data_view_id` names them (`elastic`).",
-          "title": "Data Views"
-        },
-        "ecs": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Whether the `indices` follow the Elastic Common Schema (`elastic`).",
-          "title": "Ecs"
+          "description": "The dataset's columns, keyed by column name as-is.",
+          "title": "Columns"
         }
       },
       "required": [
@@ -334,7 +270,7 @@
       "title": "Assets"
     },
     "logsources": {
-      "description": "Log sources available to detection signals.",
+      "description": "Log sources available to detection signals, one dataset each.",
       "items": {
         "$ref": "#/$defs/VisibilityLogSource"
       },

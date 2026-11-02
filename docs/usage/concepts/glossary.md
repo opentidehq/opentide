@@ -68,7 +68,10 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 : The run strategies a tenant accepts, in its platform file; both when omitted. `manual = true` keeps a tenant to the rules that list it. They replaced the tenant `deployment` key.
 
 **Visibility**
-: Configuration controlling which objects are exposed/deployed in a given context. Validated by a generated `visibility` schema.
+: `visibility.toml`: what a workspace can see, as the assets that produce logs, the log sources that hold them, and the external detectors that already cover parts of the environment. Validated by a generated `visibility` schema. See [the datasets a log source fills](../configuration.md#the-datasets-a-log-source-fills).
+
+**Log source**
+: One `[[logsources]]` entry of `visibility.toml`: one dataset, whose `name` is the KQL table, Splunk sourcetype or Elastic index pattern, with its optional columns. Signals name it in `data.logsources`; the query checks know the dataset and its columns.
 
 **Playbook-map**
 : A mapping that associates detections with response playbooks. Produced by the legacy `opentide export playbook-map` command (not by the default `opentide generate` pipeline).

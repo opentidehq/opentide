@@ -1,0 +1,76 @@
+# visibility::1.0 — a log source's name is its dataset; columns keyed by name.
+
+[[assets]]
+name = "Contoso identity provider"
+description = "Production identity provider"
+criticality = "High"
+
+[[logsources]]
+name = "Contoso_Audit_CL"
+description = "Administrative audit events from the Contoso connector"
+system = "sentinel"
+tenants = ["Production"]
+assets = ["Contoso identity provider"]
+references = ["https://contoso.example/docs/audit"]
+
+[logsources.columns]
+TimeGenerated = { type = "datetime" }
+Actor_s = { type = "string", description = "UPN of the account that made the change" }
+ResultCode_d = { type = "real" }
+
+# A built-in table, declared by name only.
+[[logsources]]
+name = "DeviceEvents"
+description = "Defender device events in the Sentinel workspace"
+system = "sentinel"
+
+# The same name under another system is allowed.
+[[logsources]]
+name = "DeviceEvents"
+description = "Defender device events in advanced hunting"
+system = "defender_for_endpoint"
+
+# A lowercase custom table.
+[[logsources]]
+name = "vendor_alerts_CL"
+description = "Alerts forwarded by the vendor connector"
+system = "sentinel"
+
+# A wildcard name.
+[[logsources]]
+name = "Fabrikam_*_CL"
+description = "Every Fabrikam connector table"
+system = "sentinel"
+
+# splunk: name is the sourcetype.
+[[logsources]]
+name = "WinEventLog:Security"
+description = "Domain controller security log"
+system = "splunk"
+
+[logsources.columns]
+EventCode = { type = "number" }
+Account_Name = { type = "string", description = "Account the event is about" }
+
+# elastic: name is the index pattern; dotted column names are quoted.
+[[logsources]]
+name = "logs-endpoint.events.*"
+description = "Endpoint telemetry"
+system = "elastic"
+
+[logsources.columns]
+"process.name" = { type = "keyword" }
+"process.pid" = { type = "long", description = "Process id" }
+"@timestamp" = { type = "date" }
+
+# A system without query checks: known to signals, declares nothing to query checks.
+[[logsources]]
+name = "Badge readers"
+description = "Physical access logs held by the facilities team"
+system = "sentinel_one"
+assets = ["Contoso identity provider"]
+
+[[detectors]]
+name = "Contoso native alerts"
+description = "Alerts raised by the Contoso console"
+assets = ["Contoso identity provider"]
