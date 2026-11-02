@@ -28,6 +28,7 @@ SQL is out of scope. There is no `opentide-sql`.
 | kql.function | `function_call` | `function_call__valid` | `function` |
 | kql.named-argument | `named_argument` | `named_argument__valid` | `variable` |
 | kql.quoted-identifier | `quoted_identifier` | `quoted_identifier__valid`, `quoted_identifier__invalid` | `variable` |
+| kql.column-pattern | `column_pattern` | `column_pattern__valid` | `variable` |
 | kql.string | `string` | `string__valid` | `string` |
 | kql.number | `number` | `number__valid` | `number` |
 | kql.comment | `comment` | `comment__valid` | `comment` |

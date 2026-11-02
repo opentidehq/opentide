@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Fixed
+
+- KQL: `project-reorder`, `project-away` and `project-keep` accept column patterns (`*`, `User*`, `*Id`), as Kusto does, instead of reporting `kql_parse_error` ([#148](https://github.com/opentidehq/language-server/issues/148)). The Sentinel threat-intelligence idiom `| project-reorder *, IsActive, ...` parses. A pattern is a glob over the input columns, never `kql_unknown_column`: `project-away User*` removes the columns it matches, `project-keep` keeps the columns a name or pattern matches, and `project-reorder` keeps every column.
+
 ## [0.7.0] - 2026-11-02
 
 The table and column release: the KQL engine knows every Azure Monitor Logs, Defender XDR and ASIM table with its columns and tracks them through a query (`kql_unknown_column`, `kql_type_mismatch`, column hover with descriptions), SPL knows the whole CIM and accepts what Splunk's parser accepts, Elastic queries over ECS indices are checked against ECS, and a workspace's `visibility.toml` declares its own tables, indexes and index patterns.

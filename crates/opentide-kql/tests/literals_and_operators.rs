@@ -226,6 +226,66 @@ fn operators_with_their_own_syntax_parse() {
     }
 }
 
+/// `project-reorder`, `project-away` and `project-keep` take column patterns
+/// (opentidehq/language-server#148).
+#[test]
+fn column_patterns_parse_and_are_not_column_references() {
+    for source in [
+        "SigninLogs | project-reorder UserPrincipalName, IPAddress",
+        "SigninLogs | project-reorder UserPrincipalName asc, IPAddress desc",
+        "SigninLogs | project-reorder *, UserPrincipalName",
+        "SigninLogs | project-reorder UserPrincipalName, *",
+        "SigninLogs | project-reorder User*, IPAddress",
+        "SigninLogs | project-reorder * asc",
+        "SigninLogs | project-away User*",
+        "SigninLogs | project-keep User*, IPAddress",
+        "SigninLogs | project-away *Id, Nothing*Matches",
+        "SigninLogs | project-keep User*Name",
+        "ThreatIntelligenceIndicator | project-reorder *, Active, Tags, TrafficLightProtocolLevel, DomainName, Type",
+        "print a = 1, b = 2 | project-reorder * desc | project-keep * | where a == 1",
+    ] {
+        assert_clean(source);
+    }
+    // Multiplication is still multiplication.
+    assert_clean("print x = 2*3 | extend y = x*x");
+}
+
+#[test]
+fn project_away_pattern_removes_matching_columns() {
+    let found = errors("SigninLogs | project-away User* | where UserPrincipalName != \"\"");
+    assert!(
+        found
+            .iter()
+            .any(|(code, message)| code == codes::KQL_UNKNOWN_COLUMN
+                && message.contains("project-away")),
+        "{found:?}"
+    );
+    assert_clean("SigninLogs | project-away User* | where IPAddress != \"\"");
+    let found = errors("print UserA = 1, UserB = 2, C = 3 | project-away User* | project UserA");
+    assert!(
+        found
+            .iter()
+            .any(|(code, _)| code == codes::KQL_UNKNOWN_COLUMN),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn project_keep_pattern_keeps_matching_columns_only() {
+    assert_clean("print UserA = 1, UserB = 2, C = 3 | project-keep User* | project UserA, UserB");
+    assert_clean("print UserA = 1, B = 2, C = 3 | project-keep User*, C | project UserA, C");
+    let found = errors("print UserA = 1, UserB = 2, C = 3 | project-keep User* | project C");
+    assert!(
+        found
+            .iter()
+            .any(|(code, message)| code == codes::KQL_UNKNOWN_COLUMN
+                && message.contains("project-keep")),
+        "{found:?}"
+    );
+    // `project-reorder` keeps every column.
+    assert_clean("print UserA = 1, C = 3 | project-reorder User* | project UserA, C");
+}
+
 #[test]
 fn operator_hir_names_match_the_keywords() {
     let Hir::Query { operators, .. } = lower(

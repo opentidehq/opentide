@@ -158,6 +158,7 @@ fn kql_named_rules_in_grammar_json_are_known() {
         "series_aggregate",
         "star",
         "_column_name",
+        "_column_name_or_pattern",
     ]
     .into_iter()
     .collect();
