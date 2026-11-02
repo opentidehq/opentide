@@ -1,16 +1,13 @@
-# Point-in-time snapshot of MITRE ATT&CK STIX groups and the live MISP
-# threat-actor galaxy. generated_at, source_fetched_at, and source_misp_sha256
-# record this refresh. This file is not a live feed.
 name = "Threat Actors"
 field = "actors"
 description = "Groups are activity clusters that are tracked by a common name in the\n  security community.\n\n  Analysts track these clusters using various analytic methodologies and terms such\n  as threat groups, activity groups, and threat actors. Some groups have multiple\n  names associated with similar activities due to various organizations tracking similar\n  activities by different names.\n\n  Organizations group definitions may partially overlap with groups designated by\n  other organizations and may disagree on specific activity."
 key = "id"
-source_version = "19.2"
-source_fetched_at = "2026-10-07T13:59:18.436Z"
+source_version = "20.0"
+source_fetched_at = "2026-11-02T14:23:27.420Z"
 source = "mitre-attack+misp"
-generated_at = "2026-10-07T13:59:26.360Z"
+generated_at = "2026-11-02T14:23:32.990Z"
 source_misp_url = "https://raw.githubusercontent.com/MISP/misp-galaxy/refs/heads/main/clusters/threat-actor.json"
-source_misp_sha256 = "599aa85c28dab5c6136bd10329fa754d694a6d99088d7fd89376debdcebca896"
+source_misp_sha256 = "10b65a22cc873d0b5f762520188316a344d2557cfbe9ce39da7f594f666005b3"
 
 [[stages]]
 id = "misp"
@@ -23,7 +20,7 @@ name = "MITRE ATT&CK Groups"
 description = "Threat Actors extracted from MITRE ATT&CK Groups, from Enterprise, ICS and Mobile definitions"
 [[keys]]
 id = "G1028"
-name = "[Mobile] APT-C-23"
+name = "[Enterprise] APT-C-23"
 description = "[APT-C-23](https://attack.mitre.org/groups/G1028) is a threat group that has been active since at least 2014.(Citation: symantec_mantis) [APT-C-23](https://attack.mitre.org/groups/G1028) has primarily focused its operations on the Middle East, including Israeli military assets. [APT-C-23](https://attack.mitre.org/groups/G1028) has developed mobile spyware targeting Android and iOS devices since 2017.(Citation: welivesecurity_apt-c-23)"
 link = "https://attack.mitre.org/groups/G1028"
 alias = [
@@ -129,7 +126,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0007"
-name = "[Mobile] APT28"
+name = "[Enterprise] APT28"
 description = "[APT28](https://attack.mitre.org/groups/G0007) is a threat group that has been attributed to Russia's General Staff Main Intelligence Directorate (GRU) 85th Main Special Service Center (GTsSS) military unit 26165.(Citation: NSA/FBI Drovorub August 2020)(Citation: Cybersecurity Advisory GRU Brute Force Campaign July 2021) This group has been active since at least 2004.(Citation: DOJ GRU Indictment Jul 2018)(Citation: Ars Technica GRU indictment Jul 2018)(Citation: Crowdstrike DNC June 2016)(Citation: FireEye APT28)(Citation: SecureWorks TG-4127)(Citation: FireEye APT28 January 2017)(Citation: GRIZZLY STEPPE JAR)(Citation: Sofacy DealersChoice)(Citation: Palo Alto Sofacy 06-2018)(Citation: Symantec APT28 Oct 2018)(Citation: ESET Zebrocy May 2019)\n\n[APT28](https://attack.mitre.org/groups/G0007) reportedly compromised the Hillary Clinton campaign, the Democratic National Committee, and the Democratic Congressional Campaign Committee in 2016 in an attempt to interfere with the U.S. presidential election.(Citation: Crowdstrike DNC June 2016) In 2018, the US indicted five GRU Unit 26165 officers associated with [APT28](https://attack.mitre.org/groups/G0007) for cyber operations (including close-access operations) conducted between 2014 and 2018 against the World Anti-Doping Agency (WADA), the US Anti-Doping Agency, a US nuclear facility, the Organization for the Prohibition of Chemical Weapons (OPCW), the Spiez Swiss Chemicals Laboratory, and other organizations.(Citation: US District Court Indictment GRU Oct 2018) Some of these were conducted with the assistance of GRU Unit 74455, which is also referred to as [Sandworm Team](https://attack.mitre.org/groups/G0034). "
 link = "https://attack.mitre.org/groups/G0007"
 alias = [
@@ -219,7 +216,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0064"
-name = "[ICS] APT33"
+name = "[Enterprise] APT33"
 description = "[APT33](https://attack.mitre.org/groups/G0064) is a suspected Iranian threat group that has carried out operations since at least 2013. The group has targeted organizations across multiple industries in the United States, Saudi Arabia, and South Korea, with a particular interest in the aviation and energy sectors.(Citation: FireEye APT33 Sept 2017)(Citation: FireEye APT33 Webinar Sept 2017)"
 link = "https://attack.mitre.org/groups/G0064"
 alias = [
@@ -248,8 +245,8 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0082"
-name = "[ICS] APT38"
-description = "[APT38](https://attack.mitre.org/groups/G0082) is a North Korean state-sponsored threat group that specializes in financial cyber operations; it has been attributed to the Reconnaissance General Bureau.(Citation: CISA AA20-239A BeagleBoyz August 2020) Active since at least 2014, [APT38](https://attack.mitre.org/groups/G0082) has targeted banks, financial institutions, casinos, cryptocurrency exchanges, SWIFT system endpoints, and ATMs in at least 38 countries worldwide. Significant operations include the 2016 Bank of Bangladesh heist, during which [APT38](https://attack.mitre.org/groups/G0082) stole $81 million, as well as attacks against Bancomext (Citation: FireEye APT38 Oct 2018) and Banco de Chile (Citation: FireEye APT38 Oct 2018); some of their attacks have been destructive.(Citation: CISA AA20-239A BeagleBoyz August 2020)(Citation: FireEye APT38 Oct 2018)(Citation: DOJ North Korea Indictment Feb 2021)(Citation: Kaspersky Lazarus Under The Hood Blog 2017)\n\nNorth Korean group definitions are known to have significant overlap, and some security researchers report all North Korean state-sponsored cyber activity under the name [Lazarus Group](https://attack.mitre.org/groups/G0032) instead of tracking clusters or subgroups."
+name = "[Enterprise] APT38"
+description = "[APT38](https://attack.mitre.org/groups/G0082) is a North Korean state-sponsored threat group that specializes in financial cyber operations; it has been attributed to the Reconnaissance General Bureau.(Citation: CISA AA20-239A BeagleBoyz August 2020) Active since at least 2014, [APT38](https://attack.mitre.org/groups/G0082) has targeted banks, financial institutions, casinos, cryptocurrency exchanges, SWIFT system endpoints, and ATMs in at least 38 countries worldwide. Significant operations include the 2016 Bank of Bangladesh heist, Bancomext (Citation: FireEye APT38 Oct 2018) and Banco de Chile (Citation: FireEye APT38 Oct 2018), along with software supply chain compromises and destructive malware attacks.(Citation: CISA AA20-239A BeagleBoyz August 2020)(Citation: FireEye APT38 Oct 2018)(Citation: DOJ North Korea Indictment Feb 2021)(Citation: Kaspersky Lazarus Under The Hood Blog 2017)(Citation: Microsoft Axios Compromise APR 2026)(Citation: Microsoft Sapphire Sleet APR 2026)(Citation: MIcrosoft Mastra npm Compromise JUN 2026)\n\nNorth Korean group definitions are known to have significant overlap, and some security researchers report all North Korean state-sponsored cyber activity under the name [Lazarus Group](https://attack.mitre.org/groups/G0032) instead of tracking clusters or subgroups."
 link = "https://attack.mitre.org/groups/G0082"
 alias = [
     "APT38",
@@ -277,7 +274,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0096"
-name = "[Mobile] APT41"
+name = "[Enterprise] APT41"
 description = "[APT41](https://attack.mitre.org/groups/G0096) is a threat group that researchers have assessed as Chinese state-sponsored espionage group that also conducts financially-motivated operations. Active since at least 2012, [APT41](https://attack.mitre.org/groups/G0096) has been observed targeting various industries, including but not limited to healthcare, telecom, technology, finance, education, retail and video game industries in 14 countries.(Citation: apt41_mandiant) Notable behaviors include using a wide range of malware and tools to complete mission objectives. [APT41](https://attack.mitre.org/groups/G0096) overlaps at least partially with public reporting on groups including BARIUM and [Winnti Group](https://attack.mitre.org/groups/G0044).(Citation: FireEye APT41 Aug 2019)(Citation: Group IB APT 41 June 2021)\n"
 link = "https://attack.mitre.org/groups/G0096"
 alias = [
@@ -401,7 +398,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G1002"
-name = "[Mobile] BITTER"
+name = "[Enterprise] BITTER"
 description = "[BITTER](https://attack.mitre.org/groups/G1002) is a suspected South Asian cyber espionage threat group that has been active since at least 2013. [BITTER](https://attack.mitre.org/groups/G1002) has targeted government, energy, and engineering organizations in Pakistan, China, Bangladesh, and Saudi Arabia.(Citation: Cisco Talos Bitter Bangladesh May 2022)(Citation: Forcepoint BITTER Pakistan Oct 2016)"
 link = "https://attack.mitre.org/groups/G1002"
 alias = [
@@ -549,7 +546,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0142"
-name = "[Mobile] Confucius"
+name = "[Enterprise] Confucius"
 description = "[Confucius](https://attack.mitre.org/groups/G0142) is a cyber espionage group that has primarily targeted military personnel, high-profile personalities, business persons, and government organizations in South Asia since at least 2013. Security researchers have noted similarities between [Confucius](https://attack.mitre.org/groups/G0142) and [Patchwork](https://attack.mitre.org/groups/G0040), particularly in their respective custom malware code and targets.(Citation: TrendMicro Confucius APT Feb 2018)(Citation: TrendMicro Confucius APT Aug 2021)(Citation: Uptycs Confucius APT Jan 2021)"
 link = "https://attack.mitre.org/groups/G0142"
 alias = [
@@ -582,7 +579,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0070"
-name = "[Mobile] Dark Caracal"
+name = "[Enterprise] Dark Caracal"
 description = "[Dark Caracal](https://attack.mitre.org/groups/G0070) is threat group that has been attributed to the Lebanese General Directorate of General Security (GDGS) and has operated since at least 2012. (Citation: Lookout Dark Caracal Jan 2018)"
 link = "https://attack.mitre.org/groups/G0070"
 alias = [
@@ -649,7 +646,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0035"
-name = "[ICS] Dragonfly"
+name = "[Enterprise] Dragonfly"
 description = "[Dragonfly](https://attack.mitre.org/groups/G0035) is a cyber espionage group that has been attributed to Russia's Federal Security Service (FSB) Center 16.(Citation: DOJ Russia Targeting Critical Infrastructure March 2022)(Citation: UK GOV FSB Factsheet April 2022) Active since at least 2010, [Dragonfly](https://attack.mitre.org/groups/G0035) has targeted defense and aviation companies, government entities, companies related to industrial control systems, and critical infrastructure sectors worldwide through supply chain, spearphishing, and drive-by compromise attacks.(Citation: Symantec Dragonfly)(Citation: Secureworks IRON LIBERTY July 2019)(Citation: Symantec Dragonfly Sept 2017)(Citation: Fortune Dragonfly 2.0 Sept 2017)(Citation: Gigamon Berserk Bear October 2021)(Citation: CISA AA20-296A Berserk Bear December 2020)(Citation: Symantec Dragonfly 2.0 October 2017)"
 link = "https://attack.mitre.org/groups/G0035"
 alias = [
@@ -678,7 +675,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G1006"
-name = "[Mobile] Earth Lusca"
+name = "[Enterprise] Earth Lusca"
 description = "[Earth Lusca](https://attack.mitre.org/groups/G1006) is a suspected China-based cyber espionage group that has been active since at least April 2019. [Earth Lusca](https://attack.mitre.org/groups/G1006) has targeted organizations in Australia, China, Hong Kong, Mongolia, Nepal, the Philippines, Taiwan, Thailand, Vietnam, the United Arab Emirates, Nigeria, Germany, France, and the United States. Targets included government institutions, news media outlets, gambling companies, educational institutions, COVID-19 research organizations, telecommunications companies, religious movements banned in China, and cryptocurrency trading platforms; security researchers assess some [Earth Lusca](https://attack.mitre.org/groups/G1006) operations may be financially motivated.(Citation: TrendMicro EarthLusca 2022)\n\n[Earth Lusca](https://attack.mitre.org/groups/G1006) has used malware commonly used by other Chinese threat groups, including [APT41](https://attack.mitre.org/groups/G0096) and the [Winnti Group](https://attack.mitre.org/groups/G0044) cluster, however security researchers assess [Earth Lusca](https://attack.mitre.org/groups/G1006)'s techniques and infrastructure are separate.(Citation: TrendMicro EarthLusca 2022)"
 link = "https://attack.mitre.org/groups/G1006"
 alias = [
@@ -782,7 +779,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0037"
-name = "[ICS] FIN6"
+name = "[Enterprise] FIN6"
 description = "[FIN6](https://attack.mitre.org/groups/G0037) is a cyber crime group that has stolen payment card data and sold it for profit on underground marketplaces. This group has aggressively targeted and compromised point of sale (PoS) systems in the hospitality and retail sectors.(Citation: FireEye FIN6 April 2016)(Citation: FireEye FIN6 Apr 2019)"
 link = "https://attack.mitre.org/groups/G0037"
 alias = [
@@ -797,7 +794,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0046"
-name = "[ICS] FIN7"
+name = "[Enterprise] FIN7"
 description = "[FIN7](https://attack.mitre.org/groups/G0046) is a financially-motivated threat group that has been active since 2013. [FIN7](https://attack.mitre.org/groups/G0046) has targeted the retail, restaurant, hospitality, software, consulting, financial services, medical equipment, cloud services, media, food and beverage, transportation, pharmaceutical, and utilities industries in the United States. A portion of [FIN7](https://attack.mitre.org/groups/G0046) was operated out of a front company called Combi Security and often used point-of-sale malware for targeting efforts. Since 2020, [FIN7](https://attack.mitre.org/groups/G0046) shifted operations to big game hunting (BGH), including use of [REvil](https://attack.mitre.org/software/S0496) ransomware and their own Ransomware-as-a-Service (RaaS), Darkside. FIN7 may be linked to the [Carbanak](https://attack.mitre.org/groups/G0008) Group, but multiple threat groups have been observed using [Carbanak](https://attack.mitre.org/software/S0030), leading these groups to be tracked separately.(Citation: FireEye FIN7 March 2017)(Citation: FireEye FIN7 April 2017)(Citation: FireEye CARBANAK June 2017)(Citation: FireEye FIN7 Aug 2018)(Citation: CrowdStrike Carbon Spider August 2021)(Citation: Mandiant FIN7 Apr 2022)(Citation: BiZone Lizar May 2021)"
 link = "https://attack.mitre.org/groups/G0046"
 alias = [
@@ -869,7 +866,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0115"
-name = "[ICS] GOLD SOUTHFIELD"
+name = "[Enterprise] GOLD SOUTHFIELD"
 description = "[GOLD SOUTHFIELD](https://attack.mitre.org/groups/G0115) is a financially motivated threat group active since at least 2018 that operates the [REvil](https://attack.mitre.org/software/S0496) Ransomware-as-a Service (RaaS). [GOLD SOUTHFIELD](https://attack.mitre.org/groups/G0115) provides backend infrastructure for affiliates recruited on underground forums to perpetrate high value deployments. By early 2020, [GOLD SOUTHFIELD](https://attack.mitre.org/groups/G0115) started capitalizing on the new trend of stealing data and further extorting the victim to pay for their data to not get publicly leaked.(Citation: Secureworks REvil September 2019)(Citation: Secureworks GandCrab and REvil September 2019)(Citation: Secureworks GOLD SOUTHFIELD)(Citation: CrowdStrike Evolution of Pinchy Spider July 2021)"
 link = "https://attack.mitre.org/groups/G0115"
 alias = [
@@ -940,7 +937,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G1001"
-name = "[ICS] HEXANE"
+name = "[Enterprise] HEXANE"
 description = "[HEXANE](https://attack.mitre.org/groups/G1001) is a cyber espionage threat group that has targeted oil & gas, telecommunications, aviation, and internet service provider organizations since at least 2017. Targeted companies have been located in the Middle East and Africa, including Israel, Saudi Arabia, Kuwait, Morocco, and Tunisia. [HEXANE](https://attack.mitre.org/groups/G1001)'s TTPs appear similar to [APT33](https://attack.mitre.org/groups/G0064) and [OilRig](https://attack.mitre.org/groups/G0049) but due to differences in victims and tools it is tracked as a separate entity.(Citation: Dragos Hexane)(Citation: Kaspersky Lyceum October 2021)(Citation: ClearSky Siamesekitten August 2021)(Citation: Accenture Lyceum Targets November 2021)"
 link = "https://attack.mitre.org/groups/G1001"
 alias = [
@@ -1028,7 +1025,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0094"
-name = "[Mobile] Kimsuky"
+name = "[Enterprise] Kimsuky"
 description = "[Kimsuky](https://attack.mitre.org/groups/G0094) is a Democratic People's Republic of Korea (DPRK)-based cyber espionage group that has been active since at least 2012. The group initially targeted South Korean government agencies, think tanks, and subject-matter experts in various fields. Its operations expanded to include the United Nations and organizations in the government, education, business services, and manufacturing sectors across the United States, Japan, Russia, and Europe. [Kimsuky](https://attack.mitre.org/groups/G0094) has focused collection on foreign policy and national security issues tied to the Korean Peninsula, nuclear policy, and sanctions. [Kimsuky](https://attack.mitre.org/groups/G0094) operations have overlapped with those of other North Korean state-sponsored cyber espionage actors as a result of ad hoc collaborations or other limited resource sharing.(Citation: EST Kimsuky April 2019)(Citation: Cybereason Kimsuky November 2020)(Citation: Malwarebytes Kimsuky June 2021)(Citation: CISA AA20-301A Kimsuky)(Citation: Mandiant APT43 March 2024)(Citation: Proofpoint TA427 April 2024) \n\n[Kimsuky](https://attack.mitre.org/groups/G0094) was assessed to be responsible for the 2014 Korea Hydro & Nuclear Power Co. compromise; other notable campaigns include Operation STOLEN PENCIL (2018), Operation Kabar Cobra (2019), and Operation Smoke Screen (2019).(Citation: Netscout Stolen Pencil Dec 2018)(Citation: EST Kimsuky SmokeScreen April 2019)(Citation: AhnLab Kimsuky Kabar Cobra Feb 2019) In 2023, [Kimsuky](https://attack.mitre.org/groups/G0094) was observed using commercial large language models (LLMs) to assist with vulnerability research, scripting, social engineering and reconnaissance.(Citation: MSFT-AI)\n\nDPRK threat actor cluster boundaries overlap in open source reporting, with some security researchers consolidating all attributed North Korean state-sponsored cyber activity under [Lazarus Group](https://attack.mitre.org/groups/G0032), rather than tracking operationally distinct subgroups."
 link = "https://attack.mitre.org/groups/G0094"
 alias = [
@@ -1047,7 +1044,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G1004"
-name = "[Mobile] LAPSUS$"
+name = "[Enterprise] LAPSUS$"
 description = "[LAPSUS$](https://attack.mitre.org/groups/G1004) is cyber criminal threat group that has been active since at least mid-2021. [LAPSUS$](https://attack.mitre.org/groups/G1004) specializes in large-scale social engineering and extortion operations, including destructive attacks without the use of ransomware. The group has targeted organizations globally, including in the government, manufacturing, higher education, energy, healthcare, technology, telecommunications, and media sectors.(Citation: BBC LAPSUS Apr 2022)(Citation: MSTIC DEV-0537 Mar 2022)(Citation: UNIT 42 LAPSUS Mar 2022)"
 link = "https://attack.mitre.org/groups/G1004"
 alias = [
@@ -1059,7 +1056,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0032"
-name = "[ICS] Lazarus Group"
+name = "[Enterprise] Lazarus Group"
 description = "[Lazarus Group](https://attack.mitre.org/groups/G0032) is a North Korean state-sponsored cyber threat group attributed to the Reconnaissance General Bureau (RGB). (Citation: US-CERT HIDDEN COBRA June 2017) (Citation: Treasury North Korean Cyber Groups September 2019) [Lazarus Group](https://attack.mitre.org/groups/G0032) has been active since at least 2009 and is reportedly responsible for the November 2014 destructive wiper attack on Sony Pictures Entertainment, identified by Novetta as part of Operation Blockbuster. Malware used by [Lazarus Group](https://attack.mitre.org/groups/G0032) correlates to other reported campaigns, including Operation Flame, Operation 1Mission, Operation Troy, DarkSeoul, and Ten Days of Rain.(Citation: Novetta Blockbuster)\n\nNorth Korea’s cyber operations have shown a consistent pattern of adaptation, forming and reorganizing units as national priorities shift. These units frequently share personnel, infrastructure, malware, and tradecraft, making it difficult to attribute specific operations with high confidence. Public reporting often uses “Lazarus Group” as an umbrella term for multiple North Korean cyber operators conducting espionage, destructive attacks, and financially motivated campaigns.(Citation: Mandiant DPRK Laz Org Breakdown 2022)(Citation: Mandiant DPRK Groups 2023)(Citation: JPCert Blog Laz Subgroups 2025)\n\n"
 link = "https://attack.mitre.org/groups/G0032"
 alias = [
@@ -1245,7 +1242,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G1019"
-name = "[Mobile] MoustachedBouncer"
+name = "[Enterprise] MoustachedBouncer"
 description = "[MoustachedBouncer](https://attack.mitre.org/groups/G1019) is a cyberespionage group that has been active since at least 2014 targeting foreign embassies in Belarus.(Citation: MoustachedBouncer ESET August 2023)"
 link = "https://attack.mitre.org/groups/G1019"
 alias = [
@@ -1255,7 +1252,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0069"
-name = "[Mobile] MuddyWater"
+name = "[Enterprise] MuddyWater"
 description = "[MuddyWater](https://attack.mitre.org/groups/G0069) is a cyber espionage group assessed to be a subordinate element within Iran's Ministry of Intelligence and Security (MOIS).(Citation: CYBERCOM Iranian Intel Cyber January 2022) Since at least 2017, [MuddyWater](https://attack.mitre.org/groups/G0069) has targeted a range of government and private organizations across sectors, including telecommunications, local government, finance, defense, and oil and natural gas organizations, in the Middle East (specifically the UAE and Saudi Arabia), Asia, Africa, Europe, and North America. [MuddyWater](https://attack.mitre.org/groups/G0069) has reused domains dating back to October 2025, and has a preference for NameCheap and Hosterdaddy Private Limited (AS136557). In late 2025 and early 2026, [MuddyWater](https://attack.mitre.org/groups/G0069) used commercial satellite internet (i.e., Starlink) for command and control (C2) communication. (Citation: FalconFeeds_Iran_Mar2026)(Citation: Huntio_IranInfra_Mar2026)(Citation: Unit 42 MuddyWater Nov 2017)(Citation: Symantec MuddyWater Dec 2018)(Citation: ClearSky MuddyWater Nov 2018)(Citation: ClearSky MuddyWater June 2019)(Citation: Reaqta MuddyWater November 2017)(Citation: DHS CISA AA22-055A MuddyWater February 2022)(Citation: Talos MuddyWater Jan 2022)(Citation: NaumaanProofpoint_GlobalClickFix_April2025)(Citation: ESET_MuddyWater_Dec2025)(Citation: SymantecCarbonBlack_Seedworm_Mar2026)   "
 link = "https://attack.mitre.org/groups/G0069"
 alias = [
@@ -1343,7 +1340,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0049"
-name = "[ICS] OilRig"
+name = "[Enterprise] OilRig"
 description = "[OilRig](https://attack.mitre.org/groups/G0049) is a suspected Iranian threat group that has targeted Middle Eastern and international victims since at least 2014. The group has targeted a variety of sectors, including financial, government, energy, chemical, and telecommunications. It appears the group carries out supply chain attacks, leveraging the trust relationship between organizations to attack their primary targets. The group works on behalf of the Iranian government based on infrastructure details that contain references to Iran, use of Iranian infrastructure, and targeting that aligns with nation-state interests.(Citation: FireEye APT34 Dec 2017)(Citation: Palo Alto OilRig April 2017)(Citation: ClearSky OilRig Jan 2017)(Citation: Palo Alto OilRig May 2016)(Citation: Palo Alto OilRig Oct 2016)(Citation: Unit42 OilRig Playbook 2023)(Citation: Unit 42 QUADAGENT July 2018)"
 link = "https://attack.mitre.org/groups/G0049"
 alias = [
@@ -1395,7 +1392,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0056"
-name = "[Mobile] PROMETHIUM"
+name = "[Enterprise] PROMETHIUM"
 description = "[PROMETHIUM](https://attack.mitre.org/groups/G0056) is an activity group focused on espionage that has been active since at least 2012. The group has conducted operations globally with a heavy emphasis on Turkish targets. [PROMETHIUM](https://attack.mitre.org/groups/G0056) has demonstrated similarity to another activity group called [NEODYMIUM](https://attack.mitre.org/groups/G0055) due to overlapping victim and campaign characteristics.(Citation: Microsoft NEODYMIUM Dec 2016)(Citation: Microsoft SIR Vol 21)(Citation: Talos Promethium June 2020)"
 link = "https://attack.mitre.org/groups/G0056"
 alias = [
@@ -1406,7 +1403,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0040"
-name = "[Mobile] Patchwork"
+name = "[Enterprise] Patchwork"
 description = "[Patchwork](https://attack.mitre.org/groups/G0040) is a cyber espionage group that was first observed in December 2015. While the group has not been definitively attributed, circumstantial evidence suggests the group may be a pro-Indian or Indian entity. [Patchwork](https://attack.mitre.org/groups/G0040) has been seen targeting industries related to diplomatic and government agencies. Much of the code used by this group was copied and pasted from online forums. [Patchwork](https://attack.mitre.org/groups/G0040) was also seen operating spearphishing campaigns targeting U.S. think tank groups in March and April of 2018.(Citation: Cymmetria Patchwork) (Citation: Symantec Patchwork)(Citation: TrendMicro Patchwork Dec 2017)(Citation: Volexity Patchwork June 2018)"
 link = "https://attack.mitre.org/groups/G0040"
 alias = [
@@ -1528,7 +1525,7 @@ version = "1.0"
 [[keys]]
 id = "G1045"
 name = "[Enterprise] Salt Typhoon"
-description = "[Salt Typhoon](https://attack.mitre.org/groups/G1045) is a People's Republic of China (PRC) state-backed actor that has been active since at least 2019 and responsible for numerous compromises of network infrastructure at major U.S. telecommunication and internet service providers (ISP).(Citation: US Dept. of Treasury Salt Typhoon JAN 2025)(Citation: Cisco Salt Typhoon FEB 2025)\n"
+description = "[Salt Typhoon](https://attack.mitre.org/groups/G1045) is a People's Republic of China (PRC) state-backed actor that has been active since at least 2019 and responsible for numerous compromises of network infrastructure at major U.S. telecommunication and internet service providers (ISP). [Salt Typhoon](https://attack.mitre.org/groups/G1045) has targeted and leveraged public facing network edge devices to gain access to victim environments. [Salt Typhoon](https://attack.mitre.org/groups/G1045) has been publicly associated with activities resembling other security industry reported activity groups to include OPERATOR PANDA, RedMike, GhostEmperor, and UNC5807.(Citation: US Dept. of Treasury Salt Typhoon JAN 2025)(Citation: Cisco Salt Typhoon FEB 2025)(Citation: CISA_AA25-239ASaltTyphoon_Sept2025)(Citation: CarySentinelLabs_CiscoSaltTyphoon_Dec2025)(Citation: CrowdStrike_OperatorPanda_NoDate)(Citation: RF_SaltTyphoon_Feb2025)(Citation: Microsoft_ThreatActorNaming_NoDate)(Citation: Mandiant_M-Trends2026_Mar2026)"
 link = "https://attack.mitre.org/groups/G1045"
 alias = [
     "Salt Typhoon",
@@ -1537,7 +1534,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0034"
-name = "[Mobile] Sandworm Team"
+name = "[Enterprise] Sandworm Team"
 description = "[Sandworm Team](https://attack.mitre.org/groups/G0034) is a destructive threat group that has been attributed to Russia's General Staff Main Intelligence Directorate (GRU) Main Center for Special Technologies (GTsST) military unit 74455.(Citation: US District Court Indictment GRU Unit 74455 October 2020)(Citation: UK NCSC Olympic Attacks October 2020) This group has been active since at least 2009.(Citation: iSIGHT Sandworm 2014)(Citation: CrowdStrike VOODOO BEAR)(Citation: USDOJ Sandworm Feb 2020)(Citation: NCSC Sandworm Feb 2020)\n\nIn October 2020, the US indicted six GRU Unit 74455 officers associated with [Sandworm Team](https://attack.mitre.org/groups/G0034) for the following cyber operations: the 2015 and 2016 attacks against Ukrainian electrical companies and government organizations, the 2017 worldwide [NotPetya](https://attack.mitre.org/software/S0368) attack, targeting of the 2017 French presidential campaign, the 2018 [Olympic Destroyer](https://attack.mitre.org/software/S0365) attack against the Winter Olympic Games, the 2018 operation against the Organisation for the Prohibition of Chemical Weapons, and attacks against the country of Georgia in 2018 and 2019.(Citation: US District Court Indictment GRU Unit 74455 October 2020)(Citation: UK NCSC Olympic Attacks October 2020) Some of these were conducted with the assistance of GRU Unit 26165, which is also referred to as [APT28](https://attack.mitre.org/groups/G0007).(Citation: US District Court Indictment GRU Oct 2018)"
 link = "https://attack.mitre.org/groups/G0034"
 alias = [
@@ -1567,7 +1564,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G1015"
-name = "[Mobile] Scattered Spider"
+name = "[Enterprise] Scattered Spider"
 description = "[Scattered Spider](https://attack.mitre.org/groups/G1015) is a native English-speaking cybercriminal group active since at least 2022. (Citation: CrowdStrike Scattered Spider Profile) (Citation: MSTIC Octo Tempest Operations October 2023) The group initially targeted customer relationship management (CRM) providers, business process outsourcing (BPO) firms, and telecommunications and technology companies before expanding in 2023 to gaming, hospitality, retail, managed service provider (MSP), manufacturing, and financial sectors. (Citation: MSTIC Octo Tempest Operations October 2023)\n[Scattered Spider](https://attack.mitre.org/groups/G1015) relies heavily on social engineering, including impersonating IT and help-desk staff, to gain initial access, bypass multi-factor authentication (MFA), and compromise enterprise networks. The group has adapted its tooling to evade endpoint detection and response (EDR) defenses and used ransomware for financial gain. (Citation: CISA Scattered Spider Advisory November 2023) (Citation: CrowdStrike Scattered Spider BYOVD January 2023) (Citation: Crowdstrike TELCO BPO Campaign December 2022)\n[Scattered Spider](https://attack.mitre.org/groups/G1015) had expanded into hybrid cloud and identity environments, using help-desk impersonation and MFA bypass to obtain administrator access in Okta, AWS, and Office 365. (Citation: Mandiant UNC3944 May 2025)"
 link = "https://attack.mitre.org/groups/G1015"
 alias = [
@@ -1660,7 +1657,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G1033"
-name = "[Mobile] Star Blizzard"
+name = "[Enterprise] Star Blizzard"
 description = "[Star Blizzard](https://attack.mitre.org/groups/G1033) is a cyber espionage and influence group originating in Russia that has been active since at least 2019. [Star Blizzard](https://attack.mitre.org/groups/G1033) campaigns align closely with Russian state interests and have included persistent phishing and credential theft against academic, defense, government, NGO, and think tank organizations in NATO countries, particularly the US and the UK.(Citation: Microsoft Star Blizzard August 2022)(Citation: CISA Star Blizzard Advisory December 2023)(Citation: StarBlizzard)(Citation: Google TAG COLDRIVER January 2024)\n"
 link = "https://attack.mitre.org/groups/G1033"
 alias = [
@@ -1780,7 +1777,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0088"
-name = "[ICS] TEMP.Veles"
+name = "[Enterprise] TEMP.Veles"
 description = "[TEMP.Veles](https://attack.mitre.org/groups/G0088) is a Russia-based threat group that has targeted critical infrastructure. The group has been observed utilizing [TRITON](https://attack.mitre.org/software/S0609), a malware framework designed to manipulate industrial safety systems.(Citation: FireEye TRITON 2019)(Citation: FireEye TEMP.Veles 2018)(Citation: FireEye TEMP.Veles JSON April 2019)"
 link = "https://attack.mitre.org/groups/G0088"
 alias = [
@@ -1957,7 +1954,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0090"
-name = "[Mobile] WIRTE"
+name = "[Enterprise] WIRTE"
 description = "[WIRTE](https://attack.mitre.org/groups/G0090) is a cyberespionage actor, believed to be a subgroup of the Hamas-affiliated Gaza Cybergang, that has been active since at least August 2018. [WIRTE](https://attack.mitre.org/groups/G0090) has targeted diplomatic, financial, military, legal, and technology organizations across the Middle East, North Africa, and in Europe to gather intelligence. [WIRTE](https://attack.mitre.org/groups/G0090) has remained persistently active despite the ongoing Israel-Hamas conflict and has expanded their operations to include wiper malware attacks against Israeli targets.(Citation: Lab52 WIRTE Apr 2019)(Citation: Kaspersky WIRTE November 2021)(Citation: Check Point Wirte NOV 2024)(Citation: Palo Alto Ashen Lepus DEC 2025)"
 link = "https://attack.mitre.org/groups/G0090"
 alias = [
@@ -1988,7 +1985,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0112"
-name = "[Mobile] Windshift"
+name = "[Enterprise] Windshift"
 description = "[Windshift](https://attack.mitre.org/groups/G0112) is a threat group that has been active since at least 2017, targeting specific individuals for surveillance in government departments and critical infrastructure across the Middle East.(Citation: SANS Windshift August 2018)(Citation: objective-see windtail1 dec 2018)(Citation: objective-see windtail2 jan 2019)"
 link = "https://attack.mitre.org/groups/G0112"
 alias = [
@@ -2022,7 +2019,7 @@ alias = [
 version = "1.0"
 [[keys]]
 id = "G0102"
-name = "[ICS] Wizard Spider"
+name = "[Enterprise] Wizard Spider"
 description = "[Wizard Spider](https://attack.mitre.org/groups/G0102) is a Russia-based financially motivated threat group originally known for the creation and deployment of [TrickBot](https://attack.mitre.org/software/S0266) since at least 2016. [Wizard Spider](https://attack.mitre.org/groups/G0102) possesses a diverse arsenal of tools and has conducted ransomware campaigns against a variety of organizations, ranging from major corporations to hospitals.(Citation: CrowdStrike Ryuk January 2019)(Citation: DHS/CISA Ransomware Targeting Healthcare October 2020)(Citation: CrowdStrike Wizard Spider October 2020)"
 link = "https://attack.mitre.org/groups/G0102"
 alias = [
@@ -7330,6 +7327,7 @@ description = "While Volexity largely observed the attacker essentially living o
 alias = [
     "UNC5221",
     "Red Dev 61",
+    "ARMORY CASTLE",
 ]
 version = "1.0"
 [[keys]]
@@ -7353,6 +7351,9 @@ id = "a9f894c6-70ab-4174-b470-5999fe93d4f3"
 name = "Cyber Partisans"
 description = "The Cyber Partisans, a hacktivist group based in Belarus, has been involved in various cyber-attacks targeting organizations and infrastructure in Belarus and Ukraine. They have hacked and wiped the network of the Belarusian Telegraph Agency, targeted the Belarusian Red Cross, and conducted ransomware attacks on the Belarusian Railway and Belarusian State University. The group aims to expose alleged crimes committed by pro-government organizations and disrupt operations supporting the Russian military operation against Ukraine. They have also leaked stolen data to journalists and expressed support for Ukraine."
 "tide.vocab.stages" = "misp"
+alias = [
+    "Partisan Zmiy",
+]
 version = "1.0"
 [[keys]]
 id = "6a77a337-bfa0-416c-8c06-1d489d0d6838"
@@ -8663,6 +8664,9 @@ id = "e13e36e7-a75b-42fa-8d51-35f9eeafebfc"
 name = "UNC5820"
 description = "UNC5820 is a threat actor exploiting the CVE-2024-47575 vulnerability in Fortinet's FortiManager, allowing them to bypass authentication and execute arbitrary commands. They have been observed exfiltrating configuration data, user information, and FortiOS256-hashed passwords from managed FortiGate devices. While the actor has staged and exfiltrated sensitive data, there is currently no evidence of lateral movement or further compromise of additional environments. Mandiant has not determined whether UNC5820 is state-sponsored or identified its geographic location."
 "tide.vocab.stages" = "misp"
+alias = [
+    "CL-STA-0954",
+]
 version = "1.0"
 [[keys]]
 id = "54bc063d-fc4e-4076-a282-cdb98480da2a"
@@ -10936,3 +10940,390 @@ alias = [
     "GLOBAL GROUP",
 ]
 version = "1.1"
+[[keys]]
+id = "G1058"
+name = "[Enterprise] The Gentlemen"
+description = "[The Gentlemen](https://attack.mitre.org/groups/G1058) is a group that maintains the [The Gentlemen Ransomware](https://attack.mitre.org/software/S9051)-as-a-service (RaaS). [The Gentlemen](https://attack.mitre.org/groups/G1058) was first observed in mid-2025 who had posed [The Gentlemen Ransomware](https://attack.mitre.org/software/S9051) as a closed ransomware and shortly later opened the ransomware as a RaaS to affiliates in September 2025. [The Gentlemen](https://attack.mitre.org/groups/G1058) has been affiliated with the threat group Storm-2697 and GOLD SHERWOOD.(Citation: MSTI_GentelmenRansomware_May2026)(Citation: Intel471_TheGentlemen_Aug2026)(Citation: Sophos_TheGentlemen_Sept2026)(Citation: SoučekESET_Gentlemen_Jun2026)(Citation: CheckPointResearch_TheGentlemen_April2026)(Citation: BradyUnit42_TheGentlemen_July2026)(Citation: CarveyODonnellWelchHuntress_TheGentlemen_May2026)(Citation: TrendAI_TheGentlemen_Sept2025) "
+link = "https://attack.mitre.org/groups/G1058"
+alias = [
+    "The Gentlemen",
+    "Storm-2697",
+    "GOLD SHERWOOD",
+]
+"tide.vocab.stages" = "att&ck"
+version = "1.2"
+[[keys]]
+id = "G1059"
+name = "[Enterprise] NIMBUS MANTICORE"
+description = "[NIMBUS MANTICORE](https://attack.mitre.org/groups/G1059) is a State Sponsored cyber espionage group associated with the Iranian Regime specifically the Iranian Revolutionary Guard Corps (IRGC). [NIMBUS MANTICORE](https://attack.mitre.org/groups/G1059) has employed social engineering attacks to include HR related themes and has leveraged custom malware against its victims. [NIMBUS MANTICORE](https://attack.mitre.org/groups/G1059) has sought sensitive information in victims’ environments to include network/IT documentation, intellectual property and emails. [NIMBUS MANTICORE](https://attack.mitre.org/groups/G1059) has also leveraged compromised organizations as pivot points to access other organizations of interest. [NIMBUS MANTICORE](https://attack.mitre.org/groups/G1059) has been active since 2021 and has targeted critical infrastructure organizations to include aviation, aerospace, telecommunications and defense and information technology related organizations within the United States, Australia, Midde East and Europe.(Citation: Mandiant_UNC1549TTPsTools_Nov2025)(Citation: CheckPoint_NimbusManticore_May2026)(Citation: CheckPoint_NimbusManticoreEurope_Sept2025)(Citation: Mandiant_UNC1549_Feb2024)"
+link = "https://attack.mitre.org/groups/G1059"
+alias = [
+    "NIMBUS MANTICORE",
+    "UNC1549",
+    "TA455",
+    "COBALT SMOKEY",
+]
+"tide.vocab.stages" = "att&ck"
+version = "1.2"
+[[keys]]
+id = "3a276902-905d-4487-82ba-c18621554417"
+name = "GTG-16003"
+description = "Sensetime, MiniMax, and the third-party reseller ecosystem"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "4adf5796-b68c-4af1-9ca5-e7eb0bc3cf53"
+name = "GTG-16005"
+description = "Chain-of-thought distillation and AI R&D campaign by Alibaba (Qwen / Tongyi Lab)"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "a28c6d43-d22e-4858-bb62-436553b5f90b"
+name = "GTG-16012"
+description = "Sensetime, MiniMax, and the third-party reseller ecosystem"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "588c0a07-57db-47d2-87d3-86dea30ab883"
+name = "GTG-04001"
+description = "Disrupting a Russian foreign information manipulation and interference operation in the Central African Republic"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "55df6f7e-c44b-44ef-85de-c0d81406d3aa"
+name = "GTG-10007"
+description = "Exploit foundries and autonomous attack frameworks"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "92f99171-e48f-46c7-8397-55ba4dff5d0d"
+name = "GTG-14010"
+description = "Disrupting a China-based surveillance and recruitment operation targeting Uyghurs in Syria"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "37a8f5e5-3e4d-4d9f-80a9-e8454810c574"
+name = "GTG-14020"
+description = "Disrupting a China-based religious affairs intelligence operation targeting Catholic, Tibetan Buddhist, Falun Gong, and Taiwanese Christian communities"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "6f8a7a90-7062-49be-b3aa-c87c58eec869"
+name = "GTG-14021"
+description = "Disrupting a China-based public and state security campaign of \"stability maintenance\" surveillance and transnational repression"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "695477db-1a8e-4082-affa-6ac44b1ef6d3"
+name = "GTG-14022"
+description = "Disrupting a China-based \"public opinion monitoring\" and dissident surveillance operation"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "9109d508-9c04-44f6-a93d-7c65c7d7229d"
+name = "GTG-15001"
+description = "Deceptive dating app network"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "275045be-4169-467e-ad50-62f0b6c5ecee"
+name = "GTG-16001"
+description = "DeepSeek serves Claude instead of its own models and collects exchanges for model training"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "b412acba-7088-46ef-ae43-1deb2c0b5618"
+name = "GTG-16002"
+description = "Moonshot serves Claude instead of Kimi and collects exchanges for model training"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "2e5da864-9bfa-463d-8d07-3a3b1d54d0d9"
+name = "GTG-16006"
+description = "Distillation, AI R&D, and targeting cyber capabilities"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "687183db-0ff7-4c78-85dd-105a52a1eb83"
+name = "GTG-16008"
+description = "Distillation campaign by Xiaomi"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "bf50feeb-fcbe-4afd-9acc-1b28724426cc"
+name = "GTG-17001"
+description = "Disrupting a China-based operation using Claude to draft a fire control specification and acquisition documents for undersea warfare"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "014818a7-6fa9-490e-8067-47060d272a24"
+name = "GTG-17002"
+description = "Disrupting a China-based operation using Claude to build targeting software for electronic warfare and air defense suppression"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "1d46f3d4-5dc5-4303-84de-d94a990d3558"
+name = "GTG-17003"
+description = "Disrupting a China-based operation using Claude to collect intelligence on directed-energy weapons and their supply chain"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "13c5884a-118e-413c-9617-b16b95164a87"
+name = "GTG-24015"
+description = "Disrupting Russian state-media editorial pipelines built on Claude"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "a44f1189-c27d-408f-aa5b-c73ab7af8b25"
+name = "GTG-27005"
+description = "Disrupting a Russia-based operation using Claude to engineer an autonomous military drone swarm"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "bc67898f-785a-4a1f-8709-16b4472e281c"
+name = "GTG-27006"
+description = "Disrupting a Russia-based operation using Claude to procure mixed military and civilian goods"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "7ddefab6-0553-4f98-89bf-d00c46eb3e75"
+name = "GTG-30004"
+description = "Automating open-source intelligence and developing malware"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "511ea668-7e9b-4cfb-89db-44bdff7278e3"
+name = "GTG-30005"
+description = "Military reconnaissance"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "93f82be9-cc64-4b0f-9a1e-3fa0b1d1c4eb"
+name = "GTG-30006"
+description = "Building the tools for domestic surveillance"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "8ba46d0d-e338-44bd-9e3b-0a31fd17de13"
+name = "GTG-34001"
+description = "Disrupting Iranian state-aligned influence operations on Claude—the ICCO, the Islamic Propaganda Office, and the Bina Observatory"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "e5b3e094-e93e-42b7-a837-972918ba587b"
+name = "GTG-34007"
+description = "Disrupting two Iranian nexus actors building surveillance systems and malicious Firefox browsing extension"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "c21d0e74-89d7-4dac-b48a-318ad3e7a63a"
+name = "GTG-50014"
+description = "ShinyHunters smash-and-grab opportunists"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "6a389572-4464-4126-b1b9-cda9bce19536"
+name = "GTG-50020"
+description = "From hotel bookings to the AI supply chain"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "21463d2b-5aea-41d4-94cc-03afcce7bf9e"
+name = "GTG-50027"
+description = "Disrupting a national mass interception and surveillance platform for Mali's state intelligence service"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "f24d79e8-7921-4953-8cbf-234c1566d559"
+name = "GTG-50029"
+description = "Hacktivists targeted European political and affiliated entities"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "abb1b56b-09e1-4cc4-a535-1796eed2c743"
+name = "GTG-54002"
+description = "Disrupting a commercial \"influence-as-a-service\" operation spanning six continents"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "cc9d41ca-e183-435b-ae21-a8bf3479941c"
+name = "GTG-54004"
+description = "Disrupting a domestic coordinated inauthentic behavior campaign in Kenya"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "f8c856db-38b0-4bd3-b786-fd1cc9fa08a4"
+name = "GTG-54006"
+description = "Disrupting an automated pro-Awami League fake-news operation on Claude targeting rural Bangladesh"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "c7a9b273-9859-426f-ab39-9c8e91396c2e"
+name = "GTG-54009"
+description = "Disrupting a commercial surveillance platform using Claude to profile the social media accounts of Iranian and Persian Gulf-based users"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "3b31dca0-2efc-4bff-9560-0a19c77ea8fc"
+name = "GTG-84002"
+description = "Disrupting a UAE-directed influence operation targeting the Muslim Brotherhood, Sudan conflict, and UN accountability mechanisms"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "1dbb13a0-1fbe-45e1-8e3a-ff11272a7ca5"
+name = "GTG-84005"
+description = "Disrupting a commercial election-manipulation platform targeting Malaysia"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "7cca5c7b-c0ca-491c-afec-facbb812cf5e"
+name = "GTG-84006"
+description = "Disrupting a distributed MEK/NCRI-aligned influence operation that used a shared AI agent to impersonate real people and recruit inside Iran"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "2e3bea3d-afcf-4d74-a436-168873ed41bb"
+name = "GTG-87001"
+description = "Disrupting a Yemen-based guided weapons engineering cell using Claude to develop guidance software"
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "c1ef86d7-ab86-4188-91d2-af3f36207d96"
+name = "UNC7017"
+description = "Uncategorized threat cluster tracked by Google Threat Intelligence Group and Mandiant, responsible for an ephemeral supply chain compromise of AOMEI Backupper between April and July 2026, investigated with ManageEngine's Threat Analysis Lab (METAL). The actor briefly modified the down_html.ini and Notifycfg.ini configuration files on AOMEI's origin servers for windows of five to ten minutes, redirecting the update and promotion flow to an attacker-hosted archive, then restored them. It deployed the CROSSROAD downloader and the SHINYROAD backdoor through trojanized Radmin components, later Adaptix C2, and on one occasion coerced NetNTLMv2 authentication through a hidden WebDAV popup. Victims were opportunistic, in IT services, telecommunications and higher education across several countries. No state nexus has been stated."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "b101baba-907b-4aba-8ea2-1f77e53eb782"
+name = "REF8801"
+description = "Intrusion set tracked by Elastic Security Labs, posing as a Web3 venture accelerator (Apex Accelerator / Apex Arena, Apex Foundation) to target cryptocurrency start-ups and founders. Lures offer investment, free AI credits and security audits, and lead victims to install npm packages (@apexacc/cli, @apexacc/audit) that fetch platform-specific payloads: the CloudSyncD backdoor on macOS and a custom information stealer exfiltrating through Telegram on Windows. The packages also repackage a legitimate coding agent to route LLM traffic through attacker infrastructure and register an attacker-controlled MCP server in the victim's agent configuration. Earlier npm packages from the same operation were reported by SafeDep in July 2026. Elastic makes no state or group attribution."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "98ff9870-3da1-4642-be8c-df6834623b23"
+name = "GhostAction"
+description = "Software supply chain campaign and its unnamed operator, first reported by GitGuardian in September 2025: malicious GitHub Actions workflows named \"Github Actions Security\" injected into compromised repositories exfiltrated CI/CD secrets, with 3,325 secrets stolen from 817 repositories. In October 2026 OpenSourceMalware reported a renewed wave and a second stage that no longer needs a CI runner: a .vscode/tasks.json launcher with a folderOpen trigger runs a Node.js credential stealer disguised as public/fonts/fa-solid-400.woff2, installs a cron job polling the operator's server, and is backed by a fallback workflow. OpenSourceMalware calls this stage a copycat of the DPRK PolinRider technique rather than an extension of it, and ties it to GhostAction through shared server infrastructure. A phishing kit on the lookalike domain my-github.com, harvesting credentials and silently authorizing an OAuth application with repo and workflow scopes, was reported on the same infrastructure."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "57eb1be4-526a-4fa4-8dc4-ec8edb9564ad"
+name = "k0t"
+description = "k0t (also CryptoFeel, Member19, QazWsxShop) is a financially motivated cybercriminal actor, first seen on 22 October 2025, behind a large-scale campaign against exposed network edge devices, according to a joint investigation by Group-IB and NyxLab published in October 2026. The actor finds targets by mass enumeration with FOFA and ZoomEye rather than by researching specific organizations. It gains access by exploiting known flaws such as CVE-2025-64446 (FortiWeb) and CVE-2026-0257 (PAN-OS/Prisma Access) with custom Python scripts, or by brute-forcing Fortinet FortiGate and Palo Alto GlobalProtect appliances, then connects over OpenConnect VPN. Post-exploitation relies on NetExec, Impacket, noPac, Kerbrute, PetitPotam and Mimikatz, persistence on MeshCentral, Atera, Teramind, AnyDesk and AdaptixC2, and exfiltration on Rclone to Wasabi S3 and MEGA. More than 70,000 exposed credentials are linked to the campaign, with victims mostly in Asia Pacific and Latin America; the actor states that the US and Canada are its priority. Many victims were later listed by the Qilin and The Gentlemen ransomware groups, so k0t is assessed to be an initial access broker or affiliate, but the exact relationship is unclear. The activity partially overlaps in time with the FortiBleed credential-harvesting cluster, with negligible overlap in compromised data."
+"tide.vocab.stages" = "misp"
+alias = [
+    "CryptoFeel",
+    "Member19",
+    "QazWsxShop",
+]
+version = "1.2"
+[[keys]]
+id = "5869bc41-c58a-4e06-9419-b3874a4d3a12"
+name = "Jingle Thief"
+description = "Jingle Thief is a financially motivated gift card fraud campaign documented by Palo Alto Networks Unit 42 in October 2025 and tracked as cluster CL-CRI-1032, assessed with moderate confidence to be run by Morocco-based attackers active since 2021, not affiliated with a nation-state. It targets cloud environments of large retail and consumer services organizations: phishing and smishing harvest Microsoft 365 credentials, then the actors, without malware, perform SharePoint and OneDrive reconnaissance of gift card issuance workflows, send internal phishing from compromised accounts, set forwarding rules, and persist by registering rogue authenticator apps and enrolling devices in Entra ID; in one case access lasted about 10 months across more than 60 accounts. Unit 42 assesses with moderate confidence that CL-CRI-1032 overlaps with the actors publicly tracked as Atlas Lion and Storm-0539; it is kept as a separate entry and linked to Storm-0539 as similar. In October 2026, 404 Media reported an organized crime gang that hacked Staples and issued millions of dollars in gift cards; The Hacker News related this to Jingle Thief, but the reporting does not attribute that intrusion to the cluster."
+"tide.vocab.stages" = "misp"
+alias = [
+    "CL-CRI-1032",
+]
+version = "1.2"
+[[keys]]
+id = "aa09600e-29a2-4ba0-a6c0-bd305c30140c"
+name = "STAC4749"
+description = "STAC4749 is a financially motivated activity cluster reported by Sophos in July 2026, observed between February and June 2026 against dozens of organizations, nearly 95% of them in Canada and the U.S. Operators contact victims through Microsoft Teams chats and calls impersonating IT support, using plausible employee usernames on IT-themed '.top' cloud domains rather than onmicrosoft.com tenants, and obtain a remote session through Microsoft Quick Assist or, increasingly from April 2026, the RemSupp RMM tool; RDP is then enabled for lateral movement. PowerShell retrieves a loader communicating over gRPC with hard-coded C2 addresses and checking for an appscreen.log file, later replaced by a PyArmour-obfuscated PyInstaller backdoor that fetches its AES key from a public GitHub repository and talks to workers.dev infrastructure, followed by Golang implants launched with a '--token-raw' argument and pinning embedded CA certificates (issuers such as loop-CA, connectify-CA, james-bond-CA), plus a reverse SOCKS proxy. Persistence relies on HKCU Run keys masquerading as Realtek or WinAudio components and hidden Startup shortcuts; DWAgent and AnyDesk provide redundant access. At least three intrusions ended in Chaos ransomware deployment (the RaaS reportedly launched by former BlackSuit members, not the Chaos builder lineage), in one case under 17 hours after initial access. Sophos notes a Russian-keyboard typo in operator commands, found no evidence of a link to MuddyWater, and states the evidence is insufficient for attribution. In October 2026 Arctic Wolf, analysing more than 400 Teams IT-support impersonation incidents, stated that the shift to '.top' tenants aligns with Sophos's reporting on STAC4749. The Sophos loader shares its artifacts (sekv-prefixed filename, 'Realtek HD Audio' Run value, appscreen.log check, gRPC C2) with the GoGRPC backdoor documented by Zscaler ThreatLabz, although neither vendor equates the two."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "01219d2a-9038-4a42-9090-2b4e964afb26"
+name = "Scarlettgroup"
+description = "ScarlettGroup is a newly observed cyber extortion gang actively threatening companies via a dark web leak site, employing countdown timers to pressure victims. Their operational TTPs include public listing of alleged breaches and a negotiation window for communications. While the group’s intrusion methods remain unverified, their public threats and activity on forums such as PwnForums indicate a growing trend in cyber extortion."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "a92ce123-9be2-4a2e-a972-ca3ebdafe88c"
+name = "UAT-10147"
+description = "UAT-10147 is a Chinese-speaking, financially motivated threat actor targeting internet-facing Windows and Linux servers through the exploitation of publicly disclosed vulnerabilities. The group employs advanced techniques including AI-assisted workflows, deploying malware such as SPECTRE and various RATs, and utilizing capabilities like remote code execution and privilege escalation. Their operations are characterized by the integration of AI for reconnaissance, exploit refinement, and persistent access management. UAT-10147 has a target list of approximately 170,000 URLs and impacts various sectors, including government and education."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "a5a31ba2-d519-4b5d-9122-656714c28641"
+name = "Mimori"
+description = "Mimori is a data-extortion / ransomware group first observed on 2026-10-20, when it launched a leak site and listed its first two claimed victims: OpenText (Canada, technology) and AVEVA (UK, industrial software), claiming 177,234 files from AVEVA. A third claimed victim, St. James's Place (UK, financial services), was reported on 2026-10-21. The leak site, mimori.group, is a clearnet domain fronted by Cloudflare that publishes victim pages under /organizations/<victim> and threatens to publish stolen data unless victims make contact. None of the claims has been independently verified. AVEVA and OpenText have each disclosed a separate security incident (unauthorized access to AVEVA's corporate SharePoint, and to an OpenText employee account through social engineering), but neither has attributed it to Mimori. No ransomware sample, encryptor or affiliate program has been publicly linked to the group, and its operators and any links to earlier groups are unknown."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "6722873c-8fe6-44d9-98ea-91e6c32c7f2c"
+name = "Whitearmor"
+description = "WhiteArmor is a data-theft and extortion group that appeared in October 2026. It claimed its first victim, Whirlpool, around 21 October 2026, and runs a Tor data leak site plus a clearnet mirror (whitearmor.cc). Within its first week it named 14-19 organisations, mainly in the United States, across the transportation/logistics (J.B. Hunt, Ryder, Echo Global Logistics), retail (Lovesac), consumer electronics (Hisense), online gambling (Gamdom) and political (Partido Liberal, Argentina) sectors. Its most publicised claim is 19 GB of Hisense warranty, customer, supplier and CRM data covering Malaysia and Singapore, for which it demanded USD 5 million in Bitcoin, reportedly raised from USD 500,000. Reports describe an affiliate model with a 5% operator fee and say the group is recruiting pentesters, web exploitation specialists and zero-day researchers. No encryptor has been publicly analysed, and none of the victim claims had been independently confirmed at the time of reporting."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "9d0e4a28-8765-45c5-9cf8-18c5d11235b0"
+name = "UAT-6275"
+description = "UAT-6275 is a cyberespionage actor targeting government organizations across Central Asia and the CIS, with a focus on diplomacy, economic development, and environmental management. The group employs custom RATs like Chvost, Laplas, and PickleShell, leveraging methods such as WinRAR exploits and malicious documents for payload delivery. Evidence indicates UAT-6275 has a Kazakhstan nexus, supported by Russian-language artifacts and specific operational hours. Its activity includes the creation of publicly accessible malware staging directories and interest in expanding to additional platforms, including Linux."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "ae595356-f187-4e54-9ee5-10d77db32f23"
+name = "CyberCartel"
+description = "CyberCartel is a Latin American e-crime group employing a multi-agent system called CARLIY0S to coordinate attacks against financial institutions and payment providers. The group's operations utilize AI models for deep reconnaissance, zero-day vulnerability analysis, exploit code generation, and credential harvesting. They have targeted over 400 financial entities in Latin America and are linked to campaigns involving malicious Chrome extensions aimed at stealing credentials and financial data. Active since 2012, CyberCartel has evolved to incorporate Malware-as-a-Service from established malware families to breach Chromium-based browsers."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "f55c5d80-2ccf-488b-b90a-5cc97048141b"
+name = "DataSuckers"
+description = "DataSuckers is a financially motivated hacking group linked to major data breaches affecting businesses in Russia and Ukraine, with claims of having stolen 2-3 TB of data from approximately 68 million customers. The group has demonstrated TTPs such as customer data theft, extortion through ransom demands, and website defacement. They have claimed responsibility for high-profile attacks on ATB Market, Dodo Pizza, and Tez Tour, and reportedly obtained sensitive customer and employee information during these breaches. While DataSuckers maintains a Telegram channel for communications, its operations have drawn the attention of Russian authorities, resulting in the detention of several key members."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "785a6aea-7a98-4290-8497-2e665b1115b3"
+name = "Earth Sirrush"
+description = "Earth Sirrush has conducted sustained spear-phishing campaigns against Ukrainian governmental and defense entities, deploying PowerShell and Go-based tools such as LONEPAGE and SEAGLOW, delivered via malicious archives and exploiting CVE-2023-38831. Their operations transitioned to image-based steganography in the CINDERBLOT campaign, using phishing lures that impersonate Ukrainian state services. Despite continuously adapting their tooling, identifiable indicators of compromise can link their campaigns, demonstrating consistent development habits and delivery patterns. Their targets have included the National Police, State Border Guard Service, and various ministries related to logistics and defense supply chains."
+"tide.vocab.stages" = "misp"
+alias = [
+    "SHADOW-EARTH-065",
+]
+version = "1.2"
+[[keys]]
+id = "9a15723b-0148-4807-b8bf-b5bdca7bf725"
+name = "DarkBlinders"
+description = "DarkBlinders hackers are deploying a fake video meeting application to establish a backdoor and facilitate cyberespionage against Israel and the Kurdistan Region of Iraq. Their operations have led to compromises within a government cloud environment in Kurdistan and targeting a significant Israeli individual linked to security. They are also abusing GitHub repositories as part of their TTPs. The investigation has confirmed their focused efforts in this cyber campaign."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "749b849c-11a6-4ec5-9a56-67caa72fd0bc"
+name = "Xuanye Group"
+description = "Xuanye Group is implicated in a breach at ASOS, utilizing social engineering to impersonate a trusted contact and obtain login credentials. They claimed responsibility for the attack, asserting the theft of customer data while clarifying that financial information was not compromised. The group linked their activities to a Telegram channel and threatened to leak stolen data unless negotiations commenced. They have not provided evidence of the stolen data, despite reportedly sharing it with BBC News."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "87e0e168-99df-4863-9fd1-23f529c5f24c"
+name = "UAT-11473"
+description = "Highly sophisticated APT reported and named by Cisco Talos that exploited CVE-2026-20127, an authentication bypass in Cisco SD-WAN Catalyst Controller, to gain unauthorized access and install the custom KeyDrift malware framework (PolyFlame, LittleFilch), designed for long-term persistent access and automated exfiltration of sensitive keying material from SD-WAN control-plane processes. Observed targeting spans space and satellite services, defense and aerospace technology, and policy research. Talos assesses with high confidence that UAT-11473's operating infrastructure overlaps considerably with Volt Typhoon's Silent Train covert access network; this infrastructure overlap is the only link Talos reports between the two."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "c2a10fc3-a12f-4310-94c2-88a1eb136719"
+name = "GOLD OGRE"
+description = "Cybercriminal group tracked by the Sophos Counter Threat Unit (CTU) that operates the Aur0ra ransomware (also known as Aurora ransomware). Sophos reports that the group used AI extensively: it tested the evasion capabilities of tools and techniques against several EDR products in an AI-assisted post-exploitation framework built with Cursor, then gave its associates similar technology for Aur0ra intrusions, in which Cursor's Composer agent and models from Anthropic, xAI and Moonshot performed network and Active Directory discovery, password spraying, Kerberoasting, NTLM coercion and relay and credential extraction, with human operators supplying VPN credentials, SOCKS access and objectives; guardrails were bypassed by framing the intrusions as authorized red team or diagnostics testing. Intrusions relied on Cobalt Strike, shared C2 infrastructure, SharpShares enumeration and exfiltration to S3-compatible storage, and victims were later named on Aur0ra's data leak site. Multiple distinct operators followed the same pattern; artifacts suggest Russian speakers."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "4125764c-ec9a-4a11-88c3-140d8b6e2810"
+name = "Vapor Panda"
+description = "China-nexus targeted intrusion adversary tracked by CrowdStrike, formerly tracked as VexatiousTemper, active since at least 2021 against government, think tank, energy and extractive organisations across Europe, North America, Oceania and the UK. From 17 October 2026 CrowdStrike observed it run the agentic AI framework ARTEX, mainly with DeepSeek plus a second commercial LLM, from a single controller against more than 200 organisations in at least 14 countries, including foreign ministries in Latin America, Europe, Asia and the Middle East, US pharmaceutical, semiconductor, defense and nuclear organisations, and telecommunications providers. A human operator steered the agents in Chinese, including instructions to find hosts without the CrowdStrike Falcon sensor. Post-exploitation at nine organisations included deployment of the BLOODALCHEMY backdoor, side-loaded by a renamed GameHook binary. CrowdStrike states this campaign is separate from the ARTEX activity tracked as Storm-0940. The Hacker News reports, without a CrowdStrike quote, that the group overlaps with Trend Micro's Earth Estries; this overlap is recorded as a similar relation, not as a synonym."
+"tide.vocab.stages" = "misp"
+alias = [
+    "VexatiousTemper",
+]
+version = "1.2"
+[[keys]]
+id = "a7e30dc5-6efd-4d0b-ba09-ce8a3a573c96"
+name = "UNC7228"
+description = "Uncategorized threat cluster tracked by Google Threat Intelligence Group for an ARTEX-enabled intrusion campaign also tracked by Wiz Research. GTIG states that it overlaps with the PRC-nexus actor Microsoft tracks as Storm-0940. Activity dates back to at least August 2026 and affected multiple entities in the US and Europe in enterprise software, industrial automation, semiconductor manufacturing and design, and telecommunications. The actor typically moved from a first compromised account to deep system access in about four hours, once in 15 minutes, customised its tooling to victim-specific setups and fell back to open proxies when its infrastructure was blocked. The overlap with Storm-0940 is recorded as a similar relation, not as a synonym."
+"tide.vocab.stages" = "misp"
+version = "1.2"
+[[keys]]
+id = "529ab5a8-b53d-4c4d-b2c2-75f13a5eaaa6"
+name = "UTA0576"
+description = "Previously unknown threat actor tracked by Volexity, which from 3 October 2026 exploited a zero-day chain in Ivanti Connect Secure (authentication bypass and RCE tracked as CVE-2026-104935, plus a privilege escalation) to obtain unauthenticated root code execution on a fully patched appliance (22.8R2.4). It re-ran the whole exploit chain for each command instead of deploying a web shell or backdoor, and used in-memory Python, Perl and Bash stages. Post-exploitation focused on credential theft and reconnaissance: Active Directory exports and a custom LDAP tool searching for LAPS passwords and BitLocker recovery keys, parsing of the appliance's own packet captures for LDAP, HTTP Basic and NTLM credentials, a Python Kerberos implementation, and password spraying. Anti-forensic steps included selective log tampering, restoring patched in-memory components and evading the Ivanti Integrity Checker Tool. Volexity assesses with low confidence a criminal rather than espionage motivation, and with medium confidence that the actor uses LLMs for exploit development and post-exploitation."
+"tide.vocab.stages" = "misp"
+version = "1.2"

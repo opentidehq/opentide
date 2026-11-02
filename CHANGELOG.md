@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **ATT&CK 20.0 group labels.** 32 ATT&CK groups in the actors vocabulary take their current label (`[Enterprise] APT28` where it said `[Mobile] APT28`) in generated docs and editor schemas. `threat::1.0` still pins `actors::1.1` and accepts the same values; the 60 actors added at `actors::1.2` wait for a new threat revision.
+
 ## [0.20.0] — 2026-11-02
 
 Minor release: `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns (language-server 0.7.0), a workspace's `visibility.toml` declares its own datasets, and `lint.toml` sets the filename convention. It is a minor because `validate` can now fail a rule that passed under 0.19.0, and because `validate query --live` drops the `VALIDATION_*` environment flags and the `validation_exit_code` / `exit_on_validation_errors` helpers. After upgrading:
