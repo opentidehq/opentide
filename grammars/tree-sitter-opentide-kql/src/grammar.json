@@ -1543,7 +1543,7 @@
             "members": [
               {
                 "type": "SYMBOL",
-                "name": "_column_name"
+                "name": "_column_name_or_pattern"
               },
               {
                 "type": "REPEAT",
@@ -1556,7 +1556,7 @@
                     },
                     {
                       "type": "SYMBOL",
-                      "name": "_column_name"
+                      "name": "_column_name_or_pattern"
                     }
                   ]
                 }
@@ -2090,7 +2090,7 @@
             "members": [
               {
                 "type": "SYMBOL",
-                "name": "_column_name"
+                "name": "_column_name_or_pattern"
               },
               {
                 "type": "REPEAT",
@@ -2103,7 +2103,7 @@
                     },
                     {
                       "type": "SYMBOL",
-                      "name": "_column_name"
+                      "name": "_column_name_or_pattern"
                     }
                   ]
                 }
@@ -2131,7 +2131,7 @@
                 "members": [
                   {
                     "type": "SYMBOL",
-                    "name": "_column_name"
+                    "name": "_column_name_or_pattern"
                   },
                   {
                     "type": "CHOICE",
@@ -2178,7 +2178,7 @@
                       "members": [
                         {
                           "type": "SYMBOL",
-                          "name": "_column_name"
+                          "name": "_column_name_or_pattern"
                         },
                         {
                           "type": "CHOICE",
@@ -5318,6 +5318,26 @@
         {
           "type": "SYMBOL",
           "name": "quoted_identifier"
+        }
+      ]
+    },
+    "column_pattern": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PATTERN",
+        "value": "[A-Za-z0-9_]*\\*[A-Za-z0-9_*]*"
+      }
+    },
+    "_column_name_or_pattern": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_column_name"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "column_pattern"
         }
       ]
     },
