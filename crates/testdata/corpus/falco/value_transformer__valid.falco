@@ -1,0 +1,2 @@
+# prod:value_transformer valid
+proc.pname = val(proc.name) and fd.name startswith val(proc.cwd)

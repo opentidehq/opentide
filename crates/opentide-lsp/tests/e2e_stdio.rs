@@ -702,6 +702,75 @@ configurations:
 }
 
 #[test]
+fn falco_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let codes = published_codes(
+        &mut lsp,
+        "file:///tmp/r.falco",
+        "plaintext",
+        "spawned_process and proc.nmae = bash",
+    );
+    assert_eq!(codes, vec!["falco_unknown_field"], "raw .falco file");
+    let text = "spawned_process and proc.name = bash";
+    published_codes(&mut lsp, "file:///tmp/h.falco", "falco", text);
+    let hover = lsp.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": "file:///tmp/h.falco" },
+            "position": { "line": 0, "character": 3 }
+        }),
+    );
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(value.contains("macro"), "{hover}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": "file:///tmp/h.falco" } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(data.len() >= 20, "semantic tokens for .falco: {tokens}");
+    let rule = "\
+name: Shell in container
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000078
+  schema: rule::1.0
+configurations:
+  sysdig:
+    status: STAGING
+    condition: >
+      spawned_process and container
+      and proc.name in (my_shells)
+    lists:
+    - name: my_shells
+      items: [bash, sh]
+    macros:
+    - name: unused
+      condition: proc.pid >
+";
+    let codes = published_codes(
+        &mut lsp,
+        "file:///tmp/objects/rules/shell-in-container.yaml",
+        "yaml",
+        rule,
+    );
+    assert!(
+        codes.iter().any(|c| c == "falco_parse_error"),
+        "the block's macro condition is analysed: {codes:?}"
+    );
+    assert!(
+        !codes.iter().any(|c| c == "falco_unknown_macro"),
+        "the block's list resolves: {codes:?}"
+    );
+}
+
+#[test]
 fn initialize_installs_the_workspace_field_catalog() {
     let root = std::env::temp_dir().join(format!("opentide-lsp-catalog-{}", std::process::id()));
     let catalogs = root.join(".opentide/lsp/catalogs/generated");

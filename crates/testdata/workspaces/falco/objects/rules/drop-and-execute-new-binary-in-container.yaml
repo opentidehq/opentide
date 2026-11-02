@@ -1,0 +1,37 @@
+# Converted from the Falco default rule "Drop and execute new binary in
+# container" (falcosecurity/rules, rules/falco_rules.yaml, Apache-2.0). The
+# condition is unmodified; the block fills the rule's template list.
+name: Drop and execute new binary in container
+metadata:
+  uuid: b4e86e4c-92bb-4cf2-871d-2f3cd31b9eb8
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  An executable that is not part of a container's base image is executed:
+  the drop-and-execute pattern after an initial foothold.
+techniques:
+- T1059
+response:
+  alert_severity: Critical
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: STAGING
+    condition: >
+      spawned_process and container and proc.is_exe_upper_layer=true
+      and not container.image.repository in (known_drop_and_execute_containers)
+      and not known_drop_and_execute_activities
+    output: >-
+      Executing binary not part of base image | proc_exe=%proc.exe proc_sname=%proc.sname
+      gparent=%proc.aname[2] proc_exe_ino_ctime=%proc.exe_ino.ctime
+      proc_cwd=%proc.cwd container_start_ts=%container.start_ts evt_type=%evt.type
+      user=%user.name process=%proc.name command=%proc.cmdline
+    priority: CRITICAL
+    lists:
+    - name: known_drop_and_execute_containers
+      items: [registry.example.com/ci/builder]

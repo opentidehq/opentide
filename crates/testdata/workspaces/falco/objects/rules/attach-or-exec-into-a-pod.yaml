@@ -1,0 +1,34 @@
+# Converted from the Falco k8saudit rule "Attach/Exec Pod" (falcosecurity/plugins,
+# plugins/k8saudit/rules/k8s_audit_rules.yaml, Apache-2.0). Unmodified.
+name: Attach or exec into a pod
+metadata:
+  uuid: 407f5291-be5f-4e5a-bd46-6300962b8743
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Detect any attempt to attach or exec to a pod.
+techniques:
+- T1609
+response:
+  alert_severity: Low
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: STAGING
+    name: Attach/Exec Pod
+    source: k8s_audit
+    condition: >
+      kevt_started and pod_subresource and (kcreate or kget)
+      and ka.target.subresource in (exec,attach) and not user_known_exec_pod_activities
+    output: >-
+      Attach/Exec to pod (user=%ka.user.name pod=%ka.target.name
+      resource=%ka.target.resource ns=%ka.target.namespace
+      action=%ka.target.subresource command=%ka.uri.param[command])
+    required_plugin_versions:
+    - name: k8saudit
+      version: 0.7.0

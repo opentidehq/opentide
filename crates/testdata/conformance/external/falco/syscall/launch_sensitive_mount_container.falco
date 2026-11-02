@@ -1,0 +1,1 @@
+container_started and sensitive_mount and not falco_sensitive_mount_containers and not user_sensitive_mount_containers

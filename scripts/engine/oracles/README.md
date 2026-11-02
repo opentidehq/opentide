@@ -10,6 +10,7 @@ CI-only checks that compare the opentide engine with the parser each query langu
 | EQL | Elasticsearch `EqlBase.g4` at `2c85bbdf`, generated with antlr-ng 1.0.10 (the grammar has no actions) | `elastic/eql.mjs` | `oracle.yml` → Elastic and Lucene |
 | Kibana KQL (`kuery`) | Kibana `grammar.peggy` at `ea2712af`, compiled with peggy 5.1.1 | `elastic/kuery.cjs` | `oracle.yml` → Elastic and Lucene |
 | Lucene | Lucene 10.5.2 `QueryParser` (the version Elasticsearch pins), leading wildcards on | `elastic/LuceneOracle.java` | `oracle.yml` → Elastic and Lucene |
+| Falco | `falco --validate` (Falco 0.41, with the default `falco_rules.yaml` loaded) | `falco/validate.py`, a local binary or the `falcosecurity/falco` image | none yet: run by hand, see [Falco](#falco) |
 | Tide YAML | Pydantic models in the pinned `opentide` package | `scripts/pydantic_object_issues.py` | `ci.yml` (`cargo test`, `tide_corpus.rs`) |
 | EQL, ES\|QL, Lucene | A live Elasticsearch (8.19 and 9.x release images) | `elasticsearch/`, a throwaway container | `oracle.yml` (8.19.23 and 9.5.5), and locally for the other lines; see [Live Elasticsearch](#live-elasticsearch) |
 
@@ -87,3 +88,13 @@ Nothing from this reference is shipped or vendored; the image is pulled at run t
 ## Not shipped
 
 Kusto.Language, Splunk, Splunk SDKs, and the Elastic and Lucene references never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and `release.yml` runs `scripts/license-scan.sh` over every artifact (unpacking zips and `.crate` files) before it attaches or publishes them.
+
+## Falco
+
+`falco/validate.py` wraps each public condition in `testdata/conformance/external/falco/syscall/` (and each `.broken.` twin) in a rule, validates it with `falco --validate` beside the Falco default rules, and compares the verdict with `falco_parse_error` from `opentide-lsp analyze`. Every public condition must pass both, and every broken twin must fail both. Plugin sources (`k8s_audit`, `aws_cloudtrail`, ...) are not compared, because validating them needs the plugin libraries configured.
+
+It is not an `oracle.yml` job yet. The engine was written in a sandbox that reached neither `download.falco.org` nor a Docker daemon, so the script has not run against a real Falco; the job lands once it has, with any disagreement listed in `testdata/oracles/exceptions.toml` under `[[falco]]`. Until then the reference for the grammar is libsinsp's documented condition grammar (`userspace/libsinsp/filter/parser.h`), and `crates/opentide-analysis/tests/external_falco.rs` requires every public default-rule condition to come out of the engine with no finding at all.
+
+```bash
+python scripts/oracles/falco/validate.py --rules ../rules --docker falcosecurity/falco:0.41.3
+```

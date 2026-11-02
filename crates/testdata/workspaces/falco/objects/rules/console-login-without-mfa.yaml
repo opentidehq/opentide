@@ -1,0 +1,36 @@
+# Converted from the Falco cloudtrail rule "Console Login Without MFA"
+# (falcosecurity/plugins, plugins/cloudtrail/rules/aws_cloudtrail_rules.yaml,
+# Apache-2.0). Unmodified.
+name: Console Login Without MFA
+metadata:
+  uuid: 20eaa01e-8457-4f9a-8b88-9c26b9dfc949
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Detect an AWS console login without MFA.
+techniques:
+- T1078.004
+response:
+  alert_severity: Critical
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    source: aws_cloudtrail
+    condition: >
+      ct.name="ConsoleLogin" and not ct.error exists and ct.user.identitytype!="AssumedRole"
+      and json.value[/responseElements/ConsoleLogin]="Success"
+      and json.value[/additionalEventData/MFAUsed]="No"
+    output: >-
+      Detected a console login without MFA (requesting user=%ct.user,
+      requesting IP=%ct.srcip, AWS region=%ct.region)
+    required_plugin_versions:
+    - name: cloudtrail
+      version: 0.12.0
+    - name: json
+      version: 0.7.0

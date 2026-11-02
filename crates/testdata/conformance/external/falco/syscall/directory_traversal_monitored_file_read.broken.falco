@@ -1,0 +1,4 @@
+(open_read or open_file_failed) and proc.name in (oops and (etc_dir or user_ssh_directory or
+     fd.name startswith /root/.ssh or
+     fd.name contains "id_rsa")
+and directory_traversal and not proc.pname in (shell_binaries)

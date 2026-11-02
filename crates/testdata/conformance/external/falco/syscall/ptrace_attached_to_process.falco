@@ -1,0 +1,1 @@
+ptrace_attach_or_injection and proc_name_exists and not known_ptrace_procs
