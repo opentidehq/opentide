@@ -31,6 +31,11 @@ from opentide.mcp_server.tools import (
     tool_validate_rule,
     tool_validation_report,
 )
+from opentide.mcp_server.workspace import (
+    apply_plugin_launch,
+    require_workspace,
+    resolve_plugin_launch,
+)
 
 #: What the product is, wherever it describes itself.
 TAGLINE = "Spec-driven development for agentic detection engineering"
@@ -95,6 +100,7 @@ def search(
     Returns a list of {uuid, type, title, status}; [] when nothing matches.
     Read opentide://rules/{uuid} (threats/, objectives/) for the full object.
     """
+    require_workspace()
     return tool_search(
         query, type=type, platform=platform, status=status, technique=technique, actor=actor
     )
@@ -109,6 +115,7 @@ def get_chaining(uuid: str) -> dict:
     threat with threat.chaining entries. An unknown UUID returns only {uuid,
     found: false, graph: {}}.
     """
+    require_workspace()
     return tool_get_chaining(uuid)
 
 
@@ -120,6 +127,7 @@ def coverage(technique: str = "", tactic: str = "") -> dict:
     technique also matches its sub-techniques. Empty: {technique_count, matrix:
     {technique: [rule uuids]}, tactic_filter}. tactic is echoed, never filtered on.
     """
+    require_workspace()
     return tool_coverage(technique=technique, tactic=tactic)
 
 
@@ -132,6 +140,7 @@ def validate_rule(uuid: str) -> dict:
     validation_report, which also takes a file path and returns warnings as
     structured entries.
     """
+    require_workspace()
     return tool_validate_rule(uuid)
 
 
@@ -157,6 +166,7 @@ def validation_report(
     help. yaml_line is 0-based and file_path absolute, kept for older clients.
     Done when ok is true.
     """
+    require_workspace()
     return tool_validation_report(
         file=file or None,
         uuid=uuid or None,
@@ -224,6 +234,7 @@ def run_query(
     person first. language is Elastic's: esql, eql, lucene or kuery. index
     names Elastic index patterns (comma-separated) or a CrowdStrike repository.
     """
+    require_workspace()
     return tool_run_query(
         query,
         platform,
@@ -246,6 +257,7 @@ def deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict:
     not_found or unknown_platform. Keep dry_run true unless a person asks for a
     real deployment: people review, merge and deploy.
     """
+    require_workspace()
     return tool_deploy_rule(uuid, platform, dry_run=dry_run)
 
 
@@ -256,41 +268,49 @@ def deployment_status(uuid: str) -> dict:
     Returns {uuid, found, platforms: {name: {deployed, rule_id, external_ids,
     tenants}}}; state_error when the rule's deployment state cannot be read.
     """
+    require_workspace()
     return tool_deployment_status(uuid)
 
 
 @mcp.resource("opentide://index")
 def index_resource() -> str:
+    require_workspace()
     return res.resource_index()
 
 
 @mcp.resource("opentide://rules")
 def rules_resource() -> str:
+    require_workspace()
     return res.resource_rules()
 
 
 @mcp.resource("opentide://rules/{uuid}")
 def rule_resource(uuid: str) -> str:
+    require_workspace()
     return res.resource_rule(uuid)
 
 
 @mcp.resource("opentide://threats")
 def threats_resource() -> str:
+    require_workspace()
     return res.resource_threats()
 
 
 @mcp.resource("opentide://threats/{uuid}")
 def threat_resource(uuid: str) -> str:
+    require_workspace()
     return res.resource_threat(uuid)
 
 
 @mcp.resource("opentide://objectives")
 def objectives_resource() -> str:
+    require_workspace()
     return res.resource_objectives()
 
 
 @mcp.resource("opentide://objectives/{uuid}")
 def objective_resource(uuid: str) -> str:
+    require_workspace()
     return res.resource_objective(uuid)
 
 
@@ -319,6 +339,7 @@ def vocabulary_resource(name: str) -> str:
 
 @mcp.resource("opentide://platforms")
 def platforms_resource() -> str:
+    require_workspace()
     return res.resource_platforms()
 
 
@@ -366,6 +387,8 @@ def main() -> None:
     from opentide.core.logging import LoggingConfig, init_logging
 
     set_mode(OutputMode.MCP)
+    # Started by an Agent Plugin client, the cwd is the plugin, not the catalogue (#431).
+    apply_plugin_launch(resolve_plugin_launch())
     # The Typer root callback already called init_logging. Without force the
     # CLI path would keep Rich-on-stderr and skip the JSON logs hosts parse.
     init_logging(LoggingConfig(json_output=True, plain=True), force=True)

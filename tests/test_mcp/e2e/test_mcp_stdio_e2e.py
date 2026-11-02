@@ -423,3 +423,66 @@ def test_content_length_headers_are_skipped_and_the_body_is_answered(tmp_path: P
     assert all(frame["jsonrpc"] == "2.0" for frame in frames)
     responses = [frame for frame in frames if frame.get("id") == 1]
     assert responses and responses[0]["result"]["serverInfo"]["name"] == "opentide"
+
+
+# Started by an Agent Plugins client (#431): the cwd is the plugin root.
+
+
+def _plugin_root(path: Path) -> Path:
+    (path / "skills").mkdir(parents=True)
+    (path / ".git").mkdir()
+    (path / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "name": "opentide",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _plugin_launch(plugin: Path, extra: dict[str, str]) -> subprocess.Popen[str]:
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"OPENTIDE_REPO_ROOT", "OPENTIDE_TIDE_WORKSPACE", "CLAUDE_PROJECT_DIR"}
+    }
+    env.update({"CI": "true", "PWD": str(plugin), **extra})
+    return subprocess.Popen(
+        _server_argv(),
+        cwd=plugin,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+
+
+def test_a_plugin_launch_serves_the_host_project(tmp_path: Path) -> None:
+    repo = materialise_corpus(tmp_path / "corpus")
+    plugin = _plugin_root(tmp_path / "skills")
+    process = _plugin_launch(plugin, {"CLAUDE_PROJECT_DIR": str(repo)})
+    client = StdioClient(process)
+    client.handshake()
+    payload = client.call_tool("search", {"query": CORPUS_RULE_UUIDS["sentinel"]})
+    assert [hit["uuid"] for hit in payload] == [CORPUS_RULE_UUIDS["sentinel"]]
+    client.close_and_drain()
+
+
+def test_a_plugin_launch_without_a_workspace_says_how_to_name_one(tmp_path: Path) -> None:
+    plugin = _plugin_root(tmp_path / "skills")
+    process = _plugin_launch(plugin, {})
+    client = StdioClient(process)
+    client.handshake()
+    result = client.request("tools/call", {"name": "search", "arguments": {"query": ""}})
+    assert result["result"]["isError"] is True
+    text = result["result"]["content"][0]["text"]
+    assert "workspace_not_found" in text and "OPENTIDE_REPO_ROOT" in text
+    # Tools that need no catalogue still work.
+    explained = client.call_tool("explain", {"code": "workspace_not_found"})
+    assert isinstance(explained, dict)
+    client.close_and_drain()
