@@ -29,9 +29,10 @@ directory: change that line before you deploy (see [Migration](../migration/inde
 
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
-deployed to one of the three platforms has no file. Sentinel, Splunk,
-HarfangLab, Carbon Black and Elastic address rules by `metadata.uuid` or by
-title and never get one.
+deployed to one of the four platforms (Defender for Endpoint, SentinelOne,
+CrowdStrike, and Sysdig tenants with `delivery = "api"`) has no file. Sentinel,
+Splunk, HarfangLab, Carbon Black, Elastic, and Sysdig `file` tenants address
+rules by `metadata.uuid` or by title and never get one.
 
 ```json
 {

@@ -95,6 +95,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--carbon-black-cloud` | Carbon Black Cloud |
 | `--harfanglab` | HarfangLab |
 | `--elastic` | Elastic Security |
+| `--sysdig` | Sysdig Secure (Falco) |
 
 ### setup ci
 

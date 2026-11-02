@@ -4,7 +4,7 @@ description: Install opentide from PyPI — one package, CLI, MCP, and all platf
 ---
 
 <Callout type="info">
-One install gets the CLI, the MCP server (`opentide mcp start`), all eight platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
+One install gets the CLI, the MCP server (`opentide mcp start`), all nine platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
@@ -65,7 +65,7 @@ uv pip install 'opentide==0.20.1'    # pin the current release
 
 </Tabs>
 
-That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all eight platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all nine platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### MCP server
 
@@ -147,7 +147,7 @@ Every vendor SDK a platform calls ships with `pip install opentide`, so live dep
 | Microsoft Sentinel | `azure-identity` `azure-monitor-query`. Rules are deployed through the ARM `alertRules` REST API directly. |
 | Splunk | `splunk-sdk` `pandas` |
 | Carbon Black Cloud | `carbon-black-cloud-sdk` |
-| Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab | HTTP clients bundled with opentide |
+| Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab, Sysdig | HTTP clients bundled with opentide |
 
 `deploy --dry-run` compiles each Sentinel rule into the exact request a live deploy sends. A bare `opentide validate query` checks the queries offline with the analysis engine; `generate`, `validate`, offline query checks and dry-run deploy need no credentials. If a live check reports that an SDK will not import, the environment is damaged: reinstall with `pip install --force-reinstall opentide`.
 
@@ -167,6 +167,7 @@ These `--platform` values are built into the package:
 | `carbon_black_cloud` | Carbon Black Cloud |
 | `crowdstrike` | CrowdStrike Falcon |
 | `harfanglab` | HarfangLab |
+| `sysdig` | Sysdig Secure (Falco) |
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.
 
