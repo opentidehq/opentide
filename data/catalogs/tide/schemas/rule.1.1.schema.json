@@ -11728,39 +11728,24 @@
             }
           ],
           "default": null,
-          "description": "Names of Sysdig runtime policies the rule joins (api delivery). Default: the tenant policies.",
+          "description": "Names of Sysdig runtime policies the rule joins. Default: the tenant policies.",
           "title": "Policies",
-          "markdownDescription": "Names of Sysdig runtime policies the rule joins (`api` delivery). Default: the tenant\n`policies`."
+          "markdownDescription": "Names of Sysdig runtime policies the rule joins. Default: the tenant\n`policies`."
         },
-        "required_engine_version": {
+        "minimum_engine_version": {
           "anyOf": [
             {
-              "type": "string"
+              "minimum": 0,
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "Falco engine version the rule needs (0.39.0), written to rules files. A YAML number (0.37, or a legacy integer engine version such as 17) is read as its text.",
-          "title": "Required Engine Version",
-          "markdownDescription": "Falco engine version the rule needs (`0.39.0`), written to rules files. A YAML\nnumber (`0.37`, or a legacy integer engine version such as `17`) is read as its text."
-        },
-        "required_plugin_versions": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/SysdigPluginVersion"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Plugins the rule needs, written to rules files.",
-          "title": "Required Plugin Versions"
+          "description": "Minimum Falco engine version the rule needs, as Sysdig's integer minimumEngineVersion. Omitted when unset.",
+          "title": "Minimum Engine Version",
+          "markdownDescription": "Minimum Falco engine version the rule needs, as Sysdig's integer\n`minimumEngineVersion`. Omitted when unset."
         }
       },
       "required": [
@@ -11773,9 +11758,10 @@
       "additionalProperties": false,
       "properties": {
         "name": {
-          "description": "Exception name, unique in the block.",
+          "description": "Exception name. Names SHOULD be unique in the block: Falco warns on a repeated name (LOAD_EXCEPTION_NAME_NOT_UNIQUE) and the engine reports it as a warning.",
           "title": "Name",
-          "type": "string"
+          "type": "string",
+          "markdownDescription": "Exception name. Names SHOULD be unique in the block: Falco warns on a repeated name\n(`LOAD_EXCEPTION_NAME_NOT_UNIQUE`) and the engine reports it as a warning."
         },
         "fields": {
           "anyOf": [
@@ -11808,9 +11794,9 @@
             }
           ],
           "default": null,
-          "description": "Comparison operators. Tuple form: a list aligned with fields; default = for each field. Single-field form: one of in, pmatch, or intersects; default in.",
+          "description": "Comparison operators, leading and trailing blanks ignored. Tuple form: a list aligned with fields, each a Falco operator or a modified operator; default = for each field. Single-field form: in, pmatch, intersects, or a modified operator (startswith oneof); default in.",
           "title": "Comps",
-          "markdownDescription": "Comparison operators. Tuple form: a list aligned with `fields`; default `=` for each field.\nSingle-field form: one of `in`, `pmatch`, or `intersects`; default `in`."
+          "markdownDescription": "Comparison operators, leading and trailing blanks ignored. Tuple form: a list aligned with\n`fields`, each a Falco operator or a modified operator; default `=` for each field.\nSingle-field form: `in`, `pmatch`, `intersects`, or a modified operator (`startswith oneof`);\ndefault `in`."
         },
         "values": {
           "anyOf": [
@@ -11823,9 +11809,9 @@
             }
           ],
           "default": null,
-          "description": "Tuple form: a list of rows, each a list aligned with fields. Where the aligned comparison is in, pmatch, or intersects, the item is a list. Single-field form: a flat list of values.",
+          "description": "Tuple form: a list of rows, each a list aligned with fields. An item is a value or a list of values; a single value under a list comparison (in, pmatch, intersects, or a modified operator) is one value list, or the name of a list. Single-field form: a flat list of values.",
           "title": "Values",
-          "markdownDescription": "Tuple form: a list of rows, each a list aligned with `fields`. Where the aligned comparison\nis `in`, `pmatch`, or `intersects`, the item is a list. Single-field form: a flat list of\nvalues."
+          "markdownDescription": "Tuple form: a list of rows, each a list aligned with `fields`. An item is a value or a list\nof values; a single value under a list comparison (`in`, `pmatch`, `intersects`, or a modified\noperator) is one value list, or the name of a list. Single-field form: a flat list of values."
         }
       },
       "required": [
@@ -11890,28 +11876,6 @@
         "condition"
       ],
       "title": "SysdigMacro",
-      "type": "object"
-    },
-    "SysdigPluginVersion": {
-      "additionalProperties": false,
-      "properties": {
-        "name": {
-          "description": "Plugin name (k8saudit, cloudtrail).",
-          "title": "Name",
-          "type": "string",
-          "markdownDescription": "Plugin name (`k8saudit`, `cloudtrail`)."
-        },
-        "version": {
-          "description": "Minimum plugin version, semver.",
-          "title": "Version",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "version"
-      ],
-      "title": "SysdigPluginVersion",
       "type": "object"
     }
   },
