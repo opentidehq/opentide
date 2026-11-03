@@ -430,7 +430,10 @@ def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path) -> None:
     assert "opentide-analysis" not in probe.stdout
     opentide = _venv_bin(tmp_path / "engine-venv", "opentide")
     lsp = _run([str(opentide), "lsp", "start"], input="", timeout=60)
-    assert lsp.returncode == 0, lsp.stdout + lsp.stderr
+    # The server starts and stops cleanly: stdin closing without `shutdown`
+    # is exit 1, as LSP specifies, and stdout carries nothing.
+    assert lsp.returncode == 1, lsp.stdout + lsp.stderr
+    assert "error:" not in lsp.stderr, lsp.stderr
     assert lsp.stdout == ""
 
 

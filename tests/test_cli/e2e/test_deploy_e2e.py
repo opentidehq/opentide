@@ -328,9 +328,10 @@ def test_deploy_loads_only_the_requested_engine(
 def _disable_splunk(repo: Path) -> None:
     config = repo / ".opentide/configurations/platforms/splunk.toml"
     text = config.read_text(encoding="utf-8")
-    assert "[tide]\nenabled = true\n" in text
+    assert "[platform]\nenabled = true\n" in text
     config.write_text(
-        text.replace("[tide]\nenabled = true\n", "[tide]\nenabled = false\n"), encoding="utf-8"
+        text.replace("[platform]\nenabled = true\n", "[platform]\nenabled = false\n"),
+        encoding="utf-8",
     )
 
 

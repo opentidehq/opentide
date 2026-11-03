@@ -286,6 +286,7 @@ class RegistryBuilder:
         resolvers read.
         """
         from opentide.generation.pydantic_metaschema import build_platform_schema_source
+        from opentide.models.platform import PLATFORM_CONFIG_MODELS
         from opentide.models.platform_schema import platform_model_for_key
         from opentide.package.paths import platform_template_name
 
@@ -295,6 +296,10 @@ class RegistryBuilder:
         platforms = configs.get("platforms", {})
         for platform, document in platforms.items():
             if not isinstance(document, dict) or not isinstance(document.get("platform"), dict):
+                continue
+            # No rule block exists for a platform without a model (a plugin's
+            # `platforms/<id>.toml`): nothing to index (#736).
+            if platform not in PLATFORM_CONFIG_MODELS:
                 continue
             schemas[platform] = build_platform_schema_source(platform_model_for_key(platform))
             template_file = bundled / platform_template_name(platform)

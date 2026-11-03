@@ -13,7 +13,8 @@ TERMINAL_HINT = (
 
 
 def serve() -> int:
-    """Serve LSP on stdio until the editor exits or closes stdin; return the exit code.
+    """Serve LSP on stdio until the editor exits or closes stdin; return the exit code:
+    0 when the editor shut the server down first, 1 otherwise (LSP).
 
     The server runs on a thread without the GIL, so Ctrl-C still reaches
     Python and stops it (exit 130). Nothing else may write to stdout: the
@@ -30,13 +31,16 @@ def serve() -> int:
     if sys.stdin.isatty():
         print(TERMINAL_HINT, file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
     _supply_catalogs()
+    _supply_configuration_checks()
+    _name_the_host()
     failure: list[BaseException] = []
+    clean: list[bool] = []
 
     def run() -> None:
         from opentide.analysis import serve_stdio
 
         try:
-            serve_stdio()
+            clean.append(serve_stdio())
         except BaseException as exc:  # reported on the main thread
             failure.append(exc)
 
@@ -47,7 +51,9 @@ def serve() -> int:
     if failure:
         print(f"error: the language server stopped: {failure[0]}", file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
         return 1
-    return 0
+    # LSP: 0 after `shutdown` then `exit`, 1 when the editor exits or closes
+    # stdin without shutting the server down.
+    return 0 if clean and clean[0] else 1
 
 
 def _supply_catalogs() -> None:
@@ -72,5 +78,34 @@ def _supply_catalogs() -> None:
         print(  # noqa: T201 -- stderr, outside the protocol
             f"warning: opentide's catalogs could not be generated ({type(exc).__name__}: {exc}); "
             "using the workspace's, or the engine's bundled ones",
+            file=sys.stderr,
+        )
+
+
+def _name_the_host() -> None:
+    """Tell clients the server runs inside opentide, and which one.
+
+    They read it at ``initialize`` (``capabilities.experimental.opentide.host``)
+    to tell ``opentide lsp start`` from the bare ``opentide-lsp`` binary.
+    """
+    from opentide import __version__
+    from opentide.analysis import engine
+
+    engine().set_host_info("opentide", __version__)
+
+
+def _supply_configuration_checks() -> None:
+    """Have the server check configuration TOML with this opentide's models.
+
+    Without them, the server reports nothing for `.opentide/configurations/`
+    files; stderr says why.
+    """
+    from opentide.analysis import install_configuration_checks
+
+    try:
+        install_configuration_checks()
+    except Exception as exc:  # the server still starts, without configuration checks
+        print(  # noqa: T201 -- stderr, outside the protocol
+            f"warning: configuration files will not be checked ({type(exc).__name__}: {exc})",
             file=sys.stderr,
         )

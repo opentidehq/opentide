@@ -616,6 +616,7 @@ def strip_framework_keywords(dictionary: dict) -> dict:
 
 def recomposition_handler(entry_point):
     from opentide.generation.pydantic_metaschema import build_platform_schema_source
+    from opentide.models.platform import PLATFORM_CONFIG_MODELS
     from opentide.models.platform_schema import platform_model_for_key
 
     _ensure_runtime_context()
@@ -626,6 +627,10 @@ def recomposition_handler(entry_point):
             continue
         platform_cfg = data.get("platform")
         if not isinstance(platform_cfg, dict) or platform_cfg.get("enabled") is not True:
+            continue
+        # A platform file opentide has no rule block for (a plugin's
+        # `platforms/<id>.toml`) adds nothing to the rule schema (#736).
+        if entry not in PLATFORM_CONFIG_MODELS:
             continue
         recomp_identifier = entry
         recomposition[recomp_identifier] = dict()

@@ -178,6 +178,14 @@ def test_a_platform_file_without_tenants_tables_is_refused(
         validate_platform_config(platform, document)
 
 
+def test_a_tide_table_is_an_unknown_key() -> None:
+    """CoreTIDE's `[tide]` identity table is not a platform table (#736)."""
+    from opentide.platforms.config import validate_platform_config
+
+    with pytest.raises(ConfigurationError, match=re.escape("tide: unknown key")):
+        validate_platform_config("splunk", {"tide": {"identifier": "splunk"}})
+
+
 # --- paths.toml, documentation.toml, visibility.toml -----------------------------------
 
 

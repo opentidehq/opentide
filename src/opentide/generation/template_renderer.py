@@ -40,12 +40,20 @@ def _schema_id_from_template_filename(filename: str) -> str | None:
 
 
 def enabled_platforms(configurations: dict[str, Any]) -> list[str]:
-    """Platform identifiers whose merged ``[platform] enabled`` is true, in file order."""
+    """Platforms with a rule block whose merged ``[platform] enabled`` is true, in file order.
+
+    A plugin's ``platforms/<id>.toml`` has no rule-block model, so no
+    template or snippet (#736).
+    """
+    from opentide.models.platform import PLATFORM_CONFIG_MODELS
+
     platforms = configurations.get("platforms")
     if not isinstance(platforms, dict):
         return []
     enabled: list[str] = []
     for identifier, document in platforms.items():
+        if identifier not in PLATFORM_CONFIG_MODELS:
+            continue
         section = document.get("platform") if isinstance(document, dict) else None
         if isinstance(section, dict) and section.get("enabled") is True:
             enabled.append(str(identifier))
