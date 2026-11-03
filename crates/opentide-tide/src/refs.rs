@@ -145,8 +145,8 @@ fn field_path(steps: &[Step]) -> String {
 }
 
 /// The UUID's span: its first occurrence not already taken after the key
-/// that holds it ([`key_span_in`], the list item each index names), else
-/// anywhere in the text. A UUID quoted in prose before its field is not the
+/// that holds it ([`key_span_in`], the list item each index names) or, in a
+/// flow mapping, after its nearest block ancestor, else anywhere in the text. A UUID quoted in prose before its field is not the
 /// field's.
 fn locate(
     source: &str,
@@ -165,11 +165,13 @@ fn locate(
             }
         }
     }
-    let anchor = key_span_in(source, &keys)
-        .or_else(|| {
-            let names: Vec<&str> = keys.iter().map(|(k, _)| *k).collect();
-            key_span(source, &names)
-        })
+    // The key that holds the UUID, else its deepest ancestor that has a span:
+    // a key inside a flow mapping (`objective: { threats: [..] }`) has none,
+    // and the search starts after the block key above it.
+    let names: Vec<&str> = keys.iter().map(|(k, _)| *k).collect();
+    let anchor = (1..=keys.len())
+        .rev()
+        .find_map(|n| key_span_in(source, &keys[..n]).or_else(|| key_span(source, &names[..n])))
         .map_or(0, |span| span.end);
     let free = |from: usize, used: &BTreeSet<usize>| {
         source[from..]
@@ -234,6 +236,18 @@ mod tests {
         let lines: Vec<u32> = found.iter().map(|r| r.range.start.line).collect();
         assert_eq!(lines, [1, 1, 4, 6]);
         assert!(found.iter().all(|r| text_at(&source, r.range) == r.uuid));
+    }
+
+    #[test]
+    fn a_ref_in_a_flow_mapping_is_not_the_uuid_quoted_in_prose_above_it() {
+        let source = format!(
+            "description: replaces {MODEL} in prose\nobjective: {{ threats: [{MODEL}] }}\n"
+        );
+        let found = refs(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].field_path, "objective.threats.0");
+        assert_eq!(found[0].range.start.line, 1, "{found:?}");
+        assert_eq!(text_at(&source, found[0].range), MODEL);
     }
 
     #[test]
