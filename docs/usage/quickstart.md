@@ -103,6 +103,18 @@ Writes markdown pages for rules, objectives, and threats under the configured do
 
 </Step>
 
+<Step>
+
+### Browse the corpus
+
+```bash
+opentide explorer serve
+```
+
+Exports the corpus and serves the interactive explorer at `http://127.0.0.1:4173/`. Needs Node.js 20.19 or newer; see [`opentide explorer`](../cli/explorer.md).
+
+</Step>
+
 </Steps>
 
 ## New repository from scratch

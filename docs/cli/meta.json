@@ -20,6 +20,7 @@
     "rules",
     "deploy",
     "share",
+    "explorer",
     "info",
     "tui",
     "new",

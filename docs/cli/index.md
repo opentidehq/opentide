@@ -27,6 +27,7 @@ Run `opentide --help` for the live command tree.
 | [`rules`](./rules.md) | Review staleness for detection rules |
 | [`deploy`](./deploy.md) | Platform rule deployment |
 | [`share`](./share.md) | Publish objects to a MISP destination |
+| [`explorer`](./explorer.md) | Build or serve the corpus explorer (needs Node.js 20.19+) |
 | [`info`](./info.md) | Repository and platform statistics |
 | [`tui`](./tui.md) | Terminal UI: catalogue tree, YAML and diagnostics, ATT&CK coverage, validate / generate / deploy dry run |
 | [`new`](./new.md) | Scaffold a threat, objective or rule from the generated template |

@@ -500,8 +500,8 @@ def test_resolution_accepts_root_flags_after_the_command(argv: tuple[str, ...]) 
 @pytest.mark.parametrize(
     ("argv", "fragment"),
     [
-        # #202: emitted into CI templates, never registered as a command.
-        (("explorer", "build"), "no subcommand 'explorer'"),
+        # #202: once emitted into CI templates before it existed; `dev` still does not.
+        (("explorer", "dev"), "no subcommand 'dev'"),
         # Only the boolean root flags are hoisted; value options stay on the root.
         (("validate", "--repo", "."), "no option '--repo'"),
         (("validate", "--jsn"), "no option '--jsn'"),
@@ -538,6 +538,10 @@ def test_resolution_rejects_commands_the_cli_does_not_have(
         ("setup", "ci", "github"),
         ("setup", "ci", "--help"),
         ("generate", "explorer"),
+        ("explorer", "build", "--base-path", "/repo"),
+        ("explorer", "serve", "--port", "8080"),
+        ("explorer", "build", "--version", "0.5.0"),
+        ("explorer", "serve", "--latest"),
     ],
 )
 def test_resolution_accepts_the_forms_the_cli_supports(argv: tuple[str, ...]) -> None:
