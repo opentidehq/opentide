@@ -152,7 +152,7 @@ The document holds the `info` keys, plus `objects`, `edges`, `signals` and `atta
 | `actors` | The actors of the threat, of the threats an objective covers, or of the threats of a rule's objective, as written (`att&ck::G0006`) |
 | `load_error` | `null`, or `{code, message, line}` for a file that did not load |
 
-A file that did not load still has a row, so an editor can show it: its `load_error` says why (`yaml_parse` with the line of the problem, `missing_uuid`), and `uuid`, `name` and `schema` are read from the text where they can be (`uuid` is `null` otherwise). It also counts in `summary.load_errors`, and sets `status` to `issues` as in every view.
+A file that did not load still has a row, so an editor can show it: its `load_error` says why (`yaml_parse` with the line of the problem, `missing_uuid`, or `duplicate_id` for a file whose UUID a later file also uses: the index keeps that file's object, and the message names it), and `uuid`, `name` and `schema` are read from the text where they can be (`uuid` is `null` otherwise). It also counts in `summary.load_errors`, and sets `status` to `issues` as in every view.
 
 **`edges`**: one per reference, `{from, to, kind, field_path, relation, missing}`. `field_path` is the dotted path of the field holding the reference; a signal's starts at its entry in the objective (`objective.signals.1.parent`).
 

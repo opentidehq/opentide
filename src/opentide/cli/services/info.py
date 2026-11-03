@@ -63,7 +63,13 @@ def collect_info(
     # `opentide validate` says why; logging it as well would say it twice.
     with parse_errors_reported_by_caller():
         Opentide.reload()
-    parse_errors = list(IndexManager.load().get("parse_errors") or [])
+    index = IndexManager.load()
+    # A file another with the same UUID replaced did not load either: it is
+    # in no object row, so it counts, and the catalogue lists it, as one.
+    parse_errors = [
+        *(index.get("parse_errors") or []),
+        *(index.get("duplicate_files") or []),
+    ]
     enabled_platforms = set(enabled_systems())
     from opentide.platforms.config import systems_raw_index
 

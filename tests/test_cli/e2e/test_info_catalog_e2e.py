@@ -355,3 +355,25 @@ def test_a_scalar_where_a_list_belongs_is_one_item(invoke_cli, tide_corpus_repo:
     assert _object(catalog, SCALAR_OBJECTIVE)["techniques"]["inherited"] == ["T1003"]
     assert _object(catalog, SCALAR_RULE)["techniques"]["inherited"] == ["T1003"]
     assert _object(catalog, SCALAR_THREAT)["techniques"]["own"] == ["T1003"]
+
+
+def test_a_file_whose_uuid_another_uses_keeps_a_row(invoke_cli, tide_corpus_repo: Path) -> None:
+    rules = tide_corpus_repo / RULE_DIR
+    original = rules / "rule-0002-defender-kql.yaml"
+    copy = rules / "rule-zz-copy.yaml"
+    copy.write_text(
+        original.read_text(encoding="utf-8").replace("name: ", "name: Copied ", 1),
+        encoding="utf-8",
+    )
+    result = invoke_cli("info", "catalog")
+    catalog = parse_cli_json(result)
+    paths = {row["path"] for row in catalog["objects"]}
+    assert f"{RULE_DIR}/rule-0002-defender-kql.yaml" in paths
+    assert f"{RULE_DIR}/rule-zz-copy.yaml" in paths
+    [duplicate] = [
+        row for row in catalog["objects"] if row["load_error"] and row["uuid"] == DEFENDER_RULE
+    ]
+    assert duplicate["load_error"]["code"] == "duplicate_id"
+    assert "rule-zz-copy.yaml" in duplicate["load_error"]["message"]
+    assert catalog["summary"]["load_errors"] == 1
+    assert catalog["status"] == "issues"

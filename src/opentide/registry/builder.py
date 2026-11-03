@@ -134,6 +134,9 @@ class RegistryBuilder:
         # YAML files in subfolders of an object folder: not object instances
         # (workspace 1.3, #584), so they are listed here instead of indexed.
         self.nested_object_files: list[dict[str, str]] = []
+        # Files whose object a later file with the same UUID replaced: the index
+        # keeps one object per UUID, so these are listed instead (``duplicate_id``).
+        self.duplicate_files: list[dict[str, str]] = []
 
     def build(self) -> dict[str, Any]:
         configs = resolve_configurations()
@@ -164,6 +167,7 @@ class RegistryBuilder:
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
         index["parse_errors"] = self.parse_errors
+        index["duplicate_files"] = self.duplicate_files
         index[NESTED_INDEX_KEY] = self.nested_object_files
         from opentide.indexing.inflight import apply_inflight_overlay, inflight_preview_enabled
 
@@ -390,6 +394,18 @@ class RegistryBuilder:
             )
             return
         model_cat = objects_index[meta_name]
+        displaced = self.file_paths.get(identifier) if identifier in model_cat else None
+        if displaced is not None and displaced != str(model_path):
+            message = f"UUID {identifier} is also used by {_shown_path(str(model_path))}"
+            self.duplicate_files.append(
+                {
+                    "path": displaced,
+                    "object_type": meta_name,
+                    "code": "duplicate_id",
+                    "error": message,
+                    "message": message,
+                }
+            )
         model_cat[identifier] = body
         files_index[identifier] = model_path.name
         self.file_paths[identifier] = str(model_path)
