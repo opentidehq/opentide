@@ -211,3 +211,120 @@ fn a_file_deleted_on_disk_is_announced_to_a_client_that_asked_for_the_catalog() 
     let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
     assert!(object(&catalog, MODEL).is_none(), "{catalog}");
 }
+
+fn roots_of(catalog: &Value) -> Vec<Value> {
+    catalog["roots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["root"].clone())
+        .collect()
+}
+
+fn folder(path: &std::path::Path) -> Value {
+    json!({ "uri": file_uri(path), "name": path.file_name().unwrap().to_str().unwrap() })
+}
+
+#[test]
+fn a_root_found_around_an_opened_document_is_announced_with_the_loose_root_it_replaces() {
+    let scratch = workspace("catalog-found-root");
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    // No folder: what @opentide/lsp-client sends by default.
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": null }));
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert_eq!(
+        catalog,
+        json!({ "roots": [{ "root": null, "objects": [] }] }),
+        "{catalog}"
+    );
+
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(DANGLING) } }),
+    );
+    let seen = settle(&mut lsp);
+    let mut announced: Vec<Value> = catalog_changes(&seen)
+        .iter()
+        .map(|m| m["params"]["root"].clone())
+        .collect();
+    announced.sort_by_key(|root| root.to_string());
+    assert_eq!(announced, [json!(file_uri(root)), Value::Null], "{seen:?}");
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert_eq!(roots_of(&catalog), [json!(file_uri(root))], "{catalog}");
+    assert!(object(&catalog, MODEL).is_some(), "{catalog}");
+
+    // The found root is followed from then on.
+    did_change(&mut lsp, &rule_uri, &rule(MODEL));
+    let seen = settle(&mut lsp);
+    let changes = catalog_changes(&seen);
+    assert_eq!(changes.len(), 1, "{seen:?}");
+    assert_eq!(changes[0]["params"]["root"], file_uri(root).as_str());
+}
+
+#[test]
+fn a_workspace_folder_added_or_removed_is_announced_and_a_removed_one_leaves_the_catalog() {
+    let a = workspace("catalog-folder-a");
+    let b = workspace("catalog-folder-b");
+    let mut lsp = start(json!({
+        "capabilities": { "workspace": { "workspaceFolders": true } },
+        "workspaceFolders": [folder(&a.0)],
+    }));
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert_eq!(roots_of(&catalog), [json!(file_uri(&a.0))], "{catalog}");
+
+    lsp.notify(
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": { "added": [folder(&b.0)], "removed": [] } }),
+    );
+    let seen = settle(&mut lsp);
+    let changes = catalog_changes(&seen);
+    assert_eq!(changes.len(), 1, "{seen:?}");
+    assert_eq!(changes[0]["params"]["root"], file_uri(&b.0).as_str());
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert_eq!(
+        roots_of(&catalog),
+        [json!(file_uri(&a.0)), json!(file_uri(&b.0))],
+        "{catalog}"
+    );
+
+    lsp.notify(
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": { "added": [], "removed": [folder(&a.0)] } }),
+    );
+    let seen = settle(&mut lsp);
+    let changes = catalog_changes(&seen);
+    assert_eq!(changes.len(), 1, "{seen:?}");
+    assert_eq!(changes[0]["params"]["root"], file_uri(&a.0).as_str());
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert_eq!(roots_of(&catalog), [json!(file_uri(&b.0))], "{catalog}");
+}
+
+#[test]
+fn a_removed_folder_with_an_open_document_stays_as_the_root_found_around_it() {
+    let a = workspace("catalog-folder-open-a");
+    let b = workspace("catalog-folder-open-b");
+    let rule_uri = file_uri(&a.0.join("objects/rules/rule-1.0.yaml"));
+    let mut lsp = start(json!({
+        "capabilities": { "workspace": { "workspaceFolders": true } },
+        "workspaceFolders": [folder(&a.0), folder(&b.0)],
+    }));
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(DANGLING) } }),
+    );
+    lsp.request("opentide/catalog", json!({}));
+    lsp.notify(
+        "workspace/didChangeWorkspaceFolders",
+        json!({ "event": { "added": [], "removed": [folder(&a.0)] } }),
+    );
+    // The open rule still reads its own workspace, not the other folder's.
+    let seen = settle(&mut lsp);
+    assert!(catalog_changes(&seen).is_empty(), "{seen:?}");
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert_eq!(
+        roots_of(&catalog),
+        [json!(file_uri(&b.0)), json!(file_uri(&a.0))],
+        "{catalog}"
+    );
+}

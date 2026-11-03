@@ -138,7 +138,13 @@ The workspace index, for catalogue, graph and search views that follow unsaved e
 
 ### `opentide/catalogChanged`
 
-A notification, `{ root }` (the same `root` as above), sent at the end of the batch in which that root's index changed, once the client has asked for its catalog: an object file created, saved with other contents, or deleted (reported by the client's file watcher; without one, the server notices on the next request that reads the workspace), or an open object's UUID, name, schema or references edited. An edit that changes only ranges or prose sends none. The client asks for `opentide/catalog` again.
+A notification, `{ root }` (the same `root` as above), sent at the end of a batch, once the client has asked for a catalog:
+
+- for a root whose catalog the client got and whose index changed: an object file created, saved with other contents, or deleted (reported by the client's file watcher; without one, the server notices on the next request that reads the workspace), or an open object's UUID, name, schema or references edited. An edit that changes only ranges or prose sends none;
+- for a root the client got that is gone: a workspace folder removed (`workspace/didChangeWorkspaceFolders`), or `root: null` once the documents outside every root have a root;
+- for a root that appeared, once the client has asked for every root (`{}`): a folder added, or the `.opentide/` or `objects/` ancestor of a document opened outside every folder. That root is followed from then on.
+
+The client asks for `opentide/catalog` again.
 
 ## TypeScript client
 

@@ -1976,6 +1976,9 @@ fn handle_catalog(session: &mut Session, params: custom::CatalogParams) -> Value
             (Some(_), None) => false,
         })
         .collect();
+    if wanted.is_none() {
+        session.catalog_every_root();
+    }
     let range = |r: Range| serde_json::to_value(lsp_range(r)).unwrap_or(Value::Null);
     let entries: Vec<Value> = roots
         .into_iter()

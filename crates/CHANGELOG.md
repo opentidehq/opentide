@@ -17,6 +17,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - The ES|QL TextMate grammar's scope is `source.opentide.esql`, as `docs/EDITORS.md` promised, not `source.esql`, the scope of Elastic's ES|QL extension ([#195](https://github.com/opentidehq/language-server/issues/195)). An editor that loaded both grammars kept only one. An editor that includes the grammar by scope includes `source.opentide.esql` now. The other grammars keep `source.<id>`; `docs/EDITORS.md` says why. HighlightSpec captures are unchanged.
 
+### Fixed
+
+- A workspace folder removed with `workspace/didChangeWorkspaceFolders` is no longer a root: `workspace/diagnostic` and `workspace/symbol` stopped covering it, and an open document of that folder reads the `.opentide/` or `objects/` root around it, as when it is opened outside every folder. The folder was kept as if the server had found it around a document.
+
 ## [0.9.1] - 2026-11-03
 
 The bundled Tide catalog catches up with opentide's removal of its CoreTIDE compatibility, so `opentide-lsp` on its own reports the same unknown keys and platform `schema` values that `opentide validate` reports.
