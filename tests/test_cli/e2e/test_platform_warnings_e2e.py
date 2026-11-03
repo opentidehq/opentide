@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 
 import pytest
@@ -194,13 +193,7 @@ def test_an_enabled_splunk_tenant_with_an_invalid_frequency_warns_once_on_deploy
         monkeypatch.setenv(name, value)
     config = tide_corpus_repo / ".opentide" / "configurations" / "platforms" / "splunk.toml"
     config.write_text(
-        re.sub(
-            r"^frequency_scheduling = .*$",
-            'frequency_scheduling = "bogus"',
-            config.read_text(encoding="utf-8"),
-            flags=re.MULTILINE,
-        ),
-        encoding="utf-8",
+        _DISABLED_SPLUNK.replace("enabled = false", "enabled = true"), encoding="utf-8"
     )
 
     info = invoke_cli("info")
