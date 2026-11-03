@@ -205,7 +205,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`spl_wildcard`](#spl_wildcard) | A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event. |
 | [`sysdig_definition_duplicate`](#sysdig_definition_duplicate) | A name is defined more than once across the block's macros and lists. |
 | [`sysdig_definition_name`](#sysdig_definition_name) | A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword. |
-| [`sysdig_definition_order`](#sysdig_definition_order) | A list item names a list that is not defined before it, or a macro uses a macro that is not defined before it: Falco's definition-before-use. |
+| [`sysdig_definition_order`](#sysdig_definition_order) | A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro. |
 | [`sysdig_exception_shape`](#sysdig_exception_shape) | An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`). |
 | [`sysdig_list_in_value`](#sysdig_list_in_value) | A block list name appears in an exception value where Falco's expansion would not produce a value list. |
 | [`sysdig_list_self_reference`](#sysdig_list_self_reference) | A block list names itself as one of its items, so its own name stays in the expanded condition. |
@@ -3463,7 +3463,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 ## sysdig_definition_order
 
-A list item names a list that is not defined before it, or a macro uses a macro that is not defined before it: Falco's definition-before-use.
+A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro.
 
 Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 
