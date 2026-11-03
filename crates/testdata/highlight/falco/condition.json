@@ -364,7 +364,7 @@
     {
       "span": {
         "start": 106,
-        "end": 113
+        "end": 114
       },
       "range": {
         "start": {
@@ -373,29 +373,11 @@
         },
         "end": {
           "line": 0,
-          "character": 113
+          "character": 114
         }
       },
       "capture": "function.builtin",
       "token_type": 5
-    },
-    {
-      "span": {
-        "start": 113,
-        "end": 114
-      },
-      "range": {
-        "start": {
-          "line": 0,
-          "character": 113
-        },
-        "end": {
-          "line": 0,
-          "character": 114
-        }
-      },
-      "capture": "punctuation.bracket",
-      "token_type": 14
     },
     {
       "span": {

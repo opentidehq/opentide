@@ -1,0 +1,2 @@
+# prod:transformer_list invalid
+join(",", (proc.name, ) = a

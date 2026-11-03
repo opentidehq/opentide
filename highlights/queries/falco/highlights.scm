@@ -11,9 +11,12 @@
 (comparison_operator) @operator
 (list_operator) @keyword
 (unary_operator) @keyword
+(operator_modifier) @keyword
 
 ((bare_string) @boolean
   (#match? @boolean "^(true|false)$"))
+((bare_string) @number
+  (#match? @number "^([+-]?[0-9]+([.][0-9]*)?([eE][+-][0-9]+)?|0[xX][0-9a-fA-F]+)$"))
 (number) @number
 (quoted_string) @string
 (bare_string) @string

@@ -17,7 +17,7 @@
         }
       },
       "capture": "tide.property",
-      "token_type": 17
+      "token_type": 18
     },
     {
       "span": {
@@ -71,7 +71,7 @@
         }
       },
       "capture": "tide.property",
-      "token_type": 17
+      "token_type": 18
     },
     {
       "span": {
@@ -215,7 +215,7 @@
         }
       },
       "capture": "tide.property",
-      "token_type": 17
+      "token_type": 18
     },
     {
       "span": {
@@ -251,7 +251,7 @@
         }
       },
       "capture": "tide.property",
-      "token_type": 17
+      "token_type": 18
     },
     {
       "span": {

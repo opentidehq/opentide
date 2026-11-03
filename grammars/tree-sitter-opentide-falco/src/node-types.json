@@ -133,6 +133,16 @@
           }
         ]
       },
+      "modifier": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "operator_modifier",
+            "named": true
+          }
+        ]
+      },
       "operator": {
         "multiple": false,
         "required": true,
@@ -160,11 +170,11 @@
             "named": true
           },
           {
-            "type": "list_reference",
+            "type": "field_transformer",
             "named": true
           },
           {
-            "type": "number",
+            "type": "list_reference",
             "named": true
           },
           {
@@ -220,7 +230,7 @@
     "fields": {},
     "children": {
       "multiple": false,
-      "required": false,
+      "required": true,
       "types": [
         {
           "type": "argument_value",
@@ -238,7 +248,7 @@
     "named": true,
     "fields": {
       "argument": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
           {
@@ -247,6 +257,28 @@
           },
           {
             "type": "field_transformer",
+            "named": true
+          },
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "quoted_string",
+            "named": true
+          },
+          {
+            "type": "transformer_list",
+            "named": true
+          }
+        ]
+      },
+      "field_argument": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "field_argument",
             "named": true
           }
         ]
@@ -468,9 +500,31 @@
     }
   },
   {
-    "type": "transformer_name",
+    "type": "transformer_list",
     "named": true,
-    "fields": {}
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "field",
+          "named": true
+        },
+        {
+          "type": "field_transformer",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quoted_string",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "value_list",
@@ -482,10 +536,6 @@
       "types": [
         {
           "type": "bare_string",
-          "named": true
-        },
-        {
-          "type": "number",
           "named": true
         },
         {
@@ -505,6 +555,16 @@
         "types": [
           {
             "type": "field",
+            "named": true
+          }
+        ]
+      },
+      "field_argument": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "field_argument",
             "named": true
           }
         ]
@@ -578,16 +638,8 @@
     "named": true
   },
   {
-    "type": "b64",
-    "named": false
-  },
-  {
     "type": "bare_string",
     "named": true
-  },
-  {
-    "type": "basename",
-    "named": false
   },
   {
     "type": "bcontains",
@@ -634,15 +686,15 @@
     "named": false
   },
   {
-    "type": "len",
-    "named": false
-  },
-  {
     "type": "not",
     "named": false
   },
   {
     "type": "number",
+    "named": true
+  },
+  {
+    "type": "operator_modifier",
     "named": true
   },
   {
@@ -666,12 +718,8 @@
     "named": false
   },
   {
-    "type": "tolower",
-    "named": false
-  },
-  {
-    "type": "toupper",
-    "named": false
+    "type": "transformer_name",
+    "named": true
   },
   {
     "type": "unary_operator",
