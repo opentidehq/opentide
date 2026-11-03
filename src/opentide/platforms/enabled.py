@@ -27,9 +27,8 @@ def enabled_systems() -> list[str]:
         config = systems.get(system)
         if not config:
             continue
-        tide_block = config.get("tide", {})
         platform_block = config.get("platform", {})
-        if tide_block.get("enabled") is True or platform_block.get("enabled") is True:
+        if isinstance(platform_block, dict) and platform_block.get("enabled") is True:
             enabled.append(system)
     return enabled
 
@@ -44,18 +43,16 @@ def misspelled_enabled_key(system: str) -> tuple[str, str] | None:
     import difflib
 
     config = resolve_configurations().get("systems", {}).get(system) or {}
-    # `[tide]` is the older spelling of the table `enabled_systems` also reads.
-    for table in ("platform", "tide"):
-        block = config.get(table)
-        if not isinstance(block, dict):
-            continue
-        for key in block:
-            lowered = str(key).lower()
-            if key != "enabled" and (
-                lowered == "enabled"
-                or difflib.SequenceMatcher(None, lowered, "enabled").ratio() >= 0.75
-            ):
-                return table, str(key)
+    block = config.get("platform")
+    if not isinstance(block, dict):
+        return None
+    for key in block:
+        lowered = str(key).lower()
+        if key != "enabled" and (
+            lowered == "enabled"
+            or difflib.SequenceMatcher(None, lowered, "enabled").ratio() >= 0.75
+        ):
+            return "platform", str(key)
     return None
 
 

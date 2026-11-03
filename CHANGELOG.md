@@ -16,6 +16,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
   `opentide.validation.configuration.configuration_buffer_issues(path, text, open_buffers)` is the check the editor runs. See [Configuration files](docs/cli/lsp.md#configuration-files).
 
+### Fixed
+
+- **Platform files no longer crash `validate`, schema generation or the editor's catalog** ([#736](https://github.com/opentidehq/opentide/issues/736)).
+  - **Plugin platform files.** A third-party `platforms/<id>.toml` (a plugin's platform) crashed `opentide validate` with `KeyError`. opentide has no rule block for such a platform, so `validate`, `generate schemas` and the editor's catalog now skip it. The configuration check still checks the file against `platforms.schema.json`.
+  - **`[tide]` tables.** CoreTIDE's `[tide]` identity table is no longer read for a platform's name, identifier or `enabled`. It made catalog generation fail with `KeyError: 'name'` when a workspace enabled a platform there, and `opentide lsp start` then fell back to stale catalogs. It is now an `unknown_key` in the configuration check, like any other unknown table: move its keys to `[platform]`.
+
 ### Changed
 
 - **`opentide lsp start` exits with the protocol's code.** It exits `0` after the editor's `shutdown` and `exit`, and `1` when the editor exits or closes stdin without `shutdown`; it used to exit `0` either way. The engine pin moves to language-server's fixes ([#185](https://github.com/opentidehq/language-server/issues/185)):

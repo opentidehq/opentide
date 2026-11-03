@@ -1,4 +1,4 @@
-[tide]
+[platform]
 enabled = true
 identifier = "carbon_black_cloud"
 name = "Carbon Black Cloud Enterprise EDR"

@@ -1,4 +1,4 @@
-[tide]
+[platform]
 enabled = true
 identifier = "splunk"
 name = "Splunk Enterprise"

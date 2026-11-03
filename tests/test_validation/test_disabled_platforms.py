@@ -147,8 +147,8 @@ def test_a_misspelled_enabled_key_is_named_in_the_warning(monkeypatch: pytest.Mo
     ("config", "expected"),
     [
         ({"platform": {"enabeld": True}}, ("platform", "enabeld")),
-        # The older [tide] table, after a [platform] value that is not a table.
-        ({"platform": "x", "tide": {"Enabled": True}}, ("tide", "Enabled")),
+        # CoreTIDE's [tide] table is not read (#736).
+        ({"platform": "x", "tide": {"Enabled": True}}, None),
         ({"platform": {"enabled": True, "name": "x"}}, None),
         ({}, None),
     ],

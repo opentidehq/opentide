@@ -121,18 +121,14 @@ def _snippets_output_path(paths: Any) -> Path:
 
 
 def _entry_enabled(recomp_entry: dict[str, Any]) -> bool:
-    for section in ("tide", "platform"):
-        block = recomp_entry.get(section)
-        if isinstance(block, dict) and block.get("enabled") is True:
-            return True
-    return False
+    block = recomp_entry.get("platform")
+    return isinstance(block, dict) and block.get("enabled") is True
 
 
 def _entry_name(recomp_entry: dict[str, Any]) -> str | None:
-    for section in ("tide", "platform"):
-        block = recomp_entry.get(section)
-        if isinstance(block, dict) and block.get("name"):
-            return str(block["name"])
+    block = recomp_entry.get("platform")
+    if isinstance(block, dict) and block.get("name"):
+        return str(block["name"])
     return None
 
 

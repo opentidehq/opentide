@@ -58,11 +58,7 @@ def _load_nested_configs(directory: Path) -> dict[str, dict]:
         if not toml_path.is_file():
             continue
         configuration = _load_toml(toml_path)
-        key = (
-            configuration.get("platform", {}).get("identifier")
-            or configuration.get("tide", {}).get("identifier")
-            or toml_path.stem
-        )
+        key = configuration.get("platform", {}).get("identifier") or toml_path.stem
         nested[str(key)] = configuration
     return nested
 
@@ -93,11 +89,7 @@ def _bundled_platform_configs() -> dict[str, dict]:
 
     for toml_path in sorted(platforms_dir.glob("*.toml")):
         configuration = _load_toml(toml_path)
-        key = (
-            configuration.get("platform", {}).get("identifier")
-            or configuration.get("tide", {}).get("identifier")
-            or toml_path.stem
-        )
+        key = configuration.get("platform", {}).get("identifier") or toml_path.stem
         systems[key] = configuration
     return systems
 

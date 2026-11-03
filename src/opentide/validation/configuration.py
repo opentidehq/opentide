@@ -322,11 +322,10 @@ def _platform_key(document: Mapping[str, Any], stem: str) -> str:
     `resolve_configurations` keys a platform file by `platform.identifier`,
     then `tide.identifier`, then the file name stem.
     """
-    for table in ("platform", "tide"):
-        section = document.get(table)
-        identifier = section.get("identifier") if isinstance(section, Mapping) else None
-        if isinstance(identifier, str) and identifier:
-            return configuration_file_key(f"platforms/{identifier}.toml") or GENERIC_PLATFORM_FILE
+    section = document.get("platform")
+    identifier = section.get("identifier") if isinstance(section, Mapping) else None
+    if isinstance(identifier, str) and identifier:
+        return configuration_file_key(f"platforms/{identifier}.toml") or GENERIC_PLATFORM_FILE
     return configuration_file_key(f"platforms/{stem}.toml") or GENERIC_PLATFORM_FILE
 
 
