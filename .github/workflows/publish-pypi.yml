@@ -135,7 +135,13 @@ jobs:
       fail-fast: true
       matrix:
         # Native runners: the engine is compiled for the machine that builds it.
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest, windows-latest]
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-15-intel
+          - macos-latest
+          - windows-latest
+          - windows-11-arm
     env:
       # The version of the tag; the Linux containers build from a copy of the checkout.
       SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.guard.outputs.version }}
@@ -148,12 +154,54 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The other images carry Rust; this one may not.
+      - name: Rust on Windows on Arm
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
+            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
+            & $installer -y --profile minimal
+            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+
       # manylinux and musllinux on Linux, the runner's architecture on macOS
-      # and Windows; each wheel is installed and run before it is kept.
+      # and Windows; each wheel is installed and run before it is kept, except
+      # win_arm64's, which the next step installs.
       - name: Build wheels
         run: |
           python -m pip install cibuildwheel==4.3.5
           python -m cibuildwheel --output-dir wheelhouse
+
+      # cibuildwheel would test the win_arm64 wheel on CPython 3.10, for which
+      # cryptography has no Windows on Arm wheel (its cp311-abi3 wheels stop at
+      # 46.0.3), so pip would compile it. Install it the way a user on 3.12
+      # does, with cryptography from a wheel, and check the engine and doctor.
+      - name: Install the win_arm64 wheel and run doctor
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        env:
+          PIP_ONLY_BINARY: cryptography
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $wheel = @(Get-ChildItem wheelhouse -Filter '*-cp310-abi3-win_arm64.whl')
+          if ($wheel.Count -ne 1) { throw "expected one win_arm64 wheel, found $($wheel.Count)" }
+          $venv = Join-Path $env:RUNNER_TEMP 'smoke'
+          python -m venv $venv
+          $python = Join-Path $venv 'Scripts\python.exe'
+          $opentide = Join-Path $venv 'Scripts\opentide.exe'
+          & $python -m pip install --quiet $wheel[0].FullName
+          & $opentide --version
+          & $python -c "from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']"
+          $workspace = Join-Path $env:RUNNER_TEMP 'smoke-workspace'
+          & $opentide --json setup --path $workspace --yes | Out-Null
+          Push-Location $workspace
+          & $opentide --json doctor --offline
+          Pop-Location
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -277,7 +325,7 @@ jobs:
               problems.append(f"expected one release version, found {sorted(versions)}")
           elif versions != {os.environ["EXPECTED_VERSION"]}:
               problems.append(f"built {sorted(versions)}, but the guard approved {os.environ['EXPECTED_VERSION']}")
-          for platform in ("manylinux", "musllinux", "macosx", "win_amd64"):
+          for platform in ("manylinux", "musllinux", "macosx", "win_amd64", "win_arm64"):
               if not any(platform in name for name in wheels):
                   problems.append(f"no {platform} wheel")
           if not all("-cp310-abi3-" in name for name in wheels):

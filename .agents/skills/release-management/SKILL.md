@@ -41,7 +41,7 @@ A GitHub Release whose `--target` is not the tagged commit is a failed release. 
 
 ## The engine is part of the wheels
 
-opentide compiles its analysis engine (`analysis/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64) and an sdist that carries `analysis/`, and refuses to publish when a platform's wheel is missing.
+opentide compiles its analysis engine (`analysis/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm) and an sdist that carries `analysis/`, and refuses to publish when a platform's wheel is missing.
 
 | Before tagging | Check |
 |----------------|-------|

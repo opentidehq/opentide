@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **A wheel for Windows on Arm** (`cp310-abi3-win_arm64`, [#748](https://github.com/opentidehq/opentide/issues/748)). `pip install opentide` on Windows on Arm compiled opentide from its sdist, which needs Rust; it now installs a wheel with the engine compiled in, and a release is refused without one. cryptography, which the Azure SDK needs, publishes no Windows on Arm wheel after 46.0.3, so install with `pip install --only-binary cryptography opentide` on CPython 3.11 or later. See [Installation](docs/usage/installation.md#windows-and-powershell).
+
 ### Changed
 
 - **`pip install opentide` no longer installs pandas or numpy** ([#747](https://github.com/opentidehq/opentide/issues/747)). They were most of the size of every install, for one code path: deploy and `deploy --dry-run` flattened a platform's tenant modifiers with `pandas.json_normalize`. They now use opentide's own function, which gives the keys pandas gave, so every deployed configuration is unchanged; a `[[modifiers]]` entry with an empty `modifications` table, which failed with `IndexError`, now changes nothing. `boto3` stays: the Carbon Black SDK imports it when it loads.

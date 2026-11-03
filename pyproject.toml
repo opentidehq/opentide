@@ -174,6 +174,9 @@ skip = ["*-win32", "*_i686", "*_ppc64le", "*_s390x", "*_armv7l", "*_riscv64"]
 # The workflow sets the version from the release tag: the Linux containers
 # build from a copy of the checkout.
 environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION"]
+# cryptography has no CPython 3.10 wheel for Windows on Arm, so the test
+# install would compile it: publish-pypi.yml installs that wheel on 3.12.
+test-skip = "*-win_arm64"
 test-command = [
     "opentide --version",
     "python -c \"from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']\"",
