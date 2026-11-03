@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from opentide.core.logging import get_logger
@@ -50,7 +50,38 @@ def is_object_file_name(name: str, *, include_debug: bool = False) -> bool:
     """
     if not name.endswith(OBJECT_SUFFIXES):
         return False
-    return include_debug or not name.endswith(DEBUG_SUFFIXES)
+    return include_debug or not is_debug_file_name(name)
+
+
+def is_debug_file_name(name: str) -> bool:
+    """True for a ``*.debug.yaml``/``*.debug.yml`` name: scratch output, never in the catalogue."""
+    return name.endswith(DEBUG_SUFFIXES)
+
+
+def split_object_name(name: str) -> tuple[str, str]:
+    """Split an object file name into the stem its ``name`` names and the suffix it keeps.
+
+    ``x.debug.yaml`` is ``("x", ".debug.yaml")``: the ``.debug`` infix belongs to
+    the suffix, so a rename that replaces the stem keeps the file out of the
+    catalogue. ``Path.stem`` gave ``"x.debug"``, and ``lint --fix`` wrote
+    ``B.yaml``: a fixture became a live rule. A name with no object suffix
+    splits as :class:`~pathlib.PurePath` does.
+    """
+    for suffix in (*DEBUG_SUFFIXES, *OBJECT_SUFFIXES):
+        if name.endswith(suffix):
+            return name[: -len(suffix)], suffix
+    path = PurePath(name)
+    return path.stem, path.suffix
+
+
+def object_stem(path: Path) -> str:
+    """The stem of the object file *path*, without its ``.debug`` infix."""
+    return split_object_name(path.name)[0]
+
+
+def with_object_stem(path: Path, stem: str) -> Path:
+    """*path* renamed to *stem*, keeping its suffix (``.debug.yaml`` included)."""
+    return path.with_name(f"{stem}{split_object_name(path.name)[1]}")
 
 
 def scan_object_dir(object_dir: Path, *, include_debug: bool = False) -> ObjectDirScan:

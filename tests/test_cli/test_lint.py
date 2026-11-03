@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -11,6 +13,8 @@ from typer.testing import CliRunner
 from opentide.cli import app
 from opentide.cli.enums import LintCheck
 from opentide.cli.services.lint import _top_level_key_lines, run_lint
+from opentide.core.lint_config import FilenameConfig, FilenameStyle, LintConfig
+from opentide.registry.catalogue import DEBUG_SUFFIXES, OBJECT_SUFFIXES, is_debug_file_name
 
 runner = CliRunner()
 
@@ -700,3 +704,70 @@ def test_lint_reports_the_engines_dataset_and_ecs_warnings(
     found = [(item.get("code"), item["path"]) for item in result["findings"]]
     relative = rule.relative_to(tmp_path).as_posix()
     assert found == [(code, relative) for code in codes[:2]]
+
+
+def _lint_names(
+    root: Path, *, style: FilenameStyle = "slug", pattern: str | None = None
+) -> dict[str, Any]:
+    filenames = FilenameConfig(style=style, pattern=re.compile(pattern) if pattern else None)
+    return run_lint(
+        root, checks=[LintCheck.filenames], fix=True, config=LintConfig(filenames=filenames)
+    )
+
+
+@pytest.mark.parametrize("suffix", DEBUG_SUFFIXES)
+def test_lint_fix_keeps_a_debug_fixture_out_of_the_catalogue(tmp_path: Path, suffix: str) -> None:
+    """``0005 - MDR Deployment Testing MDE.debug.yaml`` was renamed ``MDR TESTING - MDE 1000.yaml``:
+    the fixture joined the catalogue and the next push's deploy diff (0.20.1 migration)."""
+    body = _THREAT.replace("Simulated Actor", "MDR TESTING - MDE 1000")
+    src = _write_object(tmp_path, "threats", f"0005 - MDR Deployment Testing MDE{suffix}", body)
+
+    result = _lint_names(tmp_path, style="name")
+
+    assert result["fixed"] == 1
+    assert [entry.name for entry in src.parent.iterdir()] == [f"MDR TESTING - MDE 1000{suffix}"]
+    assert result["findings"][0]["expected"] == f"objects/threats/MDR TESTING - MDE 1000{suffix}"
+    # Named as its name asks, less the infix: nothing left to report.
+    assert _lint_names(tmp_path, style="name")["count"] == 0
+
+
+def test_lint_fix_gives_a_fixture_the_name_of_the_rule_it_copies(tmp_path: Path) -> None:
+    """A fixture and the object it copies are two files: the fixture takes the name too."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _THREAT)
+    copy = _THREAT.replace("8001-000000000001", "8001-000000000002")
+    _write_object(tmp_path, "threats", "scratch.debug.yaml", copy)
+    _write_object(tmp_path, "threats", "other.debug.yaml", copy.replace("0002", "0003"))
+
+    result = _lint_names(tmp_path)
+
+    assert result["fixed"] == 2
+    assert sorted(entry.name for entry in (tmp_path / "objects" / "threats").iterdir()) == [
+        "simulated-actor-00000000.debug.yaml",
+        "simulated-actor.debug.yaml",
+        "simulated-actor.yaml",
+    ]
+
+
+def test_lint_filename_pattern_matches_the_stem_without_the_debug_infix(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.debug.yaml", _THREAT)
+    assert _lint_names(tmp_path, pattern="[a-z-]+")["count"] == 0
+    _write_object(tmp_path, "threats", "simulated-actor.debug.yaml", _THREAT)
+    assert _lint_names(tmp_path, pattern="[a-z-]+\\.debug")["count"] == 1
+
+
+@pytest.mark.parametrize("style", ["slug", "name"])
+@pytest.mark.parametrize("name", ["B", "B.debug", "B .debug.", "x.debug.debug", "Rule 1"])
+@pytest.mark.parametrize("suffix", [*DEBUG_SUFFIXES, *OBJECT_SUFFIXES])
+def test_lint_fix_never_changes_whether_a_file_is_debug(
+    tmp_path: Path, style: FilenameStyle, name: str, suffix: str
+) -> None:
+    src = _write_object(
+        tmp_path, "threats", f"old{suffix}", _THREAT.replace("Simulated Actor", repr(name))
+    )
+
+    _lint_names(tmp_path, style=style)
+
+    [renamed] = src.parent.iterdir()
+    assert renamed.name.endswith(suffix)
+    assert is_debug_file_name(renamed.name) is is_debug_file_name(src.name)
+    assert _lint_names(tmp_path, style=style)["count"] == 0

@@ -32,7 +32,14 @@ from opentide.core.io import (
     root_mapping_problem,
 )
 from opentide.core.lint_config import FilenameConfig, LintConfig, Severity, load_lint_config
-from opentide.registry.catalogue import NESTED_OBJECT_FILE, nested_file_message, scan_object_dir
+from opentide.registry.catalogue import (
+    NESTED_OBJECT_FILE,
+    is_debug_file_name,
+    nested_file_message,
+    object_stem,
+    scan_object_dir,
+    with_object_stem,
+)
 
 if TYPE_CHECKING:
     from opentide.analysis import Finding
@@ -330,31 +337,39 @@ def _assign_expected_stems(records: list[_ObjectRecord], filenames: FilenameConf
             continue
         grouped[record.path.parent].append(record)
     for group in grouped.values():
-        taken: set[str] = set()
+        # A debug fixture and the rule it copies share a name but not a file
+        # (``B.debug.yaml``, ``B.yaml``): each kind of file claims its own stems.
+        taken: set[tuple[bool, str]] = set()
         # One folder holds one kind of object.
         config = filenames.for_kind(group[0].kind)
         for record in group:
-            if record.name and config.stem_for(record.name) == record.path.stem:
-                record.expected_stem = record.path.stem
-                taken.add(record.path.stem.casefold())
+            stem = object_stem(record.path)
+            if record.name and config.stem_for(record.name) == stem:
+                record.expected_stem = stem
+                taken.add(_stem_key(record, stem))
         for record in group:
             if record.expected_stem or not record.name:
                 continue
             stem = config.stem_for(record.name)
             if stem is None:
                 continue
-            if stem.casefold() not in taken:
+            if _stem_key(record, stem) not in taken:
                 record.expected_stem = stem
-                taken.add(stem.casefold())
+                taken.add(_stem_key(record, stem))
                 continue
             suffix = (record.uuid or "object")[:8]
             candidate = f"{stem}-{suffix}"
             index = 1
-            while candidate.casefold() in taken:
+            while _stem_key(record, candidate) in taken:
                 candidate = f"{stem}-{suffix}-{index}"
                 index += 1
             record.expected_stem = candidate
-            taken.add(candidate.casefold())
+            taken.add(_stem_key(record, candidate))
+
+
+def _stem_key(record: _ObjectRecord, stem: str) -> tuple[bool, str]:
+    """What a stem claims in its folder: debug or not, and the stem whatever its case."""
+    return is_debug_file_name(record.path.name), stem.casefold()
 
 
 def _filename_findings(
@@ -410,9 +425,10 @@ def _stem_finding(
 ) -> Path:
     """Report a stem that is not the one the style expects; return the file's path afterwards."""
     expected = record.expected_stem
-    if expected is None or expected == record.path.stem:
+    if expected is None or expected == object_stem(record.path):
         return record.path
-    dest = record.path.with_name(f"{expected}{record.path.suffix}")
+    # The suffix stays whole: ``x.debug.yaml`` becomes ``B.debug.yaml``, never the live ``B.yaml``.
+    dest = with_object_stem(record.path, expected)
     if config.style == "slug":
         message = f"Filename {record.path.name!r} does not match slugify(name)={expected!r}"
     else:
@@ -454,7 +470,7 @@ def _pattern_finding(
     by the stem it produced. It cannot be fixed, so the finding has no ``expected``.
     """
     pattern = config.pattern
-    if pattern is None or pattern.fullmatch(current.stem):
+    if pattern is None or pattern.fullmatch(object_stem(current)):
         return
     findings.append(
         _finding(

@@ -639,6 +639,19 @@ def test_target_path_adds_the_uuid_when_the_name_is_taken_in_any_case(tmp_path: 
     assert free == tmp_path / "missing" / "Some Rule.yaml"
 
 
+def test_target_path_never_writes_a_debug_fixture(tmp_path: Path) -> None:
+    """A name ending in ``.debug`` would name a file the catalogue skips."""
+    uuid = "abcdef12-0000"
+    assert new_service.target_path(tmp_path, "Probe.debug", uuid, None, "name") == (
+        tmp_path / "Probe.yaml"
+    )
+    # A fixture of the same name is another file: it does not take the stem.
+    (tmp_path / "Some Rule.debug.yaml").write_text("name: x\n", encoding="utf-8")
+    assert new_service.target_path(tmp_path, "Some Rule", uuid, None, "name") == (
+        tmp_path / "Some Rule.yaml"
+    )
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [

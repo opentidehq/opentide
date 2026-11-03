@@ -182,6 +182,8 @@ warning[filename_pattern]: Filename 'Some rule.yaml' does not match the configur
   ╰─ help: rename the file so its name matches the pattern ^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$
 ```
 
+A debug fixture (`*.debug.yaml`, `*.debug.yml`) is not in the catalogue, so nothing indexes, validates or deploys it, but lint checks it. Its stem is the name without `.debug`, and `--fix` keeps the suffix whole: `0005 - Testing.debug.yaml`, named `B`, becomes `B.debug.yaml`, never `B.yaml`. A rename never moves a file into or out of the catalogue. `pattern` is matched against the stem without `.debug`, and under `style = "name"` a trailing `.debug` in the name is dropped from the stem (`Probe.debug` expects `Probe`). A fixture and the object it copies are two files, so `B.debug.yaml` and `B.yaml` do not collide; two fixtures that want the same stem do, and the second gets `-{uuid[:8]}`.
+
 Unparsable files, objects without a `name` and files in subfolders are reported under every `style`. [`opentide new`](./new.md) names the file it writes by its kind's `style` too (`none` keeps the slug), so a new object and an existing one agree.
 
 #### A convention per object kind
