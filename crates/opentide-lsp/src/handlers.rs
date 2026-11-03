@@ -77,7 +77,9 @@ pub mod custom {
     }
 
     /// Debug builds: a handler that panics, for the isolation test.
+    #[cfg(debug_assertions)]
     pub enum Panic {}
+    #[cfg(debug_assertions)]
     impl lsp_types::request::Request for Panic {
         type Params = Option<Value>;
         type Result = ();
@@ -86,13 +88,16 @@ pub mod custom {
 
     /// Debug builds: a request that takes `ms` milliseconds, so the messages
     /// sent meanwhile queue up as one batch.
+    #[cfg(debug_assertions)]
     pub enum Sleep {}
+    #[cfg(debug_assertions)]
     impl lsp_types::request::Request for Sleep {
         type Params = SleepParams;
         type Result = ();
         const METHOD: &'static str = "opentide/__sleep";
     }
 
+    #[cfg(debug_assertions)]
     #[derive(Debug, Default, Deserialize, Serialize)]
     #[serde(default)]
     pub struct SleepParams {
@@ -100,7 +105,9 @@ pub mod custom {
     }
 
     /// Debug builds: how many analyses ran, for the cache tests.
+    #[cfg(debug_assertions)]
     pub enum Stats {}
+    #[cfg(debug_assertions)]
     impl lsp_types::request::Request for Stats {
         type Params = Option<Value>;
         type Result = Value;
