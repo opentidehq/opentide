@@ -147,7 +147,7 @@ The document holds the `info` keys, plus `objects`, `edges`, `signals` and `atta
 | `tlp`, `author`, `created`, `modified`, `reviewed` | From `metadata`; `null` when unset |
 | `platforms` | A rule's platform blocks: `{id, enabled, status, strategy}`, the strategy being the one `deployment.toml` maps the status to |
 | `deployment` | A rule's tenant bindings in `.opentide/states/deployment/`: `{platform, tenant, deployed, rule_id}`. Only Defender, SentinelOne, CrowdStrike and Sysdig keep one |
-| `techniques` | `own`: the ATT&CK ids the object lists. `inherited`: those its objective or threats give it that it does not list |
+| `techniques` | `own`: the ATT&CK ids the object lists. `inherited`: those its objective or threats give it that it does not list. An objective that lists no techniques inherits those of each threat it covers that exists; a rule, its objective's (through a signal's objective) |
 | `tactics` | The tactic shortnames of all those techniques, in matrix order |
 | `actors` | The actors of the threat, of the threats an objective covers, or of the threats of a rule's objective, as written (`att&ck::G0006`) |
 | `load_error` | `null`, or `{code, message, line}` for a file that did not load |
