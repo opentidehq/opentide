@@ -37,9 +37,10 @@ EDGE_KINDS = ("covers", "implements", "parent", "chains", "technique", "logsourc
 _NON_ENTERPRISE = ("Mobile : ", "Industrial : ")
 
 _NAME_LINE = re.compile(r"^name[ \t]*:", re.MULTILINE)
-_UUID_LINE = re.compile(r"^[ \t]+uuid[ \t]*:[ \t]*['\"]?([0-9A-Fa-f-]{32,36})", re.MULTILINE)
-_SCHEMA_LINE = re.compile(r"^[ \t]+schema[ \t]*:[ \t]*['\"]?([\w:.]+)", re.MULTILINE)
-_NAME_VALUE = re.compile(r"^name[ \t]*:[ \t]*['\"]?([^'\"\r\n#]+)", re.MULTILINE)
+#: A ``key: value`` line, its indentation, key and the rest of the line.
+_KEY_LINE = re.compile(r"^([ \t]*)([A-Za-z_][\w-]*)[ \t]*:(?:[ \t]+(.*?))?[ \t]*$")
+_UUID_VALUE = re.compile(r"[0-9A-Fa-f-]{32,36}")
+_SCHEMA_VALUE = re.compile(r"[\w:.]+")
 
 
 def collect_catalog(workspace: Path, parse_errors: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
@@ -227,16 +228,12 @@ def _load_error_row(entry: Mapping[str, Any], workspace: Path) -> dict[str, Any]
     message = entry.get("message") or (
         f"Could not parse object YAML: {entry.get('error') or 'unknown error'}"
     )
-
-    def found(pattern: re.Pattern[str]) -> str | None:
-        match = pattern.search(text) if text else None
-        return match.group(1).strip() if match else None
-
+    fields = _text_fields(text) if text else {}
     return {
-        "uuid": found(_UUID_LINE),
+        "uuid": fields.get("uuid"),
         "type": str(entry.get("object_type") or "") or None,
-        "schema": found(_SCHEMA_LINE),
-        "name": found(_NAME_VALUE) or (Path(raw_path).stem if raw_path else ""),
+        "schema": fields.get("schema"),
+        "name": fields.get("name") or (Path(raw_path).stem if raw_path else ""),
         "path": path,
         "file_path": absolute,
         "line": _line_of(text, _NAME_LINE) if text else 1,
@@ -252,6 +249,75 @@ def _load_error_row(entry: Mapping[str, Any], workspace: Path) -> dict[str, Any]
         "actors": [],
         "load_error": {"code": code, "message": str(message), "line": line},
     }
+
+
+def _scalar(raw: str | None) -> str | None:
+    """A plain or quoted YAML scalar written on one line, without its comment."""
+    if not raw:
+        return None
+    if raw[0] in "'\"":
+        quote, value, index = raw[0], [], 1
+        while index < len(raw):
+            char = raw[index]
+            if quote == "'" and raw.startswith("''", index):
+                value.append("'")
+                index += 2
+                continue
+            if char == quote:
+                break
+            if quote == '"' and char == "\\" and index + 1 < len(raw):
+                index += 1
+                char = raw[index]
+            value.append(char)
+            index += 1
+        return "".join(value).strip() or None
+    value = re.split(r"[ \t]#", raw, maxsplit=1)[0].strip()
+    return value or None
+
+
+def _text_fields(text: str) -> dict[str, str]:
+    """``name``, ``uuid`` and ``schema`` read from the text of a file that did not load.
+
+    ``name`` is the root key. ``uuid`` is the root key, else ``metadata.uuid``,
+    and ``schema`` is ``metadata.schema``, else the root key: a ``uuid`` under
+    ``signals:`` or another block is a different object's.
+    """
+    root: dict[str, str] = {}
+    metadata: dict[str, str] = {}
+    in_metadata = False
+    child_indent: str | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = _KEY_LINE.match(line)
+        indent = match.group(1) if match else line[: len(line) - len(line.lstrip())]
+        if not indent:
+            in_metadata = bool(match and match.group(2) == "metadata" and not match.group(3))
+            child_indent = None
+            if match and match.group(3) is not None:
+                root.setdefault(match.group(2), match.group(3))
+            continue
+        if not in_metadata or match is None:
+            continue
+        if child_indent is None:
+            child_indent = indent
+        if indent == child_indent and match.group(3) is not None:
+            metadata.setdefault(match.group(2), match.group(3))
+    fields: dict[str, str] = {}
+    name = _scalar(root.get("name"))
+    if name:
+        fields["name"] = name
+    for key, pattern, sources in (
+        ("uuid", _UUID_VALUE, (root, metadata)),
+        ("schema", _SCHEMA_VALUE, (metadata, root)),
+    ):
+        for source in sources:
+            value = _scalar(source.get(key))
+            if value and pattern.fullmatch(value):
+                fields[key] = value
+                break
+    return fields
 
 
 def _paths(file_path: str | None, workspace: Path) -> tuple[str | None, str | None]:
