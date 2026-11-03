@@ -168,6 +168,23 @@ def test_protocol_problems_are_json_rpc_errors(client: Client) -> None:
     assert client.run("explain", "vocab_unknown")["exit_code"] == 0
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["validate", "--", "--json"],
+        ["query", "--platform", "sentinel", "--query", "--json"],
+    ],
+)
+def test_run_keeps_a_json_token_that_is_a_value(argv: list[str]) -> None:
+    assert serve_mod._run_params({"argv": argv})[0] == argv
+    assert serve_mod._run_params({"argv": ["--json", *argv]})[0] == argv
+
+
+def test_a_json_flag_after_the_command_still_runs(client: Client) -> None:
+    result = client.run("explain", "vocab_unknown", "--json")
+    assert result["exit_code"] == 0, result["document"]
+
+
 def test_shutdown_then_exit_ends_the_loop_with_zero(client: Client) -> None:
     assert client.call("shutdown")["result"] is None
     assert client.call("run", {"argv": ["info"]})["error"]["code"] == -32600

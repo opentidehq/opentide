@@ -695,8 +695,11 @@ def _run_params(params: Any) -> tuple[list[str], str | None, dict[str, str] | No
         or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
     ):
         raise ProtocolError(INVALID_PARAMS, "env must map names to strings")
-    # --json is implied; a copy in argv would be the same flag twice.
-    argv = [token for token in argv if token != "--json"]
+    # --json is implied. A leading copy is dropped; any other is left where it
+    # is, since it may be an option's value (``--query --json``) or follow ``--``,
+    # and Click accepts the root flag twice.
+    while argv and argv[0] == "--json":
+        argv = argv[1:]
     if not argv:
         raise ProtocolError(INVALID_PARAMS, "run needs argv: a command to run")
     return argv, cwd, env
