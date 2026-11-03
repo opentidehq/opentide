@@ -414,3 +414,28 @@ def test_a_skills_download_failure_is_a_step_with_its_warning(
     assert plan["steps"][1]["warnings"] == [skipped]
     assert skipped in plan["warnings"]
     assert document_problems(plan) == []
+
+
+# --- the plan's .git -------------------------------------------------------------------
+
+
+def _plan_and_apply(target: Path, *argv: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    result, plan = _invoke(*argv, "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    result, applied = _invoke(*argv, "--yes", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    return plan, applied
+
+
+def test_an_absolute_hooks_path_inside_the_repository_is_planned_as_written(
+    git_repo: Path,
+) -> None:
+    subprocess.run(
+        ["git", "-C", str(git_repo), "config", "core.hooksPath", str(git_repo / ".githooks")],
+        check=True,
+    )
+    plan, applied = _plan_and_apply(git_repo, "hooks")
+    assert ".githooks/pre-commit" in set(applied["files"])
+    assert ".githooks/pre-commit" in _planned(plan)
+    assert plan.get("warnings", []) == applied.get("warnings", [])
+    assert not any("outside this repository" in w for w in plan.get("warnings", []))

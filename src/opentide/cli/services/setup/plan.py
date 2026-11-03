@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import tempfile
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
@@ -64,6 +65,8 @@ MAX_COPY_BYTES = 512 * 1024 * 1024
 
 class PlanRefused(Exception):
     """``--plan`` will not copy this tree; the message says why and what to do."""
+
+
 #: What of ``.git`` the copy keeps; objects are read from the real store as an alternate.
 _GIT_FILES = ("HEAD", "config", "packed-refs", "description")
 _GIT_DIRS = ("refs", "hooks", "info")
@@ -171,6 +174,39 @@ def _copy_git(top: Path, shadow_top: Path) -> None:
     real_objects = common / "objects"
     if real_objects.is_dir():
         (objects / "info" / "alternates").write_text(f"{real_objects}\n", encoding="utf-8")
+    _pin_hooks_path(top, shadow_top, target / "config")
+
+
+def _git(*args: str) -> subprocess.CompletedProcess[str] | None:
+    """``git *args*`` with no inherited ``GIT_DIR`` and friends; ``None`` without Git."""
+    env = {name: value for name, value in os.environ.items() if name not in _GIT_VARIABLES}
+    try:
+        return subprocess.run(["git", *args], capture_output=True, text=True, check=False, env=env)
+    except OSError:
+        return None
+
+
+def _pin_hooks_path(top: Path, shadow_top: Path, config: Path) -> None:
+    """Give the copy the ``core.hooksPath`` the repository has, mapped into the copy.
+
+    Read from the repository, so a value set by an ``includeIf "gitdir:…"`` that
+    matches the real path but not the copy's still applies. An absolute path
+    inside the repository (``$PWD/.githooks``) would point the copy back at
+    the repository, where the hooks step sees a folder outside its tree and
+    leaves it alone as shared: it becomes the same folder in the copy.
+    """
+    probe = _git("-C", str(top), "config", "--get", "core.hooksPath")
+    if probe is None or probe.returncode != 0 or not probe.stdout.strip():
+        return
+    value = probe.stdout.strip()
+    path = Path(os.path.expanduser(value))
+    if path.is_absolute():
+        resolved = path.resolve()
+        real_top = top.resolve()
+        if resolved.is_relative_to(real_top):
+            value = str(shadow_top / resolved.relative_to(real_top))
+    if config.is_file():
+        _git("config", "--file", str(config), "core.hooksPath", value)
 
 
 def _copy_tree(top: Path, shadow_top: Path) -> None:
