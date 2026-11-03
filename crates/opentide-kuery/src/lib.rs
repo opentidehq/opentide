@@ -8,8 +8,7 @@
 //! (`[a TO b]`, `_exists_`, `~`, `^`, `/re/`) are searched as literal text.
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, codes,
-    position_to_offset, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{first_error, node_span, parse as ts_parse};
@@ -683,8 +682,10 @@ const OPERATORS: &[(&str, &str)] = &[
     (">=", "Range: greater than or equal."),
 ];
 
-pub fn hover(source: &str, position: Position) -> Option<String> {
-    let offset = position_to_offset(source, position);
+/// Hover at byte `offset` of `source` (an LSP host converts the editor's
+/// UTF-16 position once, with `opentide_core::position_to_offset`).
+pub fn hover(source: &str, offset: usize) -> Option<String> {
+    let offset = offset.min(source.len());
     let tree = ts_parse(LanguageId::Kuery, source)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let word = text(node, source).to_ascii_lowercase();
@@ -908,7 +909,7 @@ mod tests {
 
     #[test]
     fn hover_and_completion() {
-        let h = hover("a:1 and b:2", Position::new(0, 5)).expect("hover");
+        let h = hover("a:1 and b:2", 5).expect("hover");
         assert!(h.contains("and"));
         let items = completions("host.name:x ", 12);
         assert!(items.iter().any(|i| i.label == "and"));

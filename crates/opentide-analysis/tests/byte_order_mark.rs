@@ -125,14 +125,20 @@ fn hover_and_completion_work_in_a_bom_rule() {
     let host = MemoryWorkspace::default();
     // `SecurityEvent` on line 24, as the editor counts it (no column for the mark).
     let at = Position::new(24, 8);
-    let plain = hover(&host, LanguageId::TideYaml, RULE, at);
+    let offset = opentide_core::position_to_offset(RULE, at);
+    let plain = hover(&host, LanguageId::TideYaml, RULE, offset);
     assert!(
         plain
             .as_deref()
             .is_some_and(|h| h.contains("SecurityEvent")),
         "{plain:?}"
     );
-    assert_eq!(hover(&host, LanguageId::TideYaml, &with_bom(), at), plain);
+    // With the mark, the same place is three bytes further in.
+    let with_mark = offset + '\u{feff}'.len_utf8();
+    assert_eq!(
+        hover(&host, LanguageId::TideYaml, &with_bom(), with_mark),
+        plain
+    );
 
     // Completion after `| where ` on line 26, by byte offset into each text.
     let cursor = RULE.find("| where ").unwrap() + "| where ".len();

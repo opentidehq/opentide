@@ -465,14 +465,6 @@ pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
     }
 }
 
-fn offset_at_position(text: &str, position: Position) -> usize {
-    opentide_core::position_to_offset(text, position)
-}
-
-fn position_at_offset(text: &str, offset: usize) -> Position {
-    opentide_core::span_to_range(text, opentide_core::ByteSpan::new(offset, offset.max(1))).start
-}
-
 /// The KQL profile of a platform: Defender's schema for
 /// `defender_for_endpoint`, else Sentinel's.
 fn kql_profile(platform: &str) -> Profile {
@@ -483,46 +475,41 @@ fn kql_profile(platform: &str) -> Profile {
     }
 }
 
+/// Hover at byte `offset` of `text`. A host converts the editor's UTF-16
+/// position once (`opentide_core::position_to_offset`); a byte-order mark at
+/// the start counts as bytes, as in [`completions`].
 pub fn hover(
     host: &dyn WorkspaceHost,
     language: LanguageId,
     text: &str,
-    position: Position,
+    offset: usize,
 ) -> Option<String> {
     match language {
         LanguageId::TideYaml => {
-            // An editor does not count a byte-order mark as a column.
-            let text = opentide_core::strip_bom(text);
-            let offset = offset_at_position(text, position);
+            let (text, offset) = opentide_core::strip_bom_at(text, offset);
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
-                let inner_pos = position_at_offset(&inj.inner, inner);
-                return query_hover(inj.language, &inj.inner, inner_pos, &inj.platform);
+                return query_hover(inj.language, &inj.inner, inner, &inj.platform);
             }
             let workspace = workspace_index(host);
             opentide_tide::hover_tide(text, offset, &workspace)
         }
-        query => query_hover(query, text, position, ""),
+        query => query_hover(query, text, offset, ""),
     }
 }
 
 /// Hover inside one query language. `platform` selects the KQL profile.
-fn query_hover(
-    language: LanguageId,
-    text: &str,
-    position: Position,
-    platform: &str,
-) -> Option<String> {
+fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) -> Option<String> {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, position, kql_profile(platform)),
-        LanguageId::Spl => opentide_spl::hover(text, position),
-        LanguageId::Esql => opentide_esql::hover(text, position)
-            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
-        LanguageId::Eql => opentide_eql::hover(text, position)
-            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
-        LanguageId::Kuery => opentide_kuery::hover(text, position)
-            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
-        LanguageId::Lucene => opentide_lucene::hover(text, position)
-            .or_else(|| ecs::hover(text, offset_at_position(text, position))),
+        LanguageId::Kql => opentide_kql::hover(text, offset, kql_profile(platform)),
+        LanguageId::Spl => opentide_spl::hover(text, offset),
+        LanguageId::Esql => opentide_esql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
+        LanguageId::Eql => opentide_eql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
+        LanguageId::Kuery => {
+            opentide_kuery::hover(text, offset).or_else(|| ecs::hover(text, offset))
+        }
+        LanguageId::Lucene => {
+            opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
+        }
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
@@ -580,18 +567,20 @@ pub fn compiled_spl(text: &str) -> String {
     text.to_string()
 }
 
+/// Signature help at byte `offset` of `text`. A host converts the editor's
+/// UTF-16 position once (`opentide_core::position_to_offset`); a byte-order
+/// mark at the start counts as bytes, as in [`completions`].
 pub fn signature_help(
     _host: &dyn WorkspaceHost,
     language: LanguageId,
     text: &str,
-    position: Position,
+    offset: usize,
 ) -> Option<SignatureHelp> {
-    let text = if language == LanguageId::TideYaml {
-        opentide_core::strip_bom(text)
+    let (text, offset) = if language == LanguageId::TideYaml {
+        opentide_core::strip_bom_at(text, offset)
     } else {
-        text
+        (text, offset)
     };
-    let offset = offset_at_position(text, position);
     match language {
         LanguageId::TideYaml => {
             let (inj, inner) = opentide_tide::injection_at_offset(text, offset)?;
@@ -649,7 +638,7 @@ mod tests {
             &host,
             LanguageId::Kql,
             "SecurityEvent | where EventID == 1",
-            Position::new(0, 16),
+            16,
         );
         assert!(h.unwrap().contains("where"));
     }
@@ -675,7 +664,12 @@ configurations:
             .rsplit_once('\n')
             .map(|(_, rest)| rest.len())
             .unwrap_or(where_off) as u32;
-        let h = hover(&host, LanguageId::TideYaml, src, Position::new(line, col));
+        let h = hover(
+            &host,
+            LanguageId::TideYaml,
+            src,
+            opentide_core::position_to_offset(src, Position::new(line, col)),
+        );
         assert!(
             h.as_deref().unwrap_or("").contains("where"),
             "hover at injected where, got {h:?}"
@@ -711,7 +705,12 @@ detection_model: 00000000-0000-4000-8002-000000000001
         };
         let desc = src.find("description:").unwrap();
         let line = src[..desc].bytes().filter(|b| *b == b'\n').count() as u32;
-        let h = hover(&host, LanguageId::TideYaml, src, Position::new(line, 0));
+        let h = hover(
+            &host,
+            LanguageId::TideYaml,
+            src,
+            opentide_core::position_to_offset(src, Position::new(line, 0)),
+        );
         assert!(
             h.as_deref().unwrap_or("").contains("Description"),
             "key hover, got {h:?}"
@@ -726,7 +725,7 @@ detection_model: 00000000-0000-4000-8002-000000000001
             &host,
             LanguageId::TideYaml,
             src,
-            Position::new(tlp_line, col),
+            opentide_core::position_to_offset(src, Position::new(tlp_line, col)),
         );
         assert!(
             tlp.as_deref()

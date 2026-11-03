@@ -43,6 +43,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Changed
 
+- API: the engines take byte offsets, never LSP positions ([#185](https://github.com/opentidehq/language-server/issues/185) P1.5). `opentide_analysis::hover` and `signature_help`, and each language crate's `hover`, take a `usize` offset as `completions` already did. A host converts the editor's UTF-16 position once, with `opentide_core::position_to_offset`. SPL's hover had its own column counter that counted characters, which put hover one column off after an emoji. A byte-order mark at the start counts as bytes.
 - The unused dependencies `lsp-types`, `insta` and `similar` are gone, along with `thiserror` from `opentide-kql`. A clean build no longer compiles them.
 - A `.toml` file outside `.opentide/configurations/` (`Cargo.toml`, `pyproject.toml`) is no longer read. The server used to analyse it as Tide YAML when an editor sent it.
 

@@ -15,8 +15,8 @@ pub mod regexp;
 pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, codes,
-    position_to_offset, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, position_to_offset,
+    span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{first_error, node_span, parse as ts_parse};
@@ -841,8 +841,10 @@ const OPERATORS: &[(&str, &str)] = &[
     ),
 ];
 
-pub fn hover(source: &str, position: Position) -> Option<String> {
-    let offset = position_to_offset(source, position);
+/// Hover at byte `offset` of `source` (an LSP host converts the editor's
+/// UTF-16 position once, with `opentide_core::position_to_offset`).
+pub fn hover(source: &str, offset: usize) -> Option<String> {
+    let offset = offset.min(source.len());
     let tree = ts_parse(LanguageId::Lucene, source)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let word = text(node, source);
@@ -1122,7 +1124,7 @@ mod tests {
 
     #[test]
     fn hover_and_completion() {
-        let h = hover("a:1 AND b:2", Position::new(0, 5)).expect("hover");
+        let h = hover("a:1 AND b:2", 5).expect("hover");
         assert!(h.contains("AND"));
         assert!(completions("a:1 ", 4).iter().any(|i| i.label == "AND"));
     }

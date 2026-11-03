@@ -975,7 +975,7 @@ fn handle_hover(session: &Session, params: &Value) -> Value {
             .unwrap_or(Value::Null);
     }
     let host = session.host();
-    hover(&host, language, &text, pos)
+    hover(&host, language, &text, position_to_offset(&text, pos))
         .map(|value| json!({ "contents": { "kind": "markdown", "value": value } }))
         .unwrap_or(Value::Null)
 }
@@ -1044,7 +1044,7 @@ fn handle_signature_help(session: &Session, params: &Value) -> Value {
         return Value::Null;
     };
     let host = session.host();
-    signature_help(&host, language, &text, pos)
+    signature_help(&host, language, &text, position_to_offset(&text, pos))
         .map(|help| {
             json!({
                 "signatures": help.signatures.iter().map(|s| json!({

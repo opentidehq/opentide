@@ -17,8 +17,8 @@ mod semantics;
 pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Position, Range,
-    Severity, SignatureHelp, SignatureInformation, codes, position_to_offset, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, Severity,
+    SignatureHelp, SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{first_error, node_span, parse as ts_parse};
@@ -1103,8 +1103,10 @@ pub fn sequence_maxspans(source: &str) -> Vec<(ByteSpan, u64)> {
 
 // ---- Hover ----------------------------------------------------------------
 
-pub fn hover(source: &str, position: Position) -> Option<String> {
-    let offset = position_to_offset(source, position);
+/// Hover at byte `offset` of `source` (an LSP host converts the editor's
+/// UTF-16 position once, with `opentide_core::position_to_offset`).
+pub fn hover(source: &str, offset: usize) -> Option<String> {
+    let offset = offset.min(source.len());
     let (tree, _) = parse_prepared(source)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let catalog = Catalog::cached();
@@ -1568,16 +1570,12 @@ mod tests {
     #[test]
     fn hover_and_signature_help() {
         let src = "process where startsWith~(process.name, \"a\")";
-        let h = hover(src, Position::new(0, 16)).expect("hover");
+        let h = hover(src, 16).expect("hover");
         assert!(h.contains("startsWith") && h.contains("elastic.co"), "{h}");
         let partial = "process where between(file.path, \"a\", ";
         let help = signature_help(partial, partial.len()).expect("signature");
         assert_eq!(help.active_parameter, 2);
-        let h = hover(
-            "sequence [a where true] [b where true]",
-            Position::new(0, 2),
-        )
-        .expect("keyword");
+        let h = hover("sequence [a where true] [b where true]", 2).expect("keyword");
         assert!(h.contains("sequence"));
     }
 
@@ -1859,7 +1857,7 @@ mod tests {
     #[test]
     fn parameter_descriptions_reach_hover_and_signature_help() {
         let src = "process where substring(process.name, 1)";
-        let h = hover(src, Position::new(0, 16)).expect("hover");
+        let h = hover(src, 16).expect("hover");
         let row = Catalog::cached().function("substring").unwrap();
         for p in &row.parameters {
             assert!(!p.docs.is_empty(), "{} has no description", p.name);

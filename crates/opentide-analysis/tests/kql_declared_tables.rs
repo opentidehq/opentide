@@ -4,8 +4,8 @@
 //! Declared datasets are process-wide, so this file holds one test.
 
 use opentide_analysis::{
-    Catalog, LanguageId, MemoryWorkspace, Position, QueryRequest, analyze_query, codes,
-    completions, hover, install_catalog,
+    Catalog, LanguageId, MemoryWorkspace, QueryRequest, analyze_query, codes, completions, hover,
+    install_catalog,
 };
 
 fn findings(platform: &str, text: &str) -> Vec<(String, String)> {
@@ -199,7 +199,7 @@ tables = ["Custom_CL"]
         &MemoryWorkspace::default(),
         LanguageId::Kql,
         "VendorFirewall_CL | where DeviceAction_s == 1",
-        Position::new(0, 30),
+        30,
     )
     .unwrap();
     assert!(md.contains("What the vendor device did."), "{md}");
@@ -207,7 +207,7 @@ tables = ["Custom_CL"]
         &MemoryWorkspace::default(),
         LanguageId::Kql,
         "VendorProxy_CL | where Severity_d == 1",
-        Position::new(0, 25),
+        25,
     )
     .unwrap();
     assert!(md.contains("Severity as the proxy writes it."), "{md}");
@@ -331,7 +331,7 @@ tables = ["Custom_CL"]
     // Hover shows the declared type and description; completion offers them.
     let host = MemoryWorkspace::default();
     let query = "Contoso_Audit_CL | where Actor_s == \"a\"";
-    let md = hover(&host, LanguageId::Kql, query, Position::new(0, 27)).unwrap();
+    let md = hover(&host, LanguageId::Kql, query, 27).unwrap();
     assert!(md.contains("**Actor_s** column (`string`)"), "{md}");
     assert!(
         md.contains("UPN of the account that made the change"),
@@ -342,12 +342,12 @@ tables = ["Custom_CL"]
         &host,
         LanguageId::Kql,
         "SigninLogs | where ResultType == 0",
-        Position::new(0, 22),
+        22,
     )
     .unwrap();
     assert!(md.contains("(`int`)"), "{md}");
     assert!(md.contains("Declared as a number."), "{md}");
-    let md = hover(&host, LanguageId::Kql, query, Position::new(0, 3)).unwrap();
+    let md = hover(&host, LanguageId::Kql, query, 3).unwrap();
     assert!(md.contains("Administrative audit events"), "{md}");
     assert!(md.contains("`ResultCode_d` _real_"), "{md}");
     let typed = "Contoso_Audit_CL | where ";

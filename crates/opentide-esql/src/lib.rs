@@ -38,8 +38,8 @@ pub use ecs::{ecs_diagnostics, source_indices};
 pub use version::{Availability, RELEASES, StackTarget};
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Position, Range,
-    Severity, SignatureHelp, SignatureInformation, codes, position_to_offset, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, Severity,
+    SignatureHelp, SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{first_error, node_span, parse as ts_parse};
@@ -787,8 +787,10 @@ fn highlight(spec: &HighlightSpec, source: &str, catalog: &Catalog) -> Vec<Highl
 
 // ---- Hover ----------------------------------------------------------------
 
-pub fn hover(source: &str, position: Position) -> Option<String> {
-    let offset = position_to_offset(source, position);
+/// Hover at byte `offset` of `source` (an LSP host converts the editor's
+/// UTF-16 position once, with `opentide_core::position_to_offset`).
+pub fn hover(source: &str, offset: usize) -> Option<String> {
+    let offset = offset.min(source.len());
     let tree = ts_parse(LanguageId::Esql, source)?;
     let catalog = Catalog::cached();
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
@@ -1288,9 +1290,9 @@ mod tests {
     #[test]
     fn hover_names_commands_and_functions() {
         let src = "FROM logs-* | WHERE STARTS_WITH(process.name, \"x\")";
-        let h = hover(src, Position::new(0, 15)).expect("command hover");
+        let h = hover(src, 15).expect("command hover");
         assert!(h.contains("WHERE"), "{h}");
-        let h = hover(src, Position::new(0, 22)).expect("function hover");
+        let h = hover(src, 22).expect("function hover");
         assert!(h.contains("STARTS_WITH"), "{h}");
         assert!(h.contains("elastic.co"), "{h}");
     }
@@ -1573,9 +1575,9 @@ mod tests {
     #[test]
     fn hover_shows_the_catalog_summary() {
         let src = "ROW a = TO_LOWER(\"X\")";
-        let h = hover(src, Position::new(0, 10)).expect("function hover");
+        let h = hover(src, 10).expect("function hover");
         assert!(h.contains("Lower-cases a string."), "{h}");
-        let h = hover("ROW a = COPY_SIGN(1, 2)", Position::new(0, 10)).expect("hover");
+        let h = hover("ROW a = COPY_SIGN(1, 2)", 10).expect("hover");
         assert!(h.contains("Releases: 9.1 to 9.6."), "{h}");
     }
 
