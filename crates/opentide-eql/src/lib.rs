@@ -449,13 +449,15 @@ fn check_string(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
         };
         if bad {
             let at = node.start_byte() + i;
+            // The escaped character may be several bytes (`\é`): the span and
+            // the message take all of it.
+            let escaped = t[i + 1..].chars().next().unwrap_or(next as char);
             out.push(Diagnostic::error(
                 codes::EQL_PARSE_ERROR,
                 format!(
-                    "invalid escape `\\{}`: EQL strings accept \\b \\t \\n \\f \\r \\\" \\' \\\\ and \\u{{2-8 hex}}; use `\\\\` or a triple-quoted string",
-                    next as char
+                    "invalid escape `\\{escaped}`: EQL strings accept \\b \\t \\n \\f \\r \\\" \\' \\\\ and \\u{{2-8 hex}}; use `\\\\` or a triple-quoted string"
                 ),
-                range(source, ByteSpan::new(at, at + 2)),
+                range(source, ByteSpan::new(at, at + 1 + escaped.len_utf8())),
             ));
             return;
         }
@@ -1364,6 +1366,36 @@ mod tests {
             .filter(|d| d.severity != Severity::Hint)
             .map(|d| d.code)
             .collect()
+    }
+
+    /// #180: a backslash before a multi-byte character panicked.
+    #[test]
+    fn an_invalid_escape_of_a_multi_byte_character_is_one_error_on_it() {
+        for (src, escaped) in [
+            (r#"process where a == "x\é""#, "é"),
+            (r#"process where a == "D:\日本""#, "日"),
+            (r#"process where a == "tab\😀t""#, "😀"),
+        ] {
+            let found = analyze(src).diagnostics;
+            let errors: Vec<_> = found
+                .iter()
+                .filter(|d| d.code == codes::EQL_PARSE_ERROR)
+                .collect();
+            assert_eq!(errors.len(), 1, "{src}: {found:?}");
+            assert!(
+                errors[0].message.contains(&format!("`\\{escaped}`")),
+                "{src}: {}",
+                errors[0].message
+            );
+            let line = src.lines().next().unwrap();
+            let start = errors[0].range.start.character as usize;
+            let end = errors[0].range.end.character as usize;
+            let utf16: Vec<u16> = line.encode_utf16().collect();
+            assert_eq!(
+                String::from_utf16(&utf16[start..end]).unwrap(),
+                format!("\\{escaped}")
+            );
+        }
     }
 
     #[test]

@@ -165,9 +165,14 @@ pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
     (stripped, offset.saturating_sub(shift))
 }
 
-/// Convert a UTF-8 byte offset to an LSP position.
+/// Convert a UTF-8 byte offset to an LSP position. An offset inside a
+/// multi-byte character counts from that character's start: a span that ends
+/// mid-character gives a slightly short range, never a panic.
 pub fn offset_to_position(source: &str, offset: usize) -> Position {
-    let offset = offset.min(source.len());
+    let mut offset = offset.min(source.len());
+    while !source.is_char_boundary(offset) {
+        offset -= 1;
+    }
     let mut line = 0u32;
     let mut last_line_start = 0usize;
     for (idx, ch) in source.char_indices() {
@@ -242,7 +247,10 @@ impl<'a> LineIndex<'a> {
 
     /// Same result as [`offset_to_position`].
     pub fn position(&self, offset: usize) -> Position {
-        let offset = offset.min(self.source.len());
+        let mut offset = offset.min(self.source.len());
+        while !self.source.is_char_boundary(offset) {
+            offset -= 1;
+        }
         let line = self.starts.partition_point(|&start| start <= offset) - 1;
         let start = self.starts[line];
         let character = if self.ascii[line] {
@@ -843,6 +851,21 @@ pub enum EngineError {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// #180: a span that ends inside a multi-byte character gave a panic.
+    #[test]
+    fn an_offset_inside_a_character_counts_from_its_start() {
+        let src = "a\\é日😀";
+        for offset in 0..=src.len() + 2 {
+            let position = offset_to_position(src, offset);
+            assert_eq!(LineIndex::new(src).position(offset), position, "{offset}");
+        }
+        // Byte 3 is inside `é` (bytes 2..4): its column is `é`'s start, 2.
+        assert_eq!(offset_to_position(src, 3), Position::new(0, 2));
+        let _ = span_to_range(src, ByteSpan::new(1, 4));
+    }
+
     #[test]
     fn line_index_matches_offset_to_position() {
         let text = "ab\n\u{1F600}c\r\n\nd é";
@@ -858,8 +881,6 @@ mod tests {
             );
         }
     }
-
-    use super::*;
 
     #[test]
     fn no_otide_in_crate_name() {
