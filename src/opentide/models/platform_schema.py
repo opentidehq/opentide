@@ -61,9 +61,12 @@ def platform_root_extras(model: type[TideModel]) -> dict[str, Any]:
     identifiers = platform_schema_identifiers(model)
     property_extras: dict[str, Any] = {
         **_PROPERTY_EXTRAS,
-        "platform_schema": {
+        # Keyed by the YAML key, as the schema's properties are: the model
+        # field is ``platform_schema``, aliased ``schema``.
+        "schema": {
             "title": "Schema identifier and version",
-            "enum": identifiers,
+            # ``null`` is "left out", which validation accepts too.
+            "enum": [*identifiers, None],
             "default": identifiers[-1],
         },
     }

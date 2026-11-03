@@ -158,3 +158,32 @@ def test_a_splunk_2x_search_without_a_query_is_no_query() -> None:
         SplunkConfig.model_validate({**block, "search": "index=main"})
     locations = {error["loc"] for error in caught.value.errors()}
     assert ("query",) in locations and ("search",) in locations
+
+
+@pytest.mark.parametrize("key", sorted(PLATFORM_CONFIG_MODELS))
+def test_the_editor_schema_offers_exactly_what_validation_accepts_for_schema(key: str) -> None:
+    """The extras were keyed by the field name, so the `schema` enum never applied."""
+    model = PLATFORM_CONFIG_MODELS[key]
+    prop = build_platform_schema_source(model)["properties"]["schema"]
+    assert prop["enum"] == [model.schema_identifier(), None]
+    assert prop["default"] == model.schema_identifier()
+    block = _CORPUS_BLOCKS[key]
+    model.model_validate({**block, "schema": model.schema_identifier()})
+    model.model_validate({**block, "schema": None})
+    with pytest.raises(ValidationError, match="unknown platform schema"):
+        model.model_validate({**block, "schema": f"{key}::2.1"})
+
+
+def _corpus_blocks() -> dict[str, dict]:
+    import yaml
+    from tests.corpus_support import TIDE_CORPUS_ROOT
+
+    blocks: dict[str, dict] = {}
+    for path in sorted((TIDE_CORPUS_ROOT / "Objects" / "Detection Rules").glob("*.yaml")):
+        body = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for platform, block in (body.get("configurations") or {}).items():
+            blocks.setdefault(platform, block)
+    return blocks
+
+
+_CORPUS_BLOCKS = _corpus_blocks()

@@ -161,3 +161,13 @@ def test_dump_pipeline_quotes_what_yaml_would_read_differently() -> None:
 def test_dump_pipeline_separates_top_level_keys() -> None:
     text = dump_pipeline({"a": {"script": ["one\ntwo\n"]}, "b": {"script": ["x"]}})
     assert text == "a:\n  script:\n    - |\n      one\n      two\n\nb:\n  script:\n    - x\n"
+
+
+def test_dump_pipeline_checks_the_text_it_writes() -> None:
+    """A `|+` value keeps trailing blank lines, so the blank line between keys joined it."""
+    document = {"job": {"script": ["end\n\n"]}, "k2": {"x": 1}}
+    try:
+        text = dump_pipeline(document)
+    except ValueError:
+        return
+    assert yaml.safe_load(text) == document

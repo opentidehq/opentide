@@ -106,10 +106,12 @@ class DetectionRule(TideModel):
 
     @property
     def displayed_severity(self) -> str | None:
-        """The severity a page shows: ``response.alert_severity``, else an authored ``severity``.
+        """The severity a page shows: the one deploy sends, else an authored ``severity``.
 
-        ``None`` when the rule states neither, so no page presents a model
-        default as the rule's severity.
+        With a ``response`` block deploy sends ``response.alert_severity``
+        (its default ``Informational`` when the block leaves it out), so that
+        is shown. Without one, an authored rule-level ``severity``, else
+        ``None``: no page presents a model default deploy does not send.
         """
         if self.response is not None:
             return self.response.alert_severity

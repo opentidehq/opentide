@@ -6,9 +6,8 @@ import json
 import shlex
 
 from opentide.ci.gates import (
-    azure_not_skipped,
     azure_premerge_condition,
-    azure_pull_request_skip_guard,
+    azure_skip_guard,
 )
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
@@ -106,6 +105,9 @@ _GIT_IDENTITY = (
 def _production_commands(options: CiRenderOptions) -> list[str]:
     dry_run, deploy = production_deploy_steps(options)
     return [
+        # Before the dry run, so a skipped change never sets DEPLOY_STARTED
+        # and the write-back step does not run either.
+        azure_skip_guard(),
         *_GIT_IDENTITY,
         overlay_default_branch_state(fetch=f"git fetch origin {options.default_branch}"),
         dry_run,
@@ -212,8 +214,7 @@ def _share_stage(options: CiRenderOptions) -> str:
         "  dependsOn: [Generate, Deploy]\n"
         f"  condition: and({SHARE_STATUS_CONDITION}, "
         f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'), "
-        "ne(variables['Build.Reason'], 'PullRequest'), "
-        f"{azure_not_skipped()})\n"
+        "ne(variables['Build.Reason'], 'PullRequest'))\n"
         "  jobs:\n"
         + indent(
             _azure_job(
@@ -222,6 +223,7 @@ def _share_stage(options: CiRenderOptions) -> str:
                 steps=_job_steps(
                     options,
                     [
+                        azure_skip_guard(),
                         f"git fetch origin {quoted}",
                         "git checkout -q FETCH_HEAD",
                         SHARE_COMMAND,
@@ -248,12 +250,12 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 f"validate_query_{safe}",
                 display_name=f"Validate query ({platform})",
-                # ``--changed`` live checks follow the deploys: off for a skipped change.
-                condition=f"and(succeeded(), {azure_not_skipped()})",
+                # ``--changed`` live checks follow the deploys: the guard skips
+                # them for a change marked [skip deploy].
                 steps=_job_steps(
                     options,
                     [
-                        azure_pull_request_skip_guard(),
+                        azure_skip_guard(),
                         *restore,
                         reviewed_query_validation_command(platform, repo=options.repo),
                     ],
@@ -301,7 +303,7 @@ def render_azure(options: CiRenderOptions) -> str:
                 condition=azure_premerge_condition(branch),
                 steps=_job_steps(
                     options,
-                    [azure_pull_request_skip_guard(), *restore, *staging_deploy_steps(options)],
+                    [azure_skip_guard(), *restore, *staging_deploy_steps(options)],
                     persist_credentials=True,
                     full_history=True,
                 ),
@@ -324,10 +326,7 @@ def render_azure(options: CiRenderOptions) -> str:
         _azure_job(
             "deploy_production",
             display_name="Deploy Production",
-            condition=(
-                f"and(eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'), "
-                f"{azure_not_skipped()})"
-            ),
+            condition=f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}')",
             # Persisted credentials let the write-back step push.
             steps=_job_steps(
                 options,

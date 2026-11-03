@@ -68,12 +68,15 @@ def dump_pipeline(document: Mapping[str, Any]) -> str:
         default_flow_style=False,
         width=_NO_FOLDING,
     )
-    if yaml.safe_load(text) != dict(document):
-        raise ValueError("the pipeline does not survive a YAML round trip")
     lines: list[str] = []
     for line in text.splitlines():
         # Top-level keys start in column 0; block scalars and nested keys never do.
         if lines and line and not line[0].isspace() and not line.startswith("-"):
             lines.append("")
         lines.append(line)
-    return "\n".join(lines) + "\n"
+    spaced = "\n".join(lines) + "\n"
+    # Checked on the text written: a `|+` block keeps trailing blank lines, so
+    # the blank line before the next key would join its value.
+    if yaml.safe_load(spaced) != dict(document):
+        raise ValueError("the pipeline does not survive a YAML round trip")
+    return spaced

@@ -133,7 +133,10 @@ def test_run_writes_core_snippets(tmp_path: Path) -> None:
     )
 
 
-def test_run_raises_when_enabled_platform_template_missing(tmp_path: Path) -> None:
+def test_a_workspace_without_platform_templates_uses_the_bundled_one(tmp_path: Path) -> None:
+    """Core templates from an earlier release, no ``platforms/`` folder yet."""
+    from opentide.package.paths import platform_templates_root
+
     mocked = _mock_opentide_for_snippets(
         tmp_path,
         systems={
@@ -142,8 +145,27 @@ def test_run_raises_when_enabled_platform_template_missing(tmp_path: Path) -> No
             }
         },
     )
+    with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
+        vscode_snippets.run()
+    payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
+    snippet = payload["Platform configuration : Microsoft Sentinel Template"]
+    bundled = vscode_snippets.vs_code_snippet_generator(
+        platform_templates_root() / "sentinel.template.yaml", "tide-sentinel", blanks=1
+    )
+    assert snippet["body"] == bundled["body"]
+
+
+def test_run_raises_when_a_platform_has_no_template_anywhere(tmp_path: Path) -> None:
+    mocked = _mock_opentide_for_snippets(
+        tmp_path,
+        systems={"sentinel": {"platform": {"enabled": True, "name": "Microsoft Sentinel"}}},
+    )
     with (
         patch("opentide.generation.vscode_snippets.Opentide", mocked.ot),
+        patch(
+            "opentide.generation.vscode_snippets.platform_templates_root",
+            return_value=tmp_path / "missing",
+        ),
         pytest.raises(FileNotFoundError, match="platform sentinel"),
     ):
         vscode_snippets.run()

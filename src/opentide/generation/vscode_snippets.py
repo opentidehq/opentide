@@ -12,6 +12,7 @@ import structlog
 from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
 from opentide.generation.template_renderer import enabled_platforms, platform_template_path
+from opentide.package.paths import platform_template_name, platform_templates_root
 
 logger = structlog.get_logger("opentide.generation.vscode_snippets")
 
@@ -161,6 +162,10 @@ def run() -> None:
         )
         logger.info("generating_snippets_for", arg0=name)
         template_path = platform_template_path(templates_dir, platform_id)
+        if not template_path.is_file():
+            # Templates generated before they moved under platforms/: the bundled
+            # one is the same render (the golden test keeps them in step).
+            template_path = platform_templates_root() / platform_template_name(platform_id)
         _require_template(template_path, kind=f"platform {platform_id}")
         snippets[f"Platform configuration : {name} Template".strip()] = vs_code_snippet_generator(
             template_path,

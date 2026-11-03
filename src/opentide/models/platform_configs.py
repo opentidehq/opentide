@@ -185,7 +185,7 @@ class DefenderFileActions(TideModel):
     allow_block: DefenderAllowBlockAction | None = None
     """Allow or block a file identifier."""
     quarantine_file: str | None = None
-    """Column identifying the file to quarantine. Loader alias: `quarantine_files`."""
+    """Column identifying the file to quarantine."""
 
 
 class DefenderDeviceActions(TideModel):

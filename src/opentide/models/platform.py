@@ -232,7 +232,7 @@ class CarbonBlackConfig(PlatformConfigBase):
     )
     """Lucene query. Multiline in YAML. Deploy joins lines with spaces."""
     organizations: list[str] | None = None
-    """Accepted, including the loader alias `organization`. The current deployer targets the tenant
+    """Accepted. The current deployer targets the tenant
     the run selects and does not filter on this list."""
     watchlist: str | None = None
     """Watchlist name. Deploy uses the tenant watchlist when omitted. The watchlist must already

@@ -19,8 +19,7 @@ from tests.gitlab_pipeline_support import PIPELINES, pipeline_jobs, unmet_needs
 from opentide.ci.azure import render_azure
 from opentide.ci.gates import (
     SKIP_DEPLOY_NOTE,
-    azure_not_skipped,
-    azure_pull_request_skip_guard,
+    azure_skip_guard,
     github_not_skipped,
 )
 from opentide.ci.github import render_github
@@ -122,15 +121,25 @@ def test_azure_jobs_that_deploy_share_or_live_check_honour_the_marker() -> None:
     parsed = yaml.safe_load(render_azure(_options("azure")))
     stages = {stage["stage"]: stage for stage in parsed["stages"]}
     jobs = {job["job"]: job for stage in parsed["stages"] for job in stage["jobs"]}
-    assert azure_not_skipped() in jobs["deploy_production"]["condition"]
-    assert azure_not_skipped() in stages["Share"]["condition"]
-    for name in ("validate_query_sentinel", "validate_query_splunk"):
-        assert azure_not_skipped() in jobs[name]["condition"]
-    # Pull request builds read the source commit's message in the job.
-    for name in ("deploy_staging", "validate_query_sentinel"):
-        script = jobs[name]["steps"][-1]["script"]
-        assert script.splitlines()[1] == azure_pull_request_skip_guard(), name
-    assert "condition" not in jobs["validate"]
+    # Build.SourceVersionMessage is empty in a job or stage condition: no
+    # condition may read it, the job's first step checks the commit instead.
+    assert "SourceVersionMessage" not in render_azure(_options("azure"))
+    assert "Share" in stages
+    for name in (
+        "deploy_staging",
+        "deploy_production",
+        "share",
+        "validate_query_sentinel",
+        "validate_query_splunk",
+    ):
+        script = next(
+            step["script"]
+            for step in jobs[name]["steps"]
+            if step.get("script", "").startswith("set -e")
+        )
+        # First, before any deploy, share, query or DEPLOY_STARTED.
+        assert script.splitlines()[1] == azure_skip_guard(), name
+    assert azure_skip_guard() not in str(jobs["validate"])
 
 
 _GIT = shutil.which("git")
@@ -139,16 +148,18 @@ _BASH = shutil.which("bash")
 
 @pytest.mark.skipif(_GIT is None or _BASH is None, reason="needs git and bash")
 @pytest.mark.parametrize(
-    ("message", "source", "skipped"),
+    ("message", "variable", "skipped"),
     [
-        ("style: reformat [skip deploy]", True, True),
-        ("feat: add a rule", True, False),
-        ("style: reformat [skip deploy]", False, False),
+        ("style: reformat [skip deploy]", "SYSTEM_PULLREQUEST_SOURCECOMMITID", True),
+        ("feat: add a rule", "SYSTEM_PULLREQUEST_SOURCECOMMITID", False),
+        ("Merged PR 12: reformat [skip deploy]", "BUILD_SOURCEVERSION", True),
+        ("Merged PR 13: add a rule", "BUILD_SOURCEVERSION", False),
+        ("style: reformat [skip deploy]", None, False),
     ],
-    ids=["marker", "no-marker", "not-a-pull-request"],
+    ids=["pull-request-marker", "pull-request", "push-marker", "push", "no-commit"],
 )
-def test_the_azure_pull_request_guard_reads_the_source_commit(
-    tmp_path: Path, message: str, source: bool, skipped: bool
+def test_the_azure_guard_reads_the_built_commit(
+    tmp_path: Path, message: str, variable: str | None, skipped: bool
 ) -> None:
     assert _GIT and _BASH
     for args in (
@@ -161,9 +172,9 @@ def test_the_azure_pull_request_guard_reads_the_source_commit(
         [_GIT, "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
     ).stdout.strip()
     env = {"PATH": str(Path(_GIT).parent), "HOME": str(tmp_path)}
-    if source:
-        env["SYSTEM_PULLREQUEST_SOURCECOMMITID"] = head
-    script = "\n".join(["set -e", azure_pull_request_skip_guard(), "echo deployed"])
+    if variable is not None:
+        env[variable] = head
+    script = "\n".join(["set -e", azure_skip_guard(), "echo deployed"])
     done = subprocess.run(
         [_BASH, "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60
     )

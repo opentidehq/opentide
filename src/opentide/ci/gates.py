@@ -117,27 +117,20 @@ def github_not_skipped() -> str:
     )
 
 
-def azure_not_skipped() -> str:
-    """Azure ``condition:`` term, false when the triggering commit's first line has the marker.
+def azure_skip_guard() -> str:
+    """Shell that exits 0, before anything runs, when the build's commit asks to skip deploys.
 
-    ``Build.SourceVersionMessage`` is that first line: an Azure Repos merge
-    is ``Merged PR <n>: <title>``, a squash merge the title. Pull request
-    builds read the source commit's message in the job instead, see
-    :func:`azure_pull_request_skip_guard`; Azure exposes no labels.
-    """
-    return f"not(contains(variables['Build.SourceVersionMessage'], '{SKIP_DEPLOY_MARKER}'))"
-
-
-def azure_pull_request_skip_guard() -> str:
-    """Shell that exits 0 when the pull request's source commit asks to skip deploys.
-
-    Runs first in the pull request jobs, whose full-history checkout holds
-    that commit. Outside a pull request the variable is unset and it does
-    nothing.
+    Azure fills ``Build.SourceVersionMessage`` at step level only, so a job
+    or stage ``condition:`` that reads it sees an empty string and never
+    skips. The check runs first in the job's script instead: a pull request
+    build reads its source commit's message, any other build the commit it
+    built (``Merged PR <n>: <title>`` for an Azure Repos merge, the title for
+    a squash). Every job that calls it checks out full history. Azure exposes
+    no labels or pull request title to a pipeline.
     """
     return (
-        'if [ -n "${SYSTEM_PULLREQUEST_SOURCECOMMITID:-}" ] && '
-        'git log -1 --format=%B "$SYSTEM_PULLREQUEST_SOURCECOMMITID" 2>/dev/null '
+        'commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; '
+        'if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null '
         f"| grep -qF '{SKIP_DEPLOY_MARKER}'; then "
         f'echo "{SKIP_DEPLOY_NOTE}"; exit 0; fi'
     )
