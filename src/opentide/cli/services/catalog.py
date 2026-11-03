@@ -158,9 +158,10 @@ def collect_catalog(workspace: Path, parse_errors: Iterable[Mapping[str, Any]]) 
     signal_rows = [
         {
             "uuid": str(uuid),
-            "name": str(body.get("name") or ""),
-            "objective": body.get("owner"),
-            "parent": body.get("parent") or None,
+            "name": _string(body.get("name")) or "",
+            "objective": _string(body.get("owner")),
+            # Only a string names a signal; _objective_edges skips anything else too.
+            "parent": _string(body.get("parent")),
         }
         for uuid, body in signals.items()
         if isinstance(body, Mapping)
@@ -303,6 +304,11 @@ def _text(value: Any) -> str | None:
     if value is None or value == "":
         return None
     return str(value)
+
+
+def _string(value: Any) -> str | None:
+    """*value* when it is a non-blank string, else ``None``: never a list's repr."""
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _canonical(uuid: str) -> str:

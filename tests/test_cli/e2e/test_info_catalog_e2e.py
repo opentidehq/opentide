@@ -377,3 +377,27 @@ def test_a_file_whose_uuid_another_uses_keeps_a_row(invoke_cli, tide_corpus_repo
     assert "rule-zz-copy.yaml" in duplicate["load_error"]["message"]
     assert catalog["summary"]["load_errors"] == 1
     assert catalog["status"] == "issues"
+
+
+def test_a_signal_parent_that_is_not_a_string_is_null_and_the_document_valid(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    import jsonschema
+
+    objective_path = tide_corpus_repo / OBJECTIVE_DIR / "objective-0001-credential-access.yaml"
+    text = objective_path.read_text(encoding="utf-8")
+    objective_path.write_text(
+        text.replace(
+            "      methodology: Statistical\n",
+            "      methodology: Statistical\n"
+            "      parent:\n        - 00000000-0000-4000-8099-000000000009\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    catalog = parse_cli_json(invoke_cli("info", "catalog"))
+    [signal] = catalog["signals"]
+    assert signal["parent"] is None
+    commands = parse_cli_json(invoke_cli("commands"))
+    entry = next(command for command in commands["commands"] if command["path"] == "info")
+    jsonschema.validate(catalog, {**entry["output_schema"], "$defs": commands["$defs"]})
