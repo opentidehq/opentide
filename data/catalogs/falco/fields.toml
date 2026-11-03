@@ -1963,6 +1963,7 @@ no_transformer = false
 filter_only = false
 print_only = false
 deprecated = false
+values = ["unknown", "other", "file", "net", "IPC", "memory", "process", "sleep", "system", "signal", "user", "time", "processing", "ipc", "wait", "scheduler", "internal", "syscall", "tracepoint", "plugin", "meta"]
 description = "The event category. Example values are 'file' (for file operations like open and close), 'net' (for network operations like socket and bind), memory (for things like brk or mmap), and so on."
 
 [[fields]]
@@ -2251,6 +2252,7 @@ no_transformer = false
 filter_only = false
 print_only = false
 deprecated = true
+values = [">", "<"]
 description = "event direction can be either '>' for enter events or '<' for exit events."
 
 [[fields]]
@@ -3367,6 +3369,7 @@ no_transformer = false
 filter_only = false
 print_only = false
 deprecated = false
+values = ["tcp", "udp", "icmp", "raw"]
 description = "the IP protocol of a socket. Can be 'tcp', 'udp', 'icmp' or 'raw'."
 
 [[fields]]
@@ -3799,6 +3802,7 @@ no_transformer = false
 filter_only = false
 print_only = false
 deprecated = false
+values = ["file", "directory", "ipv4", "ipv6", "unix", "pipe", "event", "signalfd", "eventpoll", "inotify", "timerfd", "netlink", "bpf", "userfaultfd", "io_uring", "memfd", "pidfd"]
 description = "type of FD. Can be 'file', 'directory', 'ipv4', 'ipv6', 'unix', 'pipe', 'event', 'signalfd', 'eventpoll', 'inotify' 'signalfd' or 'memfd'."
 
 [[fields]]

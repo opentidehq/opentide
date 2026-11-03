@@ -7,6 +7,7 @@ mod elastic;
 mod falco;
 mod injection;
 mod intel;
+mod sysdig;
 mod vocabs;
 mod yaml_path;
 mod yaml_scalar;
@@ -116,6 +117,19 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
     for inj in extract_injections(source) {
         if let Some(inner) = inj.host_map.iter().position(|&h| h == offset) {
             return Some((inj, inner));
+        }
+        // Right after the query's last character: where the cursor is while
+        // the query is typed. It belongs to the query, at its end.
+        // A plain scalar drops trailing blanks, so blanks typed after it on its
+        // last line count as its end too.
+        if inj.host_map.last().is_some_and(|&h| {
+            h < offset
+                && source
+                    .get(h + 1..offset)
+                    .is_some_and(|gap| gap.chars().all(|c| c == ' ' || c == '\t'))
+        }) {
+            let end = inj.inner.len();
+            return Some((inj, end));
         }
         if offset >= inj.host_span.start && offset < inj.host_span.end {
             let inner = inj.host_map.iter().position(|&h| h >= offset).unwrap_or(
@@ -580,6 +594,8 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
         diagnostics.extend(falco::source_diagnostics(input.source, block));
+        diagnostics.extend(falco::tuning_diagnostics(input.source, block));
+        diagnostics.extend(sysdig::constraint_diagnostics(input.source, block));
         diagnostics.extend(falco::exception_diagnostics(input.source, block));
     }
 

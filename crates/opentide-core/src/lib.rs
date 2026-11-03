@@ -531,6 +531,17 @@ pub mod codes {
     pub const FALCO_UNKNOWN_EVENT: &str = "falco_unknown_event";
     pub const FALCO_UNKNOWN_SOURCE: &str = "falco_unknown_source";
     pub const FALCO_APPEND_CONDITION: &str = "falco_append_condition";
+    pub const FALCO_UNKNOWN_RULE: &str = "falco_unknown_rule";
+    // Sysdig block constraint codes (sysdig-1.0, Constraints), as opentide names them.
+    pub const SYSDIG_RULE_SHAPE: &str = "sysdig_rule_shape";
+    pub const SYSDIG_TUNING_KEYS: &str = "sysdig_tuning_keys";
+    pub const SYSDIG_PRIORITY: &str = "sysdig_priority";
+    pub const SYSDIG_SOURCE: &str = "sysdig_source";
+    pub const SYSDIG_EXCEPTION_SHAPE: &str = "sysdig_exception_shape";
+    pub const SYSDIG_DEFINITION_NAME: &str = "sysdig_definition_name";
+    pub const SYSDIG_DEFINITION_DUPLICATE: &str = "sysdig_definition_duplicate";
+    pub const SYSDIG_DEFINITION_ORDER: &str = "sysdig_definition_order";
+    pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -653,6 +664,16 @@ pub mod codes {
         FALCO_UNKNOWN_EVENT,
         FALCO_UNKNOWN_SOURCE,
         FALCO_APPEND_CONDITION,
+        FALCO_UNKNOWN_RULE,
+        SYSDIG_RULE_SHAPE,
+        SYSDIG_TUNING_KEYS,
+        SYSDIG_PRIORITY,
+        SYSDIG_SOURCE,
+        SYSDIG_EXCEPTION_SHAPE,
+        SYSDIG_DEFINITION_NAME,
+        SYSDIG_DEFINITION_DUPLICATE,
+        SYSDIG_DEFINITION_ORDER,
+        SYSDIG_LIST_IN_VALUE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -920,6 +941,34 @@ pub mod codes {
             }
             FALCO_UNKNOWN_SOURCE => {
                 "The event source is not one Falco or its published plugins define, so its fields are not checked."
+            }
+            SYSDIG_RULE_SHAPE => {
+                "A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both."
+            }
+            SYSDIG_TUNING_KEYS => {
+                "A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them."
+            }
+            SYSDIG_PRIORITY => {
+                "`priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively."
+            }
+            SYSDIG_SOURCE => "`source` is not an event source name (`[a-z][a-z0-9_]*`).",
+            SYSDIG_EXCEPTION_SHAPE => {
+                "An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`)."
+            }
+            SYSDIG_DEFINITION_NAME => {
+                "A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword."
+            }
+            SYSDIG_DEFINITION_DUPLICATE => {
+                "A name is defined more than once across the block's macros and lists."
+            }
+            SYSDIG_DEFINITION_ORDER => {
+                "A list item names a list that is not defined before it, or a macro uses a macro that is not defined before it: Falco's definition-before-use."
+            }
+            SYSDIG_LIST_IN_VALUE => {
+                "A block list name appears in an exception value where Falco's expansion would not produce a value list."
+            }
+            FALCO_UNKNOWN_RULE => {
+                "A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule."
             }
             FALCO_APPEND_CONDITION => {
                 "A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not."

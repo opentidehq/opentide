@@ -770,6 +770,247 @@ configurations:
     );
 }
 
+/// A Sysdig rule whose `condition` (line 7) and `output` (line 8) are given.
+fn sysdig_rule(condition: &str, output: &str) -> String {
+    format!(
+        "name: Probe\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000079\n  schema: rule::1.0\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: {condition}\n    output: {output}\n    lists:\n    - name: my_shells\n      items: [bash, sh]\n"
+    )
+}
+
+/// Completion at the end of the condition (or of the output) of a probe rule.
+fn complete_at(
+    lsp: &mut Lsp,
+    uri: &str,
+    condition: &str,
+    output: &str,
+    in_output: bool,
+) -> Vec<Value> {
+    let text = sysdig_rule(condition, output);
+    published_codes(lsp, uri, "yaml", &text);
+    let (line, character) = if in_output {
+        (8, "    output: ".len() + output.len())
+    } else {
+        (7, "    condition: ".len() + condition.len())
+    };
+    let r = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    );
+    r["result"].as_array().cloned().unwrap_or_default()
+}
+
+fn labels(items: &[Value]) -> Vec<String> {
+    items
+        .iter()
+        .filter_map(|i| i["label"].as_str().map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn falco_completion_follows_the_cursor_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+
+    // Check position with a dotted prefix: filtered, each item replacing `proc.ex`.
+    let items = complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c1.yaml",
+        "spawned_process and proc.ex",
+        "x",
+        false,
+    );
+    assert!(!items.is_empty());
+    for item in &items {
+        let label = item["label"].as_str().unwrap();
+        assert!(label.starts_with("proc.ex"), "{label}");
+        assert_eq!(item["textEdit"]["newText"], label);
+        assert_eq!(
+            item["textEdit"]["range"]["start"]["character"],
+            "    condition: spawned_process and ".len(),
+            "{item}"
+        );
+        assert_eq!(item["filterText"], label);
+    }
+    assert!(labels(&items).contains(&"proc.exepath".to_string()));
+
+    // Check position, no prefix: fields, the block's... default macros too.
+    let items = complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c2.yaml",
+        "proc.name = bash and ",
+        "x",
+        false,
+    );
+    let l = labels(&items);
+    assert!(
+        l.contains(&"proc.name".to_string()) && l.contains(&"spawned_process".to_string()),
+        "{l:?}"
+    );
+    assert!(!l.contains(&"startswith".to_string()));
+
+    // After a string field: the operators libsinsp's flt_is_comparable accepts
+    // for CHARBUF, with modifiers; the byte-buffer operators are not among them.
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c3.yaml",
+        "proc.name ",
+        "x",
+        false,
+    ));
+    for op in [
+        "=",
+        "startswith",
+        "startswith anyof",
+        "in",
+        "exists",
+        "regex",
+    ] {
+        assert!(l.contains(&op.to_string()), "{op} in {l:?}");
+    }
+    assert!(
+        !l.contains(&"bcontains".to_string()) && !l.contains(&"proc.name".to_string()),
+        "{l:?}"
+    );
+
+    // After a numeric field: numeric operators, no string-only ones.
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c4.yaml",
+        "proc.pid ",
+        "x",
+        false,
+    ));
+    assert!(
+        l.contains(&"<".to_string()) && !l.contains(&"startswith".to_string()),
+        "{l:?}"
+    );
+
+    // After an operator: the field's enumerated values, or nothing.
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c5.yaml",
+        "fd.type = ",
+        "x",
+        false,
+    ));
+    assert!(
+        l.contains(&"ipv4".to_string()) && l.contains(&"file".to_string()),
+        "{l:?}"
+    );
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c6.yaml",
+        "evt.type = exec",
+        "x",
+        false,
+    ));
+    assert!(
+        l.contains(&"execve".to_string()) && l.iter().all(|e| e.starts_with("exec")),
+        "{l:?}"
+    );
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c7.yaml",
+        "proc.name startswith ",
+        "x",
+        false,
+    ));
+    assert!(l.is_empty(), "no values for a free string field: {l:?}");
+
+    // Inside a value list: the block's lists first, then the defaults.
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c8.yaml",
+        "proc.name in (",
+        "x",
+        false,
+    ));
+    assert_eq!(l.first().map(String::as_str), Some("my_shells"), "{l:?}");
+    assert!(l.contains(&"shell_binaries".to_string()));
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c9.yaml",
+        "fd.name startswith anyof (",
+        "x",
+        false,
+    ));
+    assert!(l.contains(&"my_shells".to_string()), "{l:?}");
+
+    // In the output: fields after `%`.
+    let items = complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c10.yaml",
+        "spawned_process",
+        "shell %proc.na",
+        true,
+    );
+    let l = labels(&items);
+    assert!(
+        l.contains(&"proc.name".to_string()) && l.iter().all(|f| f.starts_with("proc.na")),
+        "{l:?}"
+    );
+    let l = labels(&complete_at(
+        &mut lsp,
+        "file:///tmp/objects/rules/c11.yaml",
+        "spawned_process",
+        "shell ",
+        true,
+    ));
+    assert!(l.is_empty(), "{l:?}");
+}
+
+#[test]
+fn falco_hover_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///tmp/objects/rules/hover.yaml";
+    let text = sysdig_rule(
+        "spawned_process and proc.name in (my_shells, shell_binaries)",
+        "shell %proc.name",
+    );
+    published_codes(&mut lsp, uri, "yaml", &text);
+    let mut hover = |line: u32, character: usize| -> String {
+        let r = lsp.request(
+            "textDocument/hover",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+        );
+        r["result"]["contents"]["value"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
+    };
+    let col = |needle: &str| text.lines().nth(7).unwrap().find(needle).unwrap() + 1;
+    // A default macro, attributed to the stable rules file.
+    let h = hover(7, col("spawned_process"));
+    assert!(
+        h.contains("execve") && h.contains("falco_rules.yaml"),
+        "{h}"
+    );
+    assert!(!h.contains("sandbox"), "{h}");
+    // A field: its type and description.
+    let h = hover(7, col("proc.name"));
+    assert!(h.contains("proc.name") && h.contains("CHARBUF"), "{h}");
+    // The block's own list, and a default list.
+    let h = hover(7, col("my_shells"));
+    assert!(h.contains("this block") && h.contains("bash, sh"), "{h}");
+    let h = hover(7, col("shell_binaries"));
+    assert!(
+        h.contains("Falco default rules") && h.contains("bash"),
+        "{h}"
+    );
+    // A block key: the Tide field's documentation.
+    let h = hover(6, 6);
+    assert!(h.to_lowercase().contains("status"), "{h}");
+}
+
 #[test]
 fn initialize_installs_the_workspace_field_catalog() {
     let root = std::env::temp_dir().join(format!("opentide-lsp-catalog-{}", std::process::id()));

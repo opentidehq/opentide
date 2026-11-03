@@ -510,10 +510,24 @@ pub fn completions(
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
                 if inj.language == LanguageId::Falco {
                     let ctx = opentide_tide::falco_context(text, &inj.field_path);
-                    if inj.field_path.last().map(String::as_str) == Some("output") {
-                        return Vec::new();
+                    // Blanks typed after the scalar's end, which YAML drops:
+                    // they tell completion a new word starts.
+                    let mut query = inj.inner.clone();
+                    if inner >= inj.inner.len()
+                        && let Some(&last) = inj.host_map.last()
+                        && let Some(gap) = text.get(last + 1..offset)
+                    {
+                        query.push_str(gap);
                     }
-                    return opentide_falco::completions(&inj.inner, inner, &ctx);
+                    let at = if inner >= inj.inner.len() {
+                        query.len()
+                    } else {
+                        inner
+                    };
+                    if inj.field_path.last().map(String::as_str) == Some("output") {
+                        return opentide_falco::output_completions(&query, at, &ctx);
+                    }
+                    return opentide_falco::completions(&query, at, &ctx);
                 }
                 return query_completions(inj.language, &inj.inner, inner, &inj.platform);
             }

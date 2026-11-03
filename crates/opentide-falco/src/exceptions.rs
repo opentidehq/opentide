@@ -245,11 +245,7 @@ pub fn check(exceptions: &[Exception], ctx: &Context) -> Vec<ExceptionFinding> {
                         } else {
                             codes::FALCO_EXCEPTION
                         },
-                        if unknown {
-                            Level::Warning
-                        } else {
-                            Level::Error
-                        },
+                        Level::Error,
                         message,
                     );
                     bad = true;
@@ -457,7 +453,7 @@ mod tests {
             )),
             [("values", codes::FALCO_EXCEPTION)]
         );
-        // A field the source does not know: a warning (plugins add fields).
+        // A field the source does not know: an error, as Falco refuses it.
         assert_eq!(
             codes_of(ex(Some(Strs::One("proc.nmae".into())), None, vec![s("x")])),
             [("fields", codes::FALCO_UNKNOWN_FIELD)]

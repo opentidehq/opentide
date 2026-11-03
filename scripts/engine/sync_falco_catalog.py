@@ -203,6 +203,35 @@ def field_entries(source: str) -> list[list[str]]:
     return entries
 
 
+def _block(text: str, start: str, end: str) -> str:
+    i = text.index(start)
+    return text[i : text.index(end, i + len(start))]
+
+
+def enumerated_values(libs: Path) -> dict[str, list[str]]:
+    """The values libsinsp extracts for its enumerated string fields, in source order.
+
+    `fd.type` from `sinsp_fdinfo::get_typestring`, `fd.l4proto` and
+    `evt.category` from their filter checks, `evt.dir` from `TYPE_DIR`. Values
+    are what completion offers after a comparison operator.
+    """
+    base = libs / LIBSINSP
+
+    def strings(block: str, pattern: str) -> list[str]:
+        return list(dict.fromkeys(v for v in re.findall(pattern, block) if v != "<NA>"))
+
+    fdinfo = (base / "fdinfo.cpp").read_text(encoding="utf-8")
+    fd = (base / "sinsp_filtercheck_fd.cpp").read_text(encoding="utf-8")
+    event = (base / "sinsp_filtercheck_event.cpp").read_text(encoding="utf-8")
+    dir_block = _block(event, "case TYPE_DIR:", "case TYPE_TYPE")
+    return {
+        "fd.type": strings(_block(fdinfo, "sinsp_fdinfo::get_typestring", "default:"), r'return "([^"]+)"'),
+        "fd.l4proto": strings(_block(fd, "get_l4proto();", "default:"), r'm_tstr = "([^"]+)"'),
+        "evt.category": strings(_block(event, "case TYPE_CATEGORY:", "case TYPE_CPU:"), r'm_strstorage = "([^"]+)"'),
+        "evt.dir": strings(dir_block, r'"([<>])"'),
+    }
+
+
 def libs_fields(libs: Path, deprecated: set[str]) -> list[dict]:
     rows: list[dict] = []
     for cls, filename in LIBS_CLASSES:
@@ -237,6 +266,9 @@ def libs_fields(libs: Path, deprecated: set[str]) -> list[dict]:
                     "description": clean(c_strings(entry[5]) if len(entry) > 5 else ""),
                 }
             )
+    values = enumerated_values(libs)
+    for row in rows:
+        row["values"] = values.get(row["name"], [])
     return rows
 
 
@@ -342,20 +374,32 @@ def defaults(rules: Path, plugins: Path) -> tuple[list[dict], list[dict], list[d
         for item in yaml.safe_load(path.read_text(encoding="utf-8")) or []:
             if not isinstance(item, dict):
                 continue
-            if "macro" in item and "condition" in item:
-                macros[item["macro"]] = {
+            # Precedence: the first file that defines a name, in RULE_FILES order
+            # (stable, then incubating, then sandbox): what a Falco or Sysdig
+            # deployment loads by default. Later definitions are recorded as
+            # `also` when their body differs.
+            if "macro" in item and "condition" in item and "append" not in item and "override" not in item:
+                row = {
                     "name": item["macro"],
                     "condition": " ".join(str(item["condition"]).split()),
                     "source": source,
                     "origin": origin,
+                    "also": [],
                 }
-            elif "list" in item and "items" in item:
-                lists[item["list"]] = {
+                first = macros.setdefault(item["macro"], row)
+                if first is not row and first["condition"] != row["condition"]:
+                    first["also"].append(f"{origin}: {row['condition']}")
+            elif "list" in item and "items" in item and "append" not in item and "override" not in item:
+                row = {
                     "name": item["list"],
                     "items": [str(i) for i in item.get("items") or []],
                     "origin": origin,
+                    "also": [],
                 }
-            elif "rule" in item and "condition" in item:
+                first = lists.setdefault(item["list"], row)
+                if first is not row and first["items"] != row["items"]:
+                    first["also"].append(f"{origin}: [{', '.join(row['items'])}]")
+            elif "rule" in item and "condition" in item and "append" not in item and "override" not in item:
                 rule_rows.append(
                     {
                         "name": item["rule"],
@@ -415,12 +459,13 @@ def write_fields(rows: list[dict], header: str) -> str:
             f"filter_only = {b('filter_only')}\n"
             f"print_only = {b('print_only')}\n"
             f"deprecated = {b('deprecated')}\n"
-            f"description = {toml_str(row['description'])}\n"
+            + (f"values = {toml_list(row['values'])}\n" if row.get("values") else "")
+            + f"description = {toml_str(row['description'])}\n"
         )
     return "\n".join(out)
 
 
-def write_defaults(macros: list[dict], lists: list[dict], header: str) -> str:
+def write_defaults(macros: list[dict], lists: list[dict], rule_rows: list[dict], header: str) -> str:
     out = [header, "# Falco default rules (falcosecurity/rules, falcosecurity/plugins): Apache-2.0.\n"]
     for row in macros:
         out.append(
@@ -429,12 +474,29 @@ def write_defaults(macros: list[dict], lists: list[dict], header: str) -> str:
             f"condition = {toml_str(row['condition'])}\n"
             f"source = {toml_str(row['source'])}\n"
             f"origin = {toml_str(row['origin'])}\n"
+            + (f"also = {toml_list(row['also'])}\n" if row["also"] else "")
         )
     for row in lists:
         out.append(
             "[[lists]]\n"
             f"name = {toml_str(row['name'])}\n"
             f"items = {toml_list(row['items'])}\n"
+            f"origin = {toml_str(row['origin'])}\n"
+            + (f"also = {toml_list(row['also'])}\n" if row["also"] else "")
+        )
+    # The default rules a tuning (`append_to_rule`) can extend: Falco appends
+    # the tuning's text to the rule's condition, so its event types are judged
+    # on both. The first file that defines a name wins (see `defaults`).
+    rules: dict[str, dict] = {}
+    for row in rule_rows:
+        rules.setdefault(row["name"], row)
+    for name in sorted(rules):
+        row = rules[name]
+        out.append(
+            "[[rules]]\n"
+            f"name = {toml_str(name)}\n"
+            f"condition = {toml_str(' '.join(row['condition'].split()))}\n"
+            f"source = {toml_str(row['source'])}\n"
             f"origin = {toml_str(row['origin'])}\n"
         )
     return "\n".join(out)
@@ -508,7 +570,7 @@ def main() -> int:
     macros, lists, rule_rows = defaults(args.rules, args.plugins)
     files = {
         OUT / "fields.toml": write_fields(merge_fields(field_rows), header),
-        OUT / "defaults.toml": write_defaults(macros, lists, header),
+        OUT / "defaults.toml": write_defaults(macros, lists, rule_rows, header),
         OUT / "events.toml": write_events(*events(args.libs), header),
     }
     if args.corpus:

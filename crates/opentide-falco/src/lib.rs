@@ -33,7 +33,24 @@ pub mod compile;
 pub mod exceptions;
 pub mod parser;
 
-pub use catalog::{Catalog, DEFAULT_SOURCE, Kind, Lookup};
+pub use catalog::{Catalog, DEFAULT_SOURCE, Field, Kind, Lookup};
+
+/// The operators a modifier (`oneof`, `anyof`, `allof`) can follow: Falco's
+/// `cmpop_supports_modifier`.
+const MODIFIABLE: &[&str] = &[
+    "=",
+    "==",
+    "!=",
+    "contains",
+    "icontains",
+    "bcontains",
+    "startswith",
+    "bstartswith",
+    "endswith",
+    "glob",
+    "iglob",
+    "regex",
+];
 
 const FALCO_DOCS: &str = "https://falco.org/docs/concepts/rules/conditions/";
 
@@ -54,6 +71,9 @@ pub struct Context {
     /// A macro's condition (`macros[].condition`): Falco checks event types on
     /// rules only.
     pub macro_condition: bool,
+    /// The rule a tuning extends (`append_to_rule`). When it is a Falco default
+    /// rule, the tuning's event types are judged on the combined condition.
+    pub tuned_rule: Option<String>,
 }
 
 impl Context {
@@ -274,6 +294,12 @@ fn leading_bool_op(text: &str) -> Option<(usize, usize)> {
 fn condition_diagnostics(text: &str, ctx: &Context) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     if text.trim().is_empty() {
+        // Falco's rules schema: "Value must be non-empty".
+        out.push(Diagnostic::error(
+            codes::FALCO_PARSE_ERROR,
+            "the condition is empty: Falco requires a non-empty condition (Value must be non-empty)",
+            range(text, ByteSpan::new(0, text.len())),
+        ));
         return out;
     }
     let lead = leading_bool_op(text);
@@ -421,13 +447,32 @@ fn condition_diagnostics(text: &str, ctx: &Context) -> Vec<Diagnostic> {
         ));
     }
 
+    // Falco judges a tuning's event types on the tuned rule's condition with
+    // the tuning's text appended (`<rule condition> <text>`).
+    let tuned = if lead.is_some() {
+        ctx.tuned_rule
+            .as_deref()
+            .and_then(|name| catalog.rules.get(name))
+            .filter(|rule| rule.source == ctx.source())
+            .and_then(|rule| {
+                let combined = format!("{} {text}", rule.condition);
+                parser::parse(&expand_lists(&combined, ctx).text).ok()
+            })
+    } else {
+        None
+    };
+    let judged = if lead.is_none() {
+        Some(&ast)
+    } else {
+        tuned.as_ref()
+    };
     if ctx.source() == "syscall"
         && !ctx.macro_condition
-        && lead.is_none()
+        && let Some(judged) = judged
         && !out.iter().any(|d| d.severity == Severity::Error)
     {
         let mut resolver = EventCodes::new(ctx);
-        if let Some(codes_) = resolver.codes(&ast, false, 0)
+        if let Some(codes_) = resolver.codes(judged, false, 0)
             && codes_.len() > 100
         {
             out.push(Diagnostic::warning(
@@ -484,6 +529,38 @@ fn list_len(ctx: &Context, name: &str) -> usize {
         .into_iter()
         .find(|(n, _)| n == name)
         .map_or(0, |(_, items)| items.len())
+}
+
+/// The bare names in check positions of *text* (the macros it uses), after the
+/// context's lists are expanded as Falco does. `None` when it does not parse.
+pub fn check_position_names(text: &str, ctx: &Context) -> Option<Vec<String>> {
+    let expanded = expand_lists(text, ctx);
+    let ast = parser::parse(&expanded.text).ok()?;
+    let mut out = Vec::new();
+    collect_identifiers(&ast, &mut out);
+    Some(out.into_iter().map(|(name, _)| name).collect())
+}
+
+/// Whether *name* occurs in *text* with a `resolve_list` delimiter (the text's
+/// start or end, a blank, `(`, `)`, `,`, or `=`) on each side.
+pub fn occurs_delimited(text: &str, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let delim = |c: Option<char>| c.is_none_or(|c| " \t\n\r(),=".contains(c));
+    let mut from = 0;
+    while let Some(at) = text[from..].find(name) {
+        let start = from + at;
+        let end = start + name.len();
+        if delim(text[..start].chars().next_back()) && delim(text[end..].chars().next()) {
+            return true;
+        }
+        from = start + 1;
+        while !text.is_char_boundary(from) {
+            from += 1;
+        }
+    }
+    false
 }
 
 fn collect_identifiers(e: &parser::Expr, out: &mut Vec<(String, parser::Span)>) {
@@ -669,7 +746,7 @@ pub(crate) fn unknown_field_finding(
     };
     compile::Finding {
         code: codes::FALCO_UNKNOWN_FIELD,
-        level: compile::Level::Warning,
+        level: compile::Level::Error,
         message,
         span,
         suggestion: near_miss(name, catalog.field_names_for(source).into_iter()),
@@ -677,10 +754,7 @@ pub(crate) fn unknown_field_finding(
 }
 
 /// The closest name within one edit (two for names of ten characters or more).
-pub(crate) fn near_miss<'a>(
-    name: &str,
-    candidates: impl Iterator<Item = &'a str>,
-) -> Option<String> {
+pub fn near_miss<'a>(name: &str, candidates: impl Iterator<Item = &'a str>) -> Option<String> {
     let limit = if name.len() >= 10 { 2 } else { 1 };
     let mut best: Option<(usize, &str)> = None;
     for candidate in candidates {
@@ -883,7 +957,7 @@ pub fn analyze_output(text: &str, ctx: &Context) -> AnalyzeResult {
                         None,
                     ),
                 };
-                let mut d = if code == codes::FALCO_UNKNOWN_FIELD || !ctx.known_source() {
+                let mut d = if !ctx.known_source() {
                     Diagnostic::warning(code, message, range(text, span))
                 } else {
                     Diagnostic::error(code, message, range(text, span))
@@ -1066,35 +1140,283 @@ fn is_word_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_' || c == '.'
 }
 
-/// Inside an unclosed value list: `... in (a, b` .
-fn in_value_list(before: &str) -> bool {
-    let mut depth_list = Vec::new();
-    let mut last_word = String::new();
-    let mut words: Vec<String> = Vec::new();
-    for c in before.chars() {
-        if is_word_char(c) {
-            last_word.push(c);
-            continue;
-        }
-        if !last_word.is_empty() {
-            words.push(std::mem::take(&mut last_word));
-        }
-        match c {
-            '(' => {
-                let list = words
-                    .last()
-                    .is_some_and(|w| matches!(w.as_str(), "in" | "intersects" | "pmatch"));
-                depth_list.push(list);
+/// A token of the text before the word being completed.
+#[derive(Debug, Clone, PartialEq)]
+enum Tok {
+    Word(String),
+    Sym(String),
+    Str,
+    Open,
+    Close,
+    Comma,
+}
+
+/// What a `(` opened, for the paren stack.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Paren {
+    /// A value list after `in`, `intersects`, `pmatch`, or a modifier; the
+    /// index of the field token it compares.
+    List(Option<usize>),
+    /// A transformer or `val()` call.
+    Call,
+    Group,
+}
+
+fn lex_head(head: &str) -> Vec<Tok> {
+    let mut out = Vec::new();
+    let chars: Vec<char> = head.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c.is_whitespace() {
+            i += 1;
+        } else if c == '"' || c == '\'' {
+            i += 1;
+            while i < chars.len() && chars[i] != c {
+                if chars[i] == '\\' {
+                    i += 1;
+                }
+                i += 1;
             }
-            ')' => {
-                depth_list.pop();
+            i += 1;
+            out.push(Tok::Str);
+        } else if c == '(' {
+            out.push(Tok::Open);
+            i += 1;
+        } else if c == ')' {
+            out.push(Tok::Close);
+            i += 1;
+        } else if c == ',' {
+            out.push(Tok::Comma);
+            i += 1;
+        } else if "=!<>".contains(c) {
+            let mut s = c.to_string();
+            if i + 1 < chars.len() && chars[i + 1] == '=' {
+                s.push('=');
+                i += 1;
+            }
+            out.push(Tok::Sym(s));
+            i += 1;
+        } else {
+            // A word, with a field argument `[...]` kept on it.
+            let mut s = String::new();
+            while i < chars.len() && !chars[i].is_whitespace() && !"()\"',=!<>".contains(chars[i]) {
+                if chars[i] == '[' {
+                    while i < chars.len() && chars[i] != ']' {
+                        s.push(chars[i]);
+                        i += 1;
+                    }
+                }
+                if i < chars.len() {
+                    s.push(chars[i]);
+                    i += 1;
+                }
+            }
+            out.push(Tok::Word(s));
+        }
+    }
+    out
+}
+
+fn is_field_word(w: &str) -> bool {
+    w.contains('.') && w.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+}
+
+fn is_operator_word(w: &str) -> bool {
+    parser::OPERATORS.contains(&w) && w.chars().all(|c| c.is_ascii_alphabetic())
+}
+
+/// The field a comparison at `op` (the operator token's index) is about.
+fn field_before(toks: &[Tok], op: usize) -> Option<usize> {
+    let mut i = op.checked_sub(1)?;
+    if let Tok::Word(w) = &toks[i]
+        && parser::MODIFIERS.contains(&w.as_str())
+    {
+        i = i.checked_sub(1)?;
+        i = i.checked_sub(1)?;
+    }
+    match &toks[i] {
+        Tok::Word(w) if is_field_word(w) => Some(i),
+        _ => None,
+    }
+}
+
+/// Where the cursor is, judged from the tokens before the word being typed.
+#[derive(Debug, PartialEq)]
+enum Spot {
+    /// A check: fields, macros, `not`, transformers.
+    Check,
+    /// After a field (token index), or after a transformer call (`None`).
+    Operator(Option<usize>),
+    /// After a comparison operator: the field's enumerated values.
+    Value(Option<usize>),
+    /// Inside a value list: lists, and the field's enumerated values.
+    List(Option<usize>),
+    /// After a value or a complete check: `and`, `or`.
+    Boolean,
+    /// After a modifier: the value list's `(` comes next.
+    Nothing,
+}
+
+fn spot(toks: &[Tok]) -> Spot {
+    let mut stack: Vec<Paren> = Vec::new();
+    for (i, t) in toks.iter().enumerate() {
+        match t {
+            Tok::Open => {
+                let kind = match i.checked_sub(1).map(|p| &toks[p]) {
+                    Some(Tok::Word(w))
+                        if parser::LIST_OPERATORS.contains(&w.as_str())
+                            || parser::MODIFIERS.contains(&w.as_str()) =>
+                    {
+                        Paren::List(field_before(toks, i - 1))
+                    }
+                    Some(Tok::Word(w))
+                        if parser::TRANSFORMERS.contains(&w.as_str()) || w == "val" =>
+                    {
+                        Paren::Call
+                    }
+                    _ => Paren::Group,
+                };
+                stack.push(kind);
+            }
+            Tok::Close => {
+                stack.pop();
             }
             _ => {}
         }
     }
-    depth_list.last().copied().unwrap_or(false)
+    if let Some(Paren::List(field)) = stack.last() {
+        return Spot::List(*field);
+    }
+    let Some(last) = toks.last() else {
+        return Spot::Check;
+    };
+    let n = toks.len() - 1;
+    match last {
+        Tok::Open | Tok::Comma => Spot::Check,
+        Tok::Word(w) if matches!(w.as_str(), "and" | "or" | "not") => Spot::Check,
+        Tok::Word(w) if parser::MODIFIERS.contains(&w.as_str()) => Spot::Nothing,
+        Tok::Word(w) if w == "exists" => Spot::Boolean,
+        Tok::Word(w) if is_operator_word(w) => Spot::Value(field_before(toks, n)),
+        Tok::Sym(_) => Spot::Value(field_before(toks, n)),
+        Tok::Word(w) if is_field_word(w) => {
+            // A field after an operator is a value (`val(...)` aside).
+            match n.checked_sub(1).map(|p| &toks[p]) {
+                Some(Tok::Sym(_)) => Spot::Boolean,
+                Some(Tok::Word(p)) if is_operator_word(p) => Spot::Boolean,
+                _ => Spot::Operator(Some(n)),
+            }
+        }
+        Tok::Close => {
+            // `)` that closed a transformer call takes an operator; a group or
+            // value list closes a check.
+            let mut depth = 0usize;
+            let mut open = None;
+            for j in (0..n).rev() {
+                match toks[j] {
+                    Tok::Close => depth += 1,
+                    Tok::Open if depth == 0 => {
+                        open = Some(j);
+                        break;
+                    }
+                    Tok::Open => depth -= 1,
+                    _ => {}
+                }
+            }
+            let callee = open.and_then(|o| o.checked_sub(1)).map(|p| &toks[p]);
+            match callee {
+                Some(Tok::Word(w)) if parser::TRANSFORMERS.contains(&w.as_str()) => {
+                    // The call is a value when an operator came before it.
+                    let before = open.and_then(|o| o.checked_sub(2)).map(|p| &toks[p]);
+                    match before {
+                        Some(Tok::Sym(_)) => Spot::Boolean,
+                        Some(Tok::Word(p)) if is_operator_word(p) => Spot::Boolean,
+                        _ => Spot::Operator(None),
+                    }
+                }
+                _ => Spot::Boolean,
+            }
+        }
+        _ => Spot::Boolean,
+    }
 }
 
+fn field_item(field: &Field) -> CompletionItem {
+    let mut item = CompletionItem::new(field.name.clone(), "property");
+    item.detail = Some(field.field_type.clone());
+    item.documentation = Some(field.description.clone());
+    item
+}
+
+/// The comparison operators a field's type accepts, with their modified forms
+/// (libsinsp's `flt_is_comparable`).
+fn operator_items(field: Option<&Field>) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+    let doc = |op: &str| {
+        KEYWORDS
+            .iter()
+            .find(|(k, _)| *k == op)
+            .map(|(_, d)| (*d).to_string())
+    };
+    for op in parser::OPERATORS {
+        let ok = field.is_none_or(|f| compile::comparable(op, &f.field_type, f.list).is_ok());
+        if !ok {
+            continue;
+        }
+        let mut item = CompletionItem::new(*op, "operator");
+        item.documentation = doc(op);
+        items.push(item);
+    }
+    for op in parser::OPERATORS {
+        for m in parser::MODIFIERS {
+            let full = format!("{op} {m}");
+            if !MODIFIABLE.contains(op) {
+                continue;
+            }
+            if field.is_some_and(|f| compile::comparable(&full, &f.field_type, f.list).is_err()) {
+                continue;
+            }
+            let mut item = CompletionItem::new(full, "operator");
+            item.documentation = doc(m);
+            items.push(item);
+        }
+    }
+    items
+}
+
+/// The values a field takes, where it is enumerated: `evt.type` event names
+/// (syscall source) and the fields libsinsp extracts a fixed set for.
+fn value_items(field: Option<&Field>, ctx: &Context) -> Vec<CompletionItem> {
+    let catalog = Catalog::cached();
+    let Some(field) = field else {
+        return Vec::new();
+    };
+    if field.name == "evt.type" && ctx.source() == "syscall" {
+        return catalog
+            .events()
+            .map(|e| CompletionItem::new(e, "constant"))
+            .collect();
+    }
+    field
+        .values
+        .iter()
+        .map(|v| CompletionItem::new(v.clone(), "constant"))
+        .collect()
+}
+
+fn resolve_field<'c>(toks: &[Tok], at: Option<usize>, ctx: &Context) -> Option<&'c Field> {
+    let Tok::Word(w) = &toks[at?] else {
+        return None;
+    };
+    let name = w.split('[').next().unwrap_or(w);
+    match Catalog::cached().lookup(name, ctx.source()) {
+        Lookup::Known(f) => Some(f),
+        _ => None,
+    }
+}
+
+/// Completion in a condition: what the cursor's position takes, filtered by the
+/// word already typed (a dotted prefix, `proc.ex`, included).
 pub fn completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionItem> {
     let before = &text[..offset.min(text.len())];
     let prefix_start = before
@@ -1104,81 +1426,97 @@ pub fn completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionIt
         .last()
         .map(|(i, _)| i)
         .unwrap_or(before.len());
+    let prefix = &before[prefix_start..];
     let head = &before[..prefix_start];
     let catalog = Catalog::cached();
+    let toks = lex_head(head);
     let mut items = Vec::new();
-    if in_value_list(head) {
-        for name in ctx.lists.keys().chain(catalog.lists.keys()) {
-            items.push(CompletionItem::new(name.clone(), "variable"));
-        }
-        if head.contains("evt.type") && ctx.source() == "syscall" {
-            for event in catalog.events() {
-                items.push(CompletionItem::new(event, "constant"));
-            }
-        }
-        return items;
-    }
-    let previous = head
-        .trim_end()
-        .rsplit(|c: char| c.is_whitespace() || c == '(')
-        .next();
-    let after_field = previous.is_some_and(|w| {
-        w.contains('.')
-            && w.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
-            && head.ends_with(char::is_whitespace)
-    }) || head.trim_end().ends_with(')')
-        && head.ends_with(char::is_whitespace)
-        && !head.trim_end().ends_with("))");
-    if after_field {
-        for (kw, doc) in KEYWORDS {
-            if !matches!(
-                *kw,
-                "and" | "or" | "not" | "tolower" | "toupper" | "b64" | "basename" | "len" | "val"
-            ) {
-                let mut item = CompletionItem::new(*kw, "operator");
-                item.documentation = Some((*doc).to_string());
+    match spot(&toks) {
+        Spot::Check => {
+            items.extend(catalog.fields_for(ctx.source()).map(field_item));
+            for (name, condition) in &ctx.macros {
+                let mut item = CompletionItem::new(name.clone(), "macro");
+                item.detail = Some("macro (this block)".into());
+                item.documentation = Some(condition.clone());
                 items.push(item);
             }
+            for (name, m) in &catalog.macros {
+                if ctx.macros.contains_key(name) {
+                    continue;
+                }
+                let mut item = CompletionItem::new(name.clone(), "macro");
+                item.detail = Some("macro (Falco default rules)".into());
+                item.documentation = Some(m.condition.clone());
+                items.push(item);
+            }
+            for kw in ["not"].iter().chain(parser::TRANSFORMERS.iter()) {
+                items.push(CompletionItem::new(*kw, "keyword"));
+            }
         }
-        for kw in ["and", "or"] {
-            items.push(CompletionItem::new(kw, "keyword"));
+        Spot::Operator(at) => {
+            let field = resolve_field(&toks, at, ctx);
+            items.extend(operator_items(field));
         }
-        return items;
-    }
-    for field in catalog.fields_for(ctx.source()) {
-        let mut item = CompletionItem::new(field.name.clone(), "property");
-        item.detail = Some(field.field_type.clone());
-        item.documentation = Some(field.description.clone());
-        items.push(item);
-    }
-    for (name, condition) in &ctx.macros {
-        let mut item = CompletionItem::new(name.clone(), "macro");
-        item.detail = Some("macro (this block)".into());
-        item.documentation = Some(condition.clone());
-        items.push(item);
-    }
-    for (name, m) in &catalog.macros {
-        if ctx.macros.contains_key(name) {
-            continue;
+        Spot::Value(at) => {
+            let field = resolve_field(&toks, at, ctx);
+            items.extend(value_items(field, ctx));
         }
-        let mut item = CompletionItem::new(name.clone(), "macro");
-        item.detail = Some("macro (Falco default rules)".into());
-        item.documentation = Some(m.condition.clone());
-        items.push(item);
+        Spot::List(at) => {
+            for name in ctx.lists.keys() {
+                let mut item = CompletionItem::new(name.clone(), "variable");
+                item.detail = Some("list (this block)".into());
+                items.push(item);
+            }
+            for (name, l) in &catalog.lists {
+                if ctx.lists.contains_key(name) {
+                    continue;
+                }
+                let mut item = CompletionItem::new(name.clone(), "variable");
+                item.detail = Some("list (Falco default rules)".into());
+                item.documentation = Some(l.items.join(", "));
+                items.push(item);
+            }
+            let field = resolve_field(&toks, at, ctx);
+            items.extend(value_items(field, ctx));
+        }
+        Spot::Boolean => {
+            for kw in ["and", "or"] {
+                items.push(CompletionItem::new(kw, "keyword"));
+            }
+        }
+        Spot::Nothing => {}
     }
-    for kw in [
-        "not", "and", "or", "tolower", "toupper", "b64", "basename", "len", "join", "concat",
-        "getopt", "val",
-    ] {
-        items.push(CompletionItem::new(kw, "keyword"));
-    }
+    items.retain(|i| i.label.starts_with(prefix));
     items
+}
+
+/// Completion in an output template: fields after `%` (or `%(`), filtered by
+/// the word already typed; nothing elsewhere.
+pub fn output_completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionItem> {
+    let before = &text[..offset.min(text.len())];
+    let prefix_start = before
+        .char_indices()
+        .rev()
+        .take_while(|(_, c)| is_word_char(*c))
+        .last()
+        .map(|(i, _)| i)
+        .unwrap_or(before.len());
+    let prefix = &before[prefix_start..];
+    let head = &before[..prefix_start];
+    if !(head.ends_with('%') || head.ends_with("%(")) {
+        return Vec::new();
+    }
+    Catalog::cached()
+        .fields_for(ctx.source())
+        .filter(|f| !f.filter_only && f.name.starts_with(prefix))
+        .map(field_item)
+        .collect()
 }
 
 /// Severity of every code this engine emits, for documentation and tests.
 pub const CODES: &[(&str, Severity)] = &[
     (codes::FALCO_PARSE_ERROR, Severity::Error),
-    (codes::FALCO_UNKNOWN_FIELD, Severity::Warning),
+    (codes::FALCO_UNKNOWN_FIELD, Severity::Error),
     (codes::FALCO_UNKNOWN_MACRO, Severity::Warning),
     (codes::FALCO_UNKNOWN_LIST, Severity::Warning),
     (codes::FALCO_MISPLACED_LIST, Severity::Error),
@@ -1190,6 +1528,7 @@ pub const CODES: &[(&str, Severity)] = &[
     (codes::FALCO_INVALID_REGEX, Severity::Error),
     (codes::FALCO_UNKNOWN_EVENT, Severity::Error),
     (codes::FALCO_APPEND_CONDITION, Severity::Error),
+    (codes::FALCO_UNKNOWN_RULE, Severity::Warning),
     (codes::FALCO_OUTPUT_SYNTAX, Severity::Error),
     (codes::FALCO_EXCEPTION, Severity::Error),
     (codes::FALCO_REGEX_SIMPLE, Severity::Warning),
@@ -1455,6 +1794,53 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_condition_is_refused() {
+        // Falco's rules schema: "Value must be non-empty".
+        assert_eq!(
+            codes_of("   ", &Context::default()),
+            vec![codes::FALCO_PARSE_ERROR]
+        );
+    }
+
+    #[test]
+    fn a_tuning_is_judged_on_the_tuned_rule_with_it_appended() {
+        let tuning = |rule: &str| Context {
+            append: Some(true),
+            tuned_rule: Some(rule.into()),
+            ..Context::default()
+        };
+        // Falco warns LOAD_NO_EVTTYPE: `<rule condition> or proc.name = sshd`.
+        assert_eq!(
+            codes_of(
+                "or proc.name = sshd",
+                &tuning("Terminal shell in container")
+            ),
+            vec![codes::FALCO_NO_EVTTYPE]
+        );
+        // An `and not` keeps the tuned rule's event types.
+        assert!(
+            codes_of(
+                "and not proc.pname in (kubectl)",
+                &tuning("Terminal shell in container")
+            )
+            .is_empty()
+        );
+        // A rule the defaults do not have: nothing to judge (Tide reports falco_unknown_rule).
+        assert!(codes_of("or proc.name = sshd", &tuning("No such rule")).is_empty());
+    }
+
+    #[test]
+    fn default_definitions_follow_the_stable_rules_file() {
+        let catalog = Catalog::cached();
+        assert!(
+            catalog.macros["spawned_process"]
+                .origin
+                .ends_with("/falco_rules.yaml")
+        );
+        assert!(catalog.rules.contains_key("Terminal shell in container"));
+    }
+
+    #[test]
     fn output_fields_are_checked() {
         let r = analyze_output(
             "Shell (user=%user.name proc=%proc.nmae parent=%proc.aname[2] %container.info)",
@@ -1508,9 +1894,16 @@ mod tests {
                 .map(|i| i.label)
                 .collect()
         };
+        // Filtered by the dotted prefix already typed.
         let start = labels("proc.");
         assert!(start.iter().any(|l| l == "proc.name"));
-        assert!(start.iter().any(|l| l == "spawned_process"));
+        assert!(start.iter().all(|l| l.starts_with("proc.")));
+        let check = labels("proc.name = bash and ");
+        assert!(check.iter().any(|l| l == "spawned_process"));
+        assert!(check.iter().any(|l| l == "proc.name"));
+        // After an operator, a free string field takes no suggestion.
+        assert!(labels("proc.name startswith ").is_empty());
+        assert!(labels("fd.l4proto = ").iter().any(|l| l == "tcp"));
         let ops = labels("proc.name ");
         assert!(ops.iter().any(|l| l == "startswith"));
         assert!(!ops.iter().any(|l| l == "proc.name"));

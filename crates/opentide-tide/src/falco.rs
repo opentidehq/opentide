@@ -59,7 +59,9 @@ pub(crate) fn context_for(block: Option<&serde_yaml::Value>, field_path: &[Strin
             ctx.lists.insert(name, items);
         }
     }
-    let tuning = text(block.get("append_to_rule")).is_some_and(|s| !s.trim().is_empty());
+    let tuned = text(block.get("append_to_rule")).filter(|s| !s.trim().is_empty());
+    let tuning = tuned.is_some();
+    ctx.tuned_rule = tuned;
     ctx.append = match field_path {
         [_, _, last] if last == "condition" => Some(tuning),
         [.., last] if last == "output" => None,
@@ -95,6 +97,33 @@ pub(crate) fn source_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec
         )
         .with_field_path(path.iter().map(|p| p.to_string()).collect()),
     ]
+}
+
+/// `falco_unknown_rule` on `append_to_rule` when the Falco default rules have
+/// no rule by that name. Falco OSS refuses the append; on a Sysdig tenant it may
+/// tune a rule Sysdig manages, so it is a warning.
+pub(crate) fn tuning_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+    let Some(name) = block.get("append_to_rule").and_then(|s| s.as_str()) else {
+        return Vec::new();
+    };
+    if name.trim().is_empty() || Catalog::cached().rules.contains_key(name) {
+        return Vec::new();
+    }
+    let path = ["configurations", "sysdig", "append_to_rule"];
+    let mut d = Diagnostic::warning(
+        codes::FALCO_UNKNOWN_RULE,
+        format!(
+            "`{name}` is not a rule of the Falco default rules: Falco refuses to append to it, and on Sysdig it must be a rule the tenant has"
+        ),
+        crate::elastic::path_range(source, &path),
+    )
+    .with_field_path(path.iter().map(|p| p.to_string()).collect());
+    if let Some(near) =
+        opentide_falco::near_miss(name, Catalog::cached().rules.keys().map(String::as_str))
+    {
+        d = d.with_suggestion(near);
+    }
+    vec![d]
 }
 
 fn scalar(v: &serde_yaml::Value) -> Option<String> {
