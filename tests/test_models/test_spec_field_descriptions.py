@@ -27,6 +27,10 @@ SPEC_FILES = ["platforms/*.md", "objects/*-1.0.md", "metadata.md"]
 REWRITTEN = {
     ("DetectionObjective", "metadata"),
     ("DetectionRule", "metadata"),
+    # The spec calls these the rule's lifecycle status and severity; deploy and
+    # promotion read each platform block's status and response.alert_severity.
+    ("DetectionRule", "severity"),
+    ("DetectionRule", "status"),
     ("ElasticActions", "respond"),
     ("ElasticRisk", "score"),
     ("ElasticThreatMatch", "filters"),
