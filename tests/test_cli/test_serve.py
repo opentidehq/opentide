@@ -296,6 +296,43 @@ def test_a_repeat_run_keeps_the_registry_and_invalidate_drops_it(
     assert _stable(edited["document"]) == _stable(expected)
 
 
+def test_an_edit_on_disk_is_read_without_an_invalidate(
+    client: Client, tide_corpus_repo: Path, builds: list[float]
+) -> None:
+    # The editor's invalidate for a save can reach the server after the run
+    # that the save started: the kept registry must not answer for the old file.
+    rule = tide_corpus_repo / RULE_FILE
+    assert client.run("validate", "--file", RULE_FILE)["exit_code"] == 0
+    text = rule.read_text(encoding="utf-8")
+    rule.write_text(text.replace("name: Sentinel KQL Rule", "name: [1, 2]"), encoding="utf-8")
+    edited = client.run("validate", "--file", RULE_FILE)
+    assert len(builds) == 2
+    expected, code = spawned_document(["validate", "--file", RULE_FILE])
+    assert code == 1
+    assert edited["exit_code"] == 1, edited["document"]["report"]
+    assert _stable(edited["document"]) == _stable(expected)
+
+
+def test_a_file_created_after_a_run_is_seen_without_an_invalidate(
+    client: Client, tide_corpus_repo: Path, builds: list[float]
+) -> None:
+    before = client.run("info")["document"]["counts"]
+    rule = tide_corpus_repo / RULE_FILE
+    copy = rule.with_name("rule-served-copy.yaml")
+    text = rule.read_text(encoding="utf-8")
+    copy.write_text(
+        text.replace(CORPUS_RULE_UUIDS["sentinel"], "00000000-0000-4000-8003-0000000000ee"),
+        encoding="utf-8",
+    )
+    after = client.run("info")["document"]["counts"]
+    # Unchanged files: the next run reuses what the last one built.
+    client.run("info")
+    assert len(builds) == 2
+    expected, _ = spawned_document(["info"])
+    assert after == expected["counts"]
+    assert after != before
+
+
 def test_invalidate_outside_every_workspace_drops_everything(
     client: Client, tmp_path: Path, builds: list[float]
 ) -> None:
