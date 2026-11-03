@@ -586,6 +586,14 @@ def setup_ci_cmd(
         "--sharing/--no-sharing",
         help="Share changed objects on the default branch (off unless selected)",
     ),
+    lint_changed: bool = typer.Option(
+        False,
+        "--lint-changed/--lint-all",
+        help=(
+            "Gate lint on the object files each run changes, so a catalogue with inherited "
+            "findings can adopt it (validate still checks every file)"
+        ),
+    ),
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
@@ -623,6 +631,7 @@ def setup_ci_cmd(
         staging=staging,
         inflight=inflight,
         sharing=sharing,
+        lint_changed=lint_changed,
         promotion=promotion,
         promotion_target=promotion_target,
         python_version=python_version,

@@ -274,7 +274,11 @@ def render_azure(options: CiRenderOptions) -> str:
             steps=_job_steps(
                 options,
                 # The publish step fails on a missing folder, even after a failed gate.
-                [f"mkdir -p {REPORTS_DIR}", *object_validate_commands("sarif")],
+                [
+                    f"mkdir -p {REPORTS_DIR}",
+                    *object_validate_commands("sarif", lint_changed=options.lint_changed),
+                ],
+                full_history=options.lint_changed,
             )
             + "\n"
             + _publish_reports_step(),

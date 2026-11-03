@@ -228,13 +228,22 @@ def codequality_merge_command() -> str:
     return f"python -m opentide.ci.codequality --output {CODEQUALITY_REPORT} {inputs}"
 
 
-def object_validate_commands(report_format: str | None = None) -> list[str]:
+def object_validate_commands(
+    report_format: str | None = None, *, lint_changed: bool = False
+) -> list[str]:
     """The catalogue gate. Warnings fail, and a misnamed file fails too.
 
     With *report_format* (``sarif`` or ``codequality``) each command also
-    writes its findings to :func:`report_path`, and still prints them.
+    writes its findings to :func:`report_path`, and still prints them. With
+    *lint_changed*, ``lint`` checks only the object files the run changed (the
+    diff deploy reads), so an inherited catalogue can adopt the gate; the job
+    then needs the full history.
     """
-    commands = [f"opentide {command} --strict" for command in GATE_COMMANDS]
+    commands = [
+        f"opentide {command} --strict"
+        + (" --changed" if lint_changed and command == "lint" else "")
+        for command in GATE_COMMANDS
+    ]
     if report_format is None:
         return commands
     return [
@@ -244,7 +253,7 @@ def object_validate_commands(report_format: str | None = None) -> list[str]:
 
 
 def validate_commands(options: CiRenderOptions) -> list[str]:
-    steps = object_validate_commands()
+    steps = object_validate_commands(lint_changed=options.lint_changed)
     for platform in query_platforms(options):
         steps.append(query_validation_command(platform, repo=options.repo))
     return steps

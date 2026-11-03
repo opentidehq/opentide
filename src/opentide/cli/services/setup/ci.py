@@ -47,6 +47,8 @@ class CiSetupOptions:
     inflight: bool = True
     #: Off unless setup is asked to publish changed objects on the default branch.
     sharing: bool = False
+    #: Gate lint on the changed object files only (``lint --strict --changed``).
+    lint_changed: bool = False
     #: ``None`` detects it from the target repository.
     default_branch: str | None = None
     yes: bool = False

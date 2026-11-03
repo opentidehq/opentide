@@ -260,7 +260,11 @@ def pipeline_document(options: CiRenderOptions) -> Job:
         "validate": gitlab_job(
             options=options,
             stage="validate",
-            script=object_validate_commands("codequality"),
+            script=object_validate_commands("codequality", lint_changed=options.lint_changed),
+            # ``lint --changed`` diffs from the merge base or the push's parent,
+            # with git, which the slim image lacks.
+            variables=dict(FULL_HISTORY) if options.lint_changed else None,
+            before=[GITLAB_INSTALL_GIT] if options.lint_changed else None,
             extra=_report_artifacts(expose_as="opentide reports", codequality=True),
             # ``after_script`` runs after a failed command too, so the merge
             # request shows the findings of the command that failed.

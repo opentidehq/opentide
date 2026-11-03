@@ -365,8 +365,8 @@ def render_github(options: CiRenderOptions) -> str:
     validate_steps = join_blocks(
         # ``--changed`` diffs from the pull request's merge base, or from the
         # pushed commit's parent: neither is in a one-commit checkout.
-        _setup_steps(options, full_history=bool(queries)),
-        _run_steps(object_validate_commands("sarif")),
+        _setup_steps(options, full_history=bool(queries) or options.lint_changed),
+        _run_steps(object_validate_commands("sarif", lint_changed=options.lint_changed)),
         # ``--changed`` live checks follow the deploys: off for a skipped change.
         _reviewed_tenants_step(
             "Validate queries on reviewed tenants", branch, queries, if_cond=github_not_skipped()
