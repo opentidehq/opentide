@@ -1,4 +1,5 @@
-"""Tests for scripts/release.py's release-asset checksums (#196).
+"""Tests for scripts/release.py's release-asset checksums and for the shape
+of .github/workflows/release.yml (#196).
 
     python3 -m unittest discover -s scripts -p 'test_*.py'
 """
@@ -6,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 import subprocess
 import sys
@@ -85,6 +87,63 @@ class Sha256SumsTest(unittest.TestCase):
         )
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertTrue((self.dir / "SHA256SUMS").is_file())
+
+
+WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml"
+
+
+def workflow_jobs() -> dict[str, str]:
+    """Each job of release.yml as its lines, comments left out: the job keys
+    are the two-space-indented keys under `jobs:` (no YAML parser, which the
+    CI Python lacks)."""
+    text = WORKFLOW.read_text(encoding="utf-8")
+    jobs: dict[str, list[str]] = {}
+    name = None
+    for line in text.split("\njobs:\n", 1)[1].splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        match = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if match:
+            name = match.group(1)
+            jobs[name] = []
+        elif name is not None:
+            jobs[name].append(line)
+    return {job: "\n".join(lines) for job, lines in jobs.items()}
+
+
+def workflow_header() -> str:
+    return WORKFLOW.read_text(encoding="utf-8").split("\njobs:\n", 1)[0]
+
+
+class ReleaseWorkflowTest(unittest.TestCase):
+    def test_only_attest_crates_and_npm_can_mint_an_oidc_token(self) -> None:
+        # crates.io and npm trust release.yml as a whole: a token from any job
+        # of it publishes.
+        jobs = workflow_jobs()
+        minting = sorted(job for job, body in jobs.items() if "id-token: write" in body)
+        self.assertEqual(minting, ["attest", "crates", "npm"])
+        self.assertNotIn("id-token", workflow_header())
+        for job in minting:
+            # Every job states its permissions, so none inherits a token.
+            self.assertIn("permissions:", jobs[job], job)
+
+    def test_the_attest_job_builds_and_runs_nothing(self) -> None:
+        attest = workflow_jobs()["attest"]
+        self.assertNotIn("run:", attest)
+        self.assertNotIn("cargo", attest)
+        self.assertNotIn("actions/checkout", attest)
+        uses = re.findall(r"uses: (\S+)", attest)
+        self.assertEqual(
+            [u.split("@")[0] for u in uses],
+            ["actions/download-artifact", "actions/attest-build-provenance"],
+        )
+
+    def test_cargo_about_runs_without_an_oidc_token(self) -> None:
+        jobs = workflow_jobs()
+        builds = [job for job, body in jobs.items() if "cargo install" in body]
+        self.assertTrue(builds)
+        for job in builds:
+            self.assertNotIn("id-token", jobs[job], job)
 
 
 if __name__ == "__main__":
