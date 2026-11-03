@@ -94,7 +94,9 @@ def test_rule_severity_uses_alert_labels_and_threats_the_incident_scale(schema_i
     assert get_pins(schema_id)["severity"] == "alert_severity::1.0"
     assert get_pins("threat::1.0")["threat.severity"] == "severity::1.0"
     enum = generate_schema_for_identifier(schema_id)["properties"]["severity"].get("enum", [])
-    assert DetectionRule.model_fields["severity"].default in enum
+    # Unset unless authored: no page or template presents a default as the rule's.
+    assert DetectionRule.model_fields["severity"].default is None
+    assert "Informational" in enum
     assert "Substantial incident" not in enum
 
 

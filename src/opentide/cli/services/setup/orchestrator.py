@@ -78,6 +78,7 @@ class SetupOptions:
     python_version: str = "3.12"
     explorer_pages: bool = False
     sharing: bool = False
+    lint_changed: bool = False
     #: ``None`` detects it from the target repository.
     default_branch: str | None = None
     vscode_setup: bool = False
@@ -115,6 +116,7 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
         python_version=options.python_version,
         explorer_pages=options.explorer_pages,
         sharing=options.sharing,
+        lint_changed=options.lint_changed,
         default_branch=options.default_branch,
         yes=options.yes,
     )

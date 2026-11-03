@@ -31,7 +31,7 @@ def lint_cmd(
         "--check",
         metavar="CHECK",
         help=(
-            "Limit to one check: filenames, metadata or placeholders (repeatable). "
+            "Limit to one check: filenames, metadata, placeholders or queries (repeatable). "
             "Runs it even when lint.toml disables it"
         ),
     ),

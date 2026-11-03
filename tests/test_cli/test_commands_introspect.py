@@ -306,6 +306,12 @@ _UNDOCUMENTED_ENV = {
     "OPENTIDE_PERSIST_STATE_EXTERNALLY",
     # An Azure pipeline variable the generated pipeline sets and reads.
     "OPENTIDE_DEPLOY_STARTED",
+    # Variables of the generated pipelines, read by their shell steps
+    # (docs/usage/workflows/ci-cd.md), never by a command.
+    "OPENTIDE_VERSION",
+    "OPENTIDE_PUSH_URL",
+    "OPENTIDE_PUSH_SSH_KEY",
+    "OPENTIDE_PUSH_SSH_KNOWN_HOSTS",
     # Read by the maintainer scripts in scripts/vocabulary/, not by a command.
     "OPENTIDE_ATTACK_STIX_DIR",
     "OPENTIDE_SPECIFICATIONS_ROOT",

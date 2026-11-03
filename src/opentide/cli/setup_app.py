@@ -172,6 +172,10 @@ _YES_HELP = "Write without asking for confirmation"
 _NAME_HELP = "Repository name, used in the README"
 _ORG_HELP = "Organisation or team, used in the README"
 _DESCRIPTION_HELP = "One-line description, used in the README"
+_LINT_CHANGED_HELP = (
+    "Gate lint on the object files each run changes, so a catalogue with inherited "
+    "findings can adopt it (validate still checks every file)"
+)
 _STAGING_HELP = "Deploy to staging tenants from pull requests"
 _PYTHON_HELP = "Python version the pipeline installs"
 _REFRESH_HELP = "Download the skills catalogue again instead of using the cache"
@@ -218,6 +222,7 @@ def _ignored_ci_flag_warnings(
     explorer_pages: bool,
     default_branch: str | None,
     python_version: str,
+    lint_changed: bool = False,
 ) -> list[str]:
     """Name CI-only flags that were passed without a pipeline to write."""
     if ci is not None and ci is not CiPlatform.none:
@@ -231,6 +236,8 @@ def _ignored_ci_flag_warnings(
         ignored.append("--no-inflight")
     if sharing:
         ignored.append("--sharing")
+    if lint_changed:
+        ignored.append("--lint-changed")
     if explorer_pages:
         ignored.append("--explorer-pages")
     if python_version != "3.12":
@@ -364,6 +371,11 @@ def setup_cmd(
         "--sharing/--no-sharing",
         help="Share changed objects on the default branch (off unless selected)",
     ),
+    lint_changed: bool = typer.Option(
+        False,
+        "--lint-changed/--lint-all",
+        help=_LINT_CHANGED_HELP,
+    ),
     promotion: bool | None = typer.Option(
         None,
         "--promotion/--no-promotion",
@@ -420,6 +432,7 @@ def setup_cmd(
             staging=staging,
             inflight=inflight,
             sharing=sharing,
+            lint_changed=lint_changed,
             promotion=promotion,
             promotion_target=promotion_target,
             python_version=python_version,
@@ -444,6 +457,7 @@ def setup_cmd(
                 explorer_pages=explorer_pages,
                 default_branch=default_branch,
                 python_version=python_version,
+                lint_changed=lint_changed,
             ),
         )
         cli.apply_environment()
@@ -589,10 +603,7 @@ def setup_ci_cmd(
     lint_changed: bool = typer.Option(
         False,
         "--lint-changed/--lint-all",
-        help=(
-            "Gate lint on the object files each run changes, so a catalogue with inherited "
-            "findings can adopt it (validate still checks every file)"
-        ),
+        help=_LINT_CHANGED_HELP,
     ),
     promotion: bool | None = typer.Option(
         None,

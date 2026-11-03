@@ -70,7 +70,7 @@ def test_validate_all_objects_validates_the_objects_it_is_given(
     objects = {kind: dict(bucket) for kind, bucket in Opentide.Index["objects"].items()}
     assert validate_all_objects(objects) == {}
 
-    objects["rule"][uuid] = {**objects["rule"][uuid], "severity": None}
+    objects["rule"][uuid] = {**objects["rule"][uuid], "severity": 42}
     errors = validate_all_objects(objects)
 
     assert list(errors) == [uuid]
