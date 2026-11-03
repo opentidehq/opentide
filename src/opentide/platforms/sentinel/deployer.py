@@ -14,6 +14,7 @@ from opentide.deployment import check_status
 from opentide.generation.framework import get_vocab_entry, techniques_resolver
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy
 from opentide.models.rule import DetectionRule
+from opentide.models.sentinel_attack import SENTINEL_ATTACK_VERSION, sentinel_techniques
 from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.kql import compile_kql_query
 from opentide.platforms.plugins import RuleDeployer
@@ -63,6 +64,48 @@ def sentinel_tactic(stage: str) -> str | None:
     tactic = stage.title().replace(" ", "").strip()
     tactic = SENTINEL_TACTIC_ALIASES.get(tactic, tactic)
     return tactic if tactic in SENTINEL_TACTICS else None
+
+
+def split_techniques(identifiers: Sequence[str]) -> tuple[list[str], list[str]]:
+    """Split ATT&CK ids into the ARM ``techniques`` and ``subTechniques`` lists.
+
+    ARM rejects a sub-technique in ``techniques`` ("The technique 'T1098.003'
+    is invalid. The expected format is 'T####'"), so ``techniques`` carries
+    each id's parent and ``subTechniques`` the sub-technique ids themselves,
+    both deduplicated in order: ``T1556.009`` is sent as ``T1556`` plus
+    ``T1556.009`` (#686). This is the split Microsoft's own solution packager
+    makes.
+
+    The split keeps every id it is given. ``alert.techniques`` holds ATT&CK v18
+    ids only (``opentide.models.sentinel_attack``, checked at validate); the
+    techniques a rule resolves from its objective come from the ``att&ck``
+    vocabulary and pass through :func:`v18_sub_techniques` first.
+    """
+    techniques = [identifier.split(".")[0] for identifier in identifiers]
+    sub_techniques = [identifier for identifier in identifiers if "." in identifier]
+    return list(dict.fromkeys(techniques)), list(dict.fromkeys(sub_techniques))
+
+
+def v18_sub_techniques(rule_uuid: str, sub_techniques: Sequence[str]) -> list[str]:
+    """The ATT&CK v18 ids among *sub_techniques*; any other is dropped with a warning.
+
+    Sentinel is aligned to ATT&CK v18, while the techniques a rule resolves from
+    its objective come from the ``att&ck`` vocabulary, which follows a later
+    release. A sub-technique added since (``T1027.018``) is not sent in
+    ``subTechniques``; its v18 parent still is, in ``techniques``, as before
+    sub-techniques were sent at all (#686).
+    """
+    known = sentinel_techniques()
+    kept = [identifier for identifier in sub_techniques if identifier in known]
+    for identifier in sub_techniques:
+        if identifier not in known:
+            logger.warning(
+                "dropping_sub_technique_newer_than_sentinel_attack",
+                rule=rule_uuid,
+                technique=identifier,
+                attack=SENTINEL_ATTACK_VERSION,
+            )
+    return kept
 
 
 def _technique_tactics(technique: str) -> list[str]:
@@ -210,8 +253,10 @@ class SentinelDeploy(RuleDeployer):
             if alert_dynamic_properties:
                 details_overrides["alertDynamicProperties"] = alert_dynamic_properties
         properties["alertDetailsOverride"] = details_overrides
-        if techniques := configuration.alert.techniques:
-            properties["techniques"] = techniques
+        if alert_techniques := configuration.alert.techniques:
+            properties["techniques"], sub_techniques = split_techniques(alert_techniques)
+            if sub_techniques:
+                properties["subTechniques"] = sub_techniques
         if tactics := configuration.alert.tactics:
             properties["tactics"] = tactics
         if custom_details := configuration.alert.custom_details:
@@ -272,16 +317,16 @@ class SentinelDeploy(RuleDeployer):
         properties["severity"] = severity
         properties["displayName"] = data.name
         properties["description"] = data.description
-        techniques = techniques_resolver(data.metadata.uuid)
-        if techniques:
-            tactics = list()
-            for t in techniques:
-                tactics.extend(_technique_tactics(t))
-            techniques = [t.split(".")[0] for t in techniques]
-            techniques = list(dict.fromkeys(techniques))
-            tactics = list(dict.fromkeys(tactics))
-            properties["tactics"] = tactics
-            properties["techniques"] = techniques
+        if resolved := techniques_resolver(data.metadata.uuid):
+            resolved_tactics: list[str] = []
+            for technique in resolved:
+                resolved_tactics.extend(_technique_tactics(technique))
+            properties["tactics"] = list(dict.fromkeys(resolved_tactics))
+            properties["techniques"], sub_techniques = split_techniques(resolved)
+            # Replaces the alert block's sub-techniques with the resolved ones,
+            # as `techniques` and `tactics` are replaced.
+            sub_techniques = v18_sub_techniques(data.metadata.uuid, sub_techniques)
+            properties["subTechniques"] = sub_techniques or None
         rule["properties"] = {key: value for key, value in properties.items() if value is not None}
         logger.info("compiled_rule", detail=json.dumps(rule))
         return rule

@@ -234,3 +234,35 @@ def test_import_never_overwrites_a_rule_with_the_same_display_name(
         " Dup rule - tenant-a .yaml": "33333333-3333-4333-8333-333333333333",
         " Dup rule - tenant-a  44444444.yaml": "44444444-4444-4444-8444-444444444444",
     }
+
+
+@pytest.mark.parametrize(
+    ("techniques", "sub_techniques", "expected"),
+    [
+        (["T1556"], ["T1556.009"], ["T1556.009"]),
+        (["T1556", "T1059"], ["T1556.009", "T1556.006"], ["T1556.009", "T1556.006", "T1059"]),
+        (["T1059"], [], ["T1059"]),
+        ([], ["T1078.004"], ["T1078.004"]),
+    ],
+)
+def test_alert_techniques_lists_each_sub_technique_in_place_of_its_parent(
+    techniques: list[str], sub_techniques: list[str], expected: list[str]
+) -> None:
+    assert sentinel_importer._alert_techniques(techniques, sub_techniques) == expected
+
+
+def test_import_keeps_sub_techniques(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``subTechniques`` was dropped on import, so a re-deploy lost them (#686)."""
+    listed = [
+        _scheduled(
+            "11111111-1111-4111-8111-111111111111",
+            tactics=["Persistence"],
+            techniques=["T1556", "T1059"],
+            subTechniques=["T1556.009"],
+        )
+    ]
+
+    (imported,) = _import(listed, tmp_path, monkeypatch).values()
+
+    alert = imported["configurations"]["sentinel"]["alert"]
+    assert alert["techniques"] == ["T1556.009", "T1059"]
