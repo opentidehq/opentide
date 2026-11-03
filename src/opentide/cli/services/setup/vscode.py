@@ -184,20 +184,62 @@ def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, st
     return {_router_schema_uri(cfg): _object_glob(_object_folders(cfg))}
 
 
-def is_opentide_schema_mapping(schema: str, globs: object) -> bool:
-    """Whether a ``yaml.schemas`` entry is one ``setup vscode`` wrote.
+def _generated_globs(cfg: dict[str, Any]) -> set[str]:
+    """Every glob an earlier ``setup vscode`` mapped to the router schema."""
+    folders = _object_folders(cfg)
+    glob = _object_glob(folders)
+    found = {glob} if isinstance(glob, str) else set(glob)
+    found.update(f"{folder}/{suffix}" for folder in folders for suffix in ("**/*.yaml", "*.yaml"))
+    return found
 
-    The router schema (``.opentide/schemas/opentide.schema.json``), whatever it
-    maps, or a per-folder revision mapping of an earlier release. A mapping of
-    another schema, or of a revision schema to the user's own folders, is theirs.
+
+def _router_remainder(globs: object, generated: set[str]) -> tuple[bool, object]:
+    """Whether a router mapping holds opentide's globs, and the user's globs it also holds.
+
+    ``(False, globs)`` when it maps none of opentide's globs: the entry is the
+    user's. ``(True, None)`` when it maps only opentide's (or is not a glob
+    list at all). ``(True, rest)`` when the user added their own folders: *rest*
+    keeps them, as written.
+    """
+    values = [globs] if isinstance(globs, str) else globs
+    if not isinstance(values, list):
+        return True, None
+    ours = [
+        value
+        for value in values
+        if isinstance(value, str) and value.removeprefix("./") in generated
+    ]
+    theirs = [value for value in values if value not in ours]
+    if values and not ours:
+        return False, globs
+    return True, (theirs or None)
+
+
+def is_opentide_schema_mapping(schema: str, globs: object) -> bool:
+    """Whether a ``yaml.schemas`` entry holds a mapping ``setup vscode`` wrote.
+
+    The router schema (``.opentide/schemas/opentide.schema.json``) mapped to the
+    object folders, or a per-folder revision mapping of an earlier release. A
+    mapping of another schema, or of opentide's to the user's own folders
+    only, is theirs.
     """
     cfg = _paths_config()
     if schema.removeprefix("./") == _router_schema_uri(cfg):
-        return True
+        return _router_remainder(globs, _generated_globs(cfg))[0]
     families = list(cfg.get("objects") or CORE_OBJECT_TYPES)
     return _is_stale_revision_mapping(
         schema, globs, families=families, folders=_object_folders(cfg)
     )
+
+
+def _without_opentide_mapping(schema: str, globs: object, cfg: dict[str, Any]) -> object:
+    """What of a ``yaml.schemas`` entry to keep: its globs, the user's part, or ``None``."""
+    if schema.removeprefix("./") == _router_schema_uri(cfg):
+        return _router_remainder(globs, _generated_globs(cfg))[1]
+    families = list(cfg.get("objects") or CORE_OBJECT_TYPES)
+    if _is_stale_revision_mapping(schema, globs, families=families, folders=_object_folders(cfg)):
+        return None
+    return globs
 
 
 def _is_stale_revision_mapping(
@@ -226,9 +268,10 @@ def write_vscode_settings(target: Path) -> str | None:
 
     The opentide extension's language server checks object files, and a YAML
     language server mapped to opentide's schemas would report them a second
-    time. Every other setting and ``yaml.schemas`` entry is kept; an emptied
-    ``yaml.schemas`` is removed. The file is never created, and is left
-    untouched when it has no such entry. Returns the path when it was rewritten.
+    time. Every other setting and ``yaml.schemas`` entry is kept, and so are the
+    user's own globs in the router mapping; an emptied ``yaml.schemas`` is
+    removed. The file is never created, and is left untouched when it has no
+    such entry. Returns the path when it was rewritten.
     """
     settings_path = target / ".vscode" / "settings.json"
     if not settings_path.is_file():
@@ -239,10 +282,11 @@ def write_vscode_settings(target: Path) -> str | None:
     yaml_schemas = existing.get("yaml.schemas")
     if not isinstance(yaml_schemas, dict):
         return None
+    cfg = _paths_config()
     kept = {
-        schema: globs
+        schema: rest
         for schema, globs in yaml_schemas.items()
-        if not is_opentide_schema_mapping(str(schema), globs)
+        if (rest := _without_opentide_mapping(str(schema), globs, cfg)) is not None
     }
     if kept == yaml_schemas:
         return None

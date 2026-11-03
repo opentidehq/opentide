@@ -10,6 +10,7 @@ import pytest
 
 from opentide.cli.services.setup.vscode import (
     build_yaml_schema_mappings,
+    is_opentide_schema_mapping,
     run_vscode_all,
     run_vscode_settings,
     run_vscode_setup,
@@ -586,7 +587,7 @@ def test_the_deprecation_is_a_warning_line_not_an_event_slug(capsys, monkeypatch
     [
         "objects/**/*.yaml",
         ["objects/**/*.yaml"],
-        ["hunts/**/*.yaml", "./objects/**/*.yaml"],
+        ["./objects/**/*.yaml", "objects/rules/*.yaml"],
         "objects/rules/*.yaml",
     ],
 )
@@ -607,3 +608,23 @@ def test_write_vscode_settings_removes_the_router_mapping_as_a_string_or_in_a_li
         "editor.tabSize": 2,
         "yaml.schemas": {"own.json": "x.yaml"},
     }
+
+
+@pytest.mark.parametrize(
+    ("value", "kept"),
+    [
+        (["hunts/**/*.yaml", "./objects/**/*.yaml"], ["hunts/**/*.yaml"]),
+        (["objects/**/*.yaml", "playbooks/**/*.yaml"], ["playbooks/**/*.yaml"]),
+        ("playbooks/**/*.yaml", "playbooks/**/*.yaml"),
+    ],
+)
+def test_write_vscode_settings_keeps_the_users_own_globs_on_the_router(
+    tmp_path: Path, value: object, kept: object
+) -> None:
+    """Only the globs opentide wrote go; a folder the user mapped to the router stays."""
+    settings = tmp_path / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"yaml.schemas": {ROUTER: value}}), encoding="utf-8")
+    write_vscode_settings(tmp_path)
+    assert json.loads(settings.read_text(encoding="utf-8")) == {"yaml.schemas": {ROUTER: kept}}
+    assert not is_opentide_schema_mapping(ROUTER, kept)
