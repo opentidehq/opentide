@@ -1571,3 +1571,36 @@ fn navigation_uses_utf16_columns_after_multi_byte_characters() {
     );
     assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
 }
+
+/// #185 P0.9: resolving a completion item keeps its `textEdit` and
+/// `filterText` (the dotted field's replace range), and only adds docs.
+#[test]
+fn resolving_a_completion_item_keeps_its_edit() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///q.esql";
+    let text = "FROM logs-endpoint.events.process-* | WHERE process.pa";
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "esql", "version": 1, "text": text } }),
+    );
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": 0, "character": text.len() } }),
+    );
+    let item = items["result"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item.get("textEdit").is_some()))
+        .cloned()
+        .unwrap_or_else(|| panic!("a dotted item with a textEdit: {items}"));
+    let resolved = lsp.request("completionItem/resolve", item.clone());
+    let resolved = &resolved["result"];
+    for key in ["label", "textEdit", "filterText", "kind", "insertText"] {
+        assert_eq!(resolved[key], item[key], "{key}: {resolved}");
+    }
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+}

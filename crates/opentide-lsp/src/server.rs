@@ -1057,13 +1057,24 @@ fn handle_resolve(params: &Value) -> Value {
         item = item.with_docs(d);
     }
     let item = opentide_tide::resolve_completion(item);
-    json!({
-        "label": item.label,
-        "detail": item.detail,
-        "documentation": item.documentation.as_ref().map(|d| json!({ "kind": "markdown", "value": d })),
-        "kind": params.get("kind").cloned().unwrap_or(json!(1)),
-        "insertText": item.label,
-    })
+    // The client's item, unchanged except for what resolve adds: its
+    // `textEdit` and `filterText` (a dotted field's replace range) must
+    // survive, or the insertion breaks.
+    let mut resolved = params.clone();
+    if !resolved.is_object() {
+        resolved = json!({ "label": item.label });
+    }
+    if resolved.get("documentation").is_none_or(Value::is_null) {
+        if let Some(docs) = &item.documentation {
+            resolved["documentation"] = json!({ "kind": "markdown", "value": docs });
+        }
+    }
+    if resolved.get("detail").is_none_or(Value::is_null) {
+        if let Some(detail) = &item.detail {
+            resolved["detail"] = json!(detail);
+        }
+    }
+    resolved
 }
 
 fn handle_definition(session: &Session, params: &Value) -> Value {
