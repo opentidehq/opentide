@@ -552,3 +552,22 @@ def test_setup_skills_rerun_skips_its_own_entrypoints_quietly(tmp_path: Path) ->
 
     assert again["skipped"] == ["CLAUDE.md"]
     assert "warnings" not in again
+
+
+@pytest.mark.parametrize("plan", [False, True])
+def test_skills_linked_to_agents_skills_stay_in_place(tmp_path: Path, plan: bool) -> None:
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+
+    (tmp_path / ".agents" / "skills").mkdir(parents=True)
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "skills").symlink_to(Path("..") / ".agents" / "skills")
+    flag = "--plan" if plan else "--yes"
+    result = CliRunner().invoke(
+        app, ["--json", "setup", "skills", "--claude-code", flag, "--path", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    skill = tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md"
+    assert skill.is_file() is not plan
+    assert (tmp_path / ".claude" / "skills").is_symlink()

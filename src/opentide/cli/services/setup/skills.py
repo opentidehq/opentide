@@ -254,6 +254,11 @@ def _copy_skill(src: Path, dest: Path, where: str, warnings: list[str]) -> None:
     The folder used to be deleted first, and with it whatever the user had
     put there (team notes, local edits to a file the skill does not ship).
     """
+    if dest.exists() and dest.resolve() == src.resolve():
+        # ``.claude/skills`` links to ``.agents/skills`` (or this skill's folder
+        # does): the skill is already there, and copying it onto itself would
+        # delete it.
+        return
     shipped = [path.relative_to(src).as_posix() for path in src.rglob("*") if path.is_file()]
     kept = _extra_files(dest, shipped)
     shutil.copytree(src, dest, dirs_exist_ok=True)
