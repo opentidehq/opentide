@@ -66,7 +66,10 @@ class TimeoutStreak:
 
     :meth:`timed_out` raises :class:`~opentide.platforms.transport.TenantUnreachableError`
     at the :data:`~opentide.query.check.UNREACHABLE_AFTER_TIMEOUTS`-th: a tenant
-    that answers no query is not waited on for every rule.
+    that answers no query is not waited on for every rule. :meth:`finish` raises
+    it too when the tenant timed out and never answered at all: a stalled TLS
+    handshake reaches requests as a read timeout, and a tenant checked with one
+    or two queries would otherwise read as slow queries, not as unreachable.
     """
 
     platform: str
@@ -74,13 +77,42 @@ class TimeoutStreak:
     host: str
     timeout: float
     count: int = 0
+    #: Whether the tenant is known to have taken a connection: it answered a
+    #: request, or a timeout proved the connection was up.
+    ever_answered: bool = False
+    last_error: BaseException | None = None
 
     def answered(self) -> None:
         self.count = 0
+        self.ever_answered = True
+
+    def finish(self) -> None:
+        """End of the tenant's batch: one that only ever timed out is unreachable."""
+        from opentide.platforms.transport import TenantUnreachableError
+
+        if self.ever_answered or self.last_error is None:
+            return
+        raise TenantUnreachableError(
+            self.platform,
+            self.tenant,
+            self.host,
+            self.last_error,
+            reason=(
+                f"it answered no request: {self.count} timed out after {self.timeout:g}s "
+                f"(the last: {self.last_error}). A connection that opens but never completes "
+                "its TLS handshake, behind a proxy or a load balancer, looks like this"
+            ),
+            timeouts=self.count,
+        )
 
     def timed_out(self, error: BaseException) -> None:
         from opentide.platforms.transport import TenantUnreachableError
 
+        self.last_error = error
+        if not _may_be_a_stalled_handshake(error):
+            # A gateway page is an answer, and urllib (Splunk) reports a handshake
+            # that never completes as URLError, so its read timeout had a connection.
+            self.ever_answered = True
         self.count += 1
         if self.count >= UNREACHABLE_AFTER_TIMEOUTS:
             raise TenantUnreachableError(
@@ -95,6 +127,19 @@ class TimeoutStreak:
                 ),
                 timeouts=self.count,
             )
+
+
+def _may_be_a_stalled_handshake(error: BaseException) -> bool:
+    """Whether *error* may be a TLS handshake that never completed.
+
+    urllib3 2.x raises ``ReadTimeoutError`` for a socket timeout during the
+    handshake, so through requests a read timeout does not prove the
+    connection was established.
+    """
+    import requests
+    import urllib3.exceptions
+
+    return isinstance(error, (requests.ReadTimeout, urllib3.exceptions.ReadTimeoutError))
 
 
 class LiveQueryValidator(QueryValidator):
@@ -147,6 +192,7 @@ class LiveQueryValidator(QueryValidator):
             with reaching_tenant(self.platform, tenant.name, host):
                 for rule in batch.rules:
                     report.checks.extend(self.check_rule(rule, tenant, window, streak=streak))
+            streak.finish()
         return report
 
     def host(self, tenant: SystemConfig.Tenant) -> str:

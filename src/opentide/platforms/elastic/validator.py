@@ -277,6 +277,7 @@ class ElasticValidator(LiveQueryValidator):
                                     warnings=tuple(warnings),
                                 )
                             )
+            streak.finish()
         return report
 
     def _validate_rule(

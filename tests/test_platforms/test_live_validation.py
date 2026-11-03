@@ -680,3 +680,49 @@ def test_elastic_fails_a_rule_whose_check_times_out_and_checks_the_rest() -> Non
         with pytest.raises(TenantUnreachableError, match="3 queries in a row"):
             ElasticValidator().validate(rules, timeout=45)
         assert len(seen) == 3
+
+
+@pytest.mark.parametrize("rules", [1, 2])
+def test_a_tenant_that_answered_nothing_is_unreachable_after_its_batch(rules: int) -> None:
+    """A stalled TLS handshake reaches requests as a read timeout (urllib3 2.x).
+
+    With fewer queries than the streak, every check used to fail as a slow
+    query, with advice to raise --check-timeout that could not help.
+    """
+    import requests
+
+    from opentide.platforms.transport import TenantUnreachableError
+
+    runner = FailingRunner(errors={"Table": requests.ReadTimeout("Read timed out.")})
+
+    with pytest.raises(TenantUnreachableError) as caught:
+        _validate(SentinelStandIn(runner), _numbered(rules))
+
+    assert len(runner.requests) == rules
+    assert caught.value.timeouts == rules
+    assert "it answered no request" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param("requests", id="ambiguous-read-timeout-then-an-answer"),
+        pytest.param(TimeoutError("The read operation timed out"), id="urllib-read-timeout"),
+    ],
+)
+def test_a_slow_query_on_a_tenant_that_took_the_connection_fails_only_its_check(
+    error: object,
+) -> None:
+    import requests
+
+    if error == "requests":
+        runner = FailingRunner(errors={"Table1": requests.ReadTimeout("Read timed out.")})
+        expected = ["query_check_timeout", None]
+        rules = 2
+    else:
+        runner = FailingRunner(errors={"Table1": error})
+        expected = ["query_check_timeout"]
+        rules = 1
+    report = _validate(SentinelStandIn(runner), _numbered(rules))
+
+    assert [check.code for check in report.checks] == expected

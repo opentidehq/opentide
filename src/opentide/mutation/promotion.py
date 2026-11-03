@@ -127,14 +127,35 @@ class PromoteMDR:
         a nested ``status`` key), replaced the status as a substring, and wrote
         LF over CRLF files.
         """
+        promoted = self.planned_statuses(mdr_path, status_to_promote)
+        if promoted is not None:
+            _write_atomically(mdr_path, promoted)
+            logger.info("rule_promoted", path=str(mdr_path), target=PROMOTION_TARGET)
+
+    def planned_statuses(self, mdr_path: Path, status_to_promote: list) -> bytes | None:
+        """The promoted bytes of *mdr_path*, or ``None`` when nothing changes.
+
+        A status this cannot rewrite safely (an anchor, an alias, a merge key)
+        leaves the file as it is, with a warning naming it.
+        """
         raw = mdr_path.read_bytes()
         bom = raw.startswith(codecs.BOM_UTF8)
         text = raw.decode("utf-8-sig")
-        promoted = promote_block_statuses(text, status_to_promote, PROMOTION_TARGET)
+        try:
+            promoted = promote_block_statuses(text, status_to_promote, PROMOTION_TARGET)
+        except PromotionRefused as exc:
+            logger.warning(
+                "rule_not_promoted",
+                path=str(mdr_path),
+                detail=str(exc),
+                advice="Write each platform block's status as a plain value, then deploy again",
+            )
+            return None
+        except (ValueError, yaml.YAMLError) as exc:
+            raise ValueError(f"{mdr_path}: cannot promote its statuses: {exc}") from exc
         if promoted == text:
-            return
-        _write_atomically(mdr_path, (codecs.BOM_UTF8 if bom else b"") + promoted.encode("utf-8"))
-        logger.info("rule_promoted", target=PROMOTION_TARGET)
+            return None
+        return (codecs.BOM_UTF8 if bom else b"") + promoted.encode("utf-8")
 
     def promote(self, deployment: list[Path]):
         report_stage("status promotion")
@@ -162,6 +183,7 @@ class PromoteMDR:
                     logger.info("found_nothing_to_deploy_in_pre_deployment_environment_variable")
                     return
 
+            planned: list[tuple[Path, bytes]] = []
             for mdr in deployment:
                 system_promotion = {}
                 with open(mdr, encoding="utf-8") as mdr_file:
@@ -192,13 +214,25 @@ class PromoteMDR:
                         ),
                     )
                     statuses_to_replace = [system_promotion[s] for s in system_promotion]
-                    self.edit_mdr_statuses(mdr, statuses_to_replace)
+                    promoted = self.planned_statuses(mdr, statuses_to_replace)
+                    if promoted is not None:
+                        planned.append((mdr, promoted))
+            # Every file is planned before any is written: a file that cannot be
+            # promoted fails the run with nothing half-promoted for the
+            # write-back to commit.
+            for mdr, promoted in planned:
+                _write_atomically(mdr, promoted)
+                logger.info("rule_promoted", path=str(mdr), target=PROMOTION_TARGET)
 
         else:
             logger.info(
                 "rule_promotion_disabled_in_config",
                 detail="Enable status promotion under [promotion] in deployment.toml",
             )
+
+
+class PromotionRefused(ValueError):
+    """A status promotion cannot rewrite without changing what else the file says."""
 
 
 def promote_block_statuses(text: str, statuses: Collection[str], target: str) -> str:
@@ -211,21 +245,36 @@ def promote_block_statuses(text: str, statuses: Collection[str], target: str) ->
     """
     root = yaml.compose(text)
     spans: list[tuple[int, int, str]] = []
+    seen: set[int] = set()
+    merge = "tag:yaml.org,2002:merge"
     if isinstance(root, yaml.MappingNode):
         for key, configurations in root.value:
             if key.value != "configurations" or not isinstance(configurations, yaml.MappingNode):
                 continue
             for platform, block in configurations.value:
+                if key.tag == merge or platform.tag == merge:
+                    raise PromotionRefused("configurations uses a merge key (<<)")
                 if not isinstance(block, yaml.MappingNode):
                     continue
+                if any(field.tag == merge for field, _ in block.value):
+                    raise PromotionRefused(f"configurations.{platform.value} uses a merge key (<<)")
                 for field, value in block.value:
-                    if (
+                    if not (
                         field.value == "status"
                         and isinstance(value, yaml.ScalarNode)
                         and value.tag == "tag:yaml.org,2002:str"
                         and value.value in statuses
                     ):
-                        spans.append((value.start_mark.index, value.end_mark.index, platform.value))
+                        continue
+                    # An alias is the anchored node itself, and an anchored
+                    # scalar's span starts at its `&name`: rewriting either
+                    # changes another value or breaks the alias.
+                    if id(value) in seen or text[value.start_mark.index] in "&*":
+                        raise PromotionRefused(
+                            f"configurations.{platform.value}.status is an anchor or an alias"
+                        )
+                    seen.add(id(value))
+                    spans.append((value.start_mark.index, value.end_mark.index, platform.value))
     if not spans:
         return text
     replacement = target if yaml.safe_load(target) == target else json.dumps(target)
@@ -236,7 +285,7 @@ def promote_block_statuses(text: str, statuses: Collection[str], target: str) ->
     for _, _, platform in spans:
         expected["configurations"][platform]["status"] = target
     if yaml.safe_load(promoted) != expected:
-        raise ValueError("promotion would change more than the platform statuses")
+        raise PromotionRefused("promotion would change more than the platform statuses")
     return promoted
 
 

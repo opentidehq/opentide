@@ -386,9 +386,7 @@ def test_promotion_skips_a_rule_without_platform_blocks(
     monkeypatch.setattr(promotion, "PROMOTION_TARGET", promotion.VALID_STATUSES[-1])
     edited: list[Path] = []
     monkeypatch.setattr(
-        promotion.PromoteMDR,
-        "edit_mdr_statuses",
-        lambda self, mdr_path, status_to_promote: edited.append(mdr_path),
+        promotion, "_write_atomically", lambda mdr_path, data: edited.append(mdr_path)
     )
     rules = _write_rules_without_platform_blocks(workspace / "objects" / "rules")
     promotion.PromoteMDR().promote(rules)
@@ -405,9 +403,7 @@ def test_debug_promotion_without_rules_folder_promotes_nothing(
     monkeypatch.setattr(promotion, "PROMOTION_ENABLED", True)
     edited: list[Path] = []
     monkeypatch.setattr(
-        promotion.PromoteMDR,
-        "edit_mdr_statuses",
-        lambda self, mdr_path, status_to_promote: edited.append(mdr_path),
+        promotion, "_write_atomically", lambda mdr_path, data: edited.append(mdr_path)
     )
     promotion.PromoteMDR().promote([])
     assert edited == []
