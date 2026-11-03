@@ -93,6 +93,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`falco_unknown_field`](#falco_unknown_field) | The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it. |
 | [`falco_unknown_list`](#falco_unknown_list) | The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value. |
 | [`falco_unknown_macro`](#falco_unknown_macro) | The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros. |
+| [`falco_unknown_rule`](#falco_unknown_rule) | A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule. |
 | [`falco_unknown_source`](#falco_unknown_source) | The event source is not one Falco or its published plugins define, so its fields are not checked. |
 | [`falco_unsafe_na_check`](#falco_unsafe_na_check) | A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text. |
 | [`falco_value_type`](#falco_value_type) | The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule. |
@@ -202,6 +203,15 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`spl_unknown_datamodel`](#spl_unknown_datamodel) | The CIM data model or dataset is not one Splunk CIM defines. |
 | [`spl_unknown_datamodel_field`](#spl_unknown_datamodel_field) | The field is not in the CIM data model the search reads. |
 | [`spl_wildcard`](#spl_wildcard) | A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event. |
+| [`sysdig_definition_duplicate`](#sysdig_definition_duplicate) | A name is defined more than once across the block's macros and lists. |
+| [`sysdig_definition_name`](#sysdig_definition_name) | A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword. |
+| [`sysdig_definition_order`](#sysdig_definition_order) | A list item names a list that is not defined before it, or a macro uses a macro that is not defined before it: Falco's definition-before-use. |
+| [`sysdig_exception_shape`](#sysdig_exception_shape) | An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`). |
+| [`sysdig_list_in_value`](#sysdig_list_in_value) | A block list name appears in an exception value where Falco's expansion would not produce a value list. |
+| [`sysdig_priority`](#sysdig_priority) | `priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively. |
+| [`sysdig_rule_shape`](#sysdig_rule_shape) | A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both. |
+| [`sysdig_source`](#sysdig_source) | `source` is not an event source name (`[a-z][a-z0-9_]*`). |
+| [`sysdig_tuning_keys`](#sysdig_tuning_keys) | A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them. |
 | [`technique_not_enterprise`](#technique_not_enterprise) | The ATT&CK technique is not in the Enterprise matrix that Elastic maps. |
 | [`template_missing`](#template_missing) | `opentide new` found no generated template or schema for the object type it was asked for. |
 | [`templates_fresh`](#templates_fresh) | Every template this opentide version generates exists and matches what it would write. |
@@ -1559,6 +1569,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 ## falco_unknown_macro
 
 The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros.
+
+Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
+
+## falco_unknown_rule
+
+A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule.
 
 Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -3401,6 +3427,150 @@ opentide validate query
 ### How to fix
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+
+## sysdig_definition_duplicate
+
+A name is defined more than once across the block's macros and lists.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_definition_name
+
+A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_definition_order
+
+A list item names a list that is not defined before it, or a macro uses a macro that is not defined before it: Falco's definition-before-use.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_exception_shape
+
+An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_list_in_value
+
+A block list name appears in an exception value where Falco's expansion would not produce a value list.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_priority
+
+`priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_rule_shape
+
+A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_source
+
+`source` is not an event source name (`[a-z][a-z0-9_]*`).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## sysdig_tuning_keys
+
+A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
 
 ## technique_not_enterprise
 

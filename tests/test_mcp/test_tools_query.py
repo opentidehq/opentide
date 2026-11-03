@@ -111,11 +111,15 @@ def test_validate_query_never_fakes_an_unsupported_platform(platform: str) -> No
 
 
 def test_validate_query_checks_a_falco_condition_offline() -> None:
-    """Sysdig has no tenant check, but the engine parses Falco: offline is supported."""
-    result = tools.tool_validate_query("spawned_process and proc.nmae = bash", "sysdig")
-    assert result["mode"] == "offline"
-    assert result["valid"] is True
-    assert [w["code"] for w in result["warnings"]] == ["falco_unknown_field"]
+    """Sysdig has no tenant check, but the engine checks Falco as Falco loads it: offline is supported."""
+    deprecated = tools.tool_validate_query("evt.type = execve and evt.dir = <", "sysdig")
+    assert deprecated["mode"] == "offline"
+    assert deprecated["valid"] is True
+    assert [w["code"] for w in deprecated["warnings"]] == ["falco_deprecated_field"]
+    # Falco refuses a rule with an unknown field, so the engine reports an error.
+    unknown = tools.tool_validate_query("evt.type = execve and proc.nmae = bash", "sysdig")
+    assert unknown["valid"] is False
+    assert {e["code"] for e in unknown["errors"]} == {"falco_unknown_field"}
     broken = tools.tool_validate_query("spawned_process and (proc.name = bash", "sysdig")
     assert broken["valid"] is False
     assert {e["code"] for e in broken["errors"]} == {"falco_parse_error"}
