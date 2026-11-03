@@ -81,7 +81,9 @@ pub mod custom {
     /// schema, name, uri, range, refs: [{ uuid, field_path, range }] }] }] }`.
     pub enum Catalog {}
     impl lsp_types::request::Request for Catalog {
-        type Params = CatalogParams;
+        /// Every key is optional, so are the params: a request without
+        /// them, or with `null`, asks for every root.
+        type Params = Option<CatalogParams>;
         type Result = Value;
         const METHOD: &'static str = "opentide/catalog";
     }
@@ -1950,7 +1952,8 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
 /// `opentide/catalog` (#198): each root's indexed objects, with their
 /// references, from the index the other requests share. Open documents are
 /// read as edited, the rest from disk.
-fn handle_catalog(session: &mut Session, params: custom::CatalogParams) -> Value {
+fn handle_catalog(session: &mut Session, params: Option<custom::CatalogParams>) -> Value {
+    let params = params.unwrap_or_default();
     let wanted = params
         .root
         .as_deref()

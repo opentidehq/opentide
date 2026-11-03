@@ -404,3 +404,33 @@ fn an_organisation_or_a_template_uuid_is_not_a_ref() {
         .collect();
     assert_eq!(refs, ["detection_model"], "{found}");
 }
+
+#[test]
+fn a_catalog_request_without_params_or_with_null_asks_for_every_root() {
+    let scratch = workspace("catalog-no-params");
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    for request in [
+        json!({ "jsonrpc": "2.0", "id": 900, "method": "opentide/catalog" }),
+        json!({ "jsonrpc": "2.0", "id": 901, "method": "opentide/catalog", "params": null }),
+    ] {
+        lsp.write(&request);
+        let response = lsp.read();
+        assert_eq!(response["id"], request["id"], "{response}");
+        assert_eq!(
+            roots_of(&response["result"]),
+            [json!(file_uri(root))],
+            "{response}"
+        );
+    }
+    // And the client is told when the catalog changes.
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(MODEL) } }),
+    );
+    let seen = settle(&mut lsp);
+    let changes = catalog_changes(&seen);
+    assert_eq!(changes.len(), 1, "{seen:?}");
+    assert_eq!(changes[0]["params"]["root"], file_uri(root).as_str());
+}
