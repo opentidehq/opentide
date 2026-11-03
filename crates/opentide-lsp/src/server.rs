@@ -1151,12 +1151,9 @@ fn handle_workspace_symbol(session: &Session, params: &Value) -> Value {
         opentide_tide::workspace_symbols(&workspace, query)
             .into_iter()
             .map(|o| {
-                let text = session
-                    .docs
-                    .iter()
-                    .find(|(uri, _)| uri_to_path(uri) == o.path || uri.as_str() == o.path)
-                    .map(|(_, (_, text))| text.as_str())
-                    .unwrap_or("");
+                // The open buffer, else the file the index read.
+                let text = host.document(&o.path).unwrap_or_default();
+                let text = text.as_str();
                 json!({
                     "name": o.name,
                     "kind": 5,
@@ -1429,7 +1426,7 @@ fn handle_selection_range(session: &Session, params: &Value) -> Value {
                         "start": { "line": line, "character": 0 },
                         "end": {
                             "line": line,
-                            "character": lines.get(line).map(|l| l.len()).unwrap_or(0)
+                            "character": lines.get(line).map(|l| utf16_len(l)).unwrap_or(0)
                         }
                     },
                     "parent": {
@@ -1437,7 +1434,7 @@ fn handle_selection_range(session: &Session, params: &Value) -> Value {
                             "start": { "line": parent_start, "character": 0 },
                             "end": {
                                 "line": parent_end,
-                                "character": lines.get(parent_end as usize).map(|l| l.len()).unwrap_or(0)
+                                "character": lines.get(parent_end as usize).map(|l| utf16_len(l)).unwrap_or(0)
                             }
                         }
                     }
@@ -1490,15 +1487,15 @@ fn doc_pos(session: &Session, params: &Value) -> Option<(String, LanguageId, Str
 }
 
 fn name_token_range(text: &str, name: &str) -> Value {
-    for (line, src) in text.lines().enumerate() {
-        if let Some(idx) = src.find(name) {
-            return json!({
-                "start": { "line": line, "character": idx },
-                "end": { "line": line, "character": idx + name.len() }
-            });
+    match text.find(name) {
+        Some(start) if !name.is_empty() => range_json(span_to_range(
+            text,
+            opentide_core::ByteSpan::new(start, start + name.len()),
+        )),
+        _ => {
+            json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 1 } })
         }
     }
-    json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 1 } })
 }
 
 fn folding_ranges(text: &str) -> Vec<(u32, u32)> {
@@ -1563,22 +1560,15 @@ fn content_indent(line: &str) -> Option<usize> {
 }
 
 fn uuid_ranges(text: &str, uuid: &str) -> Vec<Value> {
-    let mut hits = Vec::new();
-    for (line, src) in text.lines().enumerate() {
-        let mut from = 0;
-        while let Some(idx) = src[from..].find(uuid) {
-            let start = from + idx;
-            hits.push(json!({
-                "range": {
-                    "start": { "line": line, "character": start },
-                    "end": { "line": line, "character": start + uuid.len() }
-                },
+    let lines = opentide_core::LineIndex::new(text);
+    text.match_indices(uuid)
+        .map(|(start, _)| {
+            json!({
+                "range": range_json(lines.range(opentide_core::ByteSpan::new(start, start + uuid.len()))),
                 "kind": 1
-            }));
-            from = start + uuid.len();
-        }
-    }
-    hits
+            })
+        })
+        .collect()
 }
 
 fn range_overlaps_param(range: Range, requested: Option<&Value>) -> bool {
@@ -1742,17 +1732,27 @@ fn path_to_uri(path: &str) -> String {
 }
 
 fn uuid_at(text: &str, pos: Position) -> Option<String> {
-    let line = text.lines().nth(pos.line as usize)?;
-    let re = regex::Regex::new(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-    )
-    .ok()?;
-    re.find_iter(line)
-        .find(|m| {
-            let c = pos.character as usize;
-            m.start() <= c && c <= m.end()
-        })
+    // The cursor's byte offset: `pos.character` counts UTF-16 units.
+    let offset = position_to_offset(text, pos);
+    uuid_pattern()
+        .find_iter(text)
+        .find(|m| m.start() <= offset && offset <= m.end())
         .map(|m| m.as_str().to_string())
+}
+
+/// A line's length in LSP columns (UTF-16 units).
+fn utf16_len(line: &str) -> usize {
+    line.encode_utf16().count()
+}
+
+fn uuid_pattern() -> &'static regex::Regex {
+    static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    PATTERN.get_or_init(|| {
+        regex::Regex::new(
+            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        )
+        .expect("UUID pattern")
+    })
 }
 
 fn position_to_offset(source: &str, position: Position) -> usize {

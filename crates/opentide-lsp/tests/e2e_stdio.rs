@@ -1470,7 +1470,10 @@ fn malformed_frames_are_answered_and_the_session_continues() {
     lsp.request("initialize", json!({ "capabilities": {} }));
     for (body, code) in [
         ("{not json", -32700),
-        ("[{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}]", -32600),
+        (
+            "[{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}]",
+            -32600,
+        ),
     ] {
         raw(&mut lsp, body);
         let reply = lsp.read();
@@ -1478,11 +1481,17 @@ fn malformed_frames_are_answered_and_the_session_continues() {
         assert_eq!(reply["id"], Value::Null, "{reply}");
     }
     // No `jsonrpc` member and a lower-case header: still answered.
-    raw(&mut lsp, r#"{"id": 7, "method": "textDocument/hover", "params": {"textDocument": {"uri": "file:///none.kql"}, "position": {"line": 0, "character": 0}}}"#);
+    raw(
+        &mut lsp,
+        r#"{"id": 7, "method": "textDocument/hover", "params": {"textDocument": {"uri": "file:///none.kql"}, "position": {"line": 0, "character": 0}}}"#,
+    );
     let reply = lsp.read();
     assert_eq!(reply["id"], 7, "{reply}");
     // `"id": null` is echoed.
-    raw(&mut lsp, r#"{"jsonrpc": "2.0", "id": null, "method": "opentide/not-a-method"}"#);
+    raw(
+        &mut lsp,
+        r#"{"jsonrpc": "2.0", "id": null, "method": "opentide/not-a-method"}"#,
+    );
     let reply = lsp.read();
     assert!(reply.get("id").is_some_and(Value::is_null), "{reply}");
     assert_eq!(reply["error"]["code"], -32601, "{reply}");
@@ -1501,5 +1510,64 @@ fn a_panicking_handler_fails_its_request_and_the_session_continues() {
         json!({ "textDocument": { "uri": "file:///none.kql" }, "position": { "line": 0, "character": 0 } }),
     );
     assert!(hover.get("result").is_some(), "{hover}");
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+}
+
+/// #185 P0.4: navigation reads and writes LSP columns (UTF-16 units) on
+/// lines with multi-byte characters, where bytes and columns differ.
+#[test]
+fn navigation_uses_utf16_columns_after_multi_byte_characters() {
+    let objective =
+        std::fs::read_to_string(repo_root().join("testdata/objects/objective-1.0.yaml")).unwrap();
+    let uuid = "00000000-0000-4000-8002-000000000001";
+    assert!(objective.contains(uuid));
+    let prefix = "# 😀日本é ";
+    let line_text = format!("{prefix}{uuid}");
+    let text = format!("name: Emoji 😀 notes\n{line_text}\n");
+    let col = prefix.encode_utf16().count() as u64; // 8, where the byte index is 15
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let open = |lsp: &mut Lsp, uri: &str, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": uri, "languageId": "opentide-yaml", "version": 1, "text": text } }),
+        );
+    };
+    open(&mut lsp, "file:///w/objects/objectives/o.yaml", &objective);
+    open(&mut lsp, "file:///w/objects/notes.yaml", &text);
+    let at = |character: u64| json!({ "textDocument": { "uri": "file:///w/objects/notes.yaml" }, "position": { "line": 1, "character": character } });
+
+    let definition = lsp.request("textDocument/definition", at(col + 3));
+    assert!(
+        definition["result"].is_object()
+            || definition["result"]
+                .as_array()
+                .is_some_and(|a| !a.is_empty()),
+        "{definition}"
+    );
+
+    let highlights = lsp.request("textDocument/documentHighlight", at(col + 3));
+    let first = &highlights["result"][0]["range"];
+    assert_eq!(first["start"]["character"], col, "{highlights}");
+    assert_eq!(
+        first["end"]["character"],
+        col + uuid.len() as u64,
+        "{highlights}"
+    );
+
+    let selection = lsp.request(
+        "textDocument/selectionRange",
+        json!({ "textDocument": { "uri": "file:///w/objects/notes.yaml" }, "positions": [{ "line": 1, "character": 0 }] }),
+    );
+    assert_eq!(
+        selection["result"][0]["range"]["end"]["character"],
+        line_text.encode_utf16().count() as u64,
+        "{selection}"
+    );
     assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
 }

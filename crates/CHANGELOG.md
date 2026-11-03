@@ -36,6 +36,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - **Bad frames:** a body that is not JSON or not a message (a batch, for example) gets `-32700` or `-32600` with `id: null`, and the session goes on. It used to end the server. `content-length` is accepted in any case, a message without `jsonrpc` is answered, and `"id": null` is echoed.
   - **Failing handlers:** a handler that panics fails its own request with `InternalError`, and the session continues. It used to exit with 101.
   - **API:** `serve_with_status` and `run_stdio_status` return whether the session ended cleanly. `serve` and `run_stdio` are unchanged.
+- Go to definition, references and document highlight work after a multi-byte character on the line ([#185](https://github.com/opentidehq/language-server/issues/185) P0.4). They compared the editor's column, in UTF-16 units, with a byte offset, so a UUID after an emoji was not found. Highlight and workspace-symbol ranges, and selection-range line ends, are now in UTF-16 too. A closed file's workspace symbol points at its `name`, not at `0:0`.
 
 ### Changed
 
