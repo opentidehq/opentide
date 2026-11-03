@@ -349,3 +349,29 @@ fn a_root_sent_with_a_trailing_slash_is_found_by_the_uri_the_catalog_reports() {
         assert!(object(&catalog, MODEL).is_some(), "{uri}: {catalog}");
     }
 }
+
+#[test]
+fn a_web_workspace_root_is_reported_as_its_own_uri() {
+    let folder_uri = "vscode-vfs://github/org/repo";
+    let rule_uri = format!("{folder_uri}/objects/rules/rule-1.0.yaml");
+    let mut lsp = start(json!({
+        "capabilities": { "workspace": { "workspaceFolders": true } },
+        "workspaceFolders": [{ "uri": folder_uri, "name": "repo" }],
+    }));
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert_eq!(roots_of(&catalog), [json!(folder_uri)], "{catalog}");
+
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(DANGLING) } }),
+    );
+    let seen = settle(&mut lsp);
+    let changes = catalog_changes(&seen);
+    assert_eq!(changes.len(), 1, "{seen:?}");
+    assert_eq!(changes[0]["params"]["root"], folder_uri);
+
+    let catalog = lsp.request("opentide/catalog", json!({ "root": folder_uri }))["result"].clone();
+    assert_eq!(roots_of(&catalog), [json!(folder_uri)], "{catalog}");
+    let found = object(&catalog, "00000000-0000-4000-8003-000000000001").expect("the rule");
+    assert_eq!(found["uri"], rule_uri.as_str());
+}

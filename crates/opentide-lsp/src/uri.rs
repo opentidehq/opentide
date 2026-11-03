@@ -4,7 +4,7 @@
 //! platform's paths need them: on Windows `file:///c%3A/x` is `c:\x` and
 //! `file://server/share/x` is `\\server\share\x`, so a URI the editor sends
 //! names the same file as the path a directory walk finds. A URI that is not
-//! a `file:` URI (`untitled:Untitled-1`) is kept as it is.
+//! a `file:` URI (`untitled:Untitled-1`) is kept as it is, both ways.
 
 /// The filesystem path of a `file:` URI, or the URI itself for any other
 /// scheme (an unsaved buffer).
@@ -36,9 +36,16 @@ pub fn uri_to_path(uri: &str) -> String {
     }
 }
 
-/// A filesystem path as a `file:` URI, the inverse of [`uri_to_path`].
+/// A filesystem path as a `file:` URI, the inverse of [`uri_to_path`]. A
+/// URI of another scheme, which [`uri_to_path`] keeps as it is
+/// (`vscode-vfs://github/org/repo` on vscode.dev, `untitled:Untitled-1`, an
+/// `opentide-object:<uuid>` a host supplied), is that URI. A drive letter
+/// (`c:/x`) is not a scheme.
 pub fn path_to_uri(path: &str) -> String {
     if path.starts_with("file://") {
+        return path.to_string();
+    }
+    if url::Url::parse(path).is_ok_and(|url| url.scheme().len() > 1) {
         return path.to_string();
     }
     if let Some(uri) = file_uri_of(path) {
@@ -130,6 +137,18 @@ mod tests {
             assert_eq!(uri_to_path(&path_to_uri(path)), path, "{path}");
         }
         assert_eq!(path_to_uri("/a b"), "file:///a%20b");
+    }
+
+    #[test]
+    fn a_uri_of_another_scheme_stays_that_uri() {
+        for uri in [
+            "vscode-vfs://github/org/repo",
+            "vscode-vfs://github/org/repo/objects/rules/r.yaml",
+            "untitled:Untitled-1",
+            "opentide-object:00000000-0000-4000-8002-000000000001",
+        ] {
+            assert_eq!(path_to_uri(&uri_to_path(uri)), uri);
+        }
     }
 
     #[cfg(not(windows))]

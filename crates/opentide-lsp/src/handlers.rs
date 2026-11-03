@@ -97,14 +97,13 @@ pub mod custom {
     #[derive(Debug, Default, Deserialize, Serialize)]
     #[serde(default)]
     pub struct CatalogParams {
-        /// A root's `file:` URI; every root without it.
+        /// A root's URI; every root without it.
         pub root: Option<String>,
     }
 
     #[derive(Debug, Deserialize, Serialize)]
     pub struct CatalogChangedParams {
-        /// The root's `file:` URI, or `null` for the documents outside every
-        /// root.
+        /// The root's URI, or `null` for the documents outside every root.
         pub root: Value,
     }
 
@@ -1948,15 +1947,6 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
     json!({ "diagnostics": response.diagnostics })
 }
 
-/// An object's URI: its file's `file:` URI, or the URI itself for an object
-/// a host supplied by its metadata alone (`opentide-object:<uuid>`).
-fn object_uri(path: &str) -> String {
-    match url::Url::parse(path) {
-        Ok(url) if url.scheme().len() > 1 && url.scheme() != "file" => path.to_string(),
-        _ => path_to_uri(path),
-    }
-}
-
 /// `opentide/catalog` (#198): each root's indexed objects, with their
 /// references, from the index the other requests share. Open documents are
 /// read as edited, the rest from disk.
@@ -1994,7 +1984,7 @@ fn handle_catalog(session: &mut Session, params: custom::CatalogParams) -> Value
                         "object_type": o.object_type,
                         "schema": o.schema,
                         "name": o.name,
-                        "uri": object_uri(&o.path),
+                        "uri": path_to_uri(&o.path),
                         "range": range(o.name_range),
                         "refs": o.refs.iter().map(|r| json!({
                             "uuid": r.uuid,

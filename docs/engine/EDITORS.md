@@ -108,7 +108,7 @@ Requests beyond LSP, for clients that know them. `opentide/analyze`, `opentide/h
 
 ### `opentide/catalog`
 
-The workspace index, for catalogue, graph and search views that follow unsaved edits, on the web too ([#198](https://github.com/opentidehq/language-server/issues/198)). Params `{ root? }`: a root's `file:` URI, or every root without it. A `root` the server does not have gives `{ roots: [] }`.
+The workspace index, for catalogue, graph and search views that follow unsaved edits, on the web too ([#198](https://github.com/opentidehq/language-server/issues/198)). Params `{ root? }`: a root's URI, as the catalog reports it, or every root without it. A root on disk is its `file:` URI; a workspace folder of another scheme (`vscode-vfs://github/org/repo` on vscode.dev and github.dev) is the folder's own URI, as are its objects'. A `root` the server does not have gives `{ roots: [] }`.
 
 ```jsonc
 {

@@ -1886,3 +1886,41 @@ fn diagnostics_are_either_pulled_or_pushed_never_both() {
         "{pushed}"
     );
 }
+
+/// vscode.dev and github.dev: a document of a `vscode-vfs:` folder is no
+/// `file:` URI, and a location in another object is that object's own URI,
+/// not `file:///vscode-vfs://…`.
+#[test]
+fn a_definition_in_a_web_workspace_is_the_other_documents_own_uri() {
+    let read = |path: &str| std::fs::read_to_string(repo_root().join(path)).unwrap();
+    let folder = "vscode-vfs://github/org/repo";
+    let rule_uri = format!("{folder}/objects/rules/rule-1.0.yaml");
+    let objective_uri = format!("{folder}/objects/objectives/objective-1.0.yaml");
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": {}, "workspaceFolders": [{ "uri": folder, "name": "repo" }] }),
+    );
+    lsp.notify("initialized", json!({}));
+    for (uri, path) in [
+        (&objective_uri, "testdata/objects/objective-1.0.yaml"),
+        (&rule_uri, "testdata/objects/rules/rule-1.0.yaml"),
+    ] {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": uri, "languageId": "opentide-yaml", "version": 1, "text": read(path) } }),
+        );
+    }
+    // `detection_model: <uuid>` is the rule's 17th line.
+    let definition = lsp.request(
+        "textDocument/definition",
+        json!({ "textDocument": { "uri": rule_uri }, "position": { "line": 16, "character": 20 } }),
+    );
+    let result = &definition["result"];
+    let location = if result.is_array() {
+        &result[0]
+    } else {
+        result
+    };
+    assert_eq!(location["uri"], objective_uri.as_str(), "{definition}");
+}
