@@ -145,11 +145,13 @@ Every vendor SDK a platform calls ships with `pip install opentide`, so live dep
 | Platform | Packages |
 |----------|----------|
 | Microsoft Sentinel | `azure-identity` `azure-monitor-query`. Rules are deployed through the ARM `alertRules` REST API directly. |
-| Splunk | `splunk-sdk` `pandas` |
+| Splunk | `splunk-sdk` |
 | Carbon Black Cloud | `carbon-black-cloud-sdk` |
 | Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab, Sysdig | HTTP clients bundled with opentide |
 
 `deploy --dry-run` compiles each Sentinel rule into the exact request a live deploy sends. A bare `opentide validate query` checks the queries offline with the analysis engine; `generate`, `validate`, offline query checks and dry-run deploy need no credentials. If a live check reports that an SDK will not import, the environment is damaged: reinstall with `pip install --force-reinstall opentide`.
+
+pandas and numpy are not dependencies: deploy planning flattens tenant modifiers itself. `boto3` stays, because the Carbon Black SDK imports it when it loads, though opentide never calls AWS.
 
 Releases up to 0.15.0 shipped the SDKs as extras (`opentide[sentinel]`, `opentide[splunk]`, `opentide[carbon-black]`). Those names are gone; an install command that still names one installs opentide with every SDK and a warning about the unknown extra.
 

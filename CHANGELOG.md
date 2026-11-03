@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **`pip install opentide` no longer installs pandas or numpy** ([#747](https://github.com/opentidehq/opentide/issues/747)). They were most of the size of every install, for one code path: deploy and `deploy --dry-run` flattened a platform's tenant modifiers with `pandas.json_normalize`. They now use opentide's own function, which gives the keys pandas gave, so every deployed configuration is unchanged; a `[[modifiers]]` entry with an empty `modifications` table, which failed with `IndexError`, now changes nothing. `boto3` stays: the Carbon Black SDK imports it when it loads.
+
 ## [0.21.0] — 2026-11-03
 
 Minor release. Sysdig Secure and Falco become the ninth platform, with Falco conditions checked offline. Migrating CoreTIDE content is not a supported path, and what suggested otherwise is removed: `global.toml`, `schema.toml` and `systems/` fail every command, and the splunk::2.x keys, a rule's `meta:` and an objective's root `composition` are unknown keys. Rule pages show each platform block's own status and severity, one slow query no longer marks a tenant unreachable, and the generated GitLab pipeline is built as data. A minor because it changes what input is accepted, removes `migrate objects` and `export playbook-map`, and changes the generated pipelines: run `opentide validate --strict`, which names each retired file and key, and re-run `opentide setup ci <provider> --yes`.

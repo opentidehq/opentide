@@ -37,7 +37,7 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    """Load pandas-dependent and registry-backed exports only when requested."""
+    """Load the planning and registry-backed exports only when requested."""
     if name == "TideDeployment":
         from opentide.deployment.planning import TideDeployment
 

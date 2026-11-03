@@ -40,7 +40,7 @@ opentide compiles its analysis engine (`analysis/`, Rust with PyO3) into the pac
 
 | Group | Purpose |
 |-------|---------|
-| `dev` | Tests, ruff, ty, pre-commit, pandas fixtures |
+| `dev` | Tests, ruff, ty, pre-commit |
 
 Docs build/deploy: [opentidehq/website](https://github.com/opentidehq/website). This repo validates with `scripts/validate-docs.sh`.
 
