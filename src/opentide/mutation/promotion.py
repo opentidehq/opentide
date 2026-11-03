@@ -1,12 +1,14 @@
+"""Status promotion: move the platform blocks a deploy reached to the promotion target."""
+
+import codecs
+import json
 import os
 import sys
+import tempfile
+from collections.abc import Collection
 from pathlib import Path
 
 import yaml
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import re
 
 from opentide.core.files import resolve_configurations
 from opentide.core.logging import get_logger
@@ -26,7 +28,6 @@ PROMOTION_TARGET = DEPLOYMENT_CONFIG["promotion"].get("promotion_target")
 DEBUG = is_debug()
 
 
-# TODO Rework Promotion to consume from opentide
 def get_valid_statuses() -> list[str]:
     """
     Retrieve a list of all valid status names from the deployment configuration.
@@ -116,32 +117,23 @@ class PromoteMDR:
     towards new targets
     """
 
-    def edit_mdr_statuses(self, mdr_path: Path, status_to_promote: list):
+    def edit_mdr_statuses(self, mdr_path: Path, status_to_promote: list) -> None:
+        """Rewrite each ``configurations.<platform>.status`` in *status_to_promote*.
 
-        # We modify the file as text instead of loading and dumping the yaml
-        # as formatting or comments are not always preserved, for small
-        # modifications such as this one it's preferable to do in this way.
-
-        with open(mdr_path, encoding="utf-8") as file:
-            buffer = []
-            crossed = False
-            for line in file:
-                # Ensure that only data after crossing the configurations point is modified
-                # in rare cases where the description contains some mentions of the status,
-                # and may introduce confusion if mistakenly modified.
-                if "configurations" in line:
-                    crossed = True
-
-                if crossed and re.search(r"status\s*:\s*", line):
-                    for word in status_to_promote:
-                        if word in line:
-                            line = line.replace(word, PROMOTION_TARGET)
-                buffer.append(line)
-
-        with open(mdr_path, "w", encoding="utf-8") as file:
-            for line in buffer:
-                file.write(line)
-
+        Only those scalars change, over the exact characters they occupy, so
+        comments, quoting, key order, a byte-order mark and line endings
+        survive. The text rewrite this replaces touched any ``status:`` line
+        after any line containing ``configurations`` (a description, a comment,
+        a nested ``status`` key), replaced the status as a substring, and wrote
+        LF over CRLF files.
+        """
+        raw = mdr_path.read_bytes()
+        bom = raw.startswith(codecs.BOM_UTF8)
+        text = raw.decode("utf-8-sig")
+        promoted = promote_block_statuses(text, status_to_promote, PROMOTION_TARGET)
+        if promoted == text:
+            return
+        _write_atomically(mdr_path, (codecs.BOM_UTF8 if bom else b"") + promoted.encode("utf-8"))
         logger.info("rule_promoted", target=PROMOTION_TARGET)
 
     def promote(self, deployment: list[Path]):
@@ -176,10 +168,12 @@ class PromoteMDR:
                     data = yaml.safe_load(mdr_file)
                 mdr_name = data["name"]
 
-                for system in (conf := data.get("configurations") or {}):
-                    system_status = conf[system]["status"]
-
-                    if system_status not in NON_PROMOTABLE_STATUSES:
+                conf = data.get("configurations") if isinstance(data, dict) else None
+                for system, block in (conf if isinstance(conf, dict) else {}).items():
+                    system_status = block.get("status") if isinstance(block, dict) else None
+                    if isinstance(system_status, str) and system_status not in (
+                        NON_PROMOTABLE_STATUSES
+                    ):
                         system_promotion[system] = system_status
 
                 if not system_promotion:
@@ -205,3 +199,53 @@ class PromoteMDR:
                 "rule_promotion_disabled_in_config",
                 detail="Enable status promotion under [promotion] in deployment.toml",
             )
+
+
+def promote_block_statuses(text: str, statuses: Collection[str], target: str) -> str:
+    """*text* with each platform block ``status`` that is one of *statuses* set to *target*.
+
+    Located through the composed node tree (``configurations`` at the root,
+    then each platform mapping's own ``status`` key), never by line; the
+    result is parsed again and must differ from the original by exactly those
+    values, or :class:`ValueError` is raised and nothing is written.
+    """
+    root = yaml.compose(text)
+    spans: list[tuple[int, int, str]] = []
+    if isinstance(root, yaml.MappingNode):
+        for key, configurations in root.value:
+            if key.value != "configurations" or not isinstance(configurations, yaml.MappingNode):
+                continue
+            for platform, block in configurations.value:
+                if not isinstance(block, yaml.MappingNode):
+                    continue
+                for field, value in block.value:
+                    if (
+                        field.value == "status"
+                        and isinstance(value, yaml.ScalarNode)
+                        and value.tag == "tag:yaml.org,2002:str"
+                        and value.value in statuses
+                    ):
+                        spans.append((value.start_mark.index, value.end_mark.index, platform.value))
+    if not spans:
+        return text
+    replacement = target if yaml.safe_load(target) == target else json.dumps(target)
+    promoted = text
+    for start, end, _ in sorted(spans, reverse=True):
+        promoted = promoted[:start] + replacement + promoted[end:]
+    expected = yaml.safe_load(text)
+    for _, _, platform in spans:
+        expected["configurations"][platform]["status"] = target
+    if yaml.safe_load(promoted) != expected:
+        raise ValueError("promotion would change more than the platform statuses")
+    return promoted
+
+
+def _write_atomically(path: Path, data: bytes) -> None:
+    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(data)
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise

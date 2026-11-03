@@ -239,7 +239,7 @@ def object_validate_commands(
     diff deploy reads), so an inherited catalogue can adopt the gate; the job
     then needs the full history.
     """
-    commands = [
+    commands: list[str] = [
         f"opentide {command} --strict"
         + (" --changed" if lint_changed and command == "lint" else "")
         for command in GATE_COMMANDS

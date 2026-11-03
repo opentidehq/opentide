@@ -28,8 +28,8 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | `name` | `str` | Display name |
 | `metadata` | `ObjectMetadata` | Identity (`uuid`), `schema_id`, `version`, `tlp` |
 | `description` | `str` | Rule narrative |
-| `status` | `str` | Deployment status (default `STAGING`) |
-| `severity` | `str` | Severity vocabulary (default `Informational`) |
+| `status` | `str \| None` | Read by no command; `None` when left out. A rule deploys, and promotion moves it, by each platform block's `status` (`platform_statuses`) |
+| `severity` | `str \| None` | Severity vocabulary, `None` when left out. Deploy sends `response.alert_severity`; `displayed_severity` is that, else this |
 | `techniques` | `list[str]` | ATT&CK technique IDs |
 | `configurations` | `RuleConfigurations` | Typed per-platform blocks (preferred) |
 | `platforms` | `dict` | Legacy flat platform dict |

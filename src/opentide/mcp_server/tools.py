@@ -616,7 +616,7 @@ def tool_deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict[str
         "action": "dry-run" if dry_run else "deploy",
         "tenant": None,
         "rule_id": uuid,
-        "status": rule.status,
+        "status": rule.platform_statuses.get(platform),
         "dry_run": result.dry_run,
         "platform": platform,
         "message": result.message,

@@ -52,10 +52,12 @@ class DetectionRule(TideModel):
         schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
     """Rule narrative (multiline YAML encouraged)."""
-    status: str = "STAGING"
-    """Deployment lifecycle status."""
-    severity: str = "Informational"
-    """`alert_severity::1.0`."""
+    status: str | None = None
+    """Read by no command: a rule deploys by each platform block's `status`
+    (`platform_statuses`), the value promotion moves. Left out, it stays unset."""
+    severity: str | None = None
+    """`alert_severity::1.0`. Deploy sends `response.alert_severity`
+    (`alert_severity`); this is shown only when the rule has no `response`."""
     techniques: list[str] = TideField(default_factory=list, role=FieldRole.TECHNIQUES)
     """MITRE ATT&CK technique ids (`att&ck::1.2`)."""
     platforms: dict[str, dict[str, Any]] = TideField(
@@ -89,6 +91,29 @@ class DetectionRule(TideModel):
         if self.configurations is None:
             raise ValueError(f"Rule {self.metadata.uuid} ({self.name}) has no configurations block")
         return self.configurations
+
+    @property
+    def platform_statuses(self) -> dict[str, str]:
+        """Each platform block's ``status``, keyed by platform: what deploy and promotion use."""
+        if self.configurations is None:
+            return {}
+        statuses: dict[str, str] = {}
+        for platform in type(self.configurations).model_fields:
+            block = getattr(self.configurations, platform)
+            if block is not None and block.status:
+                statuses[platform] = block.status
+        return statuses
+
+    @property
+    def displayed_severity(self) -> str | None:
+        """The severity a page shows: ``response.alert_severity``, else an authored ``severity``.
+
+        ``None`` when the rule states neither, so no page presents a model
+        default as the rule's severity.
+        """
+        if self.response is not None:
+            return self.response.alert_severity
+        return self.severity
 
     @property
     def alert_severity(self) -> str:
