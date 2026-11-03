@@ -119,6 +119,12 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
         if let Some(inner) = inj.host_map.iter().position(|&h| h == offset) {
             return Some((inj, inner));
         }
+        // The cursor right after the query's last character, where it sits
+        // while the author types: the end of the inner text.
+        if offset == inj.host_span.end && offset > inj.host_span.start {
+            let inner = inj.inner.len();
+            return Some((inj, inner));
+        }
         if offset >= inj.host_span.start && offset < inj.host_span.end {
             let inner = inj.host_map.iter().position(|&h| h >= offset).unwrap_or(
                 inj.inner
