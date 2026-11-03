@@ -423,13 +423,25 @@ class Server:
         self._shut_down = False
         #: Set by ``exit`` or the end of input: queued runs answer 130 unrun.
         self._closing = False
+        #: Set when a write to the client fails: nothing more is written.
+        self._output_closed = False
         self._digest: str | None = None
 
     # --- output ---------------------------------------------------------------------
 
     def send(self, message: Message) -> None:
+        """Write *message*; once a write fails, the client has gone and the session ends."""
         with self._write_lock:
-            self._write({"jsonrpc": "2.0", **message})
+            if self._output_closed:
+                return
+            try:
+                self._write({"jsonrpc": "2.0", **message})
+                return
+            except (OSError, ValueError):
+                # A closed pipe (BrokenPipeError), or a write to a closed file.
+                self._output_closed = True
+        logger.debug("serve_output_closed")
+        self._close()
 
     def _respond(self, request_id: Any, result: Any) -> None:
         self.send({"id": request_id, "result": result})
@@ -525,7 +537,8 @@ class Server:
             except Exception:  # pragma: no cover - the loop must outlive any one message
                 logger.exception("serve_message_failed", method=message.get("method"))
                 if "id" in message:
-                    self._error(message.get("id"), -32603, "Internal error")
+                    with contextlib.suppress(Exception):
+                        self._error(message.get("id"), -32603, "Internal error")
 
     def _handle(self, message: Message) -> None:
         method = message["method"]

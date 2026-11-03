@@ -494,6 +494,27 @@ def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(ending: str) -> N
     assert answers == {1: 130, 2: 130, 3: 130}
 
 
+def test_a_client_that_disconnects_ends_the_session_with_zero() -> None:
+    writes: list[dict[str, Any]] = []
+
+    def write(message: dict[str, Any]) -> None:
+        if writes:
+            raise BrokenPipeError(32, "Broken pipe")
+        writes.append(message)
+
+    runner = RecordingRunner()
+    server = Server(write, runner=runner)
+    for request_id in (1, 2, 3):
+        message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
+        message["params"] = {"argv": ["validate"]}
+        server.receive(json.dumps(message))
+    # No exit and no end of input: the failed write alone ends the session.
+    assert server.serve() == 0
+    assert [message["id"] for message in writes] == [1]
+    # The run whose answer could not be written was the last one to run.
+    assert runner.calls == [["validate"], ["validate"]]
+
+
 def test_a_cancel_for_a_finished_run_changes_nothing(client: Client) -> None:
     request_id = client.request("run", {"argv": ["explain", "vocab_unknown"]})
     assert client.answer(request_id)["result"]["exit_code"] == 0
