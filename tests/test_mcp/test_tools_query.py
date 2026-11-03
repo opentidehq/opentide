@@ -111,7 +111,7 @@ def test_validate_query_never_fakes_an_unsupported_platform(platform: str) -> No
 
 
 def test_validate_query_checks_a_falco_condition_offline() -> None:
-    """Sysdig has no tenant check, but the engine checks Falco as Falco loads it: offline is supported."""
+    """Sysdig has no tenant check, but the engine checks Falco offline, as Falco loads it."""
     deprecated = tools.tool_validate_query("evt.type = execve and evt.dir = <", "sysdig")
     assert deprecated["mode"] == "offline"
     assert deprecated["valid"] is True
