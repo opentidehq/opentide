@@ -1,7 +1,160 @@
 {
   "name": "opentide opentide-yaml",
-  "opentideHighlightSpec": "0.2.0",
+  "opentideHighlightSpec": "0.3.0",
   "patterns": [
+    {
+      "begin": "^(configurations)\\s*:\\s*(?:#.*)?$",
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.property.tide"
+        }
+      },
+      "comment": "configurations: the queries whose path fixes their language are embedded regions (#171); Elastic queries are left to semantic tokens",
+      "end": "^(?=\\S)",
+      "patterns": [
+        {
+          "begin": "^(\\s+)(sentinel|defender_for_endpoint)\\s*:\\s*(?:#.*)?$",
+          "beginCaptures": {
+            "2": {
+              "name": "variable.other.property.tide"
+            }
+          },
+          "comment": "configurations.{sentinel,defender_for_endpoint}: kql queries (#171)",
+          "end": "^(?!\\1\\s+\\S|\\s*$)",
+          "patterns": [
+            {
+              "begin": "^(\\s+)(query)\\s*:\\s*[|>][-+0-9]*\\s*(?:#.*)?$",
+              "beginCaptures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                }
+              },
+              "contentName": "meta.embedded.block.kql",
+              "end": "^(?!\\1\\s+\\S|\\s*$)",
+              "patterns": [
+                {
+                  "include": "source.kql"
+                }
+              ]
+            },
+            {
+              "captures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                },
+                "3": {
+                  "name": "meta.embedded.block.kql",
+                  "patterns": [
+                    {
+                      "include": "source.kql"
+                    }
+                  ]
+                }
+              },
+              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(.+)$"
+            },
+            {
+              "include": "$self"
+            }
+          ]
+        },
+        {
+          "begin": "^(\\s+)(splunk)\\s*:\\s*(?:#.*)?$",
+          "beginCaptures": {
+            "2": {
+              "name": "variable.other.property.tide"
+            }
+          },
+          "comment": "configurations.{splunk}: spl queries (#171)",
+          "end": "^(?!\\1\\s+\\S|\\s*$)",
+          "patterns": [
+            {
+              "begin": "^(\\s+)(query|search)\\s*:\\s*[|>][-+0-9]*\\s*(?:#.*)?$",
+              "beginCaptures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                }
+              },
+              "contentName": "meta.embedded.block.spl",
+              "end": "^(?!\\1\\s+\\S|\\s*$)",
+              "patterns": [
+                {
+                  "include": "source.spl"
+                }
+              ]
+            },
+            {
+              "captures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                },
+                "3": {
+                  "name": "meta.embedded.block.spl",
+                  "patterns": [
+                    {
+                      "include": "source.spl"
+                    }
+                  ]
+                }
+              },
+              "match": "^(\\s+)(query|search)\\s*:\\s+(?![|>])(.+)$"
+            },
+            {
+              "include": "$self"
+            }
+          ]
+        },
+        {
+          "begin": "^(\\s+)(carbon_black_cloud)\\s*:\\s*(?:#.*)?$",
+          "beginCaptures": {
+            "2": {
+              "name": "variable.other.property.tide"
+            }
+          },
+          "comment": "configurations.{carbon_black_cloud}: lucene queries (#171)",
+          "end": "^(?!\\1\\s+\\S|\\s*$)",
+          "patterns": [
+            {
+              "begin": "^(\\s+)(query)\\s*:\\s*[|>][-+0-9]*\\s*(?:#.*)?$",
+              "beginCaptures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                }
+              },
+              "contentName": "meta.embedded.block.lucene",
+              "end": "^(?!\\1\\s+\\S|\\s*$)",
+              "patterns": [
+                {
+                  "include": "source.lucene"
+                }
+              ]
+            },
+            {
+              "captures": {
+                "2": {
+                  "name": "variable.other.property.tide"
+                },
+                "3": {
+                  "name": "meta.embedded.block.lucene",
+                  "patterns": [
+                    {
+                      "include": "source.lucene"
+                    }
+                  ]
+                }
+              },
+              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(.+)$"
+            },
+            {
+              "include": "$self"
+            }
+          ]
+        },
+        {
+          "include": "$self"
+        }
+      ]
+    },
     {
       "comment": "capture:comment",
       "match": "(?m)^\\s*#.*$",

@@ -195,6 +195,10 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
         ),
         (root.join("helix.toml"), generate_helix(&spec)),
         (
+            root.join("package-contributions.json"),
+            serde_json::to_string_pretty(&opentide_highlight::generate_package_contributions())?,
+        ),
+        (
             root.join("legend.json"),
             serde_json::to_string_pretty(&spec.legend)?,
         ),

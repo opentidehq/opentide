@@ -1,0 +1,16 @@
+{
+  "contributes": {
+    "grammars": [
+      {
+        "embeddedLanguages": {
+          "meta.embedded.block.kql": "kql",
+          "meta.embedded.block.lucene": "lucene",
+          "meta.embedded.block.spl": "spl"
+        },
+        "language": "opentide-yaml",
+        "path": "./tide.tmLanguage.json",
+        "scopeName": "source.opentide-yaml"
+      }
+    ]
+  }
+}
