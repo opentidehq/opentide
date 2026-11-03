@@ -11,7 +11,9 @@ What the copy holds:
 
 - the Git work tree around the target (the target alone outside Git), less
   the folders no setup step reads (``node_modules``, virtual environments,
-  caches);
+  caches) and anything that is not a file, a folder or a link. A link that
+  points outside the tree is copied as what it points at, so no step writes
+  through it (:func:`_copy_tree`);
 - a small ``.git`` with the real repository's ``HEAD``, configuration, refs and
   hooks, and its object store as an alternate, so ``git`` answers in the copy
   as it does in the repository (branches, ``core.hooksPath``).
@@ -157,11 +159,73 @@ def _copy_git(top: Path, shadow_top: Path) -> None:
         (objects / "info" / "alternates").write_text(f"{real_objects}\n", encoding="utf-8")
 
 
-def _ignore(directory: str, names: list[str]) -> set[str]:
-    ignored = {name for name in names if name in SKIPPED_DIRS}
-    if ".git" in names:
-        ignored.add(".git")
-    return ignored
+def _copy_tree(top: Path, shadow_top: Path) -> None:
+    """Copy *top* to *shadow_top* so that nothing a step writes there lands outside it.
+
+    - A symbolic link that resolves inside *top* stays a link, to the same place
+      in the copy: a relative one as it is, an absolute one rewritten.
+    - One that resolves outside *top* (a dotfile manager's ``.mcp.json``, a
+      shared ``.vscode``) becomes a copy of what it points at, so a write
+      through it changes the copy, and the plan lists it. A dangling one is
+      left out: a step then creates the file, as it would through the link.
+    - Sockets, FIFOs and device nodes are left out: nothing setup reads is one,
+      and copying one fails.
+    """
+    real_top = top.resolve()
+    #: Folders outside the tree copied through a link.
+    outside: set[Path] = set()
+
+    def copy_link(source: Path, dest: Path) -> None:
+        try:
+            resolved = source.resolve(strict=True)
+        except (OSError, RuntimeError):
+            resolved = None
+        raw = os.readlink(source)
+        if resolved is None:
+            # Dangling: keep a relative link that stays inside the copy.
+            lexical = Path(os.path.normpath(source.parent / raw))
+            if not Path(raw).is_absolute() and lexical.is_relative_to(top):
+                os.symlink(raw, dest)
+            return
+        if resolved.is_relative_to(real_top):
+            if Path(raw).is_absolute():
+                os.symlink(shadow_top / resolved.relative_to(real_top), dest)
+            else:
+                os.symlink(raw, dest)
+            return
+        if resolved.is_dir():
+            # A folder above the tree, or one copied already, would never end.
+            if real_top.is_relative_to(resolved) or resolved in outside:
+                return
+            outside.add(resolved)
+            copy_dir(resolved, dest)
+        elif resolved.is_file():
+            shutil.copy2(resolved, dest)
+
+    def copy_dir(source: Path, dest: Path) -> None:
+        dest.mkdir(parents=True, exist_ok=True)
+        try:
+            entries = sorted(os.scandir(source), key=lambda entry: entry.name)
+        except OSError:
+            return
+        for entry in entries:
+            if entry.name in SKIPPED_DIRS or entry.name == ".git":
+                continue
+            path = Path(entry.path)
+            target = dest / entry.name
+            try:
+                if entry.is_symlink():
+                    copy_link(path, target)
+                elif entry.is_dir(follow_symlinks=False):
+                    copy_dir(path, target)
+                elif entry.is_file(follow_symlinks=False):
+                    shutil.copy2(path, target, follow_symlinks=False)
+                # Anything else (socket, FIFO, device) is not copied.
+            except OSError:
+                # Unreadable: a step cannot read it in the repository either.
+                continue
+
+    copy_dir(top, shadow_top)
 
 
 def stamps(root: Path) -> dict[str, Stamp]:
@@ -201,7 +265,7 @@ class Sandbox:
         self.shadow_top = root / (top.name or "repo")
         self.shadow_target = self.shadow_top / self.real_target.relative_to(top)
         if top.is_dir():
-            shutil.copytree(top, self.shadow_top, symlinks=True, ignore=_ignore)
+            _copy_tree(top, self.shadow_top)
             _copy_git(top, self.shadow_top)
         else:
             self.shadow_top.mkdir(parents=True)

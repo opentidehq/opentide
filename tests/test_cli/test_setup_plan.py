@@ -246,3 +246,55 @@ def test_human_plan_lists_each_step_and_file(tmp_path: Path) -> None:
     assert "create  .env.example" in result.stdout
     assert "nothing written" in result.stdout
     assert not (tmp_path / "r").exists()
+
+
+# --- what the copy holds ---------------------------------------------------------------
+
+
+def test_the_plan_never_writes_through_a_link_out_of_the_repository(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    target.mkdir()
+    outside = tmp_path / "dotfiles"
+    (outside / "vscode").mkdir(parents=True)
+    (outside / "mcp.json").write_text('{"mcpServers": {"other": {"command": "x"}}}\n', "utf-8")
+    (target / ".mcp.json").symlink_to(outside / "mcp.json")
+    (target / ".vscode").symlink_to(outside / "vscode")
+    before = _tree(tmp_path)
+    result, plan = _invoke("mcp", "--claude-code", "--vscode", "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _tree(tmp_path) == before, "the plan wrote through a link"
+    assert {".mcp.json", ".vscode/mcp.json"} <= _planned(plan)
+    assert plan["summary"]["create"] + plan["summary"]["merge"] >= 2
+
+
+def test_a_link_inside_the_repository_stays_a_link_in_the_copy(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    (target / "shared").mkdir(parents=True)
+    (target / ".vscode").symlink_to(target / "shared")
+    before = _tree(tmp_path)
+    result, plan = _invoke("mcp", "--vscode", "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _tree(tmp_path) == before
+    assert "shared/mcp.json" in _planned(plan)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no FIFOs on this platform")
+def test_a_fifo_or_a_socket_in_the_tree_does_not_stop_the_plan(tmp_path: Path) -> None:
+    import socket
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    os.mkfifo(target / "pipe")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    previous = Path.cwd()
+    os.chdir(target)  # AF_UNIX paths are short: bind by a relative name
+    try:
+        server.bind("sock")
+    finally:
+        os.chdir(previous)
+    try:
+        result, plan = _invoke("env", "--plan", "--path", str(target))
+    finally:
+        server.close()
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert ".env.example" in _planned(plan)
