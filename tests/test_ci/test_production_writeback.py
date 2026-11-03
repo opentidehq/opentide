@@ -43,8 +43,8 @@ from opentide.ci.writeback import (
 
 DEPLOY = "opentide deploy --strategy RELEASE --skip-unconfigured"
 GITLAB_PUSH = (
-    'git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/'
-    '${CI_PROJECT_PATH}.git" "HEAD:$CI_DEFAULT_BRANCH"'
+    'git push "${OPENTIDE_PUSH_URL:-https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/'
+    '${CI_PROJECT_PATH}.git}" "HEAD:$CI_DEFAULT_BRANCH"'
 )
 
 

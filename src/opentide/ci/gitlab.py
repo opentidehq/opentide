@@ -12,11 +12,11 @@ from typing import Any
 from opentide.ci.gates import gitlab_premerge_rule, gitlab_workflow_rules
 from opentide.ci.inflight import (
     GITLAB_FETCH,
-    GITLAB_IDENTITY,
     GITLAB_INSTALL_GIT,
     GITLAB_PUSH,
     gitlab_inflight_job,
     gitlab_inflight_prune_job,
+    gitlab_push_preamble,
 )
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
@@ -158,7 +158,7 @@ def _production_script(options: CiRenderOptions) -> list[str]:
         fetch=GITLAB_FETCH,
     )
     return [
-        *GITLAB_IDENTITY,
+        *gitlab_push_preamble(),
         _block(overlay_default_branch_state(fetch=GITLAB_FETCH)),
         dry_run,
         _block(script),

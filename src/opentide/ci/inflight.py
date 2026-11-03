@@ -13,12 +13,25 @@ from opentide.ci.gates import (
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import inflight_generate_steps, inflight_prune_steps, pip_install
 
-#: GitLab expands ``$VAR``; ``${{ }}`` is GitHub Actions expression syntax and
-#: would push to a host literally named ``${{CI_SERVER_HOST}}``.
-GITLAB_PUSH = (
-    'git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/'
-    '${CI_PROJECT_PATH}.git" "HEAD:$CI_DEFAULT_BRANCH"'
+#: CI/CD variable naming where the GitLab write-backs push, any URL git takes
+#: (``git@gitlab.example.com:group/project.git`` for SSH). Unset, they push
+#: over HTTPS with ``CI_JOB_TOKEN``, which needs job-token push access.
+GITLAB_PUSH_URL_VARIABLE = "OPENTIDE_PUSH_URL"
+
+#: File variables: an SSH private key the write-backs push with and sign
+#: their commits with, and the ``known_hosts`` lines of the server.
+GITLAB_SSH_KEY_VARIABLE = "OPENTIDE_PUSH_SSH_KEY"
+GITLAB_SSH_KNOWN_HOSTS_VARIABLE = "OPENTIDE_PUSH_SSH_KNOWN_HOSTS"
+
+#: The push URL, as one shell word. GitLab expands ``$VAR``; ``${{ }}`` is
+#: GitHub Actions expression syntax and would push to a host literally named
+#: ``${{CI_SERVER_HOST}}``. An explicit URL also sidesteps the runner's own
+#: ``insteadOf`` rewrite of ``origin``, which a project cannot override.
+GITLAB_PUSH_URL = (
+    f'"${{{GITLAB_PUSH_URL_VARIABLE}:-https://gitlab-ci-token:${{CI_JOB_TOKEN}}@'
+    '${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git}"'
 )
+GITLAB_PUSH = f'git push {GITLAB_PUSH_URL} "HEAD:$CI_DEFAULT_BRANCH"'
 GITLAB_FETCH = 'git fetch origin "$CI_DEFAULT_BRANCH"'
 
 #: ``python:<ver>-slim`` ships without git, so every git step failed with
@@ -26,6 +39,56 @@ GITLAB_FETCH = 'git fetch origin "$CI_DEFAULT_BRANCH"'
 GITLAB_INSTALL_GIT = (
     "apt-get update -qq && apt-get install -y -qq --no-install-recommends git > /dev/null"
 )
+
+GITLAB_SSH_NOT_A_FILE = (
+    f"{GITLAB_SSH_KEY_VARIABLE} must be a CI/CD variable of type File holding the private key."
+)
+GITLAB_SSH_NO_KNOWN_HOSTS = (
+    f"{GITLAB_SSH_KEY_VARIABLE} is set, but {GITLAB_SSH_KNOWN_HOSTS_VARIABLE} is not a "
+    "File variable holding the server's known_hosts lines; refusing to push to an "
+    "unchecked host."
+)
+
+
+def gitlab_push_setup() -> str:
+    """Shell that pushes and signs with the SSH key in :data:`GITLAB_SSH_KEY_VARIABLE`.
+
+    Nothing happens when the variable is unset. Otherwise the job installs
+    ``openssh-client`` (``python:<ver>-slim`` has none), and the repository's
+    own config, which ``after_script`` and ``git worktree`` share, gets
+    ``core.sshCommand`` with that key and the server's known hosts, and SSH
+    commit signing with the same key. Strict host-key checking is not
+    optional: without known hosts the step fails. The key itself is never
+    printed; only the variable names are.
+    """
+    key = f'"${GITLAB_SSH_KEY_VARIABLE}"'
+    ssh = (
+        f'ssh -i \\"${GITLAB_SSH_KEY_VARIABLE}\\" -o IdentitiesOnly=yes '
+        "-o StrictHostKeyChecking=yes "
+        f'-o UserKnownHostsFile=\\"${GITLAB_SSH_KNOWN_HOSTS_VARIABLE}\\"'
+    )
+    return "\n".join(
+        [
+            f'if [ -n "${{{GITLAB_SSH_KEY_VARIABLE}:-}}" ]; then',
+            f"  if [ ! -f {key} ]; then",
+            f'    echo "{GITLAB_SSH_NOT_A_FILE}" >&2',
+            "    exit 1",
+            "  fi",
+            f'  if [ ! -s "${{{GITLAB_SSH_KNOWN_HOSTS_VARIABLE}:-}}" ]; then',
+            f'    echo "{GITLAB_SSH_NO_KNOWN_HOSTS}" >&2',
+            "    exit 1",
+            "  fi",
+            "  command -v ssh-keygen > /dev/null || "
+            "apt-get install -y -qq --no-install-recommends openssh-client > /dev/null",
+            f"  chmod 600 {key}",
+            f'  git config core.sshCommand "{ssh}"',
+            "  git config gpg.format ssh",
+            f"  git config user.signingkey {key}",
+            "  git config commit.gpgsign true",
+            f"  echo 'Pushing and signing with the {GITLAB_SSH_KEY_VARIABLE} key.'",
+            "fi",
+        ]
+    )
 
 
 #: Pull request jobs and the prune job race each other to the default branch.
@@ -265,6 +328,14 @@ GITLAB_IDENTITY = (
 )
 
 
+def gitlab_push_preamble() -> list[str]:
+    """Script items a GitLab job that commits and pushes runs first.
+
+    The SSH setup is a ``|`` block (it spans lines); the identity follows.
+    """
+    return [gitlab_push_setup() + "\n", *GITLAB_IDENTITY]
+
+
 def gitlab_inflight_job(*, python_version: str) -> dict[str, Any]:
     """The GitLab job that publishes ``.opentide/inflight/`` from a merge request."""
     opts = CiRenderOptions(
@@ -282,7 +353,7 @@ def gitlab_inflight_job(*, python_version: str) -> dict[str, Any]:
             *_default_branch_shards("origin/$CI_DEFAULT_BRANCH"),
             'export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"',
             inflight_generate_steps(opts)[0],
-            *GITLAB_IDENTITY,
+            *gitlab_push_preamble(),
             # A ``|`` block: the commit message holds ``": "`` (see _commit_and_push).
             _publish_on_default_branch(push=GITLAB_PUSH, fetch=GITLAB_FETCH) + "\n",
         ],
@@ -311,7 +382,7 @@ def gitlab_inflight_prune_job(*, python_version: str) -> dict[str, Any]:
         "script": [
             'export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"',
             inflight_prune_steps(opts)[0],
-            *GITLAB_IDENTITY,
+            *gitlab_push_preamble(),
             commit_push + "\n",
         ],
         "needs": ["generate"],

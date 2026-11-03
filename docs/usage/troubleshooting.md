@@ -195,6 +195,10 @@ Through `0.3.0` the GitLab inflight jobs wrote the push URL with GitHub Actions 
 opentide setup ci gitlab --yes
 ```
 
+### GitLab write-back push is refused, or fails on the certificate
+
+The production and inflight jobs push with `CI_JOB_TOKEN` over HTTPS unless told otherwise. `remote: You are not allowed to upload code` means the job token may not push: allow it under **Settings > CI/CD > Job token permissions**, or push with a deploy key instead by setting `OPENTIDE_PUSH_URL` to the project's SSH URL and the File variables `OPENTIDE_PUSH_SSH_KEY` and `OPENTIDE_PUSH_SSH_KNOWN_HOSTS`. `SSL certificate problem: unable to get local issuer certificate` means the job image does not trust the instance's CA: set `GIT_SSL_CAINFO: $CI_SERVER_TLS_CA_FILE`, or push over SSH. A `url.….insteadOf` rewrite of `origin` has no effect, because the runner rewrites that prefix itself. See [GitLab write-back credentials](./workflows/ci-cd.md#gitlab-write-back-credentials).
+
 ### Azure inflight job says nothing changed and never commits
 
 Through `0.3.0` the Azure job scripts were joined with `&&`. `git diff --staged --quiet` exits 1 when there *are* staged changes, so the chain stopped before `git commit`; when there were none, `exit 0` swallowed every later command. **0.4.0** emits a multi-line `set -e` script with an explicit `if … fi` guard, and checks out with `persistCredentials: true` so the push can authenticate. Azure jobs also no longer declare `dependsOn` on a job from another stage, which Azure cannot resolve. Re-run `opentide setup ci azure --yes`.
