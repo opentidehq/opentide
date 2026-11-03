@@ -243,8 +243,19 @@ class RegistryBuilder:
                 identifier = parse_schema_artifact_name(filename)
             except ValueError:
                 identifier = meta_name
-            if identifier not in json_index:
+            if identifier in json_index:
+                continue
+            try:
                 json_index[identifier] = parse_json(schema_path.read_bytes())
+            except (OSError, ValueError) as exc:
+                # A truncated or hand-broken artifact: every command would fail
+                # on it until regenerated. Skip it, and say which file it is.
+                logger.error(
+                    "could_not_read_schema_artifact",
+                    path=_shown_path(str(schema_path)),
+                    error=str(exc),
+                    advice="Run `opentide generate schemas` to rewrite it.",
+                )
 
         return framework_paths, json_index
 

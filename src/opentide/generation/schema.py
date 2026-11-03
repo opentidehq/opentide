@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from opentide.core.files import resolve_configurations
+from opentide.core.io import write_text_atomically
 from opentide.core.logging import get_logger
 from opentide.generation.configuration_schemas import generate_configuration_schema
 from opentide.generation.model_json_schema import TideSchemaGenerator as TideSchemaGenerator
@@ -37,9 +38,9 @@ def run() -> None:
     # export writes: one schema source for visibility.toml (#374).
     visibility_name = schema_map.get("visibility", "visibility.1.0.schema.json")
     visibility_schema = generate_configuration_schema("visibility.toml")
-    (schema_dir / visibility_name).write_text(
+    write_text_atomically(
+        schema_dir / visibility_name,
         json.dumps(visibility_schema, indent=4, sort_keys=False, default=str) + "\n",
-        encoding="utf-8",
     )
     logger.info("exported_visibility_schema", path=str(schema_dir / visibility_name))
 

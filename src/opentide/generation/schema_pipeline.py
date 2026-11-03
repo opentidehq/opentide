@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from opentide.core.files import resolve_paths
+from opentide.core.io import write_text_atomically
 from opentide.core.logging import get_logger, is_debug_enabled
 from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
@@ -976,16 +977,14 @@ def run() -> None:
 
         logger.info("exporting_generated_schema_to_str_json_output", path=str(json_output))
         output = json.dumps(cleaned, indent=4, sort_keys=False, default=str) + "\n"
-        with open(json_output, "w", encoding="utf-8") as output_file:
-            output_file.write(output)
+        write_text_atomically(json_output, output)
         logger.info("correctly_exported", detail=artifact_name)
 
         if family in legacy_schema_map and schema_id == latest_identifier(family):
             legacy_name = legacy_schema_map[family]
             legacy_output = schema_folder / legacy_name
             if legacy_output != json_output and _legacy_alias_tracks_latest(legacy_name, schema_id):
-                with open(legacy_output, "w", encoding="utf-8") as legacy_file:
-                    legacy_file.write(output)
+                write_text_atomically(legacy_output, output)
                 logger.info("exported_legacy_schema_alias", path=str(legacy_output))
 
     logger.info("generated_all_json_schemas")
