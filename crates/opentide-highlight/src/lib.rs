@@ -1334,13 +1334,12 @@ mod tests {
         assert_eq!(root("rule"), Some(("rule::1.1", true)));
         assert_eq!(root("rule::1.0"), Some(("rule::1.0", true)));
         assert_eq!(root("unknown::1.0"), None);
+        // opentide#745 retired the objective's root `composition` and the
+        // splunk::2.x `search`: no legacy table accepts them any more.
         let (_, objective) = tide_schema_root("objective::1.0").expect("objective");
-        assert_eq!(objective.legacy.get("composition"), Some(&None));
+        assert_eq!(objective.legacy.get("composition"), None);
         let splunk = tide_field_at("rule::1.1", "configurations.splunk").expect("splunk");
-        assert_eq!(
-            splunk.legacy.get("search"),
-            Some(&Some("query".to_string()))
-        );
+        assert_eq!(splunk.legacy.get("search"), None);
         assert!(tide_field_at("rule::1.0", "metadata").is_some_and(|f| f.closed));
         assert!(tide_field_at("rule::1.0", "references.internal").is_some_and(|f| !f.closed));
         let fields = tide_fields_of("rule::1.0");
