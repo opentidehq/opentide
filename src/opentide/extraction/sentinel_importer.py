@@ -334,7 +334,9 @@ def _import_sentinel_rules() -> None:
                 tactics = "tactics:" + _list_items(tactics, "      ")
             else:
                 tactics = "OPENTIDE::REMOVE"
-            if techniques := rule.get("techniques"):
+            if techniques := _alert_techniques(
+                rule.get("techniques") or [], rule.get("sub_techniques") or []
+            ):
                 techniques = "techniques:" + _list_items(techniques, "      ")
             else:
                 techniques = "OPENTIDE::REMOVE"
@@ -443,6 +445,23 @@ def _import_sentinel_rules() -> None:
             Path("Imported").mkdir(exist_ok=True)
             with open(f"Imported/{stem}.yaml", "w+", encoding="utf-8") as f:
                 f.write(mdr)
+
+
+def _alert_techniques(techniques: list[str], sub_techniques: list[str]) -> list[str]:
+    """``alert.techniques`` for a listed rule: each sub-technique in place of its parent.
+
+    ARM keeps parents in ``techniques`` and ``T1556.009`` in ``subTechniques``;
+    deploy splits ``alert.techniques`` the same way, so listing the
+    sub-technique alone redeploys the same body (#686). A parent without a
+    listed sub-technique is kept, and a sub-technique whose parent is missing
+    is kept after them.
+    """
+    result: list[str] = []
+    for technique in techniques:
+        children = [sub for sub in sub_techniques if sub.split(".")[0] == technique]
+        result.extend(children or [technique])
+    result.extend(sub for sub in sub_techniques if sub not in result)
+    return list(dict.fromkeys(result))
 
 
 def _list_items(values: list[str], indent: str) -> str:

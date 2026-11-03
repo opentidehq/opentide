@@ -7,6 +7,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from opentide.models.base import TideField, TideModel
+from opentide.models.sentinel_attack import SentinelTechnique
 
 
 class SentinelTemplate(TideModel):
@@ -68,8 +69,10 @@ class SentinelAlert(TideModel):
     techniques resolve to tactics: each `att&ck` stage maps to the tactic of the same name.
     Stealth, Defense Impairment, and the ICS Evasion tactic map to `DefenseEvasion`. A stage with
     no Sentinel tactic is dropped."""
-    techniques: list[str] | None = None
-    """Technique ids. Replaced by the rule's resolved techniques when those exist."""
+    techniques: list[SentinelTechnique] | None = None
+    """ATT&CK v18 technique and sub-technique ids, the ATT&CK version Sentinel is aligned to. A
+    sub-technique is sent in `subTechniques` and its parent in `techniques`. Replaced by the
+    rule's resolved techniques when those exist."""
     custom_details: list[SentinelCustomDetails] | None = None
     """Extra alert properties."""
     dynamic_properties: list[SentinelDynamicProperties] | None = None
