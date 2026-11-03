@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 
 from opentide.ci.gates import (
     azure_premerge_condition,
@@ -261,81 +262,66 @@ def github_inflight_prune_job(
     )
 
 
-def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
+#: The commit identity of the GitLab jobs that push.
+GITLAB_IDENTITY = (
+    'git config user.email "gitlab-ci@opentide.local"',
+    'git config user.name "gitlab-ci"',
+)
+
+
+def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> dict[str, Any]:
+    """The GitLab job that publishes ``.opentide/inflight/`` from a merge request."""
     opts = CiRenderOptions(
         ci="gitlab",
         python_version=python_version,
         opentide_version=opentide_version,
     )
-    generate_cmd = inflight_generate_steps(opts)[0]
-    default_ref = "origin/$CI_DEFAULT_BRANCH"
-    checkout_inflight = "".join(f"    - {cmd}\n" for cmd in _default_branch_shards(default_ref))
-    commit_push = textwrap.indent(
-        _publish_on_default_branch(push=GITLAB_PUSH, fetch=GITLAB_FETCH),
-        " " * 6,
-    ).lstrip()
-    return (
-        "inflight_shards:\n"
-        "  stage: deploy\n"
-        f"  image: python:{python_version}-slim\n"
-        "  rules:\n"
-        f"    - if: {gitlab_premerge_rule()}\n"
-        "  variables:\n"
-        '    GIT_DEPTH: "0"\n'
-        "  before_script:\n"
-        f"    - {GITLAB_INSTALL_GIT}\n"
-        f"    - {pip_install(opts)}\n"
-        "  script:\n"
-        '    - git fetch origin "$CI_DEFAULT_BRANCH"\n'
-        f"{checkout_inflight}"
-        '    - export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"\n'
-        f"    - {generate_cmd}\n"
-        '    - git config user.email "gitlab-ci@opentide.local"\n'
-        '    - git config user.name "gitlab-ci"\n'
-        "    - |\n"
-        f"      {commit_push}\n"
-        "  needs:\n"
-        "    - generate"
-    )
+    return {
+        "stage": "deploy",
+        "image": f"python:{python_version}-slim",
+        "rules": [{"if": gitlab_premerge_rule()}],
+        "variables": {"GIT_DEPTH": "0"},
+        "before_script": [GITLAB_INSTALL_GIT, pip_install(opts)],
+        "script": [
+            'git fetch origin "$CI_DEFAULT_BRANCH"',
+            *_default_branch_shards("origin/$CI_DEFAULT_BRANCH"),
+            'export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"',
+            inflight_generate_steps(opts)[0],
+            *GITLAB_IDENTITY,
+            # A ``|`` block: the commit message holds ``": "`` (see _commit_and_push).
+            _publish_on_default_branch(push=GITLAB_PUSH, fetch=GITLAB_FETCH) + "\n",
+        ],
+        "needs": ["generate"],
+    }
 
 
-def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> str:
+def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> dict[str, Any]:
+    """The GitLab job that drops superseded shards after a merge."""
     opts = CiRenderOptions(
         ci="gitlab",
         python_version=python_version,
         opentide_version=opentide_version,
     )
-    prune_cmd = inflight_prune_steps(opts)[0]
-    commit_push = textwrap.indent(
-        _commit_and_push(
-            message="ci: prune inflight preview shards [skip ci]",
-            empty_note="No inflight prune changes",
-            push=GITLAB_PUSH,
-            fetch=GITLAB_FETCH,
-        ),
-        " " * 6,
-    ).lstrip()
-    return (
-        "inflight_prune:\n"
-        "  stage: deploy\n"
-        f"  image: python:{python_version}-slim\n"
-        "  rules:\n"
-        "    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH\n"
-        "  variables:\n"
-        '    GIT_DEPTH: "0"\n'
-        "  before_script:\n"
-        f"    - {GITLAB_INSTALL_GIT}\n"
-        f"    - {pip_install(opts)}\n"
-        "  script:\n"
-        '    - export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"\n'
-        f"    - {prune_cmd}\n"
-        '    - git config user.email "gitlab-ci@opentide.local"\n'
-        '    - git config user.name "gitlab-ci"\n'
-        "    - |\n"
-        f"      {commit_push}\n"
-        "  needs:\n"
-        "    - generate"
+    commit_push = _commit_and_push(
+        message="ci: prune inflight preview shards [skip ci]",
+        empty_note="No inflight prune changes",
+        push=GITLAB_PUSH,
+        fetch=GITLAB_FETCH,
     )
+    return {
+        "stage": "deploy",
+        "image": f"python:{python_version}-slim",
+        "rules": [{"if": "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"}],
+        "variables": {"GIT_DEPTH": "0"},
+        "before_script": [GITLAB_INSTALL_GIT, pip_install(opts)],
+        "script": [
+            'export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"',
+            inflight_prune_steps(opts)[0],
+            *GITLAB_IDENTITY,
+            commit_push + "\n",
+        ],
+        "needs": ["generate"],
+    }
 
 
 def azure_inflight_job(*, python_version: str, opentide_version: str, default_branch: str) -> str:
