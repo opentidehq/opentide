@@ -133,13 +133,16 @@ def test_a_broken_query_fails_with_a_frame_at_its_place(invoke_cli, tutorial: Pa
     assert "✗ 1 error in 1 file · 1 query checked" in human.output
 
 
-#: A parse error the engine spans from the open bracket to the next line (#755).
+#: A parse error the engine spans from the open bracket to column 1 of the next line (#755).
 UNCLOSED = "SecurityEvent\n| where (EventID == 4688\n| take 1"
 
 
-def test_a_finding_over_several_lines_carries_its_end_line(invoke_cli, tutorial: Path) -> None:
-    """#755: a finding had only line, column and end_column, so an editor could not
-    show a span over several lines of a block-scalar query."""
+def test_a_finding_ending_at_a_line_break_ends_on_its_line(invoke_cli, tutorial: Path) -> None:
+    """#755: every finding carries end_line, the line of the span's last character.
+
+    The engine's exclusive end here is column 1 of the next line, which holds
+    none of the span: the finding ends on its own line, after its last
+    character, so no annotation covers the line after it."""
     _set_query(tutorial / RULE, UNCLOSED)
     lines = (tutorial / RULE).read_text(encoding="utf-8").splitlines()
     for argv in (("validate",), ("validate", "query")):
@@ -150,10 +153,11 @@ def test_a_finding_over_several_lines_carries_its_end_line(invoke_cli, tutorial:
             else payload["diagnostics"]
         )
         (span,) = [item for item in found if item["code"] == "kql_parse_error"]
-        assert span["end_line"] == span["line"] + 1, span
+        assert span["end_line"] == span["line"], span
         assert lines[span["line"] - 1].rstrip().endswith("(EventID == 4688")
-        # end_column is on end_line: just inside the next line of the query.
-        assert 1 <= span["end_column"] <= len(lines[span["end_line"] - 1]) + 1
+        # The span is the line break after the open bracket: one column, on that line.
+        assert span["column"] == len(lines[span["line"] - 1]) + 1, span
+        assert span["end_column"] == span["column"] + 1, span
         for item in found:
             assert "end_line" in item, item
             if item is not span and item["line"] is not None:

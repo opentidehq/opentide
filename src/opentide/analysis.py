@@ -139,6 +139,30 @@ def _corrected_message(code: str, message: str) -> str:
     return message
 
 
+def _span_end(
+    line: int, column: int, end_line: int, end_column: int, text: str | None
+) -> tuple[int, int]:
+    """The end of a span on the line of its last character.
+
+    The engine's end is exclusive, so a span whose last character is a line's
+    newline (an "unexpected end" after ``| where (``) ends at column 1 of the
+    next line. That line holds none of the span: it ends on the line before,
+    after that line's last character. One place, so validate, lint, MCP,
+    SARIF and GitHub annotations all agree.
+    """
+    if end_column != 1 or end_line <= line:
+        return end_line, end_column
+    last = end_line - 1
+    # Lines as the engine counts them: split on LF, a CR before it not counted.
+    lines = text.split("\n") if text is not None else None
+    if lines is not None and 0 < last <= len(lines):
+        length = len(lines[last - 1].removesuffix("\r"))
+        return last, max(length + 1, column + 1) if last == line else length + 1
+    if last == line:
+        return line, column + 1
+    return end_line, end_column
+
+
 @dataclass(frozen=True)
 class Finding:
     """One engine diagnostic, in the CLI's coordinates."""
@@ -154,15 +178,19 @@ class Finding:
     suggestion: str | None = None
 
     @classmethod
-    def from_engine(cls, diagnostic: EngineDiagnostic) -> Finding:
+    def from_engine(cls, diagnostic: EngineDiagnostic, text: str | None = None) -> Finding:
+        """*diagnostic* in the CLI's coordinates; *text* is what its positions count in."""
+        end_line, end_column = _span_end(
+            diagnostic.line, diagnostic.column, diagnostic.end_line, diagnostic.end_column, text
+        )
         return cls(
             code=diagnostic.code,
             severity=_SEVERITIES.get(diagnostic.severity, "note"),
             message=_corrected_message(diagnostic.code, diagnostic.message),
             line=diagnostic.line,
             column=diagnostic.column,
-            end_line=diagnostic.end_line,
-            end_column=diagnostic.end_column,
+            end_line=end_line,
+            end_column=end_column,
             field_path=tuple(diagnostic.field_path or ()),
             suggestion=diagnostic.suggestion,
         )
@@ -566,7 +594,7 @@ def check_queries(
                     field_path=field_path,
                     line=report.line,
                     column=report.column,
-                    findings=tuple(Finding.from_engine(item) for item in report.diagnostics),
+                    findings=tuple(Finding.from_engine(item, text) for item in report.diagnostics),
                 )
             )
     return QueryRun(checks=checks, unreadable=unreadable)
@@ -577,7 +605,7 @@ def check_query(
 ) -> list[Finding]:
     """One query on its own, in its own coordinates."""
     return [
-        Finding.from_engine(item)
+        Finding.from_engine(item, text)
         for item in engine().analyze_query(text, language, platform=platform, stack=stack)
     ]
 
@@ -636,7 +664,7 @@ def check_file(
     space: Workspace, path: Path, text: str, *, language: str | None = None
 ) -> list[Finding]:
     """What the language server reports for one file (an object or a query file)."""
-    return [Finding.from_engine(item) for item in space.analyze(str(path), text, language)]
+    return [Finding.from_engine(item, text) for item in space.analyze(str(path), text, language)]
 
 
 @dataclass(frozen=True)
