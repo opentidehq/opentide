@@ -95,6 +95,11 @@ def collect_info(
         payload["threats"] = list(Opentide.Models.threats.keys())
     elif section == "objectives":
         payload["objectives"] = list(Opentide.Models.objectives.keys())
+    elif section == "catalog":
+        from opentide.cli.services.catalog import collect_catalog
+        from opentide.registry.discovery import discover_workspace
+
+        payload.update(collect_catalog(discover_workspace(), parse_errors))
     elif section == "coverage" and technique:
         payload["coverage"] = _technique_coverage(technique)
     elif section == "vocab":
@@ -151,6 +156,8 @@ def render_info(payload: dict[str, Any], *, section: str | None = None) -> None:
                 console.print(table)
         else:
             console.print(_vocab_list_table(payload["vocabularies"]))
+    elif section == "catalog":
+        console.print(_catalog_table(payload))
     elif section in _SECTION_TITLES:
         uuids = payload[section]
         if uuids:
@@ -200,6 +207,55 @@ def _summary_table(payload: dict[str, Any]) -> Text:
                 ),
             )
         )
+    return columns(rows, right=(0,))
+
+
+def _catalog_table(payload: dict[str, Any]) -> Text:
+    """The catalogue in a few lines: objects, signals, edges by kind, and ATT&CK reach."""
+    from collections import Counter
+
+    from rich.text import Text
+
+    from opentide.cli.services.catalog import EDGE_KINDS
+    from opentide.cli.ui.layout import columns
+    from opentide.cli.ui.progress import plural
+
+    separator = f" {glyph('separator', get_stdout_console().file)} "
+    objects = payload["objects"]
+    families = Counter(row["type"] for row in objects if row["load_error"] is None)
+    kinds = Counter(edge["kind"] for edge in payload["edges"])
+    missing = sum(1 for edge in payload["edges"] if edge["missing"])
+    covered = {
+        technique
+        for row in objects
+        for technique in (*row["techniques"]["own"], *row["techniques"]["inherited"])
+    }
+    matrix = payload["attack"]["techniques"]
+    errors = sum(1 for row in objects if row["load_error"] is not None)
+
+    def row(label: str, value: str, detail: str = "") -> tuple[Text, ...]:
+        return (Text(label, style="bold dim"), Text(value), Text(detail, style="dim"))
+
+    rows = [
+        row(
+            "objects",
+            str(len(objects)),
+            separator.join(
+                plural(families.get(family, 0), family)
+                for family in ("threat", "objective", "rule")
+            ),
+        ),
+        row("signals", str(len(payload["signals"]))),
+        row("edges", str(len(payload["edges"]))),
+        *(row("", str(kinds[kind]), kind) for kind in EDGE_KINDS if kinds.get(kind)),
+        *([row("", str(missing), "missing: name no object")] if missing else []),
+        row(
+            "att&ck",
+            f"{len(covered & matrix.keys())} of {len(matrix)} techniques",
+            f"{len(payload['attack']['tactics'])} tactics",
+        ),
+        row("load errors", str(errors)),
+    ]
     return columns(rows, right=(0,))
 
 
