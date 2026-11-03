@@ -8,13 +8,17 @@ so Sysdig receives the expression Falco would compile had the definitions been
 loaded on the tenant:
 
 1. Lists are flattened in block order (``compile_list_infos``): an item that
-   names an earlier block list is replaced by that list's items.
+   names an earlier block list is replaced by that list's items. An item naming
+   a later list, or its own list, stays as written.
 2. Every block list is resolved, in block order, in the condition and in each
    macro condition, by :func:`resolve_list`, a port of Falco's ``resolve_list``.
    It is textual: it also rewrites occurrences inside quoted strings, as Falco
-   does.
+   does. A later list named by an earlier one is therefore still expanded, in
+   its own pass; a list naming itself leaves its name in the text, because a
+   pass never re-scans what it inserted (``sysdig_list_self_reference``, an
+   advisory the analysis engine reports).
 3. In exception values, a value (or a member of a value list) equal to a block
-   list name becomes the list's items. Sysdig compiles exceptions itself, with
+   list name becomes the list's items, by the same passes. Sysdig compiles exceptions itself, with
    its own lists, so a block list name anywhere else in a value is refused
    (``sysdig_list_in_value``).
 4. A bare identifier in a check position that names a block macro becomes
@@ -376,31 +380,34 @@ class Expander:
             if later:
                 raise ExpansionError(
                     "sysdig_definition_order",
-                    f"macro {name!r} uses {', '.join(map(repr, dict.fromkeys(later)))}, "
-                    "which is not defined before it in the block",
+                    f"macro {name!r} uses the block macro "
+                    f"{', '.join(map(repr, dict.fromkeys(later)))}, which is itself or defined "
+                    "after it: Falco refuses it as an undefined macro",
                 )
             self.macros[name] = self._substitute(text, frozenset(visible))
 
     def _flatten(self, lists: Mapping[str, Sequence[object]]) -> dict[str, list[str]]:
-        """``compile_list_infos``: an item naming an earlier block list is its items."""
-        order = list(lists)
+        """``compile_list_infos``: an item naming an earlier block list is its items.
+
+        An item naming a later list, or its own list, is kept as written: the
+        later list's own :func:`resolve_list` pass expands it, and a list's own
+        name is never re-scanned in its pass.
+        """
         flat: dict[str, list[str]] = {}
-        for index, (name, raw) in enumerate(lists.items()):
+        for name, raw in lists.items():
             items: list[str] = []
             for item in raw:
                 text = item_text(item)
                 if text in flat:
                     items.extend(flat[text])
-                    continue
-                if text in order[index:]:
-                    raise ExpansionError(
-                        "sysdig_definition_order",
-                        f"list {name!r} names {text!r}, which is not defined before it "
-                        "in the block",
-                    )
-                items.append(text)
+                else:
+                    items.append(text)
             flat[name] = items
         return flat
+
+    def self_references(self) -> list[str]:
+        """The block lists that name themselves (``sysdig_list_self_reference``)."""
+        return [name for name in self.list_order if name in self.lists[name]]
 
     def _substitute(self, text: str, visible: frozenset[str]) -> str:
         """*text* with each visible block macro written in, in parentheses."""
@@ -423,21 +430,32 @@ class Expander:
     # --- exceptions ---------------------------------------------------------------------------
 
     def _list_in(self, value: object) -> str | None:
-        """The block list whose name occurs inside *value*, by ``resolve_list``'s rule."""
+        """A block list whose name occurs inside *value* (not as all of it), by
+        ``resolve_list``'s rule."""
         text = item_text(value)
-        return next((name for name in self.list_order if occurs(text, name)), None)
+        return next((name for name in self.list_order if text != name and occurs(text, name)), None)
+
+    def _passes(self, values: Iterable[object]) -> list[Any]:
+        """A value list after Falco's ``resolve_list`` passes, one per block list in block
+        order: a member equal to the list's name becomes its items, which that pass does
+        not re-scan (later passes do)."""
+        out = list(values)
+        for name in self.list_order:
+            current: list[Any] = []
+            for value in out:
+                if not isinstance(value, (list, dict)) and item_text(value) == name:
+                    current.extend(self.lists[name])
+                else:
+                    current.append(value)
+            out = current
+        return out
 
     def _members(self, values: Iterable[object], where: str) -> list[Any]:
-        """A value list with block list names spliced in."""
-        out: list[Any] = []
-        for value in values:
-            text = item_text(value)
-            if not isinstance(value, (list, dict)) and text in self.lists:
-                out.extend(self.lists[text])
-                continue
+        """A value list with block list names expanded."""
+        out = self._passes(values)
+        for value in out:
             if (name := self._list_in(value)) is not None:
                 raise _list_in_value(name, where)
-            out.append(value)
         return out
 
     def exception(self, entry: Mapping[str, Any]) -> dict[str, Any]:
@@ -473,15 +491,15 @@ class Expander:
                 if isinstance(item, list):
                     new_row.append(self._members(item, where))
                     continue
-                text = item_text(item)
-                if text in self.lists:
-                    if not is_list_comparison(comp):
-                        raise _list_in_value(text, where)
-                    new_row.append(list(self.lists[text]))
-                    continue
                 if (found := self._list_in(item)) is not None:
                     raise _list_in_value(found, where)
-                new_row.append(item)
+                if item_text(item) not in self.lists:
+                    new_row.append(item)
+                elif not is_list_comparison(comp):
+                    raise _list_in_value(item_text(item), where)
+                else:
+                    # Falco wraps it in parentheses: one value list, then the passes.
+                    new_row.append(self._members([item], where))
             rows.append(new_row)
         out["values"] = rows
         return out

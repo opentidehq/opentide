@@ -103,17 +103,32 @@ def test_an_item_naming_an_earlier_list_is_flattened() -> None:
     assert expander.expand("proc.name in (greps)") == "proc.name in ( grep, egrep, fgrep )"
 
 
-@pytest.mark.parametrize(
-    "lists",
-    [
-        {"greps": ["grep", "gnu"], "gnu": ["egrep"]},  # a later list
-        {"loop": ["loop"]},  # itself
-    ],
-)
-def test_a_list_naming_itself_or_a_later_list_is_out_of_order(lists: dict[str, Any]) -> None:
-    with pytest.raises(ExpansionError) as caught:
-        Expander(lists=lists)
-    assert caught.value.code == "sysdig_definition_order"
+def test_a_list_naming_a_later_list_expands_in_the_later_pass() -> None:
+    """Falco 0.45.2: compile_list_infos keeps `l2` as written, then resolve_list runs for
+    l1 and l2 in turn over the condition, so l2's pass expands it."""
+    expander = Expander(lists={"l1": ["l2", "bash"], "l2": ["zsh", "fish"]})
+    assert expander.lists["l1"] == ["l2", "bash"]
+    assert expander.expand("proc.name in (l1)") == "proc.name in ( zsh, fish , bash )"
+    assert expander.self_references() == []
+
+
+def test_a_list_naming_itself_keeps_its_name_as_a_literal() -> None:
+    """resolve_list never re-scans what it just inserted."""
+    expander = Expander(lists={"l1": ["bash", "l1"]})
+    assert expander.expand("proc.name in (l1)") == "proc.name in ( bash, l1 )"
+    assert expander.self_references() == ["l1"]
+
+
+def test_exception_values_follow_the_same_passes() -> None:
+    forward = Expander(lists={"l1": ["l2", "bash"], "l2": ["zsh", "fish"]})
+    assert forward.exception({"name": "e", "fields": "proc.name", "values": ["l1", "sh"]})[
+        "values"
+    ] == ["zsh", "fish", "bash", "sh"]
+    own = Expander(lists={"l1": ["bash", "l1"]})
+    out = own.exception(
+        {"name": "e", "fields": ["proc.name"], "comps": ["in"], "values": [["l1"], [["l1", "x"]]]}
+    )
+    assert out["values"] == [[["bash", "l1"]], [["bash", "l1", "x"]]]
 
 
 def test_numbers_are_items_as_written() -> None:

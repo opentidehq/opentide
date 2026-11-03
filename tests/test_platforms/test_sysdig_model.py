@@ -144,16 +144,6 @@ def test_omitted_status_is_the_missing_field_not_a_code() -> None:
             {**RULE, "macros": [{"name": "self", "condition": "self and x.y = 1"}]},
         ),
         (
-            "sysdig_definition_order",
-            {
-                **RULE,
-                "lists": [
-                    {"name": "first", "items": ["second"]},
-                    {"name": "second", "items": ["a"]},
-                ],
-            },
-        ),
-        (
             "sysdig_list_in_value",
             {
                 **RULE,
@@ -242,6 +232,18 @@ def test_legacy_external_id_keys_are_dropped_by_the_loader_only() -> None:
 )
 def test_exception_forms_falco_accepts_validate(exceptions: list[dict[str, Any]]) -> None:
     assert SysdigConfig.model_validate({**RULE, "exceptions": exceptions}).exceptions
+
+
+@pytest.mark.parametrize(
+    "lists",
+    [
+        [{"name": "l1", "items": ["l2", "bash"]}, {"name": "l2", "items": ["zsh"]}],
+        [{"name": "l1", "items": ["bash", "l1"]}],  # an advisory, never an error
+    ],
+)
+def test_list_order_is_never_a_model_error(lists: list[dict[str, Any]]) -> None:
+    block = SysdigConfig.model_validate({**RULE, "condition": "proc.name in (l1)", "lists": lists})
+    assert block.lists
 
 
 def test_a_block_list_in_an_exception_value_validates_where_falco_expands_it() -> None:

@@ -547,7 +547,7 @@ def _placeholder_findings(records: list[_ObjectRecord]) -> list[dict[str, object
 
 
 def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, object]]:
-    """The engine's style findings on each object: query warnings and notes, Elastic advisories.
+    """The engine's style findings on each object: query warnings and notes, platform advisories.
 
     A query the engine rejects (an error) is ``opentide validate``'s finding,
     and the engine's object checks are validate's and lint's other checks'.
@@ -557,6 +557,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
     from opentide.analysis import (
         DECLARED_DATASET_CODES,
         ELASTIC_ADVISORY_CODES,
+        SYSDIG_ADVISORY_CODES,
         check_file,
         install_workspace_visibility,
         workspace,
@@ -578,6 +579,7 @@ def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, 
             if (
                 engine_reference(finding.code) is None
                 and finding.code not in ELASTIC_ADVISORY_CODES
+                and finding.code not in SYSDIG_ADVISORY_CODES
                 and finding.code not in DECLARED_DATASET_CODES
             ):
                 continue
