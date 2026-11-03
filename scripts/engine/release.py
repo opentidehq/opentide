@@ -195,6 +195,19 @@ RATE_LIMIT_WAIT = 11 * 60
 RATE_LIMIT_TRIES = 12
 
 
+#: crates.io's answer when a trusted-publishing token tries to create a crate.
+NEW_CRATE_REFUSAL = "trusted publishing tokens do not support creating new crates"
+
+
+def use_new_crate_token(env: dict[str, str]) -> bool:
+    """Whether a refused new crate can be retried with NEW_CRATE_TOKEN (a stored token).
+
+    Only once per crate: the retry's environment already uses that token.
+    """
+    token = env.get("NEW_CRATE_TOKEN", "")
+    return bool(token) and env.get("CARGO_REGISTRY_TOKEN") != token
+
+
 def publish() -> None:
     version = workspace_version()
     for package in publish_order(publishable_crates()):
@@ -202,18 +215,24 @@ def publish() -> None:
         if on_crates_io(name, version):
             print(f"{name} {version} is already on crates.io")
             continue
+        env = dict(os.environ)
         for attempt in range(1, RATE_LIMIT_TRIES + 1):
             result = subprocess.run(
                 ["cargo", "publish", "-p", name, "--allow-dirty"],
                 cwd=ROOT,
                 capture_output=True,
                 text=True,
+                env=env,
             )
             sys.stdout.write(result.stdout)
             sys.stderr.write(result.stderr)
             if result.returncode == 0:
                 break
             output = (result.stdout + result.stderr).lower()
+            if NEW_CRATE_REFUSAL in output and use_new_crate_token(env):
+                print(f"{name} is a new crate: publishing it with the stored token")
+                env = {**env, "CARGO_REGISTRY_TOKEN": env["NEW_CRATE_TOKEN"]}
+                continue
             if "429" not in output and "rate limit" not in output:
                 sys.exit(f"cargo publish -p {name} failed")
             if attempt == RATE_LIMIT_TRIES:
