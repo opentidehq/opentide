@@ -40,3 +40,4 @@ clap.workspace = true
 anyhow.workspace = true
 serde_yaml.workspace = true
 regex.workspace = true
+url.workspace = true

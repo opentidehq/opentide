@@ -7,6 +7,7 @@
 
 mod jsonrpc;
 pub mod server;
+pub mod uri;
 
 pub use server::{
     WORKSPACE_CATALOGS, run_listen, run_stdio, run_stdio_status, serve, serve_with_status,

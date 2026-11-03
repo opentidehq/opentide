@@ -13,6 +13,12 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// A path's `file:` URI as the platform's editors write it (`file:///C:/…`
+/// on Windows), so the tests run on every platform (#185 P0.3).
+fn file_uri(path: &std::path::Path) -> String {
+    opentide_lsp::uri::path_to_uri(&path.display().to_string())
+}
+
 struct Lsp {
     child: std::process::Child,
     reader: BufReader<std::process::ChildStdout>,
@@ -105,7 +111,7 @@ fn initialize_and_analyze_kql() {
         "initialize",
         json!({
             "capabilities": {},
-            "rootUri": format!("file://{}", repo_root().display())
+            "rootUri": file_uri(&repo_root())
         }),
     );
     assert_eq!(init["result"]["serverInfo"]["name"], "opentide-lsp");
@@ -285,13 +291,13 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
         "initialize",
         json!({
             "capabilities": {},
-            "rootUri": format!("file://{}", root.display())
+            "rootUri": file_uri(&root)
         }),
     );
     lsp.notify("initialized", json!({}));
     let path = root.join("objects/rules/rule-0001-sentinel-kql.yaml");
     let text = std::fs::read_to_string(&path).unwrap();
-    let uri = format!("file://{}", path.display());
+    let uri = file_uri(&path);
     lsp.notify(
         "textDocument/didOpen",
         json!({
@@ -486,11 +492,11 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", scratch.0.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(&scratch.0) }),
     );
     lsp.notify("initialized", json!({}));
     let yaml = "name: Sentinel Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: clear\ndescription: |\n  hello\n  world\n";
-    let uri = format!("file://{}", scratch.0.join("struct-rule.yaml").display());
+    let uri = file_uri(&scratch.0.join("struct-rule.yaml"));
     let uri = uri.as_str();
     lsp.notify(
         "textDocument/didOpen",
@@ -716,12 +722,12 @@ fn initialize_installs_the_workspace_field_catalog() {
     )
     .unwrap();
     let rule = "name: House Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: house\n";
-    let uri = format!("file://{}/objects/rules/house-rule.yaml", root.display());
+    let uri = file_uri(&root.join("objects/rules/house-rule.yaml"));
 
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(&root) }),
     );
     let with_catalog = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
     drop(lsp);
@@ -812,17 +818,12 @@ fn an_unreadable_workspace_file_does_not_break_analysis() {
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", scratch.0.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(&scratch.0) }),
     );
     lsp.notify("initialized", json!({}));
     let path = scratch.0.join(rule);
     let text = std::fs::read_to_string(&path).unwrap();
-    let mut published = published_codes(
-        &mut lsp,
-        &format!("file://{}", path.display()),
-        "opentide-yaml",
-        &text,
-    );
+    let mut published = published_codes(&mut lsp, &file_uri(&path), "opentide-yaml", &text);
     published.sort();
     assert_eq!(published, expected);
 }
@@ -851,12 +852,12 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
         visibility,
     )
     .unwrap();
-    let uri = format!("file://{}/hunt.kql", root.display());
+    let uri = file_uri(&root.join("hunt.kql"));
 
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
     );
     let codes = published_codes(&mut lsp, &uri, "kql", "NTAIpDetails | take 1");
     assert_eq!(codes, vec!["kql_table_not_declared".to_string()]);
@@ -901,11 +902,11 @@ fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
         "[[logsources]]\nname = \"WinEventLog:Security\"\ndescription = \"Events.\"\nsystem = \"splunk\"\n",
     )
     .unwrap();
-    let uri = format!("file://{}/hunt.spl", root.display());
+    let uri = file_uri(&root.join("hunt.spl"));
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
     );
     let codes = published_codes(&mut lsp, &uri, "spl", "sourcetype=sysmon EventCode=1");
     assert!(
@@ -939,11 +940,11 @@ fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
 fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
     let scratch = Scratch::new("declare-create");
     let root = &scratch.0;
-    let uri = format!("file://{}/hunt.kql", root.display());
+    let uri = file_uri(&root.join("hunt.kql"));
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
     );
     let codes = published_codes(&mut lsp, &uri, "kql", "MyCustom_CL | take 1");
     assert_eq!(codes, vec!["kql_unknown_table".to_string()]);
@@ -995,7 +996,7 @@ fn editing_visibility_toml_rechecks_open_queries() {
     let config = root.join(".opentide/configurations");
     std::fs::create_dir_all(&config).unwrap();
     let path = config.join("visibility.toml");
-    let visibility_uri = format!("file://{}", path.display());
+    let visibility_uri = file_uri(&path);
     let declare = |tables: &[&str]| {
         tables
             .iter()
@@ -1006,12 +1007,12 @@ fn editing_visibility_toml_rechecks_open_queries() {
             })
             .collect::<String>()
     };
-    let uri = format!("file://{}/hunt.kql", root.display());
+    let uri = file_uri(&root.join("hunt.kql"));
 
     let mut lsp = Lsp::spawn();
     let init = json!({
         "capabilities": { "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } },
-        "rootUri": format!("file://{}", root.display())
+        "rootUri": file_uri(root)
     });
     lsp.request("initialize", init);
     lsp.notify("initialized", json!({}));
@@ -1280,7 +1281,7 @@ fn objects_written_after_start_are_indexed() {
         let rule_text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
         let rule = rules.join("rule-1.0.yaml");
         std::fs::write(&rule, &rule_text).unwrap();
-        let rule_uri = format!("file://{}", rule.display());
+        let rule_uri = file_uri(&rule);
 
         let mut lsp = Lsp::spawn();
         let capabilities = if watch {
@@ -1290,7 +1291,7 @@ fn objects_written_after_start_are_indexed() {
         };
         lsp.request(
             "initialize",
-            json!({ "processId": null, "rootUri": format!("file://{}", root.display()), "capabilities": capabilities }),
+            json!({ "processId": null, "rootUri": file_uri(&root), "capabilities": capabilities }),
         );
         lsp.notify("initialized", json!({}));
         lsp.notify(
@@ -1305,7 +1306,7 @@ fn objects_written_after_start_are_indexed() {
         if watch {
             lsp.notify(
                 "workspace/didChangeWatchedFiles",
-                json!({ "changes": [{ "uri": format!("file://{}", objective.display()), "type": 1 }] }),
+                json!({ "changes": [{ "uri": file_uri(&objective), "type": 1 }] }),
             );
         } else {
             lsp.notify(
@@ -1392,10 +1393,10 @@ fn the_workspace_walk_stays_in_objects_and_ignores_symlinked_directories() {
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "processId": null, "rootUri": format!("file://{}", root.display()), "capabilities": {} }),
+        json!({ "processId": null, "rootUri": file_uri(&root), "capabilities": {} }),
     );
     lsp.notify("initialized", json!({}));
-    let uri = format!("file://{}", rules.join("rule-1.0.yaml").display());
+    let uri = file_uri(&rules.join("rule-1.0.yaml"));
     lsp.notify(
         "textDocument/didOpen",
         json!({ "textDocument": { "uri": uri, "languageId": "opentide-yaml", "version": 1, "text": rule_text } }),

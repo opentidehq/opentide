@@ -47,6 +47,8 @@ toml = "0.8"
 toml_edit = { version = "0.22", default-features = false, features = ["parse"] }
 thiserror = "2"
 anyhow = "1"
+# The LSP host: file URIs (#185 P0.3).
+url = "2.5"
 regex = "1"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }

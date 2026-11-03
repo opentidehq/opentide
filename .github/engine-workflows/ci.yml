@@ -45,6 +45,17 @@ jobs:
           OPENTIDE_LSP_BIN: target/debug/opentide-lsp
         run: node --experimental-strip-types --test packages/lsp-client/src/index.test.ts
 
+  # The language server on Windows (#185 P0.3): drive-letter and UNC `file:`
+  # URIs name the same file as the workspace walk, and the protocol tests run
+  # against the Windows build.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: test (opentide-lsp, opentide-core)
+        run: cargo test -p opentide-lsp -p opentide-core
+
   # Every crate builds from its packaged sources, as it will from crates.io:
   # a crate that reads a file outside OPENTIDE_ASSETS fails here, not at release.
   package:
