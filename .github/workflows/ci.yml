@@ -397,7 +397,7 @@ jobs:
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
           -m cli_smoke -q --no-cov
 
-      # NTFS is case-insensitive, so `Objects` and `objects` are one folder.
-      # Linux runners cannot exercise that path of `migrate objects` (#522).
-      - name: Layout migration on a case-insensitive filesystem
-        run: uv run pytest tests/test_cli/test_migrate_objects.py -q --no-cov
+      # Promotion rewrites rule files in place: on Windows they are usually CRLF,
+      # and the replace of the temporary file must work on NTFS.
+      - name: Promotion keeps a rule file's line endings
+        run: uv run pytest tests/test_deployment/test_promotion_rewrite.py -q --no-cov
