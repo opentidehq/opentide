@@ -281,12 +281,22 @@ jobs:
           python3 scripts/release.py notes "${TAG}" > notes.md
           # From "Run workflow", the tag does not exist yet: the release creates it
           # on the commit this run built.
-          gh release create "${TAG}" dist/* \
+          if ! gh release create "${TAG}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
             --title "opentide-lsp ${TAG}" \
-            --notes-file notes.md \
-            || gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+            --notes-file notes.md; then
+            gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+            # A re-run, or a release created by hand: an asset this run did not
+            # build has no line in SHA256SUMS and no attestation, so it goes.
+            gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' \
+              | while read -r name; do
+                  if [ ! -e "dist/${name}" ]; then
+                    echo "removing ${name}, which this run did not build"
+                    gh release delete-asset "${TAG}" "${name}" --repo "${GITHUB_REPOSITORY}" --yes
+                  fi
+                done
+          fi
 
   # What a consumer downloads checks out: the sums, and the highlights zip's
   # attestation (#196). It runs after the release, and on its own for
@@ -309,7 +319,10 @@ jobs:
           set -euo pipefail
           mkdir -p published
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir published
+          # sha256sum checks the names SHA256SUMS lists; verify-sums also fails on
+          # an asset it leaves out.
           (cd published && sha256sum --check --strict SHA256SUMS)
+          python3 scripts/release.py verify-sums published
           gh attestation verify "published/highlights-${TAG}.zip" --repo "${GITHUB_REPOSITORY}"
 
   # crates.io is permanent: publish only once the GitHub Release exists and its

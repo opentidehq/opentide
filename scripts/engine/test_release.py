@@ -89,6 +89,49 @@ class Sha256SumsTest(unittest.TestCase):
         self.assertTrue((self.dir / "SHA256SUMS").is_file())
 
 
+class VerifySumsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.dir)
+        (self.dir / "highlights-v1.0.0.zip").write_bytes(b"PK")
+        (self.dir / "NOTICE").write_bytes(b"n")
+        release.write_sums(self.dir)
+
+    def test_the_sums_of_every_asset_pass(self) -> None:
+        self.assertEqual(release.verify_sums(self.dir), [])
+
+    def test_an_asset_the_sums_leave_out_fails(self) -> None:
+        # What sha256sum --check --strict lets through: a published asset with no line.
+        (self.dir / "opentide-lsp-v0.9.0-x86_64-unknown-linux-gnu").write_bytes(b"stale")
+        problems = release.verify_sums(self.dir)
+        self.assertEqual(
+            problems, ["opentide-lsp-v0.9.0-x86_64-unknown-linux-gnu has no line in SHA256SUMS"]
+        )
+
+    def test_a_listed_asset_that_is_missing_or_changed_fails(self) -> None:
+        (self.dir / "NOTICE").unlink()
+        (self.dir / "highlights-v1.0.0.zip").write_bytes(b"tampered")
+        problems = release.verify_sums(self.dir)
+        self.assertIn("NOTICE is in SHA256SUMS but not an asset", problems)
+        self.assertIn("highlights-v1.0.0.zip: the digest does not match SHA256SUMS", problems)
+
+    def test_a_missing_or_malformed_sums_file_fails(self) -> None:
+        (self.dir / "SHA256SUMS").write_text("not a sum\n", encoding="utf-8")
+        self.assertTrue(release.verify_sums(self.dir))
+        (self.dir / "SHA256SUMS").unlink()
+        self.assertEqual(release.verify_sums(self.dir), [f"{self.dir / 'SHA256SUMS'} is missing"])
+
+    def test_the_cli_fails_on_an_unlisted_asset(self) -> None:
+        script = Path(release.__file__)
+        run = [sys.executable, str(script), "verify-sums", str(self.dir)]
+        ok = subprocess.run(run, capture_output=True, text=True, check=False)
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        (self.dir / "extra.wasm").write_bytes(b"\0asm")
+        bad = subprocess.run(run, capture_output=True, text=True, check=False)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("extra.wasm has no line in SHA256SUMS", bad.stderr)
+
+
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml"
 
 
@@ -162,6 +205,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("always()", jobs["npm"])
         # The release job no longer checks: verify-assets does, for both paths.
         self.assertNotIn("gh attestation verify", jobs["release"])
+
+    def test_the_published_assets_are_checked_against_every_line_of_the_sums(self) -> None:
+        self.assertIn("python3 scripts/release.py verify-sums published", workflow_jobs()["verify-assets"])
 
 
 if __name__ == "__main__":
