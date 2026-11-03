@@ -299,8 +299,9 @@ def _declaration(option: click.Option) -> tuple[object, ...]:
 #: ``setup ci`` options the one-shot ``setup --ci`` deliberately does not take.
 _SETUP_CI_ONLY: dict[str, str] = {}
 
-#: Options both forms take that pick the target or give consent; neither shapes the pipeline.
-_NOT_CI_GENERATION = frozenset({"path", "yes"})
+#: Options both forms take that pick the target, give consent or only plan (``--plan``,
+#: which writes nothing); none shapes the pipeline.
+_NOT_CI_GENERATION = frozenset({"path", "yes", "plan"})
 
 #: A non-default value for each ``setup ci`` option that is not a flag.
 _SAMPLE_VALUES = {

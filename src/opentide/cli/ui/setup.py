@@ -229,3 +229,28 @@ def setup_outcome(
 def warnings_once(warnings: Iterable[str]) -> list[str]:
     """The warnings in order, each once."""
     return list(dict.fromkeys(str(item) for item in warnings))
+
+
+def render_plan_files(console: Console, payload: Mapping[str, Any]) -> None:
+    """``setup --plan``: each step, then one row per file, ``create``, ``merge`` or ``skip``.
+
+    The outcome line (the counts, "nothing written") follows from the result.
+    """
+    for step in _steps(payload):
+        files = step.get("files") or []
+        console.print(Text(str(step.get("step", "")), style="bold"), soft_wrap=True)
+        if not files:
+            console.print(Text("  nothing to write", style="dim"), soft_wrap=True)
+            continue
+        rows = [
+            (
+                Text(
+                    str(item.get("action", "")), style="dim" if item.get("action") == "skip" else ""
+                ),
+                Text(str(item.get("path", "")), style="bold"),
+            )
+            for item in files
+            if isinstance(item, Mapping)
+        ]
+        console.print(columns(rows, indent=2), soft_wrap=True)
+    console.print()

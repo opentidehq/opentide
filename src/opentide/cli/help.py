@@ -88,6 +88,7 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "setup": (
         "opentide setup",
         'opentide setup --yes --name "Detections" --platform sentinel --ci github',
+        "opentide setup --plan --platform sentinel --mcp vscode --hooks --env",
     ),
     "setup repo": ('opentide setup repo --yes --name "Detections" --platform sentinel',),
     "setup platforms": ("opentide setup platforms --sentinel --splunk --yes",),

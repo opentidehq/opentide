@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
@@ -59,7 +61,8 @@ def _given_on_command_line(ctx: typer.Context, name: str) -> bool:
 _GROUP_PATHS = "opentide.setup.paths"
 _GROUP_YES = "opentide.setup.yes"
 _GROUP_REFUSAL = "opentide.setup.refusal"
-_HANDED_DOWN = frozenset({"path", "yes"})
+_GROUP_PLAN = "opentide.setup.plan"
+_HANDED_DOWN = frozenset({"path", "yes", "plan"})
 
 
 def _one_path(cli: CliContext, *given: str | None) -> str | None:
@@ -97,6 +100,8 @@ def _hand_down(ctx: typer.Context) -> None:
         ctx.meta[_GROUP_PATHS] = (*ctx.meta.get(_GROUP_PATHS, ()), ctx.params["path"])
     if ctx.params.get("yes"):
         ctx.meta[_GROUP_YES] = True
+    if ctx.params.get("plan"):
+        ctx.meta[_GROUP_PLAN] = True
 
 
 def _group_path(ctx: typer.Context, cli: CliContext, own: str | None) -> str | None:
@@ -109,6 +114,34 @@ def _group_path(ctx: typer.Context, cli: CliContext, own: str | None) -> str | N
 
 def _consented(ctx: typer.Context, yes: bool) -> bool:
     return yes or bool(ctx.meta.get(_GROUP_YES))
+
+
+def _planning(ctx: typer.Context, plan: bool) -> bool:
+    """``--plan`` on this command or on the ``setup`` group before it."""
+    return plan or bool(ctx.meta.get(_GROUP_PLAN))
+
+
+#: A setup step run for a plan: the copy of the target, and the per-step callback.
+PlanRun = Callable[[Path, Callable[[str, Mapping[str, object]], None]], Mapping[str, object]]
+
+
+def _emit_plan(cli: CliContext, target: Path, step: str, run: PlanRun) -> None:
+    """Run *run* in a copy of *target* and print the files it would write; write nothing."""
+    from opentide.cli.services.setup.plan import plan_payload, plan_steps
+
+    cli.apply_environment()
+    steps, result = plan_steps(target, run, name=step)
+    payload = plan_payload(target, steps)
+    if result.get("status") == "failed":
+        payload["status"] = "failed"
+        payload["message"] = str(result.get("message") or "Setup would fail")
+        exit_code = result.get("_exit_code")
+        payload["_exit_code"] = exit_code if isinstance(exit_code, int) and exit_code else 1
+    if not cli.json_output:
+        from opentide.cli.ui.setup import render_plan_files
+
+        render_plan_files(get_stdout_console(), payload)
+    emit_success(cli, payload)
 
 
 def _option_path(ctx: typer.Context, cli: CliContext, option: str) -> Path:
@@ -145,6 +178,9 @@ def _setup_path(
     return _resolve_setup_path(cli, "." if chosen is None else chosen)
 
 
+PLAN_OPTION = typer.Option(
+    False, "--plan", help="List the files each step would write, and write nothing"
+)
 PATH_OPTION = typer.Option(".", "--path", "-C", help="Repository path")
 PATH_ARGUMENT = typer.Argument(".", help="Repository path (alias for --path)", hidden=True)
 REFRESH_OPTION = typer.Option(
@@ -400,6 +436,26 @@ def setup_cmd(
         "--vscode-setup",
         help="Run deprecated setup vscode: the extension recommendation and snippets",
     ),
+    mcp: list[McpHost] = typer.Option(
+        [],
+        "--mcp",
+        metavar="HOST",
+        help="Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)",
+    ),
+    skills: list[SkillTarget] = typer.Option(
+        [],
+        "--skills",
+        metavar="TARGET",
+        help="Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)",
+    ),
+    plugin: bool = typer.Option(
+        False,
+        "--plugin",
+        help="Register the opentidehq/skills Agent Plugin for Claude Code (.claude/settings.json)",
+    ),
+    hooks: bool = typer.Option(False, "--hooks", help="Validate objects on every commit"),
+    env: bool = typer.Option(False, "--env", help="Write .env.example and ignore .env"),
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help="Non-interactive mode"),
 ) -> None:
     """Interactive or scripted detection repository onboarding."""
@@ -417,11 +473,17 @@ def setup_cmd(
     cli = get_context(ctx)
     base = _resolve_setup_path(cli, path)
     has_repo = _has_repo_flags(name, org, description, platform)
-    only_ci_none = ci is CiPlatform.none and not yes and not has_repo and not vscode_setup
-    scripted = not only_ci_none and (yes or has_repo or ci is not None or vscode_setup)
+    # The wizard's other questions, answered on the command line.
+    answers = bool(mcp or skills or plugin or hooks or env)
+    only_ci_none = (
+        ci is CiPlatform.none and not yes and not has_repo and not vscode_setup and not answers
+    )
+    scripted = plan or (
+        not only_ci_none and (yes or has_repo or ci is not None or vscode_setup or answers)
+    )
 
     if scripted:
-        if not _confirm_write(cli, base, "Apply this setup?", yes=yes):
+        if not plan and not _confirm_write(cli, base, "Apply this setup?", yes=yes):
             emit_success(cli, {"message": "Setup cancelled", "status": "skipped"})
             return
         options = SetupOptions(
@@ -441,16 +503,24 @@ def setup_cmd(
             explorer_pages=explorer_pages,
             default_branch=default_branch,
             vscode_setup=vscode_setup,
-            yes=yes,
+            yes=yes or plan,
             run_repo=_should_run_repo(
-                yes=yes,
+                yes=yes or plan,
                 interactive=False,
                 has_repo_flags=has_repo,
                 ci=ci,
-                vscode_setup=vscode_setup,
+                # The other steps asked for, like --ci, leave the scaffold alone.
+                vscode_setup=vscode_setup or answers,
             ),
             run_ci=ci is not None and ci is not CiPlatform.none,
             run_platforms=bool(platform),
+            run_mcp=bool(mcp),
+            mcp_hosts=list(dict.fromkeys(mcp)),
+            run_skills=bool(skills or plugin),
+            skill_targets=list(dict.fromkeys(skills)),
+            plugin=plugin,
+            run_hooks=hooks,
+            run_env=env,
             warnings=_ignored_ci_flag_warnings(
                 ci=ci,
                 staging=staging,
@@ -462,6 +532,14 @@ def setup_cmd(
                 lint_changed=lint_changed,
             ),
         )
+        if plan:
+            _emit_plan(
+                cli,
+                base,
+                "setup",
+                lambda target, after: run_setup(replace(options, path=target), after_step=after),
+            )
+            return
         cli.apply_environment()
         result = run_setup(options)
     else:
@@ -489,6 +567,7 @@ def setup_repo_cmd(
         metavar=PLATFORM_METAVAR,
         help=platform_help("Enable a detection platform (repeatable)"),
     ),
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Scaffold a detection repository."""
@@ -502,6 +581,17 @@ def setup_repo_cmd(
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
+    if _planning(ctx, plan):
+        repo_options = RepoSetupOptions(
+            name=name, org=org, description=description, platforms=platform, yes=True
+        )
+        _emit_plan(
+            cli,
+            base,
+            "repo",
+            lambda target, _: run_repo_setup(replace(repo_options, path=target)),
+        )
+        return
     if yes or _has_repo_flags(name, org, description, platform):
         if not _confirm_write(cli, base, "Create this repository scaffold?", yes=yes):
             emit_success(cli, {"message": "Repository setup cancelled", "status": "skipped"})
@@ -543,6 +633,7 @@ def setup_platforms_cmd(
     harfanglab: bool = typer.Option(False, "--harfanglab", help="Enable HarfangLab"),
     elastic: bool = typer.Option(False, "--elastic", help="Enable Elastic Security"),
     sysdig: bool = typer.Option(False, "--sysdig", help="Enable Sysdig Secure (Falco)"),
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Create and enable platform configuration files in `.opentide/configurations/platforms/`."""
@@ -572,6 +663,16 @@ def setup_platforms_cmd(
         platforms.append(DetectionPlatform.sysdig)
     if not platforms:
         raise typer.BadParameter("Choose at least one platform flag (e.g. --sentinel --splunk)")
+    if _planning(ctx, plan):
+        _emit_plan(
+            cli,
+            base,
+            "platforms",
+            lambda target, _: run_platforms_setup(
+                PlatformsSetupOptions(path=target, platforms=platforms, yes=True)
+            ),
+        )
+        return
     if not _confirm_write(cli, base, "Write these platform configurations?", yes=yes):
         emit_success(cli, {"message": "Platform setup cancelled", "status": "skipped"})
         return
@@ -626,6 +727,7 @@ def setup_ci_cmd(
         help="Include GitHub Pages explorer build and deploy jobs",
     ),
     default_branch: str | None = DEFAULT_BRANCH_OPTION,
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Generate CI/CD pipeline files (platforms discovered from repo config)."""
@@ -635,7 +737,8 @@ def setup_ci_cmd(
     provider = CiPlatform(ci_platform)
     target = _option_path(ctx, cli, path)
     yes = _consented(ctx, yes)
-    if not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
+    planning = _planning(ctx, plan)
+    if not planning and not _confirm_write(cli, target, "Write this CI/CD configuration?", yes=yes):
         emit_success(cli, {"message": "CI/CD setup cancelled", "status": "skipped"})
         return
     options = CiSetupOptions(
@@ -650,8 +753,11 @@ def setup_ci_cmd(
         python_version=python_version,
         explorer_pages=explorer_pages,
         default_branch=default_branch,
-        yes=yes,
+        yes=yes or planning,
     )
+    if planning:
+        _emit_plan(cli, target, "ci", lambda copy, _: run_ci_setup(replace(options, path=copy)))
+        return
     cli.apply_environment()
     _emit_setup(cli, run_ci_setup(options))
 
@@ -661,6 +767,7 @@ def setup_env_cmd(
     ctx: typer.Context,
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Write `.env.example` with `OPENTIDE_REPO_ROOT` and ignore `.env`."""
@@ -669,6 +776,14 @@ def setup_env_cmd(
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
+    if _planning(ctx, plan):
+        _emit_plan(
+            cli,
+            base,
+            "env",
+            lambda target, _: run_env_setup(EnvSetupOptions(path=target, yes=True)),
+        )
+        return
     if not _confirm_write(cli, base, "Write .env.example with OPENTIDE_REPO_ROOT?", yes=yes):
         emit_success(cli, {"message": "Environment setup cancelled", "status": "skipped"})
         return
@@ -686,6 +801,7 @@ def setup_hooks_cmd(
         "--install/--no-install",
         help="Install .git/hooks/pre-commit when this path is a Git repository",
     ),
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Configure validate-on-commit hooks (pre-commit config + Git hook)."""
@@ -694,6 +810,16 @@ def setup_hooks_cmd(
     cli = get_context(ctx)
     base = _setup_path(ctx, cli, path, path_flag)
     yes = _consented(ctx, yes)
+    if _planning(ctx, plan):
+        _emit_plan(
+            cli,
+            base,
+            "hooks",
+            lambda target, _: run_hooks_setup(
+                HooksSetupOptions(path=target, install=install, yes=True)
+            ),
+        )
+        return
     if not _confirm_write(cli, base, "Configure validate-on-commit hooks?", yes=yes):
         emit_success(cli, {"message": "Hook setup cancelled", "status": "skipped"})
         return
@@ -714,6 +840,7 @@ def setup_mcp_cmd(
     generic: bool = typer.Option(
         False, "--generic", help="Configure any MCP host (opentide.mcp.json)"
     ),
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Write opentide MCP configuration for editors and agents."""
@@ -737,13 +864,22 @@ def setup_mcp_cmd(
     if generic:
         hosts.append(McpHost.generic)
 
-    if yes and not hosts:
+    planning = _planning(ctx, plan)
+    if (yes or planning) and not hosts:
         emit_error(
             cli,
             "Choose at least one MCP host (--vscode, --cursor, --claude-code, --generic)",
             exit_code=USAGE_EXIT_CODE,
             code=USAGE_MISSING_OPTION,
         )
+    if planning:
+        _emit_plan(
+            cli,
+            base,
+            "mcp",
+            lambda target, _: run_mcp_setup(McpSetupOptions(path=target, hosts=hosts, yes=True)),
+        )
+        return
 
     if yes or hosts:
         if not _confirm_write(cli, base, "Write these MCP configurations?", yes=yes):
@@ -798,6 +934,7 @@ def setup_skills_install_cmd(
     description: str | None = typer.Option(
         None, "--description", help="One paragraph under the heading of the agent files"
     ),
+    plan: bool = PLAN_OPTION,
     yes: bool = typer.Option(False, "--yes", "-y", help="Install without asking"),
 ) -> None:
     """Install detection engineering agent skills from opentidehq/skills.
@@ -830,7 +967,8 @@ def setup_skills_install_cmd(
     if github_copilot:
         targets.append(SkillTarget.github_copilot)
 
-    if yes and not targets and not plugin:
+    planning = _planning(ctx, plan)
+    if (yes or planning) and not targets and not plugin:
         emit_error(
             cli,
             "Choose at least one skills target "
@@ -838,6 +976,27 @@ def setup_skills_install_cmd(
             exit_code=USAGE_EXIT_CODE,
             code=USAGE_MISSING_OPTION,
         )
+    if planning:
+        skills_options = SkillsSetupOptions(
+            targets=targets,
+            skill_slugs=list(install),
+            install_all=all_skills,
+            name=name,
+            org=org,
+            description=description,
+            plugin=plugin,
+            yes=True,
+        )
+        try:
+            _emit_plan(
+                cli,
+                base,
+                "skills",
+                lambda target, _: run_skills_setup(replace(skills_options, path=target)),
+            )
+        except (SkillsDownloadError, SkillsManifestError) as exc:
+            emit_error(cli, str(exc))
+        return
 
     if yes or targets or plugin:
         if not _confirm_write(cli, base, "Install these agent skills?", yes=yes):
@@ -1045,6 +1204,7 @@ def setup_vscode_cmd(
         "-y",
         help="Accepted for symmetry with other setup subcommands; this command never prompts",
     ),
+    plan: bool = PLAN_OPTION,
 ) -> None:
     """Recommend the opentide extension and write snippets (deprecated). Default: both."""
     from opentide.cli.services.setup.vscode import run_vscode_setup
@@ -1054,12 +1214,20 @@ def setup_vscode_cmd(
     target = _setup_path(ctx, cli, path, path_flag)
     run_settings_flag = settings or not snippets
     run_snippets_flag = snippets or not settings
-    result = run_vscode_setup(
-        target,
-        settings=run_settings_flag,
-        snippets=run_snippets_flag,
-        generate=not no_generate,
-        merge=not no_merge,
-        mcp=mcp,
-    )
-    _emit_setup(cli, result)
+
+    def run(where: Path) -> dict[str, object]:
+        return dict(
+            run_vscode_setup(
+                where,
+                settings=run_settings_flag,
+                snippets=run_snippets_flag,
+                generate=not no_generate,
+                merge=not no_merge,
+                mcp=mcp,
+            )
+        )
+
+    if _planning(ctx, plan):
+        _emit_plan(cli, target, "vscode", lambda copy, _: run(copy))
+        return
+    _emit_setup(cli, run(target))
