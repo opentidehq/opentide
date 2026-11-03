@@ -94,7 +94,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - A space opens no completion list in Tide YAML.
   - An edit whose version is not newer than the document's is ignored.
 - `completionItem/resolve` documents a Tide value from the field it was completed for, carried in the item's `data`, not from the first field with that value ([#185](https://github.com/opentidehq/language-server/issues/185) P0.9).
-- Windows: `opentide-lsp analyze` no longer reports a file as its own `duplicate_id` when its path mixes `/` and `\\` (`opentide_tide::same_file`). The language server never did. CI's Windows job found it.
+- Windows: `opentide-lsp analyze` no longer reports a file as its own `duplicate_id` when its path mixes `/` and `\` (`opentide_tide::same_file`). The language server never did. CI's Windows job found it.
 - EQL and ES|QL signature help, and completion in the language server, no longer panic when the character before the name being typed is wider than one byte (`wehrEÖndsWith(`, `= Öabs(`, `where éAccount`). The fuzzer found it ([#182](https://github.com/opentidehq/language-server/issues/182)). The word's start is now found by `opentide_core::word_start`, which always returns a character boundary.
 - Completion and hover work with the cursor right after the last character of an injected query, where it sits while the author types. They found no query there, in every language.
 - A release build of `opentide-lsp` no longer warns about the debug-only test requests, which CI's `-Dwarnings` turned into an error.
