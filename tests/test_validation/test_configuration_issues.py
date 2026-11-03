@@ -515,9 +515,20 @@ def test_unmodelled_bundled_file_says_it_is_not_checked(name: str) -> None:
 
 def test_platform_file_is_routed_the_way_the_loader_keys_it() -> None:
     issues = configuration_file_issues(
-        "platforms/legacy.toml", {"tide": {"identifier": "sentinel"}, "tenants": [{"name": "T"}]}
+        "platforms/other.toml",
+        {"platform": {"identifier": "sentinel"}, "tenants": [{"name": "T"}]},
     )
     assert ("tenants", "0", "setup") in {issue.field_path for issue in issues}
+
+
+def test_a_tide_table_does_not_route_a_platform_file() -> None:
+    """`[tide] identifier` is CoreTIDE's and is not read (#736): the file name routes it."""
+    issues = configuration_file_issues(
+        "platforms/other.toml", {"tide": {"identifier": "sentinel"}, "tenants": [{"name": "T"}]}
+    )
+    # Routed by its name as a plugin's platform file, which is open; not as
+    # Sentinel, whose tenants need `setup`.
+    assert ("tenants", "0", "setup") not in {issue.field_path for issue in issues}
 
 
 def test_windows_path_stem_is_read() -> None:

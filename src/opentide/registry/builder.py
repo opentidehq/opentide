@@ -283,6 +283,7 @@ class RegistryBuilder:
         recomposition: dict[str, str],
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         from opentide.generation.pydantic_metaschema import build_platform_schema_source
+        from opentide.models.platform import PLATFORM_CONFIG_MODELS
         from opentide.models.platform_schema import platform_model_for_key
 
         subschemas_index: dict[str, Any] = {}
@@ -295,11 +296,13 @@ class RegistryBuilder:
             for data, entry in recomp_data.items():
                 if not isinstance(entry, dict):
                     continue
-                platform_section = entry.get("platform") or entry.get("tide") or {}
+                platform_section = entry.get("platform") or {}
                 sub_name = (
                     platform_section.get("name") or platform_section.get("subschema") or str(data)
                 )
-                if not platform_section:
+                # No rule block exists for a platform without a model (a
+                # plugin's `platforms/<id>.toml`): nothing to index (#736).
+                if not platform_section or data not in PLATFORM_CONFIG_MODELS:
                     continue
                 platform_model = platform_model_for_key(data)
                 subschemas_index[recomp][data] = build_platform_schema_source(platform_model)

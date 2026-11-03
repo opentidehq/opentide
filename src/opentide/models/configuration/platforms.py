@@ -15,7 +15,6 @@ from pydantic import ConfigDict, Field
 from opentide.models.configuration.base import (
     ConfigurationModel,
     EnvPlaceholder,
-    OpenConfigurationModel,
     RunStrategyName,
     SslValue,
 )
@@ -38,14 +37,6 @@ class PlatformIdentity(ConfigurationModel):
     description: str = Field(default="", description="What the platform is.")
     flags: list[str] = Field(
         default_factory=list, description="Flags a modifier condition can match."
-    )
-
-
-class LegacyTideIdentity(OpenConfigurationModel):
-    """`[tide]`: CoreTIDE-era identity table. `identifier` keys the file."""
-
-    identifier: str | None = Field(
-        default=None, description="Platform identifier, read when [platform] has none."
     )
 
 
@@ -110,9 +101,6 @@ class PlatformConfigurationBase(ConfigurationModel):
 
     platform: PlatformIdentity = Field(
         default_factory=PlatformIdentity, description="Platform identity."
-    )
-    tide: LegacyTideIdentity | None = Field(
-        default=None, description="CoreTIDE-era identity table."
     )
     modifiers: list[Modifier] = Field(
         default_factory=list, description="Deploy-time rule modifiers."

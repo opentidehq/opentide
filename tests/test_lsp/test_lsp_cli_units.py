@@ -43,11 +43,20 @@ def test_serve_says_on_stderr_when_the_engine_does_not_load(
     assert "help: reinstall opentide" in captured.err
 
 
-def test_serve_returns_when_the_server_ends(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(("clean", "code"), [(True, 0), (False, 1)])
+def test_serve_exits_with_the_lsp_code(
+    monkeypatch: pytest.MonkeyPatch, clean: bool, code: int
+) -> None:
+    """0 when the editor shut the server down before `exit`, 1 otherwise."""
     calls: list[str] = []
-    monkeypatch.setattr("opentide.analysis.serve_stdio", lambda: calls.append("served"))
+
+    def served() -> bool:
+        calls.append("served")
+        return clean
+
+    monkeypatch.setattr("opentide.analysis.serve_stdio", served)
     monkeypatch.setattr("sys.stdin.isatty", lambda: False, raising=False)
-    assert lsp.serve() == 0
+    assert lsp.serve() == code
     assert calls == ["served"]
 
 

@@ -38,7 +38,7 @@ def _schema_id_from_template_filename(filename: str) -> str | None:
 
 
 def _platform_section(entry: dict[str, Any]) -> dict[str, Any]:
-    section = entry.get("platform") or entry.get("tide")
+    section = entry.get("platform")
     return section if isinstance(section, dict) else {}
 
 

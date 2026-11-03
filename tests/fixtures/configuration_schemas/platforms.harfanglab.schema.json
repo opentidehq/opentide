@@ -131,27 +131,6 @@
       "title": "HarfangLabTenant",
       "type": "object"
     },
-    "LegacyTideIdentity": {
-      "additionalProperties": true,
-      "description": "`[tide]`: CoreTIDE-era identity table. `identifier` keys the file.",
-      "properties": {
-        "identifier": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Platform identifier, read when [platform] has none.",
-          "title": "Identifier"
-        }
-      },
-      "title": "LegacyTideIdentity",
-      "type": "object"
-    },
     "Modifier": {
       "additionalProperties": false,
       "description": "`[[modifiers]]`: rule values rewritten at deploy time when the conditions match.",
@@ -343,18 +322,6 @@
     "platform": {
       "$ref": "#/$defs/PlatformIdentity",
       "description": "Platform identity."
-    },
-    "tide": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/LegacyTideIdentity"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "CoreTIDE-era identity table."
     },
     "modifiers": {
       "description": "Deploy-time rule modifiers.",

@@ -16,6 +16,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
 | [`chaining_relation_unknown`](#chaining_relation_unknown) | A threat's chaining relation is not a known relation. |
 | [`changed_diff`](#changed_diff) | `share push --changed` could not calculate which objects changed. |
 | [`changed_on_pull_request`](#changed_on_pull_request) | `share push --changed` does not run on a pull request. |
@@ -26,6 +27,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`compile_invalid_rule`](#compile_invalid_rule) | The rule does not load as a detection rule the platform can compile. |
 | [`compile_invalid_value`](#compile_invalid_value) | A setting in the rule's platform block holds a value the platform cannot use. |
 | [`compile_missing_field`](#compile_missing_field) | A rule's Sentinel block lacks a setting Sentinel needs to build the alert rule. |
+| [`config_check_failed`](#config_check_failed) | opentide could not check this configuration file in the editor; the message says why. Its other findings are missing. |
 | [`config_enum_unknown`](#config_enum_unknown) | A value is not one of those your deployment configuration declares. |
 | [`config_parse`](#config_parse) | A configuration file could not be read as TOML. |
 | [`configuration`](#configuration) | The workspace configuration files under `.opentide/configurations/` load. |
@@ -310,6 +312,22 @@ assets = ["domain-controller"]   # declared as domain-controllers
 
 Correct the asset name, or declare the asset under `[[assets]]`.
 
+## cbc_unknown_field
+
+A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field.
+
+Severity: warning. Reported by the query checks and the language server on `configurations.carbon_black_cloud.query`, and on hunts whose `system` is `carbon_black_cloud`, at the field name, with the field it is close to as the suggestion. The field list is the engine's Carbon Black process search catalog. A field far from every catalog field is not reported, because the catalog may not list it.
+
+### Example
+
+```text illustrative
+`process_nmae` is not a Carbon Black Cloud process search field; did you mean `process_name`?
+```
+
+### How to fix
+
+Use the suggested field (`process_name:cmd.exe`). If the field is right and Carbon Black accepts it, `opentide validate query --live` confirms it against the tenant; report the missing field to the language server's catalog (`catalogs/carbon_black/fields.toml`).
+
 ## chaining_relation_unknown
 
 A threat's chaining relation is not a known relation.
@@ -480,6 +498,22 @@ error[compile_missing_field]: configurations.sentinel.scheduling.frequency is mi
 ### How to fix
 
 Add the key under `configurations.sentinel` in the rule. The generated rule template, and a rule from `opentide new rule --platform sentinel`, show each one with its default.
+
+## config_check_failed
+
+opentide could not check this configuration file in the editor; the message says why. Its other findings are missing.
+
+Severity: warning. Reported by the language server (`opentide lsp start`) on the first line of a file under `.opentide/configurations/` when the configuration check itself fails, for example because opentide raised an error while reading the parent instance's file. Nothing about the file is reported until the check runs again, so the file may still have problems `opentide validate` finds.
+
+### Example
+
+```text
+opentide could not check this file: ImportError: cannot import name 'configuration_buffer_issues'
+```
+
+### How to fix
+
+Run `opentide validate` in the workspace to see the file's findings and any error behind this one. If the message names an import or version error, the editor runs a different opentide than the one you installed: point the editor at it, or reinstall with `pip install --force-reinstall opentide`. Then edit the file or restart the language server to check it again.
 
 ## config_enum_unknown
 

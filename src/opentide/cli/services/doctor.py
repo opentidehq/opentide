@@ -213,12 +213,9 @@ def _enabled_platforms(configs: Mapping[str, Any]) -> list[str]:
     systems = configs.get("systems") or {}
     enabled: list[str] = []
     for system in SYSTEM_KEYS:
-        config = systems.get(system) or {}
-        for block in ("platform", "tide"):
-            section = config.get(block)
-            if isinstance(section, Mapping) and section.get("enabled") is True:
-                enabled.append(system)
-                break
+        section = (systems.get(system) or {}).get("platform")
+        if isinstance(section, Mapping) and section.get("enabled") is True:
+            enabled.append(system)
     return enabled
 
 

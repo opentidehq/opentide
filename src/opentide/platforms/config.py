@@ -324,7 +324,6 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
     @dataclass(frozen=True)
     class SplunkLegacyAttrs:
         Index: dict[str, Any]
-        tide: dict[str, Any]
         setup: dict[str, Any]
         secrets: dict[str, Any]
         defaults: dict[str, Any]
@@ -337,7 +336,6 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
     legacy_modifiers = {} if isinstance(raw_modifiers, list) else dict(raw_modifiers or {})
     legacy = SplunkLegacyAttrs(
         Index=raw,
-        tide=dict(raw.get("tide", {})),
         setup=dict(raw.get("setup", {})),
         secrets=dict(raw.get("secrets", {})),
         defaults=dict(raw.get("defaults", {})),
@@ -347,7 +345,6 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
     if "platform" not in raw:
         return SimpleNamespace(
             Index=legacy.Index,
-            tide=legacy.tide,
             setup=legacy.setup,
             secrets=legacy.secrets,
             defaults=legacy.defaults,
@@ -375,7 +372,6 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
         tenants=tenants or None,
         modifiers=modifiers or None,
         typed=typed,
-        tide=legacy.tide,
         setup=legacy.setup,
         secrets=legacy.secrets,
         defaults=legacy.defaults,
@@ -387,14 +383,12 @@ def _build_cbc_config(raw: dict[str, Any]) -> Any:
     @dataclass(frozen=True)
     class CarbonBlackLegacyAttrs:
         Index: dict[str, Any]
-        tide: dict[str, Any]
         setup: dict[str, Any]
         secrets: dict[str, Any]
         validation: dict[str, Any]
 
     legacy = CarbonBlackLegacyAttrs(
         Index=raw,
-        tide=dict(raw.get("tide", {})),
         setup=dict(raw.get("setup", {})),
         secrets=dict(raw.get("secrets", {})),
         validation=dict(raw.get("validation", {})),
@@ -403,7 +397,6 @@ def _build_cbc_config(raw: dict[str, Any]) -> Any:
     if "platform" not in raw:
         return SimpleNamespace(
             Index=legacy.Index,
-            tide=legacy.tide,
             setup=legacy.setup,
             secrets=legacy.secrets,
             validation=legacy.validation,
@@ -430,7 +423,6 @@ def _build_cbc_config(raw: dict[str, Any]) -> Any:
         tenants=tenants or None,
         modifiers=modifiers or None,
         typed=typed,
-        tide=legacy.tide,
         setup=legacy.setup,
         secrets=legacy.secrets,
         validation=legacy.validation,
