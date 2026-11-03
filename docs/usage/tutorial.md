@@ -40,10 +40,10 @@ opentide generate
 ✓ docs · 7 files · 1.2s · docs/
 ✓ exports · 3 files · 0.0s · .opentide/exports/
 ✓ vocabularies · 0 files · 0.0s
-✓ templates · 4 files · 1.9s · .opentide/templates/
+✓ templates · 5 files · 1.9s · .opentide/templates/
 ✓ schemas · 8 files · 2.6s · .opentide/
 ✓ snippets · 1 file · 0.0s · .vscode/
-✓ Generated 23 files in 5.8s · 6 phases
+✓ Generated 24 files in 5.8s · 6 phases
 ```
 
 This is the output with `--no-color`, in a pipe or in CI: one line per finished phase, with the files it wrote, how long it took and where they went, then the outcome line. At a terminal the phases draw as a live checklist with a spinner on the running one. Phase lines go to stderr and the outcome line to stdout, so `opentide generate > log.txt` keeps the phases on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
@@ -110,9 +110,6 @@ metadata:
   organisation:
     uuid: 00000000-0000-4000-8000-000000000099
     name: Example Corp
-composition:
-  strategy: Combined
-  description: Compose signals for credential access detection
 objective:
   priority: High
   type: Threat

@@ -1,13 +1,10 @@
 [platform]
 enabled = false
-identifier = "sentinel"
 name = "Microsoft Sentinel"
-subschema = "Microsoft Sentinel"
 description = """Microsoft Sentinel delivers intelligent security analytics
 and threat intelligence across the enterprise. With Microsoft Sentinel, you
 get a single solution for attack detection, threat visibility, proactive
 hunting, and threat response."""
-flags = [""]
 
 #[[modifiers]]
 #name = "Modifier Demo"

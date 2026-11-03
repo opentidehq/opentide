@@ -8,10 +8,6 @@ metadata:
   modified: 2026-01-02
   tlp: clear
 
-composition:
-  strategy: synergetic
-  description: Correlate cloud identity telemetry with control plane actions.
-
 objective:
   priority: High
   type: Threat

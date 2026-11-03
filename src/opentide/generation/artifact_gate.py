@@ -38,7 +38,7 @@ def _sha256(path: Path) -> str:
 
 def _workspace_config() -> dict[str, Any]:
     configs = resolve_configurations()
-    return configs.get("paths") or configs["global"]
+    return configs["paths"]
 
 
 def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
@@ -46,8 +46,8 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
     cfg = _workspace_config()
     paths = resolve_workspace_paths()
     artifacts = cfg.get("artifacts", {})
-    schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
-    template_map: dict[str, str] = dict(artifacts.get("templates", cfg.get("templates", {})))
+    schema_map: dict[str, str] = dict(artifacts.get("schemas", {}))
+    template_map: dict[str, str] = dict(artifacts.get("templates", {}))
 
     schema_dir = Path(paths["json_schemas"])
     template_dir = Path(paths["templates"])
@@ -73,13 +73,9 @@ def generation_artifact_specs(repo_root: Path) -> list[tuple[str, Path]]:
         rel = f"{OPENTIDE_DIR}/schemas/{router_name}"
         specs.append((f"{TIDE_PREFIX}{rel}", schema_dir / router_name))
 
-    subschema_templates = (
-        Path(paths.get("platform_templates", paths.get("subschemas", ".")))
-        / "MDR Systems Deployment"
-        / "Templates"
-    )
-    if subschema_templates.is_dir():
-        for path in sorted(subschema_templates.glob("*.yaml")):
+    platform_templates = Path(paths["platform_templates"])
+    if platform_templates.is_dir():
+        for path in sorted(platform_templates.glob("*.template.yaml")):
             rel_path = path.relative_to(repo_root.resolve())
             specs.append((f"{REPO_PREFIX}{rel_path.as_posix()}", path))
 

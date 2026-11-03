@@ -35,7 +35,7 @@ Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when yo
 | `query` | string | required | Search term |
 | `type` | string | `""` | Object type filter: `rule`, `threat`, `objective` |
 | `platform` | string | `""` | Platform filter |
-| `status` | string | `""` | Rule status filter |
+| `status` | string | `""` | Rule status filter: a rule matches when one of its platform blocks has this `status` |
 | `technique` | string | `""` | ATT&CK technique ID |
 | `actor` | string | `""` | Threat actor filter |
 
@@ -53,6 +53,8 @@ Search the catalogue by keyword, UUID, or ATT&CK technique. Use it first when yo
   }
 ]
 ```
+
+A rule's `status` is its platform blocks' statuses, comma-separated (`"PRODUCTION, STAGING"`), the ones deploy reads; it is `null` for threats, objectives and a rule without a block. Through 0.20.1 it was the rule-level `status`, which no command reads.
 
 The return type is always a list of `{uuid, type, title, status}` summaries — a
 UUID query yields at most one summary, an unknown UUID yields `[]`. Filters
@@ -448,7 +450,7 @@ Deploy a rule to a platform. Defaults to a dry run — a real deploy requires an
 }
 ```
 
-`action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing). `status` is the rule’s current deployment status string from the object, not a planned-action label.
+`action` is `"dry-run"` or `"deploy"` (or `"error"` when the rule is missing). `status` is the `status` of the rule's block for `platform` (the status deploy reads), not a planned-action label, or `null` when the rule has no block for it. Through 0.20.1 it was the rule-level `status`, which no command reads and which defaulted to `STAGING` when left out.
 
 A real deploy the deployer refused or failed returns `"action": "error"`, `"status": "failed"` and `"error": "deployment_failed"`, with no vendor call for a refused rule: for example a rule that still carries `rule_id` (`external_id_in_rule`), or a create whose id could not be written (`deployment_state_write_failed`). The server log names the code. Each call starts from a clean outcome, so one failed call does not mark the next as failed.
 

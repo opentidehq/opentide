@@ -35,7 +35,6 @@ def _objective_payload() -> dict[str, Any]:
     return {
         "name": "Objective",
         "metadata": _objective_metadata(),
-        "composition": {"strategy": "synergetic", "description": "compose"},
         "objective": {
             "priority": "High",
             "type": "Threat",

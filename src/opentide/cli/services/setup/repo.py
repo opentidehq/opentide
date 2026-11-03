@@ -91,28 +91,44 @@ def _ignored_readme_flags(options: RepoSetupOptions) -> list[str]:
     return ignored
 
 
-def _write_gitignore(target: Path) -> None:
-    (target / ".gitignore").write_text(
-        "\n".join(
-            [
-                "__pycache__/",
-                "*.pyc",
-                ".venv/",
-                "dist/",
-                "build/",
-                "*.egg-info/",
-                ".pytest_cache/",
-                f"{OPENTIDE_DIR}/exports/*.export.json",
-                # Only the sharing cache. ``states/deployment/`` holds vendor rule
-                # ids and must be committed (RFC 0010).
-                f"{OPENTIDE_DIR}/states/sharing.jsonl",
-                # Findings reports and the GitLab summary that CI runs write.
-                "opentide-reports/",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+#: What a new repository's ``.gitignore`` holds besides :data:`OPENTIDE_IGNORES`.
+_PYTHON_IGNORES = (
+    "__pycache__/",
+    "*.pyc",
+    ".venv/",
+    "dist/",
+    "build/",
+    "*.egg-info/",
+    ".pytest_cache/",
+)
+
+#: The files opentide writes that a repository must not commit. An existing
+#: ``.gitignore`` gains the ones it lacks; the Python lines are only for a new one,
+#: since ``build/`` or ``dist/`` may be the repository's own folders.
+OPENTIDE_IGNORES = (
+    f"{OPENTIDE_DIR}/exports/*.export.json",
+    # Only the sharing cache. ``states/deployment/`` holds vendor rule
+    # ids and must be committed (RFC 0010).
+    f"{OPENTIDE_DIR}/states/sharing.jsonl",
+    # Findings reports and the GitLab summary that CI runs write.
+    "opentide-reports/",
+)
+
+
+def _ensure_gitignore(target: Path) -> tuple[list[str], str | None]:
+    """Write ``.gitignore``, or append the opentide lines an existing one lacks.
+
+    Returns the lines added and a warning when the file could not be read.
+    """
+    from opentide.cli.services.setup.env import append_gitignore_lines
+
+    if not (target / ".gitignore").is_file():
+        return append_gitignore_lines(target, [*_PYTHON_IGNORES, *OPENTIDE_IGNORES]), None
+    try:
+        return append_gitignore_lines(target, OPENTIDE_IGNORES), None
+    except UnicodeDecodeError:
+        listed = ", ".join(OPENTIDE_IGNORES)
+        return [], f"Left .gitignore unchanged: it is not UTF-8. Add these lines to it: {listed}"
 
 
 def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
@@ -140,12 +156,13 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
     else:
         _write_readme(target, options)
         files.append("README.md")
-    gitignore = target / ".gitignore"
-    if gitignore.is_file():
-        skipped.append(".gitignore")
-    else:
-        _write_gitignore(target)
+    added, problem = _ensure_gitignore(target)
+    if added:
         files.append(".gitignore")
+    else:
+        skipped.append(".gitignore")
+    if problem:
+        warnings.append(problem)
     platforms = [p.value for p in options.platforms]
     result: dict[str, object] = {
         "message": "Repository scaffold created",
@@ -154,6 +171,9 @@ def run_repo_setup(options: RepoSetupOptions) -> dict[str, object]:
         "name": options.name or target.name,
         "scaffolded": True,
         "files": files,
+        # The lines .gitignore gained: all of them for a new file, the missing
+        # opentide ones for an existing file.
+        "gitignore_added": added,
     }
     if skipped:
         result["skipped"] = skipped

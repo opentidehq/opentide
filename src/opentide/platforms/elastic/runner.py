@@ -18,6 +18,7 @@ from opentide.core.time import format_utc_z
 from opentide.models.system_config import ConfigurationModels, SystemConfig
 from opentide.platforms.elastic.client import ElasticClient
 from opentide.platforms.elastic.query_text import mask_query
+from opentide.platforms.transport import not_json_detail
 from opentide.query.models import (
     QueryColumn,
     QueryRefused,
@@ -84,19 +85,26 @@ class ElasticQueryRunner(QueryRunner):
         )
 
     def preview_rule(
-        self, tenant: SystemConfig.Tenant, payload: dict[str, Any], *, end: datetime
+        self,
+        tenant: SystemConfig.Tenant,
+        payload: dict[str, Any],
+        *,
+        end: datetime,
+        client: ElasticClient | None = None,
     ) -> dict[str, Any]:
         """Kibana's preview of the rule *payload* deploy would create, once, ending at *end*.
 
         Creates no rule: a preview writes only its alerts, to the preview index.
-        Raises :class:`QueryRefused` when Kibana refuses the rule (HTTP 400 or
-        any other failure the client's retries did not clear) and
+        *client* is the tenant's client to send it with (default: one with the
+        client's own timeout). Raises :class:`QueryRefused` when Kibana refuses
+        the rule (HTTP 400 or any other failure the client's retries did not
+        clear, or an answer that is not JSON) and
         :class:`~opentide.core.errors.Errors.TenantConnectionError` when it
         refuses the credentials (HTTP 401 or 403).
         """
         from opentide.core.errors import Errors
 
-        response = self.elastic_client(tenant).preview_rule(
+        response = (client or self.elastic_client(tenant)).preview_rule(
             payload, invocation_count=1, timeframe_end=format_utc_ms(end)
         )
         if response.status_code == 400:
@@ -107,8 +115,17 @@ class ElasticQueryRunner(QueryRunner):
             )
         if response.status_code != 200:
             # 429 and 5xx were already retried by the client (RFC 0007 §5).
-            raise QueryRefused(f"Preview failed (HTTP {response.status_code}): {response.text}")
-        body = response.json()
+            raise QueryRefused(
+                f"Preview failed (HTTP {response.status_code}): "
+                f"{not_json_detail(response) or response.text}"
+            )
+        try:
+            body = response.json()
+        except ValueError:
+            raise QueryRefused(
+                f"Kibana answered the preview on {tenant.name} with a body that is not JSON",
+                detail=not_json_detail(response),
+            ) from None
         return body if isinstance(body, dict) else {}
 
 
@@ -299,9 +316,16 @@ def _indices(
         if response.status_code != 200:
             raise QueryRefused(
                 f"cannot read data view {request.data_view!r} on {tenant.name} "
-                f"(HTTP {response.status_code})"
+                f"(HTTP {response.status_code})",
+                detail=not_json_detail(response),
             )
-        body = response.json()
+        try:
+            body = response.json()
+        except ValueError:
+            raise QueryRefused(
+                f"cannot read data view {request.data_view!r} on {tenant.name}",
+                detail=not_json_detail(response),
+            ) from None
         view = (body.get("data_view") or body) if isinstance(body, dict) else {}
         title = view.get("title") if isinstance(view, dict) else None
         if title:
@@ -335,7 +359,11 @@ def _body(response: requests.Response, tenant: str, what: str) -> dict[str, Any]
     try:
         body = response.json()
     except ValueError:
-        body = None
+        # A gateway's or proxy's page: the status and what the page says, not a parse error.
+        raise QueryRefused(
+            f"Elastic did not answer the {what} query on {tenant} with JSON",
+            detail=not_json_detail(response),
+        ) from None
     if response.status_code != 200:
         reason = None
         if isinstance(body, dict):

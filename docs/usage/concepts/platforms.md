@@ -43,7 +43,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="Platforms" href="/docs/specifications/specs/platforms/" description="Shared fields, external rule ids, and the three checks: validate, load, deploy." />
   <Card title="Sentinel" href="/docs/specifications/specs/platforms/sentinel-1.0/" description="KQL analytics rule. Grouping is optional at validate and required at deploy." />
   <Card title="Defender for Endpoint" href="/docs/specifications/specs/platforms/defender-for-endpoint-1.0/" description="KQL custom detection, response actions, and the scope the loader requires." />
-  <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search, including the splunk::2.x keys that still normalise." />
+  <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search." />
   <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
   <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
@@ -85,7 +85,7 @@ See [`validate`](../../cli/validate.md#query-validation).
 
 ## The `query` field
 
-Where a platform spec marks `query` required, the value is a non-blank string. Splunk still accepts the `splunk::2.x` layout and normalises it before validation; the mapping is [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/).
+Where a platform spec marks `query` required, the value is a non-blank string. A Splunk block takes the [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/) layout only: the `splunk::2.x` keys (`search`, `cron_schedule`, flat `throttling`, `notable`, `scheduling.frequency`, `advanced`, ...) are unknown keys, as every other unknown key is.
 
 ### Upgrading to 0.4.0
 
@@ -95,8 +95,6 @@ This is a **breaking change** for objects that previously passed validation:
 |--------|--------------|------------|
 | Splunk or Carbon Black rule with no `query` (and, for Splunk, no `search`) | Validated; the deployer skipped it silently | `opentide validate` reports `query: Field required` |
 | Any platform with `query: ""` or whitespace only | Validated; the deployer skipped it silently | `opentide validate` reports `query must not be empty` |
-| splunk::2.x rule with `search` / `cron_schedule` | Loaded with no query and no schedule; skipped silently | Deploys the search on its schedule |
-| splunk::2.x rule with flat `throttling` / `notable` / `scheduling.frequency` | Deployed, but `opentide validate` rejected the keys | Validates and deploys |
 | Splunk schedule with no `scheduling.type` | Saved with `cron_schedule` but never scheduled | Scheduled |
 
 Every row that now fails was already a rule that never reached the platform. Run `opentide validate` after upgrading to find them.

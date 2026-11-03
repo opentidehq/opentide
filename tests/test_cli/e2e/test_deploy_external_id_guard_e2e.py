@@ -54,7 +54,7 @@ def _mock_sentinel(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         def mdr_for(self, platforms: Iterable[str]) -> dict[str, MagicMock]:
             return {"sentinel": deployer} if "sentinel" in set(platforms) else {}
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _MockDeployTide)
     return deployer
 
 
@@ -67,7 +67,7 @@ def test_sentinel_deploy_refuses_a_rule_with_a_defender_rule_id(
 ) -> None:
     _give_sentinel_rule_a_defender_rule_id(tide_corpus_repo)
     write_rule_variant(_rules(tide_corpus_repo), "rule-0301-clean.yaml", CLEAN)
-    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
     deployer = _mock_sentinel(monkeypatch)
 
     result = _deploy(invoke_cli)
@@ -91,7 +91,7 @@ def test_a_plan_left_empty_by_the_guard_fails_without_a_client(
     for path in _rules(tide_corpus_repo).glob("*.yaml"):
         if REFUSED not in path.read_text(encoding="utf-8"):
             path.unlink()
-    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
     deployer = _mock_sentinel(monkeypatch)
 
     result = _deploy(invoke_cli)

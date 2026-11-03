@@ -93,10 +93,20 @@ def render_techniques(techniques: list[str], formatter: MarkdownFormatter) -> st
 
 
 def render_rule_status(rule: DetectionRule, formatter: MarkdownFormatter) -> str:
+    """Each platform block's status and the alert severity, as deploy reads them.
+
+    Never a model default: a rule-level ``status`` is read by no command and
+    drifts at the first promotion, so the statuses come from the platform
+    blocks, and a severity the rule does not state is left out.
+    """
     rows = [
-        ["Status", f"`{rule.status}`"],
-        ["Severity", f"`{rule.severity}`"],
+        [f"Status ({platform})", f"`{status}`"]
+        for platform, status in rule.platform_statuses.items()
     ]
+    if severity := rule.displayed_severity:
+        rows.append(["Severity", f"`{severity}`"])
+    if not rows:
+        return ""
     return formatter.heading(2, "Status") + formatter.table(["Field", "Value"], rows)
 
 

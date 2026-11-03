@@ -712,7 +712,7 @@ def _id_scan_parse_issues(
 
 def _id_scan_paths() -> list[tuple[Path, str]]:
     """Collect all YAML model paths (ID uniqueness scans the full registry)."""
-    core_config = resolve_configurations()["global"]
+    core_config = resolve_configurations()["paths"]
     metaschemas = core_config["metaschemas"]
     skips = {"logsources", "ram", "mdrv2"}
     paths = resolve_paths()

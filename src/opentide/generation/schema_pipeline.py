@@ -135,9 +135,8 @@ class VocabularyResolver:
         ``enumDescriptions``.
 
         Vocabularies are canonical in the specifications repository and are
-        NOT locally extensible: the CoreTIDE-era ``[vocabulary]`` block in
-        ``schema.toml`` was never part of this package's contract and has
-        been removed. A missing entry is fixed upstream, not injected here.
+        not locally extensible. A missing entry is fixed upstream, not
+        injected here.
 
         Handles three patterns:
 
@@ -635,8 +634,8 @@ def recomposition_handler(entry_point):
             continue
         recomp_identifier = entry
         recomposition[recomp_identifier] = dict()
-        recomposition[recomp_identifier]["title"] = str(platform_cfg.get("name") or entry)
-        recomposition[recomp_identifier]["description"] = str(platform_cfg.get("description") or "")
+        recomposition[recomp_identifier]["title"] = platform_cfg.get("name") or entry
+        recomposition[recomp_identifier]["description"] = platform_cfg.get("description", "")
         recomposition[recomp_identifier]["type"] = "object"
         platform_model = platform_model_for_key(entry)
         recomp_data = build_platform_schema_source(platform_model)
@@ -779,9 +778,8 @@ def gen_json_schema(dictionary: dict[str, Any], *, schema_id: str | None = None)
                 ):
                     dictionary[field]["additionalProperties"] = False
 
-                # If within that dict a key is called coretide, the dict will receive
-                # fields generated from the libraries to allow multi or single
-                # field validation with JSON Schema
+                # A ``recomposition`` key names the platform configurations whose
+                # block schemas become this object's properties.
                 if "recomposition" in dict_foo[field]:
                     temp = recomposition_handler(dict_foo[field]["recomposition"])
                     dictionary[field]["properties"] = temp
@@ -991,47 +989,6 @@ def run() -> None:
                 logger.info("exported_legacy_schema_alias", path=str(legacy_output))
 
     logger.info("generated_all_json_schemas")
-
-    # Configuration Schemas from Pydantic models
-    config_json_schemas = GLOBAL_CONFIG.config_json_schemas
-
-    if config_json_schemas:
-        report_stage("configuration schema assembly")
-        logger.info(
-            "config_schema_assembler_started",
-            detail="Generates JSON Schemas from Pydantic configuration models.",
-        )
-
-        for meta in config_json_schemas:
-            json_output = schema_folder / config_json_schemas[meta]
-
-            if meta == "visibility":
-                from opentide.generation.pydantic_metaschema import build_model_schema_source
-                from opentide.models.visibility import VisibilityConfig
-
-                parsing = build_model_schema_source(VisibilityConfig)
-                placeholders: dict[str, str] = {}
-            else:
-                continue
-
-            logger.info("generating_config_schema_for")
-
-            from opentide.generation.schema_annotations import annotate_editor_schema
-
-            generated = gen_json_schema(parsing)
-            cleaned = annotate_editor_schema(strip_framework_keywords(generated))
-
-            logger.info("exporting_generated_schema_to_str_json_output")
-            output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
-            for placeholder in placeholders:
-                logger.info("replacing_all_occurence_of_placeholder")
-                output = output.replace(f"${placeholder}", placeholders[placeholder])
-
-            with open(json_output, "w", encoding="utf-8") as output_file:
-                output_file.write(output + "\n")
-            logger.info("correctly_exported")
-
-        logger.info("generated_all_configuration_schemas")
 
 
 if __name__ == "__main__":

@@ -33,6 +33,18 @@ class QueryRefused(Exception):
         self.detail = detail
 
 
+class QueryTimedOut(QueryRefused):
+    """The platform took the query and did not finish it within *timeout* seconds.
+
+    An asynchronous search that outlived its deadline. Live validation reports
+    it as that query's timeout (``query_check_timeout``), not as a refusal.
+    """
+
+    def __init__(self, message: str, *, timeout: float, detail: str | None = None) -> None:
+        super().__init__(message, detail=detail)
+        self.timeout = timeout
+
+
 @dataclass(frozen=True)
 class TimeWindow:
     """A UTC interval, ``start`` inclusive."""

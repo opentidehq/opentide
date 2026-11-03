@@ -119,6 +119,18 @@ calls `QueryRunner.check` on each, inside `reaching_tenant`. It returns a
 query and tenant, with its `errors` and `warnings`. The CLI grades the run from
 the report; `DetectionRule.validate_query` reads the same report.
 
+A query that gets no answer within the check timeout (`check_timeout()`:
+`--check-timeout`, `OPENTIDE_QUERY_CHECK_TIMEOUT`, else `CHECK_TIMEOUT`) is a
+failed `RuleCheck` with `code` `query_check_timeout`, caught per query before
+`reaching_tenant` sees it. `transport.read_timeout` decides what counts: a read
+timeout however it is wrapped (`requests`, urllib3's retries, Azure's
+`inner_exception`, Carbon Black's `original_exception`), a `GatewayTimeoutError`
+(a gateway's 502/503/504 page, or a page after `SLOW_ANSWER_SECONDS`), and a
+runner's `QueryTimedOut` (an asynchronous search past its deadline, which does
+not count toward the streak). `TimeoutStreak` raises `TenantUnreachableError` at
+`UNREACHABLE_AFTER_TIMEOUTS` read timeouts in a row on one tenant. A connect
+timeout, DNS, TLS or proxy failure is never a read timeout.
+
 | Runner capability | Platforms |
 |-------------------|-----------|
 | `check` = `run` with `limit=1` over the last minute (`check_window`) | Sentinel, Defender, SentinelOne |

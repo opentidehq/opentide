@@ -49,7 +49,7 @@ Schema revisions are additive. When a new revision such as `rule::1.1` ships, bo
 2. The IDE router adds a branch and a `metadata.schema` value for each identifier, and routes objects by their declared `metadata.schema`.
 3. Objects opt in individually by setting `metadata.schema: rule::1.1`. Objects that still declare `rule::1.0` keep validating against `1.0` until you migrate them.
 
-This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace. For CoreTide-era repos, see the [migration guide](../migration/index.md).
+This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace.
 
 `rule::1.1` is that kind of revision. It adds optional `metadata.reviewed` and changes nothing else. `rule::1.0` stays valid and rejects the field. `opentide generate schemas` writes both `rule.1.0.schema.json` and `rule.1.1.schema.json`. `opentide generate templates` writes both templates and leaves `reviewed` commented out, so a new file does not invent a review date. List stale rules with [`opentide rules unreviewed`](../../cli/rules.md).
 

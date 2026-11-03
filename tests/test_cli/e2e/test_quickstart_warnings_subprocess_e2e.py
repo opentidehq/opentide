@@ -34,11 +34,8 @@ _PLATFORM_LOGGERS = ("opentide.platforms.", "opentide.core.environment")
 _DISABLED_SPLUNK = """\
 [platform]
 enabled = false
-identifier = "splunk"
 name = "Splunk Enterprise"
-subschema = "Splunk Sub Schema"
 description = "Splunk"
-flags = []
 
 [[tenants]]
 name = "Default"

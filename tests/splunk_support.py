@@ -3,7 +3,8 @@
 It serves a self-signed certificate, as an on-premises Splunk often does, and
 answers the endpoints opentide calls the way Splunk does: ``server/info``,
 ``search/parser`` (``|badcommand`` is a parse error, ``|unreachable`` a 307
-"Network Error") and ``saved/searches``,
+"Network Error", ``|slow`` answers after ``slow_seconds``, ``|gateway`` is a
+gateway's HTTP 504 page) and ``saved/searches``,
 where an argument the REST handler does not know is refused with HTTP 400
 ``Argument "<name>" is not supported by this handler.`` and a ``DELETE``
 removes the saved search.
@@ -16,14 +17,22 @@ import http.server
 import json
 import socket
 import ssl
+import sys
 import threading
+import time
 import urllib.parse
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 SAVED_SEARCHES = "/servicesNS/nobody/search/saved/searches/"
+#: What a gateway in front of Splunk answers when the search head is too slow.
+GATEWAY_TIMEOUT_PAGE = (
+    b"<html><head><title>504 Gateway Time-out</title></head>"
+    b"<body><center><h1>504 Gateway Time-out</h1></center></body></html>"
+)
 _SERVER_INFO = "/services/server/info"
 
 #: savedsearches.conf spellings the saved/searches REST handler refuses; the
@@ -38,6 +47,8 @@ class SplunkStandIn:
     requests: list[tuple[str, str, dict[str, str]]] = field(default_factory=list)
     #: Answer every saved search POST with the gateway's 307 "Network Error".
     gateway_timeout: bool = False
+    #: Seconds a ``|slow`` parse takes, longer than the check timeout a test sets.
+    slow_seconds: float = 2.0
 
     def posted(self, name: str) -> dict[str, str]:
         """Every argument POSTed to the saved search *name*, merged in order."""
@@ -97,6 +108,10 @@ def _handler(state: SplunkStandIn) -> type[http.server.BaseHTTPRequestHandler]:
                 if "|unreachable" in args.get("q", ""):
                     # What a gateway in front of Splunk answers when the search head times out.
                     return self._reply(307, b"Network Error", "text/plain")
+                if "|slow" in args.get("q", ""):
+                    time.sleep(state.slow_seconds)
+                if "|gateway" in args.get("q", ""):
+                    return self._reply(504, GATEWAY_TIMEOUT_PAGE, "text/html")
                 if "|badcommand" in args.get("q", ""):
                     message = {"messages": [{"type": "FATAL", "text": "Unknown search command"}]}
                     return self._reply(400, json.dumps(message).encode(), "application/json")
@@ -174,6 +189,15 @@ def _self_signed(directory: Path) -> tuple[Path, Path]:
     return cert_path, key_path
 
 
+class _StandInServer(http.server.ThreadingHTTPServer):
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # A client that stopped waiting for a ``|slow`` answer closed the
+        # connection: the reply fails to write, which is no test's failure.
+        if isinstance(sys.exc_info()[1], OSError):
+            return
+        super().handle_error(request, client_address)
+
+
 @contextmanager
 def serve_splunk(directory: Path) -> Iterator[SplunkStandIn]:
     """Serve a stand-in on a free ``127.0.0.1`` port; its certificate names ``localhost``."""
@@ -181,7 +205,7 @@ def serve_splunk(directory: Path) -> Iterator[SplunkStandIn]:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(cert, key)
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler)
+    server = _StandInServer(("127.0.0.1", 0), http.server.BaseHTTPRequestHandler)
     state = SplunkStandIn(port=server.server_address[1])
     server.RequestHandlerClass = _handler(state)
     server.socket = context.wrap_socket(server.socket, server_side=True)

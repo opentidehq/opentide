@@ -57,11 +57,15 @@ class QueryValidator(ValidationEngine, ABC):
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
+        *,
+        timeout: float | None = None,
     ) -> LiveCheckReport:
         """Check on the platform's tenants that each rule's queries run there.
 
-        Returns one verdict per rule, query and tenant; a refused query is a
-        failed check in the report, not an exception.
+        Returns one verdict per rule, query and tenant; a refused query, or
+        one with no answer within *timeout* seconds (default:
+        :func:`~opentide.query.check.check_timeout`), is a failed check in the
+        report, not an exception.
         """
 
 
@@ -249,15 +253,8 @@ def _class_name(system_key: str) -> str:
     return "".join(part.capitalize() for part in system_key.split("_"))
 
 
-PluginTide = PlatformEngineBase
-DeployEngine = PlatformEngine
-DeployMDR = RuleDeployer
-ValidateQuery = QueryValidator
-PluginEnginesLoader = PlatformLoader
-
-
-class DeployTide:
-    """Deprecated — use Opentide.Platforms."""
+class EnabledPlatforms:
+    """Deployers and query validators of the platforms the workspace enables."""
 
     @staticmethod
     def _enabled_keys() -> set[str]:
@@ -292,7 +289,6 @@ class DeployTide:
         return cast(dict[str, QueryValidator], PlatformLoader().query_validators(only=[platform]))
 
 
-PlatformsRegistry = DeployTide
 _PLATFORM_PKG: dict[str, str] = {
     "carbon_black_cloud": "carbon_black",
     "defender_for_endpoint": "defender_for_endpoint",

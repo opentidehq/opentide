@@ -154,7 +154,7 @@ def test_validate_query_bare_needs_no_vendor_sdk(invoke_cli) -> None:
 @pytest.fixture
 def sentinel_tenant(tide_corpus_repo: Path) -> None:
     """``--live`` stops before the engine when no tenant is configured (#314)."""
-    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
 
 
 @pytest.mark.usefixtures("sentinel_tenant")

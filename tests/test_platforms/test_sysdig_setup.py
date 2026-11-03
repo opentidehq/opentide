@@ -15,7 +15,7 @@ BUNDLED = Path(__file__).resolve().parents[2] / "src/opentide/data/configuration
 
 def _config(setup: dict[str, Any]) -> Any:
     raw = {
-        "platform": {"enabled": True, "identifier": "sysdig"},
+        "platform": {"enabled": True},
         "tenants": [{"name": "prod", "setup": setup}],
     }
     return build_system_config("sysdig", raw)
@@ -25,11 +25,8 @@ def test_the_bundled_file_is_off_and_has_no_tenant() -> None:
     raw = load_toml(BUNDLED / "sysdig.toml")
     assert raw["platform"] == {
         "enabled": False,
-        "identifier": "sysdig",
         "name": "Sysdig Secure",
-        "subschema": "Sysdig Secure",
         "description": "Custom Falco rules for Sysdig Secure runtime detection.",
-        "flags": [],
     }
     assert "tenants" not in raw
     assert build_system_config("sysdig", raw).tenants is None

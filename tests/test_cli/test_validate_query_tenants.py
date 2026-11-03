@@ -78,7 +78,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
 
 def _configure(repo: Path, *tenants: str) -> None:
-    config = repo / ".opentide/configurations/systems/sentinel.toml"
+    config = repo / ".opentide/configurations/platforms/sentinel.toml"
     config.write_text(config.read_text(encoding="utf-8") + "".join(tenants), encoding="utf-8")
 
 

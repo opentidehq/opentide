@@ -435,7 +435,7 @@ def _deploy(
     from opentide.deployment.git_repo import MissingGitCheckout, missing_checkout_message
     from opentide.models.deployment_enums import StatusStrategy
     from opentide.mutation.promotion import PromoteMDR
-    from opentide.platforms.plugins import DeployTide
+    from opentide.platforms.plugins import EnabledPlatforms
 
     Opentide.reload()
     try:
@@ -546,7 +546,7 @@ def _deploy(
         }
     IndexManager.reload()
     try:
-        mdr_deployers = cast(dict[str, Any], DeployTide().mdr_for(deployment_list))
+        mdr_deployers = cast(dict[str, Any], EnabledPlatforms().mdr_for(deployment_list))
     except Exception as exc:
         message = str(exc).strip() or f"{type(exc).__name__} while loading deployment engines"
         return {"status": "failed", "message": message, "deployed": deployed, "_exit_code": 1}

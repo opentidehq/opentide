@@ -839,7 +839,7 @@ def diagnostic_from_lint_finding(
 REPORTED_AS_WARNING_NOTE = "the platform rejects this query; --queries warn reports it as a warning"
 
 #: Words in an engine message that make its ``suggestion`` a replacement name.
-_ENGINE_UNKNOWN = ("unknown", "deprecated")
+_ENGINE_UNKNOWN = ("unknown", "deprecated", "not a command")
 
 #: Code prefix → the language reference a finding without a suggestion points at.
 ENGINE_REFERENCES: dict[str, tuple[str, str]] = {

@@ -47,7 +47,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
 
 def _config(repo: Path, platform: str) -> Path:
-    return repo / ".opentide/configurations/systems" / f"{platform}.toml"
+    return repo / ".opentide/configurations/platforms" / f"{platform}.toml"
 
 
 def _add_tenant(repo: Path, platform: str, setup: str) -> None:

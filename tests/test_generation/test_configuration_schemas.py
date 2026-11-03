@@ -109,9 +109,7 @@ def test_router_names_every_file() -> None:
     files = build_configuration_router()["files"]
     for key in (
         "paths.toml",
-        "global.toml",
         "deployment.toml",
-        "schema.toml",
         "visibility.toml",
         "documentation.toml",
         "sharing.toml",
@@ -120,7 +118,9 @@ def test_router_names_every_file() -> None:
         "platforms/*.toml",
     ):
         assert files[key]["schema"] in _DOCUMENTS
-    assert files["global.toml"]["schema"] == files["paths.toml"]["schema"]
+    # Retired files have no schema: every command refuses them.
+    assert "global.toml" not in files
+    assert "schema.toml" not in files
     assert files["sharing.toml"]["merge"] == "by-name"
     assert files["sharing.toml"]["connectors"] == {"misp": "sharing::misp::1.0"}
     assert files["visibility.toml"]["schema_id"] == "visibility::1.0"
@@ -237,9 +237,7 @@ def test_tlp_enum_matches_the_bundled_vocabulary() -> None:
 
 
 def test_unknown_keys_are_rejected_except_open_tables() -> None:
-    schema = _DOCUMENTS["schema.schema.json"]
-    assert schema["additionalProperties"] is False
-    assert _def(schema, "VocabularyExtensions")["additionalProperties"] is True
+    assert "schema.schema.json" not in _DOCUMENTS
     for name in ("deployment.schema.json", "documentation.schema.json", "paths.schema.json"):
         assert _DOCUMENTS[name]["additionalProperties"] is False
 

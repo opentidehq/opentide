@@ -52,7 +52,7 @@ def tenant(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     rules = tide_corpus_repo / "objects" / "rules"
     for index, uuid in enumerate(EXTRA):
         write_rule_variant(rules, f"rule-{500 + index}-progress.yaml", uuid)
-    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
     return tide_corpus_repo
 
 

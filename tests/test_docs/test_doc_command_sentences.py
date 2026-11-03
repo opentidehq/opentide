@@ -17,12 +17,6 @@ def test_ci_cd_rerun_names_a_provider() -> None:
     assert "Re-run `opentide setup ci`" not in text
 
 
-def test_migration_table_names_a_provider() -> None:
-    text = _text("docs/usage/migration/index.md")
-    assert "| (CI pipeline files) | `opentide setup ci github` |" in text
-    assert "| (CI pipeline files) | `opentide setup ci` |" not in text
-
-
 def test_generate_extract_names_a_platform() -> None:
     text = _text("docs/cli/generate.md")
     assert "`opentide generate extract sentinel`" in text

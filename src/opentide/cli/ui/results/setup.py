@@ -22,6 +22,9 @@ class RepoFields(SetupFiles):
     # Added by #643 (flow), declared ahead so either merge order stays green.
     name: str | None = Field(None, description="The repository name")
     scaffolded: bool | None = Field(None, description="Whether the scaffold was written")
+    gitignore_added: list[str] | None = Field(
+        None, description="Lines .gitignore gained: the opentide ones an existing file lacked"
+    )
 
 
 class CiFields(RepoFields):

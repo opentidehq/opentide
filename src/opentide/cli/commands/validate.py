@@ -41,6 +41,7 @@ from opentide.cli.ui.codeframe import render_diagnostics, render_diff, render_fi
 from opentide.cli.ui.contract import (
     USAGE_ERROR,
     USAGE_EXIT_CODE,
+    USAGE_INVALID_VALUE,
     USAGE_WATCH_NEEDS_TTY,
     NextAction,
 )
@@ -373,6 +374,15 @@ def validate_query_cmd(
         metavar="error|warn",
         help="How a rejected query is reported offline: error (the default) or warn",
     ),
+    check_timeout: str | None = typer.Option(
+        None,
+        "--check-timeout",
+        metavar="SECONDS",
+        help=(
+            "Seconds each query may take on a tenant before its check fails (--live; "
+            "default: OPENTIDE_QUERY_CHECK_TIMEOUT, else 120)"
+        ),
+    ),
 ) -> None:
     """Check rule queries offline with the analysis engine, or on the tenants (--live).
 
@@ -392,6 +402,7 @@ def validate_query_cmd(
             argument="--queries",
             code=USAGE_ERROR,
         )
+    timeout: float | None = None
     if not live:
         for flag, used in (("--strategy", bool(strategy)), ("--wide", wide)):
             if used:
@@ -402,7 +413,26 @@ def validate_query_cmd(
                     argument=flag,
                     code=USAGE_ERROR,
                 )
+        if check_timeout is not None:
+            emit_usage_error(
+                cli,
+                "--check-timeout is how long a tenant may take, so it applies to --live",
+                argument="--check-timeout",
+                code=USAGE_ERROR,
+            )
     else:
+        from opentide.query.check import CHECK_TIMEOUT_ENV
+        from opentide.query.check import check_timeout as resolve_check_timeout
+
+        try:
+            timeout = resolve_check_timeout(check_timeout)
+        except ValueError as exc:
+            emit_usage_error(
+                cli,
+                str(exc),
+                argument="--check-timeout" if check_timeout is not None else CHECK_TIMEOUT_ENV,
+                code=USAGE_INVALID_VALUE,
+            )
         for flag, used in (("--strict", strict), ("--queries", queries is not None)):
             if used:
                 emit_usage_error(
@@ -429,6 +459,7 @@ def validate_query_cmd(
         uuids=uuid or (),
         strict=strict,
         queries=queries or QueriesMode.error,
+        check_timeout=timeout,
     )
     if result.get("mode") == "offline":
         _emit_offline_query_result(cli, result)

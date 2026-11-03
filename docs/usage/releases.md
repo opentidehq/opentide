@@ -1173,7 +1173,7 @@ Python **3.10–3.14**. One wheel: CLI, MCP (`opentide-mcp`), SDK, seven platfor
 
 **What it is not**
 
-- A hard cut for existing instances. Pinned CoreTide checkouts keep resolving. Migrate when you next touch CI — [migration guide](./migration/index.md).
+- A hard cut for existing instances. Pinned CoreTide checkouts keep resolving. Migrate when you next touch CI.
 - A freeze forever. For **four weeks** after 0.1.0 the maintainers treat this as a support window: deployer bugs, docs, agent setup, migration questions. File issues on [opentidehq/opentide](https://github.com/opentidehq/opentide/issues).
 
 **Links**

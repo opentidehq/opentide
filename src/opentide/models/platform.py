@@ -16,7 +16,7 @@ import re
 from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, cast
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
@@ -62,7 +62,6 @@ from opentide.models.platform_configs import (
     SysdigList,
     SysdigMacro,
 )
-from opentide.models.splunk_legacy import SPLUNK_V2_KEYS, normalize_splunk_v2
 from opentide.platforms.elastic.durations import duration_seconds
 
 
@@ -109,6 +108,21 @@ class PlatformConfigBase(TideModel):
         """The identifier under its YAML key, which would otherwise be ``BaseModel.schema``."""
         return self.platform_schema
 
+    @field_validator("platform_schema")
+    @classmethod
+    def _registered_platform_schema(cls, value: str | None) -> str | None:
+        """``schema`` names this block's registered revision, or is left out.
+
+        Nothing reads the identifier at deploy, so an unregistered one
+        (``splunk::2.1``, another platform's) validated and said nothing true
+        about the block. Each concrete block accepts only the identifier its
+        model registers.
+        """
+        expected = getattr(cls, "__schema_identifier__", None)
+        if value is None or expected is None or value == expected:
+            return value
+        raise ValueError(f"unknown platform schema {value!r}: this block's schema is {expected!r}")
+
 
 class SentinelConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::sentinel::1.0"
@@ -154,16 +168,14 @@ class DefenderConfig(PlatformConfigBase):
 
 class SplunkConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::splunk::1.0"
-    __legacy_keys__: ClassVar[Mapping[str, str | None]] = SPLUNK_V2_KEYS
     # Required, like every other platform's query and like the JSON Schema
     # extras already said. Optional here meant the FieldInfo template renderer
     # emitted `#query: |` commented out for Splunk alone, and the deployer
-    # silently skipped rules whose query never loaded (#233). A splunk::2.x
-    # `search` is copied here by `_accept_legacy_v2_spellings` below.
+    # silently skipped rules whose query never loaded (#233).
     query: QueryText = TideField(
         schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
-    """SPL. Multiline. Legacy `search` fills this when `query` is empty."""
+    """SPL. Multiline."""
     scheduling: SplunkScheduling | None = None
     """Cron or frequency, and the search time range."""
     trigger: SplunkTrigger | None = None
@@ -173,29 +185,6 @@ class SplunkConfig(PlatformConfigBase):
     correlation_search: bool | None = None
     """Force the Enterprise Security correlation-search action on or off. `null` follows the
     tenant."""
-    advanced: dict[str, Any] | None = TideField(None, schema_extra={"tide.template.hide": True})
-    """Extra `savedsearches.conf` keys, stringified at deploy. Hidden from templates. Generated
-    schema marks the field deprecated in favour of the nested blocks."""
-    # Legacy flat v2.x fields retained for backward-compatible loading
-    search: str | None = TideField(None, schema_extra={"tide.template.hide": True})
-    """Legacy v2 search string. Hidden from templates. Kept after it is copied to `query`."""
-    cron_schedule: str | None = TideField(None, schema_extra={"tide.template.hide": True})
-    """Legacy v2 cron. Hidden from templates. Kept after it is copied into
-    `scheduling.schedule.cron`."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def _accept_legacy_v2_spellings(cls, data: Any) -> Any:
-        """Map the splunk::2.x layout onto v3 before field validation.
-
-        Schema validation calls ``model_validate`` on the raw YAML and never
-        goes through ``load_splunk_config``, so the mapping has to live here as
-        well as in the loader — and be the same function, or the two paths
-        accept different rules (#233).
-        """
-        if not isinstance(data, dict):
-            return data
-        return normalize_splunk_v2(data)
 
 
 class SentinelOneConfig(PlatformConfigBase):
@@ -243,7 +232,7 @@ class CarbonBlackConfig(PlatformConfigBase):
     )
     """Lucene query. Multiline in YAML. Deploy joins lines with spaces."""
     organizations: list[str] | None = None
-    """Accepted, including the loader alias `organization`. The current deployer targets the tenant
+    """Accepted. The current deployer targets the tenant
     the run selects and does not filter on this list."""
     watchlist: str | None = None
     """Watchlist name. Deploy uses the tenant watchlist when omitted. The watchlist must already

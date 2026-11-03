@@ -26,16 +26,13 @@ from opentide.models.configuration.platforms import (
     PlatformConfiguration,
     PlatformConfigurationBase,
 )
-from opentide.models.configuration.schema import SchemaConfiguration
 from opentide.models.configuration.sharing import MispIntegration, SharingConfiguration
 from opentide.models.visibility import VisibilityConfig
 
 #: Model of each top-level configuration file, keyed by file name.
 CONFIGURATION_FILE_MODELS: dict[str, type[BaseModel]] = {
     "paths.toml": PathsConfiguration,
-    "global.toml": PathsConfiguration,
     "deployment.toml": DeploymentConfiguration,
-    "schema.toml": SchemaConfiguration,
     "visibility.toml": VisibilityConfig,
     "documentation.toml": DocumentationConfiguration,
     "sharing.toml": SharingConfiguration,
@@ -71,7 +68,7 @@ def configuration_file_key(path: str | PurePosixPath) -> str | None:
         # `configurations/sharing/` is not a configuration location.
         return None
     name = parts[-1]
-    if len(parts) >= 2 and parts[-2] in {"platforms", "systems"}:
+    if len(parts) >= 2 and parts[-2] == "platforms":
         identifier = name.removesuffix(".toml")
         if identifier in PLATFORM_CONFIGURATION_MODELS:
             return f"platforms/{identifier}.toml"
@@ -102,7 +99,6 @@ __all__ = [
     "PlatformConfiguration",
     "PlatformConfigurationBase",
     "PromotionSettings",
-    "SchemaConfiguration",
     "SharingConfiguration",
     "VisibilityConfig",
     "configuration_file_key",

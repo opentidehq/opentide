@@ -15,7 +15,6 @@ def test_elastic_platform_loads_and_is_off_by_default(
     raw = {
         "platform": {
             "enabled": False,
-            "identifier": "elastic",
             "name": "Elastic Security",
         },
         "tenants": [],
@@ -32,7 +31,7 @@ def test_elastic_platform_loads_and_is_off_by_default(
 
 def test_tenant_missing_elasticsearch_url_fails() -> None:
     raw = {
-        "platform": {"enabled": True, "identifier": "elastic"},
+        "platform": {"enabled": True},
         "tenants": [
             {
                 "name": "staging",
@@ -49,7 +48,7 @@ def test_tenant_missing_elasticsearch_url_fails() -> None:
 
 def test_tenant_literal_api_key_rejected() -> None:
     raw = {
-        "platform": {"enabled": True, "identifier": "elastic"},
+        "platform": {"enabled": True},
         "tenants": [
             {
                 "name": "staging",
@@ -67,7 +66,7 @@ def test_tenant_literal_api_key_rejected() -> None:
 
 def test_tenant_with_retired_proxy_key_rejected() -> None:
     raw = {
-        "platform": {"enabled": True, "identifier": "elastic"},
+        "platform": {"enabled": True},
         "tenants": [
             {
                 "name": "staging",
@@ -86,7 +85,7 @@ def test_tenant_with_retired_proxy_key_rejected() -> None:
 
 def test_tenant_valid_env_api_key_loads() -> None:
     raw = {
-        "platform": {"enabled": True, "identifier": "elastic"},
+        "platform": {"enabled": True},
         "tenants": [
             {
                 "name": "staging",
@@ -112,7 +111,7 @@ def test_tenant_valid_env_api_key_loads() -> None:
 
 def _tenant_with_key(api_key: object) -> dict:
     return {
-        "platform": {"enabled": True, "identifier": "elastic"},
+        "platform": {"enabled": True},
         "tenants": [
             {
                 "name": "staging",

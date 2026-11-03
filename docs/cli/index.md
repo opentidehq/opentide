@@ -19,7 +19,7 @@ Run `opentide --help` for the live command tree.
 | Command | Purpose |
 |---------|---------|
 | [`setup`](./setup.md) | Onboard detection repositories (repo, platforms, CI, MCP, skills) |
-| [`migrate`](./migrate.md) | Move legacy `Configurations/` and `Objects/` into the greenfield layout |
+| [`migrate`](./migrate.md) | Rewrite objects authored for an earlier opentide model |
 | [`generate`](./generate.md) | Documentation, exports, framework artifacts, optional platform import |
 | [`validate`](./validate.md) | Validate objects and queries: offline with the analysis engine, or on the tenants (`--live`) |
 | [`query`](./query.md) | Run a read-only query on platform tenants and show the rows |
@@ -38,7 +38,7 @@ Run `opentide --help` for the live command tree.
 
 <Callout type="info">
 
-Top-level `document`, `export`, and `extract` remain as **hidden deprecation shims** for one release. They log a warning and delegate to `opentide generate docs`, `generate exports`, and `generate extract`. `mutate` was removed — use `opentide deploy` for promotion. Layout-only `opentide migrate objects` moves `Configurations/` and `Objects/` into the greenfield tree; CoreTide submodule replacement still uses the [migration prompt](../usage/migration/prompt.md).
+Top-level `document`, `export`, and `extract` remain as **hidden deprecation shims** for one release. They log a warning and delegate to `opentide generate docs`, `generate exports`, and `generate extract`. `mutate` was removed — use `opentide deploy` for promotion.
 
 </Callout>
 
@@ -147,8 +147,8 @@ opentide --json commands
   "$defs": { "QueryValidationResult": { "…": "…" }, "CommandError": { "…": "…" } },
   "ok": true,
   "status": "completed",
-  "message": "58 commands",
-  "summary": { "commands": 58, "groups": 15 },
+  "message": "57 commands",
+  "summary": { "commands": 57, "groups": 15 },
   "…": "envelope keys"
 }
 ```
@@ -166,7 +166,7 @@ opentide --json commands
 | `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error, such as an unknown subcommand, so its schema is `CommandError`. `null` for `mcp start`, which prints JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
 | `$defs` | The schemas each `output_schema` refers to. |
 
-Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 58 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
+Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 57 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
 
 ## Choosing between CLI, SDK, and MCP
 

@@ -19,7 +19,7 @@ pytestmark = pytest.mark.cli_e2e
 
 SPLUNK_RULE = "objects/rules/rule-0003-splunk-spl.yaml"
 SPLUNK_RULE_UUID = "00000000-0000-4000-8003-000000000003"
-SPLUNK_CONFIG = ".opentide/configurations/systems/splunk.toml"
+SPLUNK_CONFIG = ".opentide/configurations/platforms/splunk.toml"
 
 
 @pytest.fixture
@@ -91,7 +91,7 @@ def test_human_output_names_the_disabled_platform(invoke_cli) -> None:
     ("old", "new", "expected"),
     [
         pytest.param(
-            "    search: index=main | head 1\n",
+            "    query: index=main | head 1\n",
             '    query: ""\n',
             "query must not be empty",
             id="empty-query",
@@ -174,7 +174,7 @@ def test_live_query_validation_of_a_disabled_platform_names_a_working_flag(
     invoke_cli, tide_corpus_repo: Path
 ) -> None:
     """#414: live validation stays gated; its advice named ``--defender_for_endpoint``."""
-    config = tide_corpus_repo / ".opentide/configurations/systems/defender_for_endpoint.toml"
+    config = tide_corpus_repo / ".opentide/configurations/platforms/defender_for_endpoint.toml"
     text = config.read_text(encoding="utf-8")
     assert "[platform]\nenabled = true\n" in text
     config.write_text(text.replace("enabled = true", "enabled = false", 1), encoding="utf-8")

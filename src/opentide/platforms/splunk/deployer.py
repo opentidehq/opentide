@@ -225,9 +225,6 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                         config["action.email.include.trigger_time"] = 1 if inc.trigger_time else 0
 
         config["alert.managedBy"] = resolve_responders(data.response)
-        if splunk_config.advanced:
-            for key, value in splunk_config.advanced.items():
-                config[key] = str(value)
         config["description"] = data.description or ""
         return config
 
@@ -351,8 +348,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         mdr_config: dict[str, Any],
         actions_config: dict[str, Any],
     ) -> bool | None:
-        deploy_config = (self.DEFAULT_CONFIG or {}).copy()
-        deploy_config.update(mdr_config)
+        deploy_config = dict(mdr_config)
         deploy_config.update(actions_config)
         deploy_config["search"] = query
         logger.info(

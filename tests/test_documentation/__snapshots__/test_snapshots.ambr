@@ -100,7 +100,7 @@
   ## Status
   | Field | Value |
   | --- | --- |
-  | Status | `STAGING` |
+  | Status (sentinel) | `STAGING` |
   | Severity | `High` |
   
   ## ATT&CK Techniques

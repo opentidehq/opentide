@@ -10,7 +10,7 @@ opentide content is three object families:
 
 A rule's `detection_model` points at an objective. An objective lists threat UUIDs under `objective.threats`. A threat chains to another threat with `threat.chaining` entries of `relation` and `vector`.
 
-Do not create `Schemas/Templates`, `Configurations/systems`, or `mdr::2.1` documents. `opentide generate` writes the current templates.
+Start a new object with `opentide new threat`, `opentide new objective` or `opentide new rule`, which write it from the current template. Platform settings live in `.opentide/configurations/platforms/<platform>.toml`, and a rule's platform block names its schema as `platform::<platform>::1.0`.
 
 ```bash
 opentide --json validate --strict

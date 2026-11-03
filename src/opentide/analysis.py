@@ -119,6 +119,26 @@ def engine_versions() -> dict[str, str]:
     return {"engine": str(engine().ENGINE_VERSION)}
 
 
+#: Engine sentences that promise a step opentide does not offer, and what opentide
+#: says instead: ``(code, engine text, replacement)``. language-server 0.8.0 asks to
+#: "declare" an SPL command an app provides, and no configuration declares one.
+_MESSAGE_CORRECTIONS: tuple[tuple[str, str, str], ...] = (
+    (
+        "spl_unknown_command",
+        "; if an app on the search head provides it, declare it",
+        "; an app on the search head may provide it (opentide cannot declare app commands yet)",
+    ),
+)
+
+
+def _corrected_message(code: str, message: str) -> str:
+    """*message*, without a promise of a setting opentide does not have."""
+    for wanted, engine_text, replacement in _MESSAGE_CORRECTIONS:
+        if code == wanted and message.endswith(engine_text):
+            return message.removesuffix(engine_text) + replacement
+    return message
+
+
 @dataclass(frozen=True)
 class Finding:
     """One engine diagnostic, in the CLI's coordinates."""
@@ -138,7 +158,7 @@ class Finding:
         return cls(
             code=diagnostic.code,
             severity=_SEVERITIES.get(diagnostic.severity, "note"),
-            message=diagnostic.message,
+            message=_corrected_message(diagnostic.code, diagnostic.message),
             line=diagnostic.line,
             column=diagnostic.column,
             end_line=diagnostic.end_line,

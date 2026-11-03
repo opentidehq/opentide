@@ -27,7 +27,7 @@ When run without a subcommand, phases execute in this order:
 | 1 | docs | `generate docs` | Markdown documentation for rules, objectives, threats |
 | 2 | exports | `generate exports` | ATT&CK navigator layer, objects export, revisions export |
 | 3 | vocabs | `generate vocabs` | In-memory object vocabulary indexes |
-| 4 | templates | `generate templates` | `.opentide/templates/*.template.yaml` |
+| 4 | templates | `generate templates` | `.opentide/templates/*.template.yaml`, and `.opentide/templates/platforms/<platform>.template.yaml` for each enabled platform |
 | 5 | schemas | `generate schemas` | `.opentide/schemas/*.schema.json`, IDE router `opentide.schema.json`, and the language server's catalogs in `.opentide/lsp/catalogs/generated/` |
 | 6 | snippets | `generate snippets` | VS Code snippets from templates |
 
@@ -69,6 +69,7 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 - Vocabulary fields are empty scalars (no enum dump).
 - `DetectionRule.file` and other `Path` / hidden fields are omitted.
 - Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
+- Each enabled platform's block is written to `.opentide/templates/platforms/<platform>.template.yaml` (`sentinel.template.yaml`), named by the platform file, never by its display `name`. `generate snippets` reads it there. Nothing is written into the installed package.
 
 JSON Schema generation (`generate schemas`) stays a separate pipeline. It writes one schema per registered revision (`rule.1.0.schema.json`, `rule.1.1.schema.json`, …) and the router `opentide.schema.json`, which applies the revision named in each object's `metadata.schema`. Map the router in your editor; see [Schema revision](../usage/concepts/schema-revision.md). VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
 

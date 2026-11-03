@@ -36,7 +36,7 @@ def sentinel_only(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     from opentide.platforms.enabled import enabled_systems
 
     repo = materialise_corpus(tmp_path_factory.mktemp("portable") / "corpus")
-    for config in (repo / ".opentide" / "configurations" / "systems").glob("*.toml"):
+    for config in (repo / ".opentide" / "configurations" / "platforms").glob("*.toml"):
         if config.stem != "sentinel":
             text = config.read_text(encoding="utf-8")
             config.write_text(text.replace("enabled = true", "enabled = false", 1), "utf-8")

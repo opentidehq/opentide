@@ -1,0 +1,29 @@
+[platform]
+enabled = true
+name = "Microsoft Defender for Endpoint"
+description = """Defender for Endpoint is a comprehensive, cloud-native endpoint
+security solution that delivers visibility and AI-powered cyberthreat protection
+to help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.
+"""
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#alert.severity = "Informational"
+#alert.title = "prefix::Staging "
+
+#[[tenants]]
+#name = "Name"
+#description = "Tenant Description"
+#strategies = ["PREVIEW", "RELEASE"] # status strategies this tenant accepts; omit for both
+#manual = false # true: only rules whose block lists this tenant
+#[tenants.setup]
+#ssl = true
+#tenant_id = "$MDE_TENANT_ID"
+#client_id = "$MDE_CLIENT_ID"
+#client_secret = "$MDE_CLIENT_SECRET"
+#[tenants.parameters]
+#device_groups = [""]

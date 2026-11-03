@@ -26,8 +26,6 @@ class DetectionPlatforms(Enum):
     SYSDIG = auto()
 
 
-DetectionSystems = DetectionPlatforms
-
 #: What a run deploys, and what a tenant accepts: ``--strategy`` and a tenant's
 #: ``strategies`` take only these. ``UNIVERSAL`` rules are deployed by both;
 #: ``DISABLEMENT`` and ``DELETION`` rules are retired by a ``RELEASE`` run;

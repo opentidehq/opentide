@@ -17,8 +17,15 @@ from urllib.parse import quote
 import requests
 
 from opentide.models.system_config import ConfigurationModels, SystemConfig
-from opentide.platforms.transport import TenantSession
-from opentide.query.models import QueryRefused, QueryRequest, QueryResult, columns_of, flatten
+from opentide.platforms.transport import TenantSession, not_json_detail
+from opentide.query.models import (
+    QueryRefused,
+    QueryRequest,
+    QueryResult,
+    QueryTimedOut,
+    columns_of,
+    flatten,
+)
 from opentide.query.runner import QueryRunner
 
 #: The repository searched when ``--index`` names none: every event Falcon holds.
@@ -79,8 +86,9 @@ class CrowdstrikeQueryRunner(QueryRunner):
                 if status.get("done"):
                     break
                 if time.monotonic() >= deadline:
-                    raise QueryRefused(
+                    raise QueryTimedOut(
                         f"the search did not finish within {request.timeout:g}s on {tenant.name}",
+                        timeout=request.timeout,
                         detail="narrow the window or raise --timeout",
                     )
                 sleep(delay)
@@ -123,7 +131,7 @@ def _json(response: requests.Response, tenant: str, action: str) -> dict[str, An
         if response.status_code == 403:
             detail = "the API client needs the NGSIEM: Read scope"
         else:
-            detail = response.text[:500] or None
+            detail = not_json_detail(response) or response.text[:500] or None
         raise QueryRefused(
             f"Next-Gen SIEM could not {action} on {tenant} (HTTP {response.status_code})",
             detail=detail,
@@ -131,7 +139,11 @@ def _json(response: requests.Response, tenant: str, action: str) -> dict[str, An
     try:
         body = response.json()
     except ValueError:
-        return {}
+        # A gateway's or proxy's page: its status and title, not "no search id".
+        raise QueryRefused(
+            f"Next-Gen SIEM did not answer with JSON to {action} on {tenant}",
+            detail=not_json_detail(response),
+        ) from None
     return body if isinstance(body, dict) else {}
 
 

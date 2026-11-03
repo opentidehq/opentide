@@ -47,24 +47,47 @@ def test_ordered_yaml_dumper_is_indent_full_subclass() -> None:
 
 
 def test_fetch_configs_reads_top_level_and_nested_toml(tmp_path: Path) -> None:
-    (tmp_path / "global.toml").write_text('title = "global"\n', encoding="utf-8")
-    systems = tmp_path / "systems"
-    systems.mkdir()
-    (systems / "sentinel.toml").write_text(
-        '[platform]\nidentifier = "sentinel"\n',
-        encoding="utf-8",
+    (tmp_path / "paths.toml").write_text('objects = ["rule"]\n', encoding="utf-8")
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "sentinel.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
+    configs = _fetch_configs(tmp_path)
+    assert configs["paths"]["objects"] == ["rule"]
+    assert configs["platforms"]["sentinel"]["platform"]["enabled"] is True
+
+
+def test_a_platform_file_is_keyed_by_its_file_name(tmp_path: Path) -> None:
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "sentinel.toml").write_text(
+        '[platform]\nidentifier = "splunk"\n', encoding="utf-8"
     )
-    configs = _fetch_configs(tmp_path)
-    assert configs["global"]["title"] == "global"
-    assert configs["systems"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert set(_fetch_configs(tmp_path)["platforms"]) == {"sentinel"}
 
 
-def test_fetch_configs_uses_tide_identifier_fallback(tmp_path: Path) -> None:
-    systems = tmp_path / "systems"
-    systems.mkdir()
-    (systems / "legacy.toml").write_text('[tide]\nidentifier = "legacy"\n', encoding="utf-8")
-    configs = _fetch_configs(tmp_path)
-    assert configs["systems"]["legacy"]["tide"]["identifier"] == "legacy"
+@pytest.mark.parametrize("entry", ["global.toml", "schema.toml", "systems"])
+@pytest.mark.parametrize("layer", ["workspace", "parent"])
+def test_a_retired_configuration_entry_fails_every_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str, layer: str
+) -> None:
+    """A retired file was loaded and then ignored; now it is refused by name."""
+    from opentide.core.errors import RetiredConfigurationError
+
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    workspace = tmp_path / "instance" / "detections"
+    base = workspace if layer == "workspace" else workspace.parent
+    configurations = base / ".opentide" / "configurations"
+    configurations.mkdir(parents=True)
+    (workspace / ".opentide").mkdir(parents=True, exist_ok=True)
+    if entry.endswith(".toml"):
+        (configurations / entry).write_text("[x]\n", encoding="utf-8")
+    else:
+        (configurations / entry).mkdir()
+        (configurations / entry / "splunk.toml").write_text("[x]\n", encoding="utf-8")
+    with pytest.raises(RetiredConfigurationError, match="not read by opentide") as raised:
+        resolve_configurations(workspace)
+    assert raised.value.code == "retired_configuration_file"
+    assert raised.value.path.name == entry
 
 
 def test_fetch_configs_returns_empty_for_missing_directory(tmp_path: Path) -> None:
@@ -72,15 +95,12 @@ def test_fetch_configs_returns_empty_for_missing_directory(tmp_path: Path) -> No
 
 
 def test_fetch_configs_skips_non_file_entries_in_nested_dir(tmp_path: Path) -> None:
-    systems = tmp_path / "systems"
-    systems.mkdir()
-    (systems / "nested-dir").mkdir()
-    (systems / "sentinel.toml").write_text(
-        '[platform]\nidentifier = "sentinel"\n',
-        encoding="utf-8",
-    )
+    platforms = tmp_path / "platforms"
+    platforms.mkdir()
+    (platforms / "nested-dir").mkdir()
+    (platforms / "sentinel.toml").write_text("[platform]\nenabled = true\n", encoding="utf-8")
     configs = _fetch_configs(tmp_path)
-    assert configs["systems"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert set(configs["platforms"]) == {"sentinel"}
 
 
 def test_fetch_configs_ignores_pycache_with_non_utf8_bytecode(tmp_path: Path) -> None:
@@ -107,13 +127,13 @@ def test_fetch_configs_ignores_non_toml_files_in_nested_dir(tmp_path: Path) -> N
     (platforms / "__init__.py").write_text("\n", encoding="utf-8")
     (platforms / "README.md").write_text("# not toml\n", encoding="utf-8")
     (platforms / "sentinel.toml").write_text(
-        '[platform]\nidentifier = "sentinel"\n',
+        "[platform]\nenabled = true\n",
         encoding="utf-8",
     )
 
     configs = _fetch_configs(tmp_path)
 
-    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert configs["platforms"]["sentinel"]["platform"]["enabled"] is True
     assert "__init__" not in configs["platforms"]
     assert "README" not in configs["platforms"]
 
@@ -124,13 +144,13 @@ def test_fetch_configs_skips_nested_directory_named_toml(tmp_path: Path) -> None
     platforms.mkdir()
     (platforms / "decoy.toml").mkdir()
     (platforms / "sentinel.toml").write_text(
-        '[platform]\nidentifier = "sentinel"\n',
+        "[platform]\nenabled = true\n",
         encoding="utf-8",
     )
 
     configs = _fetch_configs(tmp_path)
 
-    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert configs["platforms"]["sentinel"]["platform"]["enabled"] is True
     assert "decoy" not in configs["platforms"]
 
 
@@ -158,7 +178,7 @@ def test_fetch_configs_ignores_nested_pycache_bytecode(tmp_path: Path) -> None:
     platforms = tmp_path / "platforms"
     platforms.mkdir()
     (platforms / "sentinel.toml").write_text(
-        '[platform]\nidentifier = "sentinel"\n',
+        "[platform]\nenabled = true\n",
         encoding="utf-8",
     )
     pycache = platforms / "__pycache__"
@@ -167,7 +187,7 @@ def test_fetch_configs_ignores_nested_pycache_bytecode(tmp_path: Path) -> None:
 
     configs = _fetch_configs(tmp_path)
 
-    assert configs["platforms"]["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert configs["platforms"]["sentinel"]["platform"]["enabled"] is True
     assert "__pycache__" not in configs["platforms"]
 
 
@@ -191,7 +211,7 @@ def test_resolve_configurations_survives_compiled_bytecode(
         configs = resolve_configurations()
     finally:
         get_data_root.cache_clear()
-    assert "global" in configs
+    assert "paths" in configs
     assert configs.get("platforms") or configs.get("systems")
 
 

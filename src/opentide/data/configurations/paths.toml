@@ -42,5 +42,3 @@ threat = "threat"
 objective = "objective"
 rule = "rule"
 
-[recomposition]
-systems = "MDR Systems Deployment"

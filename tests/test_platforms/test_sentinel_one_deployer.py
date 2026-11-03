@@ -37,7 +37,7 @@ def _payload(metadata: dict, cool_off: str | None) -> dict:
             "response": {"alert_severity": "High"},
             "configurations": {
                 "sentinel_one": {
-                    "schema": "sentinel_one::1.0",
+                    "schema": "platform::sentinel_one::1.0",
                     "status": "STAGING",
                     "condition": {
                         "type": "Single Event",

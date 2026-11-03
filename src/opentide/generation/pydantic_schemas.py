@@ -1,4 +1,4 @@
-"""Pydantic-driven JSON Schema generation for core Tide models."""
+"""Pydantic-driven JSON Schema generation for the threat, objective and rule models."""
 
 from __future__ import annotations
 

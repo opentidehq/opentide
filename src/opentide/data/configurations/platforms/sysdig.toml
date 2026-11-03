@@ -1,10 +1,7 @@
 [platform]
 enabled = false
-identifier = "sysdig"
 name = "Sysdig Secure"
-subschema = "Sysdig Secure"
 description = "Custom Falco rules for Sysdig Secure runtime detection."
-flags = []
 
 #[[modifiers]]
 #name = "Modifier Demo"

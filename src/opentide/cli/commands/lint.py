@@ -31,9 +31,20 @@ def lint_cmd(
         "--check",
         metavar="CHECK",
         help=(
-            "Limit to one check: filenames, metadata or placeholders (repeatable). "
+            "Limit to one check: filenames, metadata, placeholders or queries (repeatable). "
             "Runs it even when lint.toml disables it"
         ),
+    ),
+    changed: bool = typer.Option(
+        False,
+        "--changed",
+        help=(
+            "Lint only the object files this run changed: the pull or merge request, the "
+            "push, or outside CI the last commit (the diff deploy reads)"
+        ),
+    ),
+    file: list[str] | None = typer.Option(
+        None, "--file", help="Lint only this object file (repeatable)"
     ),
     report_format: ReportFormat = typer.Option(ReportFormat.text, "--format", help=FORMAT_HELP),
     output: Path | None = typer.Option(None, "--output", help=OUTPUT_HELP),
@@ -48,7 +59,14 @@ def lint_cmd(
     cli = get_context(ctx)
     check_report_options(cli, report_format, output)
     cli.apply_environment()
-    result = run_lint(cli.repo, checks=check or None, fix=fix, strict=strict)
+    result = run_lint(
+        cli.repo,
+        checks=check or None,
+        fix=fix,
+        strict=strict,
+        files=file or (),
+        changed=changed,
+    )
     outcome = CommandResult.from_payload(result, default_message="Catalogue lint passed")
     if cli.json_output and report_format is ReportFormat.text:
         emit_result(cli, outcome)

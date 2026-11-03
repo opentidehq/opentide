@@ -16,7 +16,7 @@ merges cleanly into its base, and no review thread waits on you.
 | **Test (3.10 … 3.14)** | unit suite, `-n 4`; coverage gate on 3.14 only | `scripts/ci-local.sh` (`--full` adds the gate) |
 | **E2E (3.14, shard N/4)** | `cli_e2e` + `cli_smoke`, split by `.test_durations_e2e` | `uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov -n 4 --splits 4 --group N --durations-path .test_durations_e2e` |
 | **GitLab CI lint** | glint + gitlab-ci-verify on rendered pipelines | `scripts/ci-local.sh --full` (installs the linters) |
-| **CLI Windows smoke** | console launcher + case-insensitive `migrate objects` | no local equivalent; reason about it (below) |
+| **CLI Windows smoke** | console launcher + promotion keeping CRLF on NTFS | no local equivalent; reason about it (below) |
 | **CodeQL** | Python + Actions, `security-extended` | [`codeql`](../codeql/SKILL.md) |
 
 Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.

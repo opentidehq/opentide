@@ -112,7 +112,7 @@ def mock_deployers(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         def mdr_for(self, platforms: Iterable[str]) -> dict[str, MagicMock]:
             return dict.fromkeys(platforms, deployer)
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _MockDeployTide)
     return deployer
 
 
