@@ -6233,9 +6233,8 @@
             }
           ],
           "default": null,
-          "description": "Accepted, including the loader alias organization. The current deployer targets the tenant the run selects and does not filter on this list.",
-          "title": "Organizations",
-          "markdownDescription": "Accepted, including the loader alias `organization`. The current deployer targets the tenant\nthe run selects and does not filter on this list."
+          "description": "Accepted. The current deployer targets the tenant the run selects and does not filter on this list.",
+          "title": "Organizations"
         },
         "watchlist": {
           "anyOf": [
@@ -6985,9 +6984,8 @@
             }
           ],
           "default": null,
-          "description": "Column identifying the file to quarantine. Loader alias: quarantine_files.",
-          "title": "Quarantine File",
-          "markdownDescription": "Column identifying the file to quarantine. Loader alias: `quarantine_files`."
+          "description": "Column identifying the file to quarantine.",
+          "title": "Quarantine File"
         }
       },
       "title": "DefenderFileActions",
