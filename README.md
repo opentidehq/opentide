@@ -10,7 +10,7 @@ opentide gives every detection an ontology and a taxonomy, so it stays threat-al
 ## Install
 
 ```bash
-pip install opentide==0.20.1
+pip install opentide==0.21.0
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```
