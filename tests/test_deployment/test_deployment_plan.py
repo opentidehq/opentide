@@ -386,9 +386,7 @@ def test_promotion_skips_a_rule_without_platform_blocks(
     monkeypatch.setattr(promotion, "PROMOTION_TARGET", promotion.VALID_STATUSES[-1])
     edited: list[Path] = []
     monkeypatch.setattr(
-        promotion.PromoteMDR,
-        "edit_mdr_statuses",
-        lambda self, mdr_path, status_to_promote: edited.append(mdr_path),
+        promotion, "_write_atomically", lambda mdr_path, data: edited.append(mdr_path)
     )
     rules = _write_rules_without_platform_blocks(workspace / "objects" / "rules")
     promotion.PromoteMDR().promote(rules)
@@ -405,9 +403,7 @@ def test_debug_promotion_without_rules_folder_promotes_nothing(
     monkeypatch.setattr(promotion, "PROMOTION_ENABLED", True)
     edited: list[Path] = []
     monkeypatch.setattr(
-        promotion.PromoteMDR,
-        "edit_mdr_statuses",
-        lambda self, mdr_path, status_to_promote: edited.append(mdr_path),
+        promotion, "_write_atomically", lambda mdr_path, data: edited.append(mdr_path)
     )
     promotion.PromoteMDR().promote([])
     assert edited == []
@@ -656,7 +652,6 @@ configurations:
 _SPLUNK_PLATFORM = """\
 [platform]
 enabled = {enabled}
-identifier = "splunk"
 name = "Splunk Enterprise"
 description = "Splunk"
 
@@ -917,7 +912,11 @@ def _resolve(
     from opentide.loading.rule_loader import load_rule_from_dict
     from opentide.models.deployment_enums import DetectionPlatforms
 
-    block: dict[str, object] = {"schema": "splunk::3.0", "status": status, "query": "index=main"}
+    block: dict[str, object] = {
+        "schema": "platform::splunk::1.0",
+        "status": status,
+        "query": "index=main",
+    }
     if rule_tenants is not None:
         block["tenants"] = rule_tenants
     rule = load_rule_from_dict(
@@ -1013,11 +1012,8 @@ def _splunk_raw(**tenant: object) -> dict[str, object]:
     return {
         "platform": {
             "enabled": True,
-            "identifier": "splunk",
             "name": "Splunk",
-            "subschema": "Splunk Sub Schema",
             "description": "desc",
-            "flags": [],
         },
         "tenants": [
             {
@@ -1039,11 +1035,8 @@ def _cbc_raw(**tenant: object) -> dict[str, object]:
     return {
         "platform": {
             "enabled": True,
-            "identifier": "carbon_black_cloud",
             "name": "CBC",
-            "subschema": "CBC EDR Sub Schema",
             "description": "desc",
-            "flags": [],
         },
         "tenants": [
             {
@@ -1060,11 +1053,8 @@ def _sentinel_raw(**tenant: object) -> dict[str, object]:
     return {
         "platform": {
             "enabled": True,
-            "identifier": "sentinel",
             "name": "Sentinel",
-            "subschema": "Sentinel",
             "description": "desc",
-            "flags": [],
         },
         "tenants": [
             {

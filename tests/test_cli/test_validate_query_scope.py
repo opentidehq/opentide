@@ -108,7 +108,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path) -> Pat
     shutil.copytree(real_rules_folder(corpus), repo / "objects" / "rules")
     for family in ("objectives", "threats"):
         shutil.copytree(corpus / "objects" / family, repo / "objects" / family)
-    config = repo / ".opentide/configurations/systems/sentinel.toml"
+    config = repo / ".opentide/configurations/platforms/sentinel.toml"
     config.write_text(
         config.read_text(encoding="utf-8")
         + _tenant("Preview", "PREVIEW", PREVIEW_WORKSPACE)

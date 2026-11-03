@@ -18,7 +18,7 @@ pytestmark = pytest.mark.cli_e2e
 @pytest.fixture
 def seen(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> list[str | None]:
     """The flag's environment value each deployer call saw."""
-    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
     observed: list[str | None] = []
     deployer = MagicMock()
     deployer.deploy.side_effect = lambda **_: observed.append(
@@ -29,7 +29,7 @@ def seen(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> list[str | 
         def mdr_for(self, platforms: Iterable[str]) -> dict[str, MagicMock]:
             return {"sentinel": deployer} if "sentinel" in set(platforms) else {}
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _MockDeployTide)
     return observed
 
 

@@ -1,10 +1,7 @@
 [platform]
 enabled = true
-identifier = "elastic"
 name = "Elastic Security"
-subschema = "Elastic Security"
 description = "Elastic Security detection rules via the Kibana detection engine API."
-flags = []
 
 [[tenants]]
 name = "elastic-staging"

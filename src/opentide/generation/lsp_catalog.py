@@ -217,7 +217,7 @@ def deprecations_catalog(version: str) -> dict[str, Any]:
     """The ``deprecations.json`` document: root and platform fields marked deprecated."""
     from opentide.generation.pydantic_metaschema import CORE_ROOT_EXTRAS
     from opentide.models.platform import PLATFORM_CONFIG_MODELS
-    from opentide.models.platform_schema import _PLATFORM_EXTRAS
+    from opentide.models.platform_schema import platform_root_extras
 
     rows: list[dict[str, str]] = []
     for family, extras in CORE_ROOT_EXTRAS.items():
@@ -227,7 +227,7 @@ def deprecations_catalog(version: str) -> dict[str, Any]:
                     {"schema": family, "path": name, "message": str(spec["tide.meta.deprecation"])}
                 )
     for platform, model in PLATFORM_CONFIG_MODELS.items():
-        for name, spec in (_PLATFORM_EXTRAS.get(model, {}).get("property_extras") or {}).items():
+        for name, spec in (platform_root_extras(model).get("property_extras") or {}).items():
             if isinstance(spec, dict) and spec.get("tide.meta.deprecation"):
                 rows.append(
                     {

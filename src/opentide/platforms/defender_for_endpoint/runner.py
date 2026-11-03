@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 
 from opentide.core.time import format_utc_z, utc_now
 from opentide.models.system_config import ConfigurationModels, SystemConfig
+from opentide.platforms.transport import not_json_detail
 from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
 from opentide.query.runner import QueryRunner, kql_with_limit
 
@@ -50,8 +51,16 @@ class DefenderQueryRunner(QueryRunner):
             )
             if response.status_code == 403:
                 message += ": the app registration needs ThreatHunting.Read.All"
-            raise QueryRefused(message, detail=str(_error_message(response)))
-        body: dict[str, Any] = response.json()
+            detail = not_json_detail(response) or str(_error_message(response))
+            raise QueryRefused(message, detail=detail)
+        try:
+            body: dict[str, Any] = response.json()
+        except ValueError:
+            # A proxy's or gateway's page: its status and title, not a JSONDecodeError.
+            raise QueryRefused(
+                f"Graph did not answer the hunting query on {tenant.name} with JSON",
+                detail=not_json_detail(response),
+            ) from None
         schema = body.get("schema", body.get("Schema", [])) or []
         columns = tuple(
             QueryColumn(

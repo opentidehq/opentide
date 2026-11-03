@@ -52,7 +52,6 @@ SUMMARIES: dict[str, str] = {
     "generate extract elastic": "Import Elastic Security detection rules",
     "generate inflight prune": "Remove inflight shards already on the default branch",
     "deploy migrate-state": "Move vendor ids from rules into deployment state",
-    "migrate objects": "Move a legacy layout into objects/ and .opentide/",
     "migrate vocab-scope": "Re-prefix stage-scoped vocabulary values",
 }
 
@@ -139,8 +138,7 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
         "opentide deploy --strategy RELEASE",
     ),
     "deploy migrate-state": ("opentide deploy migrate-state",),
-    "migrate": ("opentide migrate objects", "opentide migrate objects --apply"),
-    "migrate objects": ("opentide migrate objects", "opentide migrate objects --apply"),
+    "migrate": ("opentide migrate vocab-scope", "opentide migrate vocab-scope --apply"),
     "migrate vocab-scope": ("opentide migrate vocab-scope", "opentide migrate vocab-scope --apply"),
 }
 

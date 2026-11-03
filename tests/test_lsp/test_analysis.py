@@ -310,9 +310,10 @@ def test_the_language_server_checks_the_revision_an_object_names(
         ("field 'metadata.reviewed' is not defined in rule::1.0", ("metadata", "reviewed"), 10)
     ]
     assert _shape(tmp_path, older.replace("rule::1.0", "rule::1.1")) == []
-    # A splunk::2.x spelling validates, so it is no finding either.
+    # A splunk::2.x spelling is an unknown key, in the editor as in validate.
     legacy = REVISION_RULE.replace("    query: index=main\n", "    search: index=main\n")
-    assert _shape(tmp_path, legacy) == []
+    paths = {path for _, path, _ in _shape(tmp_path, legacy)}
+    assert ("configurations", "splunk", "search") in paths, paths
 
 
 # Declared datasets (#695, #718) -------------------------------------------------
@@ -435,3 +436,27 @@ def test_a_system_that_declares_no_dataset_is_unchecked(bundled_catalog: None) -
     assert engine().dataset_status("sentinel_one", "NTANetAnalytics") == "unchecked"
     assert _table("NTANetAnalytics") == "unchecked"
     engine().install_visibility()
+
+
+def test_an_app_command_finding_promises_no_declaration() -> None:
+    """``spl_unknown_command`` asked to "declare" a search-head app's command, and no
+    setting declares one (0.20.1 migration: ``decrypt``, ``mispsearch``)."""
+    [finding] = check_query("index=main | mispsearch value=x", language="spl", platform="splunk")
+
+    assert finding.code == "spl_unknown_command"
+    assert finding.severity == "warning"
+    assert "declare it" not in finding.message
+    assert finding.message == (
+        "'mispsearch' is not a command opentide knows; an app on the search head may provide "
+        "it (opentide cannot declare app commands yet)"
+    )
+
+
+def test_a_typo_of_a_command_is_still_named() -> None:
+    from opentide.cli.ui.diagnostics import diagnostic_from_engine
+
+    [finding] = check_query("index=main | stas count", language="spl", platform="splunk")
+
+    assert finding.severity == "error"
+    diagnostic = diagnostic_from_engine(finding, file_path=Path("q.spl"), workspace=None)
+    assert diagnostic.help == "did you mean 'stats'?"

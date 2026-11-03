@@ -1,4 +1,4 @@
-"""``opentide migrate``: legacy client repository layouts."""
+"""``opentide migrate``: rewrite opentide objects after a model change."""
 
 from __future__ import annotations
 
@@ -9,23 +9,7 @@ import typer
 from opentide.cli.context import get_context
 from opentide.cli.output import emit_error, emit_success
 
-migrate_app = typer.Typer(help="Migrate legacy repository layouts")
-
-
-@migrate_app.command("objects")
-def migrate_objects_cmd(
-    ctx: typer.Context,
-    apply: bool = typer.Option(
-        False, "--apply", help="Perform the planned moves (default: dry-run)"
-    ),
-    copy: bool = typer.Option(False, "--copy", help="Copy files instead of moving them"),
-) -> None:
-    """Move Configurations/, Objects/, and .opentide/framework into the greenfield layout."""
-    from opentide.cli.services.migrate_objects import run_migrate_objects
-
-    cli = get_context(ctx)
-    cli.apply_environment()
-    emit_success(cli, run_migrate_objects(cli.repo, apply=apply, copy=copy))
+migrate_app = typer.Typer(help="Rewrite objects for a newer opentide model")
 
 
 @migrate_app.command("vocab-scope")

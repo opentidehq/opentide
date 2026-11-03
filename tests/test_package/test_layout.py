@@ -53,13 +53,13 @@ def test_no_legacy_client_pipeline_directory() -> None:
     assert not (ROOT / ".github" / "pipelines").exists()
 
 
-def test_bundled_global_config_objects() -> None:
-    global_toml = ROOT / "src/opentide/data/configurations/global.toml"
-    assert global_toml.is_file()
-    text = global_toml.read_text(encoding="utf-8")
-    assert '"objective"' in text
-    assert '"cdm"' not in text
-    assert 'objects = [ "threat", "objective", "rule" ]' in text
+def test_paths_toml_is_the_only_bundled_layout() -> None:
+    configurations = ROOT / "src/opentide/data/configurations"
+    assert not (configurations / "global.toml").exists()
+    assert not (configurations / "schema.toml").exists()
+    text = (configurations / "paths.toml").read_text(encoding="utf-8")
+    assert 'objects = ["threat", "objective", "rule"]' in text
+    assert "recomposition" not in text
     assert "Framework/Vocabulary" not in text
 
 

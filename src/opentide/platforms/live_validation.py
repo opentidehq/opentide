@@ -5,13 +5,17 @@ A platform's live check is its :class:`~opentide.query.runner.QueryRunner`'s
 last minute, or the platform's parse-only call where it has one (Splunk, Carbon
 Black). The rule's queries are the ones deploy sends (:func:`rule_queries`), to
 the tenants deploy sends them to (:class:`TideDeployment`). A refusal is that
-rule's failure; the other rules are still checked. What only validation asks of
-a query sits on top of the check's result (:meth:`LiveQueryValidator.inspect`).
+rule's failure; the other rules are still checked. So is a query that gets no
+answer within the check timeout (``query_check_timeout``): only
+:data:`~opentide.query.check.UNREACHABLE_AFTER_TIMEOUTS` of them in a row on one
+tenant report it unreachable. What only validation asks of a query sits on top
+of the check's result (:meth:`LiveQueryValidator.inspect`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import ClassVar
 
 import structlog
@@ -20,8 +24,16 @@ from opentide.models.deployment_enums import RunStrategies
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import SystemConfig
 from opentide.platforms.plugins import QueryValidator, resolve_rules
-from opentide.query.check import CHECK_TIMEOUT, LiveCheckReport, RuleCheck, check_window
-from opentide.query.models import LiveCheck, QueryRefused, QueryRequest, TimeWindow
+from opentide.query.check import (
+    CHECK_TIMEOUT_ENV,
+    QUERY_CHECK_TIMEOUT,
+    UNREACHABLE_AFTER_TIMEOUTS,
+    LiveCheckReport,
+    RuleCheck,
+    check_timeout,
+    check_window,
+)
+from opentide.query.models import LiveCheck, QueryRefused, QueryRequest, QueryTimedOut, TimeWindow
 from opentide.query.runner import QueryRunner
 
 logger = structlog.get_logger(__name__)
@@ -38,6 +50,96 @@ def refusal_text(refused: QueryRefused) -> str:
     if refused.detail:
         return f"{refused.message}: {refused.detail}"
     return refused.message
+
+
+def timeout_text(reason: str, timeout: float) -> str:
+    """A query check that got no answer within *timeout* seconds, and how to wait longer."""
+    return (
+        f"no answer within the {timeout:g}s check timeout ({reason}). Raise it with "
+        f"--check-timeout or {CHECK_TIMEOUT_ENV}, or make the query cheaper"
+    )
+
+
+@dataclass
+class TimeoutStreak:
+    """The queries in a row that got no answer on one tenant.
+
+    :meth:`timed_out` raises :class:`~opentide.platforms.transport.TenantUnreachableError`
+    at the :data:`~opentide.query.check.UNREACHABLE_AFTER_TIMEOUTS`-th: a tenant
+    that answers no query is not waited on for every rule. :meth:`finish` raises
+    it too when the tenant timed out and never answered at all: a stalled TLS
+    handshake reaches requests as a read timeout, and a tenant checked with one
+    or two queries would otherwise read as slow queries, not as unreachable.
+    """
+
+    platform: str
+    tenant: str
+    host: str
+    timeout: float
+    count: int = 0
+    #: Whether the tenant is known to have taken a connection: it answered a
+    #: request, or a timeout proved the connection was up.
+    ever_answered: bool = False
+    last_error: BaseException | None = None
+
+    def answered(self) -> None:
+        self.count = 0
+        self.ever_answered = True
+
+    def finish(self) -> None:
+        """End of the tenant's batch: one that only ever timed out is unreachable."""
+        from opentide.platforms.transport import TenantUnreachableError
+
+        if self.ever_answered or self.last_error is None:
+            return
+        raise TenantUnreachableError(
+            self.platform,
+            self.tenant,
+            self.host,
+            self.last_error,
+            reason=(
+                f"it answered no request: {self.count} timed out after {self.timeout:g}s "
+                f"(the last: {self.last_error}). A connection that opens but never completes "
+                "its TLS handshake, behind a proxy or a load balancer, looks like this"
+            ),
+            timeouts=self.count,
+        )
+
+    def timed_out(self, error: BaseException) -> None:
+        from opentide.platforms.transport import TenantUnreachableError
+
+        self.last_error = error
+        if not _may_be_a_stalled_handshake(error):
+            # A gateway page is an answer, and urllib (Splunk) reports a handshake
+            # that never completes as URLError, so its read timeout had a connection.
+            self.ever_answered = True
+        self.count += 1
+        if self.count >= UNREACHABLE_AFTER_TIMEOUTS:
+            raise TenantUnreachableError(
+                self.platform,
+                self.tenant,
+                self.host,
+                error,
+                reason=(
+                    f"{self.count} queries in a row got no answer within the {self.timeout:g}s "
+                    f"check timeout (the last: {error}); a tenant is reported unreachable after "
+                    f"{UNREACHABLE_AFTER_TIMEOUTS} in a row"
+                ),
+                timeouts=self.count,
+            )
+
+
+def _may_be_a_stalled_handshake(error: BaseException) -> bool:
+    """Whether *error* may be a TLS handshake that never completed.
+
+    urllib3 2.x raises ``ReadTimeoutError`` for a socket timeout during the
+    handshake, so through requests a read timeout does not prove the
+    connection was established.
+    """
+    import requests
+    import urllib3.exceptions
+
+    return isinstance(error, (requests.ReadTimeout, urllib3.exceptions.ReadTimeoutError))
 
 
 class LiveQueryValidator(QueryValidator):
@@ -60,29 +162,37 @@ class LiveQueryValidator(QueryValidator):
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
+        *,
+        timeout: float | None = None,
     ) -> LiveCheckReport:
         """Check each rule on each tenant a deploy with *strategies* sends it to.
 
+        Each query may take *timeout* seconds (default: :func:`check_timeout`).
         Lets an unreachable tenant (``TenantUnreachableError``), a credential
         the tenant refuses and a broken SDK through, for the caller to report
-        once; a query the tenant refuses is a failed :class:`RuleCheck`.
+        once; a query the tenant refuses, or does not answer in time, is a
+        failed :class:`RuleCheck`.
         """
         from opentide.deployment import TideDeployment
         from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES, DetectionPlatforms
         from opentide.platforms.transport import reaching_tenant
 
+        seconds = check_timeout(timeout)
         deployment = TideDeployment(
             deployment=resolve_rules(mdr_deployment),
             system=DetectionPlatforms[self.platform.upper()],
             strategies=strategies or DEPLOYABLE_STRATEGIES,
         )
-        report = LiveCheckReport(self.platform)
+        report = LiveCheckReport(self.platform, timeout=seconds)
         window = check_window()
         for batch in deployment.rule_deployment:
             tenant = batch.tenant
-            with reaching_tenant(self.platform, tenant.name, self.host(tenant)):
+            host = self.host(tenant)
+            streak = TimeoutStreak(self.platform, tenant.name, host, seconds)
+            with reaching_tenant(self.platform, tenant.name, host):
                 for rule in batch.rules:
-                    report.checks.extend(self.check_rule(rule, tenant, window))
+                    report.checks.extend(self.check_rule(rule, tenant, window, streak=streak))
+            streak.finish()
         return report
 
     def host(self, tenant: SystemConfig.Tenant) -> str:
@@ -91,11 +201,23 @@ class LiveQueryValidator(QueryValidator):
         return str(getattr(setup, "url", "") or _DEFAULT_HOSTS.get(self.platform, ""))
 
     def check_rule(
-        self, rule: DetectionRule, tenant: SystemConfig.Tenant, window: TimeWindow
+        self,
+        rule: DetectionRule,
+        tenant: SystemConfig.Tenant,
+        window: TimeWindow,
+        *,
+        streak: TimeoutStreak | None = None,
     ) -> list[RuleCheck]:
-        """*rule*'s queries on *tenant*: one check each."""
+        """*rule*'s queries on *tenant*: one check each.
+
+        *streak* counts the queries in a row on *tenant* that got no answer;
+        without one, the call starts its own, with :func:`check_timeout`.
+        """
+        from opentide.platforms.transport import read_timeout
         from opentide.query.rules import RuleQueryError, rule_queries
 
+        if streak is None:
+            streak = TimeoutStreak(self.platform, tenant.name, self.host(tenant), check_timeout())
         uuid = str(rule.metadata.uuid)
         if getattr(rule.platform_configs(), self.platform, None) is None:
             logger.info("rule_skipped", mdr_name=rule.name, reason=f"no {self.platform} block")
@@ -115,14 +237,29 @@ class LiveQueryValidator(QueryValidator):
                 index=item.index,
                 data_view=item.data_view,
                 label=item.label,
-                timeout=CHECK_TIMEOUT,
+                timeout=streak.timeout,
             )
             logger.info("validating_query", mdr_name=rule.name, uuid=uuid, tenant=tenant.name)
             try:
                 found = self.runner.check(request, tenant)
+            except QueryTimedOut as exc:
+                # The tenant answered: the search was still running at the deadline.
+                # Its detail advises `opentide query --timeout`; timed_out names ours.
+                streak.answered()
+                checks.append(self.timed_out(rule, tenant, item.label, exc.message, streak.timeout))
+                continue
             except QueryRefused as exc:
+                streak.answered()
                 checks.append(self._rejected(rule, tenant, item.label, refusal_text(exc)))
                 continue
+            except Exception as exc:
+                error = read_timeout(exc)
+                if error is None:
+                    raise
+                streak.timed_out(error)
+                checks.append(self.timed_out(rule, tenant, item.label, str(error), streak.timeout))
+                continue
+            streak.answered()
             errors = tuple(self.inspect(rule, request, found))
             for error in errors:
                 self._log_rejected(rule, tenant, error)
@@ -151,6 +288,32 @@ class LiveQueryValidator(QueryValidator):
     ) -> Sequence[str]:
         """Why validation fails a query the tenant accepted; none by default."""
         return ()
+
+    def timed_out(
+        self,
+        rule: DetectionRule,
+        tenant: SystemConfig.Tenant,
+        label: str | None,
+        reason: str,
+        timeout: float,
+        warnings: Sequence[str] = (),
+    ) -> RuleCheck:
+        """*rule*'s failed check: its query got no answer within *timeout* seconds."""
+        error = timeout_text(reason, timeout)
+        logger.critical(
+            "query_check_timed_out",
+            detail=f"{rule.name} ({rule.metadata.uuid}) on {self.platform} tenant {tenant.name}",
+            reason=error,
+        )
+        return RuleCheck(
+            rule=str(rule.metadata.uuid),
+            name=rule.name,
+            tenant=tenant.name,
+            label=label,
+            errors=(error,),
+            warnings=tuple(warnings),
+            code=QUERY_CHECK_TIMEOUT,
+        )
 
     def _rejected(
         self, rule: DetectionRule, tenant: SystemConfig.Tenant, label: str | None, error: str

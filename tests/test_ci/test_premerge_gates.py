@@ -23,6 +23,7 @@ import yaml
 from opentide.ci.azure import render_azure
 from opentide.ci.gates import (
     azure_premerge_condition,
+    github_not_skipped,
     github_premerge_if,
     gitlab_premerge_rule,
 )
@@ -145,8 +146,11 @@ def test_github_premerge_if_pins_the_base_ref() -> None:
 def test_github_staging_and_inflight_use_the_shared_premerge_if() -> None:
     parsed = yaml.safe_load(render_github(_options("github")))
     expected = github_premerge_if("main")
-    for job in ("deploy_staging", "inflight_shards"):
-        assert parsed["jobs"][job]["if"] == expected
+    assert parsed["jobs"]["inflight_shards"]["if"] == expected
+    # The staging deploy also honours [skip deploy] and the skip-deploy label.
+    assert parsed["jobs"]["deploy_staging"]["if"] == (
+        f"${{{{ {expected} && {github_not_skipped()} }}}}"
+    )
 
 
 # --- Azure ----------------------------------------------------------------

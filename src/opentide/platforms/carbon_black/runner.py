@@ -12,6 +12,7 @@ from opentide.query.models import (
     QueryRefused,
     QueryRequest,
     QueryResult,
+    QueryTimedOut,
     columns_of,
     flatten,
 )
@@ -37,8 +38,9 @@ class CarbonBlackQueryRunner(QueryRunner):
         from cbc_sdk.platform import Process
 
         from opentide.core.errors import Errors
+        from opentide.platforms.transport import read_timeout, transport_error
 
-        api = self._api(tenant)
+        api = self._api(tenant, timeout=request.timeout)
         query = (
             api.select(Process)
             .where(request.text)
@@ -57,8 +59,11 @@ class CarbonBlackQueryRunner(QueryRunner):
                 f"Carbon Black Cloud refused the query on {tenant.name}", detail=str(exc)
             ) from exc
         except TimeoutError as exc:
-            raise QueryRefused(
+            if transport_error(exc) is not None and read_timeout(exc) is None:
+                raise  # A connect timeout: reported once, as an unreachable tenant.
+            raise QueryTimedOut(
                 f"the process search did not finish within {request.timeout:g}s on {tenant.name}",
+                timeout=request.timeout,
                 detail="narrow the window or raise --timeout",
             ) from exc
         except CbcConnectionError:
@@ -77,14 +82,15 @@ class CarbonBlackQueryRunner(QueryRunner):
 
     def check(self, request: QueryRequest, tenant: SystemConfig.Tenant) -> LiveCheck:
         """Carbon Black's ``search_validation`` call: the query is parsed, no search runs."""
-        if not self._api(tenant).validate_process_query(request.text):
+        if not self._api(tenant, timeout=request.timeout).validate_process_query(request.text):
             raise QueryRefused(
                 f"Carbon Black Cloud refused the query on {tenant.name}",
                 detail="ensure each term has a value, and escape slashes, colons and spaces",
             )
         return LiveCheck()
 
-    def _api(self, tenant: SystemConfig.Tenant) -> CBCloudAPI:
+    def _api(self, tenant: SystemConfig.Tenant, *, timeout: float) -> CBCloudAPI:
+        """*tenant*'s SDK client whose every request may wait *timeout* seconds, made once."""
         from opentide.core.environment import reject_unsubstituted_placeholders
         from opentide.platforms.carbon_black.client import CarbonBlackCloudService
 
@@ -95,7 +101,11 @@ class CarbonBlackQueryRunner(QueryRunner):
         setup = tenant.setup
         reject_unsubstituted_placeholders(setup.url, setup.org_key, setup.token, client="CBC")
         cbc_tenant = tenant
-        return self.client(tenant, lambda: CarbonBlackCloudService(cbc_tenant).service)
+        return self.client(
+            tenant,
+            lambda: CarbonBlackCloudService(cbc_tenant, timeout=timeout).service,
+            key=f"{timeout:g}",
+        )
 
 
 def _document(process: Any) -> dict[str, Any]:

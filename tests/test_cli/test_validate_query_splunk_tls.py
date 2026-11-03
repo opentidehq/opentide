@@ -50,7 +50,7 @@ def tenant_ssl(
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(repo))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(repo))
-    config = repo / ".opentide/configurations/systems/splunk.toml"
+    config = repo / ".opentide/configurations/platforms/splunk.toml"
     original = config.read_text(encoding="utf-8")
 
     def _write(value: str) -> None:

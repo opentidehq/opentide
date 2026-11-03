@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -18,11 +17,8 @@ from opentide.platforms.splunk.client import correct_timerange_mode
 _TENANT_TOML = """\
 [platform]
 enabled = true
-identifier = "splunk"
 name = "Splunk Enterprise"
-subschema = "Splunk Sub Schema"
 description = "Splunk"
-flags = []
 
 [[tenants]]
 name = "Default"
@@ -73,26 +69,6 @@ def test_invalid_frequency_scheduling_warns_once_and_uses_current(
     assert "'bogus'" in str(call.kwargs["detail"])
 
 
-def _legacy_setup(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str | None], None]:
-    """The corpus enables Splunk with a ``[setup]`` table and ``$SPLUNK_*`` secrets."""
-    for name, value in {
-        "SPLUNK_URL": "https://splunk.example",
-        "SPLUNK_PORT": "8089",
-        "SPLUNK_APP": "search",
-        "SPLUNK_TOKEN": "token",
-    }.items():
-        monkeypatch.setenv(name, value)
-    config = repo / ".opentide" / "configurations" / "systems" / "splunk.toml"
-    original = config.read_text(encoding="utf-8")
-
-    def _write(value: str | None) -> None:
-        line = "" if value is None else f'frequency_scheduling = "{value}"'
-        text = re.sub(r"^frequency_scheduling = .*$", line, original, flags=re.MULTILINE)
-        config.write_text(text, encoding="utf-8")
-
-    return _write
-
-
 def _tenant_setup(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str | None], None]:
     """A ``[[tenants]]`` platform file, as ``opentide setup`` writes it."""
     platforms = repo / ".opentide" / "configurations" / "platforms"
@@ -105,23 +81,14 @@ def _tenant_setup(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str 
     return _write
 
 
-#: What an absent ``frequency_scheduling`` resolves to: the tenant model's default,
-#: and for a legacy ``[setup]`` table the mode 0.5.0 deployed with.
-_UNSET_FREQUENCY = {"legacy-setup": "current", "tenant": "random"}
-
-
-@pytest.fixture(params=list(_UNSET_FREQUENCY))
+@pytest.fixture
 def splunk_frequency(
-    request: pytest.FixtureRequest,
     tide_corpus_repo: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Callable[[str | None], None]:
     """Write an enabled Splunk config whose ``frequency_scheduling`` is *value* (None: absent)."""
-    if request.param == "tenant":
-        (tide_corpus_repo / ".opentide" / "configurations" / "systems" / "splunk.toml").unlink()
-        writer = _tenant_setup(tide_corpus_repo, monkeypatch)
-    else:
-        writer = _legacy_setup(tide_corpus_repo, monkeypatch)
+    (tide_corpus_repo / ".opentide" / "configurations" / "platforms" / "splunk.toml").unlink()
+    writer = _tenant_setup(tide_corpus_repo, monkeypatch)
     monkeypatch.setattr(Opentide, "Platforms", PlatformsRegistry())
 
     def _apply(value: str | None) -> None:
@@ -145,12 +112,11 @@ def test_enabled_tenant_with_invalid_frequency_warns_once(
 
 
 def test_enabled_tenant_without_frequency_keeps_its_default_silently(
-    splunk_frequency, splunk_log: CapturingLogger, request: pytest.FixtureRequest
+    splunk_frequency, splunk_log: CapturingLogger
 ) -> None:
     splunk_frequency(None)
     deployer = Opentide.Platforms["splunk"].deployer
-    expected = _UNSET_FREQUENCY[request.node.callspec.params["splunk_frequency"]]
-    assert getattr(deployer, "TIMERANGE_MODE", None) == expected
+    assert getattr(deployer, "TIMERANGE_MODE", None) == "random"
     assert _warnings(splunk_log) == []
 
 

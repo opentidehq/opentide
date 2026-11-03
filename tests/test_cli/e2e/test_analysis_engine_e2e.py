@@ -679,7 +679,7 @@ def test_the_sdk_validates_the_objects_it_is_given_not_the_queries_on_disk(
     assert validate_all_objects(objects) == {}
 
 
-def test_an_empty_legacy_search_is_reported_once(invoke_cli, tutorial: Path) -> None:
+def test_a_splunk_2x_search_is_a_schema_finding_not_a_query(invoke_cli, tutorial: Path) -> None:
     rule = _new_rule(invoke_cli, tutorial, "splunk", "index=main")
     text = rule.read_text(encoding="utf-8")
     start = text.index("    query: |")

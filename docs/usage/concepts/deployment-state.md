@@ -23,7 +23,7 @@ The normative definition is [`specs/deployment-state.md`](https://github.com/ope
 
 `opentide setup repo` writes `.opentide/states/sharing.jsonl` to `.gitignore`.
 Workspaces created by older releases ignore the whole `.opentide/states/`
-directory: change that line before you deploy (see [Migration](../migration/index.md#vendor-rule-ids-move-to-deployment-state)).
+directory: change that line before you deploy (see [0.15.0](../releases.md#0150--16-october-2026) and [`deploy migrate-state`](../../cli/deploy.md#deploy-migrate-state)).
 
 ## The shard
 

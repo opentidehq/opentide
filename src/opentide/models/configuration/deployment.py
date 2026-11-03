@@ -52,10 +52,6 @@ class DebugSettings(ConfigurationModel):
     ssl_enabled: bool = Field(
         default=True, description="Whether TLS certificates are verified in debug mode."
     )
-    proxy_enabled: bool = Field(
-        default=False,
-        description="Ignored. Pass the proxy URL with `opentide --proxy` instead.",
-    )
 
 
 class DeploymentConfiguration(ConfigurationModel):

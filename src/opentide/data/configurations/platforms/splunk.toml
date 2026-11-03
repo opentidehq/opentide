@@ -1,11 +1,8 @@
 [platform]
 enabled = false
-identifier = "splunk"
 name = "Splunk Enterprise"
-subschema = "Splunk Sub Schema"
 description = """Splunk Enterprise enables you to search, analyze and
 visualize your data to quickly act on insights from across your technology landscape."""
-flags = []
 
 # [[tenants]]
 # name = "Default"

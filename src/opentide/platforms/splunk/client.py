@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
 import ssl
+import time
 import urllib.request
 from collections.abc import Callable
 from io import BytesIO
@@ -21,7 +21,12 @@ from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DebugHelpers, Opentide
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import ConfigurationModels
-from opentide.platforms.transport import DEFAULT_TIMEOUT
+from opentide.platforms.transport import (
+    DEFAULT_TIMEOUT,
+    GatewayTimeoutError,
+    gateway_answer,
+    page_title,
+)
 
 logger = structlog.get_logger("opentide.platforms.splunk.client")
 
@@ -40,11 +45,13 @@ class SplunkConnection:
         SPLUNK_CONFIG = Opentide.Configurations.Systems.Splunk
         self.DEPLOYER_IDENTIFIER = "splunk"
 
+        self.STATUS_MODIFIERS = getattr(SPLUNK_CONFIG, "modifiers", None) or []
         tenants = getattr(SPLUNK_CONFIG, "tenants", None)
         if tenants:
-            self._init_from_tenants(SPLUNK_CONFIG, tenants[0])
+            self.use_tenant(tenants[0])
         else:
-            self._init_from_legacy(SPLUNK_CONFIG)
+            # No tenant to reach: deploy refuses the platform before any call.
+            self._apply_setup({}, token="")
 
         self.SPLUNK_SUBSCHEMA = Opentide.TideSchemas.subschemas["systems"][
             self.DEPLOYER_IDENTIFIER
@@ -56,11 +63,6 @@ class SplunkConnection:
             "High": 5,
             "Critical": 6,
         }
-
-    def _init_from_tenants(self, splunk_config, first_tenant) -> None:
-        self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
-        self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
-        self.use_tenant(first_tenant)
 
     def use_tenant(self, tenant: ConfigurationModels.Systems.Splunk.Tenant) -> None:
         """Take the actions, scheduling, skew and offset of the rules built next from *tenant*.
@@ -87,23 +89,11 @@ class SplunkConnection:
         self._apply_setup(setup, token=tenant.setup.token)
         self._tenant = tenant
 
-    def _init_from_legacy(self, splunk_config) -> None:
-        SPLUNK_SETUP = DebugHelpers.fetch_config_envvar(splunk_config.setup)
-        SPLUNK_SECRETS = DebugHelpers.fetch_config_envvar(splunk_config.secrets)
-        self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
-        self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
-        # A legacy [setup] table without frequency_scheduling has always
-        # scheduled at the current time; a new default would move deployed searches.
-        self._apply_setup(
-            SPLUNK_SETUP, token=SPLUNK_SECRETS.get("token", ""), unset_frequency="current"
-        )
-
     def _apply_setup(
         self,
         setup: dict,
         *,
         token: str,
-        unset_frequency: Literal["random", "current", "custom"] = "random",
     ) -> None:
         self.SPLUNK_URL = setup.get("url", "")
         try:
@@ -115,9 +105,7 @@ class SplunkConnection:
         self.CORRELATION_SEARCHES = setup.get("correlation_searches", True)
         self.SPLUNK_ACTIONS = setup.get("actions_enabled") or []
         self.SPLUNK_DEFAULT_ACTIONS = setup.get("default_actions") or []
-        self.TIMERANGE_MODE = correct_timerange_mode(
-            setup.get("frequency_scheduling"), unset=unset_frequency
-        )
+        self.TIMERANGE_MODE = correct_timerange_mode(setup.get("frequency_scheduling"))
         skewing = setup.get("allow_skew")
         if skewing:
             self.SKEWING_VALUE = float(str(skewing).replace("%", "e-2"))
@@ -207,8 +195,6 @@ HTTP_ERROR_STATUS = 19
 
 RequestHandler = Callable[[str, dict[str, Any]], dict[str, Any]]
 
-_HTML_TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
-
 
 class SplunkAnsweredHtmlError(ConnectionError):
     """The address answered with an HTML page, which the Splunk REST API never sends.
@@ -216,7 +202,10 @@ class SplunkAnsweredHtmlError(ConnectionError):
     Behind a proxy that is the proxy's own page (a block page, a login page):
     splunklib used to fail on it with ``xml.etree.ElementTree.ParseError:
     mismatched tag``, which reads like a TLS fault. A ``ConnectionError``, so
-    a live query check reports it as the tenant's result.
+    a live query check reports it as the tenant's result. A gateway's page for
+    one slow request (HTTP 502, 503 or 504, or any page after a slow request)
+    is a :class:`~opentide.platforms.transport.GatewayTimeoutError` instead,
+    which fails only that query.
     """
 
 
@@ -240,35 +229,54 @@ def _looks_like_html(headers: Any, body: bytes) -> bool:
     return body.lstrip()[:15].lower().startswith((b"<!doctype html", b"<html"))
 
 
-def _html_answer(url: str, body: bytes) -> SplunkAnsweredHtmlError:
+def _html_answer(
+    url: str, body: bytes, *, status: int, elapsed: float | None = None
+) -> SplunkAnsweredHtmlError | GatewayTimeoutError:
+    """The error for an HTML page that answered *url* with *status* after *elapsed* seconds."""
     parts = urlsplit(url)
     origin = f"{parts.scheme}://{parts.netloc}"
-    title = _HTML_TITLE.search(body)
-    page = f" (page title: {title.group(1).decode(errors='replace').strip()!r})" if title else ""
+    title = page_title(body)
+    page = f" (page title: {title!r})" if title else ""
+    answered = (
+        f"Splunk at {origin} answered with an HTML page (HTTP {status}), not its REST API{page}"
+    )
     proxy = splunk_route(url)
+    gateway = gateway_answer(status, elapsed)
+    if gateway:
+        through = f" The request went through the proxy {proxy}." if proxy else ""
+        return GatewayTimeoutError(
+            f"{answered}. {gateway[0].upper()}{gateway[1:]}.{through} The request may be too slow "
+            "for the gateway: make the query cheaper, or raise the gateway's timeout.",
+            status=status,
+            elapsed=elapsed,
+        )
     if proxy:
         return SplunkAnsweredHtmlError(
-            f"Splunk at {origin} answered with an HTML page, not its REST API{page}. "
+            f"{answered}. "
             f"The request went through the proxy {proxy}, so the page is most likely the "
             "proxy's (a block or sign-in page). If this tenant is reached directly, add its "
             f"host to NO_PROXY and no_proxy (NO_PROXY={parts.hostname}); otherwise check the "
             "tenant's port: 8089 is the REST API, 8000 Splunk Web."
         )
     return SplunkAnsweredHtmlError(
-        f"Splunk at {origin} answered with an HTML page, not its REST API{page}. "
+        f"{answered}. "
         "Check the tenant's url and port: the REST API listens on the management port "
         "(8089 by default), while 8000 serves Splunk Web."
     )
 
 
-def request_handler(*, verify: bool, allow_http_errors: bool = False) -> RequestHandler:
+def request_handler(
+    *, verify: bool, allow_http_errors: bool = False, timeout: float | None = None
+) -> RequestHandler:
     """A splunklib ``handler`` bound to one tenant's connection settings.
 
     splunklib's own handler opens ``http.client`` connections, which ignore
     ``HTTPS_PROXY`` and ``NO_PROXY``; ``urllib`` honours both, which
     ``--proxy`` relies on. *verify* and *allow_http_errors* are captured
     here rather than read from the process environment, so two tenants with
-    different ``ssl`` settings never share them.
+    different ``ssl`` settings never share them. *timeout* is the seconds
+    each request may wait to connect, and then for each part of the answer
+    (default: :data:`~opentide.platforms.transport.DEFAULT_TIMEOUT`).
     """
     context = None
     if not verify:
@@ -285,8 +293,11 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
         headers = dict(message.get("headers", []))
         req = urllib.request.Request(url, data, headers, method=method)
         failed = False
+        began = time.monotonic()
         try:
-            response = urllib.request.urlopen(req, context=context, timeout=DEFAULT_TIMEOUT)
+            response = urllib.request.urlopen(
+                req, context=context, timeout=DEFAULT_TIMEOUT if timeout is None else timeout
+            )
             status = response.code
         except HTTPError as error:
             # Includes a 307 answering a POST, which urllib does not follow.
@@ -295,9 +306,11 @@ def request_handler(*, verify: bool, allow_http_errors: bool = False) -> Request
             failed = True
         body = response.read()
         if _looks_like_html(response.headers, body):
-            raise _html_answer(url, body)
+            raise _html_answer(url, body, status=status, elapsed=time.monotonic() - began)
         answer = {
             "status": HTTP_ERROR_STATUS if failed and allow_http_errors else status,
+            # The status itself, which ``status`` replaces for an error answer.
+            "http_status": status,
             "reason": response.msg,
             "headers": dict(response.headers),
             "body": BytesIO(body),
@@ -327,6 +340,7 @@ def connect_splunk(
     app: str,
     allow_http_errors: bool = False,
     ssl_enabled: bool | str = True,
+    timeout: float | None = None,
 ) -> Service:
     from opentide.core.environment import reject_unsubstituted_placeholders
 
@@ -353,7 +367,9 @@ def connect_splunk(
     proxy = splunk_route(f"https://{host}:{port}/")
     logger.info("splunk_tenant_route", host=host, port=port, via=proxy or "direct")
     service = client.connect(
-        handler=request_handler(verify=ssl_enabled, allow_http_errors=allow_http_errors),
+        handler=request_handler(
+            verify=ssl_enabled, allow_http_errors=allow_http_errors, timeout=timeout
+        ),
         host=host,
         port=port,
         token=token,

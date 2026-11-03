@@ -98,7 +98,6 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 ### Phase 8 ([#69](https://github.com/opentidehq/CoreTide/issues/69))
 
 - PyPI publish; migration guide; deprecation shims
-- See [Migration guide](../usage/migration/index.md)
 
 ### Phase 9 ([#71](https://github.com/opentidehq/CoreTide/issues/71))
 

@@ -16,8 +16,8 @@ metadata:
 
 description: |
   ...
-#status: STAGING
-#severity: Informational
+#status: 
+#severity: 
 #techniques:
   #- 
 #references:

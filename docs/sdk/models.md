@@ -28,8 +28,8 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | `name` | `str` | Display name |
 | `metadata` | `ObjectMetadata` | Identity (`uuid`), `schema_id`, `version`, `tlp` |
 | `description` | `str` | Rule narrative |
-| `status` | `str` | Deployment status (default `STAGING`) |
-| `severity` | `str` | Severity vocabulary (default `Informational`) |
+| `status` | `str \| None` | Read by no command; `None` when left out. A rule deploys, and promotion moves it, by each platform block's `status` (`platform_statuses`) |
+| `severity` | `str \| None` | Severity vocabulary, `None` when left out. Deploy sends `response.alert_severity`; `displayed_severity` is that, else this |
 | `techniques` | `list[str]` | ATT&CK technique IDs |
 | `configurations` | `RuleConfigurations` | Typed per-platform blocks (preferred) |
 | `platforms` | `dict` | Legacy flat platform dict |
@@ -154,7 +154,7 @@ if not result.ok:
 
 ## Errors
 
-Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catch the specific type you expect:
+Exceptions live under `opentide.core.errors.Errors`. Catch the specific type you expect:
 
 | Exception | Raised when |
 |-----------|-------------|
@@ -162,7 +162,7 @@ Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catc
 | `Errors.TideRuleDataModelErrors` | Invalid detection rule data structure. `Errors.TideMDRDataModelErrors` is the former name, kept as an alias |
 | `Errors.TideQueryValidationError` | A rule query fails validation |
 | `Errors.TideDeploymentErrors` | Any failure during deployment |
-| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host` |
+| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host`, and counts in `timeouts` the queries in a row that got no answer when that is why |
 | `Errors.DetectionRuleCreationFailed` / `…UpdateFailed` / `…DeletionFailed` | Platform API operation failed |
 | `Errors.TideConfigurationErrors` | Invalid opentide configuration files |
 | `Errors.TenantNonExistingDeploymentPlan` | A tenant references a missing deployment plan |

@@ -6,7 +6,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
@@ -302,26 +302,6 @@ def test_deploy_dry_run_json() -> None:
     ):
         result = runner.invoke(app, ["--json", "deploy", "--dry-run"])
     assert result.exit_code == 0
-
-
-def test_export_playbook_map_legacy_shim() -> None:
-    with (
-        patch("opentide.cli.services.export.run_playbook_map_export") as mock_run,
-        patch("opentide.cli.root.init_logging"),
-        patch("opentide.cli.print_banner"),
-    ):
-        result = runner.invoke(app, ["--json", "export", "playbook-map"])
-    assert result.exit_code == 0
-    mock_run.assert_called_once()
-
-
-def test_run_playbook_map_export_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
-    from opentide.cli.services import export as export_service
-
-    called = MagicMock()
-    monkeypatch.setattr("opentide.export.playbook_map.run", called)
-    export_service.run_playbook_map_export()
-    called.assert_called_once()
 
 
 def test_generate_exports_navigator_json() -> None:

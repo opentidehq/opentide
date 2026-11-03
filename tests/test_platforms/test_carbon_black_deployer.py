@@ -94,7 +94,7 @@ def _rule(
             "description": "desc",
             "configurations": {
                 "carbon_black_cloud": {
-                    "schema": "carbon_black_cloud::3.0",
+                    "schema": "platform::carbon_black_cloud::1.0",
                     "status": "STAGING",
                     "query": "process_name:new.exe",
                     "watchlist": watchlist,

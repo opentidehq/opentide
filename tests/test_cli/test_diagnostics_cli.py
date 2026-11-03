@@ -152,9 +152,7 @@ def _break_platform_file(repo: Path) -> None:
     """A platform file whose tenants header misses a bracket, on line 4, column 10."""
     path = repo / _PLATFORM
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        '[platform]\nidentifier = "sentinel"\n\n[[tenants]\nname = "prod"\n', encoding="utf-8"
-    )
+    path.write_text('[platform]\nenabled = true\n\n[[tenants]\nname = "prod"\n', encoding="utf-8")
 
 
 @pytest.mark.parametrize("command", _COMMANDS, ids=lambda command: command[0])

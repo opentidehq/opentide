@@ -40,7 +40,6 @@ FACTS = {"opentide": "1.2.3", "python": "3.12.1 (CPython)", "os": "Linux 6.1 (x8
 PLATFORM_TOML = """\
 [platform]
 enabled = true
-identifier = "elastic"
 
 [[tenants]]
 name = "acme-prod"

@@ -39,9 +39,9 @@ from opentide.platforms.elastic.query_text import (
     esql_has_metadata_id,
 )
 from opentide.platforms.elastic.runner import ElasticQueryRunner
-from opentide.platforms.live_validation import LiveQueryValidator, refusal_text
-from opentide.platforms.transport import reaching_tenant
-from opentide.query.check import LiveCheckReport, RuleCheck
+from opentide.platforms.live_validation import LiveQueryValidator, TimeoutStreak, refusal_text
+from opentide.platforms.transport import reaching_tenant, read_timeout
+from opentide.query.check import LiveCheckReport, RuleCheck, check_timeout
 from opentide.query.models import QueryRefused
 
 logger = structlog.get_logger(__name__)
@@ -223,18 +223,23 @@ class ElasticValidator(LiveQueryValidator):
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
+        *,
+        timeout: float | None = None,
     ) -> LiveCheckReport:
+        seconds = check_timeout(timeout)
         deployment = TideDeployment(mdr_deployment, DetectionPlatforms.ELASTIC, strategies)
-        report = LiveCheckReport(self.platform)
+        report = LiveCheckReport(self.platform, timeout=seconds)
         for batch in deployment.rule_deployment:
             tenant = batch_tenant(batch, ConfigurationModels.Systems.Elastic.Tenant)
-            client = self.elastic.elastic_client(tenant)
+            client = self.elastic.elastic_client(tenant, timeout=seconds)
+            streak = TimeoutStreak("elastic", tenant.name, tenant.setup.url, seconds)
             with reaching_tenant("elastic", tenant.name, tenant.setup.url):
                 for rule in batch.rules:
                     warnings: list[str] = []
                     try:
                         self._validate_rule(rule, client, tenant, warnings)
                     except ElasticTenantError as exc:
+                        streak.answered()
                         report.checks.append(_failed(rule, tenant, str(exc), warnings))
                         logger.critical(
                             "elastic_tenant_validation_failed",
@@ -245,6 +250,7 @@ class ElasticValidator(LiveQueryValidator):
                         # The tenant refuses every rule alike: the rest are not sent.
                         break
                     except ElasticRuleCheckError as exc:
+                        streak.answered()
                         report.checks.append(_failed(rule, tenant, str(exc), warnings))
                         logger.critical(
                             "elastic_rule_validation_failed",
@@ -252,7 +258,16 @@ class ElasticValidator(LiveQueryValidator):
                             uuid=_rule_uuid(rule),
                             error=str(exc),
                         )
+                    except Exception as exc:
+                        error = read_timeout(exc)
+                        if error is None:
+                            raise
+                        streak.timed_out(error)
+                        report.checks.append(
+                            self.timed_out(rule, tenant, None, str(error), seconds, warnings)
+                        )
                     else:
+                        streak.answered()
                         if getattr(rule.configurations, "elastic", None) is not None:
                             report.checks.append(
                                 RuleCheck(
@@ -262,6 +277,7 @@ class ElasticValidator(LiveQueryValidator):
                                     warnings=tuple(warnings),
                                 )
                             )
+            streak.finish()
         return report
 
     def _validate_rule(
@@ -291,7 +307,7 @@ class ElasticValidator(LiveQueryValidator):
 
         payload = compile_rule(rule, tenant_config=tenant)
         try:
-            res = self.elastic.preview_rule(tenant, payload, end=utc_now())
+            res = self.elastic.preview_rule(tenant, payload, end=utc_now(), client=client)
         except QueryRefused as exc:
             raise ElasticRuleCheckError(refusal_text(exc)) from exc
         except Errors.TenantConnectionError as exc:

@@ -120,26 +120,13 @@
     },
     "PlatformIdentity": {
       "additionalProperties": false,
-      "description": "`[platform]`: whether the platform is enabled, and how it is named.",
+      "description": "`[platform]`: whether the platform is enabled, and how it is named.\n\nThe file name stem (`platforms/splunk.toml`) identifies the platform.",
       "properties": {
         "enabled": {
           "default": false,
           "description": "Load and deploy to this platform.",
           "title": "Enabled",
           "type": "boolean"
-        },
-        "identifier": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Platform identifier (for example sentinel). Matches the file name stem.",
-          "title": "Identifier"
         },
         "name": {
           "anyOf": [
@@ -154,32 +141,11 @@
           "description": "Display name of the platform.",
           "title": "Name"
         },
-        "subschema": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Title of the platform's rule sub-schema.",
-          "title": "Subschema"
-        },
         "description": {
           "default": "",
           "description": "What the platform is.",
           "title": "Description",
           "type": "string"
-        },
-        "flags": {
-          "description": "Flags a modifier condition can match.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Flags",
-          "type": "array"
         }
       },
       "title": "PlatformIdentity",

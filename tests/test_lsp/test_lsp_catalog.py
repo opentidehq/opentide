@@ -77,10 +77,12 @@ def test_vocabulary_fields_list_their_values(fields: dict) -> None:
     assert _field(fields, "rule::1.1", "detection_model")["ref"] == "objective"
 
 
-def test_the_deprecations_name_root_and_platform_fields() -> None:
+def test_retired_spellings_are_unknown_keys_not_deprecations() -> None:
+    """`meta:` and Splunk's `advanced` are refused like any unknown key, so the
+    language server reports them as validation does, not as a deprecation."""
     rows = {(row["schema"], row["path"]) for row in deprecations_catalog("1.2.3")["fields"]}
-    assert ("rule", "meta") in rows
-    assert ("rule", "configurations.splunk.advanced") in rows
+    assert ("rule", "meta") not in rows
+    assert ("rule", "configurations.splunk.advanced") not in rows
 
 
 @pytest.fixture
@@ -186,12 +188,12 @@ def test_a_model_that_rewrites_keys_declares_them_for_the_language_server() -> N
     assert undeclared == []
 
 
-def test_legacy_keys_reach_the_catalog(fields: dict) -> None:
-    assert fields["schemas"]["objective::1.0"]["legacy"] == {"composition": None}
-    splunk = _field(fields, "rule::1.1", "configurations.splunk")
-    assert splunk["legacy"]["search"] == "query"
-    scheduling = _field(fields, "rule::1.1", "configurations.splunk.scheduling")
-    assert scheduling["legacy"]["frequency"] == "schedule"
+def test_no_retired_spelling_reaches_the_catalog(fields: dict) -> None:
+    """The objective's root `composition` and the splunk::2.x keys are unknown keys
+    in the editor too: no legacy table accepts them."""
+    assert not fields["schemas"]["objective::1.0"].get("legacy")
+    assert not _field(fields, "rule::1.1", "configurations.splunk").get("legacy")
+    assert not _field(fields, "rule::1.1", "configurations.splunk.scheduling").get("legacy")
 
 
 def test_required_is_what_validation_requires(fields: dict) -> None:

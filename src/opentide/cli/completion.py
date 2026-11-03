@@ -80,6 +80,7 @@ INDEXED_OPTIONS: dict[tuple[str, ...], frozenset[str]] = {
     ("validate",): _OBJECT_OPTIONS,
     ("validate", "query"): frozenset({"--uuid", "--file", "--platform", "--strategy"}),
     ("query",): frozenset({"--platform", "--file"}),
+    ("lint",): frozenset({"--file"}),
     ("info",): frozenset({"--platform", "--technique"}),
     ("deploy",): frozenset({"--platform", "--strategy"}),
     ("deploy", "metadata"): frozenset({"--platform"}),

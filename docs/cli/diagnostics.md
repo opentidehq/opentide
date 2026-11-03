@@ -104,7 +104,6 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`filename_slug`](#filename_slug) | The file name is not the slug of the object's name. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
-| [`identifier_mismatch`](#identifier_mismatch) | A platform file's `[platform] identifier` differs from its file name. |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
 | [`invalid_cve`](#invalid_cve) | A threat lists CVE identifiers Vulnerability-Lookup does not know. |
 | [`invalid_ref`](#invalid_ref) | A reference names an object that does not exist. |
@@ -179,8 +178,10 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`promotion_target_unknown`](#promotion_target_unknown) | `deployment.toml` `[promotion] promotion_target` is not the name of a `[[statuses]]` entry. |
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
+| [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
 | [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; opentide validate accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
+| [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
 | [`risk_band`](#risk_band) | The risk score is outside the band of the rule's severity. |
 | [`rule_status_unknown`](#rule_status_unknown) | A `sharing.toml` block lists a rule status your configuration does not declare. |
@@ -1779,24 +1780,6 @@ Reported by `opentide doctor`. Warns when it is not a repository, or `origin/HEA
 
 Run the command it prints: `git init` for a new repository, or `git remote set-head origin --auto` when `origin/HEAD` is unset.
 
-## identifier_mismatch
-
-A platform file's `[platform] identifier` differs from its file name.
-
-Severity: error. Reported for `platforms/<id>.toml` by the configuration file check an editor runs (`configuration_file_issues`).
-
-### Example
-
-```toml
-# platforms/sentinel.toml
-[platform]
-identifier = "splunk"
-```
-
-### How to fix
-
-Make `identifier` match the file name stem, or remove it: the file name is used when it is absent.
-
 ## internal
 
 opentide stopped on an exception it did not handle: a bug in opentide, not in your input.
@@ -3028,6 +3011,26 @@ Reported by `opentide doctor`. Fails when it is older than 3.10.
 
 Install Python 3.10 or later and reinstall opentide with it (`uv tool install opentide`, or `pipx install --python python3.12 opentide`).
 
+## query_check_timeout
+
+`validate query --live` failed because a tenant did not answer a query's check within the check timeout.
+
+Exit 1, as `failure.code` when every failed check timed out; as the `code` of each entry under `timed_out` otherwise. Only that rule's check fails: the other rules are still checked. A tenant is reported unreachable only after 3 queries in a row get no answer.
+
+A read timeout, a gateway or proxy's HTTP 502, 503 or 504 page, or a SentinelOne PowerQuery still running at the deadline all count. The default timeout is 120 seconds.
+
+### Example
+
+A live check of 403 Splunk rules where one parse took longer than 120 seconds, trimmed to the keys that say so (illustrative: it needs a tenant):
+
+```json illustrative
+{"status": "failed", "exit_code": 1, "message": "Queries rejected on splunk · 403 checked on 1 tenant · 1 with no answer within 120s", "check_timeout": 120.0, "timed_out": [{"code": "query_check_timeout", "…": "…"}], "failure": {"code": "query_check_timeout", "message": "…"}}
+```
+
+### How to fix
+
+Raise the timeout with `--check-timeout SECONDS` or `OPENTIDE_QUERY_CHECK_TIMEOUT`, or make the query cheaper. When a gateway answered (HTTP 504), its own timeout may be shorter than the check's: raise the gateway's timeout too.
+
 ## recommended_field_missing
 
 A field the templates ask for is missing; opentide validate accepts the object without it.
@@ -3059,6 +3062,33 @@ opentide new rule --name "LSASS Access" --objective 00000000-0000-4000-8000-0000
 ### How to fix
 
 Copy the UUID from the object's `metadata.uuid`, or create that objective or threat first with `opentide new objective` or `opentide new threat`. `opentide info` lists the catalogue.
+
+## retired_configuration_file
+
+A file or folder under `.opentide/configurations/` that opentide does not read.
+
+Severity: error. Reported by every command that reads the configuration (`validate`, `deploy`, `generate`, …), which then stops with exit 1 and `failure.code` `retired_configuration_file`, for these entries of the workspace's (or the parent instance's) `.opentide/configurations/`:
+
+| Entry | What replaces it |
+|-------|------------------|
+| `global.toml` | `paths.toml`: workspace paths and artifact names |
+| `schema.toml` | Nothing: template defaults are not configurable, and vocabularies are not extended locally |
+| `systems/` | `platforms/<platform>.toml` |
+
+Loading such a file and ignoring it would leave the workspace believing it is configured by settings that have no effect.
+
+### Example
+
+```text illustrative
+.opentide/configurations/
+├── global.toml
+└── systems/
+    └── splunk.toml
+```
+
+### How to fix
+
+Move the settings you need into the file the diagnostic names (`paths.toml`, `platforms/<platform>.toml`), in its current format, then delete the retired file or folder. `opentide validate --check configuration` then checks what you moved.
 
 ## retract_unconfirmed
 
@@ -3403,17 +3433,19 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command.
 
-Reported by the analysis engine in a SPL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine in an SPL query (`splunk`), at the place in the query. One edit from a known command (`stas` for `stats`), it is an error, a query the platform would reject: `opentide validate` (its `queries` check) and `opentide validate query` fail on it, and the help names the command. Further from every known command, it is a warning: a command an app on the search head provides (`decrypt`, `mispsearch`) looks the same, so `validate` passes and `opentide lint` (its `queries` check) reports it. An editor running `opentide lsp start` shows both.
+
+opentide has no setting that declares a search head's app commands yet: neither `visibility.toml` nor `platforms/splunk.toml` takes a list of them, so the warning stays for every query that uses one. Through 0.20.1 the CLI's message asked to declare the command, which nothing could do; an editor running `opentide lsp start` still shows the engine's own wording, which does.
 
 ### Example
 
-```text
-opentide validate query
+```text illustrative
+index=main sourcetype=misp | mispsearch value=evil.example | table value
 ```
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [SPL reference](https://docs.splunk.com/Documentation/Splunk/latest/SearchReference) describes the syntax and the commands the engine checks against.
+When the name is a typo, correct it. When an app on the search head provides the command, the warning is expected and the query deploys as written. `opentide lint --strict` fails on any finding, so a catalogue that gates on it and uses app commands narrows the gate to the files a change touches (`opentide lint --strict --changed`), or turns the `queries` check off in `lint.toml` (`[queries] enabled = false`), which drops every other query style finding too.
 
 ## spl_unknown_datamodel
 
@@ -3917,7 +3949,7 @@ Use a value from the vocabulary the label names. When a close value exists, `hel
 
 `.vscode/settings.json` maps the object folders to the generated schemas.
 
-Reported by `opentide doctor`. Warns when it maps something else or is not valid JSON; skipped when the file does not exist.
+Reported by `opentide doctor`. The object glob may be a string (`"objects/**/*.yaml"`) or a list that holds it, among other globs (`["objects/**/*.yaml", "hunts/**/*.yaml"]`), as the YAML extension accepts both. Warns when it maps something else or is not valid JSON; skipped when the file does not exist.
 
 ### Example
 

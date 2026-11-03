@@ -81,10 +81,9 @@ def platform_config_path(system: str) -> str:
     """Workspace-relative TOML that configures *system* (where setup writes it if absent)."""
     workspace = discover_workspace()
     configs = client_configurations_dir(workspace)
-    for folder in ("platforms", "systems"):
-        candidate = configs / folder / f"{system}.toml"
-        if candidate.is_file():
-            return candidate.relative_to(workspace).as_posix()
+    candidate = configs / "platforms" / f"{system}.toml"
+    if candidate.is_file():
+        return candidate.relative_to(workspace).as_posix()
     return f"{OPENTIDE_DIR}/configurations/platforms/{system}.toml"
 
 

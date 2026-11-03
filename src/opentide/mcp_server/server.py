@@ -95,7 +95,7 @@ def search(
     query: a UUID (exact, case-insensitive) or text matched against uuid, title,
     name and description; "" matches everything the filters allow.
     Filters: type (rule | threat | objective), platform (exact configuration key:
-    sentinel never matches sentinel_one), status (rule status, exact), technique
+    sentinel never matches sentinel_one), status (a rule platform block status, exact), technique
     (ATT&CK id, case-insensitive), actor (att&ck::G0006 or G0006).
     Returns a list of {uuid, type, title, status}; [] when nothing matches.
     Read opentide://rules/{uuid} (threats/, objectives/) for the full object.

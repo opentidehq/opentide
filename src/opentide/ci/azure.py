@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import json
 import shlex
 
-from opentide.ci.gates import azure_premerge_condition
+from opentide.ci.gates import (
+    azure_premerge_condition,
+    azure_skip_guard,
+)
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    DOCS_ARTIFACT,
     REPORTS_DIR,
     SHARE_COMMAND,
     document_steps,
     header_comment,
     object_validate_commands,
+    opentide_version_entry,
     pip_install,
     production_deploy_steps,
     reviewed_query_validation_command,
@@ -34,7 +40,7 @@ def _python_setup(options: CiRenderOptions) -> str:
         "- task: UsePythonVersion@0\n"
         "  inputs:\n"
         f"    versionSpec: '{options.python_version}'\n"
-        f"- script: {pip_install(options)}\n"
+        f"- script: {pip_install()}\n"
         "  displayName: Install opentide"
     )
 
@@ -99,6 +105,9 @@ _GIT_IDENTITY = (
 def _production_commands(options: CiRenderOptions) -> list[str]:
     dry_run, deploy = production_deploy_steps(options)
     return [
+        # Before the dry run, so a skipped change never sets DEPLOY_STARTED
+        # and the write-back step does not run either.
+        azure_skip_guard(),
         *_GIT_IDENTITY,
         overlay_default_branch_state(fetch=f"git fetch origin {options.default_branch}"),
         dry_run,
@@ -145,6 +154,19 @@ def _publish_reports_step() -> str:
         "  inputs:\n"
         f"    PathtoPublish: $(Build.SourcesDirectory)/{REPORTS_DIR}\n"
         f"    ArtifactName: {SARIF_ARTIFACT}"
+    )
+
+
+def _publish_docs_step(options: CiRenderOptions) -> str:
+    """Keep the rendered pages; the job used to render them and throw them away."""
+    if not document_steps(options):
+        return ""
+    return (
+        "\n- task: PublishBuildArtifacts@1\n"
+        "  displayName: Publish documentation\n"
+        "  inputs:\n"
+        f"    PathtoPublish: {json.dumps('$(Build.SourcesDirectory)/' + options.docs_output)}\n"
+        f"    ArtifactName: {DOCS_ARTIFACT}"
     )
 
 
@@ -201,6 +223,7 @@ def _share_stage(options: CiRenderOptions) -> str:
                 steps=_job_steps(
                     options,
                     [
+                        azure_skip_guard(),
                         f"git fetch origin {quoted}",
                         "git checkout -q FETCH_HEAD",
                         SHARE_COMMAND,
@@ -227,9 +250,15 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 f"validate_query_{safe}",
                 display_name=f"Validate query ({platform})",
+                # ``--changed`` live checks follow the deploys: the guard skips
+                # them for a change marked [skip deploy].
                 steps=_job_steps(
                     options,
-                    [*restore, reviewed_query_validation_command(platform, repo=options.repo)],
+                    [
+                        azure_skip_guard(),
+                        *restore,
+                        reviewed_query_validation_command(platform, repo=options.repo),
+                    ],
                     # The checkout token is removed before later steps unless it
                     # is persisted, and the endpoint restore has to fetch.
                     persist_credentials=True,
@@ -247,7 +276,11 @@ def render_azure(options: CiRenderOptions) -> str:
             steps=_job_steps(
                 options,
                 # The publish step fails on a missing folder, even after a failed gate.
-                [f"mkdir -p {REPORTS_DIR}", *object_validate_commands("sarif")],
+                [
+                    f"mkdir -p {REPORTS_DIR}",
+                    *object_validate_commands("sarif", lint_changed=options.lint_changed),
+                ],
+                full_history=options.lint_changed,
             )
             + "\n"
             + _publish_reports_step(),
@@ -270,7 +303,7 @@ def render_azure(options: CiRenderOptions) -> str:
                 condition=azure_premerge_condition(branch),
                 steps=_job_steps(
                     options,
-                    [*restore, *staging_deploy_steps(options)],
+                    [azure_skip_guard(), *restore, *staging_deploy_steps(options)],
                     persist_credentials=True,
                     full_history=True,
                 ),
@@ -280,14 +313,12 @@ def render_azure(options: CiRenderOptions) -> str:
         deploy_jobs.append(
             azure_inflight_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
         deploy_jobs.append(
             azure_inflight_prune_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
@@ -320,7 +351,7 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 "document",
                 display_name="Generate documentation",
-                steps=_job_steps(options, document_steps(options)),
+                steps=_job_steps(options, document_steps(options)) + _publish_docs_step(options),
             ),
             4,
         )
@@ -355,6 +386,7 @@ def render_azure(options: CiRenderOptions) -> str:
         "\n"
         "variables:\n"
         "  OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)\n"
+        f"  {opentide_version_entry(options)}\n"
         "\n"
         "# Azure cannot serialise a job from YAML alone. Add an Exclusive lock\n"
         "# check to a resource the Deploy stage uses (for example an environment\n"

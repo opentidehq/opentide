@@ -289,7 +289,7 @@ def model_value(id, key):
 
 def parents(id: str) -> list:
     """
-    Returns the list of parents for any given CoreTIDE Object.
+    Returns the list of parents for any given object.
     If the Object does not have possible parent relationships,
     or in other word is a top-level Object, returns an empty string.
     """
@@ -530,7 +530,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
         return []
     model_body = MODELS_INDEX[model_type][model_id]
     if model_type == "rule":
-        parent_id = model_body.get("detection_model") or model_body.get("tags", {}).get("coretide")
+        parent_id = model_body.get("detection_model")
         if not parent_id:
             return []
         elif recursive:

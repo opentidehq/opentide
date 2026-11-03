@@ -287,11 +287,12 @@ def test_proxy_placeholder_is_a_valid_string() -> None:
     assert configuration_file_issues("platforms/splunk.toml", document) == []
 
 
-def test_platform_identifier_matches_the_file_stem(tmp_path: Path) -> None:
+@pytest.mark.parametrize("key", ["identifier", "subschema", "flags"])
+def test_the_file_name_alone_identifies_a_platform(tmp_path: Path, key: str) -> None:
     path = tmp_path / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
-    issues = configuration_file_issues(path, {"platform": {"identifier": "splunk"}})
+    issues = configuration_file_issues(path, {"platform": {key: "splunk"}})
     assert [(issue.code, issue.field_path) for issue in issues] == [
-        ("identifier_mismatch", ("platform", "identifier"))
+        ("unknown_key", ("platform", key))
     ]
 
 
@@ -376,10 +377,20 @@ def test_visibility_asset_must_be_declared() -> None:
     ]
 
 
-def test_schema_vocabulary_table_stays_open() -> None:
-    assert configuration_file_issues("schema.toml", {"vocabulary": {"anything": [1]}}) == []
-    issues = configuration_file_issues("schema.toml", {"other": {}})
-    assert _codes(issues) == {"unknown_key"}
+@pytest.mark.parametrize(
+    ("path", "replacement"),
+    [
+        ("schema.toml", "not configurable"),
+        ("global.toml", "paths.toml"),
+        (".opentide/configurations/systems/splunk.toml", "platforms/<platform>.toml"),
+        ("C:\\ws\\.opentide\\configurations\\global.toml", "paths.toml"),
+    ],
+)
+def test_a_retired_file_is_an_error_naming_its_replacement(path: str, replacement: str) -> None:
+    (issue,) = configuration_file_issues(path, {"vocabulary": {"anything": [1]}})
+    assert issue.code == "retired_configuration_file"
+    assert issue.severity == "error"
+    assert replacement in issue.message
 
 
 def test_documentation_flavor_is_an_enum() -> None:
@@ -389,10 +400,23 @@ def test_documentation_flavor_is_an_enum() -> None:
     assert configuration_file_issues("documentation.toml", {"flavor": "azure-devops"}) == []
 
 
-def test_paths_and_legacy_global() -> None:
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"paths": {"tide": {"rule": "Objects/Detection Rules/"}}},
+        {"paths": {"core": {"docs_folder": "docs/"}}},
+        {"paths": {"framework": {"schemas": "s/"}}},
+        {"recomposition": {"systems": "MDR Systems Deployment"}},
+        {"json_schemas": {"rule": "MDR Schema.json"}},
+        {"templates": {"rule": "MDR TEMPLATE.yaml"}},
+        {"exports": {"table": "Objects Table.csv"}},
+        {"indexes": {"revisions": "revisions.json"}},
+        {"config_json_schemas": {"visibility": "v.json"}},
+    ],
+)
+def test_paths_toml_refuses_the_retired_layout(document: dict[str, Any]) -> None:
     assert configuration_file_issues("paths.toml", {"paths": {"objects": {"rule": "r/"}}}) == []
-    issues = configuration_file_issues("global.toml", {"paths": {"tide": {"nope": "x"}}})
-    assert [issue.field_path for issue in issues] == [("paths", "tide", "nope")]
+    assert _codes(configuration_file_issues("paths.toml", document)) == {"unknown_key"}
 
 
 def test_unrouted_file_is_reported() -> None:
@@ -513,12 +537,12 @@ def test_unmodelled_bundled_file_says_it_is_not_checked(name: str) -> None:
     assert "not checked" in issue.message
 
 
-def test_platform_file_is_routed_the_way_the_loader_keys_it() -> None:
-    issues = configuration_file_issues(
-        "platforms/other.toml",
-        {"platform": {"identifier": "sentinel"}, "tenants": [{"name": "T"}]},
-    )
+def test_platform_file_is_routed_by_its_file_name() -> None:
+    issues = configuration_file_issues("platforms/sentinel.toml", {"tenants": [{"name": "T"}]})
     assert ("tenants", "0", "setup") in {issue.field_path for issue in issues}
+    # A plugin's file is open, but its `[platform]` table is the shared one.
+    issues = configuration_file_issues("platforms/acme.toml", {"platform": {"identifier": "x"}})
+    assert ("platform", "identifier") in {issue.field_path for issue in issues}
 
 
 def test_a_tide_table_does_not_route_a_platform_file() -> None:
@@ -533,7 +557,9 @@ def test_a_tide_table_does_not_route_a_platform_file() -> None:
 
 def test_windows_path_stem_is_read() -> None:
     path = "C:\\ws\\.opentide\\configurations\\platforms\\sentinel.toml"
-    assert configuration_file_issues(path, {"platform": {"identifier": "sentinel"}}) == []
+    assert configuration_file_issues(path, {"platform": {"enabled": True}}) == []
+    issues = configuration_file_issues(path, {"tenants": [{"name": "T"}]})
+    assert ("tenants", "0", "setup") in {issue.field_path for issue in issues}
 
 
 def test_plugin_platform_file_is_open() -> None:

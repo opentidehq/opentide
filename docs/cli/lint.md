@@ -13,6 +13,8 @@ opentide lint --check filenames
 opentide lint --check queries
 opentide lint --fix
 opentide lint --strict
+opentide lint --strict --changed
+opentide lint --file objects/rules/example.yaml
 ```
 
 ## Checks
@@ -33,12 +35,28 @@ Lint reads the `.yaml` and `.yml` files directly in `objects/{threats,objectives
 | Flag | Purpose |
 |------|---------|
 | `--check` | Repeatable. `filenames`, `metadata`, `placeholders` or `queries`. Runs only the named checks, including one `lint.toml` disables |
+| `--changed` | Lint only the object files this run changed: the pull or merge request, the push, or outside CI the last commit. See [Linting what changed](#linting-what-changed) |
+| `--file` | Lint only this object file: a repo-relative path, an absolute path or a bare file name, matched as in [`validate`](./validate.md#selecting-a-file). Repeatable. Cannot be combined with `--changed` (exit `2`) |
 | `--fix` | Apply safe filename renames |
 | `--strict` | Exit `1` when any finding exists (CI gate). Default is report-only |
 | `--format` | `text` (code frames, the default), `sarif` or `codequality`: the findings as a SARIF 2.1.0 or GitLab Code Quality report, as for [`validate`](./validate.md#reports-and-ci-annotations) |
 | `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
 `--fix` is idempotent.
+
+### Linting what changed
+
+`--changed` and `--file` narrow every check, `queries` included, to the files they select; a finding in any other file is not reported and does not fail `--strict`. A catalogue that inherited hundreds of objects without `author` can gate new work on the convention at once, and clear the backlog with a full `opentide lint` at its own pace:
+
+```bash
+opentide lint --strict --changed
+```
+
+`--changed` reads the diff [`deploy`](./deploy.md) and [`validate query --changed`](./validate.md#which-rules-are-checked) read: on a pull or merge request, the request's changes against its target branch; on any other GitHub Actions, GitLab CI or Azure Pipelines run, the pushed commits; outside CI, the last commit (uncommitted edits are not in it). It selects the added, renamed and modified files directly in `objects/threats/`, `objects/objectives/` and `objects/rules/` (debug fixtures included, as lint reads them) and the changed files in their subfolders, which get their `nested_object_file` warning. When none changed, the run passes, `--strict` too, with `No changed object file to lint`. Without a git checkout it fails with exit `1`, as does a diff it cannot compute (a shallow clone without the base commit).
+
+`--file` matches as `validate --file` does. Every target must select a file directly in an object folder: one that selects none, a path to a file in a subfolder included, fails the run with exit `1` before any check, and `--json` lists it under `unmatched`.
+
+The filenames check still reads every file in the selected files' folders: a file that is not selected keeps the stem it has, or claims the one its name asks for, so a selected file whose expected stem is taken gets `-{uuid[:8]}` exactly as in a full run, and `--fix` renames only the selected files. A narrowed run's findings on a file are the ones a full run reports on it. The JSON result carries `scope`, `changed` or `selected`, and `summary.files` counts the selected object files. The `opentide lint --fix` next step repeats the narrowing flags.
 
 In a GitHub Actions or Azure Pipelines job each finding is also an annotation on stdout, and the outcome line and the findings go to the job summary, as for [`validate`](./validate.md#reports-and-ci-annotations). A `note` finding (an `info` severity) is a GitHub notice and is not sent to Azure, which has no such level.
 
@@ -181,6 +199,8 @@ warning[filename_pattern]: Filename 'Some rule.yaml' does not match the configur
   ╭─▶ objects/rules/Some rule.yaml
   ╰─ help: rename the file so its name matches the pattern ^\[(SEN|XDR)\]\[[^\]]+\].+\[[^\]]+\]$
 ```
+
+A debug fixture (`*.debug.yaml`, `*.debug.yml`) is not in the catalogue, so nothing indexes, validates or deploys it, but lint checks it. Its stem is the name without `.debug`, and `--fix` keeps the suffix whole: `0005 - Testing.debug.yaml`, named `B`, becomes `B.debug.yaml`, never `B.yaml`. A rename never moves a file into or out of the catalogue. `pattern` is matched against the stem without `.debug`, and under `style = "name"` a trailing `.debug` in the name is dropped from the stem (`Probe.debug` expects `Probe`). A fixture and the object it copies are two files, so `B.debug.yaml` and `B.yaml` do not collide; two fixtures that want the same stem do, and the second gets `-{uuid[:8]}`.
 
 Unparsable files, objects without a `name` and files in subfolders are reported under every `style`. [`opentide new`](./new.md) names the file it writes by its kind's `style` too (`none` keeps the slug), so a new object and an existing one agree.
 

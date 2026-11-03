@@ -6,16 +6,8 @@
       "schema": "paths.schema.json",
       "merge": "deep"
     },
-    "global.toml": {
-      "schema": "paths.schema.json",
-      "merge": "deep"
-    },
     "deployment.toml": {
       "schema": "deployment.schema.json",
-      "merge": "deep"
-    },
-    "schema.toml": {
-      "schema": "schema.schema.json",
       "merge": "deep"
     },
     "visibility.toml": {

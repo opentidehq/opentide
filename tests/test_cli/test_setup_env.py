@@ -65,6 +65,13 @@ def test_run_env_setup_does_not_duplicate_gitignore_env(tmp_path: Path) -> None:
     assert ".gitignore" in result["skipped"]
 
 
+def test_run_env_setup_keeps_a_crlf_gitignore_crlf(tmp_path: Path) -> None:
+    """The append read and wrote text, turning a Windows ``.gitignore`` into LF lines."""
+    (tmp_path / ".gitignore").write_bytes(b".venv/\r\n")
+    run_env_setup(EnvSetupOptions(path=tmp_path, yes=True))
+    assert (tmp_path / ".gitignore").read_bytes() == b".venv/\r\n.env\r\n"
+
+
 def test_setup_env_cli_json(tmp_path: Path) -> None:
     result = runner.invoke(
         app,

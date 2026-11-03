@@ -1,0 +1,30 @@
+[platform]
+enabled = true
+name = "Sentinel One"
+description = """STAR Rules Engine is a rules-based engine which enables users
+to transform queries of cloud workload telemetry into automated threat hunting
+rules. Whenever a match is made, these custom rules trigger alerts and, optionally,
+automated response actions.
+"""
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#alert.severity = "Informational"
+#alert.title = "prefix::Staging "
+
+#[[tenants]]
+#name = "Environment::Name"
+#description = "Description"
+#strategies = ["PREVIEW", "RELEASE"] # status strategies this tenant accepts; omit for both
+#manual = false # true: only rules whose block lists this tenant
+#[tenants.setup]
+#ssl = true
+#url = "" #Management URL
+#account_id = 0 #Account ID (integer)
+##site_id = "Site name within scope, exactly as console"
+#api_token = "$SENTINEL_ONE_API_TOKEN"
+

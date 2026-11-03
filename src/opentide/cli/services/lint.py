@@ -14,7 +14,7 @@ import structlog
 import yaml
 
 from opentide.cli.enums import LintCheck
-from opentide.cli.ui.contract import ISSUES_FOUND, NO_WORKSPACE_STEP, NextAction
+from opentide.cli.ui.contract import ISSUES_FOUND, NO_WORKSPACE_STEP, USAGE_ERROR, NextAction
 from opentide.cli.ui.diagnostics import (
     LINT_CODES,
     Diagnostic,
@@ -32,7 +32,14 @@ from opentide.core.io import (
     root_mapping_problem,
 )
 from opentide.core.lint_config import FilenameConfig, LintConfig, Severity, load_lint_config
-from opentide.registry.catalogue import NESTED_OBJECT_FILE, nested_file_message, scan_object_dir
+from opentide.registry.catalogue import (
+    NESTED_OBJECT_FILE,
+    is_debug_file_name,
+    nested_file_message,
+    object_stem,
+    scan_object_dir,
+    with_object_stem,
+)
 
 if TYPE_CHECKING:
     from opentide.analysis import Finding
@@ -330,31 +337,39 @@ def _assign_expected_stems(records: list[_ObjectRecord], filenames: FilenameConf
             continue
         grouped[record.path.parent].append(record)
     for group in grouped.values():
-        taken: set[str] = set()
+        # A debug fixture and the rule it copies share a name but not a file
+        # (``B.debug.yaml``, ``B.yaml``): each kind of file claims its own stems.
+        taken: set[tuple[bool, str]] = set()
         # One folder holds one kind of object.
         config = filenames.for_kind(group[0].kind)
         for record in group:
-            if record.name and config.stem_for(record.name) == record.path.stem:
-                record.expected_stem = record.path.stem
-                taken.add(record.path.stem.casefold())
+            stem = object_stem(record.path)
+            if record.name and config.stem_for(record.name) == stem:
+                record.expected_stem = stem
+                taken.add(_stem_key(record, stem))
         for record in group:
             if record.expected_stem or not record.name:
                 continue
             stem = config.stem_for(record.name)
             if stem is None:
                 continue
-            if stem.casefold() not in taken:
+            if _stem_key(record, stem) not in taken:
                 record.expected_stem = stem
-                taken.add(stem.casefold())
+                taken.add(_stem_key(record, stem))
                 continue
             suffix = (record.uuid or "object")[:8]
             candidate = f"{stem}-{suffix}"
             index = 1
-            while candidate.casefold() in taken:
+            while _stem_key(record, candidate) in taken:
                 candidate = f"{stem}-{suffix}-{index}"
                 index += 1
             record.expected_stem = candidate
-            taken.add(candidate.casefold())
+            taken.add(_stem_key(record, candidate))
+
+
+def _stem_key(record: _ObjectRecord, stem: str) -> tuple[bool, str]:
+    """What a stem claims in its folder: debug or not, and the stem whatever its case."""
+    return is_debug_file_name(record.path.name), stem.casefold()
 
 
 def _filename_findings(
@@ -363,10 +378,18 @@ def _filename_findings(
     *,
     fix: bool,
     filenames: FilenameConfig,
+    reported: frozenset[Path] | None = None,
 ) -> list[dict[str, object]]:
+    """Filename findings on *reported* (default every record).
+
+    Stems are assigned across all *records*, so a file outside *reported*
+    still claims its stem, and a narrowed run reports what a full run would.
+    """
     findings: list[dict[str, object]] = []
     _assign_expected_stems(records, filenames)
     for record in records:
+        if reported is not None and record.path not in reported:
+            continue
         config = filenames.for_kind(record.kind)
         if record.parse_error:
             findings.append(
@@ -410,9 +433,10 @@ def _stem_finding(
 ) -> Path:
     """Report a stem that is not the one the style expects; return the file's path afterwards."""
     expected = record.expected_stem
-    if expected is None or expected == record.path.stem:
+    if expected is None or expected == object_stem(record.path):
         return record.path
-    dest = record.path.with_name(f"{expected}{record.path.suffix}")
+    # The suffix stays whole: ``x.debug.yaml`` becomes ``B.debug.yaml``, never the live ``B.yaml``.
+    dest = with_object_stem(record.path, expected)
     if config.style == "slug":
         message = f"Filename {record.path.name!r} does not match slugify(name)={expected!r}"
     else:
@@ -454,7 +478,7 @@ def _pattern_finding(
     by the stem it produced. It cannot be fixed, so the finding has no ``expected``.
     """
     pattern = config.pattern
-    if pattern is None or pattern.fullmatch(current.stem):
+    if pattern is None or pattern.fullmatch(object_stem(current)):
         return
     findings.append(
         _finding(
@@ -637,6 +661,82 @@ def _apply_severity(findings: list[dict[str, object]], config: LintConfig) -> No
             finding["severity"] = override
 
 
+@dataclass(frozen=True)
+class _Scope:
+    """The object files a narrowed run reports on (``--changed`` or ``--file``)."""
+
+    #: ``scope`` in the result: ``changed`` or ``selected``.
+    label: str
+    files: frozenset[Path]
+    #: The flags that chose them, for the ``lint --fix`` next step.
+    flags: tuple[str, ...]
+
+
+def _scope_refused(target: Path, message: str, *, exit_code: int) -> dict[str, object]:
+    result: dict[str, object] = {
+        "message": message,
+        "path": str(target),
+        "checks": [],
+        "findings": [],
+        "count": 0,
+        "fixed": 0,
+        "status": "failed",
+        "_exit_code": exit_code,
+    }
+    if exit_code == 2:
+        result["_failure_code"] = USAGE_ERROR
+    return result
+
+
+def _lint_scope(
+    target: Path, candidates: Sequence[Path], *, files: Sequence[str], changed: bool
+) -> _Scope | dict[str, object] | None:
+    """The files ``--changed`` or ``--file`` select, or the result refusing them.
+
+    ``None`` when neither is given: the whole catalogue. ``--file`` matches as
+    in ``opentide validate``; each target must select an object file directly
+    in its folder, or the run fails (exit ``1``) and names it under ``unmatched``.
+    ``--changed`` reads the diff ``deploy`` and ``validate query --changed`` read.
+    """
+    if changed and files:
+        return _scope_refused(target, "--changed cannot be combined with --file", exit_code=2)
+    if files:
+        from opentide.validation.scope import ValidationScope
+
+        roots = tuple(dict.fromkeys((target, Path.cwd().resolve())))
+        by_file = ValidationScope.narrow(files=frozenset(files), roots=roots)
+        objects = [path for path in candidates if path.parent.parent == target / "objects"]
+        unmatched = by_file.unmatched_file_targets([(path.name, path) for path in objects])
+        if unmatched:
+            folders = ", ".join(f"objects/{family}" for family in _OBJECT_FAMILIES)
+            result = _scope_refused(
+                target,
+                f"No object file directly in {folders} matched: {', '.join(unmatched)}",
+                exit_code=1,
+            )
+            result["unmatched"] = unmatched
+            return result
+        chosen = frozenset(path for path in candidates if by_file.matches_file(path.name, path))
+        flags = tuple(item for raw in files for item in ("--file", raw))
+        return _Scope("selected", chosen, flags)
+    if not changed:
+        return None
+    from opentide.deployment.git_repo import MissingGitCheckout, changed_files_under
+
+    try:
+        diff, source = changed_files_under(target)
+    except MissingGitCheckout as exc:
+        message = f"--changed needs a git checkout; no .git was found from {exc.searched}"
+        return _scope_refused(target, message, exit_code=1)
+    except Exception as exc:  # the diff's own failures: a shallow clone, a missing commit
+        message = str(exc).strip() or f"{type(exc).__name__} while computing the changed files"
+        return _scope_refused(target, message, exit_code=1)
+    logger.info("lint_scope_changed", diff=source.name, files=len(diff))
+    changed_files = set(diff)
+    chosen = frozenset(path for path in candidates if path in changed_files)
+    return _Scope("changed", chosen, ("--changed",))
+
+
 def run_lint(
     root: Path,
     *,
@@ -644,11 +744,16 @@ def run_lint(
     fix: bool = False,
     strict: bool = False,
     config: LintConfig | None = None,
+    files: Sequence[str] = (),
+    changed: bool = False,
 ) -> dict[str, object]:
     """Run catalogue hygiene checks without a full registry rebuild.
 
     *config* defaults to the workspace's resolved ``lint.toml``. *checks* (the
     CLI's ``--check``) wins over it: a named check runs even when disabled there.
+    *files* (``--file``) and *changed* (``--changed``) narrow every check to the
+    files they select. The filenames check still reads the whole folder, so a
+    stem another file holds is still a collision.
     """
     target = root.resolve()
     if config is None:
@@ -669,17 +774,32 @@ def run_lint(
             }
     selected = list(checks) if checks else [LintCheck(name) for name in config.enabled_checks()]
     object_files, nested = _object_files(target)
-    records = [_load_record(target, path) for path in object_files]
+    scope = _lint_scope(target, [*object_files, *nested], files=files, changed=changed)
+    if isinstance(scope, dict):
+        scope["checks"] = [item.value for item in selected]
+        return scope
+    reported = None if scope is None else scope.files
+    if reported is not None:
+        nested = [path for path in nested if path in reported]
+    # The filenames check compares stems across each folder; the others read
+    # only the files they report on.
+    every = reported is None or LintCheck.filenames in selected
+    records = [
+        _load_record(target, path)
+        for path in object_files
+        if every or (reported is not None and path in reported)
+    ]
+    shown = [record for record in records if reported is None or record.path in reported]
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
-        findings.extend(_metadata_findings(records, config.required_metadata))
+        findings.extend(_metadata_findings(shown, config.required_metadata))
     if LintCheck.placeholders in selected:
-        findings.extend(_placeholder_findings(records))
+        findings.extend(_placeholder_findings(shown))
     if LintCheck.queries in selected:
         from opentide.analysis import EngineUnavailableError
 
         try:
-            findings.extend(_query_findings(target, records))
+            findings.extend(_query_findings(target, shown))
         except EngineUnavailableError as exc:
             from opentide.cli.services.engine import engine_unavailable_result
 
@@ -687,7 +807,11 @@ def run_lint(
                 exc, path=str(target), checks=[item.value for item in selected], findings=[]
             )
     if LintCheck.filenames in selected:
-        findings.extend(_filename_findings(target, records, fix=fix, filenames=config.filenames))
+        findings.extend(
+            _filename_findings(
+                target, records, fix=fix, filenames=config.filenames, reported=reported
+            )
+        )
         _rewrite_renamed_paths(findings)
         findings.extend(_nested_findings(target, nested))
     _apply_severity(findings, config)
@@ -710,7 +834,7 @@ def run_lint(
         1 for item in findings if item.get("expected") and item.get("fixed") is not True
     )
     _add_diagnostic_fields(target, findings)
-    files = len(records)
+    linted = len(shown)
     fixed = sum(1 for item in findings if item.get("fixed") is True)
     result: dict[str, Any] = {
         "message": ("Catalogue lint found issues" if findings else "Catalogue lint passed"),
@@ -722,30 +846,41 @@ def run_lint(
         "status": status,
         "_exit_code": 1 if status == "failed" else 0,
         "_summary": {
-            "files": files,
+            "files": linted,
             "findings": len(left),
             "errors": sum(1 for item in left if item.get("severity") == "error"),
             "warnings": sum(1 for item in left if item.get("severity") == "warning"),
             "notes": sum(1 for item in left if item.get("severity") == "info"),
             "fixed": fixed,
         },
-        "_outcome": _outcome_line(left, files=files, fixed=fixed, root=target),
+        "_outcome": _outcome_line(left, files=linted, fixed=fixed, root=target),
     }
+    if scope is not None:
+        result["scope"] = scope.label
+        if not linted and not left:
+            result["_outcome"] = (
+                "No changed object file to lint"
+                if scope.label == "changed"
+                else "No object file to lint"
+            )
     if status == "failed":
         result["_failure_code"] = ISSUES_FOUND
     elif left and all(item.get("severity") == "info" for item in left):
         # Notes only: nothing to warn about, so the line takes ✓, not the ``!``
         # of a warning (post-merge end-to-end run). JSON status stays "issues".
         result["_outcome_kind"] = "ok"
-    if not files:
+    if not linted and scope is None:
         from opentide.core.root import is_workspace_root
 
         if not is_workspace_root(target):
             result["_next_actions"] = [NO_WORKSPACE_STEP]
     if renamable:
+        import shlex
+
+        narrowed = "" if scope is None else " " + shlex.join(scope.flags)
         result["_next_actions"] = [
             NextAction(
-                "opentide lint --fix",
+                f"opentide lint --fix{narrowed}",
                 f"rename {renamable} {'file' if renamable == 1 else 'files'} to match their names",
             )
         ]

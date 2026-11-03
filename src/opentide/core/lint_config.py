@@ -105,6 +105,9 @@ class LintConfig:
 
 #: Control characters, which no file system takes in a name (Windows rejects them outright).
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+#: What makes a stem a debug fixture's (``B`` + ``.debug`` + ``.yaml``): see
+#: ``opentide.registry.catalogue.DEBUG_SUFFIXES``.
+_DEBUG_INFIX = ".debug"
 
 
 def expected_stem(name: str, style: FilenameStyle) -> str | None:
@@ -114,8 +117,10 @@ def expected_stem(name: str, style: FilenameStyle) -> str | None:
     file name cannot hold (:func:`opentide.core.files.safe_file_name`), control
     characters, and the spaces and dots around it: Windows silently drops a
     trailing space or dot, and a leading dot hides the file on Unix, so the
-    stem would not be the one written. ``None`` when ``"none"`` compares no stem,
-    or when nothing of the name is left to name a file after.
+    stem would not be the one written. A trailing ``.debug`` goes too: the stem
+    ``B.debug`` would rename ``x.yaml`` to the debug fixture ``B.debug.yaml``,
+    and a rename never decides whether a file is in the catalogue. ``None`` when ``"none"``
+    compares no stem, or when nothing of the name is left to name a file after.
     """
     if style == "none":
         return None
@@ -126,6 +131,8 @@ def expected_stem(name: str, style: FilenameStyle) -> str | None:
     from opentide.core.files import safe_file_name
 
     stem = _CONTROL_CHARACTERS.sub("", safe_file_name(name)).strip(" .")
+    while stem.endswith(_DEBUG_INFIX):
+        stem = stem.removesuffix(_DEBUG_INFIX).strip(" .")
     return stem or None
 
 

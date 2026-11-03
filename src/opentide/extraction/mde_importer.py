@@ -76,7 +76,7 @@ response:
 
 configurations:
   defender_for_endpoint: 
-    schema: defender_for_endpoint::2.0
+    schema: platform::defender_for_endpoint::1.0
     status: {status}
     {contributors}
     tenants:

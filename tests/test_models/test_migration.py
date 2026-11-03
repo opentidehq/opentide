@@ -18,10 +18,11 @@ def test_stamp_schema_identifier_updates_metadata() -> None:
     assert body["metadata"] == {"uuid": "u1"}
 
 
-def test_stamp_schema_identifier_updates_legacy_meta() -> None:
+def test_stamp_schema_identifier_never_writes_a_meta_block() -> None:
     body = {"meta": {"version": 1}, "name": "Threat"}
     result = stamp_schema_identifier(body, "threat::1.0")
-    assert result["meta"]["schema"] == "threat::1.0"
+    assert result["metadata"] == {"schema": "threat::1.0"}
+    assert result["meta"] == {"version": 1}
 
 
 def test_stamp_schema_identifier_creates_metadata_when_missing() -> None:

@@ -1,0 +1,28 @@
+[platform]
+enabled = true
+name = "Crowdstrike Falcon Correlation Rules"
+description = """The CrowdStrike Falcon® platform delivers real-time
+threat detection, simplified management, and proactive threat hunting
+for unmatched protection.
+"""
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#alert.severity = "Informational"
+#alert.title = "prefix::Staging "
+
+#[[tenants]]
+#name = "Name"
+#description = "Tenant Description"
+#strategies = ["PREVIEW", "RELEASE"] # status strategies this tenant accepts; omit for both
+#manual = false # true: only rules whose block lists this tenant
+#[tenants.setup]
+#ssl = true
+#api = ""
+#customer_id = ""
+#client_id = ""
+#client_secret = ""

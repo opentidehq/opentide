@@ -25,7 +25,7 @@ def run() -> None:
     """
     configs = resolve_configurations()
     paths = resolve_workspace_paths(configs)
-    cfg = configs.get("paths") or configs["global"]
+    cfg = configs["paths"]
     artifacts = cfg.get("artifacts", {})
     schema_map: dict[str, str] = dict(artifacts.get("schemas", cfg.get("json_schemas", {})))
     schema_dir = paths["json_schemas"]

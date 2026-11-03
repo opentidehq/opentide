@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 
 import pytest
@@ -35,11 +34,8 @@ _FREQUENCY_EVENTS = frozenset(
 _DISABLED_SPLUNK = """\
 [platform]
 enabled = false
-identifier = "splunk"
 name = "Splunk Enterprise"
-subschema = "Splunk Sub Schema"
 description = "Splunk"
-flags = []
 
 [[tenants]]
 name = "Default"
@@ -195,15 +191,9 @@ def test_an_enabled_splunk_tenant_with_an_invalid_frequency_warns_once_on_deploy
         "SPLUNK_TOKEN": "token",
     }.items():
         monkeypatch.setenv(name, value)
-    config = tide_corpus_repo / ".opentide" / "configurations" / "systems" / "splunk.toml"
+    config = tide_corpus_repo / ".opentide" / "configurations" / "platforms" / "splunk.toml"
     config.write_text(
-        re.sub(
-            r"^frequency_scheduling = .*$",
-            'frequency_scheduling = "bogus"',
-            config.read_text(encoding="utf-8"),
-            flags=re.MULTILINE,
-        ),
-        encoding="utf-8",
+        _DISABLED_SPLUNK.replace("enabled = false", "enabled = true"), encoding="utf-8"
     )
 
     info = invoke_cli("info")

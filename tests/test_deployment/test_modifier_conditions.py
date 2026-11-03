@@ -110,6 +110,7 @@ def _sentinel_rule(metadata: dict[str, Any], *, status: str) -> Any:
                 "sentinel": {
                     "status": status,
                     "query": "SecurityEvent | take 1",
+                    "scheduling": {"frequency": "1h"},
                     "alert": {"title": "Title"},
                 }
             },

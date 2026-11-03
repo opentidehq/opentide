@@ -1,0 +1,5 @@
+[platform]
+enabled = true
+name = "Splunk Enterprise"
+description = """Splunk Enterprise enables you to search, analyze and
+visualize your data to quickly act on insights from across your technology landscape."""

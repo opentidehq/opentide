@@ -90,9 +90,6 @@ class Errors(Exception):
         """
 
 
-TideErrors = Errors
-
-
 _TOML_POSITION = re.compile(r"\s*\(at line (\d+), column (\d+)\)\s*$")
 _TOML_END = re.compile(r"\s*\(at end of document\)\s*$")
 
@@ -156,6 +153,19 @@ class ConfigFileError(UserFileError):
             line, column = line or int(match.group(1)), column or int(match.group(2))
         problem = _TOML_END.sub("", problem)
         return cls(path, problem, line=line, column=column)
+
+
+class RetiredConfigurationError(UserFileError):
+    """A file or folder under ``.opentide/configurations/`` that opentide no longer reads.
+
+    Loading it silently would leave the workspace configured by settings that
+    have no effect, so every command refuses it and says what replaces it.
+    """
+
+    code = "retired_configuration_file"
+    title = "Configuration file not read by opentide"
+    help = "move its settings to the file named above, then delete it"
+    outcome = "1 configuration file is not read by opentide"
 
 
 class ObjectFileError(UserFileError):

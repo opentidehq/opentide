@@ -15,7 +15,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from opentide.core.errors import ConfigFileError
+from opentide.core.errors import ConfigFileError, RetiredConfigurationError
 from opentide.core.root import get_data_root, get_repo_root
 from opentide.registry.discovery import client_configurations_dir, discover_workspace
 
@@ -57,9 +57,7 @@ def _load_nested_configs(directory: Path) -> dict[str, dict]:
     for toml_path in sorted(directory.glob("*.toml")):
         if not toml_path.is_file():
             continue
-        configuration = _load_toml(toml_path)
-        key = configuration.get("platform", {}).get("identifier") or toml_path.stem
-        nested[str(key)] = configuration
+        nested[toml_path.stem] = _load_toml(toml_path)
     return nested
 
 
@@ -88,9 +86,7 @@ def _bundled_platform_configs() -> dict[str, dict]:
         return systems
 
     for toml_path in sorted(platforms_dir.glob("*.toml")):
-        configuration = _load_toml(toml_path)
-        key = configuration.get("platform", {}).get("identifier") or toml_path.stem
-        systems[key] = configuration
+        systems[toml_path.stem] = _load_toml(toml_path)
     return systems
 
 
@@ -101,16 +97,10 @@ def resolve_configurations(workspace: Path | None = None) -> dict[str, dict]:
     """
     data_root = get_data_root()
     unified = _fetch_configs(data_root / "configurations")
-    if "paths" not in unified and "global" not in unified:
-        raise KeyError(
-            "Bundled paths.toml or global.toml missing from opentide.data.configurations"
-        )
+    if "paths" not in unified:
+        raise KeyError("Bundled paths.toml missing from opentide.data.configurations")
 
-    if "paths" in unified and "global" not in unified:
-        unified["global"] = unified["paths"]
-
-    if "platforms" not in unified:
-        unified["platforms"] = unified.get("systems", {})
+    unified.setdefault("platforms", {})
     bundled = _bundled_platform_configs()
     if bundled:
         deep_merge(unified["platforms"], bundled)
@@ -119,6 +109,7 @@ def resolve_configurations(workspace: Path | None = None) -> dict[str, dict]:
     workspace = workspace or discover_workspace()
     client_configs = client_configurations_dir(workspace)
     if client_configs.is_dir():
+        reject_retired_configurations(client_configs)
         deep_merge(unified, _fetch_configs(client_configs))
 
     root = get_repo_root()
@@ -129,16 +120,37 @@ def resolve_configurations(workspace: Path | None = None) -> dict[str, dict]:
             deep_merge(unified, _fetch_configs(fixture_configs))
 
     parent_configs = workspace.parent / ".opentide" / "configurations"
-    if (
-        parent_configs.is_dir()
-        and parent_configs != client_configs
-        and not workspace_env
-        and parent_configs != client_configs
-    ):
+    if parent_configs.is_dir() and parent_configs != client_configs and not workspace_env:
+        reject_retired_configurations(parent_configs)
         deep_merge(unified, _fetch_configs(parent_configs))
 
     _reject_retired_proxy(unified)
     return unified
+
+
+#: Entries of a configuration folder that opentide does not read, and what replaces each.
+RETIRED_CONFIGURATIONS: dict[str, str] = {
+    "global.toml": "workspace paths and artifact names are set in paths.toml",
+    "schema.toml": (
+        "template defaults are not configurable, and vocabularies are not extended locally"
+    ),
+    "systems": "platform files live in platforms/<platform>.toml",
+}
+
+
+def reject_retired_configurations(directory: Path) -> None:
+    """Refuse a file or folder under *directory* that opentide does not read.
+
+    A retired file was loaded and then ignored, so a workspace believed it was
+    configured by it. Raise :class:`RetiredConfigurationError` naming the
+    replacement instead.
+    """
+    for name, replacement in RETIRED_CONFIGURATIONS.items():
+        entry = directory / name
+        if entry.exists():
+            raise RetiredConfigurationError(
+                entry, f"{name} is not read by opentide: {replacement}."
+            )
 
 
 def _reject_retired_proxy(unified: dict[str, dict]) -> None:

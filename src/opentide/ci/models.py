@@ -28,6 +28,10 @@ class CiRenderOptions:
     explorer_pages: bool = False
     inflight: bool = True
     sharing: bool = False
+    #: Lint only the object files the run changed (``lint --strict --changed``),
+    #: so a catalogue with inherited findings can adopt the gate. ``validate``
+    #: always checks the whole catalogue.
+    lint_changed: bool = False
     #: Workspace whose ``.opentide/configurations/platforms`` files supply the
     #: live-query credential guard. Absent for a render that has no checkout.
     repo: Path | None = None
@@ -72,6 +76,7 @@ class CiRenderOptions:
             explorer_pages=repo.explorer_pages,
             inflight=repo.inflight,
             sharing=repo.sharing,
+            lint_changed=repo.lint_changed,
             default_branch=repo.default_branch or "main",
             repo=repo.path,
         )

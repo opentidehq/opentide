@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 
 from opentide.models.system_config import ConfigurationModels as C
-from opentide.query.models import QueryRefused, QueryRequest, TimeWindow
+from opentide.query.models import QueryRefused, QueryRequest, QueryTimedOut, TimeWindow
 
 WINDOW = TimeWindow(
     datetime(2026, 10, 26, 8, 0, tzinfo=timezone.utc),
@@ -452,8 +452,10 @@ def test_sentinel_one_gives_up_at_the_timeout(
         FakeResponse(body={"data": {"queryId": "q1", "status": "RUNNING"}}),
         FakeResponse(body={"data": {"queryId": "q1", "status": "RUNNING"}}),
     ]
-    with pytest.raises(QueryRefused, match="did not finish within 5s"):
+    with pytest.raises(QueryTimedOut, match="did not finish within 5s") as caught:
         runner.SentinelOneQueryRunner().run(_request("sentinel_one", "x", timeout=5), _s1_tenant())
+    # A timeout, which live validation reports as query_check_timeout, not a refusal.
+    assert caught.value.timeout == 5
 
 
 def test_sentinel_one_refusal_carries_the_api_detail(s1: FakeSession) -> None:
@@ -506,7 +508,8 @@ def cbc(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             return iter(found)
 
     class Service:
-        def __init__(self, tenant: object) -> None:
+        def __init__(self, tenant: object, *, timeout: float) -> None:
+            state["calls"].append(("client_timeout", timeout))
             self.service = type("Api", (), {"select": staticmethod(lambda model: Query())})()
 
     monkeypatch.setattr(client, "CarbonBlackCloudService", Service)
@@ -523,6 +526,8 @@ def test_carbon_black_flattens_process_documents(cbc: dict[str, Any]) -> None:
         _cbc_tenant(),
     )
     assert cbc["calls"] == [
+        # The SDK sends no timeout of its own: every request gets the query's.
+        ("client_timeout", 30),
         ("where", "process_name:cmd.exe"),
         (
             "set_time_range",
@@ -614,7 +619,7 @@ def test_crowdstrike_stops_the_job_it_stops_waiting_for(
         FakeResponse(body={"done": False}),
         FakeResponse(204, ""),
     ]
-    with pytest.raises(QueryRefused, match="did not finish"):
+    with pytest.raises(QueryTimedOut, match="did not finish"):
         runner.CrowdstrikeQueryRunner().run(
             _request("crowdstrike", "x", index=("investigate_view",)), _crowdstrike_tenant()
         )
@@ -995,3 +1000,84 @@ def test_elastic_kuery_on_a_data_view_skips_the_lookup(elastic: FakeSession) -> 
     assert url == "preview"  # no data_view GET first
     assert preview["json"]["data_view_id"] == "dv-1"
     assert "index" not in preview["json"]
+
+
+# --------------------------------------------------------------------------
+# An answer that is not JSON: its status and page, never a JSONDecodeError
+# --------------------------------------------------------------------------
+
+_GATEWAY_PAGE = "<html><head><title>504 Gateway Time-out</title></head><body></body></html>"
+_LOGIN_PAGE = "<!DOCTYPE html><html><head><title>Sign in</title></head></html>"
+
+
+def _run_defender(session: FakeSession) -> None:
+    from opentide.platforms.defender_for_endpoint.runner import DefenderQueryRunner
+
+    DefenderQueryRunner().run(_request("defender_for_endpoint", "T"), _defender_tenant())
+
+
+def _run_s1(session: FakeSession) -> None:
+    from opentide.platforms.sentinel_one.runner import SentinelOneQueryRunner
+
+    SentinelOneQueryRunner().run(_request("sentinel_one", "x"), _s1_tenant())
+
+
+def _run_falcon(session: FakeSession) -> None:
+    from opentide.platforms.crowdstrike.runner import CrowdstrikeQueryRunner
+
+    CrowdstrikeQueryRunner().run(_request("crowdstrike", "x"), _crowdstrike_tenant())
+
+
+def _run_harfanglab(session: FakeSession) -> None:
+    from opentide.platforms.harfanglab.runner import HarfangLabQueryRunner
+
+    HarfangLabQueryRunner().run(_request("harfanglab", "processes"), _harfanglab_tenant())
+
+
+def _run_elastic(session: FakeSession) -> None:
+    from opentide.platforms.elastic.runner import ElasticQueryRunner
+
+    ElasticQueryRunner().run(_request("elastic", "FROM logs-*"), _elastic_tenant())
+
+
+_RUNS = {
+    "graph": _run_defender,
+    "s1": _run_s1,
+    "falcon": _run_falcon,
+    "harfanglab": _run_harfanglab,
+    "elastic": _run_elastic,
+}
+
+
+@pytest.mark.parametrize("platform", sorted(_RUNS))
+@pytest.mark.parametrize(
+    ("status", "page", "expected"),
+    [
+        (200, _LOGIN_PAGE, "HTTP 200 with an HTML page titled 'Sign in'"),
+        (504, _GATEWAY_PAGE, "HTTP 504 with an HTML page titled '504 Gateway Time-out'"),
+    ],
+    ids=["login-page", "gateway-timeout"],
+)
+def test_a_page_that_is_not_json_is_a_refusal_with_its_status(
+    request: pytest.FixtureRequest, platform: str, status: int, page: str, expected: str
+) -> None:
+    """A 200 page raised JSONDecodeError (Defender, HarfangLab) or read as "no query id"."""
+    session: FakeSession = request.getfixturevalue(platform)
+    session.responses += [FakeResponse(status, page) for _ in range(3)]
+
+    with pytest.raises(QueryRefused) as refused:
+        _RUNS[platform](session)
+
+    detail = str(refused.value.detail)
+    assert detail.startswith(expected), detail
+    assert ("gateway or proxy in front of the tenant" in detail) is (status == 504)
+    assert "JSONDecodeError" not in str(refused.value)
+
+
+def test_splunk_searches_with_the_request_timeout(splunk: dict[str, Any]) -> None:
+    """Splunk waited the transport's 120s whatever --timeout said."""
+    from opentide.platforms.splunk.runner import SplunkQueryRunner
+
+    SplunkQueryRunner().run(_request("splunk", "index=main", timeout=300), _splunk_tenant())
+
+    assert splunk["connect"]["timeout"] == 300

@@ -298,6 +298,23 @@ def test_an_unreachable_tenant_is_reported_with_its_address(tenants: None) -> No
     assert outcome.error.startswith("Cannot reach splunk tenant 'lab' at h")
 
 
+def test_a_read_timeout_is_a_slow_query_not_an_unreachable_tenant(tenants: None) -> None:
+    import requests
+
+    runner = FakeRunner({"lab": requests.ReadTimeout("Read timed out.")})
+    run = run_query("splunk", query="x", tenants=["all"], runner=runner, timeout=30)
+    lab, prod, _dr = run.outcomes
+    assert lab.error == "splunk tenant 'lab' did not answer the query within 30s: Read timed out."
+    assert lab.detail == "narrow the window or raise --timeout"
+    assert prod.ok is True
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
+def test_a_timeout_that_is_not_a_positive_number_is_refused(tenants: None, timeout: float) -> None:
+    with pytest.raises(QueryUsageError, match="--timeout must be positive"):
+        run_query("splunk", query="x", tenants=["lab"], runner=FakeRunner(), timeout=timeout)
+
+
 def test_a_rule_query_note_is_a_warning(tenants: None) -> None:
     rule = _rule("rule-0004-sentinel-one-s1ql.yaml")
 

@@ -213,6 +213,28 @@ def changed_rule_scope() -> tuple[RuleScope, DiffSource]:
     return modified_rule_scope(source), source
 
 
+def changed_files_under(root: Path) -> tuple[list[Path], DiffSource]:
+    """The files under *root* this run changed, and where the diff came from.
+
+    The diff :func:`changed_rule_scope` reads for ``deploy`` and ``validate
+    query --changed`` (:func:`diff_calculation`), for every file rather than
+    the rules folder's alone: added, renamed and modified files, deleted ones
+    left out. Diff paths are relative to the checkout holding *root*.
+    Raises :class:`MissingGitCheckout` when there is none.
+    """
+    workspace = root.resolve()
+    worktree = _git_worktree(workspace)
+    if worktree is None:
+        raise MissingGitCheckout(workspace)
+    source = run_diff_source()
+    files = {
+        path
+        for entry in diff_calculation(source)
+        if (path := worktree / entry).is_relative_to(workspace)
+    }
+    return sorted(files), source
+
+
 def _local_repository() -> DulwichRepo:
     """The checkout holding the workspace, for a run outside CI."""
     searched = discover_workspace().resolve()
@@ -377,7 +399,7 @@ def diff_calculation(source: DiffSource) -> list[str]:
             return []
         return _changed_paths(repo, repo.commit(base), repo.head)
 
-    repo = TideRepo().repository
+    repo = GitRepository().repository
     if repo is None:
         # Only a local run has no repository, and it returned above.
         raise MissingGitCheckout(discover_workspace())
@@ -678,7 +700,7 @@ def changed_through_head(since: str | None = None) -> list[str]:
             raise Exception("Outside CI, --since must name the commit to diff from")
         repo = _local_repository()
     else:
-        repo = TideRepo().repository
+        repo = GitRepository().repository
         if repo is None:
             # Only a local run has no repository, and it took the branch above.
             raise MissingGitCheckout(discover_workspace())
@@ -713,10 +735,6 @@ def _changed_paths(
     logger.info("computed_diff_scope", detail=", ".join(scope))
 
     return scope
-
-
-# Legacy alias
-TideRepo = GitRepository
 
 
 def __dir__() -> list[str]:

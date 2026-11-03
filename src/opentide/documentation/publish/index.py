@@ -60,8 +60,10 @@ def _extra_headers(scope: DocumentScope | None) -> list[str]:
 def _extra_cells(record: DocumentRecord) -> list[str]:
     model = record.model
     if record.object_type == DocumentScope.rules:
-        status = _as_cell(getattr(model, "status", None))
-        severity = _as_cell(getattr(model, "severity", None))
+        # What deploy reads, never a model default (see ``render_rule_status``).
+        statuses = getattr(model, "platform_statuses", None) or {}
+        status = ", ".join(sorted(set(statuses.values()))) if isinstance(statuses, dict) else ""
+        severity = _as_cell(getattr(model, "displayed_severity", None))
         return [status, severity]
     if record.object_type == DocumentScope.objectives:
         body = getattr(model, "objective", None)

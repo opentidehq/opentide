@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import textwrap
+from typing import Any
 
 from opentide.ci.gates import (
     azure_premerge_condition,
@@ -12,12 +13,25 @@ from opentide.ci.gates import (
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import inflight_generate_steps, inflight_prune_steps, pip_install
 
-#: GitLab expands ``$VAR``; ``${{ }}`` is GitHub Actions expression syntax and
-#: would push to a host literally named ``${{CI_SERVER_HOST}}``.
-GITLAB_PUSH = (
-    'git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/'
-    '${CI_PROJECT_PATH}.git" "HEAD:$CI_DEFAULT_BRANCH"'
+#: CI/CD variable naming where the GitLab write-backs push, any URL git takes
+#: (``git@gitlab.example.com:group/project.git`` for SSH). Unset, they push
+#: over HTTPS with ``CI_JOB_TOKEN``, which needs job-token push access.
+GITLAB_PUSH_URL_VARIABLE = "OPENTIDE_PUSH_URL"
+
+#: File variables: an SSH private key the write-backs push with and sign
+#: their commits with, and the ``known_hosts`` lines of the server.
+GITLAB_SSH_KEY_VARIABLE = "OPENTIDE_PUSH_SSH_KEY"
+GITLAB_SSH_KNOWN_HOSTS_VARIABLE = "OPENTIDE_PUSH_SSH_KNOWN_HOSTS"
+
+#: The push URL, as one shell word. GitLab expands ``$VAR``; ``${{ }}`` is
+#: GitHub Actions expression syntax and would push to a host literally named
+#: ``${{CI_SERVER_HOST}}``. An explicit URL also sidesteps the runner's own
+#: ``insteadOf`` rewrite of ``origin``, which a project cannot override.
+GITLAB_PUSH_URL = (
+    f'"${{{GITLAB_PUSH_URL_VARIABLE}:-https://gitlab-ci-token:${{CI_JOB_TOKEN}}@'
+    '${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git}"'
 )
+GITLAB_PUSH = f'git push {GITLAB_PUSH_URL} "HEAD:$CI_DEFAULT_BRANCH"'
 GITLAB_FETCH = 'git fetch origin "$CI_DEFAULT_BRANCH"'
 
 #: ``python:<ver>-slim`` ships without git, so every git step failed with
@@ -25,6 +39,56 @@ GITLAB_FETCH = 'git fetch origin "$CI_DEFAULT_BRANCH"'
 GITLAB_INSTALL_GIT = (
     "apt-get update -qq && apt-get install -y -qq --no-install-recommends git > /dev/null"
 )
+
+GITLAB_SSH_NOT_A_FILE = (
+    f"{GITLAB_SSH_KEY_VARIABLE} must be a CI/CD variable of type File holding the private key."
+)
+GITLAB_SSH_NO_KNOWN_HOSTS = (
+    f"{GITLAB_SSH_KEY_VARIABLE} is set, but {GITLAB_SSH_KNOWN_HOSTS_VARIABLE} is not a "
+    "File variable holding the server's known_hosts lines; refusing to push to an "
+    "unchecked host."
+)
+
+
+def gitlab_push_setup() -> str:
+    """Shell that pushes and signs with the SSH key in :data:`GITLAB_SSH_KEY_VARIABLE`.
+
+    Nothing happens when the variable is unset. Otherwise the job installs
+    ``openssh-client`` (``python:<ver>-slim`` has none), and the repository's
+    own config, which ``after_script`` and ``git worktree`` share, gets
+    ``core.sshCommand`` with that key and the server's known hosts, and SSH
+    commit signing with the same key. Strict host-key checking is not
+    optional: without known hosts the step fails. The key itself is never
+    printed; only the variable names are.
+    """
+    key = f'"${GITLAB_SSH_KEY_VARIABLE}"'
+    ssh = (
+        f'ssh -i \\"${GITLAB_SSH_KEY_VARIABLE}\\" -o IdentitiesOnly=yes '
+        "-o StrictHostKeyChecking=yes "
+        f'-o UserKnownHostsFile=\\"${GITLAB_SSH_KNOWN_HOSTS_VARIABLE}\\"'
+    )
+    return "\n".join(
+        [
+            f'if [ -n "${{{GITLAB_SSH_KEY_VARIABLE}:-}}" ]; then',
+            f"  if [ ! -f {key} ]; then",
+            f'    echo "{GITLAB_SSH_NOT_A_FILE}" >&2',
+            "    exit 1",
+            "  fi",
+            f'  if [ ! -s "${{{GITLAB_SSH_KNOWN_HOSTS_VARIABLE}:-}}" ]; then',
+            f'    echo "{GITLAB_SSH_NO_KNOWN_HOSTS}" >&2',
+            "    exit 1",
+            "  fi",
+            "  command -v ssh-keygen > /dev/null || "
+            "apt-get install -y -qq --no-install-recommends openssh-client > /dev/null",
+            f"  chmod 600 {key}",
+            f'  git config core.sshCommand "{ssh}"',
+            "  git config gpg.format ssh",
+            f"  git config user.signingkey {key}",
+            "  git config commit.gpgsign true",
+            f"  echo 'Pushing and signing with the {GITLAB_SSH_KEY_VARIABLE} key.'",
+            "fi",
+        ]
+    )
 
 
 #: Pull request jobs and the prune job race each other to the default branch.
@@ -150,16 +214,14 @@ def _publish_on_default_branch(*, push: str, fetch: str) -> str:
 def github_inflight_job(
     *,
     python_version: str,
-    opentide_version: str,
     default_branch: str,
 ) -> str:
     """Render the GitHub Actions job that updates ``.opentide/inflight/`` on PRs."""
     opts = CiRenderOptions(
         ci="github",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
-    install = pip_install(opts)
+    install = pip_install()
     generate_cmd = inflight_generate_steps(opts)[0]
     default_ref = f"origin/{default_branch}"
     checkout_inflight = textwrap.indent(
@@ -211,15 +273,13 @@ def github_inflight_job(
 def github_inflight_prune_job(
     *,
     python_version: str,
-    opentide_version: str,
     default_branch: str,
 ) -> str:
     opts = CiRenderOptions(
         ci="github",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
-    install = pip_install(opts)
+    install = pip_install()
     prune_cmd = inflight_prune_steps(opts)[0]
     prod_if = f"github.event_name == 'push' && github.ref == 'refs/heads/{default_branch}'"
     commit_push = textwrap.indent(
@@ -261,90 +321,80 @@ def github_inflight_prune_job(
     )
 
 
-def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> str:
+#: The commit identity of the GitLab jobs that push.
+GITLAB_IDENTITY = (
+    'git config user.email "gitlab-ci@opentide.local"',
+    'git config user.name "gitlab-ci"',
+)
+
+
+def gitlab_push_preamble() -> list[str]:
+    """Script items a GitLab job that commits and pushes runs first.
+
+    The SSH setup is a ``|`` block (it spans lines); the identity follows.
+    """
+    return [gitlab_push_setup() + "\n", *GITLAB_IDENTITY]
+
+
+def gitlab_inflight_job(*, python_version: str) -> dict[str, Any]:
+    """The GitLab job that publishes ``.opentide/inflight/`` from a merge request."""
     opts = CiRenderOptions(
         ci="gitlab",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
-    generate_cmd = inflight_generate_steps(opts)[0]
-    default_ref = "origin/$CI_DEFAULT_BRANCH"
-    checkout_inflight = "".join(f"    - {cmd}\n" for cmd in _default_branch_shards(default_ref))
-    commit_push = textwrap.indent(
-        _publish_on_default_branch(push=GITLAB_PUSH, fetch=GITLAB_FETCH),
-        " " * 6,
-    ).lstrip()
-    return (
-        "inflight_shards:\n"
-        "  stage: deploy\n"
-        f"  image: python:{python_version}-slim\n"
-        "  rules:\n"
-        f"    - if: {gitlab_premerge_rule()}\n"
-        "  variables:\n"
-        '    GIT_DEPTH: "0"\n'
-        "  before_script:\n"
-        f"    - {GITLAB_INSTALL_GIT}\n"
-        f"    - {pip_install(opts)}\n"
-        "  script:\n"
-        '    - git fetch origin "$CI_DEFAULT_BRANCH"\n'
-        f"{checkout_inflight}"
-        '    - export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"\n'
-        f"    - {generate_cmd}\n"
-        '    - git config user.email "gitlab-ci@opentide.local"\n'
-        '    - git config user.name "gitlab-ci"\n'
-        "    - |\n"
-        f"      {commit_push}\n"
-        "  needs:\n"
-        "    - generate"
-    )
+    return {
+        "stage": "deploy",
+        "image": f"python:{python_version}-slim",
+        "rules": [{"if": gitlab_premerge_rule()}],
+        "variables": {"GIT_DEPTH": "0"},
+        "before_script": [GITLAB_INSTALL_GIT, pip_install()],
+        "script": [
+            'git fetch origin "$CI_DEFAULT_BRANCH"',
+            *_default_branch_shards("origin/$CI_DEFAULT_BRANCH"),
+            'export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"',
+            inflight_generate_steps(opts)[0],
+            *gitlab_push_preamble(),
+            # A ``|`` block: the commit message holds ``": "`` (see _commit_and_push).
+            _publish_on_default_branch(push=GITLAB_PUSH, fetch=GITLAB_FETCH) + "\n",
+        ],
+        "needs": ["generate"],
+    }
 
 
-def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> str:
+def gitlab_inflight_prune_job(*, python_version: str) -> dict[str, Any]:
+    """The GitLab job that drops superseded shards after a merge."""
     opts = CiRenderOptions(
         ci="gitlab",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
-    prune_cmd = inflight_prune_steps(opts)[0]
-    commit_push = textwrap.indent(
-        _commit_and_push(
-            message="ci: prune inflight preview shards [skip ci]",
-            empty_note="No inflight prune changes",
-            push=GITLAB_PUSH,
-            fetch=GITLAB_FETCH,
-        ),
-        " " * 6,
-    ).lstrip()
-    return (
-        "inflight_prune:\n"
-        "  stage: deploy\n"
-        f"  image: python:{python_version}-slim\n"
-        "  rules:\n"
-        "    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH\n"
-        "  variables:\n"
-        '    GIT_DEPTH: "0"\n'
-        "  before_script:\n"
-        f"    - {GITLAB_INSTALL_GIT}\n"
-        f"    - {pip_install(opts)}\n"
-        "  script:\n"
-        '    - export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"\n'
-        f"    - {prune_cmd}\n"
-        '    - git config user.email "gitlab-ci@opentide.local"\n'
-        '    - git config user.name "gitlab-ci"\n'
-        "    - |\n"
-        f"      {commit_push}\n"
-        "  needs:\n"
-        "    - generate"
+    commit_push = _commit_and_push(
+        message="ci: prune inflight preview shards [skip ci]",
+        empty_note="No inflight prune changes",
+        push=GITLAB_PUSH,
+        fetch=GITLAB_FETCH,
     )
+    return {
+        "stage": "deploy",
+        "image": f"python:{python_version}-slim",
+        "rules": [{"if": "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"}],
+        "variables": {"GIT_DEPTH": "0"},
+        "before_script": [GITLAB_INSTALL_GIT, pip_install()],
+        "script": [
+            'export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"',
+            inflight_prune_steps(opts)[0],
+            *gitlab_push_preamble(),
+            commit_push + "\n",
+        ],
+        "needs": ["generate"],
+    }
 
 
-def azure_inflight_job(*, python_version: str, opentide_version: str, default_branch: str) -> str:
+def azure_inflight_job(*, python_version: str, default_branch: str) -> str:
     from opentide.ci.azure import _azure_job, _job_steps
 
     opts = CiRenderOptions(
         ci="azure",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
     generate_cmd = inflight_generate_steps(opts)[0]
     default_ref = f"origin/{default_branch}"
@@ -370,15 +420,12 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
     )
 
 
-def azure_inflight_prune_job(
-    *, python_version: str, opentide_version: str, default_branch: str
-) -> str:
+def azure_inflight_prune_job(*, python_version: str, default_branch: str) -> str:
     from opentide.ci.azure import _azure_job, _job_steps
 
     opts = CiRenderOptions(
         ci="azure",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
     prune_cmd = inflight_prune_steps(opts)[0]
     prune_script = "\n".join(

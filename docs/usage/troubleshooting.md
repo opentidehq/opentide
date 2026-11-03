@@ -195,6 +195,10 @@ Through `0.3.0` the GitLab inflight jobs wrote the push URL with GitHub Actions 
 opentide setup ci gitlab --yes
 ```
 
+### GitLab write-back push is refused, or fails on the certificate
+
+The production and inflight jobs push with `CI_JOB_TOKEN` over HTTPS unless told otherwise. `remote: You are not allowed to upload code` means the job token may not push: allow it under **Settings > CI/CD > Job token permissions**, or push with a deploy key instead by setting `OPENTIDE_PUSH_URL` to the project's SSH URL and the File variables `OPENTIDE_PUSH_SSH_KEY` and `OPENTIDE_PUSH_SSH_KNOWN_HOSTS`. `SSL certificate problem: unable to get local issuer certificate` means the job image does not trust the instance's CA: set `GIT_SSL_CAINFO: $CI_SERVER_TLS_CA_FILE`, or push over SSH. A `url.….insteadOf` rewrite of `origin` has no effect, because the runner rewrites that prefix itself. See [GitLab write-back credentials](./workflows/ci-cd.md#gitlab-write-back-credentials).
+
 ### Azure inflight job says nothing changed and never commits
 
 Through `0.3.0` the Azure job scripts were joined with `&&`. `git diff --staged --quiet` exits 1 when there *are* staged changes, so the chain stopped before `git commit`; when there were none, `exit 0` swallowed every later command. **0.4.0** emits a multi-line `set -e` script with an explicit `if … fi` guard, and checks out with `persistCredentials: true` so the push can authenticate. Azure jobs also no longer declare `dependsOn` on a job from another stage, which Azure cannot resolve. Re-run `opentide setup ci azure --yes`.
@@ -268,7 +272,7 @@ opentide generate
 
 ### `opentide generate` crashes with `'str' object has no attribute 'get'`
 
-`0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
+`0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
 pip install 'opentide==0.20.1'
@@ -422,7 +426,7 @@ From **0.18.0** every file under `.opentide/configurations/` is checked against 
 Seen while preparing 0.18.0:
 
 - A Splunk tenant's `schedule_offset = "5"` (a string): write `schedule_offset = 5`.
-- A `documentation.toml` that `opentide migrate` copied from CoreTIDE: delete `skip_vocabularies`, `model_cover_pages` and the `[titles]` table, which opentide never read.
+- A `documentation.toml` with `skip_vocabularies`, `model_cover_pages` or a `[titles]` table: delete them, opentide never read them.
 
 ```bash
 pip install 'opentide==0.20.1'
@@ -516,7 +520,9 @@ uv pip install 'opentide==0.20.1'
 
 ### Splunk answers with HTML instead of XML behind a proxy
 
-Through **0.17.1** this failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which reads like a TLS fault but is not one. **0.17.2** names it: `Splunk at https://<host>:8089 answered with an HTML page, not its REST API … The request went through the proxy http://<proxy>:<port> …`, with the `NO_PROXY` value to set. Each connection also logs `splunk_tenant_route` with `via` set to the proxy or `direct`.
+Through **0.17.1** this failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which reads like a TLS fault but is not one. **0.17.2** names it: `Splunk at https://<host>:8089 answered with an HTML page (HTTP 403), not its REST API … The request went through the proxy http://<proxy>:<port> …`, with the `NO_PROXY` value to set (the HTTP status is in the message since the release after 0.20.1). Each connection also logs `splunk_tenant_route` with `via` set to the proxy or `direct`.
+
+When the status is 502, 503 or 504, or the page came after a request of 30 seconds or more, the message says a gateway or proxy in front of Splunk timed out instead, and `validate query --live` fails only that query: see [Slow queries and timeouts](../cli/validate.md#slow-queries-and-timeouts). The url and port are not at fault when other requests to the same address succeed.
 
 The request went through the proxy, and the proxy answered with its own error page. An internal tenant must not be reached through the corporate proxy: add its host to `NO_PROXY` and `no_proxy` (`NO_PROXY=splunk.internal.example`). opentide's platform clients honour it, so the same run still reaches a cloud tenant such as Sentinel through the proxy, and the deploy does not have to be split per platform. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 
@@ -704,9 +710,9 @@ Through **0.7.0** generated validate did not pass `--strict`, and lint was not a
 
 Through **0.7.0** `opentide setup ci azure` wrote no `pool`, so Azure Repos refused the file. `pr:` is ignored on Azure Repos Git, so a pull request never set `Build.Reason` ([#398](https://github.com/opentidehq/opentide/issues/398)). **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy. Regenerate with `opentide setup ci azure --yes`.
 
-### `setup skills` installs a short tree or CoreTide authoring instructions
+### `setup skills` installs a short tree or outdated authoring instructions
 
-Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described CoreTide schemas ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
+Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described retired schemas and folders ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
 
 ### `setup repo` hardcodes Sentinel or ignores `--name`
 

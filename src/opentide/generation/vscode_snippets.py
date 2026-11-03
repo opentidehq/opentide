@@ -11,12 +11,14 @@ import structlog
 
 from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
+from opentide.generation.template_renderer import enabled_platforms, platform_template_path
+from opentide.package.paths import platform_template_name, platform_templates_root
 
 logger = structlog.get_logger("opentide.generation.vscode_snippets")
 
 # Overridable output path. ``opentide setup vscode`` assigns this before ``run()``.
-# Must stay unset at import time: evaluating ``Paths.Core.subschemas`` on import
-# crashed fresh repositories after the platform_templates rename (issue #153).
+# Must stay unset at import time: evaluating the registry paths on import
+# crashed fresh repositories (issue #153).
 SNIPPETS_PATH: str | Path | None = None
 
 _CORE_PREFIXES: dict[str, str] = {
@@ -106,30 +108,18 @@ def vs_code_snippet_generator(
     }
 
 
-def _platform_templates_dir(core: Any) -> Path:
-    """Resolve bundled platform templates (legacy name: subschemas)."""
-    raw = getattr(core, "platform_templates", None) or getattr(core, "subschemas", None)
-    if raw is None:
-        raise AttributeError("platform template path is not configured")
-    return Path(raw)
-
-
 def _snippets_output_path(paths: Any) -> Path:
     if SNIPPETS_PATH is not None:
         return Path(str(SNIPPETS_PATH))
     return Path(str(paths.Tide.snippet_file))
 
 
-def _entry_enabled(recomp_entry: dict[str, Any]) -> bool:
-    block = recomp_entry.get("platform")
-    return isinstance(block, dict) and block.get("enabled") is True
-
-
-def _entry_name(recomp_entry: dict[str, Any]) -> str | None:
-    block = recomp_entry.get("platform")
-    if isinstance(block, dict) and block.get("name"):
-        return str(block["name"])
-    return None
+def _entry_name(entry: Any, platform: str) -> str:
+    """Display name of a platform: its ``[platform] name``, else its identifier."""
+    section = entry.get("platform") if isinstance(entry, dict) else None
+    if isinstance(section, dict) and section.get("name"):
+        return str(section["name"])
+    return platform
 
 
 def _require_template(path: Path, *, kind: str) -> None:
@@ -143,8 +133,6 @@ def run() -> None:
     paths = Opentide.Configurations.Global.Paths
     snippets_path = _snippets_output_path(paths)
     templates_dir = Path(str(paths.Tide.templates))
-    subschemas_folder = _platform_templates_dir(paths.Core)
-    recomposition = Opentide.Configurations.Global.recomposition
     config_index = Opentide.Configurations.Index
     metaschemas = Opentide.Configurations.Global.metaschemas
     templates = Opentide.Configurations.Global.templates
@@ -167,36 +155,27 @@ def run() -> None:
                 "with a tabstop on every field to fill."
             ),
         )
-    for recomp, subschema_type_folder in recomposition.items():
-        entries = config_index.get(recomp)
-        if not isinstance(entries, dict):
-            entries = config_index.get("platforms")
-        if not isinstance(entries, dict):
-            continue
-        for platform_id, recomp_entry in entries.items():
-            if not isinstance(recomp_entry, dict) or not _entry_enabled(recomp_entry):
-                continue
-            subschema_name = _entry_name(recomp_entry)
-            if not subschema_name:
-                continue
-            logger.info("generating_snippets_for", arg0=subschema_name)
-            subchema_template_name = f"{subschema_name} Template.yaml"
-            subschema_template_path = (
-                subschemas_folder / subschema_type_folder / "Templates" / subchema_template_name
-            )
-            # The folder name ("MDR Systems Deployment") stays a package path;
-            # people see "Platform configuration".
-            title = f"Platform configuration : {subschema_name} Template".strip()
-            _require_template(subschema_template_path, kind=f"platform {platform_id}")
-            snippets[title] = vs_code_snippet_generator(
-                subschema_template_path,
-                f"tide-{platform_id}",
-                blanks=1,
-                description=(
-                    f"{subschema_name}: the platform block for a detection rule's "
-                    "configurations, from the generated template."
-                ),
-            )
+    platforms = config_index.get("platforms")
+    for platform_id in enabled_platforms(config_index):
+        name = _entry_name(
+            platforms.get(platform_id) if isinstance(platforms, dict) else None, platform_id
+        )
+        logger.info("generating_snippets_for", arg0=name)
+        template_path = platform_template_path(templates_dir, platform_id)
+        if not template_path.is_file():
+            # Templates generated before they moved under platforms/: the bundled
+            # one is the same render (the golden test keeps them in step).
+            template_path = platform_templates_root() / platform_template_name(platform_id)
+        _require_template(template_path, kind=f"platform {platform_id}")
+        snippets[f"Platform configuration : {name} Template".strip()] = vs_code_snippet_generator(
+            template_path,
+            f"tide-{platform_id}",
+            blanks=1,
+            description=(
+                f"{name}: the platform block for a detection rule's "
+                "configurations, from the generated template."
+            ),
+        )
     snippets_path.parent.mkdir(parents=True, exist_ok=True)
     snippets_path.write_text(
         json.dumps(snippets, indent=4, sort_keys=False, default=str) + "\n",

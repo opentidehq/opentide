@@ -41,6 +41,7 @@ from opentide.core.lint_config import (
     load_lint_config,
 )
 from opentide.documentation.markdown.links import slugify
+from opentide.registry.catalogue import OBJECT_SUFFIXES, object_stem, split_object_name
 
 #: The object families ``new`` scaffolds, in catalogue order.
 FAMILIES = ("threat", "objective", "rule")
@@ -307,10 +308,12 @@ def _stem_taken(folder: Path, stem: str) -> bool:
     if not folder.is_dir():
         return False
     wanted = stem.casefold()
-    return any(
-        entry.suffix in (".yaml", ".yml") and entry.stem.casefold() == wanted
-        for entry in folder.iterdir()
-    )
+    for entry in folder.iterdir():
+        # ``stem.debug.yaml`` is a fixture: its stem is ``stem``, but it is another file.
+        entry_stem, suffix = split_object_name(entry.name)
+        if suffix in OBJECT_SUFFIXES and entry_stem.casefold() == wanted:
+            return True
+    return False
 
 
 # --------------------------------------------------------------------------- model walk
@@ -988,7 +991,7 @@ def scaffold_object(
             "No deployment status has strategy INERT, so the new platform blocks are "
             "disabled (enabled: false) and their status is a placeholder"
         )
-    if filenames.pattern is not None and not filenames.pattern.fullmatch(destination.stem):
+    if filenames.pattern is not None and not filenames.pattern.fullmatch(object_stem(destination)):
         warnings.append(
             f"{destination.name} does not match lint.toml {filenames.pattern_key} "
             f"{filenames.pattern.pattern}; rename it before opentide lint runs"

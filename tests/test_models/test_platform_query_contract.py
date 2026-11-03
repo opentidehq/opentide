@@ -109,86 +109,81 @@ def test_schema_extras_require_no_field_the_model_leaves_optional(key: str) -> N
 
 
 # --------------------------------------------------------------------------
-# splunk::2.x compatibility
+# splunk::2.x keys are unknown keys
 # --------------------------------------------------------------------------
 
 
-LEGACY_SPLUNK = {
-    "schema": "splunk::2.0",
+SPLUNK_BLOCK = {
+    "schema": "platform::splunk::1.0",
     "enabled": True,
     "name": "Splunk SPL Rule",
     "status": "STAGING",
-    "search": "index=main | head 1",
-    "cron_schedule": "0 * * * *",
+    "query": "index=main | head 1",
 }
 
-
-def test_legacy_search_becomes_the_query() -> None:
-    config = load_splunk_config(dict(LEGACY_SPLUNK))
-    assert config.query == "index=main | head 1"
-    # Kept so the object round-trips unchanged.
-    assert config.search == "index=main | head 1"
-
-
-def test_legacy_cron_schedule_becomes_the_schedule() -> None:
-    config = load_splunk_config(dict(LEGACY_SPLUNK))
-    assert config.scheduling is not None
-    assert config.scheduling.schedule is not None
-    assert config.scheduling.schedule.cron == "0 * * * *"
-    assert config.cron_schedule == "0 * * * *"
-
-
-def test_a_modern_query_wins_over_the_legacy_spelling() -> None:
-    config = load_splunk_config({**LEGACY_SPLUNK, "query": "index=modern"})
-    assert config.query == "index=modern"
+#: Every splunk::2.x spelling, and the hidden v2 escape hatch, at its place in the block.
+SPLUNK_2X_KEYS = [
+    ("search", "index=main | head 1"),
+    ("cron_schedule", "0 * * * *"),
+    ("throttling", {"fields": ["host"], "duration": "1h"}),
+    ("threshold", 3),
+    ("notable", {"security_domain": "threat"}),
+    ("risk", {"message": "risk message"}),
+    ("email", {"to": ["soc@example.org"]}),
+    ("advanced", {"dispatch.earliest_time": "-1h"}),
+    ("scheduling", {"frequency": "1h"}),
+    ("scheduling", {"cron": "0 * * * *"}),
+    ("scheduling", {"custom_time": "09h15"}),
+    ("scheduling", {"lookback": "2h"}),
+]
 
 
-def test_a_modern_scheduling_block_wins_over_cron_schedule() -> None:
-    config = load_splunk_config(
-        {**LEGACY_SPLUNK, "scheduling": {"schedule": {"cron": "*/5 * * * *"}}}
-    )
-    assert config.scheduling is not None
-    assert config.scheduling.schedule is not None
-    assert config.scheduling.schedule.cron == "*/5 * * * *"
+@pytest.mark.parametrize(("key", "value"), SPLUNK_2X_KEYS)
+def test_validation_refuses_a_splunk_2x_key(key: str, value: object) -> None:
+    """A 2.x key is an unknown key, never moved onto the current layout."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        SplunkConfig.model_validate({**SPLUNK_BLOCK, key: value})
 
 
-def test_schema_validation_maps_legacy_fields_too() -> None:
-    """Validation calls `model_validate` on raw YAML, never the loader."""
-    config = SplunkConfig.model_validate(LEGACY_SPLUNK)
-    assert config.query == "index=main | head 1"
-    assert config.scheduling is not None
+@pytest.mark.parametrize(("key", "value"), SPLUNK_2X_KEYS)
+def test_deploy_loading_refuses_a_splunk_2x_key(key: str, value: object) -> None:
+    """``validate`` and ``deploy`` agree: the loader refuses what validation refuses."""
+    with pytest.raises(ValidationError):
+        load_splunk_config({**SPLUNK_BLOCK, key: value})
 
 
-#: Every flat splunk::2.x spelling the loader has always understood.
-LEGACY_SPLUNK_FLAT = {
-    **LEGACY_SPLUNK,
-    "cron_schedule": None,
-    "scheduling": {"frequency": "1h", "lookback": "2h"},
-    "throttling": {"fields": ["host"], "duration": "1h"},
-    "threshold": 3,
-    "notable": {"security_domain": "threat"},
-}
+def test_a_splunk_2x_search_without_a_query_is_no_query() -> None:
+    block = {key: value for key, value in SPLUNK_BLOCK.items() if key != "query"}
+    with pytest.raises(ValidationError) as caught:
+        SplunkConfig.model_validate({**block, "search": "index=main"})
+    locations = {error["loc"] for error in caught.value.errors()}
+    assert ("query",) in locations and ("search",) in locations
 
 
-def test_validation_accepts_every_flat_legacy_key_the_loader_does() -> None:
-    """``validate`` and ``deploy`` must agree on which 2.x rules are valid.
-
-    The loader normalised these, ``model_validate`` rejected them as unknown
-    keys — so a rule that deployed fine failed ``opentide validate``.
-    """
-    validated = SplunkConfig.model_validate(dict(LEGACY_SPLUNK_FLAT))
-    loaded = load_splunk_config(dict(LEGACY_SPLUNK_FLAT))
-    assert validated.model_dump() == loaded.model_dump()
-    assert validated.scheduling is not None and validated.scheduling.schedule is not None
-    assert validated.scheduling.schedule.frequency == "1h"
-    assert validated.scheduling.timerange is not None
-    assert validated.scheduling.timerange.lookback == "2h"
-    assert validated.trigger is not None and validated.trigger.threshold == 3
-    assert validated.actions is not None and validated.actions.notable is not None
+@pytest.mark.parametrize("key", sorted(PLATFORM_CONFIG_MODELS))
+def test_the_editor_schema_offers_exactly_what_validation_accepts_for_schema(key: str) -> None:
+    """The extras were keyed by the field name, so the `schema` enum never applied."""
+    model = PLATFORM_CONFIG_MODELS[key]
+    prop = build_platform_schema_source(model)["properties"]["schema"]
+    assert prop["enum"] == [model.schema_identifier(), None]
+    assert prop["default"] == model.schema_identifier()
+    block = _CORPUS_BLOCKS[key]
+    model.model_validate({**block, "schema": model.schema_identifier()})
+    model.model_validate({**block, "schema": None})
+    with pytest.raises(ValidationError, match="unknown platform schema"):
+        model.model_validate({**block, "schema": f"{key}::2.1"})
 
 
-def test_cron_schedule_joins_a_scheduling_block_that_has_no_schedule() -> None:
-    config = SplunkConfig.model_validate({**LEGACY_SPLUNK, "scheduling": {"lookback": "2h"}})
-    assert config.scheduling is not None and config.scheduling.schedule is not None
-    assert config.scheduling.schedule.cron == "0 * * * *"
-    assert config.scheduling.timerange is not None
+def _corpus_blocks() -> dict[str, dict]:
+    import yaml
+    from tests.corpus_support import TIDE_CORPUS_ROOT
+
+    blocks: dict[str, dict] = {}
+    for path in sorted((TIDE_CORPUS_ROOT / "Objects" / "Detection Rules").glob("*.yaml")):
+        body = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for platform, block in (body.get("configurations") or {}).items():
+            blocks.setdefault(platform, block)
+    return blocks
+
+
+_CORPUS_BLOCKS = _corpus_blocks()
