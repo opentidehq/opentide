@@ -16,6 +16,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`cbc_unknown_field`](#cbc_unknown_field) | A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field. |
 | [`chaining_relation_unknown`](#chaining_relation_unknown) | A threat's chaining relation is not a known relation. |
 | [`changed_diff`](#changed_diff) | `share push --changed` could not calculate which objects changed. |
 | [`changed_on_pull_request`](#changed_on_pull_request) | `share push --changed` does not run on a pull request. |
@@ -276,6 +277,22 @@ assets = ["domain-controller"]   # declared as domain-controllers
 ### How to fix
 
 Correct the asset name, or declare the asset under `[[assets]]`.
+
+## cbc_unknown_field
+
+A field in a Carbon Black Cloud query is one or two letters away from a Carbon Black process search field, and is not that field.
+
+Severity: warning. Reported by the query checks and the language server on `configurations.carbon_black_cloud.query`, and on hunts whose `system` is `carbon_black_cloud`, at the field name, with the field it is close to as the suggestion. The field list is the engine's Carbon Black process search catalog. A field far from every catalog field is not reported, because the catalog may not list it.
+
+### Example
+
+```text illustrative
+`process_nmae` is not a Carbon Black Cloud process search field; did you mean `process_name`?
+```
+
+### How to fix
+
+Use the suggested field (`process_name:cmd.exe`). If the field is right and Carbon Black accepts it, `opentide validate query --live` confirms it against the tenant; report the missing field to the language server's catalog (`catalogs/carbon_black/fields.toml`).
 
 ## chaining_relation_unknown
 

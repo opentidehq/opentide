@@ -23,6 +23,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - Quick fixes can be applied all at once.
   - Diagnostics link to their section of the [diagnostics reference](docs/cli/diagnostics.md).
   - `initialize` names opentide as the host (`capabilities.experimental.opentide.host`), so an editor can tell it from the `opentide-lsp` binary ([language-server#172](https://github.com/opentidehq/language-server/issues/172)).
+- **Carbon Black Cloud field checks** ([language-server#162](https://github.com/opentidehq/language-server/issues/162)).
+  - `opentide validate` and the editor report `cbc_unknown_field` (warning) for a field in `configurations.carbon_black_cloud.query` that is one or two letters away from a Carbon Black process search field, and suggest it (`process_nmae` → `process_name`).
+  - In the editor, hover documents Carbon Black fields, and completion offers them instead of Elastic's ECS fields.
+  - Completion and hover also work with the cursor right after a query's last character, in every query language.
 
 ### Changed
 
