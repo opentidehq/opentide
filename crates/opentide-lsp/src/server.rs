@@ -28,6 +28,13 @@ struct Session {
     visibility: Option<String>,
     /// The client can watch files for the server (`didChangeWatchedFiles`).
     watch_files: bool,
+    /// The client pulls diagnostics (`textDocument/diagnostic`) and can be
+    /// told to pull again (`workspace/diagnostic/refresh`): the server then
+    /// publishes none. Otherwise it only publishes. Never both, or a client
+    /// such as VS Code shows every diagnostic twice (#185).
+    pull_diagnostics: bool,
+    /// The last id of a request the server sent the client.
+    sent_requests: std::cell::Cell<u64>,
     /// The workspace's object files on disk, each read and indexed once
     /// (#181). With a file watcher, a file is read again when it changes;
     /// without one, every request re-reads the files and re-indexes those
@@ -432,39 +439,47 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 .pointer("/capabilities/workspace/didChangeWatchedFiles/dynamicRegistration")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+            session.pull_diagnostics = params
+                .pointer("/capabilities/textDocument/diagnostic")
+                .is_some_and(Value::is_object)
+                && params
+                    .pointer("/capabilities/workspace/diagnostics/refreshSupport")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
             reload_visibility(session);
-            jsonrpc::write_message(
-                writer,
-                &jsonrpc::success(
-                    id,
-                    json!({
-                        "capabilities": {
-                            "textDocumentSync": 2,
-                            "hoverProvider": true,
-                            "completionProvider": { "resolveProvider": true, "triggerCharacters": ["|", " ", ":", ".", "(", ",", "`", "="] },
-                            "signatureHelpProvider": { "triggerCharacters": ["(", ",", "=", "`"] },
-                            "definitionProvider": true,
-                            "referencesProvider": true,
-                            "documentSymbolProvider": true,
-                            "workspaceSymbolProvider": true,
-                            "documentHighlightProvider": true,
-                            "codeActionProvider": true,
-                            "foldingRangeProvider": true,
-                            "selectionRangeProvider": true,
-                            "inlayHintProvider": true,
-                            "diagnosticProvider": { "interFileDependencies": true, "workspaceDiagnostics": false },
-                            "semanticTokensProvider": {
-                                "legend": {
-                                    "tokenTypes": opentide_highlight::LSP_TOKEN_TYPES,
-                                    "tokenModifiers": []
-                                },
-                                "full": true
-                            }
+            let mut result = json!({
+                "capabilities": {
+                    "textDocumentSync": 2,
+                    "hoverProvider": true,
+                    "completionProvider": { "resolveProvider": true, "triggerCharacters": ["|", " ", ":", ".", "(", ",", "`", "="] },
+                    "signatureHelpProvider": { "triggerCharacters": ["(", ",", "=", "`"] },
+                    "definitionProvider": true,
+                    "referencesProvider": true,
+                    "documentSymbolProvider": true,
+                    "workspaceSymbolProvider": true,
+                    "documentHighlightProvider": true,
+                    "codeActionProvider": true,
+                    "foldingRangeProvider": true,
+                    "selectionRangeProvider": true,
+                    "inlayHintProvider": true,
+                    "diagnosticProvider": { "interFileDependencies": true, "workspaceDiagnostics": false },
+                    "semanticTokensProvider": {
+                        "legend": {
+                            "tokenTypes": opentide_highlight::LSP_TOKEN_TYPES,
+                            "tokenModifiers": []
                         },
-                        "serverInfo": { "name": "opentide-lsp", "version": env!("CARGO_PKG_VERSION") }
-                    }),
-                ),
-            )?;
+                        "full": true
+                    }
+                },
+                "serverInfo": { "name": "opentide-lsp", "version": env!("CARGO_PKG_VERSION") }
+            });
+            if !session.pull_diagnostics {
+                // Push only: a client given both shows each diagnostic twice.
+                if let Some(capabilities) = result["capabilities"].as_object_mut() {
+                    capabilities.remove("diagnosticProvider");
+                }
+            }
+            jsonrpc::write_message(writer, &jsonrpc::success(id, result))?;
         }
         "initialized" => {
             // Hear about visibility.toml edits made outside the editor.
@@ -535,13 +550,15 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                     }
                     session.invalidate_index();
                 }
-                jsonrpc::write_message(
-                    writer,
-                    &jsonrpc::notify(
-                        "textDocument/publishDiagnostics",
-                        json!({ "uri": uri, "diagnostics": [] }),
-                    ),
-                )?;
+                if !session.pull_diagnostics {
+                    jsonrpc::write_message(
+                        writer,
+                        &jsonrpc::notify(
+                            "textDocument/publishDiagnostics",
+                            json!({ "uri": uri, "diagnostics": [] }),
+                        ),
+                    )?;
+                }
                 if is_visibility(uri) {
                     // Back to the file on disk (unsaved edits are dropped).
                     session.visibility = None;
@@ -800,6 +817,19 @@ fn reload_visibility(session: &mut Session) {
 }
 
 fn republish_all(session: &Session, writer: &mut impl Write) -> Result<()> {
+    if session.pull_diagnostics {
+        // The client pulls: ask it to pull every open document again.
+        let id = session.sent_requests.get() + 1;
+        session.sent_requests.set(id);
+        return jsonrpc::write_message(
+            writer,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": format!("opentide-refresh-{id}"),
+                "method": "workspace/diagnostic/refresh",
+            }),
+        );
+    }
     let mut uris: Vec<&String> = session.docs.keys().collect();
     uris.sort();
     for uri in uris {
@@ -888,6 +918,9 @@ fn offset_at(text: &str, line: Option<&Value>, character: Option<&Value>) -> usi
 }
 
 fn publish_diagnostics(session: &Session, writer: &mut impl Write, uri: &str) -> Result<()> {
+    if session.pull_diagnostics {
+        return Ok(());
+    }
     let Some((language, text)) = session.docs.get(uri) else {
         return Ok(());
     };
@@ -900,28 +933,7 @@ fn publish_diagnostics(session: &Session, writer: &mut impl Write, uri: &str) ->
             text: text.clone(),
         },
     );
-    let diags: Vec<Value> = response
-        .diagnostics
-        .iter()
-        .map(|d| {
-            json!({
-                "range": range_json(d.range),
-                "severity": match d.severity {
-                    opentide_core::Severity::Error => 1,
-                    opentide_core::Severity::Warning => 2,
-                    opentide_core::Severity::Information => 3,
-                    opentide_core::Severity::Hint => 4,
-                },
-                "code": d.code,
-                "source": "opentide",
-                "message": d.message,
-                "data": {
-                    "field_path": d.field_path,
-                    "suggestion": d.suggestion
-                }
-            })
-        })
-        .collect();
+    let diags: Vec<Value> = response.diagnostics.iter().map(diagnostic_json).collect();
     jsonrpc::write_message(
         writer,
         &jsonrpc::notify(
@@ -930,6 +942,26 @@ fn publish_diagnostics(session: &Session, writer: &mut impl Write, uri: &str) ->
         ),
     )?;
     Ok(())
+}
+
+/// One engine diagnostic as LSP sends it, pushed or pulled alike.
+fn diagnostic_json(d: &opentide_core::Diagnostic) -> Value {
+    json!({
+        "range": range_json(d.range),
+        "severity": match d.severity {
+            opentide_core::Severity::Error => 1,
+            opentide_core::Severity::Warning => 2,
+            opentide_core::Severity::Information => 3,
+            opentide_core::Severity::Hint => 4,
+        },
+        "code": d.code,
+        "source": "opentide",
+        "message": d.message,
+        "data": {
+            "field_path": d.field_path,
+            "suggestion": d.suggestion
+        }
+    })
 }
 
 fn handle_hover(session: &Session, params: &Value) -> Value {
@@ -1218,18 +1250,7 @@ fn handle_pull_diagnostics(session: &Session, params: &Value) -> Value {
     );
     json!({
         "kind": "full",
-        "items": response.diagnostics.iter().map(|d| json!({
-            "range": range_json(d.range),
-            "severity": match d.severity {
-                opentide_core::Severity::Error => 1,
-                opentide_core::Severity::Warning => 2,
-                opentide_core::Severity::Information => 3,
-                opentide_core::Severity::Hint => 4,
-            },
-            "code": d.code,
-            "source": "opentide",
-            "message": d.message,
-        })).collect::<Vec<_>>()
+        "items": response.diagnostics.iter().map(diagnostic_json).collect::<Vec<_>>()
     })
 }
 
@@ -1743,6 +1764,12 @@ fn path_to_uri(path: &str) -> String {
 }
 
 fn uuid_at(text: &str, pos: Position) -> Option<String> {
+    // A column past the end of its line is on no UUID (the converter would
+    // clamp it to the line's end).
+    let line = text.lines().nth(pos.line as usize)?;
+    if pos.character as usize > utf16_len(line) {
+        return None;
+    }
     // The cursor's byte offset: `pos.character` counts UTF-16 units.
     let offset = position_to_offset(text, pos);
     uuid_pattern()

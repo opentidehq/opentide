@@ -36,6 +36,8 @@ The analysis crate sees a `MemoryWorkspace` built from open documents plus YAML 
 
 Current providers: incremental sync (`textDocumentSync: 2`), hover, completion (resolve, trigger characters), signature help, definition, references, document symbol, workspace symbol, document highlight, code action, folding, selection range, inlay hints, pull diagnostics, semantic tokens (full).
 
+Diagnostics are pulled or pushed, never both (a client such as VS Code keeps the two apart and would show each twice). A client that declares `textDocument.diagnostic` and `workspace.diagnostics.refreshSupport` gets `diagnosticProvider` and no `publishDiagnostics`; where another file changes what a document says (`visibility.toml`, a configuration file, an object on disk), the server sends `workspace/diagnostic/refresh` instead of republishing. Every other client gets push only, and `diagnosticProvider` is not advertised (the request is still answered). Pushed and pulled items are built by one function, `diagnostic_json`.
+
 Custom methods:
 
 - `opentide/analyze`

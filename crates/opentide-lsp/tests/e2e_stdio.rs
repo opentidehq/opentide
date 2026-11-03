@@ -1604,3 +1604,73 @@ fn resolving_a_completion_item_keeps_its_edit() {
     }
     assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
 }
+
+/// #185 P0.8: a client that pulls diagnostics and supports refresh gets
+/// them only by pulling, with a refresh request when another file changes
+/// what they say; any other client gets them only pushed. Never both.
+#[test]
+fn diagnostics_are_either_pulled_or_pushed_never_both() {
+    let uri = "file:///q.kql";
+    let text = "SecurityEvent | wher EventID == 4688";
+    let pull_capabilities = json!({
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": { "diagnostics": { "refreshSupport": true } }
+    });
+
+    let mut lsp = Lsp::spawn();
+    let init = lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": pull_capabilities }),
+    );
+    assert!(
+        init["result"]["capabilities"]["diagnosticProvider"].is_object(),
+        "{init}"
+    );
+    lsp.notify("initialized", json!({}));
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "kql", "version": 1, "text": text } }),
+    );
+    // Nothing is pushed: the next frame is the pull's answer.
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": 50, "method": "textDocument/diagnostic", "params": { "textDocument": { "uri": uri } } }));
+    let pulled = lsp.read();
+    assert_eq!(pulled["id"], 50, "nothing pushed before the pull: {pulled}");
+    let items = pulled["result"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "{pulled}");
+    assert!(
+        items[0].get("data").is_some(),
+        "pulled items carry data: {pulled}"
+    );
+    // visibility.toml changes what every document may say: ask for a pull.
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": "file:///w/.opentide/configurations/visibility.toml", "languageId": "toml", "version": 1, "text": "" } }),
+    );
+    let refresh = lsp.read();
+    assert_eq!(
+        refresh["method"], "workspace/diagnostic/refresh",
+        "{refresh}"
+    );
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+
+    let mut lsp = Lsp::spawn();
+    let init = lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    assert!(
+        init["result"]["capabilities"]
+            .get("diagnosticProvider")
+            .is_none(),
+        "{init}"
+    );
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "kql", "version": 1, "text": text } }),
+    );
+    let pushed = lsp.read();
+    assert_eq!(
+        pushed["method"], "textDocument/publishDiagnostics",
+        "{pushed}"
+    );
+}
