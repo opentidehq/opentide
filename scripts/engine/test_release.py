@@ -145,6 +145,24 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for job in builds:
             self.assertNotIn("id-token", jobs[job], job)
 
+    def test_crates_and_npm_publish_only_once_the_published_assets_verified(self) -> None:
+        jobs = workflow_jobs()
+        verify_assets = jobs["verify-assets"]
+        self.assertIn("sha256sum", verify_assets)
+        self.assertIn("gh attestation verify", verify_assets)
+        # It runs for publish_only too, when the release job is skipped.
+        self.assertIn("inputs.publish_only && needs.release.result == 'skipped'", verify_assets)
+        for job in ["crates", "npm"]:
+            needs = re.search(r"^    needs: \[(.*)\]$", jobs[job], re.M)
+            self.assertIsNotNone(needs, job)
+            self.assertIn("verify-assets", needs.group(1).split(", "), job)
+        # crates runs under always() for publish_only: it must ask for the check itself.
+        self.assertIn("needs.verify-assets.result == 'success'", jobs["crates"])
+        # npm keeps the implicit success(): every job it needs succeeded.
+        self.assertNotIn("always()", jobs["npm"])
+        # The release job no longer checks: verify-assets does, for both paths.
+        self.assertNotIn("gh attestation verify", jobs["release"])
+
 
 if __name__ == "__main__":
     unittest.main()

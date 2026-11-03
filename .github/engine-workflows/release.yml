@@ -4,7 +4,8 @@ name: Release
 # releases the version in Cargo.toml and creates its tag with the GitHub
 # Release. "Run workflow" with publish_only resumes crates.io publishing for a
 # version whose GitHub Release already exists: it builds and releases nothing,
-# and publishes only the crates crates.io does not have yet.
+# checks the published assets as a release does, and publishes only the crates
+# crates.io does not have yet.
 on:
   push:
     tags:
@@ -286,8 +287,21 @@ jobs:
             --title "opentide-lsp ${TAG}" \
             --notes-file notes.md \
             || gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
-      # What a consumer downloads checks out: the sums, and the highlights zip's
-      # attestation (#196).
+
+  # What a consumer downloads checks out: the sums, and the highlights zip's
+  # attestation (#196). It runs after the release, and on its own for
+  # publish_only, which resumes a release whose check may have failed: crates
+  # and npm publish only once it passed.
+  verify-assets:
+    needs: [verify, release]
+    if: ${{ always() && needs.verify.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
       - name: verify the published assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -298,9 +312,10 @@ jobs:
           (cd published && sha256sum --check --strict SHA256SUMS)
           gh attestation verify "published/highlights-${TAG}.zip" --repo "${GITHUB_REPOSITORY}"
 
-  # crates.io is permanent: publish only once the GitHub Release exists. The
-  # crates go up in dependency order, each pinned to this version; a crate
-  # already published is skipped, so a re-run resumes. crates.io rate-limits
+  # crates.io is permanent: publish only once the GitHub Release exists and its
+  # assets verified (verify-assets). The crates go up in dependency order, each
+  # pinned to this version; a crate already published is skipped, so a re-run
+  # resumes. crates.io rate-limits
   # new crates (one every ten minutes after the first few), which only the
   # first release meets.
   #
@@ -310,9 +325,10 @@ jobs:
   # the workflow's OIDC identity instead of the token. The token then only
   # publishes a crate that does not exist yet, which crates.io requires.
   crates:
-    needs: [verify, release]
-    # After the release, or on its own for publish_only (the release job is skipped then).
-    if: ${{ always() && needs.verify.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
+    needs: [verify, release, verify-assets]
+    # After the release, or on its own for publish_only (the release job is
+    # skipped then); either way only once the published assets verified.
+    if: ${{ always() && needs.verify.result == 'success' && needs.verify-assets.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -362,7 +378,7 @@ jobs:
   # trusted publisher; until then it is skipped. A version already on npm is
   # skipped, so a re-run resumes.
   npm:
-    needs: [verify, release]
+    needs: [verify, release, verify-assets]
     if: vars.NPM_PUBLISH == 'true'
     runs-on: ubuntu-latest
     permissions:

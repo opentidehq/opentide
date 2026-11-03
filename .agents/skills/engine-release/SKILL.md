@@ -36,8 +36,9 @@ Run **Release** on `main` (Actions → Release → Run workflow, or `workflow_di
 2. `native` (8 targets), `wasm`, `highlights`.
 3. `assets`: the licence files (`cargo-about`) and `SHA256SUMS` for every asset (`release.py sums dist`), with no OIDC token.
 4. `attest`: each asset's build provenance (`actions/attest-build-provenance`). It downloads the assets and runs the action, nothing else: crates.io and npm trust `release.yml` as a whole, so an OIDC token minted in any of its jobs can publish, and only `attest`, `crates` and `npm` may mint one (`scripts/test_release.py` checks).
-5. `release`: opens the GitHub Release with the changelog section, creating the tag, then downloads the assets again and checks `sha256sum -c` and `gh attestation verify` on the highlights zip.
-6. `crates`: publishes in dependency order. A re-run resumes past crates already published.
+5. `release`: opens the GitHub Release with the changelog section, creating the tag.
+6. `verify-assets`: downloads the published assets and checks `sha256sum -c` and `gh attestation verify` on the highlights zip. It runs for `publish_only` too, so a release whose check failed is not resumed past it.
+7. `crates` and `npm`: only once `verify-assets` passed. `crates` publishes in dependency order; a re-run resumes past crates already published.
 
 Watch every job to the end, `crates` included. A green `release` with a red `crates` is a release opentide cannot use.
 
