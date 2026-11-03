@@ -653,6 +653,9 @@ def engine_codes() -> Sequence[str]:
         return ()
 
 
-def serve_stdio() -> None:
-    """Serve the language server protocol on stdin and stdout until the client exits."""
-    engine().serve_stdio()
+def serve_stdio() -> bool:
+    """Serve the language server protocol on stdin and stdout until the client exits.
+
+    Whether the client sent `shutdown` before `exit` (or before closing stdin).
+    """
+    return bool(engine().serve_stdio())

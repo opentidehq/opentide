@@ -122,8 +122,9 @@ def test_an_editor_session_from_initialize_to_exit(tmp_path: Path, flags: tuple[
 
 
 def test_closing_stdin_ends_the_server() -> None:
+    """Without `shutdown` first, LSP has the server exit with 1."""
     process = subprocess.run(_server(), input=b"", capture_output=True, timeout=30)
-    assert process.returncode == 0
+    assert process.returncode == 1
     assert process.stdout == b""
 
 

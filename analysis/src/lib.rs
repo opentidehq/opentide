@@ -377,9 +377,11 @@ fn language_for_path(path: &str) -> Option<&'static str> {
 /// Serve the language server protocol on this process's stdin and stdout until
 /// the client exits or closes stdin. Nothing else may write to stdout
 /// meanwhile. Runs without the GIL, so other Python threads keep running.
+/// Returns whether the client shut the server down before it exited: LSP has
+/// the process exit with 0 if so and 1 if not.
 #[pyfunction]
-fn serve_stdio(py: Python<'_>) -> PyResult<()> {
-    py.detach(opentide_lsp::run_stdio)
+fn serve_stdio(py: Python<'_>) -> PyResult<bool> {
+    py.detach(opentide_lsp::run_stdio_status)
         .map_err(|err| PyRuntimeError::new_err(format!("{err:#}")))
 }
 
