@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-03
+
+Minor release. Sysdig Secure and Falco become the ninth platform, with Falco conditions checked offline. Migrating CoreTIDE content is not a supported path, and what suggested otherwise is removed: `global.toml`, `schema.toml` and `systems/` fail every command, and the splunk::2.x keys, a rule's `meta:` and an objective's root `composition` are unknown keys. Rule pages show each platform block's own status and severity, one slow query no longer marks a tenant unreachable, and the generated GitLab pipeline is built as data. A minor because it changes what input is accepted, removes `migrate objects` and `export playbook-map`, and changes the generated pipelines: run `opentide validate --strict`, which names each retired file and key, and re-run `opentide setup ci <provider> --yes`.
+
 ### Added
 
 - **`opentide setup ci --lint-changed` gates lint on the object files each run changed.** The generated pipelines gated on `opentide lint --strict` over every file, which no inherited catalogue passes on its first day (in one migration, 428 objects without `author` and 132 query style warnings). With `--lint-changed` the validate job runs `opentide lint --strict --changed`, over the diff the run's deploy reads, and checks out full history (and installs `git` on GitLab); `opentide validate --strict` still checks every file. `--lint-all`, the default, keeps the current gate. See [setup ci](docs/cli/setup.md).
@@ -80,6 +84,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **`opentide export playbook-map` is removed**, with the `openpyxl` dependency it alone used. It read root `status`, `title`, `meta.author` and `tags.playbook` from rules, fields `rule::1.0` does not have, so it exported nothing.
 - **CoreTIDE names leave the Python API**: `opentide.platforms.plugins.DeployTide` (now `EnabledPlatforms`) and its `PlatformsRegistry`, `PluginTide`, `DeployEngine`, `DeployMDR`, `ValidateQuery` and `PluginEnginesLoader` aliases; `opentide.deployment.TideRepo` (use `GitRepository`); `opentide.deployment.DetectionSystems` (use `DetectionPlatforms`); `opentide.core.errors.TideErrors` (use `Errors`). `opentide.platforms.registry.PlatformsRegistry`, the registry behind `Opentide.Platforms`, is unchanged. `[debug] proxy_enabled` in `deployment.toml`, kept as "ignored" so a CoreTIDE file would load, is an unknown key, as `[proxy]` already is. The bundled authoring skills no longer mention `Schemas/Templates`, `Configurations/systems` or `mdr::2.1`.
 
+### Install
+
+```bash
+pip install opentide==0.21.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.20.1] — 2026-11-03
 
@@ -1493,7 +1504,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.20.1...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/opentidehq/opentide/releases/tag/v0.21.0
 [0.20.1]: https://github.com/opentidehq/opentide/releases/tag/v0.20.1
 [0.20.0]: https://github.com/opentidehq/opentide/releases/tag/v0.20.0
 [0.19.0]: https://github.com/opentidehq/opentide/releases/tag/v0.19.0

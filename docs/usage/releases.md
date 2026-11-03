@@ -7,6 +7,47 @@ description: Public package versions of opentide on PyPI.
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.21.0 — 3 November 2026
+
+Minor release. Sysdig Secure and Falco become the ninth platform. Migrating CoreTIDE content is not a supported path, and the files, keys and commands that suggested otherwise are removed. Run `opentide validate --strict` after upgrading: it names each retired file and key and what replaces it. Then re-run `opentide setup ci <provider> --yes` to pick up the pipeline fixes.
+
+**Install**
+
+```bash
+pip install opentide==0.21.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **Sysdig Secure and Falco, the ninth platform** ([#143](https://github.com/opentidehq/opentide/issues/143)). A `configurations.sysdig` block is a Falco rule, or a tuning of an existing one. Deploy goes through the Sysdig Secure runtime API, and Falco conditions are checked offline by `validate`, `lint`, the editor and MCP. `opentide setup --sysdig` enables it.
+- **CoreTIDE layouts are retired.**
+  - `global.toml`, `schema.toml` and `systems/` under `.opentide/configurations/` fail every command (`retired_configuration_file`).
+  - A platform file is identified by its file name.
+  - The splunk::2.x keys, a rule's `meta:` and an objective's root `composition` are unknown keys.
+  - A platform block's `schema` must be `platform::<platform>::1.0`.
+  - `migrate objects` and `export playbook-map` are removed.
+- **Rule pages, the index and MCP show each platform block's own status and severity**, not `STAGING`/`Informational` defaults. Promotion rewrites only `configurations.<platform>.status` and keeps line endings.
+- **One slow query no longer marks a tenant unreachable** in `validate query --live`. `--check-timeout` bounds each check.
+- **Generated pipelines.**
+  - `lint --changed`, and `setup ci --lint-changed` to gate lint on the files each run changes.
+  - `[skip deploy]` and the `skip-deploy` label.
+  - GitLab write-backs over SSH or `OPENTIDE_PUSH_URL`.
+  - One GitLab Code Quality report, and no failure on GitLab Runner 18.9.
+  - The rendered docs are kept as an artifact.
+  - One `OPENTIDE_VERSION` pin.
+- **The deploy loaders refuse every key `validate` refuses.**
+- **The engine is [language-server 0.9.1](https://github.com/opentidehq/language-server/releases/tag/v0.9.1)**, from crates.io: the rebuilt server host, configuration files checked in the editor, Carbon Black field checks and the Falco language.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0210--2026-11-03) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.21.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.21.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.20.1 — 3 November 2026
 
 Patch release. A `visibility.toml` log source is one dataset, named by its `name`, and can declare its columns; the query checks ([language-server 0.7.1](https://github.com/opentidehq/language-server/releases/tag/v0.7.1)) read them. A patch by maintainer decision: the 0.20.0 dataset lists were a defect of `visibility::1.0`, shipped the same day, and are corrected in place. If your `visibility.toml` uses the 0.20.0 lists (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), rewrite it with one `[[logsources]]` per table, sourcetype or index pattern, named after it, and update the signals' `data.logsources` references ([Upgrading from 0.20.0](./configuration.md#upgrading-from-0200)). Everything else needs nothing.
