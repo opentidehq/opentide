@@ -2,9 +2,20 @@
 
 The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.
 
-Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene` (never `sql`).
+Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene` (never `sql`), and `opentide-config`.
 
 Semantic tokens come from the server. TextMate grammars must be **copied from the language-server highlight zip**, never hand-authored.
+
+The Tide grammar (`tide.tmLanguage.json`, `source.opentide-yaml`) marks the queries whose path fixes their language as embedded regions of that language's grammar (#171): `configurations.sentinel.query` and `configurations.defender_for_endpoint.query` are `meta.embedded.block.kql`, `configurations.splunk.query` (and the legacy `search`) `meta.embedded.block.spl`, `configurations.carbon_black_cloud.query` `meta.embedded.block.lucene`, and `configurations.sysdig.condition` `meta.embedded.block.falco`, for a block scalar (`query: |`) or a value on the key's line. Comment toggling and bracket matching inside them follow the query language. Elastic queries get no region: their language follows the block's `type` and `language`, which a grammar cannot read, so semantic tokens colour them. An editor that maps regions to languages copies `generated/package-contributions.json` from the zip: its `embeddedLanguages` maps each region to the language id.
+
+## Configuration TOML
+
+`.opentide/configurations/**/*.toml` is `opentide-config`, whatever language id the editor sends. Any other `.toml` (`Cargo.toml`, `pyproject.toml`) is not read.
+
+- **opentide checks it.** The findings are opentide's own (`configuration_text_issues`, the check `opentide validate` runs), placed on the keys they name. Only `opentide lsp start` has them. `opentide-lsp` on its own has no checker, so it reports nothing for these files and never guesses. Hover and completion come from the schemas `opentide lsp start` hands the server, so they need it too. See [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml).
+- **The editor's TOML grammar highlights it.** The server sends no semantic tokens for `opentide-config`, and there is no opentide TOML grammar.
+- **Keep generic TOML language servers off `.opentide/configurations/**`** (taplo, Even Better TOML, tombi), so a file is not reported twice. Give the glob its own language (`opentide-config`), as the samples do.
+- Editing one configuration file re-checks the others that are open: a status added to `deployment.toml` is one `sharing.toml` may name. `visibility.toml` still declares datasets live, and is checked like the other files.
 
 ## Helix
 
@@ -22,30 +33,49 @@ See `editors/zed/opentide.json`.
 
 Lives in **opentidehq/vscode-extension** (other repository, #17). MIT client, EUPL engine notices.
 
-Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern.
+Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern.
 
 `esql` is also the id of Elastic's own ES|QL extension. The ids are the shared vocabulary, so the opentide extension registers `esql` too, never a second id for the same language. Its TextMate grammar uses the scope `source.opentide.esql`, not Elastic's `source.esql`, so the two grammars never collide. The server's semantic tokens are authoritative for colour either way. The other three Elastic ids (`eql`, `kuery`, `lucene`) have no prior VS Code owner.
 
 ## Structure providers
 
 `initialize` advertises these providers. The behavior below is
-`crates/opentide-lsp/src/server.rs`.
+`crates/opentide-lsp/src/handlers.rs`; which parts a client gets follows its
+capabilities ([skills/lsp-host](../skills/lsp-host/SKILL.md#dispatch-and-capabilities)).
 
 | Method | Behavior |
 | --- | --- |
-| `textDocument/documentSymbol` | Tide YAML with a `name`: one symbol, the name string, kind Class (`5`), `detail` = `metadata.uuid`, range = the first `name:` key. Raw query files have none. |
-| `workspace/symbol` | Indexed Tide objects whose name, UUID, or schema family (`rule`, `objective`, `threat`) contains the query, ignoring case. Kind Class (`5`), `containerName` = the family. Range is the first occurrence of the name in the file's open text, or `0:0`–`0:1` when the file is not open. |
+| `textDocument/documentSymbol` | Tide YAML: a tree. The object (kind Class, `5`, named by `name`, `detail` = `metadata.uuid`) holds each top-level section (Namespace, `3`); `configurations` holds each platform block (Object, `19`), and a platform block or `response` holds each query (String, `15`, `detail` = its language). Raw query files list the engine's symbols. |
+| `workspace/symbol` | Indexed Tide objects of every root whose name, UUID, or schema family (`rule`, `objective`, `threat`) contains the query, ignoring case. Kind Class (`5`), `containerName` = the family. Range is the first occurrence of the name in the file. |
 | `textDocument/documentHighlight` | Every occurrence of the UUID under the cursor in that file (kind Text, `1`). Empty when the cursor is not on a UUID. |
-| `textDocument/inlayHint` | Tide YAML only. After each UUID that matches an indexed object, label `{family} {name}` (kind Type, `1`). The document's own `metadata.uuid` is skipped. Only hints on the requested lines are returned. |
+| `textDocument/inlayHint` | Tide YAML only. After each UUID that matches an indexed object, a label part `{family} {name}` (kind Type, `1`) whose `location` is the object's UUID in its file: Ctrl-click opens it. The document's own `metadata.uuid` is skipped. Only hints on the requested lines are returned. |
+| `textDocument/documentLink` | Tide YAML only. Each ATT&CK technique (`T1059`, `T1059.001`) or tactic (`TA0002`) id links to its attack.mitre.org page; each UUID of another indexed object links to that object's file. |
+| `textDocument/codeLens` | Tide YAML only. On the object's `metadata.uuid`: `N rules use this objective` (counted by family, from the index), or `No object uses this objective` for an objective or threat nothing references. The command is `opentide.showReferences` with `[uri, position, locations]`; a client registers that command to show the locations (VS Code: `editor.action.showReferences` after converting the arguments). |
 | `textDocument/foldingRange` | For each line followed by more-indented lines, one `region` from that line to the last of them. Only spaces count as indent, and blank lines are skipped. A region from the first line to the last line is omitted. |
 | `textDocument/selectionRange` | Inner range is the whole cursor line. Parent runs from the nearest earlier less-indented line through the last more-indented line after it. |
-| `textDocument/codeAction` | `quickfix` actions for diagnostics on the requested lines, of two kinds (below). |
-| `textDocument/diagnostic` | Pull diagnostics (`interFileDependencies: true`, `workspaceDiagnostics: false`). Items carry `range`, `severity`, `code`, `message` and `source: "opentide"`. Severity map: error 1, warning 2, information 3, hint 4. |
+| `textDocument/codeAction` | `quickfix` actions (below) for the diagnostics the client sends in `context.diagnostics`, read back from their `data`, or for those on the requested lines when it sends none; each names its diagnostic and is `isPreferred`. `source.fixAll.opentide`, only when `context.only` asks for it (`source`, `source.fixAll`): every suggestion of the document as one edit. |
+| `textDocument/diagnostic` | Pull diagnostics (`interFileDependencies: true`, `workspaceDiagnostics: true`), for a client that pulls; a report repeated with its `previousResultId` is `unchanged`. |
+| `workspace/diagnostic` | Every object file of every root that no editor has open, with its `duplicate_id`, `invalid_ref` and the rest. |
+
+Diagnostics carry `range`, `severity` (error 1, warning 2, information 3,
+hint 4), `code`, `message`, `source: "opentide"` and `data: { field_path,
+suggestion }`, pushed or pulled. A client that reads them also gets
+`codeDescription.href` (`https://opentide.org/docs/cli/diagnostics/#<code>`),
+the `Deprecated` tag on deprecation codes, the other file of a `duplicate_id`
+in `relatedInformation`, and the document `version` on a published set.
+
+`capabilities.experimental.opentide` says who runs the server: `{ host:
+{ name, version } | null, engine, catalog: "host" | "workspace" | "bundled",
+configurationChecks, configurationSchemas }`. `opentide lsp start` sets the
+host to `opentide`; the binary alone has none. `opentide-lsp --version --json`
+prints the same object without starting a session, so an extension can check
+a binary before it uses it. The object is stable for clients: a key is added in
+a minor release and never removed.
 
 Code actions:
 
 - **Apply a suggestion.** A diagnostic with a `suggestion` gets `Apply suggestion: {suggestion}`. The edit replaces the diagnostic's range with the suggestion string.
-- **Declare a dataset.** When the server has a workspace root, `kql_table_not_declared`, a `kql_unknown_table` whose message names `visibility.toml` (the Sentinel warning, and the Defender error once the workspace declares Defender tables), `spl_dataset_not_declared` and `elastic_dataset_not_declared` get `Add a [[logsources]] entry declaring '{name}' to visibility.toml`. The edit appends a new log source (`name` = the table, sourcetype or index pattern, an empty `description` to fill in, and `system`) to `.opentide/configurations/visibility.toml`, never edits an existing one, and creates the file when it is missing. The server reads that file live: [kql/columns.md](kql/columns.md).
+- **Declare a dataset.** When the document has a workspace root, `kql_table_not_declared`, a `kql_unknown_table` whose message names `visibility.toml` (the Sentinel warning, and the Defender error once the workspace declares Defender tables), `spl_dataset_not_declared` and `elastic_dataset_not_declared` get `Add a [[logsources]] entry declaring '{name}' to visibility.toml`. The edit appends a new log source (`name` = the table, sourcetype or index pattern, an empty `description` to fill in, and `system`) to the root's `.opentide/configurations/visibility.toml`, never edits an existing one, and creates the file when it is missing, for a client that can create files (`workspaceEdit.documentChanges` and `resourceOperations: ["create"]`); other clients get no action while the file is missing. The server reads that file live: [kql/columns.md](kql/columns.md).
 
 Suggestions the KQL, SPL and Tide engines attach:
 

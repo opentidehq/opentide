@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "MispIntegration": {
+      "additionalProperties": false,
+      "description": "One `[[misp]]` block: a MISP instance objects are shared to.",
+      "properties": {
+        "name": {
+          "description": "Block name: 1 to 64 lowercase letters, digits, hyphens or underscores. A later layer restating it overrides this block key by key.",
+          "pattern": "^[a-z0-9_-]{1,64}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "enabled": {
+          "default": false,
+          "description": "Share to this instance.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "url": {
+          "description": "Base URL of the MISP instance (http or https).",
+          "format": "uri",
+          "minLength": 1,
+          "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://[^/?#\\s]+",
+          "title": "Url",
+          "type": "string"
+        },
+        "api_key": {
+          "description": "MISP automation key. Write a ${NAME} reference to an environment variable; a literal key is reported as a warning.",
+          "minLength": 1,
+          "title": "Api Key",
+          "type": "string"
+        },
+        "max_tlp": {
+          "description": "Highest tlp an object may carry and still be shared here. There is no default.",
+          "enum": [
+            "clear",
+            "green",
+            "amber",
+            "amber+strict",
+            "red"
+          ],
+          "title": "Max Tlp",
+          "type": "string"
+        },
+        "object_types": {
+          "default": [
+            "threat",
+            "objective",
+            "rule"
+          ],
+          "description": "Object families shared to this instance.",
+          "items": {
+            "enum": [
+              "threat",
+              "objective",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "title": "Object Types",
+          "type": "array"
+        },
+        "rule_statuses": {
+          "default": [
+            "PRODUCTION"
+          ],
+          "description": "Deployment statuses a rule must have to be shared. Names from deployment.toml.",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Rule Statuses",
+          "type": "array"
+        },
+        "organisation_uuid": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "UUID of the MISP organisation the events are created for. Omit to use the object's organisation.",
+          "title": "Organisation Uuid"
+        },
+        "publish": {
+          "default": false,
+          "description": "Publish events after writing them.",
+          "title": "Publish",
+          "type": "boolean"
+        },
+        "verify_ssl": {
+          "default": true,
+          "description": "Verify the instance's TLS certificate.",
+          "title": "Verify Ssl",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "url",
+        "api_key",
+        "max_tlp"
+      ],
+      "title": "sharing::misp::1.0",
+      "type": "object",
+      "x-opentide-schema-id": "sharing::misp::1.0"
+    }
+  },
+  "additionalProperties": {
+    "description": "Unknown connector: skipped with a warning.",
+    "items": {
+      "type": "object"
+    },
+    "type": "array"
+  },
+  "description": "Merged `sharing.toml`. Top-level keys are connector arrays; `[[misp]]` is the only one.",
+  "properties": {
+    "misp": {
+      "description": "MISP instances, one block each.",
+      "items": {
+        "$ref": "#/$defs/MispIntegration"
+      },
+      "title": "Misp",
+      "type": "array"
+    }
+  },
+  "title": "sharing.toml",
+  "type": "object"
+}

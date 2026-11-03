@@ -1,0 +1,1 @@
+device_os:WINDOWS (process_name:\\ArcSOC.exe (filemod_name:.ahk OR filemod_name:.aspx OR filemod_name:.au3 OR filemod_name:.bat OR filemod_name:.cmd OR filemod_name:.dll OR filemod_name:.exe OR filemod_name:.hta OR filemod_name:.js OR filemod_name:.ps1 OR filemod_name:.py OR filemod_name:.vbe OR filemod_name:.vbs OR filemod_name:.wsf))

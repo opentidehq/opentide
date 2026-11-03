@@ -280,20 +280,14 @@ fn faults_are_reported_where_they_are_written() {
 fn hover_and_completion_inside_the_injected_condition() {
     let host = MemoryWorkspace::default();
     let text = rule("read-sensitive-file-untrusted.yaml");
-    let (_, at) = position_of(&text, "proc_name_exists");
+    let (at, _) = position_of(&text, "proc_name_exists");
     let h = hover(&host, LanguageId::TideYaml, &text, at).unwrap();
     assert!(h.contains("Falco default rules"), "{h}");
-    let (_, at) = position_of(&text, "and not user_known_read_sensitive_files_activities");
-    let h = hover(
-        &host,
-        LanguageId::TideYaml,
-        &text,
-        Position::new(at.line, at.character + 9),
-    )
-    .unwrap();
+    let (at, _) = position_of(&text, "and not user_known_read_sensitive_files_activities");
+    let h = hover(&host, LanguageId::TideYaml, &text, at + 9).unwrap();
     assert!(h.contains("this block"), "{h}");
     assert!(h.contains("vault"), "{h}");
-    let (_, at) = position_of(&text, "fd.name startswith /etc/vault");
+    let (at, _) = position_of(&text, "fd.name startswith /etc/vault");
     let h = hover(&host, LanguageId::TideYaml, &text, at).unwrap();
     assert!(h.contains("CHARBUF") || h.contains("FSPATH"), "{h}");
 

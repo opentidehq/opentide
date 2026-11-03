@@ -19,6 +19,7 @@ on:
       - "catalogs/tide/**"
       - "crates/opentide-highlight/**"
       - "crates/opentide-tide/**"
+      - "crates/opentide-core/src/lib.rs"
       - "scripts/sync_opentide_schemas.py"
       - "scripts/pydantic_object_issues.py"
       - ".github/workflows/opentide-canary.yml"
@@ -71,6 +72,10 @@ jobs:
             exit "$code"
           fi
       - name: Regenerate them, and test against them
+        # OPENTIDE_DIAGNOSTICS_DOCS: every code the server links to has its
+        # section in opentide's diagnostics reference (#185 P2.3).
+        env:
+          OPENTIDE_DIAGNOSTICS_DOCS: ${{ github.workspace }}/opentide-src/docs/cli/diagnostics.md
         run: |
           python scripts/sync_opentide_schemas.py
           git diff --stat

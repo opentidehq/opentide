@@ -46,6 +46,6 @@ CrowdStrike stays unsupported until its language is specified. SQL stays unsuppo
 
 ## Out of scope
 
-- Rewriting the server onto `tower-lsp` or `lsp-types`.
+- Rewriting the server onto `tower-lsp` or an async runtime.
 - Shipping Kusto.Language or a Splunk SDK in the binary. Oracles stay in CI.
 - Validating a platform whose language is unspecified. Return unsupported.

@@ -1,0 +1,491 @@
+# Carbon Black Cloud process search fields (#162), for the Carbon Black
+# dialect of opentide-lucene: hover, completion and `cbc_unknown_field`.
+#
+# Facts only, with descriptions written here. Field names and value types come
+# from what these sources send to or receive from Carbon Black Cloud's process
+# search; `source` says which:
+#   sdk      carbonblack/carbon-black-cloud-sdk-python (MIT, Broadcom) at
+#            fc0c2643f340af86e3b4ac39b800cce2c661f664: the recorded process
+#            search and observation responses in src/tests/unit/fixtures/.
+#   pysigma  7RedViolin/pySigma-backend-carbonblack (MIT) at
+#            24d4ee2a55f4fa736ef6fc46ddaf33cb798bfe7f: the process search
+#            field mapping (cb_fieldmapping) and the values it writes
+#            (device_os, process_integrity_level).
+#
+# `list = true`: a process can hold several values (the field matches when one
+# does). Whether a field is tokenized is not recorded: Carbon Black documents
+# that only on developer.carbonblack.com, not reachable when this file was
+# written, so the upper-case regexp hint stays on every field.
+
+[[field]]
+name = "process_name"
+type = "string"
+description = "File path of the process's main module."
+source = "sdk"
+
+[[field]]
+name = "process_cmdline"
+type = "string"
+list = true
+description = "Command line the process ran."
+source = "sdk"
+
+[[field]]
+name = "process_cmdline_length"
+type = "integer"
+list = true
+description = "Length of the process command line."
+source = "sdk"
+
+[[field]]
+name = "process_hash"
+type = "string"
+list = true
+description = "MD5 and SHA-256 hashes of the process's main module."
+source = "sdk"
+
+[[field]]
+name = "process_sha256"
+type = "string"
+description = "SHA-256 hash of the process's main module."
+source = "sdk"
+
+[[field]]
+name = "process_pid"
+type = "integer"
+list = true
+description = "Process id."
+source = "sdk"
+
+[[field]]
+name = "process_guid"
+type = "string"
+description = "Unique id of the process in Carbon Black."
+source = "sdk"
+
+[[field]]
+name = "process_username"
+type = "string"
+list = true
+description = "User the process runs as."
+source = "sdk"
+
+[[field]]
+name = "process_start_time"
+type = "datetime"
+description = "When the process started."
+source = "sdk"
+
+[[field]]
+name = "process_terminated"
+type = "boolean"
+description = "Whether the process has ended."
+values = ["true", "false"]
+source = "sdk"
+
+[[field]]
+name = "process_reputation"
+type = "string"
+description = "Reputation of the process's main module."
+source = "sdk"
+
+[[field]]
+name = "process_effective_reputation"
+type = "string"
+description = "Reputation Carbon Black applied to the process."
+source = "sdk"
+
+[[field]]
+name = "process_publisher_state"
+type = "string"
+list = true
+description = "Signature state of the process's main module."
+source = "sdk"
+
+[[field]]
+name = "process_integrity_level"
+type = "string"
+description = "Windows integrity level of the process."
+values = ["PROTECTED", "SYSTEM", "HIGH", "MEDIUM", "LOW"]
+source = "pysigma"
+
+[[field]]
+name = "process_original_filename"
+type = "string"
+description = "Original file name in the main module's version resource."
+source = "pysigma"
+
+[[field]]
+name = "process_product_name"
+type = "string"
+description = "Product name in the main module's version resource."
+source = "pysigma"
+
+[[field]]
+name = "process_company_name"
+type = "string"
+description = "Company name in the main module's version resource."
+source = "pysigma"
+
+[[field]]
+name = "process_file_description"
+type = "string"
+description = "File description in the main module's version resource."
+source = "pysigma"
+
+[[field]]
+name = "parent_name"
+type = "string"
+description = "File path of the parent process's main module."
+source = "sdk"
+
+[[field]]
+name = "parent_cmdline"
+type = "string"
+description = "Command line the parent process ran."
+source = "pysigma"
+
+[[field]]
+name = "parent_pid"
+type = "integer"
+description = "Parent process id."
+source = "sdk"
+
+[[field]]
+name = "parent_guid"
+type = "string"
+description = "Unique id of the parent process in Carbon Black."
+source = "sdk"
+
+[[field]]
+name = "parent_hash"
+type = "string"
+list = true
+description = "MD5 and SHA-256 hashes of the parent's main module."
+source = "sdk"
+
+[[field]]
+name = "parent_reputation"
+type = "string"
+description = "Reputation of the parent's main module."
+source = "sdk"
+
+[[field]]
+name = "parent_effective_reputation"
+type = "string"
+description = "Reputation Carbon Black applied to the parent."
+source = "sdk"
+
+[[field]]
+name = "parent_publisher_state"
+type = "string"
+list = true
+description = "Signature state of the parent's main module."
+source = "sdk"
+
+[[field]]
+name = "childproc_name"
+type = "string"
+description = "File path of a child process's main module."
+source = "sdk"
+
+[[field]]
+name = "childproc_cmdline"
+type = "string"
+description = "Command line a child process ran."
+source = "sdk"
+
+[[field]]
+name = "childproc_count"
+type = "integer"
+description = "Number of child processes the process started."
+source = "sdk"
+
+[[field]]
+name = "childproc_guid"
+type = "string"
+description = "Unique id of a child process."
+source = "sdk"
+
+[[field]]
+name = "childproc_hash"
+type = "string"
+list = true
+description = "Hashes of a child process's main module."
+source = "sdk"
+
+[[field]]
+name = "childproc_pid"
+type = "integer"
+description = "Process id of a child process."
+source = "sdk"
+
+[[field]]
+name = "childproc_reputation"
+type = "string"
+description = "Reputation of a child process's main module."
+source = "sdk"
+
+[[field]]
+name = "childproc_effective_reputation"
+type = "string"
+description = "Reputation Carbon Black applied to a child process."
+source = "sdk"
+
+[[field]]
+name = "crossproc_count"
+type = "integer"
+description = "Number of cross-process events."
+source = "sdk"
+
+[[field]]
+name = "modload_name"
+type = "string"
+description = "File path of a module the process loaded."
+source = "pysigma"
+
+[[field]]
+name = "modload_hash"
+type = "string"
+description = "Hash of a module the process loaded."
+source = "pysigma"
+
+[[field]]
+name = "modload_publisher"
+type = "string"
+description = "Publisher of a module the process loaded."
+source = "pysigma"
+
+[[field]]
+name = "modload_count"
+type = "integer"
+description = "Number of modules the process loaded."
+source = "sdk"
+
+[[field]]
+name = "filemod_name"
+type = "string"
+description = "File path of a file the process changed."
+source = "pysigma"
+
+[[field]]
+name = "filemod_hash"
+type = "string"
+description = "Hash of a file the process changed."
+source = "pysigma"
+
+[[field]]
+name = "filemod_count"
+type = "integer"
+description = "Number of file changes by the process."
+source = "sdk"
+
+[[field]]
+name = "regmod_name"
+type = "string"
+description = "Registry path the process changed."
+source = "pysigma"
+
+[[field]]
+name = "regmod_count"
+type = "integer"
+description = "Number of registry changes by the process."
+source = "sdk"
+
+[[field]]
+name = "scriptload_count"
+type = "integer"
+description = "Number of scripts the process loaded."
+source = "sdk"
+
+[[field]]
+name = "netconn_domain"
+type = "string"
+description = "Domain name of a network connection."
+source = "sdk"
+
+[[field]]
+name = "netconn_ipv4"
+type = "ipv4"
+description = "Remote IPv4 address of a network connection."
+source = "sdk"
+
+[[field]]
+name = "netconn_ipv6"
+type = "ipv6"
+description = "Remote IPv6 address of a network connection."
+source = "pysigma"
+
+[[field]]
+name = "netconn_port"
+type = "integer"
+description = "Remote port of a network connection."
+source = "sdk"
+
+[[field]]
+name = "netconn_local_ipv4"
+type = "ipv4"
+description = "Local IPv4 address of a network connection."
+source = "sdk"
+
+[[field]]
+name = "netconn_local_port"
+type = "integer"
+description = "Local port of a network connection."
+source = "sdk"
+
+[[field]]
+name = "netconn_protocol"
+type = "string"
+description = "Transport protocol of a network connection."
+source = "sdk"
+
+[[field]]
+name = "netconn_application_protocol"
+type = "string"
+description = "Application protocol of a network connection."
+source = "pysigma"
+
+[[field]]
+name = "netconn_location"
+type = "string"
+description = "Location of the remote end of a network connection."
+source = "sdk"
+
+[[field]]
+name = "netconn_inbound"
+type = "boolean"
+description = "Whether the network connection was inbound."
+values = ["true", "false"]
+source = "sdk"
+
+[[field]]
+name = "netconn_count"
+type = "integer"
+description = "Number of network connections by the process."
+source = "sdk"
+
+[[field]]
+name = "device_name"
+type = "string"
+description = "Name of the endpoint."
+source = "sdk"
+
+[[field]]
+name = "device_os"
+type = "string"
+description = "Operating system family of the endpoint."
+values = ["WINDOWS", "LINUX", "MAC"]
+source = "sdk"
+
+[[field]]
+name = "device_os_version"
+type = "string"
+description = "Operating system version of the endpoint."
+source = "sdk"
+
+[[field]]
+name = "device_id"
+type = "integer"
+description = "Id of the endpoint in Carbon Black."
+source = "sdk"
+
+[[field]]
+name = "device_group"
+type = "string"
+description = "Group the endpoint belongs to."
+source = "sdk"
+
+[[field]]
+name = "device_group_id"
+type = "integer"
+description = "Id of the endpoint's group."
+source = "sdk"
+
+[[field]]
+name = "device_policy"
+type = "string"
+description = "Policy applied to the endpoint."
+source = "sdk"
+
+[[field]]
+name = "device_policy_id"
+type = "integer"
+description = "Id of the endpoint's policy."
+source = "sdk"
+
+[[field]]
+name = "device_internal_ip"
+type = "ipv4"
+description = "Internal IP address of the endpoint."
+source = "sdk"
+
+[[field]]
+name = "device_external_ip"
+type = "ipv4"
+description = "External IP address of the endpoint."
+source = "sdk"
+
+[[field]]
+name = "device_location"
+type = "string"
+description = "Where the endpoint is, as Carbon Black reports it."
+source = "sdk"
+
+[[field]]
+name = "device_target_priority"
+type = "string"
+description = "Target priority of the endpoint."
+source = "sdk"
+
+[[field]]
+name = "device_timestamp"
+type = "datetime"
+description = "Time of the event on the endpoint."
+source = "sdk"
+
+[[field]]
+name = "event_type"
+type = "string"
+list = true
+description = "Types of event the process produced."
+source = "sdk"
+
+[[field]]
+name = "enriched_event_type"
+type = "string"
+list = true
+description = "Enriched event types the process produced."
+source = "sdk"
+
+[[field]]
+name = "sensor_action"
+type = "string"
+list = true
+description = "Actions the sensor took on the process."
+source = "sdk"
+
+[[field]]
+name = "ttp"
+type = "string"
+list = true
+description = "Tactics, techniques and procedures the process matched."
+source = "sdk"
+
+[[field]]
+name = "org_id"
+type = "string"
+description = "Id of the Carbon Black organization."
+source = "sdk"
+
+[[field]]
+name = "backend_timestamp"
+type = "datetime"
+description = "When Carbon Black received the event."
+source = "sdk"
+
+[[field]]
+name = "ingress_time"
+type = "integer"
+description = "When Carbon Black ingested the event, in epoch milliseconds."
+source = "sdk"

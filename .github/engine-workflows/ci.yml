@@ -39,11 +39,69 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # The generated grammars as VS Code reads them (#171).
+      - name: TextMate grammars (vscode-textmate)
+        working-directory: highlights/test
+        run: npm ci && npm test
+      # The npm packages build and pack only what they publish (#167).
+      - name: npm packs
+        run: |
+          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          node scripts/check-npm-packs.mjs
       # The TypeScript client against the debug server `cargo test` built.
       - name: lsp-client (stdio)
         env:
           OPENTIDE_LSP_BIN: target/debug/opentide-lsp
         run: node --experimental-strip-types --test packages/lsp-client/src/index.test.ts
+
+  # The language server on Windows (#185 P0.3): drive-letter and UNC `file:`
+  # URIs name the same file as the workspace walk, and the protocol tests run
+  # against the Windows build.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: test (opentide-lsp, opentide-core)
+        run: cargo test -p opentide-lsp -p opentide-core
+
+  # Real clients against the server (#185 P2.8): pytest-lsp replays the
+  # capabilities VS Code, Neovim and Emacs send and checks each response
+  # against them, and Neovim's own client must show each diagnostic once.
+  # Informational while the recorded capabilities and Ubuntu's Neovim move.
+  clients:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cargo build -p opentide-lsp
+      - name: pytest-lsp (VS Code, Neovim, Emacs capabilities)
+        env:
+          OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
+        run: |
+          pip install -r tests/clients/requirements.txt
+          cd tests/clients && python -m pytest -q
+      - name: Neovim headless
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q neovim
+          nvim --headless --clean -l scripts/nvim-smoke.lua target/debug/opentide-lsp
+
+  # analyze() per language and hover in a 1,000-object workspace (#181).
+  # The numbers go in the job summary for comparing runs; they gate nothing.
+  bench:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo bench (opentide-analysis)
+        run: |
+          cargo bench -p opentide-analysis --bench analyze | tee bench.txt
+          { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   # Every crate builds from its packaged sources, as it will from crates.io:
   # a crate that reads a file outside OPENTIDE_ASSETS fails here, not at release.

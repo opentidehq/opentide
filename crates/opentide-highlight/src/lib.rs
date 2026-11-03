@@ -53,7 +53,8 @@ pub const FALCO_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     "/highlights/queries/falco/highlights.scm"
 ));
 
-/// The tree-sitter highlight query for a language.
+/// The tree-sitter highlight query for a language. Configuration TOML has
+/// none: the editor's TOML grammar highlights it.
 pub fn highlights_scm(language: LanguageId) -> &'static str {
     match language {
         LanguageId::Kql => KQL_HIGHLIGHTS_SCM,
@@ -63,6 +64,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Eql => EQL_HIGHLIGHTS_SCM,
         LanguageId::Kuery => KUERY_HIGHLIGHTS_SCM,
         LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
+        LanguageId::Config => "",
         LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
     }
 }
@@ -782,6 +784,7 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         LanguageId::Spl => Some("```[^`]*```"),
         // Kibana KQL, Lucene, and Falco conditions have no comment syntax.
         LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco => None,
+        LanguageId::Config => Some("(?m)^\\s*#.*$"),
     };
     if let Some(comment_match) = comment_match {
         patterns.push(serde_json::json!({
@@ -910,11 +913,116 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
             }));
         }
     }
+    if language == LanguageId::TideYaml {
+        // First, so a query block is the embedded language, not YAML.
+        patterns.insert(0, tide_embedded_queries(spec));
+    }
     serde_json::json!({
         "scopeName": format!("source.{}", language.as_str()),
         "name": format!("opentide {}", language),
         "patterns": patterns,
         "opentideHighlightSpec": spec.version,
+    })
+}
+
+/// The query fields whose path alone fixes their language, as
+/// `docs/ARCHITECTURE.md`'s injection table lists them: each platform block
+/// under `configurations`, its query keys, and the language. Elastic is not
+/// here: its language follows the block's `type` and `language` keys, which
+/// a TextMate grammar cannot read reliably, so its queries are coloured by
+/// semantic tokens only.
+pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
+    (
+        &["sentinel", "defender_for_endpoint"],
+        &["query"],
+        LanguageId::Kql,
+    ),
+    (&["splunk"], &["query", "search"], LanguageId::Spl),
+    (&["carbon_black_cloud"], &["query"], LanguageId::Lucene),
+    // The rule's condition; a macro's (`macros[].condition`) is a level
+    // deeper and is left to semantic tokens.
+    (&["sysdig"], &["condition"], LanguageId::Falco),
+];
+
+/// The embedded region a query of `language` gets: `meta.embedded.block.<id>`.
+pub fn embedded_scope(language: LanguageId) -> String {
+    format!("meta.embedded.block.{}", language.as_str())
+}
+
+/// The top-level `configurations` block, with each fixed-language query in
+/// it as an embedded region of its language's grammar (#171): a block scalar
+/// (`query: |`) until the indentation returns, or a value on the key's line.
+fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
+    let key = spec
+        .captures
+        .get("tide.property")
+        .map(|m| m.tm.clone())
+        .unwrap_or_else(|| "entity.name.tag.yaml".to_string());
+    // A line that is neither more indented than the key nor blank ends it.
+    let until_dedent = "^(?!\\1\\s+\\S|\\s*$)";
+    let platforms: Vec<serde_json::Value> = EMBEDDED_QUERIES
+        .iter()
+        .map(|(platforms, keys, language)| {
+            let scope = embedded_scope(*language);
+            let include = format!("source.{}", language.as_str());
+            let keys = keys.join("|");
+            serde_json::json!({
+                "comment": format!("configurations.{{{}}}: {} queries (#171)", platforms.join(","), language.as_str()),
+                "begin": format!("^(\\s+)({})\\s*:\\s*(?:#.*)?$", platforms.join("|")),
+                "beginCaptures": { "2": { "name": key } },
+                "end": until_dedent,
+                "patterns": [
+                    {
+                        "begin": format!("^(\\s+)({keys})\\s*:\\s*[|>][-+0-9]*\\s*(?:#.*)?$"),
+                        "beginCaptures": { "2": { "name": key } },
+                        "end": until_dedent,
+                        "contentName": scope,
+                        "patterns": [{ "include": include }],
+                    },
+                    {
+                        "match": format!("^(\\s+)({keys})\\s*:\\s+(?![|>])(.+)$"),
+                        "captures": {
+                            "2": { "name": key },
+                            "3": { "name": scope, "patterns": [{ "include": include }] },
+                        },
+                    },
+                    { "include": "$self" },
+                ],
+            })
+        })
+        .collect();
+    let mut patterns = platforms;
+    patterns.push(serde_json::json!({ "include": "$self" }));
+    serde_json::json!({
+        "comment": "configurations: the queries whose path fixes their language are embedded regions (#171); Elastic queries are left to semantic tokens",
+        "begin": "^(configurations)\\s*:\\s*(?:#.*)?$",
+        "beginCaptures": { "1": { "name": key } },
+        "end": "^(?=\\S)",
+        "patterns": patterns,
+    })
+}
+
+/// The `contributes` fragment an editor extension copies for the Tide
+/// grammar: its scope and the language id of each embedded region (#171).
+pub fn generate_package_contributions() -> serde_json::Value {
+    let embedded: serde_json::Map<String, serde_json::Value> = EMBEDDED_QUERIES
+        .iter()
+        .map(|(_, _, language)| {
+            (
+                embedded_scope(*language),
+                serde_json::Value::String(language.as_str().to_string()),
+            )
+        })
+        .collect();
+    serde_json::json!({
+        "contributes": {
+            "grammars": [{
+                "language": LanguageId::TideYaml.as_str(),
+                "scopeName": format!("source.{}", LanguageId::TideYaml.as_str()),
+                "path": "./tide.tmLanguage.json",
+                "embeddedLanguages": embedded,
+            }]
+        }
     })
 }
 
@@ -1287,6 +1395,31 @@ mod tm_language_stub_bug {
                 && p["match"].as_str().unwrap().contains("8}-")),
             "{tm}"
         );
-        assert_eq!(tm["patterns"][0]["match"], "(?m)^\\s*#.*$");
+        let comment = patterns
+            .iter()
+            .find(|p| p["comment"] == "capture:comment")
+            .unwrap();
+        assert_eq!(comment["match"], "(?m)^\\s*#.*$");
+        // The embedded query regions come first (#171).
+        assert_eq!(
+            tm["patterns"][0]["begin"],
+            "^(configurations)\\s*:\\s*(?:#.*)?$"
+        );
+    }
+
+    /// #171: the regions cover the paths with a fixed language, never Elastic.
+    #[test]
+    fn embedded_regions_name_their_languages_and_leave_elastic_out() {
+        let platforms: Vec<&str> = super::EMBEDDED_QUERIES
+            .iter()
+            .flat_map(|(p, _, _)| p.iter().copied())
+            .collect();
+        assert!(!platforms.contains(&"elastic"));
+        let contributions = super::generate_package_contributions();
+        let embedded = &contributions["contributes"]["grammars"][0]["embeddedLanguages"];
+        assert_eq!(embedded["meta.embedded.block.kql"], "kql");
+        assert_eq!(embedded["meta.embedded.block.spl"], "spl");
+        assert_eq!(embedded["meta.embedded.block.lucene"], "lucene");
+        assert_eq!(embedded["meta.embedded.block.falco"], "falco");
     }
 }

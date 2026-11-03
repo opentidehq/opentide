@@ -51,7 +51,8 @@ fn hover_at(src: &str, needle: &str, nth: usize) -> String {
     let before = &src[..offset];
     let line = before.matches('\n').count() as u32;
     let col = before.rsplit('\n').next().unwrap().chars().count() as u32;
-    hover(src, Position::new(line, col), Profile::Sentinel).expect("hover")
+    let offset = opentide_core::position_to_offset(src, Position::new(line, col));
+    hover(src, offset, Profile::Sentinel).expect("hover")
 }
 
 #[test]

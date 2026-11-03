@@ -406,9 +406,11 @@ fn in_command_position(node: Node) -> bool {
 /// zero-width tokens error recovery inserts.
 fn previous_token(node: Node) -> Option<Node> {
     let mut at = node;
-    loop {
+    // Each step moves strictly backwards in the tree, so this ends; the bound
+    // only guards against a malformed recovered tree.
+    for _ in 0..MAX_TOKEN_STEPS {
         let sibling = loop {
-            if let Some(s) = at.prev_sibling() {
+            if let Some(s) = opentide_syntax::prev_sibling(at) {
                 break s;
             }
             at = at.parent()?;
@@ -423,7 +425,11 @@ fn previous_token(node: Node) -> Option<Node> {
         }
         return Some(leaf);
     }
+    None
 }
+
+/// More steps than any query has tokens.
+const MAX_TOKEN_STEPS: usize = 1 << 20;
 
 fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
     let message = format!(
@@ -928,26 +934,11 @@ fn spl_word_at(source: &str, offset: usize) -> Option<String> {
     }
 }
 
-pub fn hover(source: &str, position: opentide_core::Position) -> Option<String> {
+/// Hover at byte `offset` of `source` (an LSP host converts the editor's
+/// UTF-16 position once, with `opentide_core::position_to_offset`).
+pub fn hover(source: &str, offset: usize) -> Option<String> {
     let catalog = Catalog::cached();
-    let offset = {
-        let mut line = 0u32;
-        let mut col = 0u32;
-        let mut at = source.len();
-        for (idx, ch) in source.char_indices() {
-            if line == position.line && col >= position.character {
-                at = idx;
-                break;
-            }
-            if ch == '\n' {
-                line += 1;
-                col = 0;
-            } else {
-                col += 1;
-            }
-        }
-        at
-    };
+    let offset = offset.min(source.len());
     let word = spl_word_at(source, offset)?;
     let macro_name = word.trim_matches('`');
     if let Some(m) = catalog.macro_named(macro_name) {
@@ -1288,6 +1279,22 @@ fn push_param(out: &mut Vec<ParameterInformation>, raw: &str) {
 mod tests {
     use super::*;
 
+    /// #179: tree-sitter's `prev_sibling()` cycled between a MISSING `)` and a
+    /// zero-width node, so `analyze` never returned on this query.
+    #[test]
+    fn a_recovered_tree_with_zero_width_nodes_does_not_hang_analysis() {
+        let query = "index=main | eval s=case(bytes>1, 1, true((), 0), t=if(us lik\r\ne \"a%\", 1,";
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = analyze(query);
+            let _ = done.send(result.diagnostics.len());
+        });
+        let found = finished
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("analyze returned within 10 s");
+        assert!(found > 0, "the broken query is reported");
+    }
+
     #[test]
     fn catalog_has_core_commands() {
         let c = Catalog::load();
@@ -1384,7 +1391,7 @@ mod tests {
                 r.diagnostics
             );
         }
-        let h = hover("index=a | apply m", opentide_core::Position::new(0, 11)).expect("hover");
+        let h = hover("index=a | apply m", 11).expect("hover");
         assert!(h.contains("MLTK"), "{h}");
     }
 
@@ -1458,19 +1465,13 @@ mod tests {
 
     #[test]
     fn hover_stats() {
-        let h = hover(
-            "index=main | stats count by host",
-            opentide_core::Position::new(0, 14),
-        );
+        let h = hover("index=main | stats count by host", 14);
         assert!(h.unwrap().to_lowercase().contains("stats"));
     }
 
     #[test]
     fn hover_function_from_catalog() {
-        let h = hover(
-            "index=main | eval x=lower(user)",
-            opentide_core::Position::new(0, 22),
-        );
+        let h = hover("index=main | eval x=lower(user)", 22);
         let text = h.expect("hover");
         assert!(text.to_lowercase().contains("lower"), "{text}");
     }
@@ -1599,10 +1600,7 @@ mod tests {
                     .any(|(c, t)| *c == "variable" && t.contains("user")),
             "{pairs:?}"
         );
-        let h = hover(
-            src,
-            opentide_core::Position::new(0, (src.find("Processes.user").unwrap() + 11) as u32),
-        );
+        let h = hover(src, src.find("Processes.user").unwrap() + 11);
         assert!(
             h.as_deref().unwrap_or("").to_lowercase().contains("user"),
             "{h:?}"
@@ -1622,7 +1620,7 @@ mod tests {
     #[test]
     fn drop_dm_object_name_hover() {
         let src = "index=main | `drop_dm_object_name(Processes)`";
-        let h = hover(src, opentide_core::Position::new(0, 16)).expect("macro hover");
+        let h = hover(src, 16).expect("macro hover");
         assert!(h.contains("drop_dm_object_name"), "{h}");
     }
 
@@ -1692,15 +1690,15 @@ mod tests {
     fn stats_sum_hovers_as_aggregate() {
         let src = "| stats sum(bytes) avg(bytes) min(bytes) max(bytes) by host";
         for name in ["sum", "avg", "min", "max"] {
-            let at = src.find(&format!("{name}(")).unwrap() as u32;
-            let text = hover(src, opentide_core::Position::new(0, at)).expect(name);
+            let at = src.find(&format!("{name}(")).unwrap();
+            let text = hover(src, at).expect(name);
             assert!(text.contains("(aggregate)"), "{name}: {text}");
             assert!(text.contains(&format!("{name}(field)")), "{name}: {text}");
             assert!(!text.contains("eval args"), "{name}: {text}");
         }
         let eval_src = "| eval total=sum(a, b)";
-        let at = eval_src.find("sum(").unwrap() as u32;
-        let text = hover(eval_src, opentide_core::Position::new(0, at)).expect("eval sum");
+        let at = eval_src.find("sum(").unwrap();
+        let text = hover(eval_src, at).expect("eval sum");
         assert!(text.contains("(eval)"), "{text}");
         assert!(text.contains("sum(X,...)"), "{text}");
 
@@ -1719,11 +1717,7 @@ mod tests {
         assert_eq!(help.signatures[0].label, "drop_dm_object_name(object)");
         assert_eq!(help.signatures[0].parameters[0].label, "object");
         let bare = "| `security_content_ctime(firstTime)`";
-        let h = hover(
-            bare,
-            opentide_core::Position::new(0, bare.find("security_content_ctime").unwrap() as u32),
-        )
-        .expect("macro hover");
+        let h = hover(bare, bare.find("security_content_ctime").unwrap()).expect("macro hover");
         assert!(h.contains("security_content_ctime(field)"), "{h}");
 
         let notable = "| `notable(";

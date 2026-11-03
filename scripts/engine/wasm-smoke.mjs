@@ -1,7 +1,8 @@
 // Smoke tests for scripts/build-wasm.sh.
 //   imports <wasm>   the browser artifact imports only wasm-bindgen glue
 //   browser <js>     wasm-bindgen's nodejs glue: highlight() for every language
-//   wasi <wasm>      the CLI under node:wasi: analyze an ES|QL file
+//   wasi <wasm>      the CLI under node:wasi: analyze an ES|QL file, then an
+//                    LSP session over --stdio (#185 P1.4: no threads there)
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -45,6 +46,47 @@ if (mode === 'imports') {
   const codes = JSON.parse(readFileSync(out, 'utf8')).map((d) => d.code);
   assert.ok(codes.includes('esql_unknown_command'), `wasi artifact: ${codes}`);
   console.log(`wasi artifact: analyze works (${codes.join(', ')})`);
+
+  // An LSP session: the frames are on stdin before the server starts, so the
+  // sync driver reads them as batches of what is buffered.
+  const frame = (body) => {
+    const text = JSON.stringify({ jsonrpc: '2.0', ...body });
+    return `Content-Length: ${Buffer.byteLength(text)}\r\n\r\n${text}`;
+  };
+  const uri = 'file:///work/q.esql';
+  const session = [
+    { id: 1, method: 'initialize', params: { capabilities: {} } },
+    { method: 'initialized', params: {} },
+    { method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'esql', version: 1, text: 'FROM logs-* | WEHRE x == 1\n' } } },
+    { id: 2, method: 'textDocument/hover', params: { textDocument: { uri }, position: { line: 0, character: 1 } } },
+    { id: 3, method: 'shutdown' },
+    { method: 'exit' },
+  ].map(frame).join('');
+  writeFileSync(join(dir, 'in.lsp'), session);
+  const input = openSync(join(dir, 'in.lsp'), 'r');
+  const output = openSync(join(dir, 'out.lsp'), 'w');
+  const lsp = new WASI({ version: 'preview1', args: ['opentide-lsp', '--stdio'], preopens: { '/work': dir }, stdin: input, stdout: output, returnOnExit: true });
+  const server = await WebAssembly.instantiate(await WebAssembly.compile(readFileSync(file)), lsp.getImportObject());
+  assert.equal(lsp.start(server), 0, 'exit after shutdown is 0');
+  closeSync(input);
+  closeSync(output);
+  const raw = readFileSync(join(dir, 'out.lsp'), 'utf8');
+  const messages = [];
+  for (let rest = raw; rest.length > 0; ) {
+    const header = rest.match(/^Content-Length: (\d+)\r\n\r\n/i);
+    assert.ok(header, `wasi --stdio: not a frame: ${rest.slice(0, 80)}`);
+    const start = header[0].length;
+    const body = Buffer.from(rest.slice(start)).subarray(0, Number(header[1])).toString('utf8');
+    messages.push(JSON.parse(body));
+    rest = rest.slice(start + body.length);
+  }
+  const reply = (id) => messages.find((m) => m.id === id && !m.method);
+  assert.equal(reply(1).result.capabilities.positionEncoding, 'utf-16');
+  const published = messages.find((m) => m.method === 'textDocument/publishDiagnostics');
+  assert.ok(published.params.diagnostics.some((d) => d.code === 'esql_unknown_command'), JSON.stringify(published));
+  assert.ok(reply(2), 'hover answered');
+  assert.equal(reply(3).result, null);
+  console.log(`wasi artifact: --stdio session works (${messages.length} messages)`);
 } else {
   throw new Error(`unknown mode ${mode}`);
 }

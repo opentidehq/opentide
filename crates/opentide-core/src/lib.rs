@@ -28,6 +28,11 @@ pub enum LanguageId {
     /// Lucene query string syntax (Elastic `language: lucene`).
     #[serde(rename = "lucene", alias = "opentide-lucene")]
     Lucene,
+    /// A configuration TOML file under `.opentide/configurations/`. The host
+    /// checks it (opentide's models); the engine places the findings. Not an
+    /// alias of `toml`: only those files are this language.
+    #[serde(rename = "opentide-config")]
+    Config,
     /// Falco rule conditions (Sysdig Secure `configurations.sysdig`).
     #[serde(rename = "falco", alias = "opentide-falco")]
     Falco,
@@ -43,6 +48,7 @@ impl LanguageId {
             Self::Eql => "eql",
             Self::Kuery => "kuery",
             Self::Lucene => "lucene",
+            Self::Config => "opentide-config",
             Self::Falco => "falco",
         }
     }
@@ -56,6 +62,7 @@ impl LanguageId {
             "eql" | "opentide-eql" | "EQL" => Some(Self::Eql),
             "kuery" | "opentide-kuery" | "kibana-kql" => Some(Self::Kuery),
             "lucene" | "opentide-lucene" | "Lucene" => Some(Self::Lucene),
+            "opentide-config" => Some(Self::Config),
             "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
             _ => None,
         }
@@ -159,15 +166,31 @@ pub fn strip_bom(text: &str) -> &str {
 
 /// [`strip_bom`], with `offset` (a byte offset into `text`) moved onto the
 /// text it returns. An offset inside the mark is the start of the text.
+/// Where the run of characters `keep` accepts that ends `text` starts: the
+/// byte after the last character it rejects, or 0. Always a char boundary,
+/// whatever the rejected character's width (#182: `rfind(...) + 1` landed
+/// inside `é`).
+pub fn word_start(text: &str, keep: impl Fn(char) -> bool) -> usize {
+    text.char_indices()
+        .rev()
+        .find(|(_, c)| !keep(*c))
+        .map_or(0, |(i, c)| i + c.len_utf8())
+}
+
 pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
     let stripped = strip_bom(text);
     let shift = text.len() - stripped.len();
     (stripped, offset.saturating_sub(shift))
 }
 
-/// Convert a UTF-8 byte offset to an LSP position.
+/// Convert a UTF-8 byte offset to an LSP position. An offset inside a
+/// multi-byte character counts from that character's start: a span that ends
+/// mid-character gives a slightly short range, never a panic.
 pub fn offset_to_position(source: &str, offset: usize) -> Position {
-    let offset = offset.min(source.len());
+    let mut offset = offset.min(source.len());
+    while !source.is_char_boundary(offset) {
+        offset -= 1;
+    }
     let mut line = 0u32;
     let mut last_line_start = 0usize;
     for (idx, ch) in source.char_indices() {
@@ -242,7 +265,10 @@ impl<'a> LineIndex<'a> {
 
     /// Same result as [`offset_to_position`].
     pub fn position(&self, offset: usize) -> Position {
-        let offset = offset.min(self.source.len());
+        let mut offset = offset.min(self.source.len());
+        while !self.source.is_char_boundary(offset) {
+            offset -= 1;
+        }
         let line = self.starts.partition_point(|&start| start <= offset) - 1;
         let start = self.starts[line];
         let character = if self.ascii[line] {
@@ -287,6 +313,18 @@ impl Severity {
             Self::Warning => "warning",
             Self::Information => "information",
             Self::Hint => "hint",
+        }
+    }
+
+    /// A severity named the way hosts name it (`error`, `warning`,
+    /// `information` or `info`, `hint`), case-insensitively.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "error" => Some(Self::Error),
+            "warning" | "warn" => Some(Self::Warning),
+            "information" | "info" => Some(Self::Information),
+            "hint" => Some(Self::Hint),
+            _ => None,
         }
     }
 }
@@ -507,6 +545,11 @@ pub mod codes {
     pub const ECS_TYPE_MISMATCH: &str = "ecs_type_mismatch";
     pub const ECS_UNKNOWN_FIELD: &str = "ecs_unknown_field";
     pub const ELASTIC_DATASET_NOT_DECLARED: &str = "elastic_dataset_not_declared";
+    /// A Carbon Black Cloud query field one edit or two from a catalog field
+    /// (#162).
+    pub const CBC_UNKNOWN_FIELD: &str = "cbc_unknown_field";
+    /// The host's configuration checker failed on a configuration file.
+    pub const CONFIG_CHECK_FAILED: &str = "config_check_failed";
     // Falco conditions (sysdig-1.0, "Falco language").
     pub const FALCO_PARSE_ERROR: &str = "falco_parse_error";
     pub const FALCO_UNKNOWN_FIELD: &str = "falco_unknown_field";
@@ -642,6 +685,8 @@ pub mod codes {
         ECS_TYPE_MISMATCH,
         ECS_UNKNOWN_FIELD,
         ELASTIC_DATASET_NOT_DECLARED,
+        CBC_UNKNOWN_FIELD,
+        CONFIG_CHECK_FAILED,
         FALCO_PARSE_ERROR,
         FALCO_UNKNOWN_FIELD,
         FALCO_UNKNOWN_MACRO,
@@ -879,8 +924,14 @@ pub mod codes {
             ECS_UNKNOWN_FIELD => {
                 "The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields."
             }
+            CBC_UNKNOWN_FIELD => {
+                "A field in a Carbon Black Cloud query is a near miss of a process search field."
+            }
             ELASTIC_DATASET_NOT_DECLARED => {
                 "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml."
+            }
+            CONFIG_CHECK_FAILED => {
+                "opentide could not check this configuration file; the message says why. Its other findings are missing."
             }
             FALCO_PARSE_ERROR => "The Falco condition does not parse.",
             FALCO_UNKNOWN_FIELD => {
@@ -991,6 +1042,35 @@ pub enum EngineError {
 
 #[cfg(test)]
 mod tests {
+    use super::word_start;
+
+    /// #182: the character before the word may be wider than a byte.
+    #[test]
+    fn word_start_is_a_char_boundary_after_a_wide_character() {
+        let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+        assert_eq!(word_start("a b", word), 2);
+        assert_eq!(word_start("abc", word), 0);
+        let text = "wehrE\u{59a}ndsWith";
+        assert_eq!(&text[word_start(text, word)..], "ndsWith");
+        let text = "x 日本name";
+        assert_eq!(&text[word_start(text, word)..], "name");
+        assert_eq!(word_start("😀", word), "😀".len());
+    }
+    use super::*;
+
+    /// #180: a span that ends inside a multi-byte character gave a panic.
+    #[test]
+    fn an_offset_inside_a_character_counts_from_its_start() {
+        let src = "a\\é日😀";
+        for offset in 0..=src.len() + 2 {
+            let position = offset_to_position(src, offset);
+            assert_eq!(LineIndex::new(src).position(offset), position, "{offset}");
+        }
+        // Byte 3 is inside `é` (bytes 2..4): its column is `é`'s start, 2.
+        assert_eq!(offset_to_position(src, 3), Position::new(0, 2));
+        let _ = span_to_range(src, ByteSpan::new(1, 4));
+    }
+
     #[test]
     fn line_index_matches_offset_to_position() {
         let text = "ab\n\u{1F600}c\r\n\nd é";
@@ -1006,8 +1086,6 @@ mod tests {
             );
         }
     }
-
-    use super::*;
 
     #[test]
     fn no_otide_in_crate_name() {

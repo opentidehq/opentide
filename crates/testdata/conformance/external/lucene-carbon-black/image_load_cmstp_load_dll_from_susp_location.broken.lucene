@@ -1,0 +1,1 @@
+(device_os:WINDOWS (process_name:\\cmstp.exe (modload_name:\\PerfLogs\\* OR modload_name:\\ProgramData\\* OR modload_name:\\Users\\* OR modload_name:\\Windows\\Temp\\* OR modload_name:C\:\\Temp\\*) (modload_name:.dll OR modload_name:.ocx))

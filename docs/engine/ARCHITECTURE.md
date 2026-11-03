@@ -66,6 +66,22 @@ queries). A key with no field row is `property`. LSP semantic tokens map
 
 Pydantic remains CLI authority. The LSP emits the same `{code, field_path, severity}` with real ranges. The engine may add **extra** query diagnostics inside `query: |`.
 
+## Configuration TOML
+
+`.opentide/configurations/**/*.toml` is `opentide-config` (#158). opentide decides what is wrong with these files. The engine only says where:
+
+- **The host checks.** A host installs a checker with `opentide_analysis::set_configuration_checker`. `opentide lsp start` installs opentide's `configuration_text_issues`, the check `opentide validate` runs. It merges the buffer onto the bundled file and the parent instance, checks the models, and runs the checks a schema cannot state (`rule_status_unknown`, `promotion_target_unknown`, `asset_unknown`, `identifier_mismatch`, the `sharing-config` codes). The engine calls the checker with the buffer's path, its text and the other open configuration buffers (`ConfigRequest`). It gets back `{code, field_path, severity, message}` (`ConfigIssue`).
+- **The engine places.** `toml_edit` spans turn each `field_path` into a range:
+  - a path that exists: its last key, or an array-of-tables entry's `[[header]]`;
+  - a path that exists only in part (a missing key): the deepest key or header that exists, and the message names the path (`misp[1].url: Field required`);
+  - an empty path, or one held by another layer: the first line;
+  - `config_parse`: where `toml_edit` stops parsing.
+
+  A checker that fails gives one `config_check_failed` warning.
+- **The host's schemas** (`install_configuration_schemas`: the router and one JSON Schema per file, as opentide's `generate_configuration_schemas()` returns them) give hover and completion. Hover shows title, type, description, allowed values and default, never the buffer's value. Completion offers the keys a table may still take, table names in a header, and allowed values after `=`. A walker reads the schema (`$ref`, `anyOf`, `items`, `additionalProperties`); it does not validate.
+- **Without a host**, as in `opentide-lsp` on its own or WASM, there is no checker and no schema. A configuration file then gets no diagnostics, no hover and no completion. The engine never guesses what opentide would say.
+- **No highlighting.** The editor's TOML grammar stays: no semantic tokens for `opentide-config`, no HighlightSpec captures, no TOML grammar here.
+
 ## Hosts
 
 - Native: `opentide-lsp --stdio` or `--listen 127.0.0.1:2087`
@@ -76,8 +92,9 @@ Pydantic remains CLI authority. The LSP emits the same `{code, field_path, sever
 ## Structure providers
 
 `initialize` advertises document symbols, workspace symbols, document
-highlight, code actions, folding, selection range, inlay hints, and pull
-diagnostics. Behavior, the visibility.toml fixes, and the quickfix range
+highlight, code actions, folding, selection range, inlay hints, document
+links, code lenses, and pull and workspace diagnostics (for a client that
+pulls). Behavior, the visibility.toml fixes, and the quickfix range
 pitfall: [EDITORS.md](EDITORS.md#structure-providers).
 
 ## Custom RPCs

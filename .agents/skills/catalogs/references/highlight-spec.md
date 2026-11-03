@@ -4,7 +4,7 @@
 
 ## Versions
 
-`[meta].version` is `0.2.0`. Policy:
+`[meta].version` is `0.3.0` (0.3.0 added the embedded query regions in the Tide grammar, #171). Policy:
 
 - Renaming or removing a capture is a **major** break. Editors and the highlight zip key off the name. Do not rename.
 - Adding a capture is a **minor**. Bump the patch or minor in `[meta].version` when you add one (`markdown.*` and `macro` were the 0.2.0 additions). Appending to `legend` is the compatible direction. Inserting in the middle changes semantic-token type indexes, which is a break for clients that cached the legend. Append.

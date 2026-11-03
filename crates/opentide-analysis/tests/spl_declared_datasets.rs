@@ -5,7 +5,7 @@
 use opentide_analysis::{
     AnalyzeRequest, Catalog, MemoryWorkspace, analyze, completions, hover, install_catalog,
 };
-use opentide_core::{Diagnostic, LanguageId, Position, Severity, codes};
+use opentide_core::{Diagnostic, LanguageId, Severity, codes};
 
 const SPLUNK: &str = r#"[[logsources]]
 name = "WinEventLog:Security"
@@ -154,7 +154,7 @@ fn declared_sourcetypes_pass_and_undeclared_ones_warn_once_splunk_is_declared() 
     // reads; never checked.
     let host = MemoryWorkspace::default();
     let search = "sourcetype=WinEventLog:Security EventCode=4688 | table ";
-    let md = hover(&host, LanguageId::Spl, search, Position::new(0, 35)).unwrap();
+    let md = hover(&host, LanguageId::Spl, search, 35).unwrap();
     assert!(md.contains("**EventCode** field (`number`)"), "{md}");
     assert!(md.contains("WinEventLog:Security"), "{md}");
     assert!(md.contains("The Windows event id."), "{md}");
@@ -176,7 +176,6 @@ fn declared_sourcetypes_pass_and_undeclared_ones_warn_once_splunk_is_declared() 
     install(None);
     assert!(undeclared(LanguageId::TideYaml, "rule.yaml", RULE).is_empty());
     assert!(
-        hover(&host, LanguageId::Spl, search, Position::new(0, 35))
-            .is_none_or(|md| !md.contains("visibility.toml"))
+        hover(&host, LanguageId::Spl, search, 35).is_none_or(|md| !md.contains("visibility.toml"))
     );
 }

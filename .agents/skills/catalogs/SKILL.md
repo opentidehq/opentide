@@ -124,12 +124,13 @@ Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), 
 - A `.broken.` twin must break the query for the reference too. Inject the fault on a live line, never inside a comment or string.
 - The references are CI-only. Do not vendor Kusto.Language, Splunk, a Splunk SDK, or an Elastic or Lucene parser; the Elastic grammars and jars are fetched by pinned SHA-256 into a git-ignored cache. `scripts/license-scan.sh` checks release artifacts.
 
-## Configuration TOML is not a catalog yet
+## Configuration TOML is not a catalog
 
-Issue `#64` (children `#65`–`#68`) will vendor Pydantic JSON Schema for `.opentide/configurations/**/*.toml` after `opentide#374`. Until that pin exists:
+`.opentide/configurations/**/*.toml` (`opentide-config`) is checked by the host, never by this repository (#158, `docs/ARCHITECTURE.md#configuration-toml`). The host installs its checker and its schemas at run time.
 
-- Do not hand-write a JSON Schema, a tree-sitter TOML grammar, or HighlightSpec captures for TOML.
-- Do not validate `sharing.toml` inside `opentide-tide`.
+- Do not vendor, generate into `catalogs/`, or hand-write a configuration JSON Schema. `testdata/config/schemas/` is opentide's own export, read only by tests of the schema walker.
+- Do not port a configuration check to Rust. A finding the editor lacks is a change to opentide's `configuration_text_issues`.
+- No tree-sitter TOML grammar and no HighlightSpec captures for TOML.
 - `Cargo.toml` and `catalogs/**/*.toml` are not `opentide-config` documents.
 
 ## Checks

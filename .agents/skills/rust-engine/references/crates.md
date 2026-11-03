@@ -70,13 +70,9 @@ Feature `v4` is enabled at the workspace. Object ids go through `Uuid::parse_str
 
 The `regex` crate is Unicode-aware by default. Patterns that should be ASCII-only say so (`(?-u:...)` or an explicit ASCII class). Prefer the existing helpers over a new pattern. A pattern that runs on every document is a `OnceLock`.
 
-## similar
+## Snapshot and diff crates
 
-`similar` 2 is a workspace dependency and no crate imports it. Do not reach for it to diff two diagnostic lists. Assert the codes.
-
-## insta
-
-`insta` 1.48 is a dev-dependency of `opentide-kql`, `opentide-spl`, `opentide-highlight`, and `opentide-tide`. No test calls `insta::assert_snapshot`. Do not add a `.snap` file to make a review easier. Assert the code, the field path, and the severity. If a snapshot is specifically requested, `insta::assert_snapshot!` needs the `INSTA_UPDATE=1` env var to write, and the `.snap` file is committed.
+`similar` and `insta` were declared and never used; #181 removed them. Do not add them back to diff or snapshot diagnostic lists: assert the code, the field path and the severity.
 
 ## Profile
 

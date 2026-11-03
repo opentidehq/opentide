@@ -1,6 +1,6 @@
 {
   "name": "opentide falco",
-  "opentideHighlightSpec": "0.2.0",
+  "opentideHighlightSpec": "0.3.0",
   "patterns": [
     {
       "comment": "capture:string",

@@ -2,10 +2,12 @@
 # CI-only differential oracles (.github/workflows/oracle.yml): the engine
 # against Microsoft Kusto.Language (kql), Splunk's search parser (spl),
 # @elastic/esql (esql), Elasticsearch's EqlBase.g4 (eql), Kibana's kuery
-# grammar.peggy (kuery), and Lucene's QueryParser (lucene).
+# grammar.peggy (kuery), Lucene's QueryParser (lucene), and a Carbon Black
+# Cloud tenant's search_validation (carbon_black).
 # See scripts/oracles/README.md.
 #
-#   scripts/ci-oracle.sh [kql] [spl] [esql] [eql] [kuery] [lucene]    default: all
+#   scripts/ci-oracle.sh [kql] [spl] [esql] [eql] [kuery] [lucene] [carbon_black]
+#                                                     default: all but carbon_black
 #
 # Optional locally: a language whose reference is unavailable (no dotnet, no
 # SPLUNK_PASSWORD, no node, no java) is skipped unless
@@ -61,8 +63,14 @@ for language in "${languages[@]}"; do
         unavailable "lucene: java not available"
         continue
       fi ;;
+    carbon_black)
+      # A tenant: never on a fork's pull request (oracle.yml).
+      if [[ -z "${OPENTIDE_CBC_URL:-}" || -z "${OPENTIDE_CBC_ORG_KEY:-}" || -z "${OPENTIDE_CBC_TOKEN:-}" ]]; then
+        unavailable "carbon_black: OPENTIDE_CBC_URL, OPENTIDE_CBC_ORG_KEY or OPENTIDE_CBC_TOKEN not set"
+        continue
+      fi ;;
     *)
-      echo "unknown oracle language: $language (kql, spl, esql, eql, kuery, or lucene)"
+      echo "unknown oracle language: $language (kql, spl, esql, eql, kuery, lucene, or carbon_black)"
       exit 2 ;;
   esac
   DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
