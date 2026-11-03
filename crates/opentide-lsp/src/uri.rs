@@ -6,8 +6,6 @@
 //! names the same file as the path a directory walk finds. A URI that is not
 //! a `file:` URI (`untitled:Untitled-1`) is kept as it is.
 
-use std::path::Path;
-
 /// The filesystem path of a `file:` URI, or the URI itself for any other
 /// scheme (an unsaved buffer).
 pub fn uri_to_path(uri: &str) -> String {
@@ -17,8 +15,7 @@ pub fn uri_to_path(uri: &str) -> String {
     if url.scheme() != "file" {
         return uri.to_string();
     }
-    if let Ok(path) = url.to_file_path() {
-        let path = path.display().to_string();
+    if let Some(path) = file_path_of(&url) {
         // A Windows drive URI read on another platform (`/c:/x`): the drive
         // path, as a Windows editor means it.
         let bytes = path.as_bytes();
@@ -44,8 +41,8 @@ pub fn path_to_uri(path: &str) -> String {
     if path.starts_with("file://") {
         return path.to_string();
     }
-    if let Ok(url) = url::Url::from_file_path(Path::new(path)) {
-        return url.to_string();
+    if let Some(uri) = file_uri_of(path) {
+        return uri;
     }
     // Not an absolute path on this platform (a Windows drive path read
     // elsewhere): encode it by hand, as a Windows host would write it.
@@ -66,6 +63,35 @@ pub fn path_to_uri(path: &str) -> String {
         }
     }
     out
+}
+
+/// What `url` makes of a `file:` URL on a platform with file paths.
+/// `wasm32-unknown-unknown` (the browser build) has none: [`uri_to_path`]
+/// decodes the URL's path by hand there, as it does for a UNC URI.
+#[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
+fn file_path_of(url: &url::Url) -> Option<String> {
+    url.to_file_path()
+        .ok()
+        .map(|path| path.display().to_string())
+}
+
+#[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
+fn file_path_of(_url: &url::Url) -> Option<String> {
+    None
+}
+
+/// What `url` makes of an absolute path on a platform with file paths; the
+/// browser build encodes it by hand ([`path_to_uri`]).
+#[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
+fn file_uri_of(path: &str) -> Option<String> {
+    url::Url::from_file_path(std::path::Path::new(path))
+        .ok()
+        .map(|url| url.to_string())
+}
+
+#[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
+fn file_uri_of(_path: &str) -> Option<String> {
+    None
 }
 
 fn percent_decode(text: &str) -> String {
