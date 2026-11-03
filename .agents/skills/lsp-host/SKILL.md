@@ -8,7 +8,7 @@ metadata:
 
 # LSP host
 
-`opentide-lsp` is a blocking stdio (and optional TCP) server. The protocol code is `crates/opentide-lsp/src/jsonrpc.rs` and `server.rs`. It is not `tower-lsp`, not `lsp-server`, and not an `lsp-types` typed loop. `lsp-types` 0.97.0 is declared on the crate and is not imported. Leave it that way unless a change needs a canonical LSP struct **and** the JSON it produces matches the existing `serde_json::json!` shape. Adding `tower-lsp` replaces the loop the e2e tests speak and is out of scope.
+`opentide-lsp` is a blocking stdio (and optional TCP) server. The protocol code is `crates/opentide-lsp/src/jsonrpc.rs` and `server.rs`. It is not `tower-lsp`, not `lsp-server`, and not an `lsp-types` typed loop. `lsp-types` is not a dependency (it was declared and never imported; #181 removed it). Moving the loop onto `lsp-server` and `lsp-types` is #90. Adding `tower-lsp` replaces the loop the e2e tests speak and is out of scope.
 
 Read `references/wire-format.md` before adding a method.
 

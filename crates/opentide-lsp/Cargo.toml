@@ -36,7 +36,6 @@ opentide-spl.workspace = true
 opentide-tide.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-lsp-types.workspace = true
 clap.workspace = true
 anyhow.workspace = true
 serde_yaml.workspace = true

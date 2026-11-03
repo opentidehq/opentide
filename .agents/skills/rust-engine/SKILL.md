@@ -52,8 +52,6 @@ Pinned stack (do not bump in passing):
 | `regex` 1 | lockfile | compile once |
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
-| `lsp-types` | 0.97.0 | declared on `opentide-lsp`, unused by the hand-rolled loop. See `lsp-host` |
-| `insta` 1 | dev-dependency | declared, no `assert_snapshot!` yet |
 
 `Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI does not pass `--locked`. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/cloud-agent-install.sh` does this restore after warming the build.
 
@@ -97,7 +95,7 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 
 - Engine unit tests sit next to the code (`#[cfg(test)]`) or in `crates/<crate>/tests/*.rs`.
 - Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `testdata/`.
-- Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct with `insta` unless the user asked. `insta` is a dev-dependency and nothing calls it.
+- Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct unless the user asked; there is no snapshot crate.
 - `cargo test --workspace` is the default. Name the test binary when iterating: `cargo test -p opentide-kql --lib`.
 - `cargo fmt --all` before finishing. rustfmt is not optional.
 
