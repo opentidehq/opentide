@@ -39,9 +39,32 @@ pub(crate) fn is_uuid(value: &str) -> bool {
         })
 }
 
-/// Every UUID-valued string in `body` other than the object's own UUID
-/// (`own`), in document order, each placed in `source`, the text `body` was
-/// parsed from.
+/// Whether a field names an object or a signal by its UUID: the reference
+/// fields of the Tide schemas, and a signal's own `uuid`, which defines what
+/// a `detection_model` or a `parent` names. Other UUID-valued fields are
+/// identifiers of something else (`metadata.organisation.uuid`, a Sentinel
+/// alert rule template's `configurations.sentinel.template.uuid`) and are not
+/// refs.
+fn is_reference(path: &[Step]) -> bool {
+    let key = |step: &Step, name: &str| matches!(step, Step::Key(k) if k == name);
+    match path {
+        // rule::1.x: the objective or signal the rule implements.
+        [field] => key(field, "detection_model"),
+        // objective::1.x: the threat vectors the objective covers.
+        [body, field, Step::Index(_)] => key(body, "objective") && key(field, "threats"),
+        [body, list, Step::Index(_), field] => {
+            // A signal, and the signal it refines.
+            (key(body, "objective") && key(list, "signals") && (key(field, "uuid") || key(field, "parent")))
+                // threat::1.0: the vector a threat chains to.
+                || (key(body, "threat") && key(list, "chaining") && key(field, "vector"))
+        }
+        _ => false,
+    }
+}
+
+/// Every UUID-valued reference field of `body` ([`is_reference`]) that does
+/// not name the object itself (`own`), in document order, each placed in
+/// `source`, the text `body` was parsed from.
 pub fn object_refs(source: &str, body: &serde_yaml::Value, own: &str) -> Vec<ObjectRef> {
     let mut found: Vec<(Vec<Step>, String)> = Vec::new();
     let mut path = Vec::new();
@@ -74,11 +97,7 @@ fn collect(
 ) {
     match value {
         serde_yaml::Value::String(text) => {
-            let own_uuid = matches!(
-                path.as_slice(),
-                [Step::Key(a), Step::Key(b)] if a == "metadata" && b == "uuid"
-            );
-            if !own_uuid && text != own && is_uuid(text) {
+            if text != own && is_uuid(text) && is_reference(path) {
                 let steps = path
                     .iter()
                     .map(|step| match step {
@@ -219,13 +238,49 @@ mod tests {
 
     #[test]
     fn columns_count_utf16_units() {
-        let source = format!("name: \"é😀\"\nthreat: {{ note: \"😀\", chain: {MODEL} }}\n");
+        let source =
+            format!("name: \"é😀\"\nobjective: {{ description: \"😀\", threats: [{MODEL}] }}\n");
         let found = refs(&source);
         assert_eq!(found.len(), 1);
         let line = source.lines().nth(1).unwrap();
         let byte = line.find(MODEL).unwrap();
         let utf16 = line[..byte].encode_utf16().count() as u32;
         assert_eq!(found[0].range.start.character, utf16);
+    }
+
+    #[test]
+    fn uuids_that_name_no_object_are_not_refs() {
+        let org = "5f3c2a10-7b6e-4c1d-9a8f-2e4b6d0c1a73";
+        let template = "f0c3a1b2-9d8e-4f7a-8b6c-5d4e3f2a1b0c";
+        let source = format!(
+            "name: R\nmetadata:\n  uuid: {OWN}\n  schema: rule::1.0\n  organisation:\n    uuid: {org}\n    name: ACME\ndetection_model: {MODEL}\nconfigurations:\n  sentinel:\n    template:\n      uuid: {template}\n"
+        );
+        let found = refs(&source);
+        let paths: Vec<&str> = found.iter().map(|r| r.field_path.as_str()).collect();
+        assert_eq!(paths, ["detection_model"], "{found:?}");
+    }
+
+    #[test]
+    fn signals_and_chained_vectors_are_refs() {
+        let a = "00000000-0000-4000-8001-00000000000a";
+        let b = "00000000-0000-4000-8001-00000000000b";
+        let signals = format!(
+            "objective:\n  signals:\n    - name: one\n      uuid: {a}\n    - name: two\n      uuid: {b}\n      parent: {a}\n"
+        );
+        let paths: Vec<String> = refs(&signals).into_iter().map(|r| r.field_path).collect();
+        assert_eq!(
+            paths,
+            [
+                "objective.signals.0.uuid",
+                "objective.signals.1.uuid",
+                "objective.signals.1.parent"
+            ]
+        );
+        let threat = format!(
+            "threat:\n  chaining:\n    - relation: preceded_by\n      vector: {a}\n      note: {b}\n"
+        );
+        let paths: Vec<String> = refs(&threat).into_iter().map(|r| r.field_path).collect();
+        assert_eq!(paths, ["threat.chaining.0.vector"]);
     }
 
     #[test]

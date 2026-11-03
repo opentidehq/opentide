@@ -375,3 +375,32 @@ fn a_web_workspace_root_is_reported_as_its_own_uri() {
     let found = object(&catalog, "00000000-0000-4000-8003-000000000001").expect("the rule");
     assert_eq!(found["uri"], rule_uri.as_str());
 }
+
+#[test]
+fn an_organisation_or_a_template_uuid_is_not_a_ref() {
+    let org = "5f3c2a10-7b6e-4c1d-9a8f-2e4b6d0c1a73";
+    let template = "f0c3a1b2-9d8e-4f7a-8b6c-5d4e3f2a1b0c";
+    let scratch = workspace("catalog-not-refs");
+    let root = &scratch.0;
+    let text = rule(MODEL)
+        .replace(
+            "  tlp: clear\n",
+            &format!("  tlp: clear\n  organisation:\n    uuid: {org}\n    name: ACME\n"),
+        )
+        .replace(
+            "    enabled: true\n",
+            &format!("    enabled: true\n    template:\n      uuid: {template}\n"),
+        );
+    assert!(text.contains(org) && text.contains(template));
+    std::fs::write(root.join("objects/rules/rule-1.0.yaml"), text).unwrap();
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    let found = object(&catalog, "00000000-0000-4000-8003-000000000001").expect("the rule");
+    let refs: Vec<&str> = found["refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["field_path"].as_str().unwrap())
+        .collect();
+    assert_eq!(refs, ["detection_model"], "{found}");
+}

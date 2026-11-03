@@ -228,8 +228,8 @@ pub struct IndexedObject {
     /// The range of the `name` value (the key's when the value is not on
     /// its line), or the start of the file without one.
     pub name_range: Range,
-    /// Each UUID the body names, other than the object's own, with where
-    /// ([`object_refs`], #198).
+    /// Each UUID the body's reference fields name, other than the object's
+    /// own, with where ([`object_refs`], #198).
     pub refs: Vec<ObjectRef>,
 }
 
