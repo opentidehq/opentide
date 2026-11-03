@@ -44,7 +44,14 @@ Custom methods:
 - `opentide/compiledSpl`
 - `opentide/fs/read`
 
-`shutdown` returns a null result. `exit` stops the loop. Notifications (`initialized`, `didOpen`, `didChange`, `didClose`) have no `id` and get no response. Requests always get `id` plus `result` or `error`.
+`serve_with_status` (and `serve`, `run_stdio`, `run_stdio_status`) enforce the LSP lifecycle before `dispatch` sees a message:
+- Before `initialize`, a request gets `-32002` and a notification is dropped.
+- After `shutdown`, a request gets `-32600` and nothing is published. A second `initialize` also gets `-32600`.
+- `exit`, or the end of input, ends the loop; the status says whether `shutdown` came first, and the binary exits 0 if so and 1 if not.
+
+A frame whose body is not a message gets `-32700` or `-32600` with `id: null`, and the loop goes on. Header names are matched case-insensitively, and `jsonrpc` is optional on input. `"id": null` is a request whose reply carries `id: null`.
+
+Each message is dispatched under `catch_unwind`: a handler that panics fails its request with `-32603` and the session continues. Debug builds answer `opentide/__panic` with a panic, for that test. Notifications (`initialized`, `didOpen`, `didChange`, `didClose`) get no response; requests always get `id` plus `result` or `error`.
 
 ## Positions
 

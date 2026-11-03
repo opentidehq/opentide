@@ -1339,17 +1339,37 @@ fn only_tide_yaml_is_analysed() {
             json!({ "textDocument": { "uri": uri, "languageId": "yaml", "version": 1, "text": text } }),
         );
     };
-    let rule = std::fs::read_to_string(repo_root().join("testdata/objects/rules/rule-1.0.yaml")).unwrap();
-    open(&mut lsp, "file:///w/.github/workflows/ci.yml", "name: CI\non: push\njobs: {}\n");
+    let rule =
+        std::fs::read_to_string(repo_root().join("testdata/objects/rules/rule-1.0.yaml")).unwrap();
+    open(
+        &mut lsp,
+        "file:///w/.github/workflows/ci.yml",
+        "name: CI\non: push\njobs: {}\n",
+    );
     open(&mut lsp, "file:///w/.pre-commit-config.yaml", "repos: []\n");
     open(&mut lsp, "file:///w/detections/rules/r.yaml", &rule);
     // The first frame is the rule's: neither CI file published anything.
     let first = lsp.read();
-    assert_eq!(first["params"]["uri"], "file:///w/detections/rules/r.yaml", "{first}");
-    open(&mut lsp, "file:///w/objects/rules/broken.yaml", "name: Broken\n");
+    assert_eq!(
+        first["params"]["uri"], "file:///w/detections/rules/r.yaml",
+        "{first}"
+    );
+    open(
+        &mut lsp,
+        "file:///w/objects/rules/broken.yaml",
+        "name: Broken\n",
+    );
     let second = lsp.read();
-    assert_eq!(second["params"]["uri"], "file:///w/objects/rules/broken.yaml", "{second}");
-    assert!(!second["params"]["diagnostics"].as_array().unwrap().is_empty());
+    assert_eq!(
+        second["params"]["uri"], "file:///w/objects/rules/broken.yaml",
+        "{second}"
+    );
+    assert!(
+        !second["params"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// #185 P0.2: only `<root>/objects` is walked, and a symlinked directory is
@@ -1386,4 +1406,100 @@ fn the_workspace_walk_stays_in_objects_and_ignores_symlinked_directories() {
     let count = symbols["result"].as_array().map_or(0, Vec::len);
     assert_eq!(count, 1, "{symbols}");
     let _ = std::fs::remove_dir_all(&root);
+}
+
+fn raw(lsp: &mut Lsp, body: &str) {
+    write!(lsp.stdin, "content-length: {}\r\n\r\n{body}", body.len()).unwrap();
+    lsp.stdin.flush().unwrap();
+}
+
+fn exit_code(mut lsp: Lsp) -> i32 {
+    lsp.child.wait().expect("server exits").code().unwrap_or(-1)
+}
+
+/// #185 P0.6: the LSP lifecycle, and the exit code that says whether the
+/// client shut the server down first.
+#[test]
+fn the_lifecycle_is_enforced_and_the_exit_code_reports_it() {
+    let hover = json!({ "textDocument": { "uri": "file:///q.kql" }, "position": { "line": 0, "character": 0 } });
+
+    // Before initialize: a request is refused, a notification dropped.
+    let mut lsp = Lsp::spawn();
+    let early = lsp.request("textDocument/hover", hover.clone());
+    assert_eq!(early["error"]["code"], -32002, "{early}");
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": "file:///q.kql", "languageId": "kql", "version": 1, "text": "T | wher x" } }),
+    );
+    let init = lsp.request("initialize", json!({ "capabilities": {} }));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    // Nothing was published for the dropped didOpen: the next frame is the
+    // answer to the second initialize, which is refused.
+    let again = lsp.request("initialize", json!({ "capabilities": {} }));
+    assert_eq!(again["error"]["code"], -32600, "{again}");
+
+    // After shutdown: requests are refused; exit then exits 0.
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+    let late = lsp.request("textDocument/hover", hover.clone());
+    assert_eq!(late["error"]["code"], -32600, "{late}");
+    lsp.notify("exit", Value::Null);
+    assert_eq!(exit_code(lsp), 0);
+
+    // exit without shutdown: 1.
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("exit", Value::Null);
+    assert_eq!(exit_code(lsp), 1);
+
+    // The stream ends without shutdown: 1.
+    let status = Command::new(bin())
+        .arg("--stdio")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(1));
+}
+
+/// #185 P0.7: a frame whose body is not a message is answered with
+/// `id: null`, and the session goes on.
+#[test]
+fn malformed_frames_are_answered_and_the_session_continues() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    for (body, code) in [
+        ("{not json", -32700),
+        ("[{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}]", -32600),
+    ] {
+        raw(&mut lsp, body);
+        let reply = lsp.read();
+        assert_eq!(reply["error"]["code"], code, "{body}: {reply}");
+        assert_eq!(reply["id"], Value::Null, "{reply}");
+    }
+    // No `jsonrpc` member and a lower-case header: still answered.
+    raw(&mut lsp, r#"{"id": 7, "method": "textDocument/hover", "params": {"textDocument": {"uri": "file:///none.kql"}, "position": {"line": 0, "character": 0}}}"#);
+    let reply = lsp.read();
+    assert_eq!(reply["id"], 7, "{reply}");
+    // `"id": null` is echoed.
+    raw(&mut lsp, r#"{"jsonrpc": "2.0", "id": null, "method": "opentide/not-a-method"}"#);
+    let reply = lsp.read();
+    assert!(reply.get("id").is_some_and(Value::is_null), "{reply}");
+    assert_eq!(reply["error"]["code"], -32601, "{reply}");
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+}
+
+/// #185 P0.5: a handler that panics fails its request, not the session.
+#[test]
+fn a_panicking_handler_fails_its_request_and_the_session_continues() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let failed = lsp.request("opentide/__panic", Value::Null);
+    assert_eq!(failed["error"]["code"], -32603, "{failed}");
+    let hover = lsp.request(
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": "file:///none.kql" }, "position": { "line": 0, "character": 0 } }),
+    );
+    assert!(hover.get("result").is_some(), "{hover}");
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
 }

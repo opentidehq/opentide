@@ -54,7 +54,12 @@ enum Command {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     if cli.stdio {
-        return server::run_stdio();
+        // LSP: exit 0 after `shutdown` then `exit`, 1 when the client exits
+        // or closes the stream without shutting the server down.
+        if !server::run_stdio_status()? {
+            std::process::exit(1);
+        }
+        return Ok(());
     }
     if let Some(addr) = cli.listen {
         return server::run_listen(&addr);

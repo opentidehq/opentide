@@ -29,6 +29,13 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - `WorkspaceHost::indexed_objects` lets any host hand the engine an index it keeps.
 - YAML that is not a Tide object is no longer analysed as one ([#185](https://github.com/opentidehq/language-server/issues/185) P0.1). Editors send every YAML file as `yaml`, so `.github/workflows/ci.yml` got `schema_validation` and `.pre-commit-config.yaml` got `filename_slug`. A YAML document is read when the editor names it `opentide-yaml`, when it is under an `objects/` folder, or when its `metadata` names a Tide schema (`schema: rule::1.0`), which covers object folders that `paths.toml` moves.
 - The server reads only `<root>/objects` (#185 P0.2). A root without `objects/` used to have every YAML file under it read on each request (`/tmp` gave false `duplicate_id` errors). A symlinked directory is no longer entered, so a link back up the tree no longer indexes each object many times. `opentide-lsp analyze` shares the walk.
+- The language server follows the LSP lifecycle, and no longer dies on a bad frame or a failing handler ([#185](https://github.com/opentidehq/language-server/issues/185) P0.5–P0.7).
+  - **Before `initialize`:** a request gets `ServerNotInitialized` and a notification is dropped.
+  - **After `shutdown`:** a request gets `InvalidRequest` and nothing is published. A second `initialize` also gets `InvalidRequest`.
+  - **Exit code:** `opentide-lsp --stdio` exits 1 when the client exits or closes the stream without `shutdown`, and 0 after it.
+  - **Bad frames:** a body that is not JSON or not a message (a batch, for example) gets `-32700` or `-32600` with `id: null`, and the session goes on. It used to end the server. `content-length` is accepted in any case, a message without `jsonrpc` is answered, and `"id": null` is echoed.
+  - **Failing handlers:** a handler that panics fails its own request with `InternalError`, and the session continues. It used to exit with 101.
+  - **API:** `serve_with_status` and `run_stdio_status` return whether the session ended cleanly. `serve` and `run_stdio` are unchanged.
 
 ### Changed
 

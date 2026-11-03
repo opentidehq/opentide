@@ -7,12 +7,44 @@ use std::io::{BufRead, Write};
 
 #[derive(Debug, Deserialize)]
 pub struct Incoming {
+    /// `"2.0"`. Optional on input: a client that leaves it out still gets
+    /// answers.
     #[allow(dead_code)]
-    pub jsonrpc: String,
+    #[serde(default)]
+    pub jsonrpc: Option<String>,
+    /// `None` when the member is absent (a notification); `Some(Value::Null)`
+    /// for `"id": null`, which a reply must echo.
+    #[serde(default, deserialize_with = "present")]
     pub id: Option<Value>,
     pub method: Option<String>,
     pub params: Option<Value>,
 }
+
+/// A member that is present, `null` included.
+fn present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
+}
+
+/// One frame read from the client.
+#[derive(Debug)]
+pub enum Frame {
+    Message(Incoming),
+    /// A frame whose body is not a JSON-RPC message. The frame was consumed,
+    /// so the stream is still in step: answer with `code` and go on.
+    Invalid {
+        code: i32,
+        message: String,
+    },
+}
+
+/// JSON-RPC: the body is not JSON.
+pub const PARSE_ERROR: i32 = -32700;
+/// JSON-RPC: the body is JSON but not a request, notification or response.
+pub const INVALID_REQUEST: i32 = -32600;
+/// LSP: a request before `initialize`.
+pub const SERVER_NOT_INITIALIZED: i32 = -32002;
+/// JSON-RPC: the handler failed.
+pub const INTERNAL_ERROR: i32 = -32603;
 
 #[derive(Debug, Serialize)]
 pub struct Response {
@@ -38,7 +70,10 @@ pub struct Notification {
     pub params: Value,
 }
 
-pub fn read_message(reader: &mut impl BufRead) -> Result<Option<Incoming>> {
+/// Read one frame. `Ok(None)` at end of input. An I/O error, or a header
+/// block without `Content-Length` (the frame's end is unknown), is an error;
+/// a body that is not a message is [`Frame::Invalid`].
+pub fn read_message(reader: &mut impl BufRead) -> Result<Option<Frame>> {
     let mut content_length = None;
     loop {
         let mut header = String::new();
@@ -50,15 +85,38 @@ pub fn read_message(reader: &mut impl BufRead) -> Result<Option<Incoming>> {
         if header.is_empty() {
             break;
         }
-        if let Some(v) = header.strip_prefix("Content-Length:") {
-            content_length = Some(v.trim().parse::<usize>().context("content-length")?);
+        // Header names are case-insensitive.
+        if let Some((name, value)) = header.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                content_length = Some(value.trim().parse::<usize>().context("content-length")?);
+            }
         }
     }
     let len = content_length.context("missing Content-Length")?;
     let mut buf = vec![0u8; len];
     std::io::Read::read_exact(reader, &mut buf)?;
-    let msg = serde_json::from_slice(&buf)?;
-    Ok(Some(msg))
+    let value: Value = match serde_json::from_slice(&buf) {
+        Ok(value) => value,
+        Err(err) => {
+            return Ok(Some(Frame::Invalid {
+                code: PARSE_ERROR,
+                message: format!("the message is not JSON: {err}"),
+            }));
+        }
+    };
+    if !value.is_object() {
+        return Ok(Some(Frame::Invalid {
+            code: INVALID_REQUEST,
+            message: "a message must be a JSON object; batches are not supported".into(),
+        }));
+    }
+    match serde_json::from_value(value) {
+        Ok(msg) => Ok(Some(Frame::Message(msg))),
+        Err(err) => Ok(Some(Frame::Invalid {
+            code: INVALID_REQUEST,
+            message: format!("not a JSON-RPC message: {err}"),
+        })),
+    }
 }
 
 pub fn write_message(writer: &mut impl Write, body: &impl Serialize) -> Result<()> {
@@ -103,6 +161,41 @@ mod tests {
     use super::*;
     use std::io::Cursor;
 
+    fn message(frame: Frame) -> Incoming {
+        match frame {
+            Frame::Message(msg) => msg,
+            Frame::Invalid { message, .. } => panic!("invalid frame: {message}"),
+        }
+    }
+
+    fn frame(body: &str) -> Vec<u8> {
+        format!("content-length: {}\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    /// #185 P0.7: a bad body is answered and the stream stays in step.
+    #[test]
+    fn a_bad_body_is_an_invalid_frame_and_the_next_one_reads() {
+        let mut bytes = frame("{not json");
+        bytes.extend(frame("[1, 2]"));
+        bytes.extend(frame(r#"{"id": 1, "method": "shutdown"}"#));
+        bytes.extend(frame(r#"{"jsonrpc": "2.0", "id": null, "method": "x"}"#));
+        let mut reader = Cursor::new(bytes);
+        let codes: Vec<i32> = (0..2)
+            .map(|_| match read_message(&mut reader).unwrap().unwrap() {
+                Frame::Invalid { code, .. } => code,
+                Frame::Message(msg) => panic!("{msg:?}"),
+            })
+            .collect();
+        assert_eq!(codes, [PARSE_ERROR, INVALID_REQUEST]);
+        // No `jsonrpc` member, lower-case header: still a request.
+        let msg = message(read_message(&mut reader).unwrap().unwrap());
+        assert_eq!(msg.method.as_deref(), Some("shutdown"));
+        assert_eq!(msg.id, Some(serde_json::json!(1)));
+        // `"id": null` is kept apart from a missing id.
+        let msg = message(read_message(&mut reader).unwrap().unwrap());
+        assert_eq!(msg.id, Some(Value::Null));
+    }
+
     fn payload_of(frame: &[u8]) -> &[u8] {
         let sep = frame
             .windows(4)
@@ -127,7 +220,7 @@ mod tests {
         assert_eq!(len, body.len());
         assert!(body.windows("é".len()).any(|w| w == "é".as_bytes()));
 
-        let msg = read_message(&mut Cursor::new(buf)).unwrap().unwrap();
+        let msg = message(read_message(&mut Cursor::new(buf)).unwrap().unwrap());
         assert_eq!(msg.method.as_deref(), Some("ping"));
         assert_eq!(msg.params.unwrap().as_str(), Some("é😀"));
     }
@@ -141,7 +234,7 @@ mod tests {
         );
         let mut bytes = frame.into_bytes();
         bytes.extend_from_slice(body);
-        let msg = read_message(&mut Cursor::new(bytes)).unwrap().unwrap();
+        let msg = message(read_message(&mut Cursor::new(bytes)).unwrap().unwrap());
         assert_eq!(msg.method.as_deref(), Some("initialize"));
         assert_eq!(msg.id, Some(serde_json::json!(1)));
     }

@@ -282,9 +282,16 @@ impl Session {
 }
 
 pub fn run_stdio() -> Result<()> {
+    run_stdio_status().map(|_| ())
+}
+
+/// [`run_stdio`], returning whether the client shut the server down before
+/// it exited ([`serve_with_status`]): the process should exit with 0 if so
+/// and 1 if not.
+pub fn run_stdio_status() -> Result<bool> {
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
-    serve(BufReader::new(stdin.lock()), stdout.lock())
+    serve_with_status(BufReader::new(stdin.lock()), stdout.lock())
 }
 
 pub fn run_listen(addr: &str) -> Result<()> {
@@ -297,18 +304,109 @@ pub fn run_listen(addr: &str) -> Result<()> {
 /// Serve one client: read LSP frames from `reader` and write the replies to
 /// `writer` until the client sends `exit` or the input ends. [`run_stdio`]
 /// and [`run_listen`] are this on stdio and on a socket; a host with its own
-/// streams calls it directly.
-pub fn serve(mut reader: impl BufRead, mut writer: impl Write) -> Result<()> {
+/// streams calls it directly. [`serve_with_status`] also says whether the
+/// client shut the server down first.
+pub fn serve(reader: impl BufRead, writer: impl Write) -> Result<()> {
+    serve_with_status(reader, writer).map(|_| ())
+}
+
+/// [`serve`], returning whether the session ended cleanly: `exit` (or the
+/// end of input) after `shutdown`. LSP has the process exit with 0 then and
+/// with 1 otherwise; the `opentide-lsp` binary does.
+///
+/// The session follows the LSP lifecycle: before `initialize`, a request is
+/// answered `ServerNotInitialized` (-32002) and a notification is dropped;
+/// after `shutdown`, a request is answered `InvalidRequest` (-32600) and
+/// nothing is published; a second `initialize` is `InvalidRequest`. A frame
+/// whose body is not a message is answered (-32700 or -32600, `id: null`)
+/// and the session goes on, and so does a handler that panics: its request
+/// is answered `InternalError` (-32603).
+pub fn serve_with_status(mut reader: impl BufRead, mut writer: impl Write) -> Result<bool> {
     let mut session = Session::default();
+    let mut state = Lifecycle::Uninitialized;
     loop {
-        let Some(msg) = jsonrpc::read_message(&mut reader)? else {
-            break;
+        let msg = match jsonrpc::read_message(&mut reader)? {
+            None => return Ok(state == Lifecycle::ShuttingDown),
+            Some(jsonrpc::Frame::Invalid { code, message }) => {
+                eprintln!("opentide-lsp: {message}");
+                jsonrpc::write_message(
+                    &mut writer,
+                    &jsonrpc::failure(Some(Value::Null), code, message),
+                )?;
+                continue;
+            }
+            Some(jsonrpc::Frame::Message(msg)) => msg,
         };
-        if !dispatch(&mut session, &mut writer, msg)? {
-            break;
+        let method = msg.method.clone().unwrap_or_default();
+        let method = method.as_str();
+        let is_request = msg.id.is_some() && msg.method.is_some();
+        if method == "exit" {
+            return Ok(state == Lifecycle::ShuttingDown);
+        }
+        let refusal = match (state, method) {
+            (Lifecycle::Uninitialized, "initialize") => None,
+            (Lifecycle::Uninitialized, _) => Some((
+                jsonrpc::SERVER_NOT_INITIALIZED,
+                "the server is not initialized",
+            )),
+            (Lifecycle::Running, "initialize") => Some((
+                jsonrpc::INVALID_REQUEST,
+                "the server is already initialized",
+            )),
+            (Lifecycle::Running, _) => None,
+            (Lifecycle::ShuttingDown, _) => {
+                Some((jsonrpc::INVALID_REQUEST, "the server is shutting down"))
+            }
+        };
+        if let Some((code, message)) = refusal {
+            // A notification is dropped; a response to a server request is
+            // fine at any time.
+            if is_request {
+                jsonrpc::write_message(&mut writer, &jsonrpc::failure(msg.id, code, message))?;
+            }
+            continue;
+        }
+        match method {
+            "initialize" => state = Lifecycle::Running,
+            "shutdown" => state = Lifecycle::ShuttingDown,
+            _ => {}
+        }
+        let id = msg.id.clone();
+        let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dispatch(&mut session, &mut writer, msg)
+        }));
+        match handled {
+            Ok(result) => {
+                result?;
+            }
+            Err(panic) => {
+                let what = panic
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+                    .or_else(|| panic.downcast_ref::<&str>().copied())
+                    .unwrap_or("a panic");
+                eprintln!("opentide-lsp: handling {method:?} failed: {what}");
+                if is_request {
+                    jsonrpc::write_message(
+                        &mut writer,
+                        &jsonrpc::failure(
+                            id,
+                            jsonrpc::INTERNAL_ERROR,
+                            format!("internal error: {what}"),
+                        ),
+                    )?;
+                }
+            }
         }
     }
-    Ok(())
+}
+
+/// Where a session is in the LSP lifecycle.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Lifecycle {
+    Uninitialized,
+    Running,
+    ShuttingDown,
 }
 
 fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Result<bool> {
@@ -415,6 +513,10 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
             jsonrpc::write_message(writer, &jsonrpc::success(id, Value::Null))?;
         }
         "exit" => return Ok(false),
+        // Lets the tests check that a failing handler does not end the
+        // session. Debug builds only.
+        #[cfg(debug_assertions)]
+        "opentide/__panic" => panic!("opentide/__panic was requested"),
         "textDocument/didOpen" => {
             handle_did_open(session, writer, &params)?;
         }
