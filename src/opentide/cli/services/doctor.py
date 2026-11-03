@@ -811,7 +811,12 @@ def _read_json(path: Path) -> Any:
 
 
 def check_vscode(ctx: DoctorContext) -> list[Check]:
-    from opentide.cli.services.setup.vscode import build_yaml_schema_mappings, snippet_file_rel
+    from opentide.cli.services.setup.vscode import (
+        build_yaml_schema_mappings,
+        schema_mapping_value,
+        schema_value_covers,
+        snippet_file_rel,
+    )
 
     checks: list[Check] = []
     settings = ctx.workspace / ".vscode" / "settings.json"
@@ -839,7 +844,11 @@ def check_vscode(ctx: DoctorContext) -> list[Check]:
                     "opentide setup vscode",
                 )
             )
-        elif all(schemas.get(key) == value for key, value in expected.items()):
+        elif all(
+            # The YAML extension takes the glob as a string or in a list.
+            schema_value_covers(schema_mapping_value(schemas, key), value)
+            for key, value in expected.items()
+        ):
             checks.append(
                 Check("vscode_settings", "pass", ".vscode/settings.json maps the object schemas")
             )

@@ -853,3 +853,30 @@ def test_doctor_real_checks_offline_never_print_secrets(
     human = CliRunner().invoke(app, ["--no-color", "--repo", str(workspace), "doctor", "--offline"])
     assert SECRET not in human.stdout + human.stderr
     assert "sentinel/prod: all 2 variables set · credentials" in _SGR.sub("", human.stdout)
+
+
+@pytest.mark.parametrize(
+    ("value", "status"),
+    [
+        ("objects/**/*.yaml", "pass"),
+        (["objects/**/*.yaml"], "pass"),
+        (["hunts/**/*.yaml", "./objects/**/*.yaml"], "pass"),
+        (["objects/rules/**/*.yaml"], "warn"),
+        ([], "warn"),
+        (3, "warn"),
+    ],
+)
+def test_vscode_settings_accepts_the_glob_as_a_string_or_in_a_list(
+    workspace: Path, value: object, status: str
+) -> None:
+    """``["objects/**/*.yaml"]``, which the YAML extension accepts, warned (0.20.1 migration)."""
+    from opentide.cli.services.setup.vscode import build_yaml_schema_mappings
+
+    [schema] = build_yaml_schema_mappings(workspace=workspace)
+    settings = workspace / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"yaml.schemas": {schema: value}}), encoding="utf-8")
+
+    checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+
+    assert checks["vscode_settings"].status == status

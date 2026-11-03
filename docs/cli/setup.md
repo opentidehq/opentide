@@ -280,7 +280,7 @@ Interim yaml.schemas and snippet generation. By default the command generates te
 
 `yaml.schemas` maps `objects/**/*.yaml` to the `.opentide/schemas/opentide.schema.json` router. The glob is the common parent of the configured object folders; when they share none, each folder gets its own recursive glob. The router validates each object against the revision schema named in its `metadata.schema`, so `rule::1.0` and `rule::1.1` rules can sit in the same folder. See [Schema revision](../usage/concepts/schema-revision.md).
 
-When merging into an existing `settings.json`, the command removes the per-folder revision mappings earlier releases wrote (for example `.opentide/schemas/rule.1.0.schema.json` → `objects/rules/**/*.yaml`). Other settings and other `yaml.schemas` entries are kept.
+When merging into an existing `settings.json`, the command removes the per-folder revision mappings earlier releases wrote (for example `.opentide/schemas/rule.1.0.schema.json` → `objects/rules/**/*.yaml`). Other settings and other `yaml.schemas` entries are kept. A router mapping written as a list keeps its own globs and gains `objects/**/*.yaml` only when it lacks it (`./objects/**/*.yaml` counts); one written as a string that is not the object glob is replaced.
 
 ```bash
 opentide setup vscode                 # generate templates + schemas, then settings + snippets

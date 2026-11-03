@@ -159,6 +159,52 @@ def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, st
     return {_router_schema_uri(cfg): _object_glob(_object_folders(cfg))}
 
 
+def _globs(value: object) -> list[str]:
+    """The globs of a ``yaml.schemas`` value: the YAML extension takes a string or a list."""
+    values = [value] if isinstance(value, str) else value
+    if not isinstance(values, list):
+        return []
+    return [item for item in values if isinstance(item, str)]
+
+
+def _same_glob(glob: str) -> str:
+    return glob.removeprefix("./")
+
+
+def schema_value_covers(value: object, wanted: str | list[str]) -> bool:
+    """Whether the ``yaml.schemas`` *value* holds every glob of *wanted*, in either form.
+
+    ``"objects/**/*.yaml"`` and ``["objects/**/*.yaml"]`` are the same mapping
+    to the YAML extension, and a list may hold the user's own globs as well.
+    """
+    held = {_same_glob(glob) for glob in _globs(value)}
+    return all(_same_glob(glob) in held for glob in _globs(wanted))
+
+
+def schema_mapping_value(schemas: dict[str, Any], schema: str) -> object:
+    """The value *schemas* maps to *schema*, written with or without a leading ``./``."""
+    for key in (schema, f"./{schema}", schema.removeprefix("./")):
+        if key in schemas:
+            return schemas[key]
+    return None
+
+
+def merge_schema_value(existing: object, wanted: str | list[str]) -> str | list[str]:
+    """The value to write for a schema *existing* maps, so that it maps *wanted*.
+
+    A mapping that already covers *wanted*, in either form, is kept as it is,
+    so a rerun changes nothing. A list keeps the user's own globs and gains the
+    ones it lacks. A string that does not cover *wanted* is replaced, as before.
+    """
+    if schema_value_covers(existing, wanted) and isinstance(existing, (str, list)):
+        return existing
+    held = _globs(existing)
+    if not isinstance(existing, list) or not held:
+        return wanted
+    present = {_same_glob(glob) for glob in held}
+    return [*existing, *(glob for glob in _globs(wanted) if _same_glob(glob) not in present)]
+
+
 def _is_stale_revision_mapping(
     schema: str, globs: object, *, families: list[str], folders: list[str]
 ) -> bool:
@@ -202,7 +248,14 @@ def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
         for schema, globs in yaml_schemas.items()
         if not _is_stale_revision_mapping(schema, globs, families=families, folders=folders)
     }
-    yaml_schemas.update(mappings)
+    for schema, globs in mappings.items():
+        # A user's list-form mapping keeps its own globs: ``update`` replaced it
+        # with the bare string and dropped them.
+        key = next(
+            (key for key in (schema, f"./{schema}") if key in yaml_schemas),
+            schema,
+        )
+        yaml_schemas[key] = merge_schema_value(yaml_schemas.get(key), globs)
     existing["yaml.schemas"] = yaml_schemas
     settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
     return ".vscode/settings.json"

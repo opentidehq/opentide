@@ -3913,7 +3913,7 @@ Use a value from the vocabulary the label names. When a close value exists, `hel
 
 `.vscode/settings.json` maps the object folders to the generated schemas.
 
-Reported by `opentide doctor`. Warns when it maps something else or is not valid JSON; skipped when the file does not exist.
+Reported by `opentide doctor`. The object glob may be a string (`"objects/**/*.yaml"`) or a list that holds it, among other globs (`["objects/**/*.yaml", "hunts/**/*.yaml"]`), as the YAML extension accepts both. Warns when it maps something else or is not valid JSON; skipped when the file does not exist.
 
 ### Example
 

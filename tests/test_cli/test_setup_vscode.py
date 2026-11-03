@@ -498,3 +498,36 @@ def test_the_deprecation_is_a_warning_line_not_an_event_slug(capsys, monkeypatch
     assert err.startswith("warning: opentide setup vscode is deprecated and will be removed")
     assert "Vscode setup deprecated" not in err
     assert "detail:" not in err
+
+
+def _settings_after_merge(tmp_path: Path, value: object) -> object:
+    settings = tmp_path / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"yaml.schemas": {ROUTER: value}}), encoding="utf-8")
+    write_vscode_settings(tmp_path)
+    return json.loads(settings.read_text(encoding="utf-8"))["yaml.schemas"][ROUTER]
+
+
+def test_write_vscode_settings_keeps_a_list_form_mapping_and_its_own_globs(
+    tmp_path: Path,
+) -> None:
+    """The merge replaced a list with the bare string, dropping the user's own globs."""
+    assert _settings_after_merge(tmp_path, ["hunts/**/*.yaml", "objects/**/*.yaml"]) == [
+        "hunts/**/*.yaml",
+        "objects/**/*.yaml",
+    ]
+
+
+def test_write_vscode_settings_adds_the_object_glob_to_a_list_without_it(tmp_path: Path) -> None:
+    assert _settings_after_merge(tmp_path, ["hunts/**/*.yaml"]) == [
+        "hunts/**/*.yaml",
+        "objects/**/*.yaml",
+    ]
+
+
+def test_write_vscode_settings_keeps_an_equivalent_list(tmp_path: Path) -> None:
+    assert _settings_after_merge(tmp_path, ["./objects/**/*.yaml"]) == ["./objects/**/*.yaml"]
+
+
+def test_write_vscode_settings_replaces_a_string_that_misses_the_objects(tmp_path: Path) -> None:
+    assert _settings_after_merge(tmp_path, "objects/rules/*.yaml") == "objects/**/*.yaml"
