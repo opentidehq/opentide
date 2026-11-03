@@ -439,3 +439,54 @@ def test_an_absolute_hooks_path_inside_the_repository_is_planned_as_written(
     assert ".githooks/pre-commit" in _planned(plan)
     assert plan.get("warnings", []) == applied.get("warnings", [])
     assert not any("outside this repository" in w for w in plan.get("warnings", []))
+
+
+def _commit(repo: Path) -> None:
+    (repo / "README.md").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "README.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "x"],
+        check=True,
+    )
+
+
+def test_a_linked_worktree_plans_the_hook_the_run_writes(git_repo: Path) -> None:
+    _commit(git_repo)
+    worktree = git_repo.parent / "linked"
+    subprocess.run(
+        ["git", "-C", str(git_repo), "worktree", "add", "-q", str(worktree), "-b", "side"],
+        check=True,
+    )
+    plan, applied = _plan_and_apply(worktree, "hooks")
+    hook = "../work/.git/hooks/pre-commit"
+    assert hook in set(applied["files"]), applied["files"]
+    assert hook in _planned(plan)
+    assert ".git/hooks/pre-commit" not in _planned(plan)
+
+
+def test_a_submodule_plans_the_hook_the_run_writes(git_repo: Path, tmp_path: Path) -> None:
+    library = tmp_path / "library"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(library)], check=True)
+    _commit(library)
+    _commit(git_repo)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(git_repo),
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            str(library),
+            "sub",
+        ],
+        check=True,
+    )
+    plan, applied = _plan_and_apply(git_repo / "sub", "hooks")
+    hook = "../.git/modules/sub/hooks/pre-commit"
+    assert hook in set(applied["files"]), applied["files"]
+    assert applied.get("installed") is not False
+    assert hook in _planned(plan)
+    assert not any("Not a Git repository" in w for w in plan.get("warnings", []))

@@ -17,7 +17,8 @@ What the copy holds:
   through it (:func:`_copy_tree`);
 - a small ``.git`` with the real repository's ``HEAD``, configuration, refs and
   hooks, and its object store as an alternate, so ``git`` answers in the copy
-  as it does in the repository (branches, ``core.hooksPath``).
+  as it does in the repository (branches, ``core.hooksPath``); a linked
+  worktree's or a submodule's ``.git`` file keeps its layout (:func:`_copy_git`).
 
 A step that would write outside the repository (a ``core.hooksPath`` shared
 with other repositories) writes nothing there in a plan either: it warns, as
@@ -149,32 +150,65 @@ def _git_dirs(top: Path) -> tuple[Path, Path] | None:
     return git_dir, common
 
 
-def _copy_git(top: Path, shadow_top: Path) -> None:
-    """A ``.git`` in the copy that ``git`` reads as the real one, sharing its objects."""
+def _copy_git(top: Path, shadow_top: Path, scratch: Path) -> list[tuple[Path, Path]]:
+    """A ``.git`` in the copy that ``git`` reads as the real one, sharing its objects.
+
+    The copy keeps the repository's layout. A plain ``.git`` folder is copied
+    into the copy's top. A ``.git`` file (a linked worktree, a submodule) stays
+    a file, pointing at a copy of its git directory beside the copy, whose
+    ``commondir`` points at a copy of the common directory: so the hooks of a
+    worktree land in the common directory, as they do for real, and a
+    submodule's ``core.worktree`` no longer points out of the copy.
+
+    Returns the ``(copy, repository)`` pairs of the git directories kept
+    outside the copy's top, for :class:`Sandbox` to watch and map back.
+    """
     found = _git_dirs(top)
     if found is None:
-        return
+        return []
     git_dir, common = found
-    target = shadow_top / ".git"
-    target.mkdir(parents=True, exist_ok=True)
+    roots: list[tuple[Path, Path]] = []
+    if (top / ".git").is_dir() and git_dir == common:
+        shadow_git = shadow_common = shadow_top / ".git"
+    else:
+        shadow_common = scratch / "git-common"
+        roots.append((shadow_common, common))
+        shadow_git = shadow_common
+        if git_dir != common:
+            shadow_git = scratch / "git-dir"
+            roots.append((shadow_git, git_dir))
+    shadow_git.mkdir(parents=True, exist_ok=True)
+    shadow_common.mkdir(parents=True, exist_ok=True)
     head = git_dir / "HEAD"
     if head.is_file():
-        shutil.copy2(head, target / "HEAD")
+        shutil.copy2(head, shadow_git / "HEAD")
+    if shadow_git != shadow_common:
+        (shadow_git / "commondir").write_text(f"{shadow_common}\n", encoding="utf-8")
+        worktree_config = git_dir / "config.worktree"
+        if worktree_config.is_file():
+            shutil.copy2(worktree_config, shadow_git / "config.worktree")
+    if roots:
+        (shadow_top / ".git").write_text(f"gitdir: {shadow_git}\n", encoding="utf-8")
     for name in _GIT_FILES[1:]:
         source = common / name
         if source.is_file():
-            shutil.copy2(source, target / name)
+            shutil.copy2(source, shadow_common / name)
     for name in _GIT_DIRS:
         source = common / name
         if source.is_dir():
-            shutil.copytree(source, target / name, symlinks=True, dirs_exist_ok=True)
-    objects = target / "objects"
+            shutil.copytree(source, shadow_common / name, symlinks=True, dirs_exist_ok=True)
+    objects = shadow_common / "objects"
     (objects / "info").mkdir(parents=True, exist_ok=True)
     (objects / "pack").mkdir(exist_ok=True)
     real_objects = common / "objects"
     if real_objects.is_dir():
         (objects / "info" / "alternates").write_text(f"{real_objects}\n", encoding="utf-8")
-    _pin_hooks_path(top, shadow_top, target / "config")
+    config = shadow_common / "config"
+    if config.is_file() and roots:
+        # A submodule's points back at the real work tree: the copy's is where its .git is.
+        _git("config", "--file", str(config), "--unset", "core.worktree")
+    _pin_hooks_path(top, shadow_top, config)
+    return roots
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str] | None:
@@ -292,27 +326,27 @@ def _copy_tree(top: Path, shadow_top: Path) -> None:
     copy_dir(top, shadow_top)
 
 
-def stamps(root: Path) -> dict[str, Stamp]:
-    """Every file under *root*, by its path relative to *root*: size and mtime.
+def stamps(root: Path, *git_dirs: Path) -> dict[str, Stamp]:
+    """Every file under *root* and *git_dirs*, by its absolute path: size and mtime.
 
-    ``.git/objects`` is left out: it is the real store's alternate, never written.
+    ``objects`` of ``root/.git`` and of each git directory is left out: it is
+    the real store's alternate, never written.
     """
     found: dict[str, Stamp] = {}
-    git_dir = root / ".git"
-    for directory, dirs, files in os.walk(root):
-        here = Path(directory)
-        dirs[:] = [
-            name
-            for name in dirs
-            if name not in SKIPPED_DIRS and not (here == git_dir and name == "objects")
-        ]
-        for name in files:
-            path = here / name
-            try:
-                stat = path.lstat()
-            except OSError:
-                continue
-            found[path.relative_to(root).as_posix()] = (stat.st_size, stat.st_mtime_ns)
+    skipped = {root / ".git" / "objects", *(folder / "objects" for folder in git_dirs)}
+    for top in (root, *git_dirs):
+        for directory, dirs, files in os.walk(top):
+            here = Path(directory)
+            dirs[:] = [
+                name for name in dirs if name not in SKIPPED_DIRS and here / name not in skipped
+            ]
+            for name in files:
+                path = here / name
+                try:
+                    stat = path.lstat()
+                except OSError:
+                    continue
+                found[str(path)] = (stat.st_size, stat.st_mtime_ns)
     return found
 
 
@@ -344,20 +378,33 @@ class Sandbox:
         self.real_top = top
         self.shadow_top = root / (top.name or "repo")
         self.shadow_target = self.shadow_top / self.real_target.relative_to(top)
+        #: ``(copy, repository)`` folder pairs: the copy's top, then any git
+        #: directory kept beside it (:func:`_copy_git`).
+        self._roots: list[tuple[Path, Path]] = [(self.shadow_top, top)]
         if top.is_dir():
             _copy_tree(top, self.shadow_top)
-            _copy_git(top, self.shadow_top)
+            self._roots.extend(_copy_git(top, self.shadow_top, root))
         else:
             self.shadow_top.mkdir(parents=True)
-        self._seen = stamps(self.shadow_top)
+        self._seen = self._stamps()
         self._written: set[str] = set()
 
-    def real_path(self, relative: str) -> Path:
-        return self.real_top / relative
+    def _stamps(self) -> dict[str, Stamp]:
+        return stamps(self.shadow_top, *(shadow for shadow, _ in self._roots[1:]))
 
-    def shown(self, relative: str) -> str:
-        """*relative* (to the copy's top) as the plan shows it: relative to the target."""
-        path = self.real_path(relative)
+    def real_path(self, shadow: str) -> Path:
+        """The repository's path for *shadow*, a path in the copy (or relative to its top)."""
+        path = Path(shadow)
+        if not path.is_absolute():
+            return self.real_top / path
+        for copy, real in self._roots:
+            if path.is_relative_to(copy):
+                return real / path.relative_to(copy)
+        return path
+
+    def shown(self, shadow: str) -> str:
+        """*shadow* (a path in the copy) as the plan shows it: relative to the target."""
+        path = self.real_path(shadow)
         try:
             return path.relative_to(self.real_target).as_posix()
         except ValueError:
@@ -365,7 +412,7 @@ class Sandbox:
 
     def step(self, name: str, result: Mapping[str, Any]) -> PlannedStep:
         """What the step that just ran wrote: the files that changed since the last one."""
-        now = stamps(self.shadow_top)
+        now = self._stamps()
         planned = PlannedStep(name, warnings=[self.to_real(str(w)) for w in _warnings(result)])
         shown: set[str] = set()
         for relative in sorted(now):
@@ -401,10 +448,12 @@ class Sandbox:
 
     def to_real(self, text: str) -> str:
         """*text* with the copy's paths replaced by the repository's."""
-        for shadow, real in (
+        pairs = [
             (str(self.shadow_target), str(self.real_target)),
-            (str(self.shadow_top), str(self.real_top)),
-        ):
+            *((str(copy), str(real)) for copy, real in self._roots),
+        ]
+        # Longest first: the target sits inside the copy's top.
+        for shadow, real in sorted(pairs, key=lambda pair: len(pair[0]), reverse=True):
             text = text.replace(shadow, real)
         return text
 
