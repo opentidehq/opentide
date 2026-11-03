@@ -243,6 +243,12 @@ class LintResult(CommandDocument):
     fixed: int | None = None
     summary: LintSummary | None = None
     advice: str | None = Field(None, description="How to fix a failure that stopped the run")
+    scope: Literal["changed", "selected"] | None = Field(
+        None, description="What narrowed the run: --changed or --file. Absent on a full run"
+    )
+    unmatched: list[str] | None = Field(
+        None, description="The --file targets that selected no object file"
+    )
 
 
 # --------------------------------------------------------------------------

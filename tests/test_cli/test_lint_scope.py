@@ -283,3 +283,14 @@ def test_changed_without_a_checkout_fails(catalogue: Path, monkeypatch: pytest.M
 
     assert result["_exit_code"] == 1
     assert str(result["message"]).startswith("--changed needs a git checkout")
+
+
+def test_narrowed_json_matches_the_lint_result_model(checkout: Path) -> None:
+    from tests.result_models_support import document_problems
+
+    _write(checkout, "objects/threats/Actor Two.yaml", _threat("Actor Two", "2") + "# edited\n")
+    _commit(checkout, "edit one threat")
+
+    for args in (("--changed",), ("--file", "missing.yaml"), ("--file", "Actor One.yaml")):
+        _, payload = _lint(*args)
+        assert not document_problems(payload), args
