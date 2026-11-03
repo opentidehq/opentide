@@ -70,7 +70,8 @@ def _strip_jsonc(text: str) -> str:
 
 def _load_jsonc(path: Path) -> Any:
     try:
-        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8")))
+        # utf-8-sig: VS Code's "UTF-8 with BOM" is common on Windows.
+        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8-sig")))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"Could not read {path}: {exc}") from exc
 
@@ -263,7 +264,7 @@ def _is_stale_revision_mapping(
     )
 
 
-def write_vscode_settings(target: Path) -> str | None:
+def write_vscode_settings(target: Path, *, warnings: list[str] | None = None) -> str | None:
     """Remove the ``yaml.schemas`` entries opentide wrote from ``.vscode/settings.json``.
 
     The opentide extension's language server checks object files, and a YAML
@@ -276,7 +277,18 @@ def write_vscode_settings(target: Path) -> str | None:
     settings_path = target / ".vscode" / "settings.json"
     if not settings_path.is_file():
         return None
-    existing = _load_jsonc(settings_path)
+    try:
+        existing = _load_jsonc(settings_path)
+    except ValueError as exc:
+        # Nothing to add here, only entries to remove: a file this cannot read
+        # is left as it is, and setup carries on.
+        logger.warning("vscode_settings_unreadable", path=str(settings_path), error=str(exc))
+        if warnings is not None:
+            warnings.append(
+                "Could not read .vscode/settings.json; left it unchanged. Remove opentide's "
+                "yaml.schemas entries from it by hand, if it has any."
+            )
+        return None
     if not isinstance(existing, dict):
         return None
     yaml_schemas = existing.get("yaml.schemas")
@@ -298,16 +310,32 @@ def write_vscode_settings(target: Path) -> str | None:
     return ".vscode/settings.json"
 
 
-def write_vscode_extensions(target: Path, *, merge: bool = True) -> str:
+def write_vscode_extensions(
+    target: Path, *, merge: bool = True, warnings: list[str] | None = None
+) -> str | None:
     """Write or merge .vscode/extensions.json recommending the opentide extension.
 
     Recommendations already there are kept, and one the file lists under
-    ``unwantedRecommendations`` is not added.
+    ``unwantedRecommendations`` is not added. A file this cannot read is left
+    as it is, with a warning, unless *merge* is off. Returns the path when written.
     """
     vscode_dir = target / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     extensions_path = vscode_dir / "extensions.json"
-    existing = _load_jsonc(extensions_path) if merge and extensions_path.is_file() else {}
+    existing: Any = {}
+    if merge and extensions_path.is_file():
+        try:
+            existing = _load_jsonc(extensions_path)
+        except ValueError as exc:
+            logger.warning(
+                "vscode_extensions_unreadable", path=str(extensions_path), error=str(exc)
+            )
+            if warnings is not None:
+                warnings.append(
+                    f"Could not read .vscode/extensions.json; left it unchanged. Add "
+                    f"{EXTENSION_ID} to its recommendations by hand, or re-run with --no-merge."
+                )
+            return None
     if not isinstance(existing, dict):
         existing = {}
     recommendations = existing.get("recommendations", [])
@@ -362,16 +390,25 @@ def run_vscode_snippets(target: Path) -> str | None:
     return snippets_rel if dest.is_file() else None
 
 
-def _settings_files(target: Path, *, merge: bool) -> list[str]:
+def _settings_files(target: Path, *, merge: bool, warnings: list[str]) -> list[str]:
     """Recommend the extension; drop opentide's ``yaml.schemas`` entries."""
-    files = [write_vscode_extensions(target, merge=merge)]
-    if (settings := write_vscode_settings(target)) is not None:
+    files: list[str] = []
+    if (extensions := write_vscode_extensions(target, merge=merge, warnings=warnings)) is not None:
+        files.append(extensions)
+    if (settings := write_vscode_settings(target, warnings=warnings)) is not None:
         files.append(settings)
     return files
 
 
 def run_vscode_settings(target: Path, *, merge: bool = True) -> dict[str, object]:
-    return {"message": "VS Code settings generated", "files": _settings_files(target, merge=merge)}
+    warnings: list[str] = []
+    payload: dict[str, object] = {
+        "message": "VS Code settings generated",
+        "files": _settings_files(target, merge=merge, warnings=warnings),
+    }
+    if warnings:
+        payload["warnings"] = warnings
+    return payload
 
 
 def run_vscode_setup(
@@ -407,8 +444,9 @@ def run_vscode_setup(
             generated = run_generate_phases_for_workspace(target, phases)
 
     files: list[str] = []
+    warnings: list[str] = []
     if settings:
-        files.extend(_settings_files(target, merge=merge))
+        files.extend(_settings_files(target, merge=merge, warnings=warnings))
 
     snippet_path: str | None = None
     if snippets:
@@ -416,7 +454,6 @@ def run_vscode_setup(
         if snippet_path:
             files.append(snippet_path)
 
-    warnings: list[str] = []
     if mcp:
         from opentide.cli.enums import McpHost
         from opentide.cli.services.setup.mcp import (

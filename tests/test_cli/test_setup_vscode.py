@@ -628,3 +628,46 @@ def test_write_vscode_settings_keeps_the_users_own_globs_on_the_router(
     write_vscode_settings(tmp_path)
     assert json.loads(settings.read_text(encoding="utf-8")) == {"yaml.schemas": {ROUTER: kept}}
     assert not is_opentide_schema_mapping(ROUTER, kept)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        b'\xef\xbb\xbf{\r\n  "editor.tabSize": 2\r\n}\r\n',
+        b'{ "editor.tabSize": 2, oops }\n',
+    ],
+    ids=["bom", "unparsable"],
+)
+def test_setup_vscode_leaves_a_settings_file_it_cannot_read_and_carries_on(
+    tmp_path: Path, content: bytes
+) -> None:
+    from tests.corpus_support import clear_runtime_caches
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+
+    settings = tmp_path / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_bytes(content)
+    clear_runtime_caches()
+    result = CliRunner().invoke(
+        app, ["--json", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)]
+    )
+    clear_runtime_caches()
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert settings.read_bytes() == content
+    assert (tmp_path / SNIPPET_REL).is_file()
+    assert (tmp_path / ".vscode" / "extensions.json").is_file()
+    unreadable = [w for w in payload.get("warnings") or [] if "settings.json" in w]
+    assert bool(unreadable) == (content[:3] != b"\xef\xbb\xbf")
+
+
+def test_an_unreadable_extensions_json_is_left_unchanged(tmp_path: Path) -> None:
+    extensions = tmp_path / ".vscode" / "extensions.json"
+    extensions.parent.mkdir()
+    extensions.write_bytes(b"{ not json\n")
+    warnings: list[str] = []
+    assert write_vscode_extensions(tmp_path, warnings=warnings) is None
+    assert extensions.read_bytes() == b"{ not json\n"
+    assert warnings and "extensions.json" in warnings[0]
