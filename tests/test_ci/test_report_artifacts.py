@@ -206,8 +206,10 @@ def test_azure_validate_job_publishes_sarif() -> None:
 
 
 def test_setup_ignores_the_reports_folder(tmp_path: Path) -> None:
-    from opentide.cli.services.setup.repo import _write_gitignore
+    from opentide.cli.services.setup.repo import OPENTIDE_IGNORES, _ensure_gitignore
 
-    _write_gitignore(tmp_path)
+    _ensure_gitignore(tmp_path)
     lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert f"{REPORTS_DIR}/" in lines
+    # An existing .gitignore gains it too: it is one of the lines always added.
+    assert f"{REPORTS_DIR}/" in OPENTIDE_IGNORES

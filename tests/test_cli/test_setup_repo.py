@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import pytest
+from typer.testing import CliRunner
+
+from opentide.cli import app
 from opentide.cli.enums import DetectionPlatform
-from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
+from opentide.cli.services.setup.repo import OPENTIDE_IGNORES, RepoSetupOptions, run_repo_setup
 
 
 def test_setup_repo_creates_scaffold(tmp_path: Path) -> None:
@@ -119,8 +124,12 @@ def test_setup_repo_keeps_an_edited_readme_and_gitignore(tmp_path: Path) -> None
     gitignore.write_text("secrets/\n", encoding="utf-8")
     result = run_repo_setup(RepoSetupOptions(path=target, name="Kept", yes=True))
     assert readme.read_text(encoding="utf-8") == "# local notes\n"
-    assert gitignore.read_text(encoding="utf-8") == "secrets/\n"
-    assert result["skipped"] == ["README.md", ".gitignore"]
+    # The user's lines stay; the opentide ones it lacked are appended.
+    assert gitignore.read_text(encoding="utf-8") == "secrets/\n" + "".join(
+        f"{line}\n" for line in OPENTIDE_IGNORES
+    )
+    assert result["skipped"] == ["README.md"]
+    assert result["gitignore_added"] == list(OPENTIDE_IGNORES)
     warnings = result["warnings"]
     assert isinstance(warnings, list)
     assert warnings == ["Left README.md unchanged; ignored --name because the file already exists"]
@@ -146,3 +155,67 @@ def test_setup_repo_ignores_only_the_sharing_cache(tmp_path: Path) -> None:
     assert ".opentide/states/sharing.jsonl" in lines
     assert ".opentide/states/" not in lines
     assert deployment_state_ignore(target) is None
+
+
+def test_setup_repo_adds_the_opentide_ignores_to_an_existing_gitignore(tmp_path: Path) -> None:
+    """On an existing repository ``.gitignore`` was skipped whole, so the sharing cache,
+    exports and CI reports were committable (0.20.1 migration)."""
+    (tmp_path / ".gitignore").write_text("node_modules/\n/opentide-reports\n", encoding="utf-8")
+
+    result = run_repo_setup(RepoSetupOptions(path=tmp_path, yes=True))
+
+    # ``/opentide-reports`` already ignores the reports; the Python lines are for new files.
+    added = [".opentide/exports/*.export.json", ".opentide/states/sharing.jsonl"]
+    assert result["gitignore_added"] == added
+    assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == (
+        "node_modules/\n/opentide-reports\n" + "".join(f"{line}\n" for line in added)
+    )
+    again = run_repo_setup(RepoSetupOptions(path=tmp_path, yes=True))
+    assert again["gitignore_added"] == []
+    assert ".gitignore" in again["skipped"]  # type: ignore[operator]
+
+
+@pytest.mark.parametrize(
+    ("existing", "expected_tail"),
+    [
+        (b"secrets/\r\nlogs/\r\n", b"logs/\r\n.opentide/exports/*.export.json\r\n"),
+        (b"secrets/", b"secrets/\n.opentide/exports/*.export.json\n"),
+        (b"\xef\xbb\xbfsecrets/\n", b"secrets/\n.opentide/exports/*.export.json\n"),
+    ],
+)
+def test_setup_repo_keeps_the_gitignores_line_endings_and_bom(
+    tmp_path: Path, existing: bytes, expected_tail: bytes
+) -> None:
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_bytes(existing)
+
+    run_repo_setup(RepoSetupOptions(path=tmp_path, yes=True))
+
+    written = gitignore.read_bytes()
+    assert written.startswith(existing.rstrip(b"\r\n"))
+    assert expected_tail in written
+    assert written.count(b"\r\n") in (0, len(OPENTIDE_IGNORES) + existing.count(b"\r\n"))
+
+
+def test_setup_repo_leaves_a_gitignore_that_is_not_utf8(tmp_path: Path) -> None:
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_bytes(b"caf\xe9/\n")
+
+    result = run_repo_setup(RepoSetupOptions(path=tmp_path, yes=True))
+
+    assert gitignore.read_bytes() == b"caf\xe9/\n"
+    assert result["gitignore_added"] == []
+    assert any("not UTF-8" in warning for warning in result["warnings"])  # type: ignore[union-attr]
+
+
+def test_setup_repo_json_reports_the_lines_added(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text(".opentide/states/sharing.jsonl\n", encoding="utf-8")
+
+    done = CliRunner().invoke(app, ["--json", "setup", "repo", "--path", str(tmp_path), "--yes"])
+
+    assert done.exit_code == 0, done.stdout
+    payload = json.loads(done.stdout)
+    assert payload["gitignore_added"] == [
+        ".opentide/exports/*.export.json",
+        "opentide-reports/",
+    ]

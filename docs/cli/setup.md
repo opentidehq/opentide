@@ -73,6 +73,8 @@ Given before the subcommand, `--path` and `--yes` still apply to it: `opentide s
 
 Scaffold directory layout, README, and `.gitignore`. `--platform` writes and enables the matching `.opentide/configurations/platforms/*.toml` files (same as `setup platforms`).
 
+On an existing repository the command keeps what is there. A `README.md` is left as it is (`skipped`). An existing `.gitignore` keeps its content, byte-order mark and line endings and gains only the lines opentide needs that it lacks: `.opentide/exports/*.export.json`, `.opentide/states/sharing.jsonl` (the sharing cache; `.opentide/states/deployment/` must be committed) and `opentide-reports/`. A line counts as present with or without a leading or trailing `/` (`/opentide-reports` does). The Python lines a new `.gitignore` starts with (`build/`, `dist/`, ...) are not added to an existing one. `--json` lists the lines added under `gitignore_added`, and `.gitignore` under `files` when it changed, under `skipped` when it did not; a rerun adds nothing. A `.gitignore` that is not UTF-8 is left alone with a warning naming the lines to add.
+
 ```bash
 opentide setup repo --yes --name SOC --platform sentinel
 ```
