@@ -15,6 +15,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - Your editor's TOML grammar keeps highlighting. Turn other TOML language servers off for `.opentide/configurations/**`.
 
   `opentide.validation.configuration.configuration_buffer_issues(path, text, open_buffers)` is the check the editor runs. See [Configuration files](docs/cli/lsp.md#configuration-files).
+- **A faster, fuller language server** ([language-server#185](https://github.com/opentidehq/language-server/issues/185)). `opentide lsp start` runs the rebuilt engine host.
+  - Each keystroke is analysed once, and queued edits are handled together. A keystroke in a 500-object workspace answers in half the time.
+  - Each workspace folder is a workspace of its own.
+  - Objects get an outline of their sections, platform blocks and queries.
+  - ATT&CK ids and object UUIDs are links, and an objective or threat counts the rules that use it.
+  - Quick fixes can be applied all at once.
+  - Diagnostics link to their section of the [diagnostics reference](docs/cli/diagnostics.md).
+  - `initialize` names opentide as the host (`capabilities.experimental.opentide.host`), so an editor can tell it from the `opentide-lsp` binary ([language-server#172](https://github.com/opentidehq/language-server/issues/172)).
 
 ### Fixed
 

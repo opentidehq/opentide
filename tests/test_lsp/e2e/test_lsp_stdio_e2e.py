@@ -89,6 +89,11 @@ def test_an_editor_session_from_initialize_to_exit(tmp_path: Path, flags: tuple[
         assert init["id"] == 1
         assert init["result"]["serverInfo"]["name"] == "opentide-lsp"
         assert init["result"]["capabilities"]["hoverProvider"] is True
+        # The client can tell `opentide lsp start` from the bare binary.
+        host = init["result"]["capabilities"]["experimental"]["opentide"]
+        assert host["host"]["name"] == "opentide"
+        assert host["catalog"] == "host"
+        assert host["configurationChecks"] is True
         _send(process.stdin, {"jsonrpc": "2.0", "method": "initialized", "params": {}})
         _send(
             process.stdin,

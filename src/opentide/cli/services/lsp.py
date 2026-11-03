@@ -32,6 +32,7 @@ def serve() -> int:
         print(TERMINAL_HINT, file=sys.stderr)  # noqa: T201 -- stderr, outside the protocol
     _supply_catalogs()
     _supply_configuration_checks()
+    _name_the_host()
     failure: list[BaseException] = []
     clean: list[bool] = []
 
@@ -79,6 +80,18 @@ def _supply_catalogs() -> None:
             "using the workspace's, or the engine's bundled ones",
             file=sys.stderr,
         )
+
+
+def _name_the_host() -> None:
+    """Tell clients the server runs inside opentide, and which one.
+
+    They read it at ``initialize`` (``capabilities.experimental.opentide.host``)
+    to tell ``opentide lsp start`` from the bare ``opentide-lsp`` binary.
+    """
+    from opentide import __version__
+    from opentide.analysis import engine
+
+    engine().set_host_info("opentide", __version__)
 
 
 def _supply_configuration_checks() -> None:

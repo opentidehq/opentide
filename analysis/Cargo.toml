@@ -26,8 +26,8 @@ pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # published, so a release always builds from crates.io.
 # opentidehq/language-server#158 (configuration checker hook), before its
 # release.
-opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "1cc34c34abd83782e16cc173b19a2e34fe762d9c" }
-opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "1cc34c34abd83782e16cc173b19a2e34fe762d9c" }
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "02f3654185830dae0969655b5358fdb65e75ab08" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "02f3654185830dae0969655b5358fdb65e75ab08" }
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"

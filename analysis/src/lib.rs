@@ -348,6 +348,13 @@ fn use_host_catalogs() {
     opentide_lsp::use_host_catalogs();
 }
 
+/// Name the host that runs the language server, process-wide: clients read
+/// it at `initialize` (`capabilities.experimental.opentide.host`).
+#[pyfunction]
+fn set_host_info(name: &str, version: &str) {
+    opentide_lsp::set_host_info(name, version);
+}
+
 /// The opentide version the Tide field catalog in use was generated from.
 #[pyfunction]
 fn catalog_version() -> &'static str {
@@ -486,7 +493,7 @@ mod _native {
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
         catalog_version, dataset_status, describe_code, highlight, install_catalog,
         install_configuration_schemas, install_visibility, language_for_path, serve_stdio,
-        set_configuration_checker, set_default_catalog, use_host_catalogs,
+        set_configuration_checker, set_default_catalog, set_host_info, use_host_catalogs,
     };
 
     #[pymodule_init]

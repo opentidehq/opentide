@@ -21,8 +21,12 @@ Serves the [language server protocol](https://microsoft.github.io/language-serve
 |---------|--------------|
 | Diagnostics | Each query checked in its platform's language, and the object's fields, references and vocabulary, as you type. Configuration files under `.opentide/configurations/` checked as `opentide validate` checks them |
 | Hover, completion, signature help | Query commands, functions, tables and fields; Tide fields and vocabulary values with their descriptions; configuration keys and their allowed values |
-| Definition, references, symbols | Object UUIDs across the workspace |
+| Definition, references, symbols | Object UUIDs across the workspace; each object's outline (sections, platform blocks, queries) |
+| Links, lenses, inlay hints | ATT&CK ids to attack.mitre.org and UUIDs to the object's file; "N rules use this objective" on an objective or threat; the name of each object a UUID names |
+| Quick fixes | Each suggestion, one at a time or all at once (`source.fixAll.opentide`) |
 | Semantic tokens | Highlighting for objects and the queries inside them |
+
+Each workspace folder the editor opens is a workspace of its own, with its own objects, `visibility.toml` and configuration. The server tells the editor it runs inside opentide: `initialize` answers `capabilities.experimental.opentide.host` = `{ "name": "opentide", "version": <this opentide> }`, which the `opentide-lsp` binary on its own leaves `null` (see the language server's `docs/EDITORS.md`).
 
 Like `opentide mcp start`, it runs in the `mcp` [output mode](./global-options.md): stdout carries the protocol and nothing else, logs go to stderr. When the engine does not load, it prints one `error:` line on stderr and exits `1` before any protocol byte (see [`engine_unavailable`](./diagnostics.md#engine_unavailable)). At a terminal it says on stderr what it is for. As the protocol specifies, it exits `0` when the editor sends `shutdown` and then `exit`, and `1` when the editor exits or closes stdin without `shutdown`. Ctrl-C stops it with exit `130`.
 
