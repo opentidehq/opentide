@@ -396,7 +396,9 @@ def setup_cmd(
     ),
     default_branch: str | None = DEFAULT_BRANCH_OPTION,
     vscode_setup: bool = typer.Option(
-        False, "--vscode-setup", help="Run deprecated VS Code settings + snippets"
+        False,
+        "--vscode-setup",
+        help="Run deprecated setup vscode: the extension recommendation and snippets",
     ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Non-interactive mode"),
 ) -> None:
@@ -1020,11 +1022,16 @@ def setup_vscode_cmd(
     path: str = PATH_ARGUMENT,
     path_flag: str = PATH_OPTION,
     settings: bool = typer.Option(
-        False, "--settings", help="Write .vscode/settings.json schema mappings and extensions.json"
+        False,
+        "--settings",
+        help=(
+            "Recommend the opentide extension in .vscode/extensions.json, and remove "
+            "opentide's yaml.schemas from .vscode/settings.json"
+        ),
     ),
     snippets: bool = typer.Option(False, "--snippets", help="Write object template snippets"),
     no_merge: bool = typer.Option(
-        False, "--no-merge", help="Replace settings.json and extensions.json instead of merging"
+        False, "--no-merge", help="Replace extensions.json instead of merging"
     ),
     no_generate: bool = typer.Option(
         False, "--no-generate", help="Do not run opentide generate first"
@@ -1039,7 +1046,7 @@ def setup_vscode_cmd(
         help="Accepted for symmetry with other setup subcommands; this command never prompts",
     ),
 ) -> None:
-    """Write VS Code yaml.schemas and snippets (deprecated). Default: both."""
+    """Recommend the opentide extension and write snippets (deprecated). Default: both."""
     from opentide.cli.services.setup.vscode import run_vscode_setup
 
     cli = get_context(ctx)

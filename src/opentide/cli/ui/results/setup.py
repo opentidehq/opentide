@@ -6,6 +6,11 @@ from pydantic import Field
 
 from opentide.cli.ui.results.base import CommandDocument, ResultModel
 
+_EXTENSION_MCP = (
+    "true when .vscode/extensions.json recommends the opentide VS Code extension "
+    "(opentidehq.opentide), which provides the opentide MCP server to VS Code"
+)
+
 
 class SetupFiles(ResultModel):
     """Keys the setup steps share: where they wrote, and what."""
@@ -44,6 +49,8 @@ class SetupStep(CiFields):
     deprecated: str | None = None
     installed: bool | None = None
     mcp_available: bool | None = None
+    extension_mcp: bool | None = None
+    detail: str | None = None
     skills: list[str] | None = None
     also_applied: list[str] | None = None
 
@@ -84,13 +91,17 @@ class SetupMcpResult(CommandDocument, SetupFiles):
     """``opentide setup mcp``: MCP configuration for editors and agents."""
 
     mcp_available: bool | None = Field(None, description="Whether the MCP server can start")
+    extension_mcp: bool | None = Field(None, description=_EXTENSION_MCP)
+    detail: str | None = Field(None, description="What extension_mcp means, in a sentence")
 
 
 class SetupVscodeResult(CommandDocument, SetupFiles):
-    """``opentide setup vscode``: VS Code schemas and snippets (deprecated)."""
+    """``opentide setup vscode``: the extension recommendation and snippets (deprecated)."""
 
     generated: list[str] | None = None
     deprecated: str | None = None
+    extension_mcp: bool | None = Field(None, description="With --mcp: " + _EXTENSION_MCP)
+    detail: str | None = Field(None, description="What extension_mcp means, in a sentence")
 
 
 class SetupSkillsResult(CommandDocument, SetupFiles):

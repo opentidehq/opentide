@@ -1,5 +1,0 @@
-{
-  "yaml.schemas": {
-    ".opentide/schemas/opentide.schema.json": "objects/**/*.yaml"
-  }
-}

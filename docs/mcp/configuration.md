@@ -27,6 +27,8 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 
 ### VS Code
 
+The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP server to VS Code agents itself, with no `.vscode/mcp.json`. Write the file for teammates without the extension. When `.vscode/extensions.json` recommends the extension, `opentide setup mcp --vscode` says so (`extension_mcp`), and `opentide doctor`'s `mcp_config` passes without the file.
+
 ```json
 {
   "servers": {

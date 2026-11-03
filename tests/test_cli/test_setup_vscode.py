@@ -6,6 +6,8 @@ import json
 import warnings
 from pathlib import Path
 
+import pytest
+
 from opentide.cli.services.setup.vscode import (
     build_yaml_schema_mappings,
     run_vscode_all,
@@ -13,7 +15,6 @@ from opentide.cli.services.setup.vscode import (
     run_vscode_setup,
     run_vscode_snippets,
     snippet_file_rel,
-    validate_schema_fragment_matches_global,
     write_vscode_extensions,
     write_vscode_settings,
 )
@@ -44,7 +45,8 @@ def test_build_yaml_schema_mappings_maps_objects_to_router() -> None:
     assert build_yaml_schema_mappings() == {ROUTER: "objects/**/*.yaml"}
 
 
-def test_write_vscode_settings_merge(tmp_path: Path) -> None:
+def test_vscode_settings_writes_no_yaml_schemas(tmp_path: Path) -> None:
+    """#752: the opentide extension's language server checks objects, not a YAML server."""
     vscode_dir = tmp_path / ".vscode"
     vscode_dir.mkdir()
     (vscode_dir / "settings.json").write_text(
@@ -53,15 +55,55 @@ def test_write_vscode_settings_merge(tmp_path: Path) -> None:
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        run_vscode_settings(tmp_path)
+        result = run_vscode_settings(tmp_path)
     assert not any(issubclass(item.category, DeprecationWarning) for item in caught)
+    assert result["files"] == [".vscode/extensions.json"]
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
-    assert settings["editor.tabSize"] == 4
-    assert settings["yaml.schemas"] == {ROUTER: "objects/**/*.yaml"}
+    assert settings == {"editor.tabSize": 4}
 
 
-def test_schema_fragment_matches_global() -> None:
-    validate_schema_fragment_matches_global()
+def test_vscode_settings_creates_no_settings_file(tmp_path: Path) -> None:
+    assert write_vscode_settings(tmp_path) is None
+    assert not (tmp_path / ".vscode" / "settings.json").exists()
+
+
+def test_vscode_settings_removes_the_router_mapping_and_keeps_the_rest(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "settings.json").write_text(
+        json.dumps(
+            {
+                "editor.tabSize": 4,
+                "yaml.schemas": {ROUTER: "objects/**/*.yaml", "other.json": "x/*.yaml"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert write_vscode_settings(tmp_path) == ".vscode/settings.json"
+    settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
+    assert settings == {"editor.tabSize": 4, "yaml.schemas": {"other.json": "x/*.yaml"}}
+
+
+def test_vscode_settings_drops_an_emptied_yaml_schemas(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "settings.json").write_text(
+        json.dumps({"yaml.schemas": {"./" + ROUTER: ["objects/rules/**/*.yaml"]}}),
+        encoding="utf-8",
+    )
+    assert write_vscode_settings(tmp_path) == ".vscode/settings.json"
+    assert json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8")) == {}
+
+
+def test_vscode_settings_leaves_a_file_without_opentide_entries_untouched(
+    tmp_path: Path,
+) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    text = '{\n  // keep my comment\n  "yaml.schemas": {"other.json": "x/*.yaml"},\n}\n'
+    (vscode_dir / "settings.json").write_text(text, encoding="utf-8")
+    assert write_vscode_settings(tmp_path) is None
+    assert (vscode_dir / "settings.json").read_text(encoding="utf-8") == text
 
 
 def test_run_vscode_snippets_skips_without_templates(tmp_path: Path) -> None:
@@ -76,7 +118,7 @@ def test_run_vscode_setup_no_generate_fails_without_templates(tmp_path: Path) ->
         result = run_vscode_setup(tmp_path, generate=False)
     assert result["status"] == "failed"
     assert result["_exit_code"] == 1
-    assert ".vscode/settings.json" in result["files"]
+    assert ".vscode/settings.json" not in result["files"]
     assert ".vscode/extensions.json" in result["files"]
     assert SNIPPET_REL not in result["files"]
     assert result["generated"] == []
@@ -95,7 +137,7 @@ def test_run_vscode_setup_creates_missing_nested_target(tmp_path: Path, monkeypa
         result = run_vscode_setup(missing)
     assert result["status"] == "completed"
     assert missing.is_dir()
-    assert (missing / ".vscode" / "settings.json").is_file()
+    assert not (missing / ".vscode" / "settings.json").exists()
     assert (missing / ".vscode" / "extensions.json").is_file()
     assert (missing / ".opentide" / "templates" / "threat.1.0.template.yaml").is_file()
     assert (missing / SNIPPET_REL).is_file()
@@ -118,7 +160,7 @@ def test_run_vscode_setup_generate_writes_templates_schemas_and_snippets(
     assert result["generated"] == ["templates", "schemas"]
     assert (tmp_path / ".opentide" / "templates" / "threat.1.0.template.yaml").is_file()
     assert (tmp_path / ".opentide" / "schemas" / "opentide.schema.json").is_file()
-    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert not (tmp_path / ".vscode" / "settings.json").exists()
     assert (tmp_path / SNIPPET_REL).is_file()
     assert SNIPPET_REL in result["files"]
     assert ".vscode/extensions.json" in result["files"]
@@ -241,6 +283,24 @@ def test_run_vscode_setup_mcp_writes_mcp_json(tmp_path: Path, monkeypatch) -> No
     assert not (tmp_path / ".vscode" / "mcp.json").exists()
     assert ".vscode/mcp.json" in with_mcp["files"]
     assert (tmp_path / "mcp" / ".vscode" / "mcp.json").is_file()
+    # The same run recommends the extension, which provides the MCP server too (#752).
+    assert with_mcp["extension_mcp"] is True
+    assert "provides the opentide MCP server" in str(with_mcp["detail"])
+    assert "extension_mcp" not in without_mcp
+
+
+def test_run_vscode_setup_mcp_without_the_recommendation_says_nothing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        "opentide.cli.services.setup.vscode.run_vscode_snippets",
+        lambda target: SNIPPET_REL,
+    )
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        result = run_vscode_setup(tmp_path, settings=False, generate=False, mcp=True)
+    assert ".vscode/mcp.json" in result["files"]
+    assert "extension_mcp" not in result
 
 
 def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
@@ -252,17 +312,30 @@ def test_write_vscode_settings_non_dict_yaml_schemas(tmp_path: Path) -> None:
     )
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
-        write_vscode_settings(tmp_path)
+        assert write_vscode_settings(tmp_path) is None
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
-    assert isinstance(settings["yaml.schemas"], dict)
+    assert settings == {"yaml.schemas": "invalid"}
 
 
-def test_write_vscode_extensions_recommends_yaml_extension(tmp_path: Path) -> None:
+def test_write_vscode_extensions_recommends_the_opentide_extension(tmp_path: Path) -> None:
+    """#752: the opentide extension, not redhat.vscode-yaml."""
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         run_vscode_settings(tmp_path)
     extensions = json.loads((tmp_path / ".vscode" / "extensions.json").read_text(encoding="utf-8"))
-    assert "redhat.vscode-yaml" in extensions["recommendations"]
+    assert extensions["recommendations"] == ["opentidehq.opentide"]
+
+
+def test_write_vscode_extensions_respects_unwanted_recommendations(tmp_path: Path) -> None:
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    (vscode_dir / "extensions.json").write_text(
+        json.dumps({"unwantedRecommendations": ["opentidehq.opentide"]}),
+        encoding="utf-8",
+    )
+    write_vscode_extensions(tmp_path)
+    extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
+    assert extensions["recommendations"] == []
 
 
 def test_write_vscode_extensions_merges_recommendations(tmp_path: Path) -> None:
@@ -274,7 +347,7 @@ def test_write_vscode_extensions_merges_recommendations(tmp_path: Path) -> None:
     )
     write_vscode_extensions(tmp_path)
     extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
-    assert extensions["recommendations"] == ["ms-python.python", "redhat.vscode-yaml"]
+    assert extensions["recommendations"] == ["ms-python.python", "opentidehq.opentide"]
 
 
 def test_write_vscode_extensions_non_list_recommendations(tmp_path: Path) -> None:
@@ -286,7 +359,7 @@ def test_write_vscode_extensions_non_list_recommendations(tmp_path: Path) -> Non
     )
     write_vscode_extensions(tmp_path)
     extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
-    assert extensions["recommendations"] == ["redhat.vscode-yaml"]
+    assert extensions["recommendations"] == ["opentidehq.opentide"]
 
 
 def test_build_yaml_schema_mappings_lists_folders_without_common_parent(monkeypatch) -> None:
@@ -307,8 +380,8 @@ def test_build_yaml_schema_mappings_lists_folders_without_common_parent(monkeypa
     }
 
 
-def test_write_vscode_settings_drops_stale_revision_mappings(tmp_path: Path) -> None:
-    """Merging removes per-folder revision mappings earlier releases wrote (issue #550)."""
+def test_write_vscode_settings_drops_every_mapping_opentide_wrote(tmp_path: Path) -> None:
+    """The router (#752) and the per-folder revision mappings of earlier releases (#550)."""
     vscode_dir = tmp_path / ".vscode"
     vscode_dir.mkdir()
     (vscode_dir / "settings.json").write_text(
@@ -333,7 +406,6 @@ def test_write_vscode_settings_drops_stale_revision_mappings(tmp_path: Path) -> 
     settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["editor.tabSize"] == 2
     assert settings["yaml.schemas"] == {
-        ROUTER: "objects/**/*.yaml",
         ".opentide/schemas/rule.1.0.schema.json": "legacy/rules/*.yaml",
         ".opentide/schemas/visibility.1.0.schema.json": "visibility/*.yaml",
         "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml",
@@ -341,22 +413,31 @@ def test_write_vscode_settings_drops_stale_revision_mappings(tmp_path: Path) -> 
 
 
 def test_write_vscode_settings_is_idempotent(tmp_path: Path) -> None:
-    write_vscode_settings(tmp_path)
-    first = (tmp_path / ".vscode" / "settings.json").read_text(encoding="utf-8")
-    write_vscode_settings(tmp_path)
-    assert (tmp_path / ".vscode" / "settings.json").read_text(encoding="utf-8") == first
-
-
-def test_write_vscode_settings_no_merge_overwrites(tmp_path: Path) -> None:
     vscode_dir = tmp_path / ".vscode"
     vscode_dir.mkdir()
     (vscode_dir / "settings.json").write_text(
-        json.dumps({"editor.tabSize": 4, "yaml.schemas": {"other.schema.json": "other/*.yaml"}}),
+        json.dumps({"yaml.schemas": {ROUTER: "objects/**/*.yaml", "o.json": "o/*.yaml"}}),
         encoding="utf-8",
     )
-    write_vscode_settings(tmp_path, merge=False)
-    settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
-    assert settings == {"yaml.schemas": {ROUTER: "objects/**/*.yaml"}}
+    assert write_vscode_settings(tmp_path) == ".vscode/settings.json"
+    first = (vscode_dir / "settings.json").read_text(encoding="utf-8")
+    assert write_vscode_settings(tmp_path) is None
+    assert (vscode_dir / "settings.json").read_text(encoding="utf-8") == first
+
+
+def test_setup_vscode_no_merge_keeps_the_settings_of_the_user(tmp_path: Path) -> None:
+    """--no-merge replaces extensions.json; settings.json has nothing of opentide's to write."""
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    user = {"editor.tabSize": 4, "yaml.schemas": {"other.schema.json": "other/*.yaml"}}
+    (vscode_dir / "settings.json").write_text(json.dumps(user), encoding="utf-8")
+    (vscode_dir / "extensions.json").write_text(
+        json.dumps({"recommendations": ["redhat.vscode-yaml"]}), encoding="utf-8"
+    )
+    run_vscode_settings(tmp_path, merge=False)
+    assert json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8")) == user
+    extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
+    assert extensions == {"recommendations": ["opentidehq.opentide"]}
 
 
 def test_run_vscode_snippets_file_not_found(tmp_path: Path, monkeypatch) -> None:
@@ -429,7 +510,7 @@ def test_run_vscode_setup_empty_dir_completes_without_object_folder_errors(
     payload = assert_json_ok(result)
     assert payload["status"] == "completed"
     assert "error" not in _object_folder_log_levels(result.stderr)
-    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / ".vscode" / "extensions.json").is_file()
     assert (tmp_path / SNIPPET_REL).is_file()
 
 
@@ -500,34 +581,29 @@ def test_the_deprecation_is_a_warning_line_not_an_event_slug(capsys, monkeypatch
     assert "detail:" not in err
 
 
-def _settings_after_merge(tmp_path: Path, value: object) -> object:
+@pytest.mark.parametrize(
+    "value",
+    [
+        "objects/**/*.yaml",
+        ["objects/**/*.yaml"],
+        ["hunts/**/*.yaml", "./objects/**/*.yaml"],
+        "objects/rules/*.yaml",
+    ],
+)
+def test_write_vscode_settings_removes_the_router_mapping_as_a_string_or_in_a_list(
+    tmp_path: Path, value: object
+) -> None:
+    """The YAML extension takes the glob as a string or in a list; either form of the
+    router mapping an earlier release wrote is removed (#752), the other settings kept."""
     settings = tmp_path / ".vscode" / "settings.json"
     settings.parent.mkdir()
-    settings.write_text(json.dumps({"yaml.schemas": {ROUTER: value}}), encoding="utf-8")
-    write_vscode_settings(tmp_path)
-    return json.loads(settings.read_text(encoding="utf-8"))["yaml.schemas"][ROUTER]
+    settings.write_text(
+        json.dumps({"editor.tabSize": 2, "yaml.schemas": {ROUTER: value, "own.json": "x.yaml"}}),
+        encoding="utf-8",
+    )
 
-
-def test_write_vscode_settings_keeps_a_list_form_mapping_and_its_own_globs(
-    tmp_path: Path,
-) -> None:
-    """The merge replaced a list with the bare string, dropping the user's own globs."""
-    assert _settings_after_merge(tmp_path, ["hunts/**/*.yaml", "objects/**/*.yaml"]) == [
-        "hunts/**/*.yaml",
-        "objects/**/*.yaml",
-    ]
-
-
-def test_write_vscode_settings_adds_the_object_glob_to_a_list_without_it(tmp_path: Path) -> None:
-    assert _settings_after_merge(tmp_path, ["hunts/**/*.yaml"]) == [
-        "hunts/**/*.yaml",
-        "objects/**/*.yaml",
-    ]
-
-
-def test_write_vscode_settings_keeps_an_equivalent_list(tmp_path: Path) -> None:
-    assert _settings_after_merge(tmp_path, ["./objects/**/*.yaml"]) == ["./objects/**/*.yaml"]
-
-
-def test_write_vscode_settings_replaces_a_string_that_misses_the_objects(tmp_path: Path) -> None:
-    assert _settings_after_merge(tmp_path, "objects/rules/*.yaml") == "objects/**/*.yaml"
+    assert write_vscode_settings(tmp_path) == ".vscode/settings.json"
+    assert json.loads(settings.read_text(encoding="utf-8")) == {
+        "editor.tabSize": 2,
+        "yaml.schemas": {"own.json": "x.yaml"},
+    }

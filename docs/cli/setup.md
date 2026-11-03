@@ -57,7 +57,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--promotion-target` | Status `deploy` promotes rules to. Omit the flag to keep the repository's setting; another status is written as `[promotion] promotion_target` |
 | `--python-version` | CI Python version (default `3.12`) |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |
-| `--vscode-setup` | Deprecated VS Code yaml.schemas + snippets (generate-first) |
+| `--vscode-setup` | Deprecated `setup vscode`: recommend the opentide extension, write snippets (generate-first) |
 | `--yes` / `-y` | Confirm explicit options without prompting |
 
 Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were removed.
@@ -197,6 +197,8 @@ opentide setup mcp --cursor --vscode --yes
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
+The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP server to VS Code itself. When `.vscode/extensions.json` recommends it, `setup mcp --vscode` still writes `.vscode/mcp.json`, for teammates without the extension, and says so: JSON output has `"extension_mcp": true` and a `detail` sentence, printed as a note.
+
 VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the detection workspace from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
 
 ### setup skills
@@ -281,16 +283,18 @@ The full wizard checks skill availability before writing repository files. If th
 
 ### setup vscode (deprecated)
 
-Interim yaml.schemas and snippet generation. By default the command generates templates and JSON schemas into `.opentide/`, then writes settings and snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory. Deprecation is logged once per invocation.
+Recommends the opentide VS Code extension and writes the object snippets. By default the command generates templates and JSON schemas into `.opentide/`, then writes `.vscode/extensions.json` and the snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory. Deprecation is logged once per invocation.
 
-`yaml.schemas` maps `objects/**/*.yaml` to the `.opentide/schemas/opentide.schema.json` router. The glob is the common parent of the configured object folders; when they share none, each folder gets its own recursive glob. The router validates each object against the revision schema named in its `metadata.schema`, so `rule::1.0` and `rule::1.1` rules can sit in the same folder. See [Schema revision](../usage/concepts/schema-revision.md).
+`.vscode/extensions.json` recommends `opentidehq.opentide`, the opentide extension: its language server checks object files, and it bundles the templates and the MCP server. Recommendations already there are kept, and the extension is not added when the file lists it under `unwantedRecommendations`.
 
-When merging into an existing `settings.json`, the command removes the per-folder revision mappings earlier releases wrote (for example `.opentide/schemas/rule.1.0.schema.json` → `objects/rules/**/*.yaml`). Other settings and other `yaml.schemas` entries are kept. A router mapping written as a list keeps its own globs and gains `objects/**/*.yaml` only when it lacks it (`./objects/**/*.yaml` counts); one written as a string that is not the object glob is replaced.
+The command writes no `yaml.schemas`: a YAML language server mapped to opentide's schemas reports what the opentide language server already does. When `.vscode/settings.json` exists, it removes the entries earlier releases wrote, the `.opentide/schemas/opentide.schema.json` router mapping and the per-folder revision mappings (for example `.opentide/schemas/rule.1.0.schema.json` → `objects/rules/**/*.yaml`), and drops `yaml.schemas` when nothing else is left in it. A mapping counts whether its globs are a string or a list. Other settings and other `yaml.schemas` entries are kept. It never creates `settings.json`, and leaves it untouched when it holds no such entry; `files` lists it only when it was rewritten.
+
+The snippets have `scope: "yaml,opentide-yaml"`, so they complete in plain YAML files and in the extension's object files (language `opentide-yaml`).
 
 ```bash
-opentide setup vscode                 # generate templates + schemas, then settings + snippets
+opentide setup vscode                 # generate templates + schemas, then extensions.json + snippets
 opentide setup vscode --mcp          # same, plus .vscode/mcp.json via write_mcp_config
-opentide setup vscode --settings    # generate schemas, then settings
+opentide setup vscode --settings    # generate schemas, then extensions.json and the settings.json cleanup
 opentide setup vscode --snippets     # generate templates, then snippets
 opentide setup vscode --no-generate  # skip generate (power users)
 opentide setup mcp --vscode          # MCP only (unchanged multi-host path)
@@ -298,11 +302,13 @@ opentide setup mcp --vscode          # MCP only (unchanged multi-host path)
 
 If snippets were requested and templates are still missing after generate, the command exits non-zero (`status: failed`) instead of reporting success.
 
+With `--mcp`, when `.vscode/extensions.json` recommends the extension, JSON output has `"extension_mcp": true` and `detail` says that the extension provides the opentide MCP server to VS Code, so `.vscode/mcp.json` is for teammates without it, as with [`setup mcp --vscode`](#setup-mcp).
+
 | Flag | Purpose |
 |------|---------|
-| `--settings` | Write `.vscode/settings.json` yaml.schemas and `.vscode/extensions.json` (generates schemas first) |
+| `--settings` | Recommend the extension in `.vscode/extensions.json` and remove opentide's `yaml.schemas` entries from `.vscode/settings.json` (generates schemas first) |
 | `--snippets` | Write model template snippets (generates templates first) |
-| `--no-merge` | Replace `settings.json` and `extensions.json` instead of merging |
+| `--no-merge` | Replace `extensions.json` instead of merging. `settings.json` is only ever cleaned up |
 | `--no-generate` | Do not run `opentide generate` phases first |
 | `--mcp` | Write `.vscode/mcp.json` by calling `write_mcp_config` (opt-in; parent `--vscode-setup` does not imply this) |
 

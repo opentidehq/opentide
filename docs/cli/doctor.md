@@ -40,9 +40,9 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `analysis_engine` | The analysis engine compiled into opentide loads, and the language-server version it was built from: what `validate`, `validate query`, `lint` and `opentide lsp` run | It does not | | |
 | `credentials` | Per configured tenant of an enabled platform, whether every `$VARIABLE` its setup names is set | | A variable is unset or empty | The platform has no tenant |
 | `proxy` | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection | It does not | | No proxy is set, or `--offline` |
-| `vscode_settings` | `.vscode/settings.json` maps the object folders to the generated schemas | | It maps something else or is not valid JSON | The file does not exist |
+| `vscode_settings` | `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), and `.vscode/settings.json` maps no object files to opentide's schemas in `yaml.schemas` | | `settings.json` maps objects to opentide's schemas (a YAML extension would report them a second time), `extensions.json` does not recommend the extension, or either is not valid JSON | No `.vscode/extensions.json` |
 | `vscode_snippets` | The snippet file `opentide generate snippets` writes exists | | | It does not |
-| `mcp_config` | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`, with the command on `PATH` | | No file has such a server, or the command is not on `PATH` | No configuration |
+| `mcp_config` | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`, with the command on `PATH`; or `.vscode/extensions.json` recommends the opentide extension, which provides the server to VS Code (with both, the message says so) | | No file has such a server, or the command is not on `PATH` | No configuration, and the extension is not recommended |
 
 `skip` marks an optional integration that is not set up, or a check that did not run. It never changes the exit code.
 
@@ -87,7 +87,7 @@ One line per check, its fix under it, then the outcome line. `✓` is a pass, `!
 ○ sentinel: no tenant configured · credentials
   → add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
 ○ No proxy set (--proxy, HTTPS_PROXY) · proxy
-○ No .vscode/settings.json: editors get no schema completion · vscode_settings
+○ No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide · vscode_settings
   → opentide setup vscode
 ○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets
   → opentide generate snippets

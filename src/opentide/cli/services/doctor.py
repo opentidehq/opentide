@@ -808,56 +808,82 @@ def _read_json(path: Path) -> Any:
 
 
 def check_vscode(ctx: DoctorContext) -> list[Check]:
+    """``vscode_settings``: the workspace recommends the opentide extension, and maps no
+    object files to opentide's schemas for a YAML extension (#752)."""
     from opentide.cli.services.setup.vscode import (
-        build_yaml_schema_mappings,
-        schema_mapping_value,
-        schema_value_covers,
+        EXTENSION_ID,
+        is_opentide_schema_mapping,
         snippet_file_rel,
     )
 
     checks: list[Check] = []
     settings = ctx.workspace / ".vscode" / "settings.json"
-    if not settings.is_file():
+    extensions = ctx.workspace / ".vscode" / "extensions.json"
+    data = _read_json(settings) if settings.is_file() else {}
+    schemas = data.get("yaml.schemas") if isinstance(data, dict) else None
+    mapped = (
+        sorted(
+            str(schema)
+            for schema, globs in schemas.items()
+            if is_opentide_schema_mapping(str(schema), globs)
+        )
+        if isinstance(schemas, dict)
+        else []
+    )
+    recommended = _read_json(extensions) if extensions.is_file() else None
+    recommendations = recommended.get("recommendations") if isinstance(recommended, dict) else None
+    if data is None:
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                ".vscode/settings.json is not valid JSON",
+                "fix the file, then opentide setup vscode",
+            )
+        )
+    elif mapped:
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                ".vscode/settings.json maps objects to "
+                + ", ".join(mapped)
+                + " in yaml.schemas: a YAML extension would report what the opentide "
+                "extension already does",
+                "opentide setup vscode",
+            )
+        )
+    elif not extensions.is_file():
         checks.append(
             Check(
                 "vscode_settings",
                 "skip",
-                "No .vscode/settings.json: editors get no schema completion",
+                f"No .vscode/extensions.json: VS Code does not suggest {EXTENSION_ID}",
                 "opentide setup vscode",
             )
         )
+    elif recommended is None:
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                ".vscode/extensions.json is not valid JSON",
+                "fix the file, then opentide setup vscode",
+            )
+        )
+    elif isinstance(recommendations, list) and EXTENSION_ID in recommendations:
+        checks.append(
+            Check("vscode_settings", "pass", f".vscode/extensions.json recommends {EXTENSION_ID}")
+        )
     else:
-        data = _read_json(settings)
-        schemas = data.get("yaml.schemas") if isinstance(data, dict) else None
-        expected = build_yaml_schema_mappings(workspace=ctx.workspace)
-        if not isinstance(schemas, dict):
-            checks.append(
-                Check(
-                    "vscode_settings",
-                    "warn",
-                    ".vscode/settings.json maps no yaml.schemas"
-                    if data is not None
-                    else ".vscode/settings.json is not valid JSON",
-                    "opentide setup vscode",
-                )
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                f".vscode/extensions.json does not recommend {EXTENSION_ID}",
+                "opentide setup vscode",
             )
-        elif all(
-            # The YAML extension takes the glob as a string or in a list.
-            schema_value_covers(schema_mapping_value(schemas, key), value)
-            for key, value in expected.items()
-        ):
-            checks.append(
-                Check("vscode_settings", "pass", ".vscode/settings.json maps the object schemas")
-            )
-        else:
-            checks.append(
-                Check(
-                    "vscode_settings",
-                    "warn",
-                    ".vscode/settings.json does not map objects to " + ", ".join(sorted(expected)),
-                    "opentide setup vscode",
-                )
-            )
+        )
     snippets = snippet_file_rel(workspace=ctx.workspace)
     if (ctx.workspace / snippets).is_file():
         checks.append(Check("vscode_snippets", "pass", f"Snippets in {snippets}"))
@@ -905,6 +931,19 @@ def check_mcp(ctx: DoctorContext) -> list[Check]:
         hosts.append(MCP_HOST_LABELS[host])
         commands.add(str(server.get("command") or ""))
     setup = "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)"
+    from opentide.cli.services.setup.vscode import EXTENSION_ID, recommends_extension
+
+    # The extension serves the opentide MCP server to VS Code agents itself (#752).
+    extension = recommends_extension(ctx.workspace)
+    if not hosts and extension:
+        return [
+            Check(
+                "mcp_config",
+                "pass",
+                f"VS Code: the opentide extension ({EXTENSION_ID}), which "
+                ".vscode/extensions.json recommends, provides the opentide MCP server",
+            )
+        ]
     if not hosts:
         if without:
             return [
@@ -926,6 +965,10 @@ def check_mcp(ctx: DoctorContext) -> list[Check]:
     configured = f"MCP configured for {', '.join(hosts)}"
     if without:
         configured += f" ({', '.join(without)} has no opentide server)"
+    if extension:
+        configured += (
+            f"; the opentide extension ({EXTENSION_ID}) also provides the server to VS Code"
+        )
     unresolved = sorted(
         command for command in commands if command and shutil.which(command) is None
     )

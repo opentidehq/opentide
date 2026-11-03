@@ -51,7 +51,7 @@ def test_vs_code_snippet_generator_reads_template(tmp_path: Path) -> None:
     template.write_text("name: Example\n", encoding="utf-8")
     snippet = vscode_snippets.vs_code_snippet_generator(template, "tide-rule")
     assert snippet["prefix"] == "tide-rule"
-    assert snippet["scope"] == "yaml"
+    assert snippet["scope"] == "yaml,opentide-yaml"
     assert snippet["description"] == "tide-rule"
     assert "name: Example" in snippet["body"]
 
@@ -126,7 +126,7 @@ def test_run_writes_core_snippets(tmp_path: Path) -> None:
     entry = payload["Detection Rules Template"]
     assert entry["body"] == ["name: Example"]
     assert entry["prefix"] == "tide-rule"
-    assert entry["scope"] == "yaml"
+    assert entry["scope"] == "yaml,opentide-yaml"
     assert entry["description"] == (
         "Detection Rules: a new object from the generated template, "
         "with a tabstop on every field to fill."
@@ -203,7 +203,7 @@ def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
     key = "Platform configuration : Microsoft Sentinel Template"
     assert key in payload
     assert payload[key]["prefix"] == "tide-sentinel"
-    assert payload[key]["scope"] == "yaml"
+    assert payload[key]["scope"] == "yaml,opentide-yaml"
     assert payload[key]["body"][0] == ""
     assert "query: ${1:query}" in payload[key]["body"]
     assert payload[key]["description"] == (

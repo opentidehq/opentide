@@ -1,6 +1,10 @@
 """Deprecated interim VS Code setup.
 
-Superseded by the opentide VS Code extension (bundled language server and templates).
+Superseded by the opentide VS Code extension (``opentidehq.opentide``), which
+bundles the language server, the templates and the MCP server. This module
+recommends that extension and writes the snippets. It no longer maps object
+files to JSON schemas for a YAML extension: the opentide language server owns
+their diagnostics, so a merge removes the mapping earlier releases wrote.
 """
 
 from __future__ import annotations
@@ -15,7 +19,6 @@ from typing import Any
 
 import structlog
 
-from opentide.cli.services.setup.templates import load_yaml_schema_fragment
 from opentide.core.files import resolve_configurations
 from opentide.models.object_types import CORE_OBJECT_TYPES
 from opentide.registry.discovery import OPENTIDE_DIR
@@ -93,7 +96,30 @@ def snippet_file_rel(*, workspace: Path | None = None) -> str:
         return str(snippet)
 
 
-RECOMMENDED_EXTENSIONS: tuple[str, ...] = ("redhat.vscode-yaml",)
+#: The opentide VS Code extension: language server, templates, snippets and MCP server.
+EXTENSION_ID = "opentidehq.opentide"
+
+RECOMMENDED_EXTENSIONS: tuple[str, ...] = (EXTENSION_ID,)
+
+#: What ``setup mcp --vscode`` and ``doctor`` say when the workspace recommends the extension.
+EXTENSION_MCP_NOTE = (
+    f"The opentide VS Code extension ({EXTENSION_ID}), which .vscode/extensions.json "
+    "recommends, provides the opentide MCP server to VS Code; .vscode/mcp.json is for "
+    "teammates without it"
+)
+
+
+def recommends_extension(workspace: Path) -> bool:
+    """Whether ``.vscode/extensions.json`` recommends the opentide extension."""
+    path = workspace / ".vscode" / "extensions.json"
+    if not path.is_file():
+        return False
+    try:
+        data = _load_jsonc(path)
+    except ValueError:
+        return False
+    recommendations = data.get("recommendations") if isinstance(data, dict) else None
+    return isinstance(recommendations, list) and EXTENSION_ID in recommendations
 
 
 def emit_vscode_deprecation() -> None:
@@ -148,61 +174,30 @@ def _router_schema_uri(cfg: dict[str, Any] | None = None) -> str:
 
 
 def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, str | list[str]]:
-    """Map every object file to the ``opentide.schema.json`` router.
+    """The ``yaml.schemas`` entry releases before #752 wrote: objects to the router schema.
 
-    The router selects the revision schema from ``metadata.schema``, so
-    revisions of one family (``rule::1.0`` and ``rule::1.1``) coexist in one
-    folder. A per-folder mapping to a single revision schema cannot express that.
+    ``setup vscode`` no longer writes it; :func:`write_vscode_settings` and
+    ``doctor`` use it to recognise it.
     """
     del workspace  # reserved for future workspace-relative schema URIs
     cfg = _paths_config()
     return {_router_schema_uri(cfg): _object_glob(_object_folders(cfg))}
 
 
-def _globs(value: object) -> list[str]:
-    """The globs of a ``yaml.schemas`` value: the YAML extension takes a string or a list."""
-    values = [value] if isinstance(value, str) else value
-    if not isinstance(values, list):
-        return []
-    return [item for item in values if isinstance(item, str)]
+def is_opentide_schema_mapping(schema: str, globs: object) -> bool:
+    """Whether a ``yaml.schemas`` entry is one ``setup vscode`` wrote.
 
-
-def _same_glob(glob: str) -> str:
-    return glob.removeprefix("./")
-
-
-def schema_value_covers(value: object, wanted: str | list[str]) -> bool:
-    """Whether the ``yaml.schemas`` *value* holds every glob of *wanted*, in either form.
-
-    ``"objects/**/*.yaml"`` and ``["objects/**/*.yaml"]`` are the same mapping
-    to the YAML extension, and a list may hold the user's own globs as well.
+    The router schema (``.opentide/schemas/opentide.schema.json``), whatever it
+    maps, or a per-folder revision mapping of an earlier release. A mapping of
+    another schema, or of a revision schema to the user's own folders, is theirs.
     """
-    held = {_same_glob(glob) for glob in _globs(value)}
-    return all(_same_glob(glob) in held for glob in _globs(wanted))
-
-
-def schema_mapping_value(schemas: dict[str, Any], schema: str) -> object:
-    """The value *schemas* maps to *schema*, written with or without a leading ``./``."""
-    for key in (schema, f"./{schema}", schema.removeprefix("./")):
-        if key in schemas:
-            return schemas[key]
-    return None
-
-
-def merge_schema_value(existing: object, wanted: str | list[str]) -> str | list[str]:
-    """The value to write for a schema *existing* maps, so that it maps *wanted*.
-
-    A mapping that already covers *wanted*, in either form, is kept as it is,
-    so a rerun changes nothing. A list keeps the user's own globs and gains the
-    ones it lacks. A string that does not cover *wanted* is replaced, as before.
-    """
-    if schema_value_covers(existing, wanted) and isinstance(existing, (str, list)):
-        return existing
-    held = _globs(existing)
-    if not isinstance(existing, list) or not held:
-        return wanted
-    present = {_same_glob(glob) for glob in held}
-    return [*existing, *(glob for glob in _globs(wanted) if _same_glob(glob) not in present)]
+    cfg = _paths_config()
+    if schema.removeprefix("./") == _router_schema_uri(cfg):
+        return True
+    families = list(cfg.get("objects") or CORE_OBJECT_TYPES)
+    return _is_stale_revision_mapping(
+        schema, globs, families=families, folders=_object_folders(cfg)
+    )
 
 
 def _is_stale_revision_mapping(
@@ -226,52 +221,58 @@ def _is_stale_revision_mapping(
     )
 
 
-def write_vscode_settings(target: Path, *, merge: bool = True) -> str:
-    """Write or merge .vscode/settings.json with opentide yaml.schemas.
+def write_vscode_settings(target: Path) -> str | None:
+    """Remove the ``yaml.schemas`` entries opentide wrote from ``.vscode/settings.json``.
 
-    Merging keeps unrelated settings and user mappings, and drops the
-    per-folder revision mappings earlier releases generated.
+    The opentide extension's language server checks object files, and a YAML
+    language server mapped to opentide's schemas would report them a second
+    time. Every other setting and ``yaml.schemas`` entry is kept; an emptied
+    ``yaml.schemas`` is removed. The file is never created, and is left
+    untouched when it has no such entry. Returns the path when it was rewritten.
     """
-    vscode_dir = target / ".vscode"
-    vscode_dir.mkdir(parents=True, exist_ok=True)
-    settings_path = vscode_dir / "settings.json"
-    mappings = build_yaml_schema_mappings(workspace=target.resolve())
-    existing = _load_jsonc(settings_path) if merge and settings_path.is_file() else {}
-    yaml_schemas = existing.get("yaml.schemas", {})
+    settings_path = target / ".vscode" / "settings.json"
+    if not settings_path.is_file():
+        return None
+    existing = _load_jsonc(settings_path)
+    if not isinstance(existing, dict):
+        return None
+    yaml_schemas = existing.get("yaml.schemas")
     if not isinstance(yaml_schemas, dict):
-        yaml_schemas = {}
-    cfg = _paths_config()
-    families = list(cfg.get("objects") or CORE_OBJECT_TYPES)
-    folders = _object_folders(cfg)
-    yaml_schemas = {
+        return None
+    kept = {
         schema: globs
         for schema, globs in yaml_schemas.items()
-        if not _is_stale_revision_mapping(schema, globs, families=families, folders=folders)
+        if not is_opentide_schema_mapping(str(schema), globs)
     }
-    for schema, globs in mappings.items():
-        # A user's list-form mapping keeps its own globs: ``update`` replaced it
-        # with the bare string and dropped them.
-        key = next(
-            (key for key in (schema, f"./{schema}") if key in yaml_schemas),
-            schema,
-        )
-        yaml_schemas[key] = merge_schema_value(yaml_schemas.get(key), globs)
-    existing["yaml.schemas"] = yaml_schemas
+    if kept == yaml_schemas:
+        return None
+    if kept:
+        existing["yaml.schemas"] = kept
+    else:
+        del existing["yaml.schemas"]
     settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
     return ".vscode/settings.json"
 
 
 def write_vscode_extensions(target: Path, *, merge: bool = True) -> str:
-    """Write or merge .vscode/extensions.json recommending the YAML extension."""
+    """Write or merge .vscode/extensions.json recommending the opentide extension.
+
+    Recommendations already there are kept, and one the file lists under
+    ``unwantedRecommendations`` is not added.
+    """
     vscode_dir = target / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     extensions_path = vscode_dir / "extensions.json"
     existing = _load_jsonc(extensions_path) if merge and extensions_path.is_file() else {}
+    if not isinstance(existing, dict):
+        existing = {}
     recommendations = existing.get("recommendations", [])
     if not isinstance(recommendations, list):
         recommendations = []
+    unwanted = existing.get("unwantedRecommendations")
+    unwanted = unwanted if isinstance(unwanted, list) else []
     for extension_id in RECOMMENDED_EXTENSIONS:
-        if extension_id not in recommendations:
+        if extension_id not in recommendations and extension_id not in unwanted:
             recommendations.append(extension_id)
     existing["recommendations"] = recommendations
     extensions_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
@@ -317,12 +318,16 @@ def run_vscode_snippets(target: Path) -> str | None:
     return snippets_rel if dest.is_file() else None
 
 
+def _settings_files(target: Path, *, merge: bool) -> list[str]:
+    """Recommend the extension; drop opentide's ``yaml.schemas`` entries."""
+    files = [write_vscode_extensions(target, merge=merge)]
+    if (settings := write_vscode_settings(target)) is not None:
+        files.append(settings)
+    return files
+
+
 def run_vscode_settings(target: Path, *, merge: bool = True) -> dict[str, object]:
-    files = [
-        write_vscode_settings(target, merge=merge),
-        write_vscode_extensions(target, merge=merge),
-    ]
-    return {"message": "VS Code settings generated", "files": files}
+    return {"message": "VS Code settings generated", "files": _settings_files(target, merge=merge)}
 
 
 def run_vscode_setup(
@@ -359,8 +364,7 @@ def run_vscode_setup(
 
     files: list[str] = []
     if settings:
-        files.append(write_vscode_settings(target, merge=merge))
-        files.append(write_vscode_extensions(target, merge=merge))
+        files.extend(_settings_files(target, merge=merge))
 
     snippet_path: str | None = None
     if snippets:
@@ -381,6 +385,7 @@ def run_vscode_setup(
             files.append(write_mcp_config(target, McpHost.vscode))
         except McpConfigError as exc:
             warnings.append(mcp_config_warning(McpHost.vscode, exc))
+    extension_mcp = mcp and recommends_extension(target)
 
     payload: dict[str, object] = {
         "message": "VS Code setup complete (deprecated)",
@@ -391,6 +396,9 @@ def run_vscode_setup(
     }
     if warnings:
         payload["warnings"] = warnings
+    if extension_mcp:
+        payload["extension_mcp"] = True
+        payload["detail"] = EXTENSION_MCP_NOTE
     if snippets and snippet_path is None:
         payload["status"] = "failed"
         payload["_exit_code"] = 1
@@ -406,9 +414,3 @@ def run_vscode_setup(
 
 def run_vscode_all(target: Path, *, merge: bool = True, generate: bool = True) -> dict[str, object]:
     return run_vscode_setup(target, merge=merge, generate=generate)
-
-
-def validate_schema_fragment_matches_global() -> None:
-    """Ensure bundled fragment stays aligned with paths.toml (tests)."""
-    fragment = load_yaml_schema_fragment()
-    assert fragment.get("yaml.schemas") == build_yaml_schema_mappings()

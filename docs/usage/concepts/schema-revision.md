@@ -33,7 +33,7 @@ The schema identifier maps predictably to files and specs:
 | Template artifact | `.opentide/templates/{family}.{major}.{minor}.template.yaml` | `rule.1.0.template.yaml` |
 | IDE router | `.opentide/schemas/opentide.schema.json` | `objects/**/*.yaml`, routed by `metadata.schema` |
 
-The router `opentide.schema.json` is the editor entry point. `opentide setup vscode` maps `objects/**/*.yaml` to it, and the router applies the revision schema named in each object's `metadata.schema`:
+The router `opentide.schema.json` is the entry point for a JSON Schema tool (an editor's YAML extension, a CI linter) that you map `objects/**/*.yaml` to: the router applies the revision schema named in each object's `metadata.schema`. `opentide setup vscode` no longer maps it, because the opentide VS Code extension checks objects with the language server. The router:
 
 - `metadata.schema` completes to the registered object identifiers (`objective::1.0`, `rule::1.0`, `rule::1.1`, `threat::1.0`). An unknown identifier is reported on that field with the valid values.
 - Each identifier has one `if`/`then` branch, combined with `allOf`. Only the branch whose identifier matches applies, so a `rule::1.1` object is checked against `rule.1.1.schema.json` and nothing else.

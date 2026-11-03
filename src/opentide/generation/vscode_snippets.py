@@ -21,6 +21,10 @@ logger = structlog.get_logger("opentide.generation.vscode_snippets")
 # crashed fresh repositories (issue #153).
 SNIPPETS_PATH: str | Path | None = None
 
+#: The languages a snippet completes in: plain YAML, and ``opentide-yaml``, the
+#: language the opentide VS Code extension gives object files (#752).
+SNIPPET_SCOPE = "yaml,opentide-yaml"
+
 _CORE_PREFIXES: dict[str, str] = {
     "threat": "tide-threat",
     "objective": "tide-objective",
@@ -89,7 +93,7 @@ def vs_code_snippet_generator(
     blanks: int = 0,
     *,
     description: str | None = None,
-    scope: str = "yaml",
+    scope: str = SNIPPET_SCOPE,
 ) -> dict[str, Any]:
     """Convert a YAML template file into a VS Code snippet entry.
 

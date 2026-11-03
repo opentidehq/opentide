@@ -143,3 +143,19 @@ def test_write_mcp_config_keeps_the_users_schema_key(tmp_path: Path) -> None:
     payload = json.loads(dest.read_text(encoding="utf-8"))
     assert payload["$schema"] == "https://example.test/mcp.json"
     assert payload["mcpServers"]["opentide"]["type"] == "stdio"
+
+
+def test_setup_mcp_vscode_says_when_the_extension_provides_the_server(tmp_path: Path) -> None:
+    """#752: the extension serves opentide's MCP server; mcp.json is for teammates without it."""
+    plain = run_mcp_setup(McpSetupOptions(path=tmp_path, hosts=[McpHost.vscode]))
+    assert "extension_mcp" not in plain
+    (tmp_path / ".vscode" / "extensions.json").write_text(
+        '{"recommendations": ["opentidehq.opentide"]}', encoding="utf-8"
+    )
+    result = run_mcp_setup(McpSetupOptions(path=tmp_path, hosts=[McpHost.vscode]))
+    assert result["files"] == [".vscode/mcp.json"]
+    assert result["extension_mcp"] is True
+    assert "opentidehq.opentide" in str(result["detail"])
+    assert "teammates without it" in str(result["detail"])
+    other = run_mcp_setup(McpSetupOptions(path=tmp_path, hosts=[McpHost.cursor]))
+    assert "extension_mcp" not in other

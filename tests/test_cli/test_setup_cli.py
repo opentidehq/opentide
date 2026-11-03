@@ -431,7 +431,10 @@ def test_setup_vscode_mcp_flag_writes_mcp_json(tmp_path) -> None:
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     assert (tmp_path / ".vscode" / "mcp.json").is_file()
-    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / ".vscode" / "extensions.json").is_file()
+    payload = json.loads(result.stdout)
+    # The same run recommended the extension, which provides the MCP server too (#752).
+    assert payload["extension_mcp"] is True
 
 
 def test_setup_vscode_mcp_flag_leaves_an_unreadable_mcp_json(tmp_path) -> None:
