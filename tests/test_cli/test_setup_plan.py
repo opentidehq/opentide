@@ -325,3 +325,62 @@ def test_the_plan_lists_the_files_a_step_removes(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout + result.stderr
     assert not (agents / "STALE.md").exists()
     assert (claude / "TEAM-NOTES.md").read_text(encoding="utf-8") == "ours\n"
+
+
+def test_the_plan_refuses_to_copy_a_home_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".ssh").mkdir()
+    (home / ".ssh" / "id_ed25519").write_text("secret\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    result, document = _invoke("env", "--plan", "--path", str(home))
+    assert result.exit_code == 2, result.stdout
+    assert "home folder" in document["failure"]["message"]
+
+
+def test_the_plan_refuses_a_tree_too_big_to_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.cli.services.setup import plan as plan_mod
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    for number in range(5):
+        (target / f"file-{number}.txt").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(plan_mod, "MAX_COPY_FILES", 3)
+    result, document = _invoke("env", "--plan", "--path", str(target))
+    assert result.exit_code == 2, result.stdout
+    assert "more than 3 files" in document["failure"]["message"]
+
+
+def test_the_plan_does_not_copy_build_output(tmp_path: Path) -> None:
+    from opentide.cli.services.setup.plan import Sandbox
+
+    target = tmp_path / "repo"
+    for folder in ("target", "dist", "build", ".terraform", ".cache", "objects"):
+        (target / folder).mkdir(parents=True)
+        (target / folder / "x.bin").write_bytes(b"x")
+    box = Sandbox(target, tmp_path / "scratch")
+    copied = {path.relative_to(box.shadow_top).as_posix() for path in box.shadow_top.rglob("*")}
+    assert copied == {"objects", "objects/x.bin"}
+
+
+def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
+    import signal
+
+    from opentide.cli.services.setup.plan import sandbox
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    (target / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    copies: list[Path] = []
+    with pytest.raises(SystemExit) as stopped, sandbox(target) as box:
+        copies.append(box.shadow_top)
+        assert (box.shadow_top / ".env").is_file()
+        os.kill(os.getpid(), signal.SIGTERM)
+    assert stopped.value.code == 128 + signal.SIGTERM
+    assert not copies[0].exists()
+    assert signal.getsignal(signal.SIGTERM) is not None

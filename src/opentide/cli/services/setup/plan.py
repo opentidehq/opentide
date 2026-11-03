@@ -49,8 +49,21 @@ SKIPPED_DIRS = frozenset(
         ".mypy_cache",
         ".pytest_cache",
         ".ruff_cache",
+        ".cache",
+        ".terraform",
+        "target",
+        "dist",
+        "build",
     }
 )
+#: The most the copy holds before the plan refuses: a work tree this big is not
+#: a detection repository, or one whose copy would fill the temporary folder.
+MAX_COPY_FILES = 50_000
+MAX_COPY_BYTES = 512 * 1024 * 1024
+
+
+class PlanRefused(Exception):
+    """``--plan`` will not copy this tree; the message says why and what to do."""
 #: What of ``.git`` the copy keeps; objects are read from the real store as an alternate.
 _GIT_FILES = ("HEAD", "config", "packed-refs", "description")
 _GIT_DIRS = ("refs", "hooks", "info")
@@ -175,6 +188,18 @@ def _copy_tree(top: Path, shadow_top: Path) -> None:
     real_top = top.resolve()
     #: Folders outside the tree copied through a link.
     outside: set[Path] = set()
+    copied = [0, 0]
+
+    def count(path: Path) -> None:
+        copied[0] += 1
+        copied[1] += path.stat().st_size
+        if copied[0] > MAX_COPY_FILES or copied[1] > MAX_COPY_BYTES:
+            raise PlanRefused(
+                f"--plan copies the work tree around the target into a temporary folder, "
+                f"and {top} holds more than {MAX_COPY_FILES:,} files or "
+                f"{MAX_COPY_BYTES // (1024 * 1024)} MB outside the folders it skips. "
+                "Plan a smaller tree with --path, or run setup without --plan."
+            )
 
     def copy_link(source: Path, dest: Path) -> None:
         try:
@@ -201,6 +226,7 @@ def _copy_tree(top: Path, shadow_top: Path) -> None:
             outside.add(resolved)
             copy_dir(resolved, dest)
         elif resolved.is_file():
+            count(resolved)
             shutil.copy2(resolved, dest)
 
     def copy_dir(source: Path, dest: Path) -> None:
@@ -220,6 +246,7 @@ def _copy_tree(top: Path, shadow_top: Path) -> None:
                 elif entry.is_dir(follow_symlinks=False):
                     copy_dir(path, target)
                 elif entry.is_file(follow_symlinks=False):
+                    count(path)
                     shutil.copy2(path, target, follow_symlinks=False)
                 # Anything else (socket, FIFO, device) is not copied.
             except OSError:
@@ -253,6 +280,21 @@ def stamps(root: Path) -> dict[str, Stamp]:
     return found
 
 
+def _refuse_to_copy(top: Path) -> None:
+    """Refuse a tree no plan should copy: a home folder or a file system root."""
+    try:
+        home = Path.home().resolve()
+    except (OSError, RuntimeError):
+        home = None
+    if top.parent == top or (home is not None and top.resolve() == home):
+        where = "your home folder" if top.parent != top else "a file system root"
+        raise PlanRefused(
+            f"--plan would copy {where} ({top}) into a temporary folder, its secrets "
+            "included. Point --path at the detection repository, or run `git init` "
+            "in it so the plan copies that repository alone."
+        )
+
+
 class Sandbox:
     """A copy of the repository around *target*, and the way back to real paths."""
 
@@ -262,6 +304,7 @@ class Sandbox:
         top = _git_root(anchor)
         if top is None or not self.real_target.is_relative_to(top):
             top = self.real_target
+        _refuse_to_copy(top)
         self.real_top = top
         self.shadow_top = root / (top.name or "repo")
         self.shadow_target = self.shadow_top / self.real_target.relative_to(top)
@@ -341,10 +384,42 @@ def _reported_skips(result: Mapping[str, Any]) -> list[str]:
 
 
 @contextmanager
+def _exit_on_termination() -> Generator[None, None, None]:
+    """Turn SIGTERM and SIGHUP into ``SystemExit`` while the copy exists.
+
+    Python's default for both ends the process without running ``finally``
+    blocks, so the copy, the repository's secrets included, stayed in the
+    temporary folder when an editor or a CI timeout stopped the plan.
+    Only the main thread can install handlers; elsewhere this does nothing.
+    """
+    import signal
+    import threading
+
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def stop(signum: int, _frame: object) -> None:
+        raise SystemExit(128 + signum)
+
+    names = [name for name in ("SIGTERM", "SIGHUP") if hasattr(signal, name)]
+    previous = {name: signal.signal(getattr(signal, name), stop) for name in names}
+    try:
+        yield
+    finally:
+        for name, handler in previous.items():
+            # None: a handler installed outside Python, which cannot be put back.
+            signal.signal(getattr(signal, name), signal.SIG_DFL if handler is None else handler)
+
+
+@contextmanager
 def sandbox(target: Path) -> Generator[Sandbox, None, None]:
     """A :class:`Sandbox` for *target*, with the workspace variables pointing at the copy."""
     saved = {name: os.environ.get(name) for name in (*_WORKSPACE_VARIABLES, *_GIT_VARIABLES)}
-    with tempfile.TemporaryDirectory(prefix="opentide-setup-plan-") as scratch:
+    with (
+        _exit_on_termination(),
+        tempfile.TemporaryDirectory(prefix="opentide-setup-plan-") as scratch,
+    ):
         box = Sandbox(target, Path(scratch))
         for name in _GIT_VARIABLES:
             os.environ.pop(name, None)

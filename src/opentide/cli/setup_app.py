@@ -127,10 +127,13 @@ PlanRun = Callable[[Path, Callable[[str, Mapping[str, object]], None]], Mapping[
 
 def _emit_plan(cli: CliContext, target: Path, step: str, run: PlanRun) -> None:
     """Run *run* in a copy of *target* and print the files it would write; write nothing."""
-    from opentide.cli.services.setup.plan import plan_payload, plan_steps
+    from opentide.cli.services.setup.plan import PlanRefused, plan_payload, plan_steps
 
     cli.apply_environment()
-    steps, result = plan_steps(target, run, name=step)
+    try:
+        steps, result = plan_steps(target, run, name=step)
+    except PlanRefused as refused:
+        raise typer.BadParameter(str(refused), param_hint="--plan") from refused
     payload = plan_payload(target, steps)
     if result.get("status") == "failed":
         payload["status"] = "failed"
