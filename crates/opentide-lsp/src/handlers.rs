@@ -1964,14 +1964,14 @@ fn handle_catalog(session: &mut Session, params: custom::CatalogParams) -> Value
     let wanted = params
         .root
         .as_deref()
-        .map(|uri| crate::session::path_key(uri_to_path(uri).trim_end_matches(['/', '\\'])));
+        .map(|uri| crate::session::root_key(&uri_to_path(uri)));
     let roots: Vec<Option<usize>> = session
         .catalog_roots()
         .into_iter()
         .filter(|root| match (&wanted, root) {
             (None, _) => true,
             (Some(want), Some(i)) => {
-                crate::session::path_key(&session.roots[*i].path.display().to_string()) == *want
+                crate::session::root_key(&session.roots[*i].path.display().to_string()) == *want
             }
             (Some(_), None) => false,
         })

@@ -328,3 +328,24 @@ fn a_removed_folder_with_an_open_document_stays_as_the_root_found_around_it() {
         "{catalog}"
     );
 }
+
+#[test]
+fn a_root_sent_with_a_trailing_slash_is_found_by_the_uri_the_catalog_reports() {
+    let scratch = workspace("catalog-slash");
+    let root = &scratch.0;
+    let plain = file_uri(root);
+    let slashed = format!("{plain}/");
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": slashed }));
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    let reported = catalog["roots"][0]["root"].as_str().unwrap().to_string();
+    assert_eq!(reported, plain, "{catalog}");
+    for uri in [&reported, &plain, &slashed] {
+        let catalog = lsp.request("opentide/catalog", json!({ "root": uri }))["result"].clone();
+        assert_eq!(
+            catalog["roots"].as_array().unwrap().len(),
+            1,
+            "{uri}: {catalog}"
+        );
+        assert!(object(&catalog, MODEL).is_some(), "{uri}: {catalog}");
+    }
+}

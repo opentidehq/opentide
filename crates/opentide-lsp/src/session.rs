@@ -196,6 +196,22 @@ pub(crate) fn path_key(path: &str) -> String {
     key
 }
 
+/// The key a root is compared under: its [`path_key`] without trailing
+/// separators, so `/w/` (a client that sends its folder with a slash, as
+/// Emacs eglot does) and `/w` are one root. A bare `/` and a drive root
+/// (`c:/`) keep theirs.
+pub(crate) fn root_key(path: &str) -> String {
+    let key = path_key(path);
+    let trimmed = key.trim_end_matches('/');
+    if trimmed.is_empty() && !key.is_empty() {
+        return "/".to_string();
+    }
+    if trimmed.len() == 2 && trimmed.as_bytes()[1] == b':' {
+        return format!("{trimmed}/");
+    }
+    trimmed.to_string()
+}
+
 /// Object files under a root: [`path_key`] → (text, index entry).
 #[derive(Default)]
 struct DiskObjects {
@@ -1073,5 +1089,21 @@ impl Session {
         uri_to_path(uri)
             .replace('\\', "/")
             .ends_with(VISIBILITY_CONFIGURATION)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::root_key;
+
+    #[test]
+    fn a_root_is_the_same_root_with_or_without_a_trailing_separator() {
+        assert_eq!(root_key("/w/"), "/w");
+        assert_eq!(root_key("/w"), "/w");
+        assert_eq!(root_key(r"C:\w\"), "c:/w");
+        assert_eq!(root_key("/"), "/");
+        assert_eq!(root_key("c:/"), "c:/");
+        assert_eq!(root_key("C:"), "c:/");
+        assert_eq!(root_key(r"c:\"), "c:/");
     }
 }
