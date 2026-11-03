@@ -1348,10 +1348,9 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
         i += 1;
     }
     let (open, commas) = *stack.last()?;
-    let name_start = before[..open]
-        .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '~'))
-        .map(|i| i + 1)
-        .unwrap_or(0);
+    let name_start = opentide_core::word_start(&before[..open], |c| {
+        c.is_ascii_alphanumeric() || c == '_' || c == '~'
+    });
     let name = before[name_start..open].to_string();
     (!name.is_empty()).then_some((name, commas))
 }

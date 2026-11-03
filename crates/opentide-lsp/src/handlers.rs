@@ -1013,9 +1013,9 @@ fn handle_completion(
     // prefix already typed. Editors split words at `.`, so plain insertText
     // would append after `process.`.
     let before = &doc.text[..offset.min(doc.text.len())];
-    let dotted = &before[before
-        .rfind(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-')))
-        .map_or(0, |i| i + 1)..];
+    let dotted = &before[opentide_core::word_start(before, |c| {
+        c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-')
+    })..];
     let start = lsp::Position::new(
         position.line,
         position

@@ -159,6 +159,17 @@ pub fn strip_bom(text: &str) -> &str {
 
 /// [`strip_bom`], with `offset` (a byte offset into `text`) moved onto the
 /// text it returns. An offset inside the mark is the start of the text.
+/// Where the run of characters `keep` accepts that ends `text` starts: the
+/// byte after the last character it rejects, or 0. Always a char boundary,
+/// whatever the rejected character's width (#182: `rfind(...) + 1` landed
+/// inside `é`).
+pub fn word_start(text: &str, keep: impl Fn(char) -> bool) -> usize {
+    text.char_indices()
+        .rev()
+        .find(|(_, c)| !keep(*c))
+        .map_or(0, |(i, c)| i + c.len_utf8())
+}
+
 pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
     let stripped = strip_bom(text);
     let shift = text.len() - stripped.len();
@@ -858,6 +869,20 @@ pub enum EngineError {
 
 #[cfg(test)]
 mod tests {
+    use super::word_start;
+
+    /// #182: the character before the word may be wider than a byte.
+    #[test]
+    fn word_start_is_a_char_boundary_after_a_wide_character() {
+        let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+        assert_eq!(word_start("a b", word), 2);
+        assert_eq!(word_start("abc", word), 0);
+        let text = "wehrE\u{59a}ndsWith";
+        assert_eq!(&text[word_start(text, word)..], "ndsWith");
+        let text = "x 日本name";
+        assert_eq!(&text[word_start(text, word)..], "name");
+        assert_eq!(word_start("😀", word), "😀".len());
+    }
     use super::*;
 
     /// #180: a span that ends inside a multi-byte character gave a panic.
