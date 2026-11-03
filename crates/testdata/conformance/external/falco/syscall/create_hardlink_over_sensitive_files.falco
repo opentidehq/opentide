@@ -1,0 +1,1 @@
+create_hardlink and (evt.arg.oldpath in (sensitive_file_names))

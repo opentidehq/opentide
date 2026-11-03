@@ -209,6 +209,10 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
             serde_json::to_string_pretty(&generate_tm_language(LanguageId::Lucene, &spec))?,
         ),
         (
+            root.join("falco.tmLanguage.json"),
+            serde_json::to_string_pretty(&generate_tm_language(LanguageId::Falco, &spec))?,
+        ),
+        (
             root.join("monaco.json"),
             serde_json::to_string_pretty(&generate_monaco(&spec))?,
         ),

@@ -1,8 +1,8 @@
 name: Oracle
 
 # CI-only differential oracles (scripts/oracles/README.md). The engine is
-# compared with Microsoft Kusto.Language, Splunk's search parser, and the
-# Elastic and Lucene parsers (@elastic/esql, EqlBase.g4, Kibana's kuery
+# compared with Microsoft Kusto.Language, Splunk's search parser, Falco's own
+# `falco --validate`, and the Elastic and Lucene parsers (@elastic/esql, EqlBase.g4, Kibana's kuery
 # grammar, Lucene's QueryParser). A
 # disagreement not listed in testdata/oracles/exceptions.toml is a red build,
 # and so is a listed one that is gone. The references never ship; release.yml
@@ -20,6 +20,7 @@ on:
       - "catalogs/esql/**"
       - "catalogs/eql/**"
       - "catalogs/carbon_black/**"
+      - "catalogs/falco/**"
       - "testdata/**"
       - "scripts/oracles/**"
       - "scripts/ci-oracle.sh"
@@ -67,6 +68,43 @@ jobs:
         run: |
           eval "$(bash scripts/oracles/splunk/start.sh)"
           bash scripts/ci-oracle.sh spl
+
+  falco:
+    # Every case of testdata/oracles/falco/cases.yaml and every Falco default
+    # rule condition (with its broken twin) through the real Falco, one
+    # `falco --validate` per case, beside the engine's verdict. The pins are
+    # recorded in scripts/oracles/README.md; bump them together.
+    name: Falco ${{ matrix.falco }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        falco: ["0.45.2"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: falcosecurity/rules
+          ref: e7b066bfbc8d81226ca5fa3e95ffd4dee38a2428
+          path: falco-rules
+          sparse-checkout: rules
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - run: docker pull falcosecurity/falco:${{ matrix.falco }}
+      - name: Falco oracle
+        run: >
+          python3 scripts/oracles/falco/oracle.py
+          --rules falco-rules
+          --docker falcosecurity/falco:${{ matrix.falco }}
+          --report falco-oracle-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: falco-oracle-report-${{ matrix.falco }}
+          path: falco-oracle-report.json
 
   elastic:
     name: Elastic and Lucene

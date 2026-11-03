@@ -25,6 +25,7 @@ const files = {
   'source.esql': 'esql.tmLanguage.json',
   'source.eql': 'eql.tmLanguage.json',
   'source.kuery': 'kuery.tmLanguage.json',
+  'source.falco': 'falco.tmLanguage.json',
 };
 const registry = new textmate.Registry({
   onigLib: Promise.resolve({
@@ -65,6 +66,9 @@ configurations:
     query: index=main | stats count by host
   carbon_black_cloud:
     query: process_name:cmd.exe
+  sysdig:
+    condition: >
+      spawned_process and proc.name = bash
   elastic:
     type: query
     language: lucene
@@ -86,6 +90,8 @@ test('a plain SPL scalar and a Carbon Black query are embedded too', () => {
   assert.ok(stats.includes('meta.embedded.block.spl'), stats.join(' '));
   const cmd = all.find(([t, s]) => t.includes('process_name') && s.includes('meta.embedded.block.lucene'));
   assert.ok(cmd, 'carbon_black_cloud.query is embedded Lucene');
+  const falco = all.find(([t, s]) => t.includes('spawned_process') && s.includes('meta.embedded.block.falco'));
+  assert.ok(falco, 'sysdig.condition is embedded Falco');
 });
 
 test('Elastic queries and text after the block get no region', () => {
@@ -107,5 +113,6 @@ test('package-contributions.json maps each region to its language id', () => {
     'meta.embedded.block.kql': 'kql',
     'meta.embedded.block.spl': 'spl',
     'meta.embedded.block.lucene': 'lucene',
+    'meta.embedded.block.falco': 'falco',
   });
 });

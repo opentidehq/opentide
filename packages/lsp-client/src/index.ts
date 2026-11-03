@@ -41,6 +41,7 @@ export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "eql", name: "EQL", patterns: ["**/*.eql"] },
   { id: "kuery", name: "Kibana KQL", patterns: ["**/*.kuery"] },
   { id: "lucene", name: "Lucene", patterns: ["**/*.lucene"] },
+  { id: "falco", name: "Falco", patterns: ["**/*.falco"] },
 ];
 
 /**

@@ -1,5 +1,5 @@
 //! Production coverage gate: every required named grammar rule must appear
-//! in `testdata/corpus/{kql,spl}/` tagged `prod:<rule>`.
+//! in `testdata/corpus/<language>/` tagged `prod:<rule>`.
 
 use opentide_core::LanguageId;
 use opentide_syntax::{has_error, parse};
@@ -413,6 +413,26 @@ fn lucene_corpus_gate() {
             "or",
             "and",
             "not",
+        ],
+    });
+}
+
+#[test]
+fn falco_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Falco,
+        id: "falco",
+        structural: &[
+            "source_file",
+            "identifier",
+            "field_name",
+            "argument_value",
+            "transformer_name",
+            "unary_operator",
+            "comparison_operator",
+            "list_operator",
+            "bare_string",
+            "number",
         ],
     });
 }

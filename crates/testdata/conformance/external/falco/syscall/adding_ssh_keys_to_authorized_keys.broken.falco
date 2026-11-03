@@ -1,0 +1,1 @@
+open_write and proc.name in (oops and (user_ssh_directory or fd.name startswith /root/.ssh) and fd.name endswith authorized_keys and not proc.name in (ssh_binaries)

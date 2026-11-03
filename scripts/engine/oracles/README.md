@@ -11,6 +11,7 @@ CI-only checks that compare the opentide engine with the parser each query langu
 | Kibana KQL (`kuery`) | Kibana `grammar.peggy` at `ea2712af`, compiled with peggy 5.1.1 | `elastic/kuery.cjs` | `oracle.yml` → Elastic and Lucene |
 | Lucene | Lucene 10.5.2 `QueryParser` (the version Elasticsearch pins), leading wildcards on | `elastic/LuceneOracle.java` | `oracle.yml` → Elastic and Lucene |
 | Lucene, Carbon Black Cloud | A Carbon Black Cloud tenant's `processes/search_validation` (`valid`, `invalid_message`, `error_offset`), as cbc_sdk's `validate_process_query` calls it | `oracle.py carbon_black`, with `OPENTIDE_CBC_URL`, `OPENTIDE_CBC_ORG_KEY` and `OPENTIDE_CBC_TOKEN` (`<api secret>/<api id>`, `org.search.events` READ) | `oracle.yml` → Carbon Black Cloud, weekly and on demand; it skips without the secrets and never runs on a pull request |
+| Falco | `falco --validate`: Falco 0.45.2 (libs 0.26.1), `falcosecurity/falco:0.45.2`, with the three default rules files of `falcosecurity/rules@e7b066bf` loaded | `falco/oracle.py`, one Falco process per case in one container | `oracle.yml` → Falco 0.45.2; see [Falco](#falco) |
 | Tide YAML | Pydantic models in the pinned `opentide` package | `scripts/pydantic_object_issues.py` | `ci.yml` (`cargo test`, `tide_corpus.rs`) |
 | EQL, ES\|QL, Lucene | A live Elasticsearch (8.19 and 9.x release images) | `elasticsearch/`, a throwaway container | `oracle.yml` (8.19.23 and 9.5.5), and locally for the other lines; see [Live Elasticsearch](#live-elasticsearch) |
 
@@ -90,3 +91,17 @@ Nothing from this reference is shipped or vendored; the image is pulled at run t
 ## Not shipped
 
 Kusto.Language, Splunk, Splunk SDKs, and the Elastic and Lucene references never enter a release artifact. `ci-oracle.sh` fails if a shipped manifest depends on one, and `release.yml` runs `scripts/license-scan.sh` over every artifact (unpacking zips and `.crate` files) before it attaches or publishes them.
+
+## Falco
+
+`falco/oracle.py` runs every case through the real Falco and through the engine, and compares them. A case is one Falco rule: a condition, its output, exceptions, the macros and lists it defines, or a tuning (`append_to_rule`). It becomes a Falco rules file (its lists and macros as real `- list:` / `- macro:` items, so Falco resolves them itself, then the rule or an `override: append` of a default rule) and an opentide rule with the same `configurations.sysdig` block, which `opentide-lsp analyze` checks. Falco validates each file with the three default rules files loaded first (`falco_rules.yaml`, `falco-incubating_rules.yaml`, `falco-sandbox_rules.yaml`), in its own process: a load failure carries over to the files after it in one run.
+
+A case agrees when Falco loads it exactly when the engine reports no error (`falco_*` or the block's `sysdig_*` constraint codes), and when Falco's `LOAD_NO_EVTTYPE` matches the engine's `falco_no_evttype`. The corpora are `testdata/oracles/falco/cases.yaml`, one or more cases per row of `docs/FALCO.md`, and the conditions of the Falco default rules (`testdata/conformance/external/falco/syscall/`) with their broken twins.
+
+Two differences are documented, and the oracle counts them apart: Falco OSS refuses a macro or list it does not define (`Undefined macro`), and an append to a rule it does not have; on a Sysdig tenant either may be one Sysdig manages, so the engine warns (`falco_unknown_macro`, `falco_unknown_list`, `falco_unknown_rule`). Nothing else is allowed to differ. A case may also list `engine_warnings` it requires (`sysdig_list_self_reference` on a list naming itself), which Falco has no code for.
+
+Pins: Falco `0.45.2` (the `falcosecurity/falco` image), rules `falcosecurity/rules@e7b066bfbc8d81226ca5fa3e95ffd4dee38a2428`. Bump both in `oracle.yml` and here together. Plugin sources (`k8s_audit`, `aws_cloudtrail`, ...) are not compared: the image ships only the container plugin.
+
+```bash
+python scripts/oracles/falco/oracle.py --rules ../falcosecurity-rules --docker falcosecurity/falco:0.45.2 --report report.json
+```

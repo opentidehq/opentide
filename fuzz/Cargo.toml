@@ -67,6 +67,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "falco"
+path = "fuzz_targets/falco.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "tide"
 path = "fuzz_targets/tide.rs"
 test = false

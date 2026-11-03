@@ -151,3 +151,39 @@ fn standalone_spl_matches_tide_query_unknown_command() {
         )
     );
 }
+
+#[test]
+fn standalone_falco_matches_tide_condition_unknown_field() {
+    let query = "spawned_process and proc.nmae = bash";
+    let raw = analyze_raw("queries/broken.falco", LanguageId::Falco, query);
+    let raw_op = operator(&raw.diagnostics, codes::FALCO_UNKNOWN_FIELD);
+    assert!(raw_op.message.contains("proc.nmae"), "{}", raw_op.message);
+    assert!(raw.diagnostics.iter().all(|d| d.code.starts_with("falco_")));
+
+    let yaml = tide_rule("sysdig", "condition", query);
+    let host = MemoryWorkspace {
+        files: vec![(
+            "objects/rules/composability-falco.yaml".into(),
+            yaml.clone(),
+        )],
+    };
+    let embedded = analyze_doc(
+        "objects/rules/composability-falco.yaml",
+        LanguageId::TideYaml,
+        &yaml,
+        &host,
+    );
+    let embedded_op = operator(&embedded.diagnostics, codes::FALCO_UNKNOWN_FIELD);
+    assert_same_operator(raw_op, embedded_op);
+    assert_eq!(
+        embedded_op.field_path.as_deref(),
+        Some(
+            [
+                "configurations".to_string(),
+                "sysdig".to_string(),
+                "condition".to_string(),
+            ]
+            .as_slice()
+        )
+    );
+}

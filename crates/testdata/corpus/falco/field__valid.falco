@@ -1,0 +1,2 @@
+# prod:field valid
+proc.aname[2] = sshd and evt.arg.flags contains O_TRUNC

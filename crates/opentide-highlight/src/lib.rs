@@ -48,6 +48,10 @@ pub const LUCENE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/lucene/highlights.scm"
 ));
+pub const FALCO_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/falco/highlights.scm"
+));
 
 /// The tree-sitter highlight query for a language. Configuration TOML has
 /// none: the editor's TOML grammar highlights it.
@@ -61,6 +65,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Kuery => KUERY_HIGHLIGHTS_SCM,
         LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
         LanguageId::Config => "",
+        LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
     }
 }
 
@@ -777,8 +782,8 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
         LanguageId::Kql | LanguageId::Esql | LanguageId::Eql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
         LanguageId::Spl => Some("```[^`]*```"),
-        // Kibana KQL and Lucene have no comment syntax.
-        LanguageId::Kuery | LanguageId::Lucene => None,
+        // Kibana KQL, Lucene, and Falco conditions have no comment syntax.
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco => None,
         LanguageId::Config => Some("(?m)^\\s*#.*$"),
     };
     if let Some(comment_match) = comment_match {
@@ -934,6 +939,9 @@ pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
     ),
     (&["splunk"], &["query", "search"], LanguageId::Spl),
     (&["carbon_black_cloud"], &["query"], LanguageId::Lucene),
+    // The rule's condition; a macro's (`macros[].condition`) is a level
+    // deeper and is left to semantic tokens.
+    (&["sysdig"], &["condition"], LanguageId::Falco),
 ];
 
 /// The embedded region a query of `language` gets: `meta.embedded.block.<id>`.
@@ -1182,6 +1190,13 @@ mod tests {
                     "/grammars/tree-sitter-opentide-lucene/queries/highlights.scm"
                 )),
             ),
+            (
+                LanguageId::Falco,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-falco/queries/highlights.scm"
+                )),
+            ),
         ];
         for (language, copy) in copies {
             assert_eq!(
@@ -1405,5 +1420,6 @@ mod tm_language_stub_bug {
         assert_eq!(embedded["meta.embedded.block.kql"], "kql");
         assert_eq!(embedded["meta.embedded.block.spl"], "spl");
         assert_eq!(embedded["meta.embedded.block.lucene"], "lucene");
+        assert_eq!(embedded["meta.embedded.block.falco"], "falco");
     }
 }

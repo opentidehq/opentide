@@ -2,12 +2,19 @@ name: Release
 
 # A release is either a pushed vX.Y.Z tag, or "Run workflow" on main, which
 # releases the version in Cargo.toml and creates its tag with the GitHub
-# Release.
+# Release. "Run workflow" with publish_only resumes crates.io publishing for a
+# version whose GitHub Release already exists: it builds and releases nothing,
+# and publishes only the crates crates.io does not have yet.
 on:
   push:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      publish_only:
+        description: "Resume crates.io publishing for the already-released version in Cargo.toml"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,6 +36,7 @@ jobs:
         id: tag
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISH_ONLY: ${{ inputs.publish_only }}
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
@@ -39,7 +47,18 @@ jobs:
               exit 1
             fi
             tag="v$(python3 scripts/release.py version)"
-            if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            if [ "${PUBLISH_ONLY}" = "true" ]; then
+              if ! gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+                echo "::error::publish_only resumes a released version, and ${tag} has no GitHub Release"
+                exit 1
+              fi
+              # The crates are published from this commit: their sources must be the tag's.
+              git fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+              if ! git diff --quiet "${tag}" HEAD -- crates catalogs grammars highlights Cargo.toml Cargo.lock LICENSE NOTICE; then
+                echo "::error::the crate sources changed since ${tag}; publish_only would publish different crates"
+                exit 1
+              fi
+            elif gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
               echo "::error::${tag} is already released; bump the version first (scripts/release.py bump)"
               exit 1
             fi
@@ -53,6 +72,7 @@ jobs:
 
   native:
     needs: verify
+    if: ${{ !inputs.publish_only }}
     env:
       TAG: ${{ needs.verify.outputs.tag }}
     strategy:
@@ -117,6 +137,7 @@ jobs:
 
   wasm:
     needs: verify
+    if: ${{ !inputs.publish_only }}
     env:
       TAG: ${{ needs.verify.outputs.tag }}
     runs-on: ubuntu-latest
@@ -147,6 +168,7 @@ jobs:
 
   highlights:
     needs: verify
+    if: ${{ !inputs.publish_only }}
     env:
       TAG: ${{ needs.verify.outputs.tag }}
     runs-on: ubuntu-latest
@@ -168,6 +190,7 @@ jobs:
 
   release:
     needs: [verify, native, wasm, highlights]
+    if: ${{ !inputs.publish_only }}
     runs-on: ubuntu-latest
     env:
       TAG: ${{ needs.verify.outputs.tag }}
@@ -224,7 +247,9 @@ jobs:
   # the workflow's OIDC identity instead of the token. The token then only
   # publishes a crate that does not exist yet, which crates.io requires.
   crates:
-    needs: release
+    needs: [verify, release]
+    # After the release, or on its own for publish_only (the release job is skipped then).
+    if: ${{ always() && needs.verify.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -246,6 +271,9 @@ jobs:
         env:
           TRUSTED_TOKEN: ${{ steps.trusted.outputs.token }}
           STORED_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # Trusted publishing cannot create a crate: release.py publishes a crate
+          # crates.io does not have yet with the stored token.
+          NEW_CRATE_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
           if [ -n "${TRUSTED_TOKEN}" ]; then

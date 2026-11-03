@@ -8,7 +8,7 @@ metadata:
 
 # Add a language
 
-KQL, SPL, and Tide YAML are the 1.0 engines. ES|QL, EQL, Kibana KQL (`kuery`), and Lucene followed this list for Elastic Security; `opentide-esql` and `opentide-eql` are the most complete examples. A later language follows this list. Authoring guidance for detections lives in `opentidehq/skills` (`kusto-query-language`, `splunk-spl-processing`, and the platform skills). Those skills are not an engine. Implementation skills in this repo are `rust-engine`, `tree-sitter`, `catalogs`, `lsp-host`, and `wasm-hosts`. Read them before the matching step.
+KQL, SPL, and Tide YAML are the 1.0 engines. ES|QL, EQL, Kibana KQL (`kuery`), and Lucene followed this list for Elastic Security, and Falco for Sysdig Secure; `opentide-esql` and `opentide-eql` are the most complete examples, and `opentide-falco` the smallest complete one (grammar, catalogs from a generator, block context from Tide). A later language follows this list. Authoring guidance for detections lives in `opentidehq/skills` (`kusto-query-language`, `splunk-spl-processing`, and the platform skills). Those skills are not an engine. Implementation skills in this repo are `rust-engine`, `tree-sitter`, `catalogs`, `lsp-host`, and `wasm-hosts`. Read them before the matching step.
 
 CrowdStrike stays unsupported until its language is specified. SQL stays unsupported until a real dialect and grammar are chosen. A stub parser or a fake highlighter is not a language.
 
@@ -42,7 +42,7 @@ CrowdStrike stays unsupported until its language is specified. SQL stays unsuppo
 
 ## Dispatch
 
-`Session::language_for` selects the engine from a reported language id, then from the URI suffix. A reported id the parser does not know is ignored and the suffix is used. Raw query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`) are first-class documents with an empty Tide workspace; a new suffix goes in `LanguageId::from_extension`. `crates/opentide-analysis/tests/raw_query_composability.rs` is the pattern: the same diagnostic fires for a standalone file and for the same text injected into a Tide query block.
+`Session::language_for` selects the engine from a reported language id, then from the URI suffix. A reported id the parser does not know is ignored and the suffix is used. Raw query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`) are first-class documents with an empty Tide workspace; a new suffix goes in `LanguageId::from_extension`. `crates/opentide-analysis/tests/raw_query_composability.rs` is the pattern: the same diagnostic fires for a standalone file and for the same text injected into a Tide query block.
 
 ## Out of scope
 

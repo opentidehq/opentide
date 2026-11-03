@@ -1,0 +1,1 @@
+container_started and proc.name in (oops and container.privileged=true and not falco_privileged_containers and not user_privileged_containers and not redhat_image

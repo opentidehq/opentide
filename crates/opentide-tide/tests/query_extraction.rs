@@ -100,6 +100,29 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
             }
         }
     }
+    if let Some(sysdig) = configurations.and_then(|c| c.get("sysdig")) {
+        for field in ["condition", "output"] {
+            if let Some(value) = text(sysdig.get(field)) {
+                add(
+                    format!("configurations.sysdig.{field}"),
+                    LanguageId::Falco,
+                    "sysdig",
+                    value,
+                );
+            }
+        }
+        let macros = sysdig.get("macros").and_then(Value::as_sequence);
+        for (n, m) in macros.into_iter().flatten().enumerate() {
+            if let Some(value) = text(m.get("condition")) {
+                add(
+                    format!("configurations.sysdig.macros.{n}.condition"),
+                    LanguageId::Falco,
+                    "sysdig",
+                    value,
+                );
+            }
+        }
+    }
     let searches = doc
         .get("response")
         .and_then(|r| r.get("procedure"))

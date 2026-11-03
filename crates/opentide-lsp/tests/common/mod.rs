@@ -124,7 +124,7 @@ impl Drop for Lsp {
     }
 }
 
-/// Open a document, return its published diagnostic codes.
+/// Open a document, return the diagnostic codes published for it.
 pub fn published_codes(lsp: &mut Lsp, uri: &str, language_id: &str, text: &str) -> Vec<String> {
     lsp.notify(
         "textDocument/didOpen",
@@ -137,12 +137,9 @@ pub fn published_codes(lsp: &mut Lsp, uri: &str, language_id: &str, text: &str) 
             }
         }),
     );
-    let msg = lsp.read();
-    assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
-    msg["params"]["diagnostics"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default()
+    // Opening a Tide object re-checks the other open ones (they may reference
+    // it), so other documents' publishes can come first.
+    published_for(lsp, uri)
         .iter()
         .filter_map(|d| d["code"].as_str().map(str::to_string))
         .collect()

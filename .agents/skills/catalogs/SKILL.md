@@ -74,6 +74,16 @@ ECS is never a closed list: elastic-1.0 says field names MUST NOT be checked aga
 
 `elastic_dataset_not_declared` (warning) checks the block's `index` and `threat.index`, and ES|QL `FROM`, against the `name` of the workspace's elastic log sources, opt-in per platform (`Declaration::Undeclared` only); data views are not declarable. `crates/opentide-analysis/tests/elastic_detection_rules.rs` runs the ECS checks over every public rule on `logs-*`: any `ecs_type_mismatch` there is an engine bug.
 
+## Falco catalogs
+
+| Path | Contents |
+| --- | --- |
+| `catalogs/falco/fields.toml` | event sources, then every field with its type, kind (`string`, `number`, `bool`, `ip`), the sources it applies to (`*` for every source), and whether it takes an argument |
+| `catalogs/falco/defaults.toml` | the macros and lists of the Falco default rules, with condition or items and defining file |
+| `catalogs/falco/events.toml` | event names `evt.type` compares with |
+
+`scripts/sync_falco_catalog.py --website <falco-website> --plugins <plugins> --rules <rules>` regenerates them (`--check` compares, `--corpus` also writes `testdata/conformance/external/falco/`); never hand-edit. The field reference is CC BY 4.0, the plugin READMEs and default rules Apache-2.0 (`catalogs/falco/NOTICE`). `LEGACY_FIELDS` in the script adds fields current libsinsp no longer documents that Sysdig and older Falco rules still use (`evt.dir`), each with its reason. Nothing here is a closed list: an unknown field, macro, list, or event is a warning, because plugins add fields and Sysdig manages macros of its own (sysdig-1.0).
+
 ## Tide objects
 
 `scripts/sync_opentide_schemas.py` runs opentide's own generator (`python -m opentide.generation.lsp_catalog`) and writes `catalogs/tide/generated/`, the reference schemas and the highlights key list; it needs an opentide that ships the generator (`uv run --project ../opentide python scripts/sync_opentide_schemas.py` from a checkout). Rows are keyed by schema id; lookups resolve an object's `metadata.schema`, a bare family or unknown revision taking the newest, and a family-keyed catalog (an older workspace one) applying to every revision. Required fields, closed objects and legacy keys come from the catalog: never hard-code a revision check in Rust. `scripts/requirements-opentide.txt` pins the opentide release `pydantic_object_issues.py` uses as its oracle. Pydantic is the CLI authority. The LSP emits the same `{code, field_path, severity}` with ranges. `scripts/pydantic_object_issues.py` is the comparison source. Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.
@@ -89,6 +99,7 @@ Injection, from `language_for_field_path`:
 | `configurations.splunk.query` and legacy `configurations.splunk.search` | SPL |
 | `configurations.elastic.query` and `threat.query` | ES\|QL, EQL, kuery, or Lucene from `type` and `language` (`elastic_query_language`) |
 | `configurations.carbon_black_cloud.query` | Lucene, Carbon Black dialect |
+| `configurations.sysdig.condition`, `macros[].condition`, `output` | Falco (`opentide_tide::falco_context` gives the block's `source`, `macros`, `lists`, and whether it is a tuning) |
 | `response.procedure.searches[].query` with `system: elastic` | the entry's `language`; none when omitted |
 | `response.procedure.searches[].query` with `system:` a platform identifier above | that platform's language and profile, in any key order (`hunt_query_language`) |
 | `configurations.splunk.actions.notable.drilldown.search`, any other `query:` / `search:` | none |

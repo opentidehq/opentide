@@ -71,7 +71,7 @@ Custom methods: `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`
 
 ## Session
 
-Documents are keyed by the URI the client sent, with their language, text, version and root. `language_for` returns `opentide-config` for a TOML file under `.opentide/configurations/` whatever id the client reports, and `None` (not read, nothing published) for any other `.toml`. Otherwise it uses a reported language id when `LanguageId::parse` accepts it (never `opentide-config`), else the URI suffix (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, else Tide YAML); YAML is Tide only under `objects/`, with an `opentide-yaml` id, or when it names a Tide schema. A `didChange` whose version is not newer than the document's is ignored.
+Documents are keyed by the URI the client sent, with their language, text, version and root. `language_for` returns `opentide-config` for a TOML file under `.opentide/configurations/` whatever id the client reports, and `None` (not read, nothing published) for any other `.toml`. Otherwise it uses a reported language id when `LanguageId::parse` accepts it (never `opentide-config`), else the URI suffix (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, else Tide YAML); YAML is Tide only under `objects/`, with an `opentide-yaml` id, or when it names a Tide schema. A `didChange` whose version is not newer than the document's is ignored.
 
 Roots are the workspace folders (`workspaceFolders`, else `rootUri`, else `rootPath`), plus the `.opentide/`/`objects/` ancestor (`server::workspace_root`, shared with `analyze`) of a document opened outside every folder. A document belongs to the deepest root holding it, else the first. Each root has its own disk objects, index, `visibility.toml` and catalogs; the engine's catalog and dataset layers are process-wide, so `Session::activate` installs the root's before a request reads them (once, with one root). The engine never calls `std::fs`; the host does.
 
@@ -97,7 +97,7 @@ CrowdStrike paths produce `crowdstrike_unsupported` or no fake success. Do not p
 
 `editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is a separate repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
-Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
+Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
 
 ## Tests
 

@@ -33,6 +33,9 @@ pub enum LanguageId {
     /// alias of `toml`: only those files are this language.
     #[serde(rename = "opentide-config")]
     Config,
+    /// Falco rule conditions (Sysdig Secure `configurations.sysdig`).
+    #[serde(rename = "falco", alias = "opentide-falco")]
+    Falco,
 }
 
 impl LanguageId {
@@ -46,6 +49,7 @@ impl LanguageId {
             Self::Kuery => "kuery",
             Self::Lucene => "lucene",
             Self::Config => "opentide-config",
+            Self::Falco => "falco",
         }
     }
 
@@ -59,6 +63,7 @@ impl LanguageId {
             "kuery" | "opentide-kuery" | "kibana-kql" => Some(Self::Kuery),
             "lucene" | "opentide-lucene" | "Lucene" => Some(Self::Lucene),
             "opentide-config" => Some(Self::Config),
+            "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
             _ => None,
         }
     }
@@ -73,18 +78,20 @@ impl LanguageId {
             "eql" => Some(Self::Eql),
             "kuery" => Some(Self::Kuery),
             "lucene" => Some(Self::Lucene),
+            "falco" => Some(Self::Falco),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 6] = [
+    pub const QUERY_LANGUAGES: [Self; 7] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
         Self::Eql,
         Self::Kuery,
         Self::Lucene,
+        Self::Falco,
     ];
 }
 
@@ -543,6 +550,42 @@ pub mod codes {
     pub const CBC_UNKNOWN_FIELD: &str = "cbc_unknown_field";
     /// The host's configuration checker failed on a configuration file.
     pub const CONFIG_CHECK_FAILED: &str = "config_check_failed";
+    // Falco conditions (sysdig-1.0, "Falco language").
+    pub const FALCO_PARSE_ERROR: &str = "falco_parse_error";
+    pub const FALCO_UNKNOWN_FIELD: &str = "falco_unknown_field";
+    pub const FALCO_UNKNOWN_MACRO: &str = "falco_unknown_macro";
+    pub const FALCO_UNKNOWN_LIST: &str = "falco_unknown_list";
+    pub const FALCO_MISPLACED_LIST: &str = "falco_misplaced_list";
+    pub const FALCO_FIELD_ARGUMENT: &str = "falco_field_argument";
+    pub const FALCO_OPERATOR_TYPE: &str = "falco_operator_type";
+    pub const FALCO_VALUE_TYPE: &str = "falco_value_type";
+    pub const FALCO_TRANSFORMER: &str = "falco_transformer";
+    pub const FALCO_RHS_FIELD: &str = "falco_rhs_field";
+    pub const FALCO_INVALID_REGEX: &str = "falco_invalid_regex";
+    pub const FALCO_REGEX_SIMPLE: &str = "falco_regex_simple";
+    pub const FALCO_FIELD_AS_VALUE: &str = "falco_field_as_value";
+    pub const FALCO_TRANSFORMER_AS_VALUE: &str = "falco_transformer_as_value";
+    pub const FALCO_DEPRECATED_FIELD: &str = "falco_deprecated_field";
+    pub const FALCO_UNSAFE_NA_CHECK: &str = "falco_unsafe_na_check";
+    pub const FALCO_NO_EVTTYPE: &str = "falco_no_evttype";
+    pub const FALCO_OUTPUT_SYNTAX: &str = "falco_output_syntax";
+    pub const FALCO_NEWER_SYNTAX: &str = "falco_newer_syntax";
+    pub const FALCO_EXCEPTION: &str = "falco_exception";
+    pub const FALCO_UNKNOWN_EVENT: &str = "falco_unknown_event";
+    pub const FALCO_UNKNOWN_SOURCE: &str = "falco_unknown_source";
+    pub const FALCO_APPEND_CONDITION: &str = "falco_append_condition";
+    pub const FALCO_UNKNOWN_RULE: &str = "falco_unknown_rule";
+    // Sysdig block constraint codes (sysdig-1.0, Constraints), as opentide names them.
+    pub const SYSDIG_RULE_SHAPE: &str = "sysdig_rule_shape";
+    pub const SYSDIG_TUNING_KEYS: &str = "sysdig_tuning_keys";
+    pub const SYSDIG_PRIORITY: &str = "sysdig_priority";
+    pub const SYSDIG_SOURCE: &str = "sysdig_source";
+    pub const SYSDIG_EXCEPTION_SHAPE: &str = "sysdig_exception_shape";
+    pub const SYSDIG_DEFINITION_NAME: &str = "sysdig_definition_name";
+    pub const SYSDIG_DEFINITION_DUPLICATE: &str = "sysdig_definition_duplicate";
+    pub const SYSDIG_DEFINITION_ORDER: &str = "sysdig_definition_order";
+    pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
+    pub const SYSDIG_LIST_SELF_REFERENCE: &str = "sysdig_list_self_reference";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -644,6 +687,40 @@ pub mod codes {
         ELASTIC_DATASET_NOT_DECLARED,
         CBC_UNKNOWN_FIELD,
         CONFIG_CHECK_FAILED,
+        FALCO_PARSE_ERROR,
+        FALCO_UNKNOWN_FIELD,
+        FALCO_UNKNOWN_MACRO,
+        FALCO_UNKNOWN_LIST,
+        FALCO_MISPLACED_LIST,
+        FALCO_FIELD_ARGUMENT,
+        FALCO_OPERATOR_TYPE,
+        FALCO_VALUE_TYPE,
+        FALCO_TRANSFORMER,
+        FALCO_RHS_FIELD,
+        FALCO_INVALID_REGEX,
+        FALCO_REGEX_SIMPLE,
+        FALCO_FIELD_AS_VALUE,
+        FALCO_TRANSFORMER_AS_VALUE,
+        FALCO_DEPRECATED_FIELD,
+        FALCO_UNSAFE_NA_CHECK,
+        FALCO_NO_EVTTYPE,
+        FALCO_OUTPUT_SYNTAX,
+        FALCO_NEWER_SYNTAX,
+        FALCO_EXCEPTION,
+        FALCO_UNKNOWN_EVENT,
+        FALCO_UNKNOWN_SOURCE,
+        FALCO_APPEND_CONDITION,
+        FALCO_UNKNOWN_RULE,
+        SYSDIG_RULE_SHAPE,
+        SYSDIG_TUNING_KEYS,
+        SYSDIG_PRIORITY,
+        SYSDIG_SOURCE,
+        SYSDIG_EXCEPTION_SHAPE,
+        SYSDIG_DEFINITION_NAME,
+        SYSDIG_DEFINITION_DUPLICATE,
+        SYSDIG_DEFINITION_ORDER,
+        SYSDIG_LIST_IN_VALUE,
+        SYSDIG_LIST_SELF_REFERENCE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -856,6 +933,102 @@ pub mod codes {
             CONFIG_CHECK_FAILED => {
                 "opentide could not check this configuration file; the message says why. Its other findings are missing."
             }
+            FALCO_PARSE_ERROR => "The Falco condition does not parse.",
+            FALCO_UNKNOWN_FIELD => {
+                "The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it."
+            }
+            FALCO_UNKNOWN_MACRO => {
+                "The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros."
+            }
+            FALCO_UNKNOWN_LIST => {
+                "The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value."
+            }
+            FALCO_MISPLACED_LIST => {
+                "A list is used where its expansion breaks the condition: as a macro, or as a single value; a list belongs inside a value list, `in (name)`."
+            }
+            FALCO_FIELD_ARGUMENT => {
+                "A known Falco field is used with an argument it refuses, or without one it requires (libsinsp's field rules: `proc.aname[N]` takes an index, `evt.arg.NAME` an event argument)."
+            }
+            FALCO_OPERATOR_TYPE => {
+                "The operator does not apply to the field's type (libsinsp `flt_is_comparable`); Falco refuses to load the rule."
+            }
+            FALCO_VALUE_TYPE => {
+                "The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule."
+            }
+            FALCO_TRANSFORMER => {
+                "A field transformer cannot apply here: the field's type, a field that refuses transformers, or the arguments of `join`, `concat`, or `getopt`."
+            }
+            FALCO_RHS_FIELD => {
+                "A field cannot be compared with another field here (`val(...)` or a transformer on the right): not with `pmatch` or `regex`, not on networks, not on fields that refuse it, and only between fields of the same type."
+            }
+            FALCO_INVALID_REGEX => "The `regex` pattern does not compile.",
+            FALCO_REGEX_SIMPLE => {
+                "A `regex` check a plain operator (`=`, `contains`, `startswith`, `endswith`) could make, which libsinsp warns about: regex is the slowest check."
+            }
+            FALCO_FIELD_AS_VALUE => {
+                "A constant value that is a field name: compare with `val(field)` to read the field."
+            }
+            FALCO_TRANSFORMER_AS_VALUE => {
+                "A constant value that looks like a transformer call, compared as text."
+            }
+            FALCO_DEPRECATED_FIELD => {
+                "A field Falco deprecates (`evt.dir`, `evt.latency`): it no longer carries the value it used to."
+            }
+            FALCO_UNSAFE_NA_CHECK => {
+                "A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text."
+            }
+            FALCO_NO_EVTTYPE => {
+                "The rule cannot be narrowed to a few event types (`evt.type`), so it runs on every event; Falco and Sysdig warn about the performance penalty."
+            }
+            FALCO_OUTPUT_SYNTAX => {
+                "The output template does not format: a `%` at the end, a length with no field, or a token that is no field or transformer."
+            }
+            FALCO_NEWER_SYNTAX => {
+                "Syntax that only recent libsinsp releases parse (operator modifiers, `join`, `concat`, `getopt`, transformer arguments); an older Falco or Sysdig agent refuses the rule."
+            }
+            FALCO_EXCEPTION => {
+                "A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold."
+            }
+            FALCO_UNKNOWN_EVENT => {
+                "The event type is not in the driver's event table nor a syscall name; libsinsp refuses it."
+            }
+            FALCO_UNKNOWN_SOURCE => {
+                "The event source is not one Falco or its published plugins define, so its fields are not checked."
+            }
+            SYSDIG_RULE_SHAPE => {
+                "A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both."
+            }
+            SYSDIG_TUNING_KEYS => {
+                "A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them."
+            }
+            SYSDIG_PRIORITY => {
+                "`priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively."
+            }
+            SYSDIG_SOURCE => "`source` is not an event source name (`[a-z][a-z0-9_]*`).",
+            SYSDIG_EXCEPTION_SHAPE => {
+                "An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`)."
+            }
+            SYSDIG_DEFINITION_NAME => {
+                "A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword."
+            }
+            SYSDIG_DEFINITION_DUPLICATE => {
+                "A name is defined more than once across the block's macros and lists."
+            }
+            SYSDIG_DEFINITION_ORDER => {
+                "A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro."
+            }
+            SYSDIG_LIST_SELF_REFERENCE => {
+                "A block list names itself: Falco keeps the name as a literal item, which on Sysdig resolves against a tenant list of that name, not this one."
+            }
+            SYSDIG_LIST_IN_VALUE => {
+                "A block list name appears in an exception value where Falco's expansion would not produce a value list."
+            }
+            FALCO_UNKNOWN_RULE => {
+                "A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule."
+            }
+            FALCO_APPEND_CONDITION => {
+                "A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not."
+            }
             _ => return None,
         })
     }
@@ -962,6 +1135,8 @@ mod tests {
         assert_eq!(LanguageId::parse("esql"), Some(LanguageId::Esql));
         assert_eq!(LanguageId::from_extension("sql"), None);
         assert_eq!(LanguageId::from_extension("eql"), Some(LanguageId::Eql));
+        assert_eq!(LanguageId::from_extension("falco"), Some(LanguageId::Falco));
+        assert_eq!(LanguageId::parse("falco"), Some(LanguageId::Falco));
     }
 
     #[test]

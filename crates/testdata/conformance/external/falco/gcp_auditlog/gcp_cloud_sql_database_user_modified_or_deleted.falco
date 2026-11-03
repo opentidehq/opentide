@@ -1,0 +1,1 @@
+is_cloudsql_service and (gcp.methodName="cloudsql.users.update" or gcp.methodName="cloudsql.users.delete")

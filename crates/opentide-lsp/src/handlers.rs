@@ -1032,8 +1032,10 @@ fn handle_completion(
     let items = found
         .into_iter()
         .map(|c| {
-            let dotted_edit =
-                c.label.contains('.') && !dotted.is_empty() && c.label.starts_with(dotted);
+            // Any label that extends the typed word replaces the whole of
+            // it: a client that splits words at `.` would otherwise filter
+            // and insert after the last dot.
+            let dotted_edit = !dotted.is_empty() && c.label.starts_with(dotted);
             let field = (c.kind == "enum")
                 .then(|| c.detail.as_deref()?.split_once(' '))
                 .flatten();

@@ -10,6 +10,7 @@ unsafe extern "C" {
     fn tree_sitter_opentide_eql() -> *const ();
     fn tree_sitter_opentide_kuery() -> *const ();
     fn tree_sitter_opentide_lucene() -> *const ();
+    fn tree_sitter_opentide_falco() -> *const ();
 }
 
 fn from_raw(ptr: *const ()) -> Language {
@@ -25,6 +26,7 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Eql => Some(unsafe { from_raw(tree_sitter_opentide_eql()) }),
         LanguageId::Kuery => Some(unsafe { from_raw(tree_sitter_opentide_kuery()) }),
         LanguageId::Lucene => Some(unsafe { from_raw(tree_sitter_opentide_lucene()) }),
+        LanguageId::Falco => Some(unsafe { from_raw(tree_sitter_opentide_falco()) }),
         // Tide YAML has its own parser; configuration TOML is the host's.
         LanguageId::TideYaml | LanguageId::Config => None,
     }

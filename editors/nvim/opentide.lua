@@ -1,8 +1,9 @@
 -- Neovim sample: opentide LSP.
 -- Disable yamlls on objects/**. Languages: opentide-yaml, kql, spl, esql, eql,
--- kuery (Kibana KQL), lucene (not sql), and opentide-config for
--- .opentide/configurations/**/*.toml. Configuration checks need
--- `opentide lsp start`: `opentide-lsp` on its own reports nothing there.
+-- kuery (Kibana KQL), lucene, falco (Falco conditions; not sql), and
+-- opentide-config for .opentide/configurations/**/*.toml. Configuration
+-- checks need `opentide lsp start`: `opentide-lsp` on its own reports
+-- nothing there.
 
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   pattern = { "objects/**/*.yaml", "objects/**/*.yml" },
@@ -25,7 +26,7 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   end,
 })
 
-for _, lang in ipairs({ "esql", "eql", "kuery", "lucene" }) do
+for _, lang in ipairs({ "esql", "eql", "kuery", "lucene", "falco" }) do
   vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
     pattern = { "*." .. lang },
     callback = function()
@@ -56,7 +57,7 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene" },
+  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco" },
   callback = function()
     vim.lsp.start({
       name = "opentide-lsp",
