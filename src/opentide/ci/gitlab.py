@@ -21,6 +21,7 @@ from opentide.ci.inflight import (
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     CODEQUALITY_REPORT,
+    DOCS_ARTIFACT,
     OPENTIDE_VERSION_VARIABLE,
     REPORTS_DIR,
     SHARE_COMMAND,
@@ -320,6 +321,8 @@ def pipeline_document(options: CiRenderOptions) -> Job:
             script=doc_commands,
             needs=["generate"],
             rules=[dict(DEFAULT_BRANCH_RULE)],
+            # The pages were rendered and thrown away with the runner.
+            extra={"artifacts": {"name": DOCS_ARTIFACT, "paths": [f"{options.docs_output}/"]}},
         )
 
     return {

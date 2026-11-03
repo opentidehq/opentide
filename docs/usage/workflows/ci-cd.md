@@ -369,4 +369,6 @@ See [CLI → JSON output](../../cli/index.md) and [exit codes](../../cli/exit-co
 opentide generate docs --flavor github
 ```
 
+The generated pipelines run `opentide generate docs --output docs` in a `document` job on the default branch and keep the pages as the `opentide-docs` artifact: `artifacts:paths` on GitLab, `actions/upload-artifact` on GitHub, `PublishBuildArtifacts` on Azure. Download it from the pipeline run, or add a job that publishes it (the pages are Markdown, so a static-site step must render them first). Through 0.20.1 the job rendered the pages and kept nothing, a few minutes of runner time per default-branch pipeline for no output.
+
 The flavor adapts to where the docs are read: `--flavor` if given, else the CI platform running the job (`GITHUB_ACTIONS` → `github`, `GITLAB_CI` → `gitlab`, `TF_BUILD` → `azure_devops`), else the host of the repository's `origin` remote (GitHub, GitLab or Azure DevOps, self-hosted included when the host name says so), else `[flavor] default` in `documentation.toml`, plain CommonMark (`generic`) out of the box. Another CI (Jenkins, CircleCI) no longer selects GitLab. See [`generate docs`](../../cli/generate.md).

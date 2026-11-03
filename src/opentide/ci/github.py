@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shlex
 import textwrap
 
@@ -9,6 +10,7 @@ from opentide.ci.gates import github_premerge_if
 from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    DOCS_ARTIFACT,
     GATE_COMMANDS,
     REPORTS_DIR,
     SHARE_COMMAND,
@@ -79,6 +81,19 @@ def _report_artifact_step() -> str:
         "    name: opentide-reports\n"
         f"    path: {REPORTS_DIR}/\n"
         "    if-no-files-found: ignore"
+    )
+
+
+def _docs_artifact_step(options: CiRenderOptions) -> str:
+    """Keep the rendered pages; the job used to render them and throw them away."""
+    if not document_steps(options):
+        return ""
+    return (
+        "- name: Upload documentation\n"
+        "  uses: actions/upload-artifact@v4\n"
+        "  with:\n"
+        f"    name: {DOCS_ARTIFACT}\n"
+        f"    path: {json.dumps(options.docs_output + '/')}"
     )
 
 
@@ -429,7 +444,9 @@ def render_github(options: CiRenderOptions) -> str:
             name="Document",
             needs="generate",
             if_cond=prod_if,
-            steps=join_blocks(setup, _run_steps(document_steps(options))),
+            steps=join_blocks(
+                setup, _run_steps(document_steps(options)), _docs_artifact_step(options)
+            ),
         )
     )
 

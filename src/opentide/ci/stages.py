@@ -288,10 +288,14 @@ def github_deploy_env() -> str:
     return "\n".join(lines)
 
 
+#: The artifact every provider's document job keeps the rendered pages in.
+DOCS_ARTIFACT = "opentide-docs"
+
+
 def document_steps(options: CiRenderOptions) -> list[str]:
     if not options.docs_enabled:
         return []
-    return [f"opentide generate docs --output {options.docs_output}"]
+    return [f"opentide generate docs --output {shlex.quote(options.docs_output)}"]
 
 
 def inflight_generate_steps(options: CiRenderOptions | None = None) -> list[str]:

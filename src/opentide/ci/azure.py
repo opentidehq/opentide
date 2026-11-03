@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import shlex
 
 from opentide.ci.gates import azure_premerge_condition
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    DOCS_ARTIFACT,
     REPORTS_DIR,
     SHARE_COMMAND,
     document_steps,
@@ -146,6 +148,19 @@ def _publish_reports_step() -> str:
         "  inputs:\n"
         f"    PathtoPublish: $(Build.SourcesDirectory)/{REPORTS_DIR}\n"
         f"    ArtifactName: {SARIF_ARTIFACT}"
+    )
+
+
+def _publish_docs_step(options: CiRenderOptions) -> str:
+    """Keep the rendered pages; the job used to render them and throw them away."""
+    if not document_steps(options):
+        return ""
+    return (
+        "\n- task: PublishBuildArtifacts@1\n"
+        "  displayName: Publish documentation\n"
+        "  inputs:\n"
+        f"    PathtoPublish: {json.dumps('$(Build.SourcesDirectory)/' + options.docs_output)}\n"
+        f"    ArtifactName: {DOCS_ARTIFACT}"
     )
 
 
@@ -319,7 +334,7 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 "document",
                 display_name="Generate documentation",
-                steps=_job_steps(options, document_steps(options)),
+                steps=_job_steps(options, document_steps(options)) + _publish_docs_step(options),
             ),
             4,
         )

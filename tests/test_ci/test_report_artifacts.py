@@ -132,7 +132,41 @@ def test_gitlab_jobs_keep_their_summary(job: str, expose_as: str | None) -> None
 def test_gitlab_jobs_without_opentide_output_keep_no_artifact() -> None:
     pipeline = _gitlab()
     assert "artifacts" not in pipeline["generate"]
-    assert "artifacts" not in pipeline["document"]
+
+
+def test_every_document_job_keeps_the_pages_it_renders() -> None:
+    """The document job rendered the docs (minutes per default-branch run) and dropped them."""
+    gitlab = _gitlab()["document"]
+    assert gitlab["script"] == ["opentide generate docs --output docs"]
+    assert gitlab["artifacts"] == {"name": "opentide-docs", "paths": ["docs/"]}
+
+    github = _github()["document"]["steps"]
+    runs = [step.get("run") for step in github]
+    upload = _step(github, "Upload documentation")
+    assert runs.index("opentide generate docs --output docs") < github.index(upload)
+    assert upload["uses"] == "actions/upload-artifact@v4"
+    assert upload["with"] == {"name": "opentide-docs", "path": "docs/"}
+
+    parsed = yaml.safe_load(render_azure(CiRenderOptions(ci="azure", platforms=["sentinel"])))
+    document = next(stage for stage in parsed["stages"] if stage["stage"] == "Document")
+    steps = document["jobs"][0]["steps"]
+    assert "opentide generate docs --output docs" in steps[-2]["script"]
+    assert steps[-1] == {
+        "task": "PublishBuildArtifacts@1",
+        "displayName": "Publish documentation",
+        "inputs": {
+            "PathtoPublish": "$(Build.SourcesDirectory)/docs",
+            "ArtifactName": "opentide-docs",
+        },
+    }
+
+
+@pytest.mark.parametrize("ci", ["github", "gitlab", "azure"])
+def test_no_docs_artifact_without_docs(ci: str) -> None:
+    from opentide.ci.render import render_ci
+
+    options = CiRenderOptions(ci=ci, platforms=["sentinel"], docs_enabled=False)
+    assert "opentide-docs" not in next(iter(render_ci(options).values()))
 
 
 def test_gitlab_expose_as_names_are_valid() -> None:
