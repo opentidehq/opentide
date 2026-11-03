@@ -93,8 +93,10 @@ pub fn index_workspace(host: &dyn WorkspaceHost) -> Vec<IndexedObject> {
     workspace_index(host).to_vec()
 }
 
-/// The host's index when it keeps one, else one built from its documents.
-fn workspace_index(host: &dyn WorkspaceHost) -> std::sync::Arc<[IndexedObject]> {
+/// The host's index when it keeps one, else one built from its documents:
+/// [`index_workspace`] without the copy, for a host that serves many
+/// requests from one index.
+pub fn workspace_index(host: &dyn WorkspaceHost) -> std::sync::Arc<[IndexedObject]> {
     if let Some(index) = host.indexed_objects() {
         return index;
     }
@@ -344,6 +346,13 @@ fn parse_visibility(text: Option<&str>) -> Result<Option<DeclaredDatasets>, Stri
     text.map(DeclaredDatasets::from_visibility)
         .transpose()
         .map_err(|err| format!("visibility.toml: {err}"))
+}
+
+/// Whether `visibility.toml` text parses, without installing it: a host
+/// whose buffer is mid-edit keeps the declarations in use and need not
+/// re-check what depends on them.
+pub fn check_visibility(text: &str) -> Result<(), String> {
+    parse_visibility(Some(text)).map(|_| ())
 }
 
 /// Install the datasets a workspace's `visibility.toml` declares, leaving the

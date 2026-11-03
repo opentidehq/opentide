@@ -6,6 +6,7 @@
 mod elastic;
 mod injection;
 mod intel;
+mod outline;
 mod vocabs;
 mod yaml_path;
 mod yaml_scalar;
@@ -26,6 +27,10 @@ pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elasti
 pub use injection::hunt_query_language;
 pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
+};
+pub use outline::{
+    LinkTarget, OutlineKind, OutlineNode, ReferenceLens, TideLink, attack_url, document_links,
+    outline, reference_lens,
 };
 pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
 pub use yaml_path::{
