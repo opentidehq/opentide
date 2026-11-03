@@ -35,6 +35,11 @@ export interface OpentideLanguage {
  * Every language the server handles. `kql` is Microsoft KQL; `kuery` is
  * Kibana KQL (Elastic `language: kuery`). Tide YAML is scoped to `objects/`,
  * where the server owns diagnostics (turn yamlls off there).
+ *
+ * `opentide-config` is configuration TOML (`.opentide/configurations/`). The
+ * host that runs the server checks it (`opentide lsp start`); `opentide-lsp`
+ * on its own reports nothing for it, so `analyze` and `highlight` refuse it.
+ * Keep the editor's TOML grammar for it.
  */
 export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "opentide-yaml", name: "Tide YAML", patterns: ["**/objects/**/*.yaml", "**/objects/**/*.yml"] },
@@ -45,18 +50,46 @@ export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "kuery", name: "Kibana KQL", patterns: ["**/*.kuery"] },
   { id: "lucene", name: "Lucene", patterns: ["**/*.lucene"] },
   { id: "falco", name: "Falco", patterns: ["**/*.falco"] },
+  { id: "opentide-config", name: "opentide configuration", patterns: ["**/.opentide/configurations/**/*.toml"] },
 ];
+
+/** A document filter by language id. */
+export interface LanguageFilter {
+  language: string;
+}
+
+/** A document filter by file pattern, for `file:` URIs only. */
+export interface FileFilter {
+  scheme: "file";
+  pattern: string;
+}
+
+/** A document filter by file pattern, for a URI of any scheme. */
+export interface PatternFilter {
+  pattern: string;
+}
 
 /**
  * LSP document selector for every language, by language id and by file
  * pattern, so a file is served even when no extension registered its id
- * (for example `.esql` when Elastic's own extension owns the id).
+ * (for example `.esql` when Elastic's own extension owns the id). Its
+ * patterns match `file:` URIs only: use it on the desktop.
  */
-export const DOCUMENT_SELECTOR: ReadonlyArray<{ language: string } | { scheme: string; pattern: string }> =
-  LANGUAGES.flatMap((l) => [
-    { language: l.id },
-    ...l.patterns.map((pattern) => ({ scheme: "file", pattern })),
-  ]);
+export const DOCUMENT_SELECTOR: ReadonlyArray<LanguageFilter | FileFilter> = LANGUAGES.flatMap((l) => [
+  { language: l.id },
+  ...l.patterns.map((pattern): FileFilter => ({ scheme: "file", pattern })),
+]);
+
+/**
+ * The same selector with no scheme, for web hosts (vscode.dev, github.dev),
+ * where documents are `vscode-vfs:`, `vscode-remote:` or other virtual URIs,
+ * not `file:` ones. A pattern without a scheme matches the URI's path
+ * whatever its scheme.
+ */
+export const WEB_DOCUMENT_SELECTOR: ReadonlyArray<LanguageFilter | PatternFilter> = LANGUAGES.flatMap((l) => [
+  { language: l.id },
+  ...l.patterns.map((pattern): PatternFilter => ({ pattern })),
+]);
 
 /** The `opentide-wasm` exports the `worker` transport calls when given a `module`. */
 export interface HighlightModule {
@@ -149,10 +182,16 @@ export interface OpentideClient {
   dispose(): Promise<void>;
 }
 
-const LANGUAGE_IDS = new Set(LANGUAGES.map((l) => l.id));
+/** The languages `analyze` and `highlight` take: not `opentide-config`, which only a host checks. */
+const LANGUAGE_IDS = new Set(LANGUAGES.map((l) => l.id).filter((id) => id !== "opentide-config"));
 
 /** The server reads an unknown id as a default language; refuse it here instead. */
 function checkLanguage(languageId: string): void {
+  if (languageId === "opentide-config") {
+    throw new Error(
+      "opentide-config is checked by the host that runs the server (opentide lsp start), not by analyze or highlight",
+    );
+  }
   if (!LANGUAGE_IDS.has(languageId)) {
     throw new Error(`unknown language ${JSON.stringify(languageId)}; expected one of ${[...LANGUAGE_IDS].join(", ")}`);
   }
