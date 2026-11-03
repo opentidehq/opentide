@@ -69,8 +69,8 @@ PLACEHOLDER_MARKER = "# opentide:placeholder"
 #: detection logic and deploys: Elastic's validator wants a ``query`` for
 #: ``type: query``, the Defender loader reads ``scope`` unconditionally, a
 #: SentinelOne ``Single Event`` condition needs its query, HarfangLab needs a
-#: sigma (or yara) detection, and Sentinel's compile needs grouping and, unless
-#: ``nrt`` is true, a schedule.
+#: sigma (or yara) detection, Sysdig needs a Falco ``condition``, and Sentinel's
+#: compile needs grouping and, unless ``nrt`` is true, a schedule.
 PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "defender_for_endpoint": (("scope",), ("scope", "selection")),
     "elastic": (("query",),),
@@ -82,6 +82,7 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     ),
     "sentinel_one": (("condition", "single_event"), ("condition", "single_event", "query")),
     "harfanglab": (("sigma",),),
+    "sysdig": (("condition",),),
 }
 
 #: Values for those keys that compile, as ``(value, is_placeholder)``. A
@@ -759,7 +760,7 @@ def fill_template(
 def keep_platform_blocks(text: str, platforms: Iterable[str], pointer: str) -> str:
     """Drop the commented ``configurations`` blocks of every platform not in *platforms*.
 
-    The template lists all eight platforms, about 400 commented lines; a new
+    The template lists all nine platforms, about 400 commented lines; a new
     rule keeps its own blocks and one comment that points at *pointer*, the
     template, for the others.
     """

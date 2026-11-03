@@ -526,6 +526,7 @@ def setup_platforms_cmd(
     ),
     harfanglab: bool = typer.Option(False, "--harfanglab", help="Enable HarfangLab"),
     elastic: bool = typer.Option(False, "--elastic", help="Enable Elastic Security"),
+    sysdig: bool = typer.Option(False, "--sysdig", help="Enable Sysdig Secure (Falco)"),
     yes: bool = typer.Option(False, "--yes", "-y", help=_YES_HELP),
 ) -> None:
     """Create and enable platform configuration files in `.opentide/configurations/platforms/`."""
@@ -551,6 +552,8 @@ def setup_platforms_cmd(
         platforms.append(DetectionPlatform.harfanglab)
     if elastic:
         platforms.append(DetectionPlatform.elastic)
+    if sysdig:
+        platforms.append(DetectionPlatform.sysdig)
     if not platforms:
         raise typer.BadParameter("Choose at least one platform flag (e.g. --sentinel --splunk)")
     if not _confirm_write(cli, base, "Write these platform configurations?", yes=yes):

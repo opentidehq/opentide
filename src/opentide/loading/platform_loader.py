@@ -15,6 +15,7 @@ from opentide.models.platform import (
     SentinelConfig,
     SentinelOneConfig,
     SplunkConfig,
+    SysdigConfig,
 )
 from opentide.models.platform_configs import (
     DefenderAllowBlockAction,
@@ -390,6 +391,10 @@ def load_elastic_config(mdr_config: dict[str, Any]) -> ElasticConfig:
     return ElasticConfig.model_validate(_without_external_ids(mdr_config))
 
 
+def load_sysdig_config(mdr_config: dict[str, Any]) -> SysdigConfig:
+    return SysdigConfig.model_validate(_without_external_ids(mdr_config))
+
+
 _PLATFORM_LOADERS = {
     "sentinel": load_sentinel_config,
     "defender_for_endpoint": load_defender_config,
@@ -399,6 +404,7 @@ _PLATFORM_LOADERS = {
     "harfanglab": load_harfanglab_config,
     "carbon_black_cloud": load_carbon_black_config,
     "elastic": load_elastic_config,
+    "sysdig": load_sysdig_config,
 }
 
 

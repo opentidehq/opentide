@@ -854,6 +854,7 @@ ENGINE_REFERENCES: dict[str, tuple[str, str]] = {
         "query-dsl-query-string-query",
     ),
     "ecs_": ("ECS field", "https://www.elastic.co/docs/reference/ecs/ecs-field-reference"),
+    "falco_": ("Falco condition", "https://falco.org/docs/concepts/rules/conditions/"),
 }
 
 

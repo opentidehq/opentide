@@ -32,6 +32,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "crowdstrike": ConfigurationModels.Systems.Crowdstrike,
     "harfanglab": ConfigurationModels.Systems.HarfangLab,
     "elastic": ConfigurationModels.Systems.Elastic,
+    "sysdig": ConfigurationModels.Systems.Sysdig,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
@@ -138,6 +139,21 @@ def _build_section(cls: Any, payload: dict[str, Any], *, where: str) -> Any:
     return cls(**{key: value for key, value in payload.items() if key in known})
 
 
+def _check_sysdig_setup(setup: dict[str, Any], *, where: str) -> None:
+    """sysdig-1.0 tenant setup: `url` and `api_token`, the token as `$VAR`."""
+    missing = [key for key in ("url", "api_token") if not setup.get(key)]
+    if missing:
+        raise ValueError(f"{where} setup is missing required key(s): {', '.join(missing)}")
+    token = setup["api_token"]
+    reference = _ENV_REFERENCE.fullmatch(token) if isinstance(token, str) else None
+    if reference is None:
+        raise ValueError(
+            f"{where} setup: api_token must be an environment variable reference "
+            "($VAR or ${VAR}, e.g. $SYSDIG_SECURE_API_TOKEN)"
+        )
+    setup["api_token"] = f"${reference.group(1) or reference.group(2)}"
+
+
 def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
     """Typed tenants for any system without a bespoke loader."""
     from opentide.core.debug import DebugHelpers
@@ -169,6 +185,8 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
                     )
                 # The resolver reads `$NAME`; hand it the braced form that way.
                 supplied_setup["api_key"] = f"${reference.group(1) or reference.group(2)}"
+        if system == "sysdig":
+            _check_sysdig_setup(supplied_setup, where=where)
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)

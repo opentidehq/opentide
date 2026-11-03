@@ -45,7 +45,7 @@ Without `--json`, `info` prints a Rich table:
 - Package version
 - Rule, threat, objective counts
 - How many object files failed to load
-- One row per platform: `enabled=True` or `enabled=False`, then its capabilities — `[deploy, validate]`, or `[deploy]` for CrowdStrike and HarfangLab
+- One row per platform: `enabled=True` or `enabled=False`, then its capabilities — `[deploy, validate]`, or `[deploy]` for CrowdStrike, HarfangLab and Sysdig
 
 With a section, the table for that section replaces the summary:
 

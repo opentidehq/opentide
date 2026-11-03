@@ -59,6 +59,7 @@ PLATFORMS = (
     "carbon_black_cloud",
     "harfanglab",
     "elastic",
+    "sysdig",
 )
 
 #: ``--strategy`` values and what each deploys, as

@@ -22,9 +22,10 @@ class DetectionPlatform(str, Enum):
     carbon_black = "carbon_black_cloud"
     harfanglab = "harfanglab"
     elastic = "elastic"
+    sysdig = "sysdig"
 
 
-#: ``--platform`` shows this in help instead of eight values run together.
+#: ``--platform`` shows this in help instead of nine values run together.
 PLATFORM_METAVAR = "PLATFORM"
 
 #: The values ``--platform`` takes, for its help text.
@@ -126,6 +127,7 @@ def platform_label(platform: DetectionPlatform) -> str:
         DetectionPlatform.carbon_black: "Carbon Black Cloud",
         DetectionPlatform.harfanglab: "HarfangLab",
         DetectionPlatform.elastic: "Elastic Security",
+        DetectionPlatform.sysdig: "Sysdig Secure",
     }
     return labels.get(platform, platform.value)
 

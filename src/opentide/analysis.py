@@ -52,6 +52,11 @@ ELASTIC_ADVISORY_CODES = frozenset(
     }
 )
 
+#: The engine's advisories on a Sysdig rule block (sysdig-1.0): Falco loads the
+#: rule, but it may not do what the author meant. ``opentide lint`` reports them
+#: with the query warnings; they never reject a rule.
+SYSDIG_ADVISORY_CODES = frozenset({"sysdig_list_self_reference"})
+
 #: The engine's warnings about a dataset a query reads that ``visibility.toml``
 #: does not declare, where the workspace has a log source for the platform:
 #: ``opentide lint`` reports them with the query warnings, and their help is
@@ -520,7 +525,7 @@ def check_query(
 
 
 #: Extensions of a query file: one query in the language its extension names.
-QUERY_FILE_SUFFIXES = (".kql", ".spl", ".esql", ".eql", ".kuery", ".lucene")
+QUERY_FILE_SUFFIXES = (".kql", ".spl", ".esql", ".eql", ".kuery", ".lucene", ".falco")
 
 
 def is_query_file(path: Path | str) -> bool:

@@ -30,14 +30,14 @@ Hover, completion and the object checks come from a catalog of every field of ev
 
 ### Configuring an editor
 
-Run `opentide lsp start` as the server command, for YAML files under `objects/` and for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`). Turn off other YAML language servers for `objects/**`: opentide reports those files' diagnostics itself.
+Run `opentide lsp start` as the server command, for YAML files under `objects/` and for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`). Turn off other YAML language servers for `objects/**`: opentide reports those files' diagnostics itself.
 
 Neovim (0.11 or later):
 
 ```lua
 vim.lsp.config("opentide", {
   cmd = { "opentide", "lsp", "start" },
-  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene" },
+  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco" },
   root_markers = { ".opentide" },
 })
 vim.lsp.enable("opentide")

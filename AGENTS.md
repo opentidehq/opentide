@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across eight security platforms.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across nine security platforms.
 
 **Entry point:** this file, then a domain skill from [`.agents/skills/`](.agents/skills/) when the task matches.
 
@@ -102,8 +102,11 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | Carbon Black | ✅ | ✅ Lucene | ✅ Lucene | ✅ Lucene |
 | CrowdStrike | ✅ | ❌ | ❌ | ✅ CQL (Next-Gen SIEM) |
 | HarfangLab | ✅ | ❌ | ❌ | ✅ telemetry filters (no `--rule`) |
+| Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
 
-CrowdStrike and HarfangLab: `can_validate is False` — return `supported: False`, never fake validation.
+CrowdStrike, HarfangLab and Sysdig: `can_validate is False` — return `supported: False`, never fake validation.
+Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
+id in deployment state; block macros and lists are expanded into the condition.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
 search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
 `kuery` is the one write: its rule preview's alerts, in the preview index.
