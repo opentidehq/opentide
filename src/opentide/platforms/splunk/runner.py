@@ -26,7 +26,7 @@ class SplunkQueryRunner(QueryRunner):
     def run(self, request: QueryRequest, tenant: SystemConfig.Tenant) -> QueryResult:
         from splunklib.binding import HTTPError
 
-        service = self._service(tenant)
+        service = self._service(tenant, timeout=request.timeout)
         sent = spl_search(request.text)
         try:
             stream = service.jobs.oneshot(
@@ -67,8 +67,13 @@ class SplunkQueryRunner(QueryRunner):
         """Splunk's ``search/parser``: the query is parsed with its macros and lookups, no
         search job runs."""
         from opentide.platforms.splunk.client import HTTP_ERROR_STATUS
+        from opentide.platforms.transport import (
+            GATEWAY_STATUSES,
+            GatewayTimeoutError,
+            describe_answer,
+        )
 
-        service = self._service(tenant, allow_http_errors=True)
+        service = self._service(tenant, allow_http_errors=True, timeout=request.timeout)
         query = request.text.strip()
         if not query.startswith("| "):
             query = "| search " + query
@@ -83,6 +88,14 @@ class SplunkQueryRunner(QueryRunner):
             body = response["body"].read()
             if response.get("reason") == "Temporary Redirect" and "Network Error" in str(body):
                 return LiveCheck(warnings=(PARSER_TIMEOUT_WARNING,))
+            http_status = response.get("http_status")
+            if http_status in GATEWAY_STATUSES and not _is_json(body):
+                # A gateway's own answer for this one parse, not Splunk's refusal.
+                raise GatewayTimeoutError(
+                    f"Splunk's parser did not answer on {tenant.name}: "
+                    + describe_answer(int(http_status), body),
+                    status=int(http_status),
+                )
             messages = _parse(body).get("messages", []) or []
             texts = [str(m.get("text", "")) for m in messages if isinstance(m, dict)]
             detail = "; ".join(text for text in texts if text) or None
@@ -92,7 +105,10 @@ class SplunkQueryRunner(QueryRunner):
             logger.critical("unexpected_splunk_validation_response", response=str(response))
         return LiveCheck()
 
-    def _service(self, tenant: SystemConfig.Tenant, *, allow_http_errors: bool = False) -> Service:
+    def _service(
+        self, tenant: SystemConfig.Tenant, *, allow_http_errors: bool = False, timeout: float
+    ) -> Service:
+        """*tenant*'s Splunk service, made once per runner, kind and *timeout* (seconds)."""
         from opentide.platforms.splunk.client import connect_splunk
 
         if not isinstance(tenant, ConfigurationModels.Systems.Splunk.Tenant):
@@ -107,8 +123,9 @@ class SplunkQueryRunner(QueryRunner):
                 app=setup.app,
                 allow_http_errors=allow_http_errors,
                 ssl_enabled=setup.ssl,
+                timeout=timeout,
             ),
-            key="parser" if allow_http_errors else "",
+            key=f"{'parser' if allow_http_errors else 'search'}:{timeout:g}",
         )
 
 
@@ -128,6 +145,14 @@ def _parse(raw: Any) -> dict[str, Any]:
     except (TypeError, ValueError):
         return {"messages": [{"type": "ERROR", "text": str(raw)}]}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _is_json(raw: bytes) -> bool:
+    try:
+        json.loads(raw.decode("utf-8", errors="replace"))
+    except ValueError:
+        return False
+    return True
 
 
 def _messages(body: dict[str, Any], kinds: tuple[str, ...]) -> str:

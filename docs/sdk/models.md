@@ -162,7 +162,7 @@ Exceptions live under `opentide.core.errors.Errors`. Catch the specific type you
 | `Errors.TideRuleDataModelErrors` | Invalid detection rule data structure. `Errors.TideMDRDataModelErrors` is the former name, kept as an alias |
 | `Errors.TideQueryValidationError` | A rule query fails validation |
 | `Errors.TideDeploymentErrors` | Any failure during deployment |
-| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host` |
+| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host`, and counts in `timeouts` the queries in a row that got no answer when that is why |
 | `Errors.DetectionRuleCreationFailed` / `…UpdateFailed` / `…DeletionFailed` | Platform API operation failed |
 | `Errors.TideConfigurationErrors` | Invalid opentide configuration files |
 | `Errors.TenantNonExistingDeploymentPlan` | A tenant references a missing deployment plan |

@@ -85,6 +85,10 @@ def environment() -> list[dict[str, str]]:
             "meaning": "Fewest objects before validate runs in parallel",
         },
         {
+            "name": "OPENTIDE_QUERY_CHECK_TIMEOUT",
+            "meaning": "Seconds each validate query --live check may take, like --check-timeout",
+        },
+        {
             "name": "OPENTIDE_PROGRESS",
             "meaning": "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal",
         },

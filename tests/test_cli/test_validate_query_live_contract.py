@@ -440,6 +440,135 @@ def test_splunk_parser_timeout_is_a_warning(repo: Path, splunk: SplunkStandIn) -
     _warned("splunk", payload, queries=1)
 
 
+def test_splunk_slow_query_fails_its_check_with_the_timeout(
+    repo: Path, splunk: SplunkStandIn
+) -> None:
+    """The 0.20.1 report: one parse past the check timeout read as an unreachable tenant."""
+    _edit_rule(repo, "rule-0003-splunk-spl.yaml", "| head 1", "|slow")
+    splunk.slow_seconds = 1.5
+
+    code, payload = _validate_json("splunk", "--check-timeout", "0.3")
+
+    assert code == 1, payload
+    message = "Queries rejected on splunk · 1 checked on 1 tenant · 1 with no answer within 0.3s"
+    advice = (
+        "raise the check timeout with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT, "
+        "or make the queries cheaper"
+    )
+    [check] = payload.pop("timed_out")
+    assert payload == {
+        **_checked("splunk", 1, "soc"),
+        "ok": False,
+        "status": "failed",
+        "message": message,
+        "error": message,
+        "check_timeout": 0.3,
+        "advice": advice,
+        "exit_code": 1,
+        "failure": {**_failure(message), "code": "query_check_timeout"},
+    }
+    assert check["rule"] == CORPUS_RULE_UUIDS["splunk"]
+    assert check["tenant"] == "soc"
+    assert check["status"] == "failed"
+    assert check["code"] == "query_check_timeout"
+    [error] = check["errors"]
+    assert error.startswith("no answer within the 0.3s check timeout (")
+    assert "Raise it with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT" in error
+
+
+def test_splunk_check_timeout_comes_from_the_environment(
+    repo: Path, splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _edit_rule(repo, "rule-0003-splunk-spl.yaml", "| head 1", "|slow")
+    splunk.slow_seconds = 1.5
+    monkeypatch.setenv("OPENTIDE_QUERY_CHECK_TIMEOUT", "0.3")
+
+    code, payload = _validate_json("splunk")
+
+    assert code == 1, payload
+    assert payload["check_timeout"] == 0.3
+    assert payload["failure"]["code"] == "query_check_timeout"
+    # A timeout the parse fits in passes it, the option winning over the variable.
+    code, payload = _validate_json("splunk", "--check-timeout", "10")
+    assert code == 0, payload
+
+
+def test_splunk_gateway_page_fails_the_query_and_names_the_gateway(
+    repo: Path, splunk: SplunkStandIn
+) -> None:
+    _edit_rule(repo, "rule-0003-splunk-spl.yaml", "| head 1", "|gateway")
+
+    code, payload = _validate_json("splunk")
+
+    assert code == 1, payload
+    assert "tenant" not in payload, "a gateway's page is not an unreachable tenant"
+    [check] = payload["timed_out"]
+    [error] = check["errors"]
+    assert "answered with an HTML page (HTTP 504)" in error
+    assert "gateway or proxy in front of the tenant" in error
+    assert "management port" not in error
+
+
+@pytest.mark.parametrize(
+    ("args", "environment", "argument"),
+    [
+        (["--check-timeout", "0"], None, "--check-timeout"),
+        (["--check-timeout", "-5"], None, "--check-timeout"),
+        (["--check-timeout", "abc"], None, "--check-timeout"),
+        (["--check-timeout", "inf"], None, "--check-timeout"),
+        ([], "soon", "OPENTIDE_QUERY_CHECK_TIMEOUT"),
+        ([], "0", "OPENTIDE_QUERY_CHECK_TIMEOUT"),
+    ],
+)
+def test_a_check_timeout_that_is_not_a_positive_number_is_a_usage_error(
+    splunk: SplunkStandIn,
+    monkeypatch: pytest.MonkeyPatch,
+    args: list[str],
+    environment: str | None,
+    argument: str,
+) -> None:
+    if environment is not None:
+        monkeypatch.setenv("OPENTIDE_QUERY_CHECK_TIMEOUT", environment)
+
+    code, payload = _validate_json("splunk", *args)
+
+    assert code == 2, payload
+    assert payload["failure"]["code"] == "usage_invalid_value"
+    assert payload["failure"]["argument"] == argument
+    assert f"{argument} must be a positive number of seconds" in payload["message"]
+    assert splunk.requests == [], "no query is sent with an unusable timeout"
+
+
+def test_check_timeout_applies_to_live_only(repo: Path) -> None:
+    result = runner.invoke(
+        app, ["--json", "validate", "query", "--platform", "splunk", "--check-timeout", "30"]
+    )
+
+    assert result.exit_code == 2, result.output
+    payload = json.loads(result.stdout)
+    assert payload["failure"]["code"] == "usage_error"
+    assert payload["failure"]["argument"] == "--check-timeout"
+
+
+def test_sentinel_search_runs_with_the_check_timeout(azure: dict[str, Any]) -> None:
+    """Log Analytics' own server timeout is the check's (at most 600s)."""
+    calls: list[int] = []
+    import azure.monitor.query as monitor
+
+    original = monitor.LogsQueryClient.query_workspace
+
+    def query_workspace(self: Any, **kwargs: Any) -> Any:
+        calls.append(kwargs["server_timeout"])
+        return original(self, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(monitor.LogsQueryClient, "query_workspace", query_workspace)
+        code, payload = _validate_json("sentinel", "--check-timeout", "30")
+
+    assert code == 0, payload
+    assert calls == [30, 30]
+
+
 # --------------------------------------------------------------------------
 # SentinelOne: the session behind dv/events/pq
 # --------------------------------------------------------------------------

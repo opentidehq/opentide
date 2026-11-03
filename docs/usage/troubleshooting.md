@@ -516,7 +516,9 @@ uv pip install 'opentide==0.20.1'
 
 ### Splunk answers with HTML instead of XML behind a proxy
 
-Through **0.17.1** this failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which reads like a TLS fault but is not one. **0.17.2** names it: `Splunk at https://<host>:8089 answered with an HTML page, not its REST API … The request went through the proxy http://<proxy>:<port> …`, with the `NO_PROXY` value to set. Each connection also logs `splunk_tenant_route` with `via` set to the proxy or `direct`.
+Through **0.17.1** this failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which reads like a TLS fault but is not one. **0.17.2** names it: `Splunk at https://<host>:8089 answered with an HTML page (HTTP 403), not its REST API … The request went through the proxy http://<proxy>:<port> …`, with the `NO_PROXY` value to set (the HTTP status is in the message since the release after 0.20.1). Each connection also logs `splunk_tenant_route` with `via` set to the proxy or `direct`.
+
+When the status is 502, 503 or 504, or the page came after a request of 30 seconds or more, the message says a gateway or proxy in front of Splunk timed out instead, and `validate query --live` fails only that query: see [Slow queries and timeouts](../cli/validate.md#slow-queries-and-timeouts). The url and port are not at fault when other requests to the same address succeed.
 
 The request went through the proxy, and the proxy answered with its own error page. An internal tenant must not be reached through the corporate proxy: add its host to `NO_PROXY` and `no_proxy` (`NO_PROXY=splunk.internal.example`). opentide's platform clients honour it, so the same run still reaches a cloud tenant such as Sentinel through the proxy, and the deploy does not have to be split per platform. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 

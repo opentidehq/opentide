@@ -14,6 +14,7 @@ from opentide.cli.exit_codes import CiOutcome
 from opentide.cli.services import validation as validation_service
 from opentide.cli.ui.contract import NextAction
 from opentide.cli.ui.fixes import FixChange, FixPlan
+from opentide.query.check import LiveCheckReport
 from opentide.validation.issues import ValidationIssue, ValidationReport
 
 FAILED_OUTCOME = CiOutcome(exit_code=1, failed=True, warned=False)
@@ -433,6 +434,7 @@ def test_validate_query_platform_refuses_an_inherited_deployment_plan(
 def test_validate_query_platform_runs_validator(monkeypatch) -> None:
     ctx = CliContext(json_output=True)
     validator = MagicMock()
+    validator.validate.return_value = LiveCheckReport("sentinel")
     with (
         patch(
             "opentide.deployment.make_deploy_plan",
@@ -462,6 +464,7 @@ def test_validate_query_platform_fails_on_unsubstituted_credentials() -> None:
     """A ValueError from the validator fails the check and does not retry as TypeError."""
     ctx = CliContext(json_output=True)
     validator = MagicMock()
+    validator.validate.return_value = LiveCheckReport("sentinel")
     validator.validate.side_effect = ValueError(
         "Azure credentials are unset ($AZURE_TENANT_ID). "
         "Set those environment variables before a live check."
@@ -489,6 +492,7 @@ def test_validate_query_platform_reports_a_validator_type_error() -> None:
     """
     ctx = CliContext(json_output=True)
     validator = MagicMock()
+    validator.validate.return_value = LiveCheckReport("sentinel")
     validator.validate.side_effect = TypeError("'NoneType' object is not subscriptable")
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
@@ -587,6 +591,7 @@ def test_validate_query_live_with_a_broken_sdk_advises_a_reinstall() -> None:
     environment, so the advice is a reinstall and never an extra (the Monflo report)."""
     ctx = CliContext(json_output=True)
     validator = MagicMock()
+    validator.validate.return_value = LiveCheckReport("sentinel")
     validator.validate.side_effect = ModuleNotFoundError("No module named 'azure'", name="azure")
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
@@ -787,6 +792,7 @@ def test_the_fix_command_keeps_the_scope_of_the_run() -> None:
 def test_validate_query_platform_names_a_system_without_a_tide_block() -> None:
     ctx = CliContext(json_output=True)
     validator = MagicMock()
+    validator.validate.return_value = LiveCheckReport("sentinel")
     with (
         patch(
             "opentide.deployment.make_deploy_plan",
@@ -809,6 +815,7 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
     ctx = CliContext(json_output=True)
     warned = CiOutcome(exit_code=0, failed=False, warned=True)
     validator = MagicMock()
+    validator.validate.return_value = LiveCheckReport("sentinel")
     with (
         patch(
             "opentide.deployment.make_deploy_plan",
@@ -925,3 +932,21 @@ def test_run_validate_fix_dry_run_writes_nothing(tmp_path: Path) -> None:
     assert result["_next_actions"] == [
         NextAction("opentide validate --fix --uuid u1", "apply 1 safe fix")
     ]
+
+
+def test_a_tenant_unreachable_after_timeouts_advises_the_check_timeout() -> None:
+    from opentide.platforms.transport import TenantUnreachableError
+
+    slow = TenantUnreachableError(
+        "splunk", "Default", "h:443", TimeoutError("timed out"), reason="3 in a row", timeouts=3
+    )
+    down = TenantUnreachableError("splunk", "Default", "h:443", ConnectionRefusedError("refused"))
+
+    slow_advice = str(validation_service._unreachable_tenant_result(slow)["advice"])
+    down_advice = str(validation_service._unreachable_tenant_result(down)["advice"])
+
+    assert slow_advice.startswith(
+        "if the tenant is up and only slow, raise the check timeout with --check-timeout "
+        "or OPENTIDE_QUERY_CHECK_TIMEOUT; otherwise check the 'Default' tenant"
+    )
+    assert down_advice.startswith("check the 'Default' tenant")

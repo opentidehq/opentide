@@ -11,7 +11,14 @@ import requests
 
 from opentide.core.time import format_utc_z
 from opentide.models.system_config import ConfigurationModels, SystemConfig
-from opentide.query.models import QueryColumn, QueryRefused, QueryRequest, QueryResult
+from opentide.platforms.transport import not_json_detail
+from opentide.query.models import (
+    QueryColumn,
+    QueryRefused,
+    QueryRequest,
+    QueryResult,
+    QueryTimedOut,
+)
 from opentide.query.runner import QueryRunner
 
 #: Replaced in tests, so polling costs no wall-clock time.
@@ -52,8 +59,9 @@ class SentinelOneQueryRunner(QueryRunner):
             if query_id is None:
                 raise QueryRefused(f"SentinelOne returned no query id on {tenant.name}")
             if time.monotonic() >= deadline:
-                raise QueryRefused(
+                raise QueryTimedOut(
                     f"the PowerQuery did not finish within {request.timeout:g}s on {tenant.name}",
+                    timeout=request.timeout,
                     detail="narrow the window or raise --timeout",
                 )
             sleep(delay)
@@ -103,7 +111,11 @@ def _data(response: requests.Response, tenant: str) -> dict[str, Any]:
     try:
         body = response.json()
     except ValueError:
-        body = {}
+        # A gateway's or proxy's page: its status and title, not "no query id".
+        raise QueryRefused(
+            f"SentinelOne did not answer the PowerQuery on {tenant} with JSON",
+            detail=not_json_detail(response),
+        ) from None
     if response.status_code != 200:
         detail = None
         errors = body.get("errors") if isinstance(body, dict) else None

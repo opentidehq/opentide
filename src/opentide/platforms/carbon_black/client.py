@@ -3,7 +3,7 @@ import structlog
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
-from opentide.platforms.transport import tenant_tls_verify
+from opentide.platforms.transport import DEFAULT_TIMEOUT, tenant_tls_verify
 
 logger = structlog.get_logger("opentide.platforms.carbon_black.client")
 
@@ -63,10 +63,17 @@ class CarbonBlackCloudConnection:
 class CarbonBlackCloudService:
     """Connect to Carbon Black Cloud for a specific tenant configuration."""
 
-    def __init__(self, tenant: ConfigurationModels.Systems.CarbonBlackCloud.Tenant):
+    def __init__(
+        self,
+        tenant: ConfigurationModels.Systems.CarbonBlackCloud.Tenant,
+        *,
+        timeout: float = DEFAULT_TIMEOUT,
+    ):
         from cbc_sdk.rest_api import CBCloudAPI
 
         self.tenant = tenant
+        # The SDK sends its requests without a timeout unless given one, so a
+        # tenant that took a request and never answered held the run forever.
         self.service = CBCloudAPI(
             url=tenant.setup.url,
             token=tenant.setup.token,
@@ -74,4 +81,5 @@ class CarbonBlackCloudService:
             ssl_verify=tenant_tls_verify(
                 tenant.setup.ssl, platform="carbon_black_cloud", tenant=tenant.name
             ),
+            timeout=timeout,
         )

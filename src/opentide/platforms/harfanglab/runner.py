@@ -15,6 +15,7 @@ from typing import Any, ClassVar
 
 from opentide.core.time import format_utc_z
 from opentide.models.system_config import ConfigurationModels, SystemConfig
+from opentide.platforms.transport import not_json_detail
 from opentide.query.models import QueryRefused, QueryRequest, QueryResult, columns_of, flatten
 from opentide.query.runner import QueryRunner
 
@@ -63,9 +64,16 @@ class HarfangLabQueryRunner(QueryRunner):
             raise QueryRefused(
                 f"HarfangLab refused the telemetry search on {tenant.name} "
                 f"(HTTP {response.status_code})",
-                detail=response.text[:500] or None,
+                detail=not_json_detail(response) or response.text[:500] or None,
             )
-        body = response.json()
+        try:
+            body = response.json()
+        except ValueError:
+            # A gateway's or proxy's page: its status and title, not a JSONDecodeError.
+            raise QueryRefused(
+                f"HarfangLab did not answer the telemetry search on {tenant.name} with JSON",
+                detail=not_json_detail(response),
+            ) from None
         results = body.get("results", []) if isinstance(body, dict) else []
         rows = [flatten(item) for item in results or [] if isinstance(item, dict)]
         count = body.get("count") if isinstance(body, dict) else None

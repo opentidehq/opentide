@@ -31,6 +31,7 @@ from opentide.cli.ui.diagnostics import (
 )
 from opentide.cli.ui.fixes import FixPlan, plan_fixes
 from opentide.cli.ui.glyphs import glyph
+from opentide.query.check import CHECK_TIMEOUT_ENV
 from opentide.registry.builder import parse_errors_reported_by_caller
 from opentide.registry.discovery import discover_workspace
 from opentide.validation.configuration import CONFIGURATION_OBJECT_TYPE
@@ -656,9 +657,22 @@ def _missing_sdk_result(platform: str, exc: ModuleNotFoundError) -> dict[str, ob
 
 
 def _unreachable_tenant_result(exc: TenantUnreachableError) -> dict[str, object]:
-    """A tenant the live check could not reach (DNS, refused, TLS, timeout): no traceback."""
+    """A tenant the live check could not reach (DNS, refused, TLS, timeout): no traceback.
+
+    A tenant reported unreachable because queries in a row got no answer
+    advises the check timeout too: the tenant may be up and only slow.
+    """
     from opentide.platforms.enabled import platform_config_path
 
+    advice = (
+        f"check the '{exc.tenant}' tenant in {platform_config_path(exc.platform)} and the "
+        f"network path to {exc.host}; behind a proxy, pass opentide --proxy"
+    )
+    if exc.timeouts:
+        advice = (
+            f"if the tenant is up and only slow, raise the check timeout with --check-timeout "
+            f"or {CHECK_TIMEOUT_ENV}; otherwise {advice}"
+        )
     return {
         "platform": exc.platform,
         "mode": "live",
@@ -667,10 +681,7 @@ def _unreachable_tenant_result(exc: TenantUnreachableError) -> dict[str, object]
         "tenant": exc.tenant,
         "host": exc.host,
         "message": str(exc),
-        "advice": (
-            f"check the '{exc.tenant}' tenant in {platform_config_path(exc.platform)} and the "
-            f"network path to {exc.host}; behind a proxy, pass opentide --proxy"
-        ),
+        "advice": advice,
         "_exit_code": 1,
     }
 
@@ -794,6 +805,7 @@ def validate_query_platform(
     uuids: Sequence[str] = (),
     strict: bool = False,
     queries: QueriesMode = QueriesMode.error,
+    check_timeout: float | None = None,
 ) -> dict[str, object]:
     """Validate rule queries: offline with the analysis engine, or on the tenants.
 
@@ -807,7 +819,9 @@ def validate_query_platform(
     and ``RELEASE``, so every rule is checked wherever it is deployed.
     ``DISABLEMENT`` and ``DELETION`` rules send no query. ``changed`` checks
     only the rule files this run changed, and *files* and *uuids* only the
-    rules they select; without them every rule file is read.
+    rules they select; without them every rule file is read. Each query may
+    take *check_timeout* seconds on a tenant (``--check-timeout``; default:
+    :func:`~opentide.query.check.check_timeout`).
     """
     ctx.apply_environment()
     from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
@@ -947,7 +961,9 @@ def validate_query_platform(
                 return _scoped(_strategy_reaches_none(platform, run, len(rules)), scope_label)
             return _scoped(_no_tenant_reached(platform, run, len(rules)), scope_label)
         return _scoped(
-            _run_live_validator(ctx, platform, deployment_list[platform], run, reach),
+            _run_live_validator(
+                ctx, platform, deployment_list[platform], run, reach, timeout=check_timeout
+            ),
             scope_label,
         )
 
@@ -1245,6 +1261,8 @@ def _run_live_validator(
     rules: Sequence[str],
     strategies: RunStrategies,
     reach: dict[str, int],
+    *,
+    timeout: float | None = None,
 ) -> dict[str, object]:
     from opentide.core.registry import Opentide as LegacyOpentide
     from opentide.platforms.plugins import EnabledPlatforms
@@ -1290,7 +1308,9 @@ def _run_live_validator(
         # No retry on TypeError: the pre-strategy `validate(deployment=...)` that
         # was retried exists on no engine, and its own TypeError hid the real one.
         try:
-            report = validator.validate(mdr_deployment=rules, strategies=strategies)
+            report = validator.validate(
+                mdr_deployment=rules, strategies=strategies, timeout=timeout
+            )
         except ModuleNotFoundError as exc:
             early = _missing_sdk_result(platform, exc)
         except TenantUnreachableError as exc:
@@ -1337,6 +1357,9 @@ def _run_live_validator(
         if outcome.failed
         else f"{plural(queries, 'query', 'queries')} valid on {plural(len(reach), 'tenant')}"
     )
+    timed_out = report.timed_out()
+    if timed_out:
+        message += f" · {len(timed_out)} with no answer within {report.timeout:g}s"
     result: dict[str, object] = {
         "platform": platform,
         "mode": "live",
@@ -1347,6 +1370,16 @@ def _run_live_validator(
         "_summary": {"queries": queries, "tenants": len(reach)},
         "_exit_code": outcome.exit_code,
     }
+    if timed_out:
+        # Which rules to re-check, or to make cheaper; the others' verdicts stand.
+        result["check_timeout"] = report.timeout
+        result["timed_out"] = [check.to_dict() for check in timed_out]
+        result["advice"] = (
+            f"raise the check timeout with --check-timeout or {CHECK_TIMEOUT_ENV}, "
+            "or make the queries cheaper"
+        )
+        if len(timed_out) == len(report.rejected()):
+            result["_failure_code"] = "query_check_timeout"
     if outcome.failed:
         result["error"] = message
     if outcome.warned:

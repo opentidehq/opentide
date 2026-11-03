@@ -84,6 +84,21 @@ class QueryChecked(ResultModel):
     errors: int = Field(description="Errors the engine reports: the platform rejects the query")
 
 
+class LiveRuleCheckModel(ResultModel):
+    """One rule's query, checked on one tenant (``validate query --live``)."""
+
+    rule: str = Field(description="The rule's UUID")
+    name: str
+    tenant: str
+    status: Literal["passed", "failed"]
+    label: str | None = Field(None, description="Which of a rule's queries this is")
+    code: str | None = Field(
+        None, description="query_check_timeout: the query got no answer within check_timeout"
+    )
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class QueryValidationResult(CommandDocument):
     """``opentide validate query``: rule queries checked offline, or on one platform's tenants."""
 
@@ -104,6 +119,13 @@ class QueryValidationResult(CommandDocument):
     )
     unmatched: list[str] = Field(
         default_factory=list, description="--file or --uuid values that matched no rule"
+    )
+    check_timeout: float | None = Field(
+        None, description="Live: the seconds each query could take, when one got no answer"
+    )
+    timed_out: list[LiveRuleCheckModel] = Field(
+        default_factory=list,
+        description="Live: the checks whose query got no answer within check_timeout",
     )
     tenant: str | None = Field(None, description="The tenant that could not be reached")
     host: str | None = None

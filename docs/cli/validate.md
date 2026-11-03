@@ -384,8 +384,9 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
 | `--strategy` | `--live`: check only the rules a run with this strategy deploys, on the tenants that accept it: `PREVIEW` or `RELEASE`, repeatable. Default: both |
 | `--wide` | `--live`: ignore each rule's status: check every status except `DISABLEMENT` and `DELETION`, `INERT` included |
+| `--check-timeout` | `--live`: seconds each query may wait for the tenant's answer before its check fails, a positive number. Default: `OPENTIDE_QUERY_CHECK_TIMEOUT`, else `120`. See [Slow queries and timeouts](#slow-queries-and-timeouts) |
 
-`--strategy` and `--wide` choose tenants, so offline they exit `2` (`usage_error`); so do a query file with `--live`, which sends rule queries, and a query file with `--changed`. `--queries` and `--strict`, typed before `query`, carry over: `opentide validate --queries warn query` is `opentide validate query --queries warn`. Through 0.18.0 a bare `validate query` refused and named `--live`; it now runs the offline check.
+`--strategy`, `--wide` and `--check-timeout` apply to tenants, so offline they exit `2` (`usage_error`); so do a query file with `--live`, which sends rule queries, and a query file with `--changed`. `--queries` and `--strict`, typed before `query`, carry over: `opentide validate --queries warn query` is `opentide validate query --queries warn`. Through 0.18.0 a bare `validate query` refused and named `--live`; it now runs the offline check.
 
 ### Offline: the analysis engine
 
@@ -468,7 +469,8 @@ modules. A platform with no `[[tenants]]` entry fails the same way, before the
 client is built, and names the file to edit.
 
 A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
-timeout, or a proxy that will not connect) fails the check with exit `1`, not a
+connect timeout, a proxy that will not connect, or three queries in a row with no
+answer; see [Slow queries and timeouts](#slow-queries-and-timeouts)) fails the check with exit `1`, not a
 traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
 Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
 carries the network error; Sentinel does too, where it used to report only a rejected query. The human output prints the same message as an `error:` line,
@@ -489,6 +491,39 @@ configured tenant:
   "message": "Cannot reach splunk tenant 'Production' at splunk.example.com:8089: <urlopen error [Errno 111] Connection refused>"
 }
 ```
+
+### Slow queries and timeouts
+
+Each query may take `--check-timeout` seconds on a tenant (default: `OPENTIDE_QUERY_CHECK_TIMEOUT`, else `120`). The value is a positive number of seconds; anything else (`0`, `-5`, `abc`, `inf`) exits `2` with `failure.code` `usage_invalid_value`, naming `--check-timeout` or the variable as `failure.argument`, before any query is sent. On Splunk, Carbon Black Cloud, Defender and Elastic it bounds each request to the tenant; on SentinelOne the PowerQuery, polled until then; on Sentinel the search, which Log Analytics runs for at most 600 seconds.
+
+A query that gets no answer in that time fails its own check, and the other rules are still checked. Three things count as no answer: the tenant took the request and sent nothing back in time (a read timeout), a gateway or proxy in front of the tenant answered for it with HTTP 502, 503 or 504 (or with a page that is not the API's after 30 seconds or more), or an asynchronous search was still running at the deadline. The rejection is logged as `query_check_timed_out` with the timeout and how to raise it. The run's message counts them (`error: Queries rejected on splunk · 403 checked on 1 tenant · 1 with no answer within 120s`) and `--json` lists them under `timed_out`, each with `code` `query_check_timeout`, beside `check_timeout` and an `advice` line. The exit code is `1`; when every failed check timed out, `failure.code` is `query_check_timeout` ([`opentide explain query_check_timeout`](./diagnostics.md#query_check_timeout)). The sample is illustrative:
+
+```json illustrative
+{
+  "platform": "splunk",
+  "mode": "live",
+  "status": "failed",
+  "message": "Queries rejected on splunk · 403 checked on 1 tenant · 1 with no answer within 120s",
+  "check_timeout": 120.0,
+  "timed_out": [
+    {
+      "rule": "00000000-0000-4000-8000-000000000042",
+      "name": "Rare parent process",
+      "tenant": "Default",
+      "status": "failed",
+      "code": "query_check_timeout",
+      "errors": ["no answer within the 120s check timeout (The read operation timed out). Raise it with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"],
+      "warnings": []
+    }
+  ],
+  "advice": "raise the check timeout with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT, or make the queries cheaper",
+  "failure": { "code": "query_check_timeout" }
+}
+```
+
+A tenant that answers none of three queries in a row is reported unreachable, and the run stops there as for any unreachable tenant (above): `message` says `3 queries in a row got no answer within the 120s check timeout`, and `advice` names `--check-timeout` first, in case the tenant is up and only slow. A connect timeout, a DNS, TLS or proxy failure is reported unreachable at once. Through 0.20.1 one read timeout reported the tenant unreachable (`Cannot reach splunk tenant … The read operation timed out`) and left every later rule unchecked.
+
+Splunk's gateway page names its status: `Splunk at https://splunk.example.com:443 answered with an HTML page (HTTP 504), not its REST API (page title: '504 Gateway Time-out'). HTTP 504 Gateway Timeout is what a gateway or proxy in front of the tenant answers when the tenant does not answer it in time, …`. Only an HTML page answered with another status, quickly, still points at the tenant's `url` and `port`. Every platform reports the status and the page title of an answer that is not JSON, instead of a JSON parse error.
 
 ### Which rules are checked
 

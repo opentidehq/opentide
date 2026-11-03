@@ -6,6 +6,7 @@ The CLI, the MCP ``run_query`` tool and :meth:`DetectionRule.query` all call
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
@@ -125,7 +126,7 @@ def run_query(
         raise QueryUsageError(
             f"--limit must be between 1 and {MAX_LIMIT}", argument="--limit", value=str(limit)
         )
-    if timeout <= 0:
+    if not math.isfinite(timeout) or timeout <= 0:
         raise QueryUsageError("--timeout must be positive", argument="--timeout")
     languages = PLATFORM_LANGUAGES[platform]
     if language is not None and language not in languages:
@@ -227,7 +228,7 @@ def run_on_tenant(
     runner: QueryRunner, request: QueryRequest, tenant: SystemConfig.Tenant
 ) -> TenantOutcome:
     """*request* on *tenant*: its rows, or the reason it has none."""
-    from opentide.platforms.transport import TenantUnreachableError, reaching_tenant
+    from opentide.platforms.transport import TenantUnreachableError, reaching_tenant, read_timeout
 
     outcome = TenantOutcome(tenant=tenant.name, label=request.label)
     began = time.monotonic()
@@ -236,7 +237,19 @@ def run_on_tenant(
     logger.info("query_sent", platform=request.platform, tenant=tenant.name, label=request.label)
     try:
         with reaching_tenant(request.platform, tenant.name, host):
-            outcome.result = runner.run(request, tenant)
+            try:
+                outcome.result = runner.run(request, tenant)
+            except Exception as exc:
+                # The tenant took the query and did not answer in time: it is
+                # not unreachable, and "Cannot reach" pointed at the network.
+                error = read_timeout(exc)
+                if error is None:
+                    raise
+                outcome.error = (
+                    f"{request.platform} tenant {tenant.name!r} did not answer the query "
+                    f"within {request.timeout:g}s: {error}"
+                )
+                outcome.detail = "narrow the window or raise --timeout"
     except QueryRefused as exc:
         outcome.error = exc.message
         outcome.detail = exc.detail

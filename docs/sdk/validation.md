@@ -101,7 +101,7 @@ if Opentide.Platforms["sentinel"].can_validate:
     result = rule.validate_query("sentinel")
 ```
 
-The call checks the rule on every tenant a `PREVIEW` or `RELEASE` deploy sends it to, through the platform's [query runner](../cli/query.md), and reads nothing from or into the process environment. For each query's verdict on each tenant, call the validator itself: `validate` returns a `LiveCheckReport` whose `checks` are `RuleCheck`s (`rule`, `tenant`, `errors`, `warnings`).
+The call checks the rule on every tenant a `PREVIEW` or `RELEASE` deploy sends it to, through the platform's [query runner](../cli/query.md). It writes nothing into the process environment, and reads only `OPENTIDE_QUERY_CHECK_TIMEOUT`, the seconds each query may take (default 120; a value that is not a positive number raises `ValueError`). For each query's verdict on each tenant, call the validator itself: `validate` returns a `LiveCheckReport` whose `checks` are `RuleCheck`s (`rule`, `tenant`, `errors`, `warnings`, and `code` `query_check_timeout` for a query that got no answer in time; `report.timed_out()` lists those). `validate(..., timeout=SECONDS)` sets the timeout for that call. A query with no answer fails only its own check; three in a row on one tenant raise `TenantUnreachableError`, as a connection, DNS or TLS failure does at once. See [Slow queries and timeouts](../cli/validate.md#slow-queries-and-timeouts).
 
 ```python
 from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES

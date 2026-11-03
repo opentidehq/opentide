@@ -167,12 +167,73 @@ def _splunk_tenant(splunk: SplunkStandIn) -> ConfigurationModels.Systems.Splunk.
     return ConfigurationModels.Systems.Splunk.Tenant(name="local", description="", setup=setup)
 
 
-def _check(text: str, tenant: ConfigurationModels.Systems.Splunk.Tenant) -> LiveCheck:
+def _check(
+    text: str, tenant: ConfigurationModels.Systems.Splunk.Tenant, *, timeout: float = 120.0
+) -> LiveCheck:
     from opentide.platforms.splunk.runner import SplunkQueryRunner
     from opentide.query.check import check_window
 
-    request = QueryRequest(platform="splunk", text=text, window=check_window(), limit=1)
+    request = QueryRequest(
+        platform="splunk", text=text, window=check_window(), limit=1, timeout=timeout
+    )
     return SplunkQueryRunner().check(request, tenant)
+
+
+def test_live_check_waits_the_check_timeout_and_no_longer(splunk: SplunkStandIn) -> None:
+    """The handler used the transport's 120s whatever the request's timeout said."""
+    from opentide.platforms.transport import read_timeout
+
+    splunk.slow_seconds = 1.0
+    with pytest.raises(TimeoutError) as caught:
+        _check("| makeresults |slow", _splunk_tenant(splunk), timeout=0.2)
+    assert read_timeout(caught.value) is caught.value
+    # A timeout long enough lets the same slow parse through.
+    assert _check("| makeresults |slow", _splunk_tenant(splunk), timeout=5) == LiveCheck()
+
+
+def test_a_gateway_page_answering_the_parser_is_a_gateway_timeout(splunk: SplunkStandIn) -> None:
+    """The 0.20.1 report blamed the url and port for a gateway's page on one slow parse."""
+    from opentide.platforms.transport import GatewayTimeoutError, read_timeout
+
+    with pytest.raises(GatewayTimeoutError) as caught:
+        _check("| makeresults |gateway", _splunk_tenant(splunk))
+
+    message = str(caught.value)
+    assert f"Splunk at https://localhost:{splunk.port} answered with an HTML page (HTTP 504)" in (
+        message
+    )
+    assert "'504 Gateway Time-out'" in message
+    assert "HTTP 504 Gateway Timeout is what a gateway or proxy in front of the tenant" in message
+    assert "url and port are not at fault" in message
+    assert "management port" not in message
+    assert caught.value.status == 504
+    # One query's failure, not an unreachable tenant.
+    assert not isinstance(caught.value, ConnectionError)
+    assert read_timeout(caught.value) is caught.value
+
+
+def test_a_gateway_status_without_a_page_answering_the_parser_is_a_gateway_timeout(
+    splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A gateway's plain-text 504 used to read as Splunk refusing the query."""
+    from io import BytesIO
+
+    from opentide.platforms.splunk.runner import SplunkQueryRunner
+    from opentide.platforms.transport import GatewayTimeoutError
+
+    class Service:
+        def parse(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {
+                "status": HTTP_ERROR_STATUS,
+                "http_status": 504,
+                "reason": "Gateway Timeout",
+                "body": BytesIO(b"upstream request timeout"),
+            }
+
+    monkeypatch.setattr(SplunkQueryRunner, "_service", lambda *_a, **_k: Service())
+
+    with pytest.raises(GatewayTimeoutError, match="HTTP 504 with a body that is not JSON"):
+        _check("| makeresults", _splunk_tenant(splunk))
 
 
 def test_live_check_reports_an_invalid_query(splunk: SplunkStandIn) -> None:
@@ -305,8 +366,28 @@ def test_an_html_answer_without_a_proxy_points_at_the_port(
         service = connect_splunk(
             host="localhost", port=port, token="token", app="search", ssl_enabled=False
         )
-        with pytest.raises(SplunkAnsweredHtmlError, match="management port"):
+        with pytest.raises(SplunkAnsweredHtmlError, match="management port") as caught:
             service.saved_searches["Rule"]
+    assert "answered with an HTML page (HTTP 200), not its REST API" in str(caught.value)
+
+
+def test_an_html_page_after_a_slow_request_is_a_gateway_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page that took as long as a gateway's timeout is the gateway's, whatever its status."""
+    from opentide.platforms import transport
+    from opentide.platforms.transport import GatewayTimeoutError
+
+    for name in _PROXY_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(transport, "SLOW_ANSWER_SECONDS", 0.0)
+    with serve_block_page(tmp_path) as port:
+        service = connect_splunk(
+            host="localhost", port=port, token="token", app="search", ssl_enabled=False
+        )
+        with pytest.raises(GatewayTimeoutError, match=r"HTTP 200\), not its REST API") as caught:
+            service.saved_searches["Rule"]
+    assert "as from a gateway or proxy in front of the tenant" in str(caught.value)
 
 
 @pytest.mark.parametrize(
