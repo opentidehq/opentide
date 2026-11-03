@@ -208,7 +208,7 @@
     },
     "SysdigSetup": {
       "additionalProperties": false,
-      "description": "`[tenants.setup]` for Sysdig Secure (`api`) or Falco rules files (`file`).",
+      "description": "`[tenants.setup]` for Sysdig Secure.",
       "properties": {
         "ssl": {
           "anyOf": [
@@ -230,64 +230,24 @@
           "description": "Verify the tenant's TLS certificate: a boolean, true/false, yes/no, on/off, 1/0, or a $NAME placeholder.",
           "title": "Ssl"
         },
-        "delivery": {
-          "default": "api",
-          "description": "api: Sysdig Secure custom Falco rules. file: one Falco rules file per rule.",
-          "enum": [
-            "api",
-            "file"
-          ],
-          "title": "Delivery",
+        "url": {
+          "description": "Sysdig Secure base URL for the account's region.",
+          "title": "Url",
           "type": "string"
         },
-        "url": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Sysdig Secure base URL for the account's region. Required for api.",
-          "title": "Url"
-        },
         "api_token": {
-          "anyOf": [
-            {
-              "description": "Environment variable placeholder ($NAME), resolved when the tenant loads.",
-              "pattern": "^\\$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
           "description": "Sysdig Secure API token. Must be a $NAME placeholder.",
-          "title": "Api Token"
+          "pattern": "^\\$",
+          "title": "Api Token",
+          "type": "string"
         },
         "policies": {
-          "description": "Runtime policies every new rule joins when its block names none (api).",
+          "description": "Runtime policies every new rule joins when its block names none.",
           "items": {
             "type": "string"
           },
           "title": "Policies",
           "type": "array"
-        },
-        "rules_dir": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Directory that receives the rules files. Relative to the workspace root. Required for file.",
-          "title": "Rules Dir"
         },
         "tags": {
           "anyOf": [
@@ -306,6 +266,10 @@
           "title": "Tags"
         }
       },
+      "required": [
+        "url",
+        "api_token"
+      ],
       "title": "SysdigSetup",
       "type": "object"
     },

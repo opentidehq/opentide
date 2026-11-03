@@ -2,9 +2,9 @@
 
 The author writes the condition, its exceptions, and the macros and lists only
 this rule uses; this module derives the rest from the opentide rule: the rule
-name, ``desc``, ``priority``, ``tags`` and a default ``output``. Two writers
-consume the result: :mod:`opentide.platforms.sysdig.generate` (a Falco rules
-file) and :func:`api_body` (the Sysdig Secure ``/api/secure/rules`` payload).
+name, ``desc``, ``priority``, ``tags`` and a default ``output``.
+:func:`api_body` turns the result into the Sysdig Secure ``/api/secure/rules``
+payload.
 """
 
 from __future__ import annotations
@@ -86,9 +86,7 @@ class FalcoRule:
     priority: str = DEFAULT_PRIORITY
     source: str = DEFAULT_SOURCE
     tags: list[str] = field(default_factory=list)
-    enabled: bool = True
-    required_engine_version: str | None = None
-    required_plugin_versions: list[dict[str, str]] = field(default_factory=list)
+    minimum_engine_version: int | None = None
 
 
 def block_of(rule: DetectionRule) -> SysdigConfig:
@@ -205,10 +203,7 @@ def compile_rule(
             tuning=True,
             condition=condition,
             exceptions=exceptions,
-            required_engine_version=block.required_engine_version,
-            required_plugin_versions=[
-                {"name": p.name, "version": p.version} for p in block.required_plugin_versions or []
-            ],
+            minimum_engine_version=block.minimum_engine_version,
         )
     name = block.name or rule.name
     return FalcoRule(
@@ -222,11 +217,7 @@ def compile_rule(
         priority=derive_priority(rule, block),
         source=block.source or DEFAULT_SOURCE,
         tags=derive_tags(rule, block, strategy, tenant_tags),
-        enabled=strategy is not StatusStrategy.DISABLEMENT,
-        required_engine_version=block.required_engine_version,
-        required_plugin_versions=[
-            {"name": p.name, "version": p.version} for p in block.required_plugin_versions or []
-        ],
+        minimum_engine_version=block.minimum_engine_version,
     )
 
 
@@ -238,6 +229,8 @@ def api_body(compiled: FalcoRule) -> dict[str, Any]:
             details["condition"] = {"condition": compiled.condition, "components": []}
         if compiled.exceptions:
             details["exceptions"] = compiled.exceptions
+        if compiled.minimum_engine_version is not None:
+            details["minimumEngineVersion"] = compiled.minimum_engine_version
         return {"name": compiled.name, "description": "", "tags": [], "details": details}
     details["source"] = compiled.source
     details["condition"] = {"condition": compiled.condition or "", "components": []}
@@ -245,6 +238,8 @@ def api_body(compiled: FalcoRule) -> dict[str, Any]:
     details["priority"] = API_PRIORITY[compiled.priority]
     if compiled.exceptions:
         details["exceptions"] = compiled.exceptions
+    if compiled.minimum_engine_version is not None:
+        details["minimumEngineVersion"] = compiled.minimum_engine_version
     return {
         "name": compiled.name,
         "description": compiled.desc,

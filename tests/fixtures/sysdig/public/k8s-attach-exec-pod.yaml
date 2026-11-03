@@ -34,7 +34,4 @@ configurations:
     lists:
     - name: break_glass_users
       items: [oncall-admin, "system:serviceaccount:ops:debugger"]
-    required_plugin_versions:
-    - name: k8saudit
-      version: 0.7.0
     tags: [k8s]

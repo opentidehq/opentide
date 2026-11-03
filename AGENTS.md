@@ -105,8 +105,8 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
 
 CrowdStrike, HarfangLab and Sysdig: `can_validate is False` — return `supported: False`, never fake validation.
-Sysdig (`src/opentide/platforms/sysdig/`) delivers per tenant: `api` (Sysdig Secure, rule id in deployment
-state) or `file` (`<rules_dir>/<uuid>.yaml`); block macros and lists are expanded into the condition.
+Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
+id in deployment state; block macros and lists are expanded into the condition.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
 search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
 `kuery` is the one write: its rule preview's alerts, in the preview index.

@@ -31,7 +31,7 @@ Every platform but Sysdig answers [`opentide query`](../../cli/query.md), which 
 
 `validate query --platform elastic --live` previews the compiled rule in Kibana and runs the Elasticsearch pre-flight (ES|QL `LIMIT 0`, then `_field_caps` on aggregation fields). The same pre-flight runs before every Elastic deploy. Offline, the engine parses Kuery, Lucene, EQL and ES|QL, ES|QL against the stack versions of the block's tenants. See [Validate](../../cli/validate.md#elastic-live-validation-and-deploy).
 
-Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exceptions, and the macros and lists only that rule uses), and each tenant picks a delivery: `api` creates a custom Falco rule in Sysdig Secure and adds it to the runtime policies the tenant or block names, keeping Sysdig's rule id in [deployment state](deployment-state.md); `file` writes `<rules_dir>/<uuid>.yaml` for open-source Falco or a GitOps pipeline. Deploy expands the block's own macros and lists into the condition and derives the Falco `desc`, `priority`, MITRE tags and a default `output` from the rule. Sysdig has no rule preview, so `validate query --platform sysdig` reports `supported: false`; `deploy --dry-run` shows both the API body and the rules file. The offline Falco check lands with the analysis engine's Falco language.
+Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exceptions, and the macros and lists only that rule uses), which deploy creates through the Sysdig Secure runtime API and adds to the runtime policies the tenant or block names, keeping Sysdig's rule id in [deployment state](deployment-state.md). Deploy expands the block's own macros and lists into the condition and derives the Falco `desc`, `priority`, MITRE tags and a default `output` from the rule. The analysis engine checks the Falco condition offline; Sysdig has no rule preview, so `validate query --platform sysdig --live` reports `supported: false`. `deploy --dry-run` shows the API body.
 
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
@@ -48,7 +48,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
   <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
   <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA. No query validator. Sigma wins when both are set." />
-  <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Falco rule for the Sysdig Secure API or a Falco rules file. Block macros and lists are expanded at deploy." />
+  <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
 </Cards>
 
 ## Inspecting capabilities at runtime

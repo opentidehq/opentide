@@ -138,21 +138,15 @@ def _elastic_compile_preview(rule: DetectionRule) -> dict[str, Any] | None:
 
 
 def _sysdig_compile_preview(rule: DetectionRule) -> dict[str, Any]:
-    """The Sysdig API body, and the Falco rules file a ``file`` tenant would get."""
+    """The Sysdig Secure ``/api/secure/rules`` body the deploy would send."""
     try:
         from opentide.platforms.sysdig.compile import api_body
         from opentide.platforms.sysdig.deployer import SysdigDeploy
-        from opentide.platforms.sysdig.generate import rules_file
 
         compiled = SysdigDeploy().compile_deployment(rule)
     except Exception as exc:
         return _compile_failure(rule, exc)
-    return {
-        "uuid": rule.metadata.uuid,
-        "name": rule.name,
-        "api_request": api_body(compiled),
-        "falco_rules_file": rules_file(compiled),
-    }
+    return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": api_body(compiled)}
 
 
 def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any]:

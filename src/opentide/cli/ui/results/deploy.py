@@ -17,10 +17,6 @@ class RulePayload(ResultModel):
     api_request: dict[str, Any] | None = Field(
         description="The vendor API body; null when the rule could not be compiled"
     )
-    falco_rules_file: str | None = Field(
-        None,
-        description="Sysdig: the Falco rules file a file-delivery tenant would receive",
-    )
     status: str | None = Field(None, description="failed, when the rule could not be compiled")
     error: str | None = None
     # A rule the dry run could not compile (#643): the diagnostic's own fields.

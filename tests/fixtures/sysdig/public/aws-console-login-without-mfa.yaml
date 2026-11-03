@@ -27,7 +27,4 @@ configurations:
     output: >
       Detected a console login without MFA
       (requesting user=%ct.user, requesting IP=%ct.srcip, AWS region=%ct.region)
-    required_plugin_versions:
-    - name: cloudtrail
-      version: 0.12.0
     tags: [cloud, aws, aws_console, aws_iam]

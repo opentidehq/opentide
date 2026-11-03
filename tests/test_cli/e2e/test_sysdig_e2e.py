@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-import yaml
 from tests.corpus_support import CORPUS_RULE_UUIDS
 from tests.test_cli.conftest import assert_json_ok, parse_cli_json
 from tests.test_cli.e2e.helpers import EVERY_RULE
@@ -47,9 +46,7 @@ def test_a_tuning_that_sets_output_fails_validation_with_its_code(
     assert "sysdig_tuning_keys" in result.output
 
 
-def test_deploy_dry_run_previews_the_api_body_and_the_rules_file(
-    invoke_cli, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_deploy_dry_run_previews_the_api_body(invoke_cli, monkeypatch: pytest.MonkeyPatch) -> None:
     deployer = _mock_deployer(monkeypatch)
     result = invoke_cli(
         "deploy", "--dry-run", "--platform", "sysdig", *EVERY_RULE, "--wide", "--skip-promotion"
@@ -64,9 +61,8 @@ def test_deploy_dry_run_previews_the_api_body_and_the_rules_file(
     )
     assert details["priority"] == "warning"
     assert "mitre_execution" in preview["api_request"]["tags"]
-    (item,) = yaml.safe_load(preview["falco_rules_file"])
-    assert item["rule"] == "Sysdig Falco Rule"
-    assert item["condition"] == details["condition"]["condition"]
+    assert preview["api_request"]["name"] == "Sysdig Falco Rule"
+    assert "falco_rules_file" not in preview
     deployer.deploy.assert_not_called()
 
 

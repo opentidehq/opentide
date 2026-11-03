@@ -1,26 +1,17 @@
-"""Deploy Falco rules to Sysdig Secure or as Falco rules files (sysdig-1.0).
+"""Deploy Falco rules to Sysdig Secure (sysdig-1.0).
 
-Each tenant picks a delivery:
-
-``api``
-    Custom Falco rules through the Sysdig Secure runtime API. Sysdig assigns
-    every rule an integer id; it is kept in ``.opentide/states/deployment/``
-    (deployment-state, RFC 0010) and every create, update, disable and delete
-    is planned from that shard before any request. A rule alerts only when a
-    runtime policy names it: deploy adds it to the policies the block or the
-    tenant names, and never creates or deletes a policy.
-``file``
-    One Falco rules file per rule, ``<rules_dir>/<metadata.uuid>.yaml``, for
-    open-source Falco or a GitOps pipeline. No id, no shard.
+Custom Falco rules go through the Sysdig Secure runtime API. Sysdig assigns
+every rule an integer id; it is kept in ``.opentide/states/deployment/``
+(deployment-state, RFC 0010) and every create, update, disable and delete is
+planned from that shard before any request. A rule alerts only when a runtime
+policy names it: deploy adds it to the policies the block or the tenant names,
+and never creates or deletes a policy.
 """
 
 from __future__ import annotations
 
 import os
-import tempfile
-import uuid as uuid_module
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -44,7 +35,6 @@ from opentide.models.system_config import ConfigurationModels, batch_tenant
 from opentide.platforms.plugins import RuleDeployer
 from opentide.platforms.sysdig.client import SysdigApiError, SysdigClient, SysdigTenantError
 from opentide.platforms.sysdig.compile import FalcoRule, api_body, block_of, compile_rule
-from opentide.platforms.sysdig.generate import rules_file
 from opentide.platforms.transport import tenant_tls_verify
 from opentide.states.deployment import (
     DeploymentStateError,
@@ -73,38 +63,6 @@ def _strategy(rule: DetectionRule) -> StatusStrategy:
     return check_status(block_of(rule).status)
 
 
-def rules_dir(tenant: SysdigTenant) -> Path:
-    """The tenant's ``rules_dir``; a relative path is under the workspace root."""
-    from opentide.core.root import get_repo_root
-
-    path = Path(tenant.setup.rules_dir).expanduser()
-    return path if path.is_absolute() else get_repo_root() / path
-
-
-def rule_file(directory: Path, rule: DetectionRule) -> Path:
-    """``<directory>/<metadata.uuid>.yaml``, the uuid in its canonical form.
-
-    The uuid is parsed, so a value from YAML can never name a path outside
-    *directory*.
-    """
-    canonical = str(uuid_module.UUID(str(rule.metadata.uuid)))
-    return directory / f"{canonical}.yaml"
-
-
-def _write_atomic(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp, path)
-    except BaseException:
-        Path(temp).unlink(missing_ok=True)
-        raise
-
-
 class SysdigDeploy(RuleDeployer):
     """Deploy rules to every Sysdig tenant a run reaches."""
 
@@ -117,28 +75,6 @@ class SysdigDeploy(RuleDeployer):
         """The Falco rule *data* deploys on *tenant_config*."""
         tags = tenant_config.setup.tags if tenant_config is not None else None
         return compile_rule(data, strategy or _strategy(data), tags)
-
-    # --- file delivery ---------------------------------------------------------
-
-    def deploy_file(self, rule: DetectionRule, tenant: SysdigTenant) -> None:
-        """Write, rewrite or delete the rule's file on a ``file`` tenant."""
-        strategy = _strategy(rule)
-        if strategy is StatusStrategy.INERT:
-            deploy_events.note_skip("status is inert")
-            return
-        path = rule_file(rules_dir(tenant), rule)
-        block = block_of(rule)
-        if strategy is StatusStrategy.DELETION or (
-            strategy is StatusStrategy.DISABLEMENT and block.is_tuning
-        ):
-            path.unlink(missing_ok=True)
-            logger.info("falco_rules_file_deleted", path=str(path), uuid=rule.metadata.uuid)
-            return
-        compiled = self.compile_deployment(rule, tenant, strategy)
-        _write_atomic(path, rules_file(compiled))
-        logger.info("falco_rules_file_written", path=str(path), uuid=rule.metadata.uuid)
-
-    # --- api delivery ----------------------------------------------------------
 
     def deploy_api(
         self,
@@ -353,23 +289,7 @@ class SysdigDeploy(RuleDeployer):
         deployment = TideDeployment(loaded, DetectionPlatforms.SYSDIG, strategies)
         for batch in deployment.rule_deployment:
             tenant = batch_tenant(batch, SysdigTenant)
-            if tenant.setup.delivery == "file":
-                self._deploy_file_tenant(list(batch.rules), tenant)
-            else:
-                self._deploy_api_tenant(list(batch.rules), tenant, strategies)
-
-    def _deploy_file_tenant(self, rules: list[DetectionRule], tenant: SysdigTenant) -> None:
-        for rule in rules:
-            with deploy_events.deploying(PLATFORM, tenant.name, rule.metadata.uuid, rule.name):
-                try:
-                    self.deploy_file(rule, tenant)
-                except OSError as exc:
-                    _deployment_error(
-                        "falco_rules_file_failed",
-                        uuid=rule.metadata.uuid,
-                        tenant=tenant.name,
-                        error=f"{type(exc).__name__}: {exc}",
-                    )
+            self._deploy_api_tenant(list(batch.rules), tenant, strategies)
 
     def _deploy_api_tenant(
         self,

@@ -84,19 +84,6 @@ def _rule_status(rule: Any, platform: str) -> str:
     return str(getattr(config, "status", "") or "")
 
 
-def _stateless_tenant(platform: str, tenant: str | None) -> bool:
-    """A Sysdig ``file`` tenant: its rules files are named by uuid, with no vendor id."""
-    if platform != "sysdig" or tenant is None:
-        return False
-    try:
-        from opentide.core.registry import Opentide
-
-        tenants = Opentide.Configurations.Systems.Sysdig.tenants or []
-    except Exception:
-        return False
-    return any(t.name == tenant and t.setup.delivery == "file" for t in tenants)
-
-
 def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action:
     from opentide.models.deployment_enums import StatusStrategy
     from opentide.states.deployment import STATE_PLATFORMS, DeploymentState
@@ -111,7 +98,7 @@ def _action(platform: str, tenant: str | None, uuid: str, status: str) -> Action
         return "delete"
     if strategy is StatusStrategy.DISABLEMENT:
         return "disable"
-    if platform not in STATE_PLATFORMS or _stateless_tenant(platform, tenant):
+    if platform not in STATE_PLATFORMS:
         return "upsert"
     if tenant is None:
         return "create"

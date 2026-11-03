@@ -16,7 +16,7 @@ import re
 from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, cast
 
-from pydantic import AfterValidator, BeforeValidator, model_validator
+from pydantic import AfterValidator, Field, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
@@ -61,7 +61,6 @@ from opentide.models.platform_configs import (
     SysdigException,
     SysdigList,
     SysdigMacro,
-    SysdigPluginVersion,
 )
 from opentide.models.splunk_legacy import SPLUNK_V2_KEYS, normalize_splunk_v2
 from opentide.platforms.elastic.durations import duration_seconds
@@ -684,15 +683,6 @@ def _sysdig_definitions(
     return macros, lists
 
 
-def _engine_version_text(value: Any) -> Any:
-    """A Falco engine version written as a YAML number (`0.37`, `17`) is its text."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return str(value)
-    return value
-
-
 class SysdigConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::sysdig::1.0"
     # Its before-validator reports the constraint codes; it accepts no extra key.
@@ -729,13 +719,11 @@ class SysdigConfig(PlatformConfigBase):
     lists: list[SysdigList] | None = None
     """Lists only this rule uses, expanded into the condition at deploy."""
     policies: list[str] | None = None
-    """Names of Sysdig runtime policies the rule joins (`api` delivery). Default: the tenant
+    """Names of Sysdig runtime policies the rule joins. Default: the tenant
     `policies`."""
-    required_engine_version: Annotated[str, BeforeValidator(_engine_version_text)] | None = None
-    """Falco engine version the rule needs (`0.39.0`), written to rules files. A YAML
-    number (`0.37`, or a legacy integer engine version such as `17`) is read as its text."""
-    required_plugin_versions: list[SysdigPluginVersion] | None = None
-    """Plugins the rule needs, written to rules files."""
+    minimum_engine_version: Annotated[int, Field(ge=0, strict=True)] | None = None
+    """Minimum Falco engine version the rule needs, as Sysdig's integer
+    `minimumEngineVersion`. Omitted when unset."""
 
     @property
     def is_tuning(self) -> bool:

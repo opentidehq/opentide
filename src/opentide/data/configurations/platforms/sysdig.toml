@@ -3,7 +3,7 @@ enabled = false
 identifier = "sysdig"
 name = "Sysdig Secure"
 subschema = "Sysdig Secure"
-description = "Falco rules for Sysdig Secure runtime detection, or as Falco rules files."
+description = "Custom Falco rules for Sysdig Secure runtime detection."
 flags = []
 
 #[[modifiers]]
@@ -14,27 +14,18 @@ flags = []
 #[modifiers.modifications]
 #priority = "NOTICE"
 
-# delivery = "api": custom Falco rules in Sysdig Secure, added to runtime policies
-# by name. The Sysdig rule id is kept in .opentide/states/deployment/.
+# Custom Falco rules in Sysdig Secure, added to runtime policies by name. The
+# Sysdig rule id is kept in .opentide/states/deployment/ (commit it). url is the
+# account's region: https://secure.sysdig.com, https://us2.app.sysdig.com,
+# https://us4.app.sysdig.com, https://eu1.app.sysdig.com, https://app.au1.sysdig.com,
+# https://app.me2.sysdig.com, or an on-premises URL.
 #[[tenants]]
 #name = "sysdig-prod"
 #description = "Sysdig Secure SaaS, EU region"
 #strategies = ["RELEASE"]
 #[tenants.setup]
 #ssl = true
-#delivery = "api"
 #url = "https://eu1.app.sysdig.com"
 #api_token = "$SYSDIG_SECURE_API_TOKEN"
 #policies = ["opentide managed detections"]
 #tags = ["opentide"]
-
-# delivery = "file": one Falco rules file per rule, <rules_dir>/<uuid>.yaml, for
-# open-source Falco (rules_files) or a GitOps pipeline.
-#[[tenants]]
-#name = "falco-gitops"
-#description = "Falco rules files picked up by the Helm chart"
-#strategies = ["PREVIEW"]
-#[tenants.setup]
-#ssl = true
-#delivery = "file"
-#rules_dir = "deploy/falco/rules.d"

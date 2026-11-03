@@ -795,10 +795,3 @@ class SysdigList(TideModel):
     """List name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
     items: list[str | int | float]
     """List items. An item may name another list of this block."""
-
-
-class SysdigPluginVersion(TideModel):
-    name: str
-    """Plugin name (`k8saudit`, `cloudtrail`)."""
-    version: str
-    """Minimum plugin version, semver."""

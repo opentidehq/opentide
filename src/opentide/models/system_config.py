@@ -253,12 +253,9 @@ class ConfigurationModels:
             class Tenant(SystemConfig.Tenant):
                 @dataclass
                 class Setup(SystemConfig.Tenant.Setup):
-                    #: ``api`` (Sysdig Secure) or ``file`` (Falco rules files).
-                    delivery: str = "api"
                     url: str = ""
                     api_token: str = ""
                     policies: Sequence[str] | None = None
-                    rules_dir: str = ""
                     tags: Sequence[str] | None = None
 
                 setup: Setup

@@ -1,4 +1,4 @@
-"""A Sysdig block compiled to a Falco rule: goldens and derivations (sysdig-1.0)."""
+"""A Sysdig block compiled to the Sysdig Secure API body: goldens and derivations (sysdig-1.0)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from opentide.loading.rule_loader import load_rule_from_dict
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.models.rule import DetectionRule
 from opentide.platforms.sysdig.compile import api_body, compile_rule
-from opentide.platforms.sysdig.generate import rules_file
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "sysdig"
 PUBLIC = sorted((FIXTURES / "public").glob("*.yaml"))
@@ -41,47 +40,30 @@ def _block_rule(block: dict[str, Any], **rule: Any) -> DetectionRule:
     return load_rule_from_dict(document)
 
 
-def test_new_rule_matches_the_specification_rules_file() -> None:
-    compiled = compile_rule(_rule("rule-sysdig-1.0.yaml"), StatusStrategy.PREVIEW)
-    expected = (FIXTURES / "rule-sysdig-1.0.falco.yaml").read_bytes()
-    assert rules_file(compiled).encode("utf-8") == expected
-
-
 def test_new_rule_matches_the_specification_api_body() -> None:
     compiled = compile_rule(_rule("rule-sysdig-1.0.yaml"), StatusStrategy.PREVIEW)
     expected = json.loads((FIXTURES / "rule-sysdig-1.0.api.json").read_text(encoding="utf-8"))
     assert api_body(compiled) == expected
 
 
-def test_tuning_matches_the_specification_rules_file() -> None:
+def test_tuning_matches_the_specification_api_body() -> None:
     compiled = compile_rule(_rule("rule-sysdig-tuning-1.0.yaml"), StatusStrategy.RELEASE)
-    expected = (FIXTURES / "rule-sysdig-tuning-1.0.falco.yaml").read_bytes()
-    assert rules_file(compiled).encode("utf-8") == expected
+    expected = json.loads(
+        (FIXTURES / "rule-sysdig-tuning-1.0.api.json").read_text(encoding="utf-8")
+    )
+    assert api_body(compiled) == expected
 
 
 def test_tuning_api_body_appends_only_condition_and_exceptions() -> None:
     compiled = compile_rule(_rule("rule-sysdig-tuning-1.0.yaml"), StatusStrategy.RELEASE)
-    assert api_body(compiled) == {
-        "name": "Terminal shell in container",
-        "description": "",
-        "tags": [],
-        "details": {
-            "ruleType": "FALCO",
-            "append": True,
-            "condition": {
-                "condition": "and not proc.pname in (gitlab-runner, buildkite-agent)",
-                "components": [],
-            },
-            "exceptions": [
-                {
-                    "name": "build_namespaces",
-                    "fields": "k8s.ns.name",
-                    "comps": "in",
-                    "values": ["ci", "builds"],
-                }
-            ],
-        },
-    }
+    body = api_body(compiled)
+    assert (body["name"], body["description"], body["tags"]) == (
+        "Terminal shell in container",
+        "",
+        [],
+    )
+    assert set(body["details"]) == {"ruleType", "append", "condition", "exceptions"}
+    assert body["details"]["append"] is True
 
 
 @pytest.mark.parametrize(
@@ -168,34 +150,25 @@ def test_tags_are_block_attack_maturity_then_tenant(
     ]
 
 
-def test_disablement_writes_enabled_false() -> None:
-    compiled = compile_rule(_block_rule({"condition": "x"}), StatusStrategy.DISABLEMENT)
-    assert compiled.enabled is False
-    assert "  enabled: false\n" in rules_file(compiled)
-
-
 def test_description_whitespace_is_collapsed() -> None:
     assert compile_rule(_block_rule({"condition": "x"}), StatusStrategy.PREVIEW).desc == (
         "A shell started."
     )
 
 
-def test_required_versions_lead_the_rules_file() -> None:
-    rule = _block_rule(
-        {
-            "condition": "ka.verb = create",
-            "source": "k8s_audit",
-            "required_engine_version": "0.39.0",
-            "required_plugin_versions": [{"name": "k8saudit", "version": "0.7.0"}],
-        }
-    )
-    items = yaml.safe_load(rules_file(compile_rule(rule, StatusStrategy.PREVIEW)))
-    assert items[0] == {"required_engine_version": "0.39.0"}
-    assert items[1] == {"required_plugin_versions": [{"name": "k8saudit", "version": "0.7.0"}]}
-    assert items[2]["rule"] == "Shell in container"
+@pytest.mark.parametrize("tuning", [False, True])
+def test_minimum_engine_version_is_sent_when_set(tuning: bool) -> None:
+    block: dict[str, Any] = {"condition": "and not proc.name = sh" if tuning else "x"}
+    if tuning:
+        block["append_to_rule"] = "Terminal shell in container"
+    unset = api_body(compile_rule(_block_rule(block), StatusStrategy.PREVIEW))
+    assert "minimumEngineVersion" not in unset["details"]
+    block["minimum_engine_version"] = 17
+    body = api_body(compile_rule(_block_rule(block), StatusStrategy.PREVIEW))
+    assert body["details"]["minimumEngineVersion"] == 17
 
 
-def test_yaml_sensitive_values_survive_the_rules_file() -> None:
+def test_api_body_keeps_values_verbatim() -> None:
     rule = _block_rule(
         {
             "condition": 'proc.name = "yes: no" and fd.name startswith /tmp',
@@ -211,26 +184,25 @@ def test_yaml_sensitive_values_survive_the_rules_file() -> None:
         },
         description="Colon: a # hash and 'quotes'",
     )
-    compiled = compile_rule(rule, StatusStrategy.PREVIEW)
-    (item,) = yaml.safe_load(rules_file(compiled))
-    assert item["condition"] == compiled.condition
-    assert item["desc"] == "Colon: a # hash and 'quotes'"
-    assert item["exceptions"][0]["comps"] == ["=", "!="]
-    assert item["exceptions"][0]["values"] == [["no", "1.0"]]
-    assert item["tags"][:2] == ["yes", "on"]
+    body = json.loads(json.dumps(api_body(compile_rule(rule, StatusStrategy.PREVIEW))))
+    assert body["details"]["condition"]["condition"] == (
+        'proc.name = "yes: no" and fd.name startswith /tmp'
+    )
+    assert body["description"] == "Colon: a # hash and 'quotes'"
+    assert body["details"]["exceptions"][0]["comps"] == ["=", "!="]
+    assert body["details"]["exceptions"][0]["values"] == [["no", "1.0"]]
+    assert body["tags"][:2] == ["yes", "on"]
 
 
 @pytest.mark.parametrize("path", PUBLIC, ids=lambda p: p.stem)
-def test_public_falco_rules_compile_and_round_trip(path: Path) -> None:
+def test_public_falco_rules_compile_to_api_bodies(path: Path) -> None:
     rule = load_rule_from_dict(yaml.safe_load(path.read_text(encoding="utf-8")))
     compiled = compile_rule(rule, StatusStrategy.RELEASE)
-    items = yaml.safe_load(rules_file(compiled))
-    falco_rule = items[-1]
-    assert falco_rule["rule"] == compiled.name
-    if compiled.condition is not None:
-        assert falco_rule["condition"] == compiled.condition
-        assert "\n" not in compiled.condition
     body = api_body(compiled)
+    assert body["name"] == compiled.name
+    if compiled.condition is not None:
+        assert body["details"]["condition"]["condition"] == compiled.condition
+        assert "\n" not in compiled.condition
     assert body["details"]["ruleType"] == "FALCO"
     assert body["details"]["append"] is compiled.tuning
 
@@ -273,15 +245,18 @@ def test_public_cloudtrail_rule_keeps_json_field_arguments() -> None:
     assert compiled.tags[-1] == "maturity_stable"
 
 
-def test_public_tuning_appends_with_an_override() -> None:
+def test_public_tuning_appends_its_condition_and_exceptions() -> None:
     compiled = compile_rule(_public("tuning-contact-k8s-api-server"), StatusStrategy.RELEASE)
-    (item,) = yaml.safe_load(rules_file(compiled))
-    assert item == {
-        "rule": "Contact K8S API Server From Container",
-        "condition": (
-            "and not container.image.repository in "
-            "(quay.io/prometheus/node-exporter, docker.io/grafana/agent)"
-        ),
+    assert api_body(compiled)["details"] == {
+        "ruleType": "FALCO",
+        "append": True,
+        "condition": {
+            "condition": (
+                "and not container.image.repository in "
+                "(quay.io/prometheus/node-exporter, docker.io/grafana/agent)"
+            ),
+            "components": [],
+        },
         "exceptions": [
             {
                 "name": "monitoring_namespaces",
@@ -290,5 +265,4 @@ def test_public_tuning_appends_with_an_override() -> None:
                 "values": [[["monitoring", "observability"], "node-exporter"]],
             }
         ],
-        "override": {"condition": "append", "exceptions": "append"},
     }

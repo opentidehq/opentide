@@ -140,17 +140,10 @@ def _build_section(cls: Any, payload: dict[str, Any], *, where: str) -> Any:
 
 
 def _check_sysdig_setup(setup: dict[str, Any], *, where: str) -> None:
-    """sysdig-1.0 tenant setup: the keys each delivery needs, the token as `$VAR`."""
-    delivery = setup.get("delivery", "api")
-    if delivery not in ("api", "file"):
-        raise ValueError(f"{where} setup: delivery must be api or file, got {delivery!r}")
-    if delivery == "file":
-        if not setup.get("rules_dir"):
-            raise ValueError(f"{where} setup: delivery file needs rules_dir")
-        return
+    """sysdig-1.0 tenant setup: `url` and `api_token`, the token as `$VAR`."""
     missing = [key for key in ("url", "api_token") if not setup.get(key)]
     if missing:
-        raise ValueError(f"{where} setup: delivery api needs {', '.join(missing)}")
+        raise ValueError(f"{where} setup is missing required key(s): {', '.join(missing)}")
     token = setup["api_token"]
     reference = _ENV_REFERENCE.fullmatch(token) if isinstance(token, str) else None
     if reference is None:

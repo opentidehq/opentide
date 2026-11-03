@@ -36,8 +36,6 @@ def test_sysdig_is_a_registered_platform() -> None:
 )
 def test_fixture_blocks_validate(path: Path) -> None:
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if isinstance(document, list):  # a generated rules file, not a rule
-        return
     block = document["configurations"]["sysdig"]
     assert isinstance(load_platform_config("sysdig", block), SysdigConfig)
 
@@ -177,9 +175,19 @@ def test_legacy_external_id_keys_are_dropped_by_the_loader_only() -> None:
     assert isinstance(load_platform_config("sysdig", block), SysdigConfig)
 
 
-@pytest.mark.parametrize(("raw", "text"), [(0.37, "0.37"), (17, "17"), ("0.39.0", "0.39.0")])
-def test_required_engine_version_reads_a_yaml_number_as_text(raw: object, text: str) -> None:
-    block = SysdigConfig.model_validate(
-        {"status": "STAGING", "condition": "proc.name = sh", "required_engine_version": raw}
-    )
-    assert block.required_engine_version == text
+@pytest.mark.parametrize("version", [0, 17, 35])
+def test_minimum_engine_version_takes_a_non_negative_integer(version: int) -> None:
+    block = SysdigConfig.model_validate({**RULE, "minimum_engine_version": version})
+    assert block.minimum_engine_version == version
+
+
+@pytest.mark.parametrize("version", ["17", "0.39.0", 0.37, -1, True])
+def test_minimum_engine_version_rejects_anything_else(version: object) -> None:
+    with pytest.raises(ValidationError, match="minimum_engine_version"):
+        SysdigConfig.model_validate({**RULE, "minimum_engine_version": version})
+
+
+@pytest.mark.parametrize("key", ["required_engine_version", "required_plugin_versions"])
+def test_rules_file_keys_are_unknown(key: str) -> None:
+    with pytest.raises(ValidationError, match=key):
+        SysdigConfig.model_validate({**RULE, key: "0.39.0"})
