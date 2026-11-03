@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-03
+
+The bundled Tide catalog catches up with opentide's removal of its CoreTIDE compatibility, so `opentide-lsp` on its own reports the same unknown keys and platform `schema` values that `opentide validate` reports.
+
 ### Changed
 
 - The bundled Tide catalog follows opentide's removal of its CoreTIDE compatibility ([opentidehq/opentide#745](https://github.com/opentidehq/opentide/pull/745)): a Splunk block's splunk::2.x keys (`search`, `cron_schedule`, `advanced`, `security_domain`), a rule's `meta:` and an objective's root `composition` are unknown keys rather than accepted spellings or deprecations, and each platform block's `schema` offers and accepts only its registered `platform::<platform>::1.0`. Regenerated with `scripts/sync_opentide_schemas.py`; editors running `opentide-lsp` on its own now report what `opentide validate` reports for these keys.
@@ -347,6 +351,7 @@ The first working server: KQL, SPL, and Tide YAML over stdio and WASM, with the 
 - A frozen HighlightSpec with generated editor maps, and semantic tokens on the standard LSP legend.
 - Stdio and WASM hosts, and Zed, Helix, and Neovim samples.
 
+[0.9.1]: https://github.com/opentidehq/language-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/opentidehq/language-server/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/opentidehq/language-server/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/opentidehq/language-server/compare/v0.7.0...v0.7.1
