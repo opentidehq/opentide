@@ -44,6 +44,7 @@ from opentide.cli.ui.layout import Cropped, columns
 from opentide.cli.ui.mode import OutputMode, get_mode
 from opentide.cli.ui.terminal_progress import TerminalProgress
 from opentide.core import progress as engine_progress
+from opentide.core import progress_events
 
 StepStatus = Literal["running", "ok", "failed", "skipped"]
 
@@ -367,6 +368,8 @@ class Checklist:
         self.console.print(text, soft_wrap=True)
 
     def _finished(self, step: Step) -> None:
+        # Every mode, JSON included: an editor reads these (OPENTIDE_PROGRESS=json).
+        progress_events.progress(step.name, self.completed, self.total)
         if self._terminal is not None:
             self._terminal.update(self.completed)
         if self.silent:

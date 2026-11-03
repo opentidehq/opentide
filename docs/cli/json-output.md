@@ -143,6 +143,26 @@ An exception no command handles is a bug in opentide. The run exits `1` and, und
 
 Where the log goes, what it holds and how to report the bug: [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
 
+## Progress events
+
+A document arrives when the command ends. To show progress while a long command runs, set `OPENTIDE_PROGRESS=json`: the command also writes one JSON object per line on stderr as it goes. Stdout is unchanged, still exactly one document, so the redirect below keeps both apart.
+
+```bash
+OPENTIDE_PROGRESS=json opentide --json generate 2> events.ndjson
+```
+
+```json illustrative
+{"event":"progress","step":"schemas","done":3,"total":6}
+{"event":"tenant","platform":"sentinel","tenant":"prod","status":"ok","rows":120,"elapsed_ms":1800}
+```
+
+| Event | Keys | Sent by |
+|-------|------|---------|
+| `progress` | `step`, `done`, `total` (`null` when unknown) | `generate` and its subcommands: one per finished phase (`schemas`, `templates`, …). `validate`: `objects` as objects are checked, in batches (about 20 per run, and always the last one, where `done` equals `total`), then `queries` once the query check ran. `deploy --dry-run`: one per platform, `step` being the platform. `deploy`, `validate query` and the other commands with steps: one per finished step |
+| `tenant` | `platform`, `tenant`, `status` (`ok` or `failed`), `rows`, `elapsed_ms`; `label` when the rule holds several queries | `query`: one per tenant and query, as each answers |
+
+Each event is one line of compact JSON, written whole. Log lines share stderr (`OPENTIDE_LOG_JSON=1` makes them JSON too), so a reader keeps the lines whose `event` is `progress` or `tenant`.
+
 ## Output modes
 
 opentide decides once per command who is reading. The first rule that matches wins:

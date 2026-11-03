@@ -11,6 +11,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
+from opentide.core import progress_events
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import Opentide
 from opentide.models.object_types import CORE_OBJECT_TYPES
@@ -194,6 +195,8 @@ def run_validation(
 
     if object_checks:
         enabled_platforms = _enabled_platforms(work_items, object_checks)
+        # OPENTIDE_PROGRESS=json: objects checked so far, in batches.
+        ticker = progress_events.Ticker("objects", len(work_items))
         if object_workers > 0:
             from concurrent.futures import ThreadPoolExecutor
 
@@ -213,6 +216,7 @@ def run_validation(
                 for item_issues, item_warnings in pool.map(_worker, work_items):
                     issues.extend(item_issues)
                     warnings.extend(item_warnings)
+                    ticker.advance()
         else:
             for item in work_items:
                 item_issues, item_warnings = _validate_work_item(
@@ -225,6 +229,7 @@ def run_validation(
                 )
                 issues.extend(item_issues)
                 warnings.extend(item_warnings)
+                ticker.advance()
         stats["objects_checked"] = len(work_items)
         if enabled_platforms and not issues:
             issues.extend(_compile_issues(work_items, graph, enabled_platforms))
@@ -251,6 +256,7 @@ def run_validation(
         issues.extend(_not_in(found.errors, rejected))
         warnings.extend(_not_in(found.warnings, rejected))
         stats["queries_checked"] = found.queries
+        progress_events.progress("queries", found.queries, found.queries)
         if not object_checks:
             stats["objects_checked"] = len(work_items)
 

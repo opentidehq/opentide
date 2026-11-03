@@ -18,6 +18,7 @@ from opentide.cli.ui.contract import (
     did_you_mean,
 )
 from opentide.cli.ui.glyphs import glyph
+from opentide.core import progress_events
 from opentide.core.errors import UserFileError
 from opentide.core.index_manager import IndexManager
 
@@ -640,7 +641,7 @@ def _deploy(
                 scope=plan_scope(len(deployment_list), tenant_count),
                 tally=plan_message(changes),
             )
-        for system, uuids in deployment_list.items():
+        for position, (system, uuids) in enumerate(deployment_list.items(), start=1):
             deployer = cast(Any, mdr_deployers[system])
             if run_log is None:  # a dry run: nothing is sent, so nothing reports
                 logger.info(
@@ -651,6 +652,8 @@ def _deploy(
                 payloads[system] = preview_platform_deployment(system, uuids)
                 if system not in missing_tenants:
                     deployed.append(system)
+                # A dry run has no checklist step to report it (OPENTIDE_PROGRESS=json).
+                progress_events.progress(system, position, len(deployment_list))
                 continue
             with checklist.step(system, unit="rule") as step:
                 step.done(len(uuids))
