@@ -2396,20 +2396,7 @@ fn parameters_from_signature(sig: &str) -> Vec<ParameterInformation> {
 }
 
 fn position_to_offset(source: &str, position: opentide_core::Position) -> usize {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for (idx, ch) in source.char_indices() {
-        if line == position.line && col >= position.character {
-            return idx;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-    source.len()
+    opentide_core::position_to_offset(source, position)
 }
 
 fn word_at(source: &str, offset: usize) -> Option<String> {
@@ -3258,7 +3245,7 @@ mod tests {
     }
 
     #[test]
-    fn position_to_offset_counts_scalars_not_utf16() {
+    fn position_to_offset_counts_utf16() {
         let src = "aéX";
         assert_eq!(
             position_to_offset(src, opentide_core::Position::new(0, 1)),
@@ -3271,7 +3258,7 @@ mod tests {
 
         let src = "a😀b";
         assert_eq!(
-            position_to_offset(src, opentide_core::Position::new(0, 2)),
+            position_to_offset(src, opentide_core::Position::new(0, 3)),
             1 + "😀".len()
         );
         assert_eq!(

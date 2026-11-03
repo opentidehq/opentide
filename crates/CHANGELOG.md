@@ -17,6 +17,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - There is no TOML highlighting: the editor's TOML grammar stays.
   - API: `opentide_analysis::config` (`ConfigRequest`, `ConfigIssue`, `configuration_diagnostics`, `configuration_hover`, `configuration_completions`, `configuration_path`), `LanguageId::Config`, `Severity::parse`, `opentide_lsp::serve`. The editor samples associate the glob and start `opentide lsp start` for it.
 
+### Fixed
+
+- An incremental edit after a multi-byte character (`日本`, `é`, an emoji) no longer crashes the language server ([#178](https://github.com/opentidehq/language-server/issues/178)). The server read the editor's column, which counts UTF-16 units, as a byte offset, and sliced inside the character. Edits, completion and hover now all convert positions with `opentide_core::position_to_offset`, which counts UTF-16 as LSP does; completion and KQL hover used to count characters, which put the cursor one column off after an emoji.
+
 ### Changed
 
 - A `.toml` file outside `.opentide/configurations/` (`Cargo.toml`, `pyproject.toml`) is no longer read. The server used to analyse it as Tide YAML when an editor sent it.

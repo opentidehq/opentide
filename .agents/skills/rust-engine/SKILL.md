@@ -65,12 +65,7 @@ Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list i
 
 LSP `character` is a UTF-16 code unit count. `é` is one unit; an emoji outside the BMP is two. Ranges **sent** to the client go through `span_to_range` / `offset_to_position` in `opentide-core`, which uses `char::len_utf16`.
 
-Two older inbound converters do not match that. Do not add a third, and do not "fix" one of them in a drive-by:
-
-- `offset_at` in `crates/opentide-lsp/src/server.rs` treats `character` as a **byte** index into the line (capped by the line's byte length). Incremental `didChange` uses it.
-- `position_to_offset` (the lsp server and `opentide-kql`) counts Unicode scalar values (`col += 1` per `char`).
-
-A change to any of the three needs a fixture containing `é` and a non-BMP character, and the other two call sites reviewed in the same change. Do not index the source with `position.character` as a byte index in new code; call one of these helpers.
+Inbound positions (LSP → byte offset) go through `opentide_core::position_to_offset`, which counts UTF-16 and always returns a char boundary. `offset_at` (incremental `didChange`) and `position_to_offset` in `crates/opentide-lsp/src/server.rs`, and `position_to_offset` in `opentide-kql`, are thin wrappers over it (#178: the byte-index version panicked after `日本`). Do not add another converter, and do not index the source with `position.character` as a byte index; a change here needs a fixture with `é`, a CJK character and a non-BMP character.
 
 `uuid::Uuid::parse_str` plus `get_version_num() == 4` is the object-id check (`is_uuidv4`). Do not add another parser. A 36-character hex UUID that is not version 4 is a different future check (configuration `organisation_uuid`) and does not belong in this function.
 

@@ -50,7 +50,7 @@ Custom methods:
 
 LSP positions are zero-based line and UTF-16 `character`. `opentide_core::offset_to_position` is the UTF-8 byte → position conversion for every range that leaves the process (`range_json`). Do not send byte offsets as `character`.
 
-Inbound conversion is not the same function. `apply_content_changes` walks `contentChanges` in order and splices with `offset_at`, which treats `character` as a byte index into the line. Completion uses `position_to_offset`, which counts Unicode scalars. See `skills/rust-engine/SKILL.md`. New protocol code calls one of those helpers instead of slicing the source with `position.character`.
+Inbound conversion is `opentide_core::position_to_offset` (UTF-16, always a char boundary). `apply_content_changes` walks `contentChanges` in order and splices with `offset_at`, and completion and hover use `position_to_offset`; both wrap it. See `skills/rust-engine/SKILL.md`. New protocol code calls one of those helpers instead of slicing the source with `position.character`.
 
 Semantic tokens are the LSP integer array `[deltaLine, deltaStartChar, length, tokenType, tokenModifiers]` from `encode_lsp_semantic_tokens`. A token cannot cross a newline; `length` is the UTF-16 length on the start line. Split multiline comments and strings before encoding. `tokenModifiers` is 0.
 

@@ -1204,3 +1204,41 @@ fn configuration_toml_without_a_host_checker_reports_nothing() {
     );
     assert_eq!(hover["result"], Value::Null, "{hover}");
 }
+
+/// #178: an incremental edit after a multi-byte character panicked the
+/// server (it read the UTF-16 column as a byte index).
+#[test]
+fn an_edit_after_a_multi_byte_character_keeps_the_server_running() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///q.kql";
+    let text = "SecurityEvent | where Account == \"日本\"";
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "kql", "version": 1, "text": text } }),
+    );
+    next_diagnostics(&mut lsp, uri);
+    // Column 35 is after `日本`, and 36 after the emoji's two units.
+    for (version, character, insert) in [(2, 35, "😀"), (3, 37, "é")] {
+        lsp.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [{
+                    "range": {
+                        "start": { "line": 0, "character": character },
+                        "end": { "line": 0, "character": character }
+                    },
+                    "text": insert
+                }]
+            }),
+        );
+        next_diagnostics(&mut lsp, uri);
+    }
+    let reply = lsp.request("shutdown", Value::Null);
+    assert_eq!(reply["result"], Value::Null, "{reply}");
+}

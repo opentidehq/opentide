@@ -521,17 +521,15 @@ fn splice_range(text: &str, range: &Value, insert: &str) -> String {
     out
 }
 
+/// The byte offset of an LSP position in `text`: `character` counts UTF-16
+/// code units, as LSP positions do, and the offset always falls on a char
+/// boundary. A column past its line's end clamps to the end of the line, and
+/// a line past the end of the text gives its length.
 fn offset_at(text: &str, line: Option<&Value>, character: Option<&Value>) -> usize {
-    let line = line.and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-    let character = character.and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-    let mut offset = 0;
-    for (i, src) in text.split_inclusive('\n').enumerate() {
-        if i == line {
-            return offset + character.min(src.trim_end_matches('\n').len());
-        }
-        offset += src.len();
-    }
-    text.len()
+    let line = line.and_then(|v| v.as_u64()).unwrap_or(0);
+    let character = character.and_then(|v| v.as_u64()).unwrap_or(0);
+    let clamp = |n: u64| u32::try_from(n).unwrap_or(u32::MAX);
+    opentide_core::position_to_offset(text, Position::new(clamp(line), clamp(character)))
 }
 
 fn publish_diagnostics(session: &Session, writer: &mut impl Write, uri: &str) -> Result<()> {
@@ -1403,20 +1401,7 @@ fn uuid_at(text: &str, pos: Position) -> Option<String> {
 }
 
 fn position_to_offset(source: &str, position: Position) -> usize {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for (idx, ch) in source.char_indices() {
-        if line == position.line && col >= position.character {
-            return idx;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-    source.len()
+    opentide_core::position_to_offset(source, position)
 }
 
 /// The workspace's object YAML. A file or directory that cannot be read (not
@@ -1487,20 +1472,19 @@ mod tests {
     }
 
     #[test]
-    fn offset_at_is_a_byte_index_and_clamps() {
+    fn offset_at_counts_utf16_and_clamps() {
         let src = "aéX";
         assert_eq!(at(src, 0, 0), 0);
         assert_eq!(at(src, 0, 1), 1);
-        // Byte 2 is inside `é`. Scalar/UTF-16 column 2 is `X`.
-        assert_eq!(at(src, 0, 2), 2);
-        assert_eq!(at(src, 0, 3), 3);
+        // UTF-16 column 2 is `X`, after the two bytes of `é`.
+        assert_eq!(at(src, 0, 2), 1 + "é".len());
 
+        // An emoji is two UTF-16 units; column 3 is `b`.
         let src = "a😀b";
         assert_eq!(at(src, 0, 1), 1);
-        assert_eq!(at(src, 0, 2), 2);
-        assert_eq!(at(src, 0, 5), 5);
+        assert_eq!(at(src, 0, 3), 1 + "😀".len());
         assert_eq!(
-            apply_content_changes(src, &[ranged(0, 1, 0, 5, "X")]),
+            apply_content_changes(src, &[ranged(0, 1, 0, 3, "X")]),
             "aXb"
         );
 
@@ -1522,13 +1506,29 @@ mod tests {
         assert_eq!(at(src, 1, 1), "ab\r\n".len() + 1);
     }
 
+    /// #178: an edit after a multi-byte character used to slice inside it.
     #[test]
-    fn position_to_offset_counts_scalars() {
+    fn edits_after_multi_byte_characters_land_where_the_editor_put_them() {
+        let src = "T | where Name == \"日本\"";
+        // `日` is column 19 and `本` column 20 (one UTF-16 unit each).
+        let edited = apply_content_changes(src, &[ranged(0, 20, 0, 20, "x")]);
+        assert_eq!(edited, "T | where Name == \"日x本\"");
+        let edited = apply_content_changes(src, &[ranged(0, 21, 0, 21, "x")]);
+        assert_eq!(edited, "T | where Name == \"日本x\"");
+        let edited = apply_content_changes("é😀", &[ranged(0, 3, 0, 3, "!")]);
+        assert_eq!(edited, "é😀!");
+        // A column inside a surrogate pair moves past the character, never into it.
+        let edited = apply_content_changes("😀z", &[ranged(0, 1, 0, 1, "!")]);
+        assert_eq!(edited, "😀!z");
+    }
+
+    #[test]
+    fn position_to_offset_counts_utf16() {
         let src = "aéX";
         assert_eq!(position_to_offset(src, Position::new(0, 2)), 1 + "é".len());
         let src = "a😀b";
-        assert_eq!(position_to_offset(src, Position::new(0, 2)), 1 + "😀".len());
-        assert_ne!(at(src, 0, 2), position_to_offset(src, Position::new(0, 2)));
+        assert_eq!(position_to_offset(src, Position::new(0, 3)), 1 + "😀".len());
+        assert_eq!(at(src, 0, 3), position_to_offset(src, Position::new(0, 3)));
     }
 
     #[test]
