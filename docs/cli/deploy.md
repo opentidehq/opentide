@@ -11,6 +11,7 @@ Deploy the rules a run changed whose status maps to the run's `--strategy`, to t
 opentide deploy --strategy PREVIEW --dry-run          # pull or merge request job
 opentide deploy --strategy RELEASE --platform splunk  # default-branch job
 opentide deploy --strategy PREVIEW --strategy RELEASE --all --dry-run   # every rule file
+opentide --json deploy --dry-run --strategy PREVIEW --uuid <uuid>   # one rule
 ```
 
 Three things decide what is sent:
@@ -44,6 +45,8 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 |------|---------|
 | `--strategy` | Required, repeatable. `PREVIEW`: rules whose status maps to `PREVIEW` or `UNIVERSAL`. `RELEASE`: rules whose status maps to `RELEASE` or `UNIVERSAL`; also disables `DISABLEMENT` rules and deletes `DELETION` rules. Each rule goes to the tenants whose `strategies` accept the run's strategy. A status name such as `STAGING` is refused, and the message names the strategy it maps to |
 | `--all` | Read every rule file. Without it, deploy reads the rule files the run changed: the pull or merge request (from its merge base), the push, or outside CI the last commit |
+| `--uuid` | Read the rule with this `metadata.uuid` instead of the changed rules (repeatable, case-insensitive). See [Selecting rules](#selecting-rules) |
+| `--file` | Read this rule file instead of the changed rules (repeatable), matched as [`validate --file`](./validate.md) matches: a file name, or a path relative to the current directory or the workspace |
 | `--platform` | Target platform (see [platforms](../usage/concepts/platforms.md)) |
 | `--wide` | Deploy the rule files read whatever their status strategy, `INERT` included, to the tenants accepting the run's strategies. `DISABLEMENT` and `DELETION` still follow `--keep-deprecated` |
 | `--dry-run` | Simulate deployment without writes. `--json` lists the tenants each rule would reach |
@@ -51,6 +54,27 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--skip-promotion` | Skip the promotion step of a `RELEASE` run on a push |
 | `--skip-unconfigured` | Exit 0 when every platform with rules to deploy has no `[[tenants]]` block |
 | `--persist-state-externally` | In CI, allow a run other than `--strategy RELEASE` on a push to create Defender for Endpoint, SentinelOne and CrowdStrike rules. Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
+
+### Selecting rules
+
+`--uuid` and `--file` name the rules a run reads, in place of the rules the run changed: no git checkout or diff is read, and a `RELEASE` run skips status promotion, which applies to the diff. Both are repeatable and add up: `--uuid A --file b.yaml` reads both rules. The rest of the run is unchanged: each selected rule is planned on the platform blocks whose status a run strategy deploys (pass `--wide` to ignore the status), and goes to the tenants that accept the strategy. An editor's "preview deploy" of one rule is, for the [tutorial](../usage/tutorial.md)'s rule:
+
+```bash
+opentide --json deploy --dry-run --strategy PREVIEW --uuid 00000000-0000-4000-8003-000000000001
+```
+
+Its `plan` and `payloads` hold only that rule, and the document carries `"scope": "selected"`:
+
+```json output-of="opentide --json deploy --dry-run --strategy PREVIEW --uuid 00000000-0000-4000-8003-000000000001"
+{
+  "scope": "selected",
+  "dry_run": true,
+  "plan": { "sentinel": ["00000000-0000-4000-8003-000000000001"] }
+}
+```
+
+- With `--all`, either flag is a usage error: exit `2`, `failure.code` `usage_error`. `--all` reads every file; a selection reads some.
+- A value that selects no rule fails the run with exit `1` before anything is planned, and `unmatched` lists each one. Candidates are the files directly in the rules folder, as for `--all`.
 
 `--plan` and `DEPLOYMENT_PLAN` were removed in 0.17.0. Either now fails with exit `2` and names the `--strategy` to pass: `STAGING` became `--strategy PREVIEW`, `PRODUCTION` became `--strategy RELEASE`, and `FULL` became `--strategy PREVIEW --strategy RELEASE --all`. A platform file whose tenant still sets `deployment` fails to load and names the `strategies` or `manual` line that replaces it ([migration table](../usage/concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier)).
 
@@ -296,7 +320,7 @@ result = rule.deploy("sentinel", dry_run=True)                       # as its st
 result = rule.deploy("sentinel", dry_run=True, strategies=["PREVIEW"])
 ```
 
-Without `strategies`, the rule is deployed by the run strategies that deploy the strategy its `sentinel` status maps to, to the tenants that accept them. MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run) deploys the same way.
+Without `strategies`, the rule is deployed by the run strategies that deploy the strategy its `sentinel` status maps to, to the tenants that accept them. MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run) deploys the same way. On the command line, `deploy --uuid` does the same for one rule or several, with the dry run's rendered `payloads` ([Selecting rules](#selecting-rules)).
 
 ## Source
 
