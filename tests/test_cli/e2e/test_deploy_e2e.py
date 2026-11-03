@@ -330,7 +330,8 @@ def _disable_splunk(repo: Path) -> None:
     text = config.read_text(encoding="utf-8")
     assert "[platform]\nenabled = true\n" in text
     config.write_text(
-        text.replace("[platform]\nenabled = true\n", "[platform]\nenabled = false\n"), encoding="utf-8"
+        text.replace("[platform]\nenabled = true\n", "[platform]\nenabled = false\n"),
+        encoding="utf-8",
     )
 
 
