@@ -16,6 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   - `signals`, and `attack`: the Enterprise ATT&CK matrix from the bundled vocabulary (tactics in order, techniques with their names, parents and sub-techniques).
 
   It is built in one pass over the registry: a 500-rule workspace answers in about 1.3 s. Without `--json` it prints a short summary. See [The catalogue](docs/cli/info.md#the-catalogue).
+- **`opentide --json info` lists each platform's tenants** ([#754](https://github.com/opentidehq/opentide/issues/754)). Each `platforms[]` entry, also under `info --platform <id>`, gains `tenants[]`: `name`, `description`, `strategies`, `manual` and `variables`, each `$VAR` the tenant's setup references with whether it is set. A value is never printed. See [Tenants](docs/cli/info.md#tenants).
 
 ### Changed
 

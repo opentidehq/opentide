@@ -65,6 +65,9 @@ def collect_info(
         Opentide.reload()
     parse_errors = list(IndexManager.load().get("parse_errors") or [])
     enabled_platforms = set(enabled_systems())
+    from opentide.platforms.config import systems_raw_index
+
+    systems = systems_raw_index()
     platforms_info = []
     for name, plat in Opentide.Platforms.items():
         if platform is not None and name != platform.value:
@@ -76,6 +79,7 @@ def collect_info(
                 "can_deploy": plat.can_deploy,
                 "can_validate": plat.can_validate,
                 "can_query": name in QUERY_PLATFORMS,
+                "tenants": _tenants((systems.get(name) or {}).get("tenants")),
             }
         )
     payload: dict[str, Any] = {
@@ -113,6 +117,47 @@ def collect_info(
         else:
             payload["vocabulary"] = _vocab_detail(vocab, vocabularies[vocab])
     return payload
+
+
+def _tenants(configured: Any) -> list[dict[str, Any]]:
+    """Each ``[[tenants]]`` entry as written: name, description, strategies, manual, variables.
+
+    ``variables`` names each ``$VAR`` the tenant's ``setup`` references and
+    whether the process environment sets it; never its value.
+    """
+    import os
+
+    from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES, parse_strategies
+    from opentide.platforms.config import setup_variables
+
+    tenants: list[dict[str, Any]] = []
+    for position, tenant in enumerate(configured if isinstance(configured, list) else ()):
+        if not isinstance(tenant, dict):
+            continue
+        raw = tenant.get("strategies")
+        if raw is None:
+            strategies = [strategy.name for strategy in DEPLOYABLE_STRATEGIES]
+        else:
+            values = [raw] if isinstance(raw, str) else raw if isinstance(raw, list) else []
+            try:
+                strategies = [strategy.name for strategy in parse_strategies(values)]
+            except ValueError:
+                # validate reports the value; list it as written.
+                strategies = [str(value) for value in values]
+        setup = tenant.get("setup")
+        tenants.append(
+            {
+                "name": str(tenant.get("name") or f"tenant {position + 1}"),
+                "description": str(tenant.get("description") or ""),
+                "strategies": strategies,
+                "manual": tenant.get("manual") is True,
+                "variables": [
+                    {"name": variable, "set": bool(os.environ.get(variable))}
+                    for variable in setup_variables(setup if isinstance(setup, dict) else {})
+                ],
+            }
+        )
+    return tenants
 
 
 #: Singular nouns of the counts on the outcome line, in order.

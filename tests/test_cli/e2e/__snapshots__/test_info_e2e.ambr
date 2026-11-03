@@ -13,6 +13,8 @@
         'can_validate': True,
         'enabled': True,
         'name': 'carbon_black_cloud',
+        'tenants': list([
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -20,6 +22,8 @@
         'can_validate': False,
         'enabled': True,
         'name': 'crowdstrike',
+        'tenants': list([
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -27,6 +31,8 @@
         'can_validate': True,
         'enabled': True,
         'name': 'defender_for_endpoint',
+        'tenants': list([
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -34,6 +40,22 @@
         'can_validate': True,
         'enabled': True,
         'name': 'elastic',
+        'tenants': list([
+          dict({
+            'description': '',
+            'manual': False,
+            'name': 'staging',
+            'strategies': list([
+              'PREVIEW',
+            ]),
+            'variables': list([
+              dict({
+                'name': 'ELASTIC_API_KEY',
+                'set': False,
+              }),
+            ]),
+          }),
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -41,6 +63,8 @@
         'can_validate': False,
         'enabled': True,
         'name': 'harfanglab',
+        'tenants': list([
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -48,6 +72,8 @@
         'can_validate': True,
         'enabled': True,
         'name': 'sentinel',
+        'tenants': list([
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -55,6 +81,8 @@
         'can_validate': True,
         'enabled': True,
         'name': 'sentinel_one',
+        'tenants': list([
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -62,6 +90,8 @@
         'can_validate': True,
         'enabled': True,
         'name': 'splunk',
+        'tenants': list([
+        ]),
       }),
       dict({
         'can_deploy': True,
@@ -69,6 +99,22 @@
         'can_validate': False,
         'enabled': True,
         'name': 'sysdig',
+        'tenants': list([
+          dict({
+            'description': '',
+            'manual': False,
+            'name': 'staging',
+            'strategies': list([
+              'PREVIEW',
+            ]),
+            'variables': list([
+              dict({
+                'name': 'SYSDIG_SECURE_API_TOKEN',
+                'set': False,
+              }),
+            ]),
+          }),
+        ]),
       }),
     ]),
   })

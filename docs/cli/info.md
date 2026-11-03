@@ -73,7 +73,7 @@ Every view ends with one line counting the catalogue: `✓ 1 rule · 1 threat ·
   "counts": { "rules": 1, "threats": 1, "objectives": 1 },
   "parse_error_count": 0,
   "platforms": [
-    { "name": "sentinel", "enabled": true, "can_deploy": true, "can_validate": true }
+    { "name": "sentinel", "enabled": true, "can_deploy": true, "can_validate": true, "tenants": [] }
   ],
   "ok": true,
   "status": "completed",
@@ -85,6 +85,29 @@ Every view ends with one line counting the catalogue: `✓ 1 rule · 1 threat ·
   "summary": {},
   "next_actions": [],
   "failure": null
+}
+```
+
+### Tenants
+
+Each `platforms[]` entry lists the platform's `[[tenants]]` from `.opentide/configurations/platforms/<id>.toml`, so a client can show them and their credentials without reading TOML:
+
+| Key | Content |
+|-----|---------|
+| `name`, `description` | From the tenant's table |
+| `strategies` | The run strategies the tenant accepts (`PREVIEW`, `RELEASE`); both when the file omits `strategies` |
+| `manual` | `true` when only rules whose block names the tenant reach it |
+| `variables` | `{name, set}` for each `$VAR` (or `${VAR}`) the tenant's `[tenants.setup]` references, in order: whether the process environment sets it to a non-empty value |
+
+A variable's value is never printed, in either output. A tenant's setup values that are not variable references are not printed either. `opentide doctor`'s `credentials` check reports the same variables as a pass or a warning.
+
+```json illustrative
+{
+  "name": "sentinel",
+  "tenants": [
+    { "name": "prod", "description": "Production workspace", "strategies": ["RELEASE"], "manual": false,
+      "variables": [ { "name": "AZURE_CLIENT_ID", "set": true }, { "name": "AZURE_CLIENT_SECRET", "set": false } ] }
+  ]
 }
 ```
 

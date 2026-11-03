@@ -111,6 +111,31 @@ def _tenant_ssl(value: Any, *, where: str) -> bool | str:
 _ENV_REFERENCE = re.compile(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})")
 
 
+def setup_variables(value: Any) -> list[str]:
+    """The environment variables a tenant's ``setup`` table names, in order, each once.
+
+    A value is a reference when it is ``$NAME`` or ``${NAME}`` as a whole, as
+    :meth:`DebugHelpers.fetch_config_envvar` resolves it. Values are never returned.
+    """
+    names: list[str] = []
+
+    def walk(item: Any) -> None:
+        if isinstance(item, str) and item.startswith("$") and len(item) > 1:
+            reference = _ENV_REFERENCE.fullmatch(item)
+            name = (reference.group(1) or reference.group(2)) if reference else item[1:]
+            if name not in names:
+                names.append(name)
+        elif isinstance(item, dict):
+            for nested in item.values():
+                walk(nested)
+        elif isinstance(item, (list, tuple)):
+            for nested in item:
+                walk(nested)
+
+    walk(value)
+    return names
+
+
 _PROXY_RETIRED = (
     "The proxy key is retired. Pass the URL with `opentide --proxy http://[user:pass@]host:port`."
 )

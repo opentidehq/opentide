@@ -256,12 +256,36 @@ class LintResult(CommandDocument):
 # --------------------------------------------------------------------------
 
 
+class TenantVariable(ResultModel):
+    """An environment variable a tenant's setup names. Its value is never printed."""
+
+    name: str = Field(description="The variable, without the $")
+    set: bool = Field(description="Whether the environment sets it to a non-empty value")
+
+
+class TenantInfo(ResultModel):
+    """One [[tenants]] entry of the platform's configuration file."""
+
+    name: str
+    description: str
+    strategies: list[str] = Field(
+        description="The run strategies the tenant accepts; both when the file omits them"
+    )
+    manual: bool = Field(description="true: only rules whose block lists the tenant reach it")
+    variables: list[TenantVariable] = Field(
+        description="Each $VAR the tenant's setup references, in order"
+    )
+
+
 class PlatformInfo(ResultModel):
     name: str
     enabled: bool
     can_deploy: bool
     can_validate: bool
     can_query: bool = Field(False, description="Whether opentide query runs on the platform")
+    tenants: list[TenantInfo] = Field(
+        default_factory=list, description="The platform's configured tenants"
+    )
 
 
 class TechniqueCoverage(ResultModel):
