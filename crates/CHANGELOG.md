@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-03
+
+A rebuilt server, and the server in the browser. The protocol host now runs on `lsp-server` and `lsp-types`: it batches what is queued, answers cancelled and outdated requests as LSP says, gives each workspace folder its own objects and `visibility.toml`, and lets a client that pulls diagnostics pull them instead of also getting them pushed. Editors gain an outline, links to ATT&CK and to the objects a UUID names, a "N rules use this objective" lens, fix-all, configuration TOML checked by opentide, and `initialize` saying who hosts the server. Carbon Black queries are checked against its field catalog, queries inside Tide YAML are embedded regions of their grammar, and every language is fuzzed nightly. The browser build carries the language server itself for a Web Worker (`@opentide/lsp-worker`).
+
 ### Added
 
 - The language server runs in a browser worker ([#14](https://github.com/opentidehq/language-server/issues/14)). The browser build (`opentide-wasm`) carries the server itself: `LanguageServer` is the `opentide-lsp` server `--stdio` runs, driven one JSON-RPC message at a time (`opentide_lsp::MessageSession`, the protocol loop with one message to a batch: the same lifecycle and the same answers to a malformed message), so a browser editor gets the same diagnostics, hover, completion, code actions and semantic tokens as a native one, with no second implementation. `version()` is exported too. The artifact still imports nothing but wasm-bindgen's glue, and `scripts/wasm-smoke.mjs` checks that its server answers `initialize`, diagnostics, hover and completion.
@@ -339,6 +343,7 @@ The first working server: KQL, SPL, and Tide YAML over stdio and WASM, with the 
 - A frozen HighlightSpec with generated editor maps, and semantic tokens on the standard LSP legend.
 - Stdio and WASM hosts, and Zed, Helix, and Neovim samples.
 
+[0.9.0]: https://github.com/opentidehq/language-server/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/opentidehq/language-server/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/opentidehq/language-server/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/opentidehq/language-server/compare/v0.6.0...v0.7.0
