@@ -123,11 +123,14 @@ def _region(diagnostic: Diagnostic) -> dict[str, int] | None:
     if diagnostic.line is None:
         return None
     region = {"startLine": diagnostic.line}
+    if diagnostic.multiline and (last_line := diagnostic.last_line) is not None:
+        region["endLine"] = last_line
     if diagnostic.column is not None:
         region["startColumn"] = diagnostic.column
-        if diagnostic.end_column is not None and diagnostic.end_column > diagnostic.column:
-            # SARIF's endColumn is exclusive, like ours.
-            region["endColumn"] = diagnostic.end_column
+        end_column = diagnostic.end_column
+        if end_column is not None and (diagnostic.multiline or end_column > diagnostic.column):
+            # SARIF's endColumn is exclusive, like ours, and on endLine.
+            region["endColumn"] = end_column
     return region
 
 

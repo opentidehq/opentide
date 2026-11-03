@@ -312,7 +312,7 @@ def diagnostic_lines(
         if diagnostic.column is not None:
             # Measured on the text as printed: a replaced character is one cell.
             shown = safe(source)
-            end = diagnostic.end_column or diagnostic.column + 1
+            end = diagnostic.single_line_end or diagnostic.column + 1
             marked = shown[diagnostic.column - 1 : end - 1].replace("\t", " ")
             length = max(1, cell_len(marked) if marked else end - diagnostic.column)
             row = gutter()

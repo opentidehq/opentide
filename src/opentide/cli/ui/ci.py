@@ -130,21 +130,24 @@ def github_annotation(diagnostic: Diagnostic, *, root: Path | None = None) -> st
     """One diagnostic as a GitHub ``::error``, ``::warning`` or ``::notice`` command.
 
     GitHub's ``endColumn`` is the last column of the span, one before ours,
-    and applies only on a single line, so ``endLine`` repeats ``line``.
+    and applies only on a single line: a one-line span's ``endLine`` repeats
+    ``line``, and a longer one has ``endLine`` and no ``endColumn``.
     """
     path = repository_path(diagnostic, root)
     line = diagnostic.line if path is not None else None
     column = diagnostic.column if line is not None else None
     end_column = None
-    if column is not None and diagnostic.end_column is not None:
+    multiline = line is not None and diagnostic.multiline
+    if column is not None and diagnostic.end_column is not None and not multiline:
         end_column = max(column, diagnostic.end_column - 1)
+    end_line = diagnostic.last_line if multiline else line if end_column is not None else None
     return github_command(
         _GITHUB_LEVEL[diagnostic.severity],
         annotation_text(diagnostic),
         (
             ("file", path),
             ("line", line),
-            ("endLine", line if end_column is not None else None),
+            ("endLine", end_line),
             ("col", column),
             ("endColumn", end_column),
             ("title", diagnostic.code),

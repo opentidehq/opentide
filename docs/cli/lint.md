@@ -104,7 +104,7 @@ When more than one severity is left, the count splits them. Notes alone are no w
 | `message` | What is wrong |
 | `code` | `filename_mismatch`, `filename_pattern`, `name_missing`, `metadata_recommended`, `placeholder`, `yaml_parse`, or the engine's code for a `queries` finding (`kql_where_not_first`, `spl_wildcard`, `lookback_zero`, ...). `opentide explain <code>` describes it |
 | `field_path` | The key the finding is about (`["metadata"]`, `["configurations", "sentinel", "query"]`), or `[]` |
-| `line`, `column`, `end_column` | One-based position of that key, of the YAML error, or of the engine's finding in the query. `null` when unknown |
+| `line`, `column`, `end_line`, `end_column` | One-based position of that key, of the YAML error, or of the engine's finding in the query: the span runs from (`line`, `column`) up to (`end_line`, `end_column`), `end_column` exclusive and on `end_line`. `end_line` equals `line` for a span on one line, and is the line of the last character of one that spans several (a query finding over a block scalar's lines). `null` when unknown |
 | `help` | What to do, or `null` |
 | `fix` | Always `null`: a rename is not a text edit. `opentide lint --fix` renames |
 | `explain` | `opentide explain <code>` |

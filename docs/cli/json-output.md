@@ -173,6 +173,8 @@ warning: Query validation reported warnings for sentinel
 
 `validate` and `lint` print each finding as a code frame before the outcome line, and their outcome line counts them (`✗ 2 errors in 1 file · 3 objects checked · 0.9s`). See [Diagnostic codes](./diagnostics.md).
 
+In JSON, every `validate`, `validate query` and `lint` finding carries `path`, `line`, `column`, `end_line` and `end_column`: one-based, columns in Unicode code points, the span from (`line`, `column`) up to (`end_line`, `end_column`), `end_column` exclusive and on `end_line`. `end_line` equals `line` for a span on one line. An editor maps them to a range as they are ([validate](./validate.md#diagnostic-fields), [lint](./lint.md#json-findings)).
+
 | Line | Meaning |
 |------|---------|
 | `✓ …` | Done |

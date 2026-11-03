@@ -105,7 +105,10 @@ class DiagnosticFields(ResultModel):
     path: str | None = Field(None, description="Workspace-relative path")
     line: int | None = Field(None, description="1-based")
     column: int | None = Field(None, description="1-based, Unicode code points")
-    end_column: int | None = Field(None, description="Exclusive")
+    end_line: int | None = Field(
+        None, description="1-based line the span ends on; equal to line for a one-line span"
+    )
+    end_column: int | None = Field(None, description="Exclusive, on end_line")
     field_path: list[str] = Field(default_factory=list, description="YAML path")
     help: str | None = None
     fix: FixModel | None = None
