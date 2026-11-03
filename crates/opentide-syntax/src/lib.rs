@@ -129,6 +129,41 @@ pub fn node_span(node: Node<'_>) -> ByteSpan {
     )
 }
 
+/// `scm` compiled for `id`, once per process. `Query::new` costs about
+/// 10 ms for the KQL and SPL highlight queries, more than the rest of an
+/// analysis (#181); a compiled `Query` is `Send + Sync`, so every thread
+/// shares it.
+fn compiled_query(
+    id: LanguageId,
+    language: &Language,
+    scm: &str,
+) -> Result<std::sync::Arc<Query>, String> {
+    type Cache = std::collections::HashMap<LanguageId, Vec<(String, std::sync::Arc<Query>)>>;
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    let lookup = |cache: &Cache| {
+        cache
+            .get(&id)
+            .and_then(|queries| queries.iter().find(|(text, _)| text == scm))
+            .map(|(_, query)| std::sync::Arc::clone(query))
+    };
+    if let Some(query) = lookup(&cache.lock().unwrap_or_else(|p| p.into_inner())) {
+        return Ok(query);
+    }
+    // Compile outside the lock; a racing thread compiling the same query
+    // only wastes the work.
+    let query = std::sync::Arc::new(Query::new(language, scm).map_err(|e| e.to_string())?);
+    let mut cache = cache.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(existing) = lookup(&cache) {
+        return Ok(existing);
+    }
+    cache
+        .entry(id)
+        .or_default()
+        .push((scm.to_string(), std::sync::Arc::clone(&query)));
+    Ok(query)
+}
+
 /// Run a highlights.scm query. First capture wins for an identical span so
 /// specific patterns listed before `(identifier) @variable` take precedence.
 pub fn query_captures(
@@ -137,7 +172,7 @@ pub fn query_captures(
     scm: &str,
 ) -> Result<Vec<(ByteSpan, String)>, String> {
     let language = language(id).ok_or_else(|| format!("no tree-sitter grammar for {id}"))?;
-    let query = Query::new(&language, scm).map_err(|e| e.to_string())?;
+    let query = compiled_query(id, &language, scm)?;
     let mut parser = Parser::new();
     parser.set_language(&language).map_err(|e| e.to_string())?;
     let tree = parser
