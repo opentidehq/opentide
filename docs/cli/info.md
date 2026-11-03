@@ -97,7 +97,7 @@ Each `platforms[]` entry lists the platform's `[[tenants]]` from `.opentide/conf
 | `name`, `description` | From the tenant's table |
 | `strategies` | The run strategies the tenant accepts (`PREVIEW`, `RELEASE`); both when the file omits `strategies` |
 | `manual` | `true` when only rules whose block names the tenant reach it |
-| `variables` | `{name, set}` for each `$VAR` (or `${VAR}`) the tenant's `[tenants.setup]` references, in order: whether the process environment sets it to a non-empty value |
+| `variables` | `{name, set}` for each `$VAR` (or `${VAR}`) the tenant's `[tenants.setup]` references, in order: whether the process environment sets it to a non-empty value. A reference is a top-level setup value that is `$NAME` or `${NAME}` as a whole, the values opentide resolves; a value that only starts with `$` is a literal |
 
 A variable's value is never printed, in either output. A tenant's setup values that are not variable references are not printed either. `opentide doctor`'s `credentials` check reports the same variables as a pass or a warning.
 

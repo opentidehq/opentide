@@ -19,7 +19,7 @@ import shutil
 import socket
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -674,20 +674,9 @@ def check_platform_sdks(ctx: DoctorContext) -> list[Check]:
     return checks
 
 
-def _placeholders(value: Any) -> Iterable[str]:
-    """``$NAME`` references anywhere in a tenant's setup."""
-    if isinstance(value, str) and value.startswith("$") and len(value) > 1:
-        yield value[1:]
-    elif isinstance(value, Mapping):
-        for item in value.values():
-            yield from _placeholders(item)
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            yield from _placeholders(item)
-
-
 def check_credentials(ctx: DoctorContext) -> list[Check]:
     """Per configured tenant: are the variables its setup names set? Never their values."""
+    from opentide.platforms.config import setup_variables
     from opentide.platforms.enabled import platform_config_path
 
     configs = _configurations(ctx)
@@ -711,7 +700,8 @@ def check_credentials(ctx: DoctorContext) -> list[Check]:
         for index, tenant in enumerate(tenants, start=1):
             name = str(tenant.get("name") or f"tenant {index}")
             subject = f"{platform}/{name}"
-            variables = list(dict.fromkeys(_placeholders(tenant.get("setup") or {})))
+            # The names `info` reports and the tenant loader resolves.
+            variables = setup_variables(tenant.get("setup") or {})
             unset = [variable for variable in variables if not environ.get(variable)]
             if unset:
                 checks.append(

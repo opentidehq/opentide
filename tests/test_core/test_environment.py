@@ -53,3 +53,10 @@ def test_connect_splunk_rejects_placeholders_before_the_sdk() -> None:
 
     with pytest.raises(ValueError, match=r"\$SPLUNK_TOKEN"):
         connect_splunk(host="$SPLUNK_URL", port=8089, token="$SPLUNK_TOKEN", app="search")
+
+
+def test_reject_unsubstituted_placeholders_passes_a_dollar_literal() -> None:
+    # A secret that starts with `$` is a value, not an unset variable.
+    reject_unsubstituted_placeholders("$uP3r-S3cret!pass", client="Azure")
+    with pytest.raises(ValueError, match=r"\$\{AZURE_TENANT_ID\}"):
+        reject_unsubstituted_placeholders("${AZURE_TENANT_ID}", client="Azure")
