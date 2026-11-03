@@ -631,6 +631,7 @@ dependencies = [
  "opentide-analysis",
  "opentide-core",
  "opentide-highlight",
+ "opentide-lsp",
  "serde",
  "serde_json",
  "wasm-bindgen",

@@ -32,6 +32,34 @@ if (mode === 'imports') {
   }
   assert.ok(wasm.legend().length > 0);
   console.log(`browser artifact: highlight() works for ${Object.keys(samples).join(', ')}`);
+
+  // The language server itself, one JSON-RPC message at a time, as a worker drives it.
+  const server = new wasm.LanguageServer();
+  let id = 0;
+  const send = (method, params, request = true) =>
+    server
+      .handle(JSON.stringify({ jsonrpc: '2.0', ...(request ? { id: ++id } : {}), method, params }))
+      .map((text) => JSON.parse(text));
+  const [init] = send('initialize', { processId: null, rootUri: null, capabilities: {} });
+  assert.equal(init.result.serverInfo.name, 'opentide-lsp');
+  assert.equal(init.result.serverInfo.version, wasm.version());
+  send('initialized', {}, false);
+  const open = (uri, languageId, text) =>
+    send('textDocument/didOpen', { textDocument: { uri, languageId, version: 1, text } }, false).find(
+      (m) => m.method === 'textDocument/publishDiagnostics',
+    ).params.diagnostics;
+  const broken = open('untitled:broken.esql', 'esql', 'FROM logs-* | WEHRE x == 1');
+  assert.ok(broken.some((d) => d.code === 'esql_unknown_command'), `language server: ${JSON.stringify(broken)}`);
+  assert.deepEqual(open('untitled:q.kql', 'kql', 'SecurityEvent\n| where EventID == 4688\n'), []);
+  const at = { textDocument: { uri: 'untitled:q.kql' }, position: { line: 1, character: 3 } };
+  const [hover] = send('textDocument/hover', at);
+  assert.match(hover.result.contents.value, /where/);
+  const [completion] = send('textDocument/completion', { ...at, position: { line: 1, character: 2 } });
+  assert.ok(completion.result.some((item) => item.label === 'where'));
+  send('shutdown', null);
+  send('exit', null, false);
+  assert.ok(server.closed);
+  console.log('browser artifact: the language server answers initialize, diagnostics, hover and completion');
 } else if (mode === 'wasi') {
   const { WASI } = await import('node:wasi');
   const dir = mkdtempSync(join(tmpdir(), 'opentide-wasi-'));

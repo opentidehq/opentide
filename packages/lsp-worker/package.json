@@ -1,7 +1,7 @@
 {
   "name": "@opentide/lsp-worker",
   "version": "0.1.0",
-  "description": "wasm32-unknown-unknown highlight() worker. Do not mix WASI.",
+  "description": "wasm32-unknown-unknown worker: the opentide language server and highlight(). Do not mix WASI.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

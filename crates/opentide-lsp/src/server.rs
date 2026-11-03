@@ -76,6 +76,71 @@ pub fn serve_with_status(reader: impl BufRead, mut writer: impl Write) -> Result
     protocol::run(&mut source, &mut writer, &mut session)
 }
 
+/// The language server driven one message at a time, for a host with no
+/// stdio to give it: a browser worker hands [`MessageSession::handle`] each
+/// JSON-RPC message its client posts and posts back what it returns. It is
+/// the loop [`serve`] runs, one message to a batch: the same lifecycle, the
+/// same answers to a body that is not a message, and the same publishes.
+///
+/// Such a host has no filesystem, so it supplies the workspace on
+/// `initialize`, in `initializationOptions.workspace`:
+///
+/// - `documents`: `[{ "uri", "text" }]`, object files indexed as if they were
+///   on disk (references resolve to them; they are not checked);
+/// - `objects`: `[{ "uuid", "schema", "name"?, "uri"? }]`, objects the host
+///   knows by their metadata alone, indexed with just those keys, so a
+///   reference to one resolves and hover names it;
+/// - `visibility`: the text of the workspace's `visibility.toml`.
+///
+/// A host with a filesystem may send it too: a root's own files win.
+#[derive(Default)]
+pub struct MessageSession {
+    session: Session,
+    driver: protocol::Driver,
+    closed: bool,
+}
+
+impl MessageSession {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Handle one JSON-RPC message: its JSON text, without the
+    /// `Content-Length` header. Returns what the server sends back, each
+    /// message as JSON text and in order: the response to a request, the
+    /// notifications it publishes (`textDocument/publishDiagnostics`,
+    /// `window/logMessage`), and the requests it makes of the client
+    /// (`client/registerCapability`, `workspace/diagnostic/refresh`). Text
+    /// that is not a JSON-RPC message is answered with a parse error
+    /// (-32700) or an invalid request (-32600). After `exit` the session is
+    /// closed and handles nothing more.
+    pub fn handle(&mut self, message: &str) -> Vec<String> {
+        if self.closed {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let frame = protocol::frame_of(message);
+        match self.driver.batch(&mut self.session, &mut out, vec![frame]) {
+            Ok(Some(_)) => self.closed = true,
+            Ok(None) => {}
+            // Writing to a `Vec` does not fail.
+            Err(err) => eprintln!("opentide-lsp: {err}"),
+        }
+        protocol::frame_bodies(&out)
+    }
+
+    /// Whether the client has sent `exit`.
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+
+    /// Whether the client shut the server down before it sent `exit`: a
+    /// clean end, as [`serve_with_status`] reports it.
+    pub fn shut_down(&self) -> bool {
+        self.driver.state == protocol::Lifecycle::ShuttingDown
+    }
+}
+
 /// A path as a `file:` URI, typed.
 pub(crate) fn path_to_uri_value(path: &Path) -> Option<lsp_types::Uri> {
     crate::uri::path_to_uri(&path.display().to_string())

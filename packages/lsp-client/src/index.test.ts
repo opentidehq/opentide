@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { loadHighlightModule } from "../../lsp-worker/src/index.ts";
+import {
+  type LanguageServerModule,
+  loadHighlightModule,
+  loadLanguageServer,
+  serveLanguageServer,
+} from "../../lsp-worker/src/index.ts";
 import {
   createOpentideClient,
   createOtideClient,
@@ -113,7 +118,7 @@ test("an unknown transport or language is refused", async () => {
 });
 
 test("a transport without its artifact is refused, not answered empty", async () => {
-  assert.throws(() => createOpentideClient({ transport: "worker" }), /needs `module`/);
+  assert.throws(() => createOpentideClient({ transport: "worker" }), /needs `worker`/);
   assert.throws(() => createOpentideClient({ transport: "wasi" }), /needs `wasi`/);
   const missing = createOpentideClient({ transport: "stdio", command: join(tmpdir(), "no-such-opentide-lsp") });
   await assert.rejects(missing.analyze("kql", "T | take 1"), /cannot start|exited/);
@@ -145,7 +150,88 @@ test("worker transport highlights and refuses to analyze", async () => {
   assert.equal((await client.highlight("kql", "take")).tokens.length, 1);
   assert.deepEqual(calls, [["kql", "take"]]);
   assert.deepEqual(await client.legend(), ["keyword"]);
-  await assert.rejects(client.analyze("kql", "take"), /not available on the worker transport/);
+  await assert.rejects(client.analyze("kql", "take"), /analyze needs the language server/);
+});
+
+/** A stand-in for opentide-wasm's LanguageServer that answers what the client asks and logs it. */
+function fakeServer(log: { method?: string; params?: unknown }[]): LanguageServerModule {
+  return {
+    version: () => "0.0.0",
+    createSession() {
+      let closed = false;
+      return {
+        get closed() {
+          return closed;
+        },
+        handle(text: string) {
+          const message = JSON.parse(text) as { id?: number; method?: string; params?: { language?: string } };
+          log.push(message);
+          const reply = (result: unknown) => [JSON.stringify({ jsonrpc: "2.0", id: message.id, result })];
+          switch (message.method) {
+            case "initialize":
+              return reply({ capabilities: {}, serverInfo: { name: "fake" } });
+            case "opentide/analyze":
+              // A notification may come first; the client matches the response by id.
+              return [
+                JSON.stringify({ jsonrpc: "2.0", method: "window/logMessage", params: { type: 3, message: "hi" } }),
+                ...reply({ diagnostics: [{ code: "kql_parse_error", severity: "error", message: "x", range: {} }] }),
+              ];
+            case "opentide/highlight":
+              return reply({ language_id: message.params?.language, tokens: [{ capture: "keyword", start: 0, end: 4 }], legend: ["keyword"] });
+            case "shutdown":
+              return reply(null);
+            case "exit":
+              closed = true;
+              return [];
+            default:
+              return [];
+          }
+        },
+      };
+    },
+  };
+}
+
+test("worker transport: JSON-RPC to the language server in a worker, one message per postMessage", async () => {
+  const log: { method?: string; params?: unknown }[] = [];
+  const { port1, port2 } = new MessageChannel();
+  const served = serveLanguageServer(port2, fakeServer(log));
+  const workspace = { objects: [{ uuid: "00000000-0000-4000-8002-000000000001", schema: "objective::1.0", name: "Parent" }] };
+  const client = createOpentideClient({ transport: "worker", worker: port1, workspace });
+  assert.deepEqual((await client.analyze("kql", "T | wher x")).diagnostics.map((d) => d.code), ["kql_parse_error"]);
+  assert.equal((await client.highlight("kql", "take")).tokens.length, 1);
+  await client.dispose();
+  await served;
+  assert.deepEqual(
+    log.map((m) => m.method),
+    ["initialize", "initialized", "opentide/analyze", "opentide/highlight", "shutdown", "exit"],
+  );
+  const init = log[0]!.params as { processId: unknown; initializationOptions: unknown };
+  assert.equal(init.processId, null);
+  assert.deepEqual(init.initializationOptions, { workspace });
+});
+
+test("worker transport: a server that fails to load fails initialize with the reason, not an empty answer", async () => {
+  const { port1, port2 } = new MessageChannel();
+  void serveLanguageServer(port2, Promise.reject(new Error("404 Not Found")));
+  const client = createOpentideClient({ transport: "worker", worker: port1 });
+  await assert.rejects(client.analyze("kql", "T"), /did not load: 404 Not Found/);
+  await client.dispose();
+  port2.close();
+});
+
+test("worker transport: messages that arrive while the server loads wait for it", async () => {
+  const log: { method?: string }[] = [];
+  let release!: (module: LanguageServerModule) => void;
+  const { port1, port2 } = new MessageChannel();
+  const served = serveLanguageServer(port2, new Promise<LanguageServerModule>((resolve) => (release = resolve)));
+  const client = createOpentideClient({ transport: "worker", worker: port1 });
+  const analyzed = client.analyze("kql", "T");
+  setTimeout(() => release(fakeServer(log)), 20);
+  assert.equal((await analyzed).diagnostics.length, 1);
+  await client.dispose();
+  await served;
+  assert.equal(log[0]!.method, "initialize");
 });
 
 test("stdio: the server's diagnostics, tokens and legend", { skip: !server && "no opentide-lsp build (set OPENTIDE_LSP_BIN)" }, async () => {
@@ -193,6 +279,41 @@ test("worker: opentide-wasm glue highlights like the native server", { skip: !wa
   for (const [id, text] of Object.entries(SAMPLES)) {
     assert.ok((await client.highlight(id, text)).tokens.length > 0, `${id}: no tokens`);
   }
+});
+
+test("worker: the language server in opentide-wasm answers like the native server", { skip: !wasmGlue && "set OPENTIDE_WASM_GLUE" }, async () => {
+  const glue = pathToFileURL(resolve(wasmGlue!));
+  const serve = (workspace?: Parameters<typeof createOpentideClient>[0]["workspace"]) => {
+    const { port1, port2 } = new MessageChannel();
+    const served = serveLanguageServer(port2, loadLanguageServer(glue));
+    return { client: createOpentideClient({ transport: "worker", worker: port1, workspace }), served };
+  };
+
+  const { client, served } = serve();
+  await using(client, async (client) => {
+    assert.deepEqual(await client.legend(), generatedLegend);
+    for (const [id, text] of Object.entries(SAMPLES)) {
+      assert.ok((await client.highlight(id, text)).tokens.length > 0, `${id}: no tokens`);
+      if (server) {
+        const codes = (await client.analyze(id, text)).diagnostics.map((d) => d.code).sort();
+        assert.deepEqual(codes, cliCodes(server, id, text), id);
+      }
+    }
+    const broken = await client.analyze("kql", "SecurityEvent | wher EventID == 1");
+    assert.ok(broken.diagnostics.length > 0);
+    const rule = await client.analyze("opentide-yaml", TIDE_RULE);
+    assert.ok(rule.diagnostics.some((d) => d.code === "invalid_ref"), "nothing indexed: the detection model is unknown");
+  });
+  await served;
+
+  // A workspace supplied on initialize resolves the reference.
+  const objective = { uuid: "00000000-0000-4000-8002-000000000001", schema: "objective::1.0", name: "Parent" };
+  const supplied = serve({ objects: [objective] });
+  await using(supplied.client, async (client) => {
+    const rule = await client.analyze("opentide-yaml", TIDE_RULE);
+    assert.ok(!rule.diagnostics.some((d) => d.code === "invalid_ref"), JSON.stringify(rule.diagnostics));
+  });
+  await supplied.served;
 });
 
 test("createOtideClient is rejected", () => {

@@ -297,8 +297,40 @@ pub(crate) fn run(
     writer: &mut dyn Write,
     session: &mut Session,
 ) -> anyhow::Result<bool> {
-    let mut state = Lifecycle::Uninitialized;
+    let mut driver = Driver::default();
     while let Some(batch) = source.next_batch()? {
+        if let Some(clean) = driver.batch(session, writer, batch)? {
+            return Ok(clean);
+        }
+    }
+    Ok(driver.state == Lifecycle::ShuttingDown)
+}
+
+/// The loop's state between batches: where the session is in the
+/// lifecycle. [`run`] feeds it batches from a [`Source`];
+/// [`MessageSession`](crate::MessageSession) feeds it one message at a time.
+pub(crate) struct Driver {
+    pub(crate) state: Lifecycle,
+}
+
+impl Default for Driver {
+    fn default() -> Self {
+        Self {
+            state: Lifecycle::Uninitialized,
+        }
+    }
+}
+
+impl Driver {
+    /// Handle one batch and write what it answers and publishes. `Some`
+    /// once the client sent `exit`, with whether it shut the server down
+    /// first; nothing after `exit` is handled.
+    pub(crate) fn batch(
+        &mut self,
+        session: &mut Session,
+        writer: &mut dyn Write,
+        batch: Vec<Frame>,
+    ) -> io::Result<Option<bool>> {
         session.begin_batch();
         let cancelled: HashSet<RequestId> = batch.iter().filter_map(cancelled_id).collect();
         // The documents a frame at or after each index edits.
@@ -331,18 +363,20 @@ pub(crate) fn run(
                 Message::Response(response) => session.response(response),
                 Message::Notification(notification) => {
                     if notification.method == "exit" {
-                        flush(session, writer, state)?;
-                        return Ok(state == Lifecycle::ShuttingDown);
+                        flush(session, writer, self.state)?;
+                        return Ok(Some(self.state == Lifecycle::ShuttingDown));
                     }
                     // Dropped before `initialize` and after `shutdown`; a
                     // cancellation is read with its batch.
-                    if state == Lifecycle::Running && notification.method != "$/cancelRequest" {
+                    if self.state == Lifecycle::Running && notification.method != "$/cancelRequest"
+                    {
                         handle_notification(session, notification);
                     }
                 }
                 Message::Request(request) => {
                     let staled_by = &edited_after[i + 1];
-                    let response = respond(session, &mut state, request, &cancelled, staled_by);
+                    let response =
+                        respond(session, &mut self.state, request, &cancelled, staled_by);
                     // What the handler queued (a publish before `shutdown`)
                     // goes first.
                     write_outbox(session, writer)?;
@@ -351,9 +385,45 @@ pub(crate) fn run(
             }
             write_outbox(session, writer)?;
         }
-        flush(session, writer, state)?;
+        flush(session, writer, self.state)?;
+        Ok(None)
     }
-    Ok(state == Lifecycle::ShuttingDown)
+}
+
+/// One message's JSON text, without its `Content-Length` header, read as
+/// [`read_frame`] reads a framed one: the same answers for a body that is
+/// not a message.
+pub(crate) fn frame_of(text: &str) -> Frame {
+    let mut framed = format!("Content-Length: {}\r\n\r\n", text.len()).into_bytes();
+    framed.extend_from_slice(text.as_bytes());
+    match read_frame(&mut io::Cursor::new(framed)) {
+        Ok(Some(frame)) => frame,
+        _ => classify(text.as_bytes()),
+    }
+}
+
+/// The bodies of the frames written into `bytes`, in order: what a host
+/// with no stdio posts, one message at a time.
+pub(crate) fn frame_bodies(mut bytes: &[u8]) -> Vec<String> {
+    let mut bodies = Vec::new();
+    while let Some(sep) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+        let length = std::str::from_utf8(&bytes[..sep]).ok().and_then(|header| {
+            header.lines().find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.trim()
+                    .eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+        });
+        let start = sep + 4;
+        let Some(body) = length.and_then(|length| bytes.get(start..start + length)) else {
+            break;
+        };
+        bodies.push(String::from_utf8_lossy(body).into_owned());
+        bytes = &bytes[start + body.len()..];
+    }
+    bodies
 }
 
 /// The answer to one request, whatever the lifecycle and the batch say.
@@ -570,5 +640,44 @@ mod tests {
         let mut source = Direct::new(&input[..]);
         assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
         assert!(source.next_batch().unwrap().is_none());
+    }
+
+    #[test]
+    fn frame_bodies_splits_what_write_wrote() {
+        let mut buf = Vec::new();
+        write(
+            &mut buf,
+            &Message::Notification(Notification::new("a".into(), json!("é😀"))),
+        )
+        .unwrap();
+        write_raw(
+            &mut buf,
+            &json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": "x" } }),
+        )
+        .unwrap();
+        let bodies = frame_bodies(&buf);
+        assert_eq!(bodies.len(), 2);
+        let first: Value = serde_json::from_str(&bodies[0]).unwrap();
+        assert_eq!(first["params"], "é😀");
+        let second: Value = serde_json::from_str(&bodies[1]).unwrap();
+        assert_eq!(second["id"], Value::Null);
+        assert!(frame_bodies(b"").is_empty());
+        // A frame cut short is dropped, never read past.
+        assert!(frame_bodies(b"Content-Length: 10\r\n\r\n{}").is_empty());
+    }
+
+    #[test]
+    fn frame_of_reads_a_body_as_read_frame_does() {
+        assert!(matches!(
+            frame_of(r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#),
+            Frame::Message(Message::Notification(_))
+        ));
+        assert_eq!(
+            invalid(frame_of("{ not json")).1,
+            ErrorCode::ParseError as i32
+        );
+        let (id, code) = invalid(frame_of(r#"{"jsonrpc":"2.0","id":3}"#));
+        assert_eq!((id, code), (json!(3), ErrorCode::InvalidRequest as i32));
+        assert!(matches!(frame_of(""), Frame::Invalid { .. }));
     }
 }

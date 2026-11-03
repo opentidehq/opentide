@@ -11,7 +11,7 @@ use opentide_analysis::{
 };
 use opentide_core::LanguageId;
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -186,6 +186,75 @@ impl DiskObjects {
     }
 }
 
+/// The workspace a host with no filesystem supplies on `initialize`
+/// (`initializationOptions.workspace`): a browser worker
+/// ([`MessageSession`](crate::MessageSession)). Its objects are indexed as
+/// if they were on disk, under every root and outside them; they are never
+/// checked or published.
+#[derive(Default)]
+pub(crate) struct Supplied {
+    /// [`path_key`] → (path, text, index entry).
+    pub files: BTreeMap<String, (String, String, Option<IndexedObject>)>,
+    /// The text of `visibility.toml`, used where no root has one on disk.
+    pub visibility: Option<String>,
+}
+
+impl Supplied {
+    /// Read `initializationOptions.workspace`:
+    ///
+    /// - `documents`: `[{ "uri", "text" }]`, object files;
+    /// - `objects`: `[{ "uuid", "schema", "name"?, "uri"? }]`, objects the
+    ///   host knows by their metadata alone, indexed with just those keys;
+    /// - `visibility`: the text of `visibility.toml`.
+    ///
+    /// Entries that lack what they need are skipped.
+    pub(crate) fn from_options(workspace: Option<&serde_json::Value>) -> Self {
+        use serde_json::Value;
+        let mut supplied = Self::default();
+        let Some(workspace) = workspace else {
+            return supplied;
+        };
+        let entries = |key: &str| {
+            workspace
+                .get(key)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        };
+        let mut add = |path: String, text: String| {
+            let indexed = opentide_analysis::index_object(&path, &text);
+            supplied
+                .files
+                .insert(path_key(&path), (path, text, indexed));
+        };
+        for document in entries("documents") {
+            let field = |key: &str| document.get(key).and_then(Value::as_str);
+            if let (Some(uri), Some(text)) = (field("uri"), field("text")) {
+                add(uri_to_path(uri), opentide_core::strip_bom(text).to_string());
+            }
+        }
+        for object in entries("objects") {
+            let field = |key: &str| object.get(key).and_then(Value::as_str);
+            let (Some(uuid), Some(schema)) = (field("uuid"), field("schema")) else {
+                continue;
+            };
+            let path = field("uri").map_or_else(|| format!("opentide-object:{uuid}"), uri_to_path);
+            // JSON is YAML: the stub indexes like an object file with these
+            // keys alone.
+            let stub = serde_json::json!({
+                "name": field("name").unwrap_or(""),
+                "metadata": { "uuid": uuid, "schema": schema },
+            });
+            add(path, stub.to_string());
+        }
+        supplied.visibility = workspace
+            .get("visibility")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        supplied
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct Session {
     pub docs: HashMap<String, Document>,
@@ -218,6 +287,8 @@ pub(crate) struct Session {
     /// The broken-file warning was shown (once per session).
     warned: Cell<bool>,
     loose_index: RefCell<Option<Arc<[IndexedObject]>>>,
+    /// What a host with no filesystem supplied on `initialize`.
+    pub supplied: Supplied,
 }
 
 /// What a request sees of the workspace: the open documents, the object
@@ -245,6 +316,9 @@ impl WorkspaceHost for SessionHost<'_> {
             if let Some((text, _)) = root.disk.borrow().files.get(&key) {
                 return Some(text.clone());
             }
+        }
+        if let Some((_, text, _)) = session.supplied.files.get(&key) {
+            return Some(text.clone());
         }
         let elastic = session.elastic_configuration(self.root)?;
         (path_key(&elastic.0) == key).then_some(elastic.1)
@@ -309,6 +383,23 @@ impl WorkspaceHost for SessionHost<'_> {
             open.values()
                 .filter_map(|(path, text)| opentide_analysis::index_object(path, text)),
         );
+        // What the host supplied stands in for objects the session has no
+        // file for: an object open or on disk is itself, not a duplicate of
+        // its own metadata.
+        let known: HashSet<String> = index.iter().map(|o| o.uuid.clone()).collect();
+        let on_disk = |key: &String| {
+            self.root
+                .is_some_and(|i| session.roots[i].disk.borrow().files.contains_key(key))
+        };
+        index.extend(
+            session
+                .supplied
+                .files
+                .iter()
+                .filter(|(key, _)| !open.contains_key(*key) && !on_disk(key))
+                .filter_map(|(_, (_, _, indexed))| indexed.clone())
+                .filter(|o| !known.contains(&o.uuid)),
+        );
         let index: Arc<[IndexedObject]> = index.into();
         *slot.borrow_mut() = Some(Arc::clone(&index));
         Some(index)
@@ -359,13 +450,17 @@ impl Session {
             self.warn_once(&err);
         }
         let Some(r) = r else {
-            let _ = install_visibility(None);
+            if let Err(err) = install_visibility(self.supplied.visibility.as_deref()) {
+                self.log_warning(&format!("opentide-lsp: {err}; no datasets are declared"));
+                let _ = install_visibility(None);
+            }
             return;
         };
         let text = r
             .visibility
             .clone()
-            .or_else(|| std::fs::read_to_string(r.visibility_path()).ok());
+            .or_else(|| std::fs::read_to_string(r.visibility_path()).ok())
+            .or_else(|| self.supplied.visibility.clone());
         match install_visibility(text.as_deref()) {
             Ok(()) => {
                 let previous = r.good_visibility.replace(Some(text.clone()));

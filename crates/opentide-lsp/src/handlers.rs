@@ -334,6 +334,9 @@ fn initialize(
     raw: &Value,
 ) -> lsp::InitializeResult {
     session.caps = read_caps(&params.capabilities, raw);
+    // A host with no filesystem hands over its workspace (a browser worker).
+    session.supplied =
+        crate::session::Supplied::from_options(raw.pointer("/initializationOptions/workspace"));
     #[allow(deprecated)] // `rootUri` and `rootPath`: what clients without folders send.
     let folders: Vec<PathBuf> = match (
         &params.workspace_folders,
