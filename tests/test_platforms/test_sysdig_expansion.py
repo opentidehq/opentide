@@ -1,29 +1,127 @@
-"""Block macros and lists expanded into the Falco condition (sysdig-1.0, Expansion)."""
+"""Block macros and lists expanded as Falco's rule loader does (sysdig-1.0, Expansion).
+
+``resolve_list`` cases follow ``falcosecurity/falco`` ``userspace/engine/rule_loader_compiler.cpp``.
+"""
 
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 
 from opentide.platforms.sysdig.expansion import (
     Expander,
     ExpansionError,
-    check_cycles,
-    format_item,
+    check_definitions,
+    is_exception_operator,
+    is_list_comparison,
+    is_modified_operator,
     join_lines,
+    normalize_comp,
+    quote_item,
+    resolve_list,
+    substitute_macros,
     tokenize,
 )
 
-
-def test_tokens_keep_every_character() -> None:
-    text = 'proc.aname[2]="sshd" and fd.name in (/etc/shadow, "a b") or not x!=1'
-    assert "".join(token.text for token in tokenize(text)) == text
+# --- resolve_list, ported from Falco --------------------------------------------------------
 
 
-def test_field_argument_stays_in_its_word() -> None:
-    words = [
-        t.text for t in tokenize("json.value[/a/b]=x and proc.aname[2] = y") if t.kind == "word"
-    ]
-    assert words == ["json.value[/a/b]", "x", "and", "proc.aname[2]", "y"]
+@pytest.mark.parametrize(
+    ("condition", "expected"),
+    [
+        # a delimiter on each side: ( ) , = blank, start, end
+        ("proc.name in (shells)", "proc.name in ( bash, sh )"),
+        ("proc.name in (shells, zsh)", "proc.name in ( bash, sh , zsh)"),
+        ("proc.name in (zsh,shells)", "proc.name in (zsh, bash, sh )"),
+        ("x = shells", "x = bash, sh "),
+        ("x=shells", "x= bash, sh "),
+        ("shells", "bash, sh "),
+        ("shells and y", "bash, sh and y"),
+        ("proc.name in (zsh,\tshells\n)", "proc.name in (zsh, bash, sh )"),
+        # a name inside another identifier is not an occurrence
+        ("myshells = 1 and shells_x = 2", "myshells = 1 and shells_x = 2"),
+        ("proc.name in (myshells, shells)", "proc.name in (myshells, bash, sh )"),
+        # inside a quoted string, Falco replaces a delimited occurrence too
+        ('proc.cmdline contains "run shells now"', 'proc.cmdline contains "run bash, sh now"'),
+        ('proc.cmdline contains "shells"', 'proc.cmdline contains "shells"'),
+    ],
+)
+def test_resolve_list_follows_falco(condition: str, expected: str) -> None:
+    assert resolve_list(condition, "shells", ["bash", "sh"]) == (
+        expected,
+        condition != expected,
+    )
+
+
+def test_resolve_list_replaces_every_occurrence() -> None:
+    text, used = resolve_list("a in (l) or b in (l)", "l", ["x"])
+    assert (text, used) == ("a in ( x ) or b in ( x )", True)
+
+
+@pytest.mark.parametrize(
+    ("condition", "expected"),
+    [
+        ("proc.name in (bash, none)", "proc.name in (bash  )"),
+        ("proc.name in (none, bash)", "proc.name in (   bash)"),
+        ("proc.name in (none)", "proc.name in (  )"),
+        ("proc.name in (a, none, b)", "proc.name in (a  , b)"),
+    ],
+)
+def test_an_empty_list_removes_one_comma_left_first(condition: str, expected: str) -> None:
+    assert resolve_list(condition, "none", [])[0] == expected
+
+
+@pytest.mark.parametrize(
+    ("item", "quoted"),
+    [
+        ("bash", "bash"),
+        ("a b", '"a b"'),
+        ('"sh -c uname"', '"sh -c uname"'),
+        ("'sh -c uname'", "'sh -c uname'"),
+        ("x,y", "x,y"),  # Falco quotes on a space only
+        ("tab\there", "tab\there"),
+    ],
+)
+def test_quote_item_quotes_a_space_only(item: str, quoted: str) -> None:
+    assert quote_item(item) == quoted
+
+
+def test_items_with_spaces_are_quoted_in_the_condition() -> None:
+    expander = Expander(lists={"cmds": ["sh -c uname", "'already quoted'", "id"]})
+    assert expander.expand("proc.cmdline in (cmds)") == (
+        "proc.cmdline in ( \"sh -c uname\", 'already quoted', id )"
+    )
+
+
+# --- lists: flattening and definition order --------------------------------------------------
+
+
+def test_an_item_naming_an_earlier_list_is_flattened() -> None:
+    expander = Expander(lists={"gnu": ["egrep", "fgrep"], "greps": ["grep", "gnu"]})
+    assert expander.lists["greps"] == ["grep", "egrep", "fgrep"]
+    assert expander.expand("proc.name in (greps)") == "proc.name in ( grep, egrep, fgrep )"
+
+
+@pytest.mark.parametrize(
+    "lists",
+    [
+        {"greps": ["grep", "gnu"], "gnu": ["egrep"]},  # a later list
+        {"loop": ["loop"]},  # itself
+    ],
+)
+def test_a_list_naming_itself_or_a_later_list_is_out_of_order(lists: dict[str, Any]) -> None:
+    with pytest.raises(ExpansionError) as caught:
+        Expander(lists=lists)
+    assert caught.value.code == "sysdig_definition_order"
+
+
+def test_numbers_are_items_as_written() -> None:
+    expander = Expander(lists={"ports": [22, 2222]})
+    assert expander.expand("fd.sport in (ports)") == "fd.sport in ( 22, 2222 )"
+
+
+# --- macros ----------------------------------------------------------------------------------
 
 
 def test_macro_becomes_its_condition_in_parentheses() -> None:
@@ -33,79 +131,168 @@ def test_macro_becomes_its_condition_in_parentheses() -> None:
     )
 
 
-def test_list_in_a_value_list_becomes_its_items() -> None:
-    expander = Expander(lists={"shells": ["bash", "sh"]})
-    assert expander.expand("proc.name in (shells, zsh)") == "proc.name in (bash, sh, zsh)"
+def test_a_macro_sees_earlier_macros_and_every_list() -> None:
+    expander = Expander(
+        {"grep_commands": "(proc.name in (greps))", "grep_more": "grep_commands and x"},
+        {"gnu": ["egrep", "fgrep"], "greps": ["grep", "gnu"]},
+    )
+    assert expander.expand("grep_more") == "(((proc.name in ( grep, egrep, fgrep ))) and x)"
 
 
-@pytest.mark.parametrize("operator", ["in", "intersects", "pmatch"])
-def test_every_list_operator_expands(operator: str) -> None:
-    expander = Expander(lists={"paths": ["/etc", "/bin"]})
-    assert expander.expand(f"fd.name {operator} (paths)") == f"fd.name {operator} (/etc, /bin)"
+@pytest.mark.parametrize(
+    "macros",
+    [
+        {"a": "b and x.y = 1", "b": "x.z = 2"},  # a later macro
+        {"a": "a and x.y = 1"},  # itself
+        {"a": "not (x.y = 1 or a)"},
+    ],
+)
+def test_a_macro_using_itself_or_a_later_macro_is_out_of_order(macros: dict[str, str]) -> None:
+    with pytest.raises(ExpansionError) as caught:
+        Expander(macros)
+    assert caught.value.code == "sysdig_definition_order"
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        "proc.name = nc",
+        "proc.args startswith nc",
+        "proc.name in (nc, ncat)",
+        "proc.name startswith oneof (nc, x)",
+        'proc.cmdline contains "nc"',
+        "tolower(proc.name) = nc",
+        "proc.pname = val(nc.field)",
+        "proc.aname[nc] = x",
+        "proc.name exists and not nc_other",
+    ],
+)
+def test_values_fields_and_strings_are_not_macro_positions(condition: str) -> None:
+    assert Expander({"nc": "proc.name = netcat"}).expand(condition) == condition
+
+
+def test_macros_in_check_positions_after_not_and_parentheses() -> None:
+    expander = Expander({"m": "x.y = 1"})
+    assert expander.expand("not m and (m or not(m))") == (
+        "not (x.y = 1) and ((x.y = 1) or not((x.y = 1)))"
+    )
 
 
 def test_names_the_block_does_not_define_stay_as_written() -> None:
     expander = Expander({"mine": "proc.name = x"}, {"mylist": ["a"]})
     condition = "spawned_process and container and proc.name in (shell_binaries, mylist)"
     assert expander.expand(condition) == (
-        "spawned_process and container and proc.name in (shell_binaries, a)"
+        "spawned_process and container and proc.name in (shell_binaries, a )"
     )
 
 
-def test_quoted_strings_and_comparison_values_are_never_expanded() -> None:
-    expander = Expander({"nc": "proc.name = netcat"}, {"nc_list": ["x"]})
-    condition = 'proc.cmdline contains "nc" and proc.name = nc and proc.args startswith nc'
-    assert expander.expand(condition) == condition
-
-
-def test_a_value_list_without_block_lists_is_left_untouched() -> None:
-    expander = Expander(lists={"other": ["a"]})
-    condition = "proc.name in (bash,sh ,  zsh)"
-    assert expander.expand(condition) == condition
-
-
-def test_expansion_recurses_through_macros_and_lists() -> None:
-    expander = Expander(
-        {"grep_commands": "(proc.name in (grep_binaries))", "grep_more": "grep_commands and x"},
-        {"grep_binaries": ["grep", "gnu_grep"], "gnu_grep": ["egrep", "fgrep"]},
-    )
-    assert expander.expand("grep_more") == "(((proc.name in (grep, egrep, fgrep))) and x)"
-
-
-def test_an_empty_list_drops_out_of_the_value_list() -> None:
-    expander = Expander(lists={"none": []})
-    assert expander.expand("proc.name in (none, bash)") == "proc.name in (bash)"
+def test_substitute_keeps_every_character() -> None:
+    text = 'proc.aname[2]="sshd" and fd.name in (/etc/shadow, "a b") or not x!=1'
+    assert substitute_macros(text, lambda name: None) == text
+    assert "".join(token.text for token in tokenize(text)) == text
 
 
 def test_multiline_conditions_join_with_single_spaces() -> None:
     assert join_lines("  a\n   and b  \n\n and c\n") == "a and b and c"
 
 
-@pytest.mark.parametrize(
-    ("item", "written"),
-    [
-        ("bash", "bash"),
-        ("a b", '"a b"'),
-        ("x,y", '"x,y"'),
-        ('"sh -c uname"', '"sh -c uname"'),
-        ('say "hi"', '"say \\"hi\\""'),
-        (8080, "8080"),
-    ],
-)
-def test_list_items_are_quoted_as_falco_reads_them(item: object, written: str) -> None:
-    assert format_item(item) == written
+# --- exceptions ------------------------------------------------------------------------------
+
+LISTS = {"shells": ["bash", "sh"], "none": []}
+
+
+def _exception(entry: dict[str, Any]) -> dict[str, Any]:
+    return Expander(lists=LISTS).exception({"name": "e", **entry})
+
+
+def test_a_single_field_value_naming_a_list_is_spliced() -> None:
+    assert _exception({"fields": "proc.name", "values": ["shells", "zsh", "none"]}) == {
+        "name": "e",
+        "fields": "proc.name",
+        "values": ["bash", "sh", "zsh"],
+    }
+
+
+def test_a_value_list_member_naming_a_list_is_spliced() -> None:
+    out = _exception(
+        {
+            "fields": ["proc.name", "proc.pname"],
+            "comps": ["in", "="],
+            "values": [[["shells", "zsh"], "x"]],
+        }
+    )
+    assert out["values"] == [[["bash", "sh", "zsh"], "x"]]
+
+
+@pytest.mark.parametrize("comp", ["in", "pmatch", "intersects", "startswith oneof", " in "])
+def test_a_single_value_list_name_under_a_list_comparison_is_the_value_list(comp: str) -> None:
+    out = _exception({"fields": ["proc.name"], "comps": [comp], "values": [["shells"]]})
+    assert out["comps"] == [comp.strip()]
+    assert out["values"] == [[["bash", "sh"]]]
 
 
 @pytest.mark.parametrize(
-    ("macros", "lists"),
+    "entry",
     [
-        ({"a": "b", "b": "a"}, {}),
-        ({"a": "a and x"}, {}),
-        ({}, {"l": ["m"], "m": ["l"]}),
-        ({"a": "proc.name in (l)"}, {"l": ["l"]}),
+        {"fields": ["proc.name"], "comps": ["="], "values": [["shells"]]},
+        {"fields": ["proc.name"], "values": [["shells"]]},
+        {"fields": ["proc.cmdline"], "comps": ["contains"], "values": [["run shells"]]},
+        {"fields": ["proc.name"], "comps": ["in"], "values": [[["x", "a shells"]]]},
+        {"fields": "proc.cmdline", "values": ["run shells"]},
+        {"fields": "proc.cmdline", "values": ["shells=1"]},
     ],
 )
-def test_a_cycle_is_reported_with_its_code(macros: dict, lists: dict) -> None:
+def test_a_list_name_anywhere_else_in_a_value_is_refused(entry: dict[str, Any]) -> None:
     with pytest.raises(ExpansionError) as caught:
-        check_cycles(macros, lists, [])
-    assert caught.value.code == "sysdig_definition_cycle"
+        _exception(entry)
+    assert caught.value.code == "sysdig_list_in_value"
+
+
+def test_values_without_list_names_are_sent_as_written() -> None:
+    entry = {"fields": ["proc.name", "fd.sport"], "comps": ["in", ">"], "values": [["sh", 22]]}
+    assert _exception(entry)["values"] == [["sh", 22]]
+    assert _exception({"fields": ["x.y"], "values": [["myshells"]]})["values"] == [["myshells"]]
+
+
+def test_check_definitions_reports_the_first_code() -> None:
+    with pytest.raises(ExpansionError) as caught:
+        check_definitions(
+            {}, LISTS, ["x.y = 1"], [{"name": "e", "fields": "x.y", "values": ["a shells"]}]
+        )
+    assert caught.value.code == "sysdig_list_in_value"
+
+
+# --- operators ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("op", "modified"),
+    [
+        ("startswith oneof", True),
+        ("= anyof", True),
+        ("== allof", True),
+        ("regex oneof", True),
+        ("in oneof", False),
+        ("< anyof", False),
+        ("startswith  oneof", False),
+        ("startswith someof", False),
+        ("startswith", False),
+    ],
+)
+def test_modified_operators_follow_str_to_cmpop_with_modifier(op: str, modified: bool) -> None:
+    assert is_modified_operator(op) is modified
+
+
+@pytest.mark.parametrize(
+    "op",
+    ["exists", "<", "<=", ">", ">=", "=", "==", "!=", "bcontains", "iglob", "regex", "intersects"],
+)
+def test_every_falco_operator_is_an_exception_operator(op: str) -> None:
+    assert is_exception_operator(op)
+
+
+def test_list_comparisons_and_normalization() -> None:
+    assert is_list_comparison("pmatch")
+    assert is_list_comparison("contains allof")
+    assert not is_list_comparison("contains")
+    assert normalize_comp(" \tin\n") == "in"

@@ -185,7 +185,7 @@ def test_create_records_the_id_and_joins_the_policy(
     body = fake.calls[0][2]
     assert body["name"] == RULE_NAME
     assert body["details"]["condition"]["condition"] == (
-        "spawned_process and container and proc.name in (bash, sh, zsh)"
+        "spawned_process and container and proc.name in ( bash, sh, zsh )"
     )
     assert _shard(tide_corpus_repo) == {
         "object_uuid": UUID,

@@ -172,16 +172,6 @@ def derive_tags(
     return list(dict.fromkeys(tags))
 
 
-def _exception(entry: Any) -> dict[str, Any]:
-    """An exception as the block gives it: only the keys it sets."""
-    out: dict[str, Any] = {"name": entry.name, "fields": entry.fields}
-    if entry.comps is not None:
-        out["comps"] = entry.comps
-    if entry.values is not None:
-        out["values"] = entry.values
-    return out
-
-
 def compile_rule(
     rule: DetectionRule,
     strategy: StatusStrategy,
@@ -194,7 +184,9 @@ def compile_rule(
         {item.name: list(item.items) for item in block.lists or []},
     )
     condition = expander.expand(block.condition) if block.condition else None
-    exceptions = [_exception(entry) for entry in block.exceptions or []]
+    exceptions = [
+        expander.exception(entry.model_dump(exclude_none=True)) for entry in block.exceptions or []
+    ]
     uuid = str(rule.metadata.uuid)
     if block.append_to_rule:
         return FalcoRule(

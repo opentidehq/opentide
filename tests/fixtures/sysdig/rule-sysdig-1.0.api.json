@@ -4,7 +4,7 @@
     "append": false,
     "condition": {
       "components": [],
-      "condition": "spawned_process and container and shell_procs and proc.tty != 0 and container_entrypoint and not container.image.repository in (busybox, registry.example.com/ops/toolbox)"
+      "condition": "spawned_process and container and shell_procs and proc.tty != 0 and container_entrypoint and not container.image.repository in ( busybox, registry.example.com/ops/toolbox )"
     },
     "exceptions": [
       {

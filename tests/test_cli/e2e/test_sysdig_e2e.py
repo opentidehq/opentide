@@ -57,7 +57,7 @@ def test_deploy_dry_run_previews_the_api_body(invoke_cli, monkeypatch: pytest.Mo
     details = preview["api_request"]["details"]
     assert details["ruleType"] == "FALCO"
     assert details["condition"]["condition"] == (
-        "spawned_process and container and proc.name in (bash, sh, zsh)"
+        "spawned_process and container and proc.name in ( bash, sh, zsh )"
     )
     assert details["priority"] == "warning"
     assert "mitre_execution" in preview["api_request"]["tags"]

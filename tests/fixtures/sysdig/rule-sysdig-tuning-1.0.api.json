@@ -4,17 +4,14 @@
     "append": true,
     "condition": {
       "components": [],
-      "condition": "and not proc.pname in (gitlab-runner, buildkite-agent)"
+      "condition": "and not proc.pname in ( gitlab-runner, buildkite-agent )"
     },
     "exceptions": [
       {
         "comps": "in",
         "fields": "k8s.ns.name",
         "name": "build_namespaces",
-        "values": [
-          "ci",
-          "builds"
-        ]
+        "values": ["ci", "builds"]
       }
     ],
     "ruleType": "FALCO"

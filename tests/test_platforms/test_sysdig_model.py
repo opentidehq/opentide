@@ -77,34 +77,15 @@ def test_omitted_status_is_the_missing_field_not_a_code() -> None:
         ("sysdig_exception_shape", {**RULE, "exceptions": [{"name": "", "fields": "a"}]}),
         (
             "sysdig_exception_shape",
-            {**RULE, "exceptions": [{"name": "e", "fields": "a"}, {"name": "e", "fields": "b"}]},
-        ),
-        (
-            "sysdig_exception_shape",
             {**RULE, "exceptions": [{"name": "e", "fields": "a", "comps": "="}]},
         ),
         (
             "sysdig_exception_shape",
             {**RULE, "exceptions": [{"name": "e", "fields": "a", "values": [["x"]]}]},
         ),
-        ("sysdig_exception_shape", {**RULE, "exceptions": [{"name": "e", "fields": ["a", "a"]}]}),
         (
             "sysdig_exception_shape",
             {**RULE, "exceptions": [{"name": "e", "fields": ["a", "b"], "values": [["x"]]}]},
-        ),
-        (
-            "sysdig_exception_shape",
-            {
-                **RULE,
-                "exceptions": [
-                    {
-                        "name": "e",
-                        "fields": ["a", "b"],
-                        "comps": ["=", "in"],
-                        "values": [["x", "y"]],
-                    }
-                ],
-            },
         ),
         (
             "sysdig_exception_shape",
@@ -121,14 +102,71 @@ def test_omitted_status_is_the_missing_field_not_a_code() -> None:
             },
         ),
         (
-            "sysdig_definition_cycle",
+            "sysdig_exception_shape",
+            {**RULE, "exceptions": [{"name": "e", "fields": "a", "comps": ["in"]}]},
+        ),
+        (
+            "sysdig_exception_shape",
+            {**RULE, "exceptions": [{"name": "e", "fields": "a", "comps": "exists"}]},
+        ),
+        (
+            "sysdig_exception_shape",
+            {**RULE, "exceptions": [{"name": "e", "fields": ["a"], "comps": ["in oneof"]}]},
+        ),
+        (
+            "sysdig_exception_shape",
+            {
+                **RULE,
+                "exceptions": [{"name": "e", "fields": ["a"], "comps": ["startswith  anyof"]}],
+            },
+        ),
+        (
+            "sysdig_exception_shape",
+            {**RULE, "exceptions": [{"name": "e", "fields": ["a"], "values": [[{"k": "v"}]]}]},
+        ),
+        (
+            "sysdig_exception_shape",
+            {**RULE, "exceptions": [{"name": "e", "fields": ["a"], "values": [[["x", ["y"]]]]}]},
+        ),
+        (
+            "sysdig_definition_order",
             {
                 **RULE,
                 "condition": "loop_a",
                 "macros": [
                     {"name": "loop_a", "condition": "loop_b"},
-                    {"name": "loop_b", "condition": "loop_a and x"},
+                    {"name": "loop_b", "condition": "x.y = 1"},
                 ],
+            },
+        ),
+        (
+            "sysdig_definition_order",
+            {**RULE, "macros": [{"name": "self", "condition": "self and x.y = 1"}]},
+        ),
+        (
+            "sysdig_definition_order",
+            {
+                **RULE,
+                "lists": [
+                    {"name": "first", "items": ["second"]},
+                    {"name": "second", "items": ["a"]},
+                ],
+            },
+        ),
+        (
+            "sysdig_list_in_value",
+            {
+                **RULE,
+                "lists": [{"name": "shells", "items": ["bash"]}],
+                "exceptions": [{"name": "e", "fields": ["proc.name"], "values": [["shells"]]}],
+            },
+        ),
+        (
+            "sysdig_list_in_value",
+            {
+                **RULE,
+                "lists": [{"name": "shells", "items": ["bash"]}],
+                "exceptions": [{"name": "e", "fields": "proc.cmdline", "values": ["run shells"]}],
             },
         ),
     ],
@@ -173,6 +211,50 @@ def test_legacy_external_id_keys_are_dropped_by_the_loader_only() -> None:
     with pytest.raises(ValidationError):
         SysdigConfig.model_validate(block)
     assert isinstance(load_platform_config("sysdig", block), SysdigConfig)
+
+
+@pytest.mark.parametrize(
+    "exceptions",
+    [
+        # what Falco's validate_exception_info accepts
+        [{"name": "e", "fields": "a"}, {"name": "e", "fields": "b"}],  # a repeated name warns only
+        [{"name": "e", "fields": ["a", "a"], "values": [["x", "y"]]}],  # repeated fields
+        [{"name": "e", "fields": ["a", "b"], "comps": ["=", "in"], "values": [["x", "y"]]}],
+        [
+            {
+                "name": "e",
+                "fields": ["a", "b", "c"],
+                "comps": ["exists", " startswith oneof ", "== allof"],
+                "values": [["x", ["p", "q"], "z"]],
+            }
+        ],
+        [{"name": "e", "fields": "a", "comps": "contains anyof", "values": ["x", "y"]}],
+        [{"name": "e", "fields": "a", "comps": " pmatch ", "values": ["/tmp"]}],
+        [
+            {
+                "name": "e",
+                "fields": ["a"],
+                "comps": ["<", ">=", "!=", "iglob", "bcontains", "regex"][:1],
+                "values": [[1]],
+            }
+        ],
+    ],
+)
+def test_exception_forms_falco_accepts_validate(exceptions: list[dict[str, Any]]) -> None:
+    assert SysdigConfig.model_validate({**RULE, "exceptions": exceptions}).exceptions
+
+
+def test_a_block_list_in_an_exception_value_validates_where_falco_expands_it() -> None:
+    block = {
+        **RULE,
+        "lists": [{"name": "shells", "items": ["bash", "sh"]}],
+        "exceptions": [
+            {"name": "single", "fields": "proc.name", "values": ["shells", "zsh"]},
+            {"name": "listop", "fields": ["proc.name"], "comps": ["in"], "values": [["shells"]]},
+            {"name": "member", "fields": ["proc.name"], "comps": ["in"], "values": [[["shells"]]]},
+        ],
+    }
+    assert SysdigConfig.model_validate(block).exceptions
 
 
 @pytest.mark.parametrize("version", [0, 17, 35])

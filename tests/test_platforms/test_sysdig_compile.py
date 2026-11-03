@@ -18,6 +18,11 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "sysdig"
 PUBLIC = sorted((FIXTURES / "public").glob("*.yaml"))
 
 
+def _golden(name: str) -> Any:
+    """A specification golden (fixtures/platforms/sysdig/, copied byte for byte)."""
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+
 def _rule(name: str) -> DetectionRule:
     return load_rule_from_dict(yaml.safe_load((FIXTURES / name).read_text(encoding="utf-8")))
 
@@ -42,16 +47,12 @@ def _block_rule(block: dict[str, Any], **rule: Any) -> DetectionRule:
 
 def test_new_rule_matches_the_specification_api_body() -> None:
     compiled = compile_rule(_rule("rule-sysdig-1.0.yaml"), StatusStrategy.PREVIEW)
-    expected = json.loads((FIXTURES / "rule-sysdig-1.0.api.json").read_text(encoding="utf-8"))
-    assert api_body(compiled) == expected
+    assert api_body(compiled) == _golden("rule-sysdig-1.0.api.json")
 
 
 def test_tuning_matches_the_specification_api_body() -> None:
     compiled = compile_rule(_rule("rule-sysdig-tuning-1.0.yaml"), StatusStrategy.RELEASE)
-    expected = json.loads(
-        (FIXTURES / "rule-sysdig-tuning-1.0.api.json").read_text(encoding="utf-8")
-    )
-    assert api_body(compiled) == expected
+    assert api_body(compiled) == _golden("rule-sysdig-tuning-1.0.api.json")
 
 
 def test_tuning_api_body_appends_only_condition_and_exceptions() -> None:
@@ -219,8 +220,8 @@ def test_public_search_keys_rule_expands_nested_macros_and_lists() -> None:
     assert "grep_commands" not in condition
     assert "grep_more" not in condition
     assert "private_key_or_password" not in condition
-    assert "(proc.name in (grep, egrep, fgrep))" in condition
-    assert condition.startswith("spawned_process and ((((proc.name in (grep, egrep, fgrep)))")
+    assert "(proc.name in ( grep, egrep, fgrep ))" in condition
+    assert condition.startswith("spawned_process and ((((proc.name in ( grep, egrep, fgrep )))")
     assert compiled.priority == "WARNING"
     assert compiled.tags[:5] == ["host", "container", "process", "filesystem", "T1552.001"]
     assert "mitre_credential_access" in compiled.tags
@@ -233,7 +234,7 @@ def test_public_k8s_rule_expands_its_list_and_keeps_tenant_macros() -> None:
     assert compiled.condition == (
         "kevt_started and pod_subresource and (kcreate or kget) and "
         "ka.target.subresource in (exec,attach) and not "
-        "(ka.user.name in (oncall-admin, system:serviceaccount:ops:debugger))"
+        "(ka.user.name in ( oncall-admin, system:serviceaccount:ops:debugger ))"
     )
     assert "%ka.uri.param[command]" in compiled.output
 
@@ -253,7 +254,7 @@ def test_public_tuning_appends_its_condition_and_exceptions() -> None:
         "condition": {
             "condition": (
                 "and not container.image.repository in "
-                "(quay.io/prometheus/node-exporter, docker.io/grafana/agent)"
+                "( quay.io/prometheus/node-exporter, docker.io/grafana/agent )"
             ),
             "components": [],
         },

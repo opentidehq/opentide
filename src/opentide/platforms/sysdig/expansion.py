@@ -1,58 +1,66 @@
-"""Expand a Sysdig block's own macros and lists into its Falco condition (sysdig-1.0, Expansion).
+"""Expand a Sysdig block's own macros and lists as Falco's rule loader does (sysdig-1.0).
 
 Falco macros and lists are global to a ruleset: two rules that defined the same
 name would overwrite each other on a tenant. A block's ``macros`` and ``lists``
-are therefore private to the rule, and deploy writes them into the condition:
+are therefore private to the rule, and deploy writes them into what it sends,
+by the algorithm of Falco's rule loader (``userspace/engine/rule_loader_compiler.cpp``),
+so Sysdig receives the expression Falco would compile had the definitions been
+loaded on the tenant:
 
-1. a bare name in condition position that is a block macro becomes ``(<its
-   condition, expanded>)``;
-2. a bare name inside a value list (after ``in``, ``intersects`` or ``pmatch``)
-   that is a block list becomes the list's items, expanded, joined by ``, ``;
-3. expansion recurses through block definitions and leaves every other name as
-   written, to resolve on the tenant;
-4. quoted strings, field names, field arguments, and the value after a
-   comparison operator are never expanded.
+1. Lists are flattened in block order (``compile_list_infos``): an item that
+   names an earlier block list is replaced by that list's items.
+2. Every block list is resolved, in block order, in the condition and in each
+   macro condition, by :func:`resolve_list`, a port of Falco's ``resolve_list``.
+   It is textual: it also rewrites occurrences inside quoted strings, as Falco
+   does.
+3. In exception values, a value (or a member of a value list) equal to a block
+   list name becomes the list's items. Sysdig compiles exceptions itself, with
+   its own lists, so a block list name anywhere else in a value is refused
+   (``sysdig_list_in_value``).
+4. A bare identifier in a check position that names a block macro becomes
+   ``(<the macro's expanded condition>)``. A macro sees the block macros defined
+   before it, and every block list (Falco orders macros, not lists).
 
-The tokenizer is lexical, not a Falco parser: it only has to tell those
-positions apart. The analysis engine parses the condition.
+Names the block does not define are left as written: they resolve on the tenant.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
-#: Operators that take a parenthesised value list.
-LIST_OPERATORS = frozenset({"in", "intersects", "pmatch"})
+# --- Falco's operators (libsinsp parser.cpp, Falco rule_loader_cmpop.h) ----------------------
 
-#: Comparison operators written as words; the next word is a value.
-WORD_COMPARISONS = frozenset(
+UNARY_OPERATORS = frozenset({"exists"})
+NUMERIC_OPERATORS = frozenset({"<=", "<", ">=", ">"})
+STRING_OPERATORS = frozenset(
     {
-        "contains",
-        "icontains",
-        "bcontains",
-        "startswith",
-        "bstartswith",
-        "endswith",
-        "glob",
-        "iglob",
-        "regex",
-    }
-)
-
-#: Comparison operators written as symbols.
-SYMBOL_COMPARISONS = frozenset({"=", "==", "!=", "<", "<=", ">", ">="})
-
-#: Every comparison operator an exception's ``comps`` may name (sysdig-1.0).
-EXCEPTION_OPERATORS = frozenset(
-    {
+        "==",
         "=",
         "!=",
-        "<",
-        "<=",
-        ">",
-        ">=",
+        "glob",
+        "iglob",
+        "contains",
+        "icontains",
+        "bcontains",
+        "startswith",
+        "bstartswith",
+        "endswith",
+        "regex",
+    }
+)
+#: ``parser::supported_operators(true)``: operators whose right-hand side is a value list.
+LIST_OPERATORS = frozenset({"intersects", "in", "pmatch"})
+#: ``parser::supported_operators()``.
+FALCO_OPERATORS = UNARY_OPERATORS | NUMERIC_OPERATORS | STRING_OPERATORS | LIST_OPERATORS
+#: ``cmpop_supports_modifier``: the operators ``oneof``, ``anyof`` and ``allof`` may follow.
+MODIFIABLE_OPERATORS = frozenset(
+    {
+        "=",
+        "==",
+        "!=",
         "contains",
         "icontains",
         "bcontains",
@@ -61,19 +69,26 @@ EXCEPTION_OPERATORS = frozenset(
         "endswith",
         "glob",
         "iglob",
-        "in",
-        "intersects",
-        "pmatch",
         "regex",
     }
 )
-
-#: Words that can never name a block macro or list (``sysdig_definition_name``).
-RESERVED_WORDS = (
-    frozenset({"and", "or", "not", "exists", "val"}) | WORD_COMPARISONS | LIST_OPERATORS
+MODIFIERS = frozenset({"oneof", "anyof", "allof"})
+#: Field transformers, and ``val``.
+TRANSFORMERS = frozenset(
+    {"tolower", "toupper", "b64", "basename", "len", "join", "concat", "getopt", "val"}
 )
 
+#: Operators written as words; the token after one is a value.
+WORD_OPERATORS = frozenset(op for op in FALCO_OPERATORS if op.isalpha())
+
+#: Words that can never name a block macro or list (``sysdig_definition_name``).
+RESERVED_WORDS = frozenset({"and", "or", "not", "in", "exists", "val"}) | WORD_OPERATORS
+
 DEFINITION_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+#: ``resolve_list``'s blanks and delimiters.
+BLANKS = " \t\n\r"
+DELIMITERS = BLANKS + "(),="
 
 _SYMBOLS = ("!=", "<=", ">=", "==", "=", "<", ">")
 
@@ -84,6 +99,106 @@ class ExpansionError(ValueError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+def normalize_comp(comp: str) -> str:
+    """Falco's ``normalize_comp``: leading and trailing ASCII whitespace stripped."""
+    return comp.strip(" \t\r\n")
+
+
+def is_modified_operator(op: str) -> bool:
+    """Falco's ``is_str_operator_with_modifier``: ``<op> oneof|anyof|allof``.
+
+    ``str_to_cmpop_with_modifier`` splits at the first space; the rest must be
+    the modifier exactly.
+    """
+    head, space, modifier = op.partition(" ")
+    return bool(space) and head in MODIFIABLE_OPERATORS and modifier in MODIFIERS
+
+
+def is_exception_operator(op: str) -> bool:
+    """A comparison an exception may use: a Falco operator or a modified operator."""
+    return op in FALCO_OPERATORS or is_modified_operator(op)
+
+
+def is_list_comparison(op: str) -> bool:
+    """Falco's ``is_operator_for_list``: a list operator, or a modified operator."""
+    return op in LIST_OPERATORS or is_modified_operator(op)
+
+
+def quote_item(item: str) -> str:
+    """Falco's ``quote_item``: double-quoted when it holds a space and is not quoted."""
+    if " " in item and item[0] not in "\"'":
+        return f'"{item}"'
+    return item
+
+
+def item_text(item: object) -> str:
+    """A list or exception item as YAML gives it to Falco: its text."""
+    if isinstance(item, bool):
+        return "true" if item else "false"
+    return str(item)
+
+
+def resolve_list(condition: str, name: str, items: Sequence[str]) -> tuple[str, bool]:
+    """Falco's ``resolve_list``, ported verbatim: *name* replaced by *items* in *condition*.
+
+    An occurrence counts only with a delimiter on each side (the start or end of
+    the text, a blank, ``(``, ``)``, ``,`` or ``=``). The blanks around it are
+    consumed, and it becomes ``" " + items + " "`` (no leading blank at the
+    start of the text). An empty list removes one comma next to it, the left one
+    first. Returns the new condition and whether the list was used.
+    """
+    cnd = condition
+    used = False
+    start = cnd.find(name)
+    while start != -1:
+        end = start + len(name)
+        if (start == 0 or cnd[start - 1] in DELIMITERS) and (
+            end >= len(cnd) or cnd[end] in DELIMITERS
+        ):
+            while start > 0 and cnd[start - 1] in BLANKS:
+                start -= 1
+            while end < len(cnd) and cnd[end] in BLANKS:
+                end += 1
+            sub = ", ".join(quote_item(item) for item in items)
+            if not sub:
+                if start > 0 and cnd[start - 1] == ",":
+                    start -= 1
+                elif end < len(cnd) and cnd[end] == ",":
+                    end += 1
+            new = ""
+            if start > 0:
+                new += cnd[:start] + " "
+            new += sub + " "
+            if end <= len(cnd):
+                new += cnd[end:]
+            cnd = new
+            start += len(sub) + 1
+            used = True
+        start = cnd.find(name, start + 1)
+    return cnd, used
+
+
+def occurs(text: str, name: str) -> bool:
+    """Whether :func:`resolve_list` would replace an occurrence of *name* in *text*."""
+    start = text.find(name)
+    while start != -1:
+        end = start + len(name)
+        if (start == 0 or text[start - 1] in DELIMITERS) and (
+            end >= len(text) or text[end] in DELIMITERS
+        ):
+            return True
+        start = text.find(name, start + 1)
+    return False
+
+
+def join_lines(text: str) -> str:
+    """Multiline YAML text as one line: each line stripped, joined by single spaces."""
+    return " ".join(line.strip() for line in text.splitlines() if line.strip())
+
+
+# --- the condition tokenizer (macros only) ----------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -99,9 +214,9 @@ def tokenize(text: str) -> list[Token]:
     n = len(text)
     while i < n:
         char = text[i]
-        if char.isspace():
+        if char in BLANKS:
             j = i
-            while j < n and text[j].isspace():
+            while j < n and text[j] in BLANKS:
                 j += 1
             tokens.append(Token("space", text[i:j]))
             i = j
@@ -127,14 +242,14 @@ def tokenize(text: str) -> list[Token]:
         else:
             j = i
             depth = 0
-            # A field argument (`proc.aname[2]`, `evt.arg[0]`) stays in its word.
+            # A field argument (`proc.aname[2]`, `proc.env["HOME"]`) stays in its word.
             while j < n:
                 c = text[j]
                 if c == "[":
                     depth += 1
                 elif c == "]" and depth:
                     depth -= 1
-                elif depth == 0 and (c.isspace() or c in "(),\"'=<>!"):
+                elif depth == 0 and (c in BLANKS or c in "(),\"'=<>!"):
                     break
                 j += 1
             if j == i:  # a lone "!" or similar: keep it, never loop
@@ -142,148 +257,6 @@ def tokenize(text: str) -> list[Token]:
             tokens.append(Token("word", text[i:j]))
             i = j
     return tokens
-
-
-def join_lines(text: str) -> str:
-    """Multiline YAML text as one line: each line stripped, joined by single spaces."""
-    return " ".join(line.strip() for line in text.splitlines() if line.strip())
-
-
-def format_item(item: object) -> str:
-    """A list item as Falco reads it: quoted when it holds a space, comma, parenthesis or quote."""
-    text = str(item)
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
-        return text
-    if any(c.isspace() or c in ",()\"'" for c in text):
-        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
-    return text
-
-
-class Expander:
-    """Expands one block's macros and lists."""
-
-    def __init__(
-        self,
-        macros: Mapping[str, str] | None = None,
-        lists: Mapping[str, Sequence[object]] | None = None,
-    ) -> None:
-        self.macros = {name: join_lines(cond) for name, cond in (macros or {}).items()}
-        self.lists = {name: list(items) for name, items in (lists or {}).items()}
-        self._macro_cache: dict[str, str] = {}
-        self._list_cache: dict[str, list[str]] = {}
-
-    # --- lists ---------------------------------------------------------------
-
-    def list_items(self, name: str, stack: tuple[str, ...] = ()) -> list[str]:
-        if name in stack:
-            raise _cycle(stack, name)
-        cached = self._list_cache.get(name)
-        if cached is not None:
-            return cached
-        items: list[str] = []
-        for item in self.lists[name]:
-            if isinstance(item, str) and item in self.lists:
-                items.extend(self.list_items(item, (*stack, name)))
-            else:
-                items.append(format_item(item))
-        self._list_cache[name] = items
-        return items
-
-    # --- macros --------------------------------------------------------------
-
-    def macro(self, name: str, stack: tuple[str, ...] = ()) -> str:
-        if name in stack:
-            raise _cycle(stack, name)
-        cached = self._macro_cache.get(name)
-        if cached is None:
-            cached = self._expand(self.macros[name], (*stack, name))
-            self._macro_cache[name] = cached
-        return cached
-
-    # --- conditions ----------------------------------------------------------
-
-    def expand(self, condition: str) -> str:
-        """*condition* with the block's macros and lists written in, on one line."""
-        return self._expand(join_lines(condition), ())
-
-    def _expand(self, text: str, stack: tuple[str, ...]) -> str:
-        tokens = tokenize(text)
-        out: list[str] = []
-        i = 0
-        expect_value = False
-        while i < len(tokens):
-            token = tokens[i]
-            if token.kind == "space":
-                out.append(token.text)
-                i += 1
-                continue
-            if token.kind == "word" and token.text in LIST_OPERATORS:
-                out.append(token.text)
-                i += 1
-                # Copy the spaces, then a value list if one follows.
-                while i < len(tokens) and tokens[i].kind == "space":
-                    out.append(tokens[i].text)
-                    i += 1
-                if i < len(tokens) and tokens[i].kind == "open":
-                    end = _closing(tokens, i)
-                    out.append(self._value_list(tokens[i : end + 1], stack))
-                    i = end + 1
-                expect_value = False
-                continue
-            if token.kind == "symbol":
-                out.append(token.text)
-                expect_value = token.text in SYMBOL_COMPARISONS
-                i += 1
-                continue
-            if token.kind == "word":
-                if token.text in WORD_COMPARISONS:
-                    out.append(token.text)
-                    expect_value = True
-                elif expect_value:
-                    out.append(token.text)
-                    expect_value = False
-                elif token.text in self.macros:
-                    out.append(f"({self.macro(token.text, stack)})")
-                else:
-                    out.append(token.text)
-                i += 1
-                continue
-            # strings, parentheses, commas
-            if token.kind == "string":
-                expect_value = False
-            out.append(token.text)
-            i += 1
-        return "".join(out)
-
-    def _value_list(self, tokens: Sequence[Token], stack: tuple[str, ...]) -> str:
-        """``( … )`` with block lists expanded; untouched when it names none."""
-        inner = tokens[1:-1]
-        items: list[list[Token]] = [[]]
-        for token in inner:
-            if token.kind == "comma":
-                items.append([])
-            else:
-                items[-1].append(token)
-        names = [_item_name(item) for item in items]
-        if not any(name is not None and name in self.lists for name in names):
-            return "".join(t.text for t in tokens)
-        written: list[str] = []
-        for item, name in zip(items, names, strict=True):
-            if name is not None and name in self.lists:
-                written.extend(self.list_items(name, stack))
-                continue
-            text = "".join(t.text for t in item).strip()
-            if text:
-                written.append(text)
-        return "(" + ", ".join(written) + ")"
-
-
-def _item_name(item: Sequence[Token]) -> str | None:
-    words = [t for t in item if t.kind != "space"]
-    if len(words) == 1 and words[0].kind == "word":
-        return words[0].text
-    return None
 
 
 def _closing(tokens: Sequence[Token], start: int) -> int:
@@ -298,21 +271,239 @@ def _closing(tokens: Sequence[Token], start: int) -> int:
     return len(tokens) - 1
 
 
-def _cycle(stack: tuple[str, ...], name: str) -> ExpansionError:
-    path = " -> ".join((*stack[stack.index(name) :], name))
+def _call_end(tokens: Sequence[Token], i: int) -> int | None:
+    """The index of the ``)`` closing a call ``word(`` at *i*, when *i* starts one."""
+    if i + 1 < len(tokens) and tokens[i + 1].kind == "open":
+        return _closing(tokens, i + 1)
+    return None
+
+
+def substitute_macros(text: str, resolve: Callable[[str], str | None]) -> str:
+    """*text* with each bare identifier in a check position replaced by ``resolve(name)``.
+
+    ``resolve`` returns the replacement, or ``None`` to keep the name. Values
+    (after an operator: a word, a string, a value list, ``val(...)`` or a
+    transformer), field names, field arguments, transformer calls on the
+    left-hand side, and quoted strings are never touched.
+    """
+    tokens = tokenize(text)
+    out: list[str] = []
+    expect = "check"  # "check", "operator" or "value"
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token.kind == "space":
+            out.append(token.text)
+            i += 1
+            continue
+        if expect == "value":
+            if token.kind == "word" and token.text in MODIFIERS:
+                out.append(token.text)
+                i += 1
+                continue
+            end = _closing(tokens, i) if token.kind == "open" else None
+            if token.kind == "word":
+                end = _call_end(tokens, i)
+            last = i if end is None else end
+            out.extend(t.text for t in tokens[i : last + 1])
+            i = last + 1
+            expect = "check"
+            continue
+        if expect == "operator":
+            if token.kind == "symbol" or (token.kind == "word" and token.text in WORD_OPERATORS):
+                out.append(token.text)
+                expect = "check" if token.text in UNARY_OPERATORS else "value"
+                i += 1
+                continue
+            expect = "check"
+        if token.kind == "word":
+            if token.text in ("and", "or", "not"):
+                out.append(token.text)
+                i += 1
+                continue
+            end = _call_end(tokens, i) if token.text in TRANSFORMERS else None
+            if end is not None:
+                out.extend(t.text for t in tokens[i : end + 1])
+                i = end + 1
+                expect = "operator"
+                continue
+            if "." in token.text:  # a field
+                out.append(token.text)
+                expect = "operator"
+                i += 1
+                continue
+            replacement = resolve(token.text)
+            out.append(token.text if replacement is None else replacement)
+            i += 1
+            continue
+        out.append(token.text)
+        i += 1
+    return "".join(out)
+
+
+def check_position_names(text: str) -> list[str]:
+    """The bare identifiers in check positions of *text*: the macros it uses."""
+    names: list[str] = []
+
+    def record(name: str) -> str | None:
+        names.append(name)
+        return None
+
+    substitute_macros(text, record)
+    return names
+
+
+# --- the block's definitions ------------------------------------------------------------------
+
+
+class Expander:
+    """Expands one block's macros and lists, in block order."""
+
+    def __init__(
+        self,
+        macros: Mapping[str, str] | None = None,
+        lists: Mapping[str, Sequence[object]] | None = None,
+    ) -> None:
+        self.macro_order = list(macros or {})
+        self.list_order = list(lists or {})
+        self.lists = self._flatten(lists or {})
+        self.macros: dict[str, str] = {}
+        for index, (name, condition) in enumerate((macros or {}).items()):
+            visible = self.macro_order[:index]
+            text = self.resolve_lists(join_lines(condition))
+            used = [n for n in check_position_names(text) if n in self.macro_order]
+            later = [n for n in used if n not in visible]
+            if later:
+                raise ExpansionError(
+                    "sysdig_definition_order",
+                    f"macro {name!r} uses {', '.join(map(repr, dict.fromkeys(later)))}, "
+                    "which is not defined before it in the block",
+                )
+            self.macros[name] = self._substitute(text, frozenset(visible))
+
+    def _flatten(self, lists: Mapping[str, Sequence[object]]) -> dict[str, list[str]]:
+        """``compile_list_infos``: an item naming an earlier block list is its items."""
+        order = list(lists)
+        flat: dict[str, list[str]] = {}
+        for index, (name, raw) in enumerate(lists.items()):
+            items: list[str] = []
+            for item in raw:
+                text = item_text(item)
+                if text in flat:
+                    items.extend(flat[text])
+                    continue
+                if text in order[index:]:
+                    raise ExpansionError(
+                        "sysdig_definition_order",
+                        f"list {name!r} names {text!r}, which is not defined before it "
+                        "in the block",
+                    )
+                items.append(text)
+            flat[name] = items
+        return flat
+
+    def _substitute(self, text: str, visible: frozenset[str]) -> str:
+        """*text* with each visible block macro written in, in parentheses."""
+
+        def macro(name: str) -> str | None:
+            return f"({self.macros[name]})" if name in visible else None
+
+        return substitute_macros(text, macro)
+
+    def resolve_lists(self, text: str) -> str:
+        """Every block list resolved in *text*, in block order (Falco's ``parse_condition``)."""
+        for name in self.list_order:
+            text, _ = resolve_list(text, name, self.lists[name])
+        return text
+
+    def expand(self, condition: str) -> str:
+        """*condition* on one line, with the block's lists and macros written in."""
+        return self._substitute(self.resolve_lists(join_lines(condition)), frozenset(self.macros))
+
+    # --- exceptions ---------------------------------------------------------------------------
+
+    def _list_in(self, value: object) -> str | None:
+        """The block list whose name occurs inside *value*, by ``resolve_list``'s rule."""
+        text = item_text(value)
+        return next((name for name in self.list_order if occurs(text, name)), None)
+
+    def _members(self, values: Iterable[object], where: str) -> list[Any]:
+        """A value list with block list names spliced in."""
+        out: list[Any] = []
+        for value in values:
+            text = item_text(value)
+            if not isinstance(value, (list, dict)) and text in self.lists:
+                out.extend(self.lists[text])
+                continue
+            if (name := self._list_in(value)) is not None:
+                raise _list_in_value(name, where)
+            out.append(value)
+        return out
+
+    def exception(self, entry: Mapping[str, Any]) -> dict[str, Any]:
+        """An exception as Sysdig receives it: comps normalized, block lists expanded."""
+        name = str(entry.get("name"))
+        fields = entry.get("fields")
+        comps = entry.get("comps")
+        values = entry.get("values")
+        out: dict[str, Any] = {"name": name, "fields": fields}
+        where = f"exception {name!r}"
+        if isinstance(fields, str):
+            if comps is not None:
+                out["comps"] = normalize_comp(str(comps))
+            if values is not None:
+                out["values"] = self._members(values, where)
+            return out
+        comp_list = (
+            [normalize_comp(str(c)) for c in comps]
+            if isinstance(comps, list)
+            else ["="] * len(fields or [])
+        )
+        if comps is not None:
+            out["comps"] = comp_list
+        if values is None:
+            return out
+        rows: list[Any] = []
+        for row in values:
+            if not isinstance(row, list):
+                rows.append(row)
+                continue
+            new_row: list[Any] = []
+            for comp, item in zip(comp_list, row, strict=False):
+                if isinstance(item, list):
+                    new_row.append(self._members(item, where))
+                    continue
+                text = item_text(item)
+                if text in self.lists:
+                    if not is_list_comparison(comp):
+                        raise _list_in_value(text, where)
+                    new_row.append(list(self.lists[text]))
+                    continue
+                if (found := self._list_in(item)) is not None:
+                    raise _list_in_value(found, where)
+                new_row.append(item)
+            rows.append(new_row)
+        out["values"] = rows
+        return out
+
+
+def _list_in_value(name: str, where: str) -> ExpansionError:
     return ExpansionError(
-        "sysdig_definition_cycle", f"block macros and lists reference themselves: {path}"
+        "sysdig_list_in_value",
+        f"{where}: the block list {name!r} appears in a value where Falco's expansion would "
+        "not produce a value list",
     )
 
 
-def check_cycles(
-    macros: Mapping[str, str], lists: Mapping[str, Sequence[object]], conditions: Iterable[str]
+def check_definitions(
+    macros: Mapping[str, str],
+    lists: Mapping[str, Sequence[object]],
+    conditions: Iterable[str],
+    exceptions: Iterable[Mapping[str, Any]] = (),
 ) -> None:
-    """Expand every definition and *conditions*; raise ``sysdig_definition_cycle`` on a loop."""
+    """Expand the block; raise ``sysdig_definition_order`` or ``sysdig_list_in_value``."""
     expander = Expander(macros, lists)
-    for name in expander.lists:
-        expander.list_items(name)
-    for name in expander.macros:
-        expander.macro(name)
     for condition in conditions:
         expander.expand(condition)
+    for entry in exceptions:
+        expander.exception(entry)

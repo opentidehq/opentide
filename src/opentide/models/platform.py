@@ -596,59 +596,60 @@ def _non_blank(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
-def _sysdig_exception_codes(exceptions: Any) -> set[str]:
-    """``sysdig_exception_shape`` for each malformed entry of ``exceptions``."""
-    from opentide.platforms.sysdig.expansion import EXCEPTION_OPERATORS
+def _sysdig_scalar(value: Any) -> bool:
+    return not isinstance(value, (list, dict))
 
+
+def _sysdig_exception_ok(entry: Any) -> bool:
+    """One exception, by the checks of Falco's ``validate_exception_info`` and
+    ``build_rule_exception_infos``."""
+    from opentide.platforms.sysdig.expansion import (
+        is_exception_operator,
+        is_modified_operator,
+        normalize_comp,
+    )
+
+    if not isinstance(entry, dict) or not _non_blank(entry.get("name")):
+        return False
+    fields = entry.get("fields")
+    comps = entry.get("comps")
+    values = entry.get("values")
+    if values is not None and not isinstance(values, list):
+        return False
+    if isinstance(fields, str):
+        if not fields.strip():
+            return False
+        if comps is not None:
+            if not isinstance(comps, str):
+                return False  # "Fields and comps must both be strings"
+            comp = normalize_comp(comps)
+            if comp not in _MULTI_VALUE_COMPS and not is_modified_operator(comp):
+                return False
+        return all(_sysdig_scalar(value) for value in values or [])
+    if not isinstance(fields, list) or not fields or not all(_non_blank(f) for f in fields):
+        return False
+    if comps is not None:
+        if not isinstance(comps, list) or len(comps) != len(fields):
+            return False  # "Fields and comps lists must have equal length"
+        if not all(isinstance(c, str) and is_exception_operator(normalize_comp(c)) for c in comps):
+            return False
+    for row in values or []:
+        if not isinstance(row, list) or len(row) != len(fields):
+            return False  # "Fields and values lists must have equal length"
+        for item in row:
+            if isinstance(item, dict):
+                return False
+            if isinstance(item, list) and not all(_sysdig_scalar(v) for v in item):
+                return False
+    return True
+
+
+def _sysdig_exception_codes(exceptions: Any) -> set[str]:
+    """``sysdig_exception_shape`` when an entry of ``exceptions`` is malformed."""
     if exceptions is None:
         return set()
-    if not isinstance(exceptions, list):
+    if not isinstance(exceptions, list) or not all(map(_sysdig_exception_ok, exceptions)):
         return {"sysdig_exception_shape"}
-    names: set[str] = set()
-    for entry in exceptions:
-        if not isinstance(entry, dict) or not _non_blank(entry.get("name")):
-            return {"sysdig_exception_shape"}
-        if entry["name"] in names:
-            return {"sysdig_exception_shape"}
-        names.add(entry["name"])
-        fields = entry.get("fields")
-        comps = entry.get("comps")
-        values = entry.get("values")
-        if isinstance(fields, str):
-            if not fields.strip():
-                return {"sysdig_exception_shape"}
-            if comps is not None and comps not in _MULTI_VALUE_COMPS:
-                return {"sysdig_exception_shape"}
-            if values is not None and (
-                not isinstance(values, list) or any(isinstance(v, (list, dict)) for v in values)
-            ):
-                return {"sysdig_exception_shape"}
-            continue
-        if (
-            not isinstance(fields, list)
-            or not fields
-            or not all(_non_blank(f) for f in fields)
-            or len(set(fields)) != len(fields)
-        ):
-            return {"sysdig_exception_shape"}
-        if comps is None:
-            comp_list = ["="] * len(fields)
-        elif isinstance(comps, list) and len(comps) == len(fields):
-            comp_list = comps
-        else:
-            return {"sysdig_exception_shape"}
-        if not all(isinstance(c, str) and c in EXCEPTION_OPERATORS for c in comp_list):
-            return {"sysdig_exception_shape"}
-        if values is None:
-            continue
-        if not isinstance(values, list):
-            return {"sysdig_exception_shape"}
-        for row in values:
-            if not isinstance(row, list) or len(row) != len(fields):
-                return {"sysdig_exception_shape"}
-            for comp, item in zip(comp_list, row, strict=True):
-                if comp in _MULTI_VALUE_COMPS and not isinstance(item, list):
-                    return {"sysdig_exception_shape"}
     return set()
 
 
@@ -767,11 +768,18 @@ class SysdigConfig(PlatformConfigBase):
             codes.add("sysdig_source")
         codes |= _sysdig_exception_codes(raw.get("exceptions"))
         macros, lists = _sysdig_definitions(raw, codes)
-        if "sysdig_definition_duplicate" not in codes and "sysdig_definition_name" not in codes:
-            from opentide.platforms.sysdig.expansion import ExpansionError, check_cycles
+        if not codes & {"sysdig_definition_duplicate", "sysdig_definition_name"}:
+            from opentide.platforms.sysdig.expansion import ExpansionError, check_definitions
 
+            exceptions = raw.get("exceptions")
+            shaped = "sysdig_exception_shape" not in codes and isinstance(exceptions, list)
             try:
-                check_cycles(macros, lists, [condition] if isinstance(condition, str) else [])
+                check_definitions(
+                    macros,
+                    lists,
+                    [condition] if isinstance(condition, str) else [],
+                    exceptions if shaped else [],
+                )
             except ExpansionError as exc:
                 codes.add(exc.code)
         if codes:
