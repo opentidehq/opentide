@@ -20,6 +20,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 ### Fixed
 
 - An incremental edit after a multi-byte character (`日本`, `é`, an emoji) no longer crashes the language server ([#178](https://github.com/opentidehq/language-server/issues/178)). The server read the editor's column, which counts UTF-16 units, as a byte offset, and sliced inside the character. Edits, completion and hover now all convert positions with `opentide_core::position_to_offset`, which counts UTF-16 as LSP does; completion and KQL hover used to count characters, which put the cursor one column off after an emoji.
+- EQL: a backslash before a multi-byte character (`"D:\\日本"`, `"x\\é"`) no longer panics the engine ([#180](https://github.com/opentidehq/language-server/issues/180)). The invalid-escape error now covers the whole escaped character and names it, where it printed the character's first byte. `opentide_core::offset_to_position` and `LineIndex::position` count an offset inside a character from that character's start instead of panicking, so a wrong span anywhere gives a short range, never a crash.
+- SPL: analysis no longer hangs on some broken queries ([#179](https://github.com/opentidehq/language-server/issues/179)). In an error-recovered tree, tree-sitter's `prev_sibling()` can cycle between a `MISSING` node and a zero-width sibling, and the "never closed" message and the previous-token lookup followed it forever, freezing the language server. They now walk the parent's children with a cursor (`opentide_syntax::prev_sibling`).
 
 ### Changed
 

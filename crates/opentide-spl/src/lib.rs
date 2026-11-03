@@ -406,9 +406,11 @@ fn in_command_position(node: Node) -> bool {
 /// zero-width tokens error recovery inserts.
 fn previous_token(node: Node) -> Option<Node> {
     let mut at = node;
-    loop {
+    // Each step moves strictly backwards in the tree, so this ends; the bound
+    // only guards against a malformed recovered tree.
+    for _ in 0..MAX_TOKEN_STEPS {
         let sibling = loop {
-            if let Some(s) = at.prev_sibling() {
+            if let Some(s) = opentide_syntax::prev_sibling(at) {
                 break s;
             }
             at = at.parent()?;
@@ -423,7 +425,11 @@ fn previous_token(node: Node) -> Option<Node> {
         }
         return Some(leaf);
     }
+    None
 }
+
+/// More steps than any query has tokens.
+const MAX_TOKEN_STEPS: usize = 1 << 20;
 
 fn unknown_command(name: &str, range: Range, catalog: &Catalog) -> Diagnostic {
     let message = format!(
@@ -1287,6 +1293,22 @@ fn push_param(out: &mut Vec<ParameterInformation>, raw: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #179: tree-sitter's `prev_sibling()` cycled between a MISSING `)` and a
+    /// zero-width node, so `analyze` never returned on this query.
+    #[test]
+    fn a_recovered_tree_with_zero_width_nodes_does_not_hang_analysis() {
+        let query = "index=main | eval s=case(bytes>1, 1, true((), 0), t=if(us lik\r\ne \"a%\", 1,";
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = analyze(query);
+            let _ = done.send(result.diagnostics.len());
+        });
+        let found = finished
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("analyze returned within 10 s");
+        assert!(found > 0, "the broken query is reported");
+    }
 
     #[test]
     fn catalog_has_core_commands() {

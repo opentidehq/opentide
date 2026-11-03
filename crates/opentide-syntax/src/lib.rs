@@ -102,6 +102,25 @@ pub fn walk_with_ancestors<'t>(root: Node<'t>, mut f: impl FnMut(Node<'t>, &[Nod
     }
 }
 
+/// The sibling before `node`, read from its parent's children with a cursor.
+///
+/// Use this instead of [`Node::prev_sibling`]: in an error-recovered tree,
+/// tree-sitter 0.25's `prev_sibling()` can cycle between a `MISSING` node and
+/// a zero-width sibling, so a loop over it never ends (#179). A cursor walks
+/// the parent's child list, which is finite.
+pub fn prev_sibling(node: Node<'_>) -> Option<Node<'_>> {
+    let parent = node.parent()?;
+    let mut cursor = parent.walk();
+    let mut previous = None;
+    for child in parent.children(&mut cursor) {
+        if child.id() == node.id() {
+            return previous;
+        }
+        previous = Some(child);
+    }
+    None
+}
+
 /// Byte span of a node, never empty so editors can show it.
 pub fn node_span(node: Node<'_>) -> ByteSpan {
     ByteSpan::new(
