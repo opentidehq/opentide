@@ -63,7 +63,7 @@ def _flags_stay_unset() -> Iterator[None]:
 
 
 def _add_tenant(repo: Path, platform: str, setup: str, name: str = "soc") -> None:
-    config = repo / ".opentide/configurations/systems" / f"{platform}.toml"
+    config = repo / ".opentide/configurations/platforms" / f"{platform}.toml"
     tenant = f'\n[[tenants]]\nname = "{name}"\n[tenants.setup]\n{setup}'
     config.write_text(config.read_text(encoding="utf-8") + tenant, encoding="utf-8")
 

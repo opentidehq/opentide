@@ -105,7 +105,7 @@ def stub_deployers(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
         def mdr_for(self, platforms: Any) -> dict[str, MagicMock]:
             return {name: deployers.setdefault(name, MagicMock()) for name in platforms}
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _StubDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _StubDeployTide)
     return deployers
 
 

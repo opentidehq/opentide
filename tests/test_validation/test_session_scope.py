@@ -108,7 +108,7 @@ def test_run_validation_uuid_scope_still_finds_duplicate_ids(
         patch("opentide.validation.session.resolve_paths", return_value={"rule": rules_dir}),
         patch(
             "opentide.validation.session.resolve_configurations",
-            return_value={"global": {"metaschemas": {"rule": {}}}},
+            return_value={"paths": {"metaschemas": {"rule": {}}}},
         ),
     ):
         report = run_validation(
@@ -155,7 +155,7 @@ def test_run_validation_ignores_a_uuid_repeated_in_a_subfolder(
         patch("opentide.validation.session.resolve_paths", return_value={"rule": rules_dir}),
         patch(
             "opentide.validation.session.resolve_configurations",
-            return_value={"global": {"metaschemas": {"rule": {}}}},
+            return_value={"paths": {"metaschemas": {"rule": {}}}},
         ),
     ):
         report = run_validation(
@@ -188,7 +188,7 @@ def test_run_validation_finds_a_duplicate_uuid_in_a_yml_file(
         patch("opentide.validation.session.resolve_paths", return_value={"rule": rules_dir}),
         patch(
             "opentide.validation.session.resolve_configurations",
-            return_value={"global": {"metaschemas": {"rule": {}}}},
+            return_value={"paths": {"metaschemas": {"rule": {}}}},
         ),
     ):
         report = run_validation(
@@ -251,7 +251,7 @@ def test_run_validation_finds_a_signal_that_reuses_an_object_uuid(
         ),
         patch(
             "opentide.validation.session.resolve_configurations",
-            return_value={"global": {"metaschemas": {"rule": {}, "objective": {}}}},
+            return_value={"paths": {"metaschemas": {"rule": {}, "objective": {}}}},
         ),
     ):
         report = run_validation(

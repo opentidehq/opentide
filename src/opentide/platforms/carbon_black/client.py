@@ -1,7 +1,7 @@
 import structlog
 
 from opentide.core.debug import DebugEnvironment
-from opentide.core.registry import DebugHelpers, Opentide
+from opentide.core.registry import Opentide
 from opentide.models.system_config import ConfigurationModels
 from opentide.platforms.transport import tenant_tls_verify
 
@@ -28,7 +28,12 @@ class CarbonBlackCloudConnection:
         if tenants:
             self._init_from_tenants(CBC_CONFIG)
         else:
-            self._init_from_legacy(CBC_CONFIG)
+            # No tenant to reach: deploy refuses the platform before any call.
+            self.DEFAULT_WATCHLIST = ""
+            self.CBC_URL = ""
+            self.CBC_SECRETS: dict[str, dict[str, str]] = {}
+            self.ORGANIZATIONS: list[str] = []
+            self.VALIDATION_ORGANIZATION = ""
 
     def _init_from_tenants(self, cbc_config) -> None:
         """Initialise from MDRv4 typed tenant configuration."""
@@ -53,53 +58,6 @@ class CarbonBlackCloudConnection:
             else organizations
         )
         self.VALIDATION_ORGANIZATION = organizations[0] if organizations else ""
-
-    def _init_from_legacy(self, cbc_config) -> None:
-        """Initialise from legacy setup/secrets configuration."""
-        CBC_SETUP = DebugHelpers.fetch_config_envvar(getattr(cbc_config, "setup", {}) or {})
-        self.DEFAULT_WATCHLIST = CBC_SETUP.get("watchlist", "")
-        self.CBC_URL = CBC_SETUP.get("url", "")
-
-        secrets: dict[str, dict[str, str]] = {}
-        cbc_secrets_error_flag = False
-        raw_secrets = getattr(cbc_config, "secrets", {}) or {}
-        for org in raw_secrets:
-            tenant_secrets = DebugHelpers.fetch_config_envvar(raw_secrets[org])
-            if "org_key" not in tenant_secrets:
-                logger.critical(
-                    "could_not_fetch_organization_key_for_organization",
-                    arg0=org,
-                    advice=(
-                        "Double check that there is a namespaced entry for this organization in "
-                        "the TOML config"
-                    ),
-                )
-                cbc_secrets_error_flag = True
-            if "token" not in tenant_secrets:
-                logger.critical(
-                    "target_organization_is_not_present_in_secrets_configuration",
-                    arg0=org,
-                    advice=(
-                        "Double check that there is a namespaced entry for this organization in "
-                        "the TOML config"
-                    ),
-                )
-                cbc_secrets_error_flag = True
-            if not cbc_secrets_error_flag:
-                secrets[org] = {
-                    "org_key": tenant_secrets["org_key"],
-                    "token": tenant_secrets["token"],
-                }
-        if cbc_secrets_error_flag:
-            logger.critical(
-                "the_secrets_configuration_was_not_setup_correctly",
-                detail="Review the previous errors to understand what attribute was missing",
-            )
-            raise KeyError
-        self.CBC_SECRETS = secrets
-        self.ORGANIZATIONS = CBC_SETUP.get("organizations", [])
-        validation = getattr(cbc_config, "validation", {}) or {}
-        self.VALIDATION_ORGANIZATION = validation.get("organization", "")
 
 
 class CarbonBlackCloudService:

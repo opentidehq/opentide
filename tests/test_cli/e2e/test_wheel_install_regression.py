@@ -362,7 +362,6 @@ _PLATFORM_SDK_IMPORTS = (
     "splunklib.client",
     "cbc_sdk.rest_api",
     "pandas",
-    "openpyxl",
 )
 
 

@@ -102,7 +102,6 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`filename_slug`](#filename_slug) | The file name is not the slug of the object's name. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
-| [`identifier_mismatch`](#identifier_mismatch) | A platform file's `[platform] identifier` differs from its file name. |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
 | [`invalid_cve`](#invalid_cve) | A threat lists CVE identifiers Vulnerability-Lookup does not know. |
 | [`invalid_ref`](#invalid_ref) | A reference names an object that does not exist. |
@@ -179,6 +178,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; opentide validate accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
+| [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
 | [`risk_band`](#risk_band) | The risk score is outside the band of the rule's severity. |
 | [`rule_status_unknown`](#rule_status_unknown) | A `sharing.toml` block lists a rule status your configuration does not declare. |
@@ -1745,24 +1745,6 @@ Reported by `opentide doctor`. Warns when it is not a repository, or `origin/HEA
 
 Run the command it prints: `git init` for a new repository, or `git remote set-head origin --auto` when `origin/HEAD` is unset.
 
-## identifier_mismatch
-
-A platform file's `[platform] identifier` differs from its file name.
-
-Severity: error. Reported for `platforms/<id>.toml` by the configuration file check an editor runs (`configuration_file_issues`).
-
-### Example
-
-```toml
-# platforms/sentinel.toml
-[platform]
-identifier = "splunk"
-```
-
-### How to fix
-
-Make `identifier` match the file name stem, or remove it: the file name is used when it is absent.
-
 ## internal
 
 opentide stopped on an exception it did not handle: a bug in opentide, not in your input.
@@ -3025,6 +3007,33 @@ opentide new rule --name "LSASS Access" --objective 00000000-0000-4000-8000-0000
 ### How to fix
 
 Copy the UUID from the object's `metadata.uuid`, or create that objective or threat first with `opentide new objective` or `opentide new threat`. `opentide info` lists the catalogue.
+
+## retired_configuration_file
+
+A file or folder under `.opentide/configurations/` that opentide does not read.
+
+Severity: error. Reported by every command that reads the configuration (`validate`, `deploy`, `generate`, …), which then stops with exit 1 and `failure.code` `retired_configuration_file`, for these entries of the workspace's (or the parent instance's) `.opentide/configurations/`:
+
+| Entry | What replaces it |
+|-------|------------------|
+| `global.toml` | `paths.toml`: workspace paths and artifact names |
+| `schema.toml` | Nothing: template defaults are not configurable, and vocabularies are not extended locally |
+| `systems/` | `platforms/<platform>.toml` |
+
+Loading such a file and ignoring it would leave the workspace believing it is configured by settings that have no effect.
+
+### Example
+
+```text illustrative
+.opentide/configurations/
+├── global.toml
+└── systems/
+    └── splunk.toml
+```
+
+### How to fix
+
+Move the settings you need into the file the diagnostic names (`paths.toml`, `platforms/<platform>.toml`), in its current format, then delete the retired file or folder. `opentide validate --check configuration` then checks what you moved.
 
 ## retract_unconfirmed
 

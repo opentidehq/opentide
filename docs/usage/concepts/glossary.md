@@ -73,9 +73,6 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 **Log source**
 : One `[[logsources]]` entry of `visibility.toml`: one dataset, whose `name` is the KQL table, Splunk sourcetype or Elastic index pattern, with its optional columns. Signals name it in `data.logsources`; the query checks know the dataset and its columns.
 
-**Playbook-map**
-: A mapping that associates detections with response playbooks. Produced by the legacy `opentide export playbook-map` command (not by the default `opentide generate` pipeline).
-
 **TLP (Traffic Light Protocol)**
 : The sharing-sensitivity classification on `metadata.tlp` (e.g. `clear`, `green`, `amber`, `red`).
 
@@ -96,5 +93,3 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 **SDK**
 : The Python API (`from opentide import Opentide`) for embedding the engine in your own code. See [SDK](../../sdk/index.md).
 
-**CoreTide**
-: The predecessor to opentide, distributed via git submodules. Migrating from it? See the [migration guide](../migration/index.md).

@@ -1,8 +1,6 @@
 [platform]
 enabled = true
-identifier = "sysdig"
 name = "Sysdig Secure"
-subschema = "Sysdig Secure"
 
 [[tenants]]
 name = "staging"

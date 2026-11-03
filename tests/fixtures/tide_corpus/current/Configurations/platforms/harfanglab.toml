@@ -1,14 +1,11 @@
 [platform]
 enabled = true
-identifier = "harfanglab"
 name = "HarfangLab"
-subschema = "HarfangLab"
 description = """HarfangLab EDR provides advanced threat detection using Sigma rules
 for behavioral detection and YARA rules for memory/file scanning. This integration
 supports deploying detection rules to HarfangLab's threat intelligence API, including
 both Sigma-based behavioral rules and YARA-based scanning rules.
 """
-flags = [""]
 
 #[[modifiers]]
 #name = "Modifier Demo"

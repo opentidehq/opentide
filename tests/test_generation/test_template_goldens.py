@@ -20,9 +20,7 @@ _PINNED_MODELS = {
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE_GOLDENS = ROOT / "tests/fixtures/generation/tide_workspace/.opentide/templates"
-PLATFORM_GOLDENS = (
-    ROOT / "src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates"
-)
+PLATFORM_GOLDENS = ROOT / "src/opentide/schemas/data/platform_templates"
 
 _STACKED_HASH = re.compile(r"(?m)^[ ]*#[ ]+#")
 _HASH_ONLY = re.compile(r"(?m)^[ ]*#[ ]*$")
@@ -42,17 +40,7 @@ CORE_FILES = {
     "rule": "rule.1.0.template.yaml",
 }
 
-PLATFORM_FILES = {
-    "sentinel": "Microsoft Sentinel Template.yaml",
-    "defender_for_endpoint": "Microsoft Defender for Endpoint Template.yaml",
-    "splunk": "Splunk Enterprise Template.yaml",
-    "sentinel_one": "Sentinel One Template.yaml",
-    "crowdstrike": "Crowdstrike Falcon Correlation Rules Template.yaml",
-    "harfanglab": "HarfangLab Template.yaml",
-    "carbon_black_cloud": "Carbon Black Cloud Enterprise EDR Template.yaml",
-    "elastic": "Elastic Security Template.yaml",
-    "sysdig": "Sysdig Secure Template.yaml",
-}
+PLATFORM_FILES = {platform: f"{platform}.template.yaml" for platform in PLATFORM_CONFIG_MODELS}
 
 
 def test_core_template_goldens_match_renderer() -> None:
@@ -69,13 +57,17 @@ def test_platform_template_goldens_match_renderer() -> None:
         model = platform_model_for_key(key)
         expected = (PLATFORM_GOLDENS / filename).read_text(encoding="utf-8")
         rendered = render_model_template(model, indent=2)
-        assert rendered == expected, filename
+        assert rendered == expected, (
+            f"{filename} is stale: run `uv run python -c 'from opentide.generation."
+            "template_renderer import write_bundled_platform_templates as w; w()'`"
+        )
         _assert_comment_style(rendered)
         assert "configurations: {}" not in rendered
 
 
 def test_platform_models_cover_golden_files() -> None:
-    assert set(PLATFORM_FILES) == set(PLATFORM_CONFIG_MODELS)
+    bundled = {path.name for path in PLATFORM_GOLDENS.glob("*.template.yaml")}
+    assert bundled == set(PLATFORM_FILES.values())
 
 
 def test_generate_core_template_writes_golden_bytes(tmp_path: Path) -> None:

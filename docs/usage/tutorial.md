@@ -110,9 +110,6 @@ metadata:
   organisation:
     uuid: 00000000-0000-4000-8000-000000000099
     name: Example Corp
-composition:
-  strategy: Combined
-  description: Compose signals for credential access detection
 objective:
   priority: High
   type: Threat

@@ -55,8 +55,12 @@ def _rule(uuid: str, name: str, configurations: dict[str, Any]) -> Any:
     )
 
 
+#: A Sentinel block validates only with these, and deploy loads only what validates.
+_SENTINEL_REQUIRED: dict[str, Any] = {"scheduling": {"frequency": "1h"}, "alert": {}}
+
+
 def _sentinel(uuid: str, name: str, query: str) -> Any:
-    block = {"enabled": True, "status": "STAGING", "query": query}
+    block = {"enabled": True, "status": "STAGING", "query": query, **_SENTINEL_REQUIRED}
     return _rule(uuid, name, {"sentinel": block})
 
 
@@ -167,6 +171,7 @@ def test_the_tenant_exclusions_deploy_compiles_are_in_the_checked_query() -> Non
                 "enabled": True,
                 "status": "STAGING",
                 "query": "SecurityEvent",
+                **_SENTINEL_REQUIRED,
                 "exclusions": [
                     {"tenant": "soc", "query": "| where Account != 'svc'", "reason": "r"}
                 ],
@@ -209,7 +214,7 @@ def test_a_rule_with_no_query_to_send_is_rejected(monkeypatch: pytest.MonkeyPatc
 def test_a_rule_without_the_platforms_block_is_skipped() -> None:
     runner = StandInRunner()
     splunk_only = _rule(
-        _UUID_A, "Splunk", {"splunk": {"enabled": True, "status": "STAGING", "search": "x"}}
+        _UUID_A, "Splunk", {"splunk": {"enabled": True, "status": "STAGING", "query": "x"}}
     )
 
     report = _validate(SentinelStandIn(runner), [splunk_only])

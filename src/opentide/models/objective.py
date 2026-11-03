@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
-from pydantic import StrictInt, model_validator
+from pydantic import StrictInt
 
 from opentide.models.base import FieldRole, TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
@@ -113,9 +112,6 @@ class DetectionObjective(TideModel):
     """Code-first detection objective model."""
 
     __schema_identifier__: ClassVar[str] = "objective::1.0"
-    # A root composition block is accepted and dropped: the required one is
-    # objective.composition.
-    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {"composition": None}
     name: str
     """Objective display name."""
     metadata: ObjectMetadata = TideField(schema_extra={"tide.template.spacer": True})
@@ -124,16 +120,6 @@ class DetectionObjective(TideModel):
     """Detection objective body."""
     references: ObjectReferences | None = None
     """External and internal references."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def _accept_root_composition(cls, data: Any) -> Any:
-        """Ignore a root composition block. The required block is objective.composition."""
-        if isinstance(data, dict):
-            dropped = [key for key, fills in cls.__legacy_keys__.items() if fills is None]
-            if any(key in data for key in dropped):
-                data = {key: value for key, value in data.items() if key not in dropped}
-        return data
 
     @classmethod
     def from_yaml_dict(

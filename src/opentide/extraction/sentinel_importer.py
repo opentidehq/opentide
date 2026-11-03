@@ -133,7 +133,7 @@ configurations:
 """
 
 SENTINEL = """
-  schema: sentinel::2.1
+  schema: platform::sentinel::1.0
   status: {status}
   tenants:
     - {tenant_name}

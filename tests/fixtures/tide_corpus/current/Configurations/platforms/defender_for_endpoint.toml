@@ -1,13 +1,10 @@
 [platform]
 enabled = true
-identifier = "defender_for_endpoint"
 name = "Microsoft Defender for Endpoint"
-subschema = "Defender for Endpoint"
 description = """Defender for Endpoint is a comprehensive, cloud-native endpoint
 security solution that delivers visibility and AI-powered cyberthreat protection
 to help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.
 """
-flags = [""]
 
 #[[modifiers]]
 #name = "Modifier Demo"

@@ -66,7 +66,7 @@ class StandIn(QueryRunner):
 
 @pytest.fixture
 def splunk(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> StandIn:
-    config = tide_corpus_repo / ".opentide/configurations/systems/splunk.toml"
+    config = tide_corpus_repo / ".opentide/configurations/platforms/splunk.toml"
     text = config.read_text(encoding="utf-8")
     config.write_text(text + _tenant("lab") + _tenant("prod"), encoding="utf-8")
     runner = StandIn()

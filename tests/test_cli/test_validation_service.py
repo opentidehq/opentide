@@ -439,7 +439,7 @@ def test_validate_query_platform_runs_validator(monkeypatch) -> None:
             return_value={"sentinel": ["u1"]},
         ),
         patch(
-            "opentide.platforms.plugins.DeployTide",
+            "opentide.platforms.plugins.EnabledPlatforms",
         ) as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
@@ -468,7 +468,7 @@ def test_validate_query_platform_fails_on_unsubstituted_credentials() -> None:
     )
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
@@ -492,7 +492,7 @@ def test_validate_query_platform_reports_a_validator_type_error() -> None:
     validator.validate.side_effect = TypeError("'NoneType' object is not subscriptable")
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
@@ -516,7 +516,7 @@ def test_validate_query_platform_surfaces_retired_tenant_proxy() -> None:
     )
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
     ):
         mock_tide.return_value.query_validation_for.side_effect = ValueError(message)
         result = validation_service.validate_query_platform(ctx, "splunk", live=True)
@@ -562,7 +562,7 @@ def test_validate_query_live_without_tenants_fails_before_loading_a_validator(
     tenantless.return_value = ["splunk"]
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.platforms.enabled.platform_config_path", return_value=config),
     ):
         result = validation_service.validate_query_platform(ctx, "splunk", live=True)
@@ -590,7 +590,7 @@ def test_validate_query_live_with_a_broken_sdk_advises_a_reinstall() -> None:
     validator.validate.side_effect = ModuleNotFoundError("No module named 'azure'", name="azure")
     with (
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
     ):
         mock_tide.return_value.query_validation_for.return_value = {"sentinel": validator}
@@ -792,7 +792,7 @@ def test_validate_query_platform_names_a_system_without_a_tide_block() -> None:
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -814,7 +814,7 @@ def test_validate_query_platform_warnings_are_not_fatal() -> None:
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.registry.Opentide") as mock_ot,
         patch("opentide.cli.exit_codes.validation_outcome", return_value=warned),
     ):

@@ -35,7 +35,7 @@ from opentide.cli.ui.results.catalogue import (
 )
 from opentide.cli.ui.results.deploy import DeployResult, MigrateStateResult
 from opentide.cli.ui.results.generate import DocsResult, ExportResult, ExtractResult, GenerateResult
-from opentide.cli.ui.results.migrate import MigrateObjectsResult, MigrateVocabScopeResult
+from opentide.cli.ui.results.migrate import MigrateVocabScopeResult
 from opentide.cli.ui.results.setup import (
     SetupCiResult,
     SetupEnvResult,
@@ -113,11 +113,10 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "doctor": DoctorResult,
     # Refuses outside an interactive terminal, so --json only ever prints a usage error.
     "tui": CommandError,
-    "migrate objects": MigrateObjectsResult,
     "migrate vocab-scope": MigrateVocabScopeResult,
     # Deprecated spellings of generate subcommands.
     **{f"document{scope}": DocsResult for scope in _DOCS},
-    **{f"export{target}": ExportResult for target in (*_EXPORTS, " playbook-map")},
+    **{f"export{target}": ExportResult for target in _EXPORTS},
     **{f"extract{target}": ExtractResult for target in _IMPORTERS[:2]},
 }
 

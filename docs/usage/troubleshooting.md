@@ -268,7 +268,7 @@ opentide generate
 
 ### `opentide generate` crashes with `'str' object has no attribute 'get'`
 
-`0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
+`0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
 pip install 'opentide==0.20.1'
@@ -422,7 +422,7 @@ From **0.18.0** every file under `.opentide/configurations/` is checked against 
 Seen while preparing 0.18.0:
 
 - A Splunk tenant's `schedule_offset = "5"` (a string): write `schedule_offset = 5`.
-- A `documentation.toml` that `opentide migrate` copied from CoreTIDE: delete `skip_vocabularies`, `model_cover_pages` and the `[titles]` table, which opentide never read.
+- A `documentation.toml` with `skip_vocabularies`, `model_cover_pages` or a `[titles]` table: delete them, opentide never read them.
 
 ```bash
 pip install 'opentide==0.20.1'
@@ -704,9 +704,9 @@ Through **0.7.0** generated validate did not pass `--strict`, and lint was not a
 
 Through **0.7.0** `opentide setup ci azure` wrote no `pool`, so Azure Repos refused the file. `pr:` is ignored on Azure Repos Git, so a pull request never set `Build.Reason` ([#398](https://github.com/opentidehq/opentide/issues/398)). **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy. Regenerate with `opentide setup ci azure --yes`.
 
-### `setup skills` installs a short tree or CoreTide authoring instructions
+### `setup skills` installs a short tree or outdated authoring instructions
 
-Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described CoreTide schemas ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
+Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described retired schemas and folders ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
 
 ### `setup repo` hardcodes Sentinel or ignores `--name`
 

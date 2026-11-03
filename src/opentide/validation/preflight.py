@@ -43,7 +43,7 @@ class PreflightGraph:
     @classmethod
     def build(cls, index: Mapping[str, Any]) -> PreflightGraph:
         configurations = index.get("configurations", {})
-        global_config = configurations.get("global", {})
+        global_config = configurations.get("paths", {})
         doc_config = configurations.get("documentation", {})
         objects = dict(index.get("objects", {}))
 

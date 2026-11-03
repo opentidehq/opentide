@@ -1,8 +1,6 @@
 [platform]
 enabled = true
-identifier = "elastic"
 name = "Elastic Security"
-subschema = "Elastic Security"
 
 [[tenants]]
 name = "staging"

@@ -154,7 +154,7 @@ if not result.ok:
 
 ## Errors
 
-Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catch the specific type you expect:
+Exceptions live under `opentide.core.errors.Errors`. Catch the specific type you expect:
 
 | Exception | Raised when |
 |-----------|-------------|

@@ -14,7 +14,7 @@ A modern SOC writes detections for several platforms at once — Sentinel, Splun
 - **Content drift.** Rules live as raw platform exports or copied YAML. There is no shared schema, so two engineers describe the same rule two different ways. Reviews catch style, not correctness.
 - **No link between threat and detection.** A rule exists, but *why*? Which threat does it address, which objective does it satisfy, what is the coverage gap if you delete it? That knowledge lives in people's heads.
 - **Multi-platform sprawl.** The same detection idea is re-implemented per platform with no common source of truth. Coverage reporting across platforms is guesswork.
-- **Submodule and copy-paste reuse.** Sharing content across repos via git submodules (the CoreTide era) couples repositories, makes upgrades painful, and spreads breaking changes silently.
+- **Submodule and copy-paste reuse.** Sharing content across repos via git submodules couples repositories, makes upgrades painful, and spreads breaking changes silently.
 - **Unsafe automation.** Agents and scripts edit detection YAML with no schema to validate against and no honest signal about which platforms can actually be tested.
 
 ## What opentide does about it

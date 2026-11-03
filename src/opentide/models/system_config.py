@@ -45,11 +45,10 @@ class SystemConfig:
     @dataclass
     class Platform:
         enabled: bool
+        #: The platform file's name stem (``splunk``).
         identifier: str
         name: str
-        subschema: str
         description: str
-        flags: list[str]
 
     @dataclass
     class Modifiers:

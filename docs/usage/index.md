@@ -32,7 +32,6 @@ opentide serves several audiences. Follow the path that matches you.
 | **New to opentide, greenfield repo** | [Installation](./installation.md) → [Repository setup](./repository-setup.md) | [Tutorial](./tutorial.md) → [Detection-as-code](./workflows/detection-as-code.md) |
 | **Checking what shipped** | [Releases](./releases.md) | [0.20.1 on PyPI](https://pypi.org/project/opentide/0.20.1/) |
 | **Evaluating the project** | [Why opentide](./why-opentide.md) → [How it works](./how-it-works.md) | [Object model](./concepts/object-model.md) |
-| **Migrating from CoreTide** | [Migration guide](./migration/index.md) | [Configuration](./configuration.md) |
 | **Wiring up an AI agent** | [Agentic setup](./workflows/agentic-setup.md) | [MCP reference](../mcp/index.md) |
 | **Embedding opentide in Python** | [SDK](../sdk/index.md) | [SDK registry](../sdk/registry.md) |
 

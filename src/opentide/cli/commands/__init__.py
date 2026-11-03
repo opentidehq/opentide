@@ -119,7 +119,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "migrate",
         "opentide.cli.commands.migrate",
         "migrate_app",
-        "Migrate legacy repository layouts",
+        "Rewrite objects for a newer opentide model",
         rich_help_panel=WORKSPACE,
     ),
     CommandSpec(

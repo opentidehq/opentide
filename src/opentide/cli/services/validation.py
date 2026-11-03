@@ -148,8 +148,9 @@ _CHECK_ISSUE_CODES: dict[str, frozenset[str]] = {
             "schema_validation",
             "promotion_target_unknown",
             "config_parse",
-            # Reported by the per-file helper an editor calls, not by `validate`.
-            "identifier_mismatch",
+            # Every command refuses the file before validate runs; the editor's
+            # per-file check reports it.
+            "retired_configuration_file",
         }
     ),
 }
@@ -1246,7 +1247,7 @@ def _run_live_validator(
     reach: dict[str, int],
 ) -> dict[str, object]:
     from opentide.core.registry import Opentide as LegacyOpentide
-    from opentide.platforms.plugins import DeployTide
+    from opentide.platforms.plugins import EnabledPlatforms
     from opentide.platforms.transport import TenantUnreachableError
 
     counts: dict[str, object] = {
@@ -1255,7 +1256,7 @@ def _run_live_validator(
         "queries_per_tenant": dict(reach),
     }
     try:
-        query_validators = DeployTide().query_validation_for(platform)
+        query_validators = EnabledPlatforms().query_validation_for(platform)
     except ValueError as exc:
         # Config parsing (a retired tenant ``proxy`` key) raises ValueError inside
         # engine load. Returning it keeps the FATAL panel instead of a traceback.
@@ -1274,10 +1275,8 @@ def _run_live_validator(
             "status": "skipped",
             "message": f"No query validation engine for {platform}",
         }
-    try:
-        system_name = LegacyOpentide.Configurations.Systems.Index[platform]["tide"]["name"]
-    except Exception:
-        system_name = LegacyOpentide.Configurations.Systems.Index[platform]["platform"]["name"]
+    identity = LegacyOpentide.Configurations.Systems.Index.get(platform, {}).get("platform", {})
+    system_name = str(identity.get("name") or platform)
     from opentide.cli.ui.progress import Checklist
 
     validator = query_validators[platform]

@@ -372,7 +372,7 @@ def trigger_rule(metadata: dict):
             "response": {"alert_severity": "High"},
             "configurations": {
                 "splunk": {
-                    "schema": "splunk::3.0",
+                    "schema": "platform::splunk::1.0",
                     "status": "STAGING",
                     "query": "index=main | stats count by host",
                     "scheduling": {"schedule": {"frequency": "1h"}},

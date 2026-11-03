@@ -40,11 +40,13 @@ class SplunkConnection:
         SPLUNK_CONFIG = Opentide.Configurations.Systems.Splunk
         self.DEPLOYER_IDENTIFIER = "splunk"
 
+        self.STATUS_MODIFIERS = getattr(SPLUNK_CONFIG, "modifiers", None) or []
         tenants = getattr(SPLUNK_CONFIG, "tenants", None)
         if tenants:
-            self._init_from_tenants(SPLUNK_CONFIG, tenants[0])
+            self.use_tenant(tenants[0])
         else:
-            self._init_from_legacy(SPLUNK_CONFIG)
+            # No tenant to reach: deploy refuses the platform before any call.
+            self._apply_setup({}, token="")
 
         self.SPLUNK_SUBSCHEMA = Opentide.TideSchemas.subschemas["systems"][
             self.DEPLOYER_IDENTIFIER
@@ -56,11 +58,6 @@ class SplunkConnection:
             "High": 5,
             "Critical": 6,
         }
-
-    def _init_from_tenants(self, splunk_config, first_tenant) -> None:
-        self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
-        self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
-        self.use_tenant(first_tenant)
 
     def use_tenant(self, tenant: ConfigurationModels.Systems.Splunk.Tenant) -> None:
         """Take the actions, scheduling, skew and offset of the rules built next from *tenant*.
@@ -87,23 +84,11 @@ class SplunkConnection:
         self._apply_setup(setup, token=tenant.setup.token)
         self._tenant = tenant
 
-    def _init_from_legacy(self, splunk_config) -> None:
-        SPLUNK_SETUP = DebugHelpers.fetch_config_envvar(splunk_config.setup)
-        SPLUNK_SECRETS = DebugHelpers.fetch_config_envvar(splunk_config.secrets)
-        self.DEFAULT_CONFIG = getattr(splunk_config, "defaults", {}) or {}
-        self.STATUS_MODIFIERS = getattr(splunk_config, "modifiers", None) or []
-        # A legacy [setup] table without frequency_scheduling has always
-        # scheduled at the current time; a new default would move deployed searches.
-        self._apply_setup(
-            SPLUNK_SETUP, token=SPLUNK_SECRETS.get("token", ""), unset_frequency="current"
-        )
-
     def _apply_setup(
         self,
         setup: dict,
         *,
         token: str,
-        unset_frequency: Literal["random", "current", "custom"] = "random",
     ) -> None:
         self.SPLUNK_URL = setup.get("url", "")
         try:
@@ -115,9 +100,7 @@ class SplunkConnection:
         self.CORRELATION_SEARCHES = setup.get("correlation_searches", True)
         self.SPLUNK_ACTIONS = setup.get("actions_enabled") or []
         self.SPLUNK_DEFAULT_ACTIONS = setup.get("default_actions") or []
-        self.TIMERANGE_MODE = correct_timerange_mode(
-            setup.get("frequency_scheduling"), unset=unset_frequency
-        )
+        self.TIMERANGE_MODE = correct_timerange_mode(setup.get("frequency_scheduling"))
         skewing = setup.get("allow_skew")
         if skewing:
             self.SKEWING_VALUE = float(str(skewing).replace("%", "e-2"))

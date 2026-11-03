@@ -1,4 +1,4 @@
-"""Pydantic-driven template generation for core Tide object models."""
+"""Pydantic-driven template generation for the threat, objective and rule models."""
 
 from __future__ import annotations
 

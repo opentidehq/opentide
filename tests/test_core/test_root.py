@@ -28,7 +28,7 @@ def test_resolve_configurations_includes_bundled_platforms(
     configs = resolve_configurations()
     systems = configs.get("systems", {})
     assert "sentinel" in systems
-    assert systems["sentinel"]["platform"]["identifier"] == "sentinel"
+    assert "enabled" in systems["sentinel"]["platform"]
 
 
 def test_resolve_paths_uses_bundled_vocabulary(

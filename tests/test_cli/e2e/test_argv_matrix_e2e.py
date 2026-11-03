@@ -75,7 +75,7 @@ def test_deploy_metadata_does_not_run_the_deploy_callback(
         def mdr(self) -> dict[str, MagicMock]:
             return {"sentinel": deployer}
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _MockDeployTide)
     result = invoke_cli("deploy", "metadata", "--platform", "sentinel")
     assert result.exit_code == 2, result.stdout + result.stderr
     payload = parse_cli_json(result)

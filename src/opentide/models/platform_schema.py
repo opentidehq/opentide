@@ -1,4 +1,4 @@
-"""Platform configuration schema metadata for template and deployer generation."""
+"""Platform block schema metadata for editor schemas and templates."""
 
 from __future__ import annotations
 
@@ -18,198 +18,66 @@ from opentide.models.platform import (
     SysdigConfig,
 )
 
-_COMMON_PLATFORM_EXTRAS: dict[str, Any] = {
-    "required": ["status", "query"],
-    "property_extras": {
-        "platform_schema": {
-            "title": "Schema identifier and version",
-        },
-        "status": {
-            "title": "Status of the use-case",
-            "tide.config.statuses": True,
-        },
-        "contributors": {
-            "title": "Development Contributors",
-        },
-        "tenants": {
-            "title": "Target Tenants",
-        },
+_PROPERTY_EXTRAS: dict[str, Any] = {
+    "status": {
+        "title": "Status of the use-case",
+        "tide.config.statuses": True,
+    },
+    "contributors": {
+        "title": "Development Contributors",
+    },
+    "tenants": {
+        "title": "Target Tenants",
     },
 }
 
-_PLATFORM_EXTRAS: dict[type[TideModel], dict[str, Any]] = {
-    SplunkConfig: {
-        # Not `scheduling`: a correlation search has nothing to schedule, so
-        # the model, the deployer and the template all leave it optional.
-        "required": ["status", "query"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {
-                "title": "Schema identifier and version",
-                "default": "splunk::3.0",
-                "pattern": r"^splunk::[1-9]\.[0-9]$",
-            },
-            "tenants": {"tide.config.system.tenants": "splunk"},
-            "threshold": {"tide.mdr.parameter": "alert_threshold"},
-            "throttling": {
-                "properties": {
-                    "fields": {"tide.mdr.parameter": "alert.suppress.fields"},
-                    "duration": {"tide.mdr.parameter": "alert.suppress.period"},
-                },
-            },
-            "scheduling": {
-                "properties": {
-                    "cron": {"tide.mdr.parameter": "cron_schedule"},
-                    "lookback": {"tide.mdr.parameter": "dispatch.earliest_time"},
-                },
-            },
-            "notable": {
-                "properties": {
-                    "event": {
-                        "properties": {
-                            "title": {"tide.mdr.parameter": "action.notable.param.rule_title"},
-                            "description": {
-                                "tide.mdr.parameter": "action.notable.param.rule_description",
-                            },
-                        },
-                    },
-                    "drilldown": {
-                        "properties": {
-                            "name": {"tide.mdr.parameter": "action.notable.param.drilldown_name"},
-                            "search": {
-                                "tide.mdr.parameter": "action.notable.param.drilldown_search",
-                            },
-                        },
-                    },
-                    "security_domain": {
-                        "tide.mdr.parameter": "action.notable.param.security_domain",
-                    },
-                },
-            },
-            "security_domain": {
-                "tide.meta.deprecation": "security_domain is now nested under the notable block",
-                "tide.mdr.parameter": "action.notable.param.security_domain",
-            },
-            "risk": {
-                "tide.mdr.parameter": "action.risk.param._risk",
-                "properties": {
-                    "message": {"tide.mdr.parameter": "action.risk.param._risk_message"},
-                    "risk_objects": {
-                        "items": {
-                            "properties": {
-                                "field": {"tide.mdr.parameter": "risk_object_field"},
-                                "type": {"tide.mdr.parameter": "risk_object_type"},
-                                "score": {"tide.mdr.parameter": "risk_score"},
-                            },
-                        },
-                    },
-                    "threat_objects": {
-                        "items": {
-                            "properties": {
-                                "field": {"tide.mdr.parameter": "threat_object_field"},
-                                "type": {"tide.mdr.parameter": "threat_object_type"},
-                            },
-                        },
-                    },
-                },
-            },
-            "advanced": {"tide.meta.deprecation": "Use nested Splunk action blocks"},
-        },
-    },
-    SentinelConfig: {
-        "required": ["status", "query", "scheduling", "alert"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {"default": "sentinel::2.4"},
-            "tenants": {"tide.config.system.tenants": "sentinel"},
-        },
-    },
-    DefenderConfig: {
-        "required": ["status", "query", "alert", "impacted_entities", "scheduling"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {"default": "defender_for_endpoint::2.3"},
-            "tenants": {"tide.config.system.tenants": "defender_for_endpoint"},
-        },
-    },
-    SentinelOneConfig: {
-        "required": ["status", "condition"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {"default": "sentinel_one::2.0"},
-            "tenants": {"tide.config.system.tenants": "sentinel_one"},
-        },
-    },
-    CrowdstrikeConfig: {
-        "required": ["status", "query", "details", "schedule"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {"default": "crowdstrike::2.0"},
-            "tenants": {"tide.config.system.tenants": "crowdstrike"},
-        },
-    },
-    HarfangLabConfig: {
-        "required": ["status"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {"default": "harfanglab::2.0"},
-            "tenants": {"tide.config.system.tenants": "harfanglab"},
-        },
-    },
-    CarbonBlackConfig: {
-        "required": ["status", "query"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {
-                "default": "carbon_black_cloud::3.0",
-                "pattern": r"^carbon_black_cloud::[1-9]\.[0-9]$",
-            },
-            "tenants": {"tide.config.system.tenants": "carbon_black_cloud"},
-        },
-    },
-    ElasticConfig: {
-        "required": ["status"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {
-                "default": "elastic::1.0",
-                "pattern": r"^elastic::[1-9]\.[0-9]$",
-            },
-            "tenants": {"tide.config.system.tenants": "elastic"},
-        },
-    },
-    SysdigConfig: {
-        "required": ["status"],
-        "property_extras": {
-            **_COMMON_PLATFORM_EXTRAS["property_extras"],
-            "platform_schema": {"default": "platform::sysdig::1.0"},
-            "tenants": {"tide.config.system.tenants": "sysdig"},
-        },
-    },
+#: Keys a platform block requires, besides what its model requires.
+_REQUIRED: dict[type[TideModel], list[str]] = {
+    # Not `scheduling`: a correlation search has nothing to schedule, so the
+    # model, the deployer and the template all leave it optional.
+    SplunkConfig: ["status", "query"],
+    SentinelConfig: ["status", "query", "scheduling", "alert"],
+    DefenderConfig: ["status", "query", "alert", "impacted_entities", "scheduling"],
+    SentinelOneConfig: ["status", "condition"],
+    CrowdstrikeConfig: ["status", "query", "details", "schedule"],
+    HarfangLabConfig: ["status"],
+    CarbonBlackConfig: ["status", "query"],
+    ElasticConfig: ["status"],
+    SysdigConfig: ["status"],
 }
+
+
+def platform_schema_identifiers(model: type[TideModel]) -> list[str]:
+    """The ``schema`` identifiers a block of *model* accepts: its registered revision."""
+    return [model.schema_identifier()]
 
 
 def platform_root_extras(model: type[TideModel]) -> dict[str, Any]:
-    """Return root-level schema extras for a platform configuration model."""
-    return dict(_PLATFORM_EXTRAS.get(model, _COMMON_PLATFORM_EXTRAS))
+    """Return root-level schema extras for a platform configuration model.
+
+    ``schema`` offers and accepts only the identifiers the model registers
+    (``platform::splunk::1.0``), as validation does.
+    """
+    identifiers = platform_schema_identifiers(model)
+    property_extras: dict[str, Any] = {
+        **_PROPERTY_EXTRAS,
+        "platform_schema": {
+            "title": "Schema identifier and version",
+            "enum": identifiers,
+            "default": identifiers[-1],
+        },
+    }
+    platform = model.schema_identifier().split("::")[1]
+    property_extras["tenants"] = {
+        **_PROPERTY_EXTRAS["tenants"],
+        "tide.config.system.tenants": platform,
+    }
+    return {
+        "required": list(_REQUIRED.get(model, ["status", "query"])),
+        "property_extras": property_extras,
+    }
 
 
 def platform_model_for_key(key: str) -> type[TideModel]:
     """Resolve a platform registry key to its configuration model."""
     return PLATFORM_CONFIG_MODELS[key]
-
-
-def platform_model_for_subschema_name(subschema_name: str) -> type[TideModel] | None:
-    """Resolve a legacy subschema file stem to a platform model."""
-    mapping = {
-        "Splunk Sub Schema": SplunkConfig,
-        "Microsoft Sentinel": SentinelConfig,
-        "Defender for Endpoint": DefenderConfig,
-        "Sentinel One": SentinelOneConfig,
-        "Crowdstrike": CrowdstrikeConfig,
-        "HarfangLab": HarfangLabConfig,
-        "CBC EDR Sub Schema": CarbonBlackConfig,
-        "Elastic Security": ElasticConfig,
-        "Sysdig Secure": SysdigConfig,
-    }
-    return mapping.get(subschema_name)

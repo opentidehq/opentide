@@ -318,9 +318,9 @@ def workspace_redactor(
 
     Secrets are the values of environment variables named like a secret and
     the passwords of proxy URLs. Each workspace's
-    ``.opentide/configurations/platforms/*.toml`` (and the older ``systems/``)
-    adds its secret values and, for every ``[[tenants]]`` entry, its name and
-    the values of its address and id keys, ``$VARIABLE`` references resolved.
+    ``.opentide/configurations/platforms/*.toml`` adds its secret values and,
+    for every ``[[tenants]]`` entry, its name and the values of its address and id
+    keys, ``$VARIABLE`` references resolved.
     ``.opentide/configurations/sharing.toml`` does the same for every sharing
     destination (a MISP block's name, URL and API key).
     """
@@ -337,13 +337,10 @@ def workspace_redactor(
         configurations = workspace / ".opentide" / "configurations"
         # (file, whether every block in it is a destination like a tenant)
         files: list[tuple[Path, bool]] = [(configurations / "sharing.toml", True)]
-        for folder in ("platforms", "systems"):
-            try:
-                files += [
-                    (path, False) for path in sorted((configurations / folder).glob("*.toml"))
-                ]
-            except OSError:
-                continue
+        with contextlib.suppress(OSError):
+            files += [
+                (path, False) for path in sorted((configurations / "platforms").glob("*.toml"))
+            ]
         for path, destinations in files:
             try:
                 resolved = path.resolve()

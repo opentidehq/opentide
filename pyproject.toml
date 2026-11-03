@@ -63,8 +63,6 @@ dependencies = [
     "azure-monitor-query>=1.4",
     "splunk-sdk>=2.0",
     "pandas>=2.0",
-    # pandas writes the playbook map export (`to_excel`) through openpyxl.
-    "openpyxl>=3.1",
     "carbon-black-cloud-sdk>=1.0",
     # carbon-black-cloud-sdk requires boto3 unpinned. botocore caps
     # python-dateutil below 3, and once 3.0.0 was out uv's resolver chose it and

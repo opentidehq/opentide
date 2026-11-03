@@ -7,7 +7,7 @@ Author objectives as `objective::1.0` YAML under `objects/objectives/`.
 - `metadata.uuid` is required. `metadata.schema` is `objective::1.0`.
 - Linked threats are UUIDs under `objective.threats`.
 - Signals, when present, are objects under `objective.signals` and each signal has its own `uuid`.
-- Do not use `mdr::2.1` or a `Schemas/Templates` path. Generate a starting file with `opentide generate`.
+- Start a new objective with `opentide new objective`, which writes it from the current template.
 
 ## Check
 

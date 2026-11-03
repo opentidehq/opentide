@@ -17,7 +17,7 @@ pytestmark = pytest.mark.cli_e2e
 
 SENTINEL_RULE = "objects/rules/rule-0001-sentinel-kql.yaml"
 SENTINEL_RULE_UUID = "00000000-0000-4000-8003-000000000001"
-SENTINEL_CONFIG = ".opentide/configurations/systems/sentinel.toml"
+SENTINEL_CONFIG = ".opentide/configurations/platforms/sentinel.toml"
 GROUPING_ALERT = "      alert:\n        enabled: false\n"
 
 

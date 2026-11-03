@@ -102,7 +102,7 @@ def test_run_deploy_dry_run_collects_payloads() -> None:
         ) as targets,
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=preview),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
@@ -128,7 +128,7 @@ def test_run_deploy_invokes_deployer() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -148,7 +148,7 @@ def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
     ):
         mock_tide.return_value.mdr_for.side_effect = Exception(
@@ -178,7 +178,7 @@ def test_run_deploy_reports_a_platform_that_fails_and_what_was_deployed() -> Non
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.services.deploy._tenant_targets", return_value={}),
     ):
@@ -201,7 +201,7 @@ def test_run_deploy_warning_marks_result_with_warnings() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
     ):
@@ -218,7 +218,7 @@ def test_run_deploy_error_marks_result_failed() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=errored),
     ):
@@ -347,7 +347,7 @@ def test_run_deploy_selects_rules_with_the_run_strategies(
         patch(
             "opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}
         ) as mock_plan,
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -401,7 +401,7 @@ def test_run_deploy_dry_run_skips_release_promotion(monkeypatch: pytest.MonkeyPa
         patch("opentide.deployment.modified_mdr_files") as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
@@ -427,7 +427,7 @@ def test_run_deploy_local_debug_skips_release_promotion(
         patch("opentide.deployment.modified_mdr_files") as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -473,7 +473,7 @@ def test_run_deploy_promotes_only_on_a_release_push(
         patch("opentide.deployment.modified_mdr_files", return_value=["r.yaml"]) as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -500,7 +500,7 @@ def test_run_deploy_without_tenants_fails_before_loading_engines(tenantless: Mag
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload") as mock_reload,
         patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
     ):
@@ -529,7 +529,7 @@ def test_run_deploy_dry_run_does_not_claim_a_platform_without_tenants(
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
@@ -559,7 +559,7 @@ def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u2"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
@@ -640,7 +640,7 @@ def test_run_deploy_reports_selection_warnings_in_every_result(
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", side_effect=_plan) as mock_plan,
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
     ):
@@ -706,7 +706,7 @@ def _deploy_with(deployers: dict[str, MagicMock], plan: dict[str, list[str]]) ->
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value=plan),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.services.deploy._tenant_targets", return_value={}),
     ):

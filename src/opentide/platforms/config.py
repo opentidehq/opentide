@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
@@ -19,7 +18,7 @@ def systems_raw_index() -> dict[str, dict[str, Any]]:
 
 
 #: Every detection system has a typed tenant model. Splunk and Carbon Black get
-#: bespoke loaders below for their legacy key handling; the rest are built
+#: bespoke tenant loaders below; the rest are built
 #: generically. Before this mapping existed the generic branch handed callers
 #: raw dicts, so ``tenant.name`` and ``tenant.setup.*`` raised ``AttributeError``
 #: in both importers and in ``tenants_resolver`` (#242).
@@ -320,50 +319,18 @@ def _load_cbc_tenants(
     return tenants
 
 
+def _identity_platform(system: str, payload: dict[str, Any]) -> SystemConfig.Platform:
+    """The ``[platform]`` table of a platform file; *system* is the file name stem."""
+    return SystemConfig.Platform(
+        enabled=bool(payload.get("enabled", False)),
+        identifier=system,
+        name=str(payload.get("name") or system),
+        description=str(payload.get("description", "")),
+    )
+
+
 def _build_splunk_config(raw: dict[str, Any]) -> Any:
-    @dataclass(frozen=True)
-    class SplunkLegacyAttrs:
-        Index: dict[str, Any]
-        tide: dict[str, Any]
-        setup: dict[str, Any]
-        secrets: dict[str, Any]
-        defaults: dict[str, Any]
-        modifiers: dict[str, Any]
-
-    # ``[[modifiers]]`` is an array of tables. ``dict()`` on that list raises
-    # before ``_load_modifiers`` runs. The legacy shim only needs a mapping;
-    # the typed path loads the list below.
-    raw_modifiers = raw.get("modifiers", {})
-    legacy_modifiers = {} if isinstance(raw_modifiers, list) else dict(raw_modifiers or {})
-    legacy = SplunkLegacyAttrs(
-        Index=raw,
-        tide=dict(raw.get("tide", {})),
-        setup=dict(raw.get("setup", {})),
-        secrets=dict(raw.get("secrets", {})),
-        defaults=dict(raw.get("defaults", {})),
-        modifiers=legacy_modifiers,
-    )
-
-    if "platform" not in raw:
-        return SimpleNamespace(
-            Index=legacy.Index,
-            tide=legacy.tide,
-            setup=legacy.setup,
-            secrets=legacy.secrets,
-            defaults=legacy.defaults,
-            modifiers=legacy.modifiers,
-            tenants=None,
-        )
-
-    platform_payload = dict(raw["platform"])
-    platform = SystemConfig.Platform(
-        enabled=platform_payload.get("enabled", False),
-        identifier=platform_payload.get("identifier", "splunk"),
-        name=platform_payload.get("name", "Splunk"),
-        subschema=platform_payload.get("subschema", "Splunk Sub Schema"),
-        description=platform_payload.get("description", ""),
-        flags=list(platform_payload.get("flags", [])),
-    )
+    platform = _identity_platform("splunk", dict(raw.get("platform") or {}))
     tenants = _load_splunk_tenants(raw.get("tenants"))
     modifiers = _load_modifiers(raw.get("modifiers"))
     typed = ConfigurationModels.Systems.Splunk(
@@ -375,50 +342,12 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
         tenants=tenants or None,
         modifiers=modifiers or None,
         typed=typed,
-        tide=legacy.tide,
-        setup=legacy.setup,
-        secrets=legacy.secrets,
-        defaults=legacy.defaults,
-        Index=legacy.Index,
+        Index=raw,
     )
 
 
 def _build_cbc_config(raw: dict[str, Any]) -> Any:
-    @dataclass(frozen=True)
-    class CarbonBlackLegacyAttrs:
-        Index: dict[str, Any]
-        tide: dict[str, Any]
-        setup: dict[str, Any]
-        secrets: dict[str, Any]
-        validation: dict[str, Any]
-
-    legacy = CarbonBlackLegacyAttrs(
-        Index=raw,
-        tide=dict(raw.get("tide", {})),
-        setup=dict(raw.get("setup", {})),
-        secrets=dict(raw.get("secrets", {})),
-        validation=dict(raw.get("validation", {})),
-    )
-
-    if "platform" not in raw:
-        return SimpleNamespace(
-            Index=legacy.Index,
-            tide=legacy.tide,
-            setup=legacy.setup,
-            secrets=legacy.secrets,
-            validation=legacy.validation,
-            tenants=None,
-        )
-
-    platform_payload = dict(raw["platform"])
-    platform = SystemConfig.Platform(
-        enabled=platform_payload.get("enabled", False),
-        identifier=platform_payload.get("identifier", "carbon_black_cloud"),
-        name=platform_payload.get("name", "Carbon Black Cloud"),
-        subschema=platform_payload.get("subschema", "CBC EDR Sub Schema"),
-        description=platform_payload.get("description", ""),
-        flags=list(platform_payload.get("flags", [])),
-    )
+    platform = _identity_platform("carbon_black_cloud", dict(raw.get("platform") or {}))
     tenants = _load_cbc_tenants(raw.get("tenants"))
     modifiers = _load_modifiers(raw.get("modifiers"))
     typed = ConfigurationModels.Systems.CarbonBlackCloud(
@@ -430,25 +359,7 @@ def _build_cbc_config(raw: dict[str, Any]) -> Any:
         tenants=tenants or None,
         modifiers=modifiers or None,
         typed=typed,
-        tide=legacy.tide,
-        setup=legacy.setup,
-        secrets=legacy.secrets,
-        validation=legacy.validation,
-        Index=legacy.Index,
-    )
-
-
-def _identity_platform(system: str, payload: dict[str, Any]) -> SystemConfig.Platform:
-    """Tenant TOML ``[platform]`` identity — not a detection-rule platform config."""
-    flags_raw = payload.get("flags") or []
-    flags = [str(flag) for flag in flags_raw] if isinstance(flags_raw, list) else []
-    return SystemConfig.Platform(
-        enabled=bool(payload.get("enabled", False)),
-        identifier=str(payload.get("identifier") or system),
-        name=str(payload.get("name") or system),
-        subschema=str(payload.get("subschema", "")),
-        description=str(payload.get("description", "")),
-        flags=flags,
+        Index=raw,
     )
 
 

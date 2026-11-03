@@ -9,7 +9,7 @@ import pytest
 
 from opentide.platforms import plugins
 from opentide.platforms.plugins import (
-    DeployTide,
+    EnabledPlatforms,
     Platform,
     PlatformLoader,
     QueryValidator,
@@ -140,7 +140,7 @@ def test_query_validation_for_loads_one_platform() -> None:
             plugins.PlatformLoader, "query_validators", return_value={"sentinel": validator}
         ) as query_validators,
     ):
-        assert DeployTide().query_validation_for("sentinel") == {"sentinel": validator}
+        assert EnabledPlatforms().query_validation_for("sentinel") == {"sentinel": validator}
     assert query_validators.call_args.kwargs["only"] == ["sentinel"]
 
 
@@ -152,7 +152,7 @@ def test_mdr_for_loads_only_the_enabled_requested_platforms() -> None:
             plugins.PlatformLoader, "rule_deployers", return_value={"sentinel": deployer}
         ) as rule_deployers,
     ):
-        assert DeployTide().mdr_for(["sentinel", "crowdstrike"]) == {"sentinel": deployer}
+        assert EnabledPlatforms().mdr_for(["sentinel", "crowdstrike"]) == {"sentinel": deployer}
     assert rule_deployers.call_args.kwargs["only"] == ["sentinel"]
 
 
@@ -161,7 +161,7 @@ def test_mdr_for_builds_nothing_when_no_requested_platform_is_enabled() -> None:
         patch("opentide.deployment.enabled_systems", return_value=["splunk"]),
         patch.object(plugins.PlatformLoader, "rule_deployers") as rule_deployers,
     ):
-        assert DeployTide().mdr_for(["sentinel"]) == {}
+        assert EnabledPlatforms().mdr_for(["sentinel"]) == {}
     rule_deployers.assert_not_called()
 
 
@@ -177,7 +177,7 @@ def test_query_validation_for_returns_nothing_when_it_cannot_validate(
         patch("opentide.deployment.enabled_systems", return_value=enabled),
         patch.object(plugins.PlatformLoader, "query_validators") as query_validators,
     ):
-        assert DeployTide().query_validation_for(platform) == {}
+        assert EnabledPlatforms().query_validation_for(platform) == {}
     query_validators.assert_not_called()
 
 
@@ -247,6 +247,6 @@ def test_deploy_tide_filters_enabled_systems() -> None:
             return_value={"sentinel": validator, "splunk": MagicMock()},
         ),
     ):
-        tide = DeployTide()
+        tide = EnabledPlatforms()
         assert tide.mdr == {"sentinel": deployer}
         assert tide.query_validation == {"sentinel": validator}

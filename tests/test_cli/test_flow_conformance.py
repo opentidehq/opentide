@@ -275,18 +275,6 @@ def test_finished_step_counts_align_on_their_numbers() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_migrate_objects_dry_run_is_a_plan(tmp_path: Path) -> None:
-    from opentide.cli.services.migrate_objects import run_migrate_objects
-
-    (tmp_path / "Objects" / "Detection Rules").mkdir(parents=True)
-    (tmp_path / "Objects" / "Detection Rules" / "r.yaml").write_text("name: r\n", encoding="utf-8")
-    result = run_migrate_objects(tmp_path, apply=False)
-    assert str(result["message"]).startswith("Would move")
-    assert result["_outcome_kind"] == "plan"
-    applied = run_migrate_objects(tmp_path, apply=True)
-    assert "_outcome_kind" not in applied
-
-
 def test_share_preview_is_a_plan() -> None:
     from opentide.cli.services.share import _from_run
     from opentide.sharing.report import ShareRecord, ShareRun

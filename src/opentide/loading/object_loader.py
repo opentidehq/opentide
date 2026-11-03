@@ -33,7 +33,7 @@ def schema_id_from_body(body: dict[str, Any]) -> str:
     not a mapping raises a ``ValidationError`` at that key instead: its shape
     needs fixing, not a missing key.
     """
-    metadata = body.get("metadata") or body.get("meta") or {}
+    metadata = body.get("metadata") or {}
     if not isinstance(metadata, dict):
         key = "metadata" if body.get("metadata") else "meta"
         raise ValidationError.from_exception_data(

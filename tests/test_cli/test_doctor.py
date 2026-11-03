@@ -24,7 +24,6 @@ SECRET = "s3cr3t-Value-never-printed"
 SENTINEL_TOML = """\
 [platform]
 enabled = true
-identifier = "sentinel"
 
 [[tenants]]
 name = "prod"
@@ -403,7 +402,7 @@ def test_credentials_report_presence_never_values(
 
 def test_credentials_skip_a_platform_without_tenants(workspace: Path) -> None:
     path = workspace / ".opentide" / "configurations" / "platforms" / "splunk.toml"
-    path.write_text('[platform]\nenabled = true\nidentifier = "splunk"\n', encoding="utf-8")
+    path.write_text("[platform]\nenabled = true\n", encoding="utf-8")
     clear_runtime_caches()
     check = _only(doctor.check_credentials(_ctx(workspace)))
     assert (check.status, check.subject) == ("skip", "splunk")

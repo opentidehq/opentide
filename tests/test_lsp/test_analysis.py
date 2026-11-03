@@ -310,9 +310,10 @@ def test_the_language_server_checks_the_revision_an_object_names(
         ("field 'metadata.reviewed' is not defined in rule::1.0", ("metadata", "reviewed"), 10)
     ]
     assert _shape(tmp_path, older.replace("rule::1.0", "rule::1.1")) == []
-    # A splunk::2.x spelling validates, so it is no finding either.
+    # A splunk::2.x spelling is an unknown key, in the editor as in validate.
     legacy = REVISION_RULE.replace("    query: index=main\n", "    search: index=main\n")
-    assert _shape(tmp_path, legacy) == []
+    paths = {path for _, path, _ in _shape(tmp_path, legacy)}
+    assert ("configurations", "splunk", "search") in paths, paths
 
 
 # Declared datasets (#695, #718) -------------------------------------------------

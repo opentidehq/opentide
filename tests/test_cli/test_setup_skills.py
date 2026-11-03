@@ -187,7 +187,7 @@ def test_download_skill_uses_manifest_ref(monkeypatch: pytest.MonkeyPatch, tmp_p
 def test_authoring_skills_install_from_the_package_when_github_is_down(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The skills repository still describes CoreTide. These four must not.
+    """The bundled authoring skills describe the current layout only.
 
     #405: installing the remote text taught agents ``mdr::2.1`` and
     ``Schemas/Templates``.
@@ -217,11 +217,12 @@ def test_authoring_skills_install_from_the_package_when_github_is_down(
     )
     assert "rule::1.1" in engineering
     assert "objects/rules/" in rule
-    # The retired schema may appear only as a prohibition, not as the layout to author.
-    assert "schema: mdr::" not in engineering
-    assert "Do not create" in engineering
-    assert "`mdr::2.1`" in engineering
-    assert "Schemas/Templates" not in rule
+    assert "opentide new" in engineering
+    assert "platform::<platform>::1.0" in rule
+    for text in (engineering, rule):
+        assert "mdr::" not in text
+        assert "Schemas/" not in text
+        assert "Configurations/systems" not in text
 
 
 def test_unavailable_skills_keeps_bundled_starters_when_github_is_down(

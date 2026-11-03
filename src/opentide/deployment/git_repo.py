@@ -377,7 +377,7 @@ def diff_calculation(source: DiffSource) -> list[str]:
             return []
         return _changed_paths(repo, repo.commit(base), repo.head)
 
-    repo = TideRepo().repository
+    repo = GitRepository().repository
     if repo is None:
         # Only a local run has no repository, and it returned above.
         raise MissingGitCheckout(discover_workspace())
@@ -678,7 +678,7 @@ def changed_through_head(since: str | None = None) -> list[str]:
             raise Exception("Outside CI, --since must name the commit to diff from")
         repo = _local_repository()
     else:
-        repo = TideRepo().repository
+        repo = GitRepository().repository
         if repo is None:
             # Only a local run has no repository, and it took the branch above.
             raise MissingGitCheckout(discover_workspace())
@@ -713,10 +713,6 @@ def _changed_paths(
     logger.info("computed_diff_scope", detail=", ".join(scope))
 
     return scope
-
-
-# Legacy alias
-TideRepo = GitRepository
 
 
 def __dir__() -> list[str]:

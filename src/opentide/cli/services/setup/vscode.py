@@ -113,7 +113,7 @@ def emit_vscode_deprecation() -> None:
 
 def _paths_config() -> dict[str, Any]:
     configs = resolve_configurations()
-    return configs.get("paths") or configs["global"]
+    return configs["paths"]
 
 
 def _schema_artifacts(cfg: dict[str, Any]) -> dict[str, str]:
