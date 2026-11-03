@@ -213,6 +213,28 @@ def changed_rule_scope() -> tuple[RuleScope, DiffSource]:
     return modified_rule_scope(source), source
 
 
+def changed_files_under(root: Path) -> tuple[list[Path], DiffSource]:
+    """The files under *root* this run changed, and where the diff came from.
+
+    The diff :func:`changed_rule_scope` reads for ``deploy`` and ``validate
+    query --changed`` (:func:`diff_calculation`), for every file rather than
+    the rules folder's alone: added, renamed and modified files, deleted ones
+    left out. Diff paths are relative to the checkout holding *root*.
+    Raises :class:`MissingGitCheckout` when there is none.
+    """
+    workspace = root.resolve()
+    worktree = _git_worktree(workspace)
+    if worktree is None:
+        raise MissingGitCheckout(workspace)
+    source = run_diff_source()
+    files = {
+        path
+        for entry in diff_calculation(source)
+        if (path := worktree / entry).is_relative_to(workspace)
+    }
+    return sorted(files), source
+
+
 def _local_repository() -> DulwichRepo:
     """The checkout holding the workspace, for a run outside CI."""
     searched = discover_workspace().resolve()
