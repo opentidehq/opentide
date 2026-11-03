@@ -74,6 +74,9 @@ pub struct Context {
     /// The rule a tuning extends (`append_to_rule`). When it is a Falco default
     /// rule, the tuning's event types are judged on the combined condition.
     pub tuned_rule: Option<String>,
+    /// The block's list names in block order (Falco's load order for them).
+    /// Empty: `lists` in name order.
+    pub list_order: Vec<String>,
 }
 
 impl Context {
@@ -232,39 +235,48 @@ fn resolve_list(t: &mut Expanded, name: &str, items: &[String]) {
 /// The lists Falco would expand, items expanded through other lists, the
 /// block's after the default rules' (a later definition replaces).
 fn lists_in_order(ctx: &Context) -> Vec<(String, Vec<String>)> {
+    // Falco's rule loader (`compile_list_infos`, then `resolve_list` in load
+    // order): the default lists in their load order, then the block's in block
+    // order (a block list of a default's name replaces it in place). An item
+    // names a list only when that list is loaded before it; otherwise it stays
+    // a literal item, so a list naming itself or a later list keeps the name.
     let catalog = Catalog::cached();
-    let mut raw: BTreeMap<&str, &[String]> = catalog
-        .lists
-        .values()
-        .map(|l| (l.name.as_str(), l.items.as_slice()))
-        .collect();
-    for (name, items) in &ctx.lists {
-        raw.insert(name.as_str(), items.as_slice());
-    }
-    fn expand(name: &str, raw: &BTreeMap<&str, &[String]>, depth: usize, out: &mut Vec<String>) {
-        for item in raw.get(name).copied().unwrap_or_default() {
-            if depth < 16 && item != name && raw.contains_key(item.as_str()) {
-                expand(item, raw, depth + 1, out);
-            } else {
-                out.push(item.clone());
-            }
+    let block_order: Vec<String> = if ctx.list_order.is_empty() {
+        ctx.lists.keys().cloned().collect()
+    } else {
+        ctx.list_order
+            .iter()
+            .filter(|n| ctx.lists.contains_key(*n))
+            .cloned()
+            .collect()
+    };
+    let mut order: Vec<String> = catalog.list_order.clone();
+    for name in &block_order {
+        if !order.contains(name) {
+            order.push(name.clone());
         }
     }
-    let mut order: Vec<&str> = catalog
-        .lists
-        .keys()
-        .map(String::as_str)
-        .filter(|n| !ctx.lists.contains_key(*n))
-        .collect();
-    order.extend(ctx.lists.keys().map(String::as_str));
-    order
-        .into_iter()
-        .map(|name| {
-            let mut items = Vec::new();
-            expand(name, &raw, 0, &mut items);
-            (name.to_string(), items)
-        })
-        .collect()
+    let raw = |name: &str| -> Vec<String> {
+        ctx.lists
+            .get(name)
+            .cloned()
+            .or_else(|| catalog.lists.get(name).map(|l| l.items.clone()))
+            .unwrap_or_default()
+    };
+    let mut flat: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut out = Vec::new();
+    for name in order {
+        let mut items = Vec::new();
+        for item in raw(&name) {
+            match flat.get(&item) {
+                Some(earlier) => items.extend(earlier.iter().cloned()),
+                None => items.push(item),
+            }
+        }
+        flat.insert(name.clone(), items.clone());
+        out.push((name, items));
+    }
+    out
 }
 
 pub(crate) fn expand_lists(text: &str, ctx: &Context) -> Expanded {
@@ -1096,16 +1108,19 @@ pub fn hover(text: &str, position: Position, ctx: &Context) -> Option<String> {
             if node.kind() == "identifier" {
                 if let Some(m) = catalog.macros.get(word) {
                     return Some(format!(
-                        "**`{word}`** (macro, Falco default rules)\n\n```falco\n{}\n```\n\nDefined in `{}`.",
-                        m.condition, m.origin
+                        "**`{word}`** (macro, Falco default rules)\n\n```falco\n{}\n```\n\nDefined in `{}`.{}",
+                        m.condition,
+                        m.origin,
+                        also_defined(&m.also)
                     ));
                 }
             }
             if let Some(l) = catalog.lists.get(word) {
                 return Some(format!(
-                    "**`{word}`** (list, Falco default rules)\n\n`{}`\n\nDefined in `{}`.",
+                    "**`{word}`** (list, Falco default rules)\n\n`{}`\n\nDefined in `{}`.{}",
                     l.items.join(", "),
-                    l.origin
+                    l.origin,
+                    also_defined(&l.also)
                 ));
             }
             catalog
@@ -1117,6 +1132,18 @@ pub fn hover(text: &str, position: Position, ctx: &Context) -> Option<String> {
             .find(|(k, _)| *k == word)
             .map(|(k, d)| format!("**`{k}`** (Falco)\n\n{d}\n\n[Falco docs]({FALCO_DOCS})")),
     }
+}
+
+/// The differing definitions later default rules files give a name, for hover.
+fn also_defined(also: &[String]) -> String {
+    if also.is_empty() {
+        return String::new();
+    }
+    let lines: Vec<String> = also.iter().map(|a| format!("- `{a}`")).collect();
+    format!(
+        "\n\nDefined differently later (not loaded by default):\n{}",
+        lines.join("\n")
+    )
 }
 
 fn field_hover(name: &str, ctx: &Context) -> Option<String> {
@@ -1827,6 +1854,28 @@ mod tests {
         );
         // A rule the defaults do not have: nothing to judge (Tide reports falco_unknown_rule).
         assert!(codes_of("or proc.name = sshd", &tuning("No such rule")).is_empty());
+    }
+
+    #[test]
+    fn hover_names_differing_later_definitions() {
+        let h = hover(
+            "evt.type = connect and inbound_outbound",
+            Position {
+                line: 0,
+                character: 26,
+            },
+            &Context::default(),
+        )
+        .unwrap();
+        // First defined in the incubating file; the sandbox file differs.
+        assert!(
+            h.contains("Defined in `falcosecurity/rules/rules/falco-incubating_rules.yaml`"),
+            "{h}"
+        );
+        assert!(
+            h.contains("Defined differently later") && h.contains("falco-sandbox_rules.yaml"),
+            "{h}"
+        );
     }
 
     #[test]

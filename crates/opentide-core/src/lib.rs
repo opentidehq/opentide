@@ -542,6 +542,7 @@ pub mod codes {
     pub const SYSDIG_DEFINITION_DUPLICATE: &str = "sysdig_definition_duplicate";
     pub const SYSDIG_DEFINITION_ORDER: &str = "sysdig_definition_order";
     pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
+    pub const SYSDIG_LIST_SELF_REFERENCE: &str = "sysdig_list_self_reference";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -674,6 +675,7 @@ pub mod codes {
         SYSDIG_DEFINITION_DUPLICATE,
         SYSDIG_DEFINITION_ORDER,
         SYSDIG_LIST_IN_VALUE,
+        SYSDIG_LIST_SELF_REFERENCE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -962,7 +964,10 @@ pub mod codes {
                 "A name is defined more than once across the block's macros and lists."
             }
             SYSDIG_DEFINITION_ORDER => {
-                "A list item names a list that is not defined before it, or a macro uses a macro that is not defined before it: Falco's definition-before-use."
+                "A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro."
+            }
+            SYSDIG_LIST_SELF_REFERENCE => {
+                "A block list names itself: Falco keeps the name as a literal item, which on Sysdig resolves against a tenant list of that name, not this one."
             }
             SYSDIG_LIST_IN_VALUE => {
                 "A block list name appears in an exception value where Falco's expansion would not produce a value list."

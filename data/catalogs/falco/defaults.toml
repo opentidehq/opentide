@@ -2282,98 +2282,28 @@ source = "syscall"
 origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
-name = "allowed_container_images_loading_kernel_module"
-items = []
+name = "shell_binaries"
+items = ["ash", "bash", "csh", "ksh", "sh", "tcsh", "zsh", "dash"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "allowed_countries_list"
-items = []
-origin = "falcosecurity/plugins/plugins/okta/rules/okta_rules.yaml"
-
-[[lists]]
-name = "allowed_dev_files"
-items = ["/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/random", "/dev/urandom", "/dev/console", "/dev/kmsg"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "allowed_inbound_source_domains"
-items = ["google.com"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "allowed_inbound_source_ipaddrs"
-items = ["\"127.0.0.1\""]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "allowed_inbound_source_networks"
-items = ["\"127.0.0.1/8\"", "\"10.0.0.0/8\""]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "allowed_k8s_nodes"
-items = []
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "allowed_k8s_users"
-items = ["minikube", "minikube-user", "kubelet", "kops", "admin", "kube", "kube-proxy", "kube-apiserver-healthcheck", "kubernetes-admin", "vertical_pod_autoscaler_users", "cluster-autoscaler", "system:addon-manager", "cloud-controller-manager", "system:kube-controller-manager"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "allowed_kube_namespace_image_list"
-items = ["gcr.io/google-containers/prometheus-to-sd", "gcr.io/projectcalico-org/node", "gke.gcr.io/addon-resizer", "gke.gcr.io/heapster", "gke.gcr.io/gke-metadata-server", "registry.k8s.io/ip-masq-agent-amd64", "registry.k8s.io/kube-apiserver", "gke.gcr.io/kube-proxy", "gke.gcr.io/netd-amd64", "gke.gcr.io/watcher-daemonset", "registry.k8s.io/addon-resizer", "registry.k8s.io/prometheus-to-sd", "registry.k8s.io/k8s-dns-dnsmasq-nanny-amd64", "registry.k8s.io/k8s-dns-kube-dns-amd64", "registry.k8s.io/k8s-dns-sidecar-amd64", "registry.k8s.io/metrics-server-amd64", "kope/kube-apiserver-healthcheck", "k8s_image_list"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "allowed_namespaces"
-items = ["kube-system", "kube-public", "default"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "approved_regions"
-items = ["us-east-0"]
-origin = "falcosecurity/plugins/plugins/cloudtrail/rules/aws_cloudtrail_rules.yaml"
-
-[[lists]]
-name = "bash_config_filenames"
-items = [".bashrc", ".bash_profile", ".bash_history", ".bash_login", ".bash_logout", ".inputrc", ".profile"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "bash_config_files"
-items = ["/etc/profile", "/etc/bashrc"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "bpf_profiled_binaries"
-items = ["falco", "bpftool", "systemd"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "coreutils_binaries"
-items = ["truncate", "sha1sum", "numfmt", "fmt", "fold", "uniq", "cut", "who", "groups", "csplit", "sort", "expand", "printf", "printenv", "unlink", "tee", "chcon", "stat", "basename", "split", "nice", "yes", "whoami", "sha224sum", "hostid", "users", "stdbuf", "base64", "unexpand", "cksum", "od", "paste", "nproc", "pathchk", "sha256sum", "wc", "test", "comm", "arch", "du", "factor", "sha512sum", "md5sum", "tr", "runcon", "env", "dirname", "tsort", "join", "shuf", "install", "logname", "pinky", "nohup", "expr", "pr", "tty", "timeout", "tail", "[", "seq", "sha384sum", "nl", "head", "id", "mkfifo", "sum", "dircolors", "ptx", "shred", "tac", "link", "chroot", "vdir", "chown", "touch", "ls", "dd", "uname", "true", "pwd", "date", "chgrp", "chmod", "mktemp", "cat", "mknod", "sync", "ln", "false", "rm", "mv", "cp", "echo", "readlink", "sleep", "stty", "mkdir", "df", "dir", "rmdir", "touch"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "cron_binaries"
-items = ["anacron", "cron", "crond", "crontab"]
+name = "login_binaries"
+items = ["login", "systemd", "\"(systemd)\"", "systemd-logind", "su", "nologin", "faillog", "lastlog", "newgrp", "sg"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "csh_config_filenames"
-items = [".cshrc", ".login", ".logout", ".history", ".tcshrc", ".cshdirs"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+name = "passwd_binaries"
+items = ["shadowconfig", "grpck", "pwunconv", "grpconv", "pwck", "groupmod", "vipw", "pwconv", "useradd", "newusers", "cppw", "chpasswd", "usermod", "groupadd", "groupdel", "grpunconv", "chgpasswd", "userdel", "chage", "chsh", "gpasswd", "chfn", "expiry", "passwd", "vigr", "cpgr", "adduser", "addgroup", "deluser", "delgroup"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "csh_config_files"
-items = ["/etc/csh.cshrc", "/etc/csh.login"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+name = "shadowutils_binaries"
+items = ["chage", "gpasswd", "lastlog", "newgrp", "sg", "adduser", "deluser", "chpasswd", "groupadd", "groupdel", "addgroup", "delgroup", "groupmems", "groupmod", "grpck", "grpconv", "grpunconv", "newusers", "pwck", "pwconv", "pwunconv", "useradd", "userdel", "usermod", "vigr", "vipw", "unix_chkpwd"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "data_remove_commands"
-items = ["shred", "mkfs", "mke2fs"]
+name = "http_server_binaries"
+items = ["nginx", "httpd", "httpd-foregroun", "lighttpd", "apache", "apache2"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
@@ -2382,39 +2312,130 @@ items = ["mysqld", "postgres", "sqlplus"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
+name = "postgres_mgmt_binaries"
+items = ["pg_dumpall", "pg_ctl", "pg_lsclusters", "pg_ctlcluster"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "nosql_server_binaries"
+items = ["couchdb", "memcached", "redis-server", "rabbitmq-server", "mongod"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "gitlab_binaries"
+items = ["gitlab-shell", "gitlab-mon", "gitlab-runner-b", "git"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "rpm_binaries"
+items = ["dnf", "dnf-automatic", "rpm", "rpmkey", "yum", "\"75-system-updat\"", "rhsmcertd-worke", "rhsmcertd", "subscription-ma", "repoquery", "rpmkeys", "rpmq", "yum-cron", "yum-config-mana", "yum-debug-dump", "abrt-action-sav", "rpmdb_stat", "microdnf", "rhn_check", "yumdb"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
 name = "deb_binaries"
 items = ["dpkg", "dpkg-preconfigu", "dpkg-reconfigur", "dpkg-divert", "apt", "apt-get", "aptitude", "frontend", "preinst", "add-apt-reposit", "apt-auto-remova", "apt-key", "apt-listchanges", "unattended-upgr", "apt-add-reposit", "apt-cache", "apt.systemd.dai"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "dev_creation_binaries"
-items = ["blkid", "rename_device", "update_engine", "sgdisk"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+name = "python_package_managers"
+items = ["pip", "pip3", "conda", "uv"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+also = ["falcosecurity/rules/rules/falco-incubating_rules.yaml: [pip, pip3, conda]", "falcosecurity/rules/rules/falco-sandbox_rules.yaml: [pip, pip3, conda]"]
 
 [[lists]]
-name = "dhcp_binaries"
-items = ["dhclient", "dhclient-script", "11-dhclient"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "docker_binaries"
-items = ["docker", "dockerd", "containerd-shim", "runc:[1:CHILD]", "pause", "exe", "docker-compose", "docker-entrypoi", "docker-runc-cur", "docker-current", "dockerd-current"]
+name = "package_mgmt_binaries"
+items = ["rpm_binaries", "deb_binaries", "update-alternat", "gem", "npm", "python_package_managers", "sane-utils.post", "alternatives", "chef-client", "apk", "snapd"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "eks_allowed_k8s_users"
-items = ["eks:node-manager", "eks:certificate-controller", "eks:fargate-scheduler", "eks:k8s-metrics", "eks:authenticator", "eks:cluster-event-watcher", "eks:nodewatcher", "eks:pod-identity-mutating-webhook", "eks:cloud-controller-manager", "eks:vpc-resource-controller", "eks:addon-manager"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+name = "userexec_binaries"
+items = ["sudo", "su", "suexec", "critical-stack", "dzdo"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "exclude_hidden_directories"
-items = ["/root/.cassandra"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+name = "user_mgmt_binaries"
+items = ["login_binaries", "passwd_binaries", "shadowutils_binaries"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "expected_udp_ports"
-items = ["53", "openvpn_udp_ports", "l2tp_udp_ports", "statsd_ports", "ntp_ports", "test_connect_ports"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+name = "hids_binaries"
+items = ["aide", "aide.wrapper", "update-aide.con", "logcheck", "syslog-summary", "osqueryd", "ossec-syscheckd"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "vpn_binaries"
+items = ["openvpn"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "nomachine_binaries"
+items = ["nxexec", "nxnode.bin", "nxserver.bin", "nxclient.bin"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "mail_binaries"
+items = ["sendmail", "sendmail-msp", "postfix", "procmail", "exim4", "pickup", "showq", "mailq", "dovecot", "imap-login", "imap", "mailmng-core", "pop3-login", "dovecot-lda", "pop3"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "mail_config_binaries"
+items = ["update_conf", "parse_mc", "makemap_hash", "newaliases", "update_mk", "update_tlsm4", "update_db", "update_mc", "ssmtp.postinst", "mailq", "postalias", "postfix.config.", "postfix.config", "postfix-script", "postconf"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "sensitive_file_names"
+items = ["/etc/shadow", "/etc/sudoers", "/etc/pam.conf", "/etc/security/pwquality.conf"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "sensitive_directory_names"
+items = ["/", "/etc", "/etc/", "/root", "/root/"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "cron_binaries"
+items = ["anacron", "cron", "crond", "crontab"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "needrestart_binaries"
+items = ["needrestart", "10-dpkg", "20-rpm", "30-pacman"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "sshkit_script_binaries"
+items = ["10_etc_sudoers.", "10_passwd_group"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "read_sensitive_file_binaries"
+items = ["iptables", "ps", "lsb_release", "check-new-relea", "dumpe2fs", "accounts-daemon", "sshd", "vsftpd", "systemd", "mysql_install_d", "psql", "screen", "debconf-show", "sa-update", "pam-auth-update", "pam-config", "/usr/sbin/spamd", "polkit-agent-he", "lsattr", "file", "sosreport", "scxcimservera", "adclient", "rtvscand", "cockpit-session", "userhelper", "ossec-syscheckd", "sshd-session", "rkhunter"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "read_sensitive_file_images"
+items = []
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "protected_shell_spawning_binaries"
+items = ["http_server_binaries", "db_server_binaries", "nosql_server_binaries", "mail_binaries", "fluentd", "flanneld", "splunkd", "consul", "smbd", "runsv", "PM2"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "mesos_shell_binaries"
+items = ["mesos-docker-ex", "mesos-slave", "mesos-health-ch"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "trusted_images"
+items = []
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
+
+[[lists]]
+name = "sematext_images"
+items = ["docker.io/sematext/sematext-agent-docker", "docker.io/sematext/agent", "docker.io/sematext/logagent", "registry.access.redhat.com/sematext/sematext-agent-docker", "registry.access.redhat.com/sematext/agent", "registry.access.redhat.com/sematext/logagent"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
 name = "falco_containers"
@@ -2433,59 +2454,14 @@ items = ["falco_containers", "docker.io/calico/node", "calico/node", "docker.io/
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "falco_sensitive_mount_images"
-items = ["falco_containers", "docker.io/sysdig/sysdig", "sysdig/sysdig", "gcr.io/google_containers/hyperkube", "gcr.io/google_containers/kube-proxy", "docker.io/calico/node", "docker.io/rook/toolbox", "docker.io/cloudnativelabs/kube-router", "docker.io/consul", "docker.io/datadog/docker-dd-agent", "docker.io/datadog/agent", "docker.io/docker/ucp-agent", "docker.io/gliderlabs/logspout", "docker.io/netdata/netdata", "docker.io/google/cadvisor", "docker.io/prom/node-exporter", "amazon/amazon-ecs-agent", "prom/node-exporter", "amazon/cloudwatch-agent"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "full_admin_k8s_users"
-items = ["admin", "kubernetes-admin", "kubernetes-admin@kubernetes", "kubernetes-admin@cluster.local", "minikube-user"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "gitlab_binaries"
-items = ["gitlab-shell", "gitlab-mon", "gitlab-runner-b", "git"]
+name = "known_shell_spawn_cmdlines"
+items = ["\"sh -c uname -p 2> /dev/null\"", "\"sh -c uname -s 2>&1\"", "\"sh -c uname -r 2>&1\"", "\"sh -c uname -v 2>&1\"", "\"sh -c uname -a 2>&1\"", "\"sh -c ruby -v 2>&1\"", "\"sh -c getconf CLK_TCK\"", "\"sh -c getconf PAGESIZE\"", "\"sh -c LC_ALL=C LANG=C /sbin/ldconfig -p 2>/dev/null\"", "\"sh -c LANG=C /sbin/ldconfig -p 2>/dev/null\"", "\"sh -c /sbin/ldconfig -p 2>/dev/null\"", "\"sh -c stty -a 2>/dev/null\"", "\"sh -c stty -a < /dev/tty\"", "\"sh -c stty -g < /dev/tty\"", "\"sh -c node index.js\"", "\"sh -c node index\"", "\"sh -c node ./src/start.js\"", "\"sh -c node app.js\"", "\"sh -c node -e \\\"require('nan')\\\"\"", "\"sh -c node -e \\\"require('nan')\\\")\"", "\"sh -c node $NODE_DEBUG_OPTION index.js \"", "\"sh -c crontab -l 2\"", "\"sh -c lsb_release -a\"", "\"sh -c lsb_release -is 2>/dev/null\"", "\"sh -c whoami\"", "\"sh -c node_modules/.bin/bower-installer\"", "\"sh -c /bin/hostname -f 2> /dev/null\"", "\"sh -c locale -a\"", "\"sh -c  -t -i\"", "\"sh -c openssl version\"", "\"bash -c id -Gn kafadmin\"", "\"sh -c /bin/sh -c 'date +%%s'\"", "\"sh -c /usr/share/lighttpd/create-mime.conf.pl\""]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "gpu_device_files"
-items = ["/dev/nvidiactl", "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools", "/dev/kfd"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "gpu_management_binaries"
-items = ["nvidia-smi", "nvidia-debugdum", "nvidia-persiste", "nvidia-cuda-mps", "rocm-smi", "rocminfo"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "grep_binaries"
-items = ["grep", "egrep", "fgrep"]
+name = "user_known_shell_spawn_binaries"
+items = []
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "hids_binaries"
-items = ["aide", "aide.wrapper", "update-aide.con", "logcheck", "syslog-summary", "osqueryd", "ossec-syscheckd"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "http_miner_domains"
-items = ["ca.minexmr.com", "de.minexmr.com", "fr.minexmr.com", "mine.moneropool.com", "mine.xmrpool.net", "pool.minexmr.com", "sg.minexmr.com", "xmr.crypto-pool.fr"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "http_proxy_binaries"
-items = ["curl", "wget"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "http_server_binaries"
-items = ["nginx", "httpd", "httpd-foregroun", "lighttpd", "apache", "apache2"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "https_miner_domains"
-items = ["ca.minexmr.com", "cn.stratum.slushpool.com", "de.minexmr.com", "fr.minexmr.com", "mine.moneropool.com", "mine.xmrpool.net", "pool.minexmr.com", "sg.minexmr.com", "stratum-eth.antpool.com", "stratum-ltc.antpool.com", "stratum-zec.antpool.com", "stratum.antpool.com", "xmr.crypto-pool.fr", "ss.antpool.com", "stratum-dash.antpool.com", "stratum-xmc.antpool.com", "stratum-btm.antpool.com", "btm.antpool.com"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
 name = "ibm_cloud_containers"
@@ -2493,124 +2469,9 @@ items = ["icr.io/ext/sysdig/agent", "registry.ng.bluemix.net/armada-master/metri
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "ingress_remote_file_copy_binaries"
-items = ["wget"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "interpreted_binaries"
-items = ["lua", "node", "perl", "perl5", "perl6", "php", "python", "python2", "python3", "ruby", "tcl"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "k8s_audit_hostipc_images"
-items = []
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "k8s_audit_hostnetwork_images"
-items = ["gcr.io/google-containers/prometheus-to-sd", "gcr.io/projectcalico-org/typha", "gcr.io/projectcalico-org/node", "gke.gcr.io/gke-metadata-server", "gke.gcr.io/kube-proxy", "gke.gcr.io/netd-amd64", "registry.k8s.io/ip-masq-agent-amd64", "registry.k8s.io/prometheus-to-sd"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "k8s_audit_hostpid_images"
-items = []
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "k8s_audit_privileged_images"
-items = ["falcosecurity/falco", "docker.io/falcosecurity/falco", "public.ecr.aws/falcosecurity/falco", "docker.io/calico/node", "calico/node", "docker.io/cloudnativelabs/kube-router", "docker.io/docker/ucp-agent", "docker.io/mesosphere/mesos-slave", "docker.io/rook/toolbox", "docker.io/sysdig/sysdig", "gcr.io/google_containers/kube-proxy", "gcr.io/google-containers/startup-script", "gcr.io/projectcalico-org/node", "gke.gcr.io/kube-proxy", "gke.gcr.io/gke-metadata-server", "gke.gcr.io/netd-amd64", "gke.gcr.io/watcher-daemonset", "gcr.io/google-containers/prometheus-to-sd", "registry.k8s.io/ip-masq-agent-amd64", "registry.k8s.io/kube-proxy", "registry.k8s.io/prometheus-to-sd", "quay.io/calico/node", "sysdig/sysdig", "registry.k8s.io/dns/k8s-dns-node-cache", "mcr.microsoft.com/oss/kubernetes/kube-proxy"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "k8s_audit_sensitive_mount_images"
-items = ["falcosecurity/falco", "docker.io/falcosecurity/falco", "public.ecr.aws/falcosecurity/falco", "docker.io/sysdig/sysdig", "sysdig/sysdig", "gcr.io/google_containers/hyperkube", "gcr.io/google_containers/kube-proxy", "docker.io/calico/node", "docker.io/rook/toolbox", "docker.io/cloudnativelabs/kube-router", "docker.io/consul", "docker.io/datadog/docker-dd-agent", "docker.io/datadog/agent", "docker.io/docker/ucp-agent", "docker.io/gliderlabs/logspout", "docker.io/netdata/netdata", "docker.io/google/cadvisor", "docker.io/prom/node-exporter", "amazon/amazon-ecs-agent", "prom/node-exporter", "amazon/cloudwatch-agent"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "k8s_audit_stages"
-items = ["ResponseComplete"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "k8s_binaries"
-items = ["hyperkube", "skydns", "kube2sky", "exechealthz", "weave-net", "loopback", "bridge", "openshift-sdn", "openshift"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "k8s_client_binaries"
-items = ["docker", "kubectl", "crictl"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "k8s_image_list"
-items = []
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "known_binaries_to_read_environment_variables_from_proc_files"
-items = ["scsi_id", "argoexec"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "known_decode_payload_containers"
-items = []
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "known_drop_and_execute_containers"
-items = []
+name = "grep_binaries"
+items = ["grep", "egrep", "fgrep"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "known_istio_files"
-items = ["/healthready", "/healthliveness"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "known_memfd_execution_binaries"
-items = ["runc"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "known_ptrace_binaries"
-items = []
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "known_root_directories"
-items = ["/root/.oracle_jre_usage", "/root/.ssh", "/root/.subversion", "/root/.nami"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "known_root_files"
-items = ["/root/.monit.state", "/root/.auth_tokens", "/root/.bash_history", "/root/.ash_history", "/root/.aws/credentials", "/root/.viminfo.tmp", "/root/.lesshst", "/root/.bzr.log", "/root/.gitconfig.lock", "/root/.babel.json", "/root/.localstack", "/root/.node_repl_history", "/root/.mongorc.js", "/root/.dbshell", "/root/.augeas/history", "/root/.rnd", "/root/.wget-hsts", "/health", "/exec.fifo"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "known_sa_list"
-items = ["coredns", "coredns-autoscaler", "cronjob-controller", "daemon-set-controller", "deployment-controller", "disruption-controller", "endpoint-controller", "endpointslice-controller", "endpointslicemirroring-controller", "generic-garbage-collector", "horizontal-pod-autoscaler", "job-controller", "namespace-controller", "node-controller", "persistent-volume-binder", "pod-garbage-collector", "pv-protection-controller", "pvc-protection-controller", "replicaset-controller", "resourcequota-controller", "root-ca-cert-publisher", "service-account-controller", "statefulset-controller"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "known_setuid_binaries"
-items = ["sshd", "dbus-daemon-lau", "ping", "ping6", "critical-stack-", "pmmcli", "filemng", "PassengerAgent", "bwrap", "osdetect", "nginxmng", "sw-engine-fpm", "start-stop-daem"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "known_shell_spawn_cmdlines"
-items = ["\"sh -c uname -p 2> /dev/null\"", "\"sh -c uname -s 2>&1\"", "\"sh -c uname -r 2>&1\"", "\"sh -c uname -v 2>&1\"", "\"sh -c uname -a 2>&1\"", "\"sh -c ruby -v 2>&1\"", "\"sh -c getconf CLK_TCK\"", "\"sh -c getconf PAGESIZE\"", "\"sh -c LC_ALL=C LANG=C /sbin/ldconfig -p 2>/dev/null\"", "\"sh -c LANG=C /sbin/ldconfig -p 2>/dev/null\"", "\"sh -c /sbin/ldconfig -p 2>/dev/null\"", "\"sh -c stty -a 2>/dev/null\"", "\"sh -c stty -a < /dev/tty\"", "\"sh -c stty -g < /dev/tty\"", "\"sh -c node index.js\"", "\"sh -c node index\"", "\"sh -c node ./src/start.js\"", "\"sh -c node app.js\"", "\"sh -c node -e \\\"require('nan')\\\"\"", "\"sh -c node -e \\\"require('nan')\\\")\"", "\"sh -c node $NODE_DEBUG_OPTION index.js \"", "\"sh -c crontab -l 2\"", "\"sh -c lsb_release -a\"", "\"sh -c lsb_release -is 2>/dev/null\"", "\"sh -c whoami\"", "\"sh -c node_modules/.bin/bower-installer\"", "\"sh -c /bin/hostname -f 2> /dev/null\"", "\"sh -c locale -a\"", "\"sh -c  -t -i\"", "\"sh -c openssl version\"", "\"bash -c id -Gn kafadmin\"", "\"sh -c /bin/sh -c 'date +%%s'\"", "\"sh -c /usr/share/lighttpd/create-mime.conf.pl\""]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "known_system_procs_network_activity_binaries"
-items = ["systemd", "hostid", "id"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "l2tp_udp_ports"
-items = ["500", "1701", "4500", "10000"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
 name = "log_directories"
@@ -2623,175 +2484,34 @@ items = ["syslog", "auth.log", "secure", "kern.log", "cron", "user.log", "dpkg.l
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "login_binaries"
-items = ["login", "systemd", "\"(systemd)\"", "systemd-logind", "su", "nologin", "faillog", "lastlog", "newgrp", "sg"]
+name = "data_remove_commands"
+items = ["shred", "mkfs", "mke2fs"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "lxd_binaries"
-items = ["lxd", "lxcfs"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "mail_binaries"
-items = ["sendmail", "sendmail-msp", "postfix", "procmail", "exim4", "pickup", "showq", "mailq", "dovecot", "imap-login", "imap", "mailmng-core", "pop3-login", "dovecot-lda", "pop3"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "mail_config_binaries"
-items = ["update_conf", "parse_mc", "makemap_hash", "newaliases", "update_mk", "update_tlsm4", "update_db", "update_mc", "ssmtp.postinst", "mailq", "postalias", "postfix.config.", "postfix.config", "postfix-script", "postconf"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "mesos_shell_binaries"
-items = ["mesos-docker-ex", "mesos-slave", "mesos-health-ch"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "miner_binaries"
-items = ["xmrig", "xmr-stak", "minerd", "minergate", "cpuminer", "ccminer", "ethminer", "cgminer", "bfgminer", "sgminer", "claymore", "nbminer", "t-rex", "gminer", "lolminer", "phoenixminer", "teamredminer", "nanominer", "bminer", "wildrig", "srbminer"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "miner_domains"
-items = ["asia1.ethpool.org", "ca.minexmr.com", "cn.stratum.slushpool.com", "de.minexmr.com", "eth-ar.dwarfpool.com", "eth-asia.dwarfpool.com", "eth-asia1.nanopool.org", "eth-au.dwarfpool.com", "eth-au1.nanopool.org", "eth-br.dwarfpool.com", "eth-cn.dwarfpool.com", "eth-cn2.dwarfpool.com", "eth-eu.dwarfpool.com", "eth-eu1.nanopool.org", "eth-eu2.nanopool.org", "eth-hk.dwarfpool.com", "eth-jp1.nanopool.org", "eth-ru.dwarfpool.com", "eth-ru2.dwarfpool.com", "eth-sg.dwarfpool.com", "eth-us-east1.nanopool.org", "eth-us-west1.nanopool.org", "eth-us.dwarfpool.com", "eth-us2.dwarfpool.com", "eu.stratum.slushpool.com", "eu1.ethermine.org", "eu1.ethpool.org", "fr.minexmr.com", "mine.moneropool.com", "mine.xmrpool.net", "pool.minexmr.com", "pool.monero.hashvault.pro", "pool.supportxmr.com", "sg.minexmr.com", "sg.stratum.slushpool.com", "stratum-eth.antpool.com", "stratum-ltc.antpool.com", "stratum-zec.antpool.com", "stratum.antpool.com", "us-east.stratum.slushpool.com", "us1.ethermine.org", "us1.ethpool.org", "us2.ethermine.org", "us2.ethpool.org", "xmr-asia1.nanopool.org", "xmr-au1.nanopool.org", "xmr-eu1.nanopool.org", "xmr-eu2.nanopool.org", "xmr-jp1.nanopool.org", "xmr-us-east1.nanopool.org", "xmr-us-west1.nanopool.org", "xmr.crypto-pool.fr", "xmr.pool.minergate.com", "rx.unmineable.com", "ss.antpool.com", "dash.antpool.com", "eth.antpool.com", "zec.antpool.com", "xmc.antpool.com", "btm.antpool.com", "stratum-dash.antpool.com", "stratum-xmc.antpool.com", "stratum-btm.antpool.com"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "miner_ports"
-items = ["25", "3333", "3334", "3335", "3336", "3357", "4444", "5555", "5556", "5588", "5730", "6099", "6666", "7777", "7778", "8000", "8001", "8008", "8080", "8118", "8333", "8888", "8899", "9332", "9999", "14433", "14444", "45560", "45700"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "monitored_directories"
-items = ["/boot", "/lib", "/lib64", "/usr/lib", "/usr/local/lib", "/usr/local/sbin", "/usr/local/bin", "/root/.ssh"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "ms_oms_binaries"
-items = ["omi.postinst", "omsconfig.posti", "scx.postinst", "omsadmin.sh", "omiagent"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "namespace_scope_network_only_subnet"
-items = []
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "needrestart_binaries"
-items = ["needrestart", "10-dpkg", "20-rpm", "30-pacman"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "network_plugin_binaries"
-items = ["aws-cni", "azure-vnet"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "network_tool_binaries"
-items = ["nc", "ncat", "netcat", "nmap", "dig", "tcpdump", "tshark", "ngrep", "telnet", "mitmproxy", "socat", "zmap"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "node_package_managers"
-items = ["npm", "yarn", "pnpm", "bun"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "nomachine_binaries"
-items = ["nxexec", "nxnode.bin", "nxserver.bin", "nxclient.bin"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "nosql_server_binaries"
-items = ["couchdb", "memcached", "redis-server", "rabbitmq-server", "mongod"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "ntp_ports"
-items = ["123"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "openscap_rpm_binaries"
-items = ["probe_rpminfo", "probe_rpmverify", "probe_rpmverifyfile", "probe_rpmverifypackage"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "openvpn_udp_ports"
-items = ["1194", "1197", "1198", "8080", "9201"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "package_mgmt_binaries"
-items = ["rpm_binaries", "deb_binaries", "update-alternat", "gem", "npm", "python_package_managers", "sane-utils.post", "alternatives", "chef-client", "apk", "snapd"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "passwd_binaries"
-items = ["shadowconfig", "grpck", "pwunconv", "grpconv", "pwck", "groupmod", "vipw", "pwconv", "useradd", "newusers", "cppw", "chpasswd", "usermod", "groupadd", "groupdel", "grpunconv", "chgpasswd", "userdel", "chage", "chsh", "gpasswd", "chfn", "expiry", "passwd", "vigr", "cpgr", "adduser", "addgroup", "deluser", "delgroup"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "plesk_binaries"
-items = ["sw-engine", "sw-engine-fpm", "sw-engine-kv", "filemng", "f2bmng"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "postgres_mgmt_binaries"
-items = ["pg_dumpall", "pg_ctl", "pg_lsclusters", "pg_ctlcluster"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "protected_shell_spawning_binaries"
-items = ["http_server_binaries", "db_server_binaries", "nosql_server_binaries", "mail_binaries", "fluentd", "flanneld", "splunkd", "consul", "smbd", "runsv", "PM2"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "python_package_managers"
-items = ["pip", "pip3", "conda", "uv"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-also = ["falcosecurity/rules/rules/falco-incubating_rules.yaml: [pip, pip3, conda]", "falcosecurity/rules/rules/falco-sandbox_rules.yaml: [pip, pip3, conda]"]
-
-[[lists]]
-name = "python_pth_installer_binaries"
-items = ["pipx", "uv", "virtualenv"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
-
-[[lists]]
-name = "read_sensitive_file_binaries"
-items = ["iptables", "ps", "lsb_release", "check-new-relea", "dumpe2fs", "accounts-daemon", "sshd", "vsftpd", "systemd", "mysql_install_d", "psql", "screen", "debconf-show", "sa-update", "pam-auth-update", "pam-config", "/usr/sbin/spamd", "polkit-agent-he", "lsattr", "file", "sosreport", "scxcimservera", "adclient", "rtvscand", "cockpit-session", "userhelper", "ossec-syscheckd", "sshd-session", "rkhunter"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "read_sensitive_file_images"
+name = "user_known_packet_socket_binaries"
 items = []
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "recon_binaries"
-items = ["w", "whoami", "id", "who", "uname"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+name = "allowed_container_images_loading_kernel_module"
+items = []
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "redhat_io_images_privileged"
-items = ["registry.redhat.io/openshift-logging/fluentd-rhel8", "registry.redhat.io/openshift4/ose-csi-node-driver-registrar", "registry.redhat.io/openshift4/ose-kubernetes-nmstate-handler-rhel8", "registry.redhat.io/openshift4/ose-local-storage-diskmaker"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+name = "docker_binaries"
+items = ["docker", "dockerd", "containerd-shim", "runc:[1:CHILD]", "pause", "exe", "docker-compose", "docker-entrypoi", "docker-runc-cur", "docker-current", "dockerd-current"]
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "remote_file_copy_binaries"
-items = ["rsync", "scp", "sftp", "dcp"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+name = "known_ptrace_binaries"
+items = []
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "repository_directories"
-items = ["/etc/apt/sources.list.d", "/etc/yum.repos.d", "/etc/apt"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "repository_files"
-items = ["sources.list"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+name = "known_drop_and_execute_containers"
+items = []
+origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
 name = "rfc_1918_addresses"
@@ -2799,48 +2519,73 @@ items = ["\"10.0.0.0/8\"", "\"172.16.0.0/12\"", "\"192.168.0.0/16\""]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "rpm_binaries"
-items = ["dnf", "dnf-automatic", "rpm", "rpmkey", "yum", "\"75-system-updat\"", "rhsmcertd-worke", "rhsmcertd", "subscription-ma", "repoquery", "rpmkeys", "rpmq", "yum-cron", "yum-config-mana", "yum-debug-dump", "abrt-action-sav", "rpmdb_stat", "microdnf", "rhn_check", "yumdb"]
+name = "ssh_non_standard_ports"
+items = ["80", "8080", "88", "443", "8443", "53", "4444"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "run_as_root_image_list"
-items = []
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "safe_etc_dirs"
-items = ["/etc/cassandra", "/etc/ssl/certs/java", "/etc/logstash", "/etc/nginx/conf.d", "/etc/container_environment", "/etc/hrmconfig", "/etc/fluent/configs.d", "/etc/alertmanager"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "sematext_images"
-items = ["docker.io/sematext/sematext-agent-docker", "docker.io/sematext/agent", "docker.io/sematext/logagent", "registry.access.redhat.com/sematext/sematext-agent-docker", "registry.access.redhat.com/sematext/agent", "registry.access.redhat.com/sematext/logagent"]
+name = "known_memfd_execution_binaries"
+items = ["runc"]
 origin = "falcosecurity/rules/rules/falco_rules.yaml"
 
 [[lists]]
-name = "sensitive_directory_names"
-items = ["/", "/etc", "/etc/", "/root", "/root/"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "ssh_binaries"
+items = ["sshd", "sftp-server", "ssh-agent", "ssh", "scp", "sftp", "ssh-keygen", "ssh-keysign", "ssh-keyscan", "ssh-add"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "sensitive_file_names"
-items = ["/etc/shadow", "/etc/sudoers", "/etc/pam.conf", "/etc/security/pwquality.conf"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "coreutils_binaries"
+items = ["truncate", "sha1sum", "numfmt", "fmt", "fold", "uniq", "cut", "who", "groups", "csplit", "sort", "expand", "printf", "printenv", "unlink", "tee", "chcon", "stat", "basename", "split", "nice", "yes", "whoami", "sha224sum", "hostid", "users", "stdbuf", "base64", "unexpand", "cksum", "od", "paste", "nproc", "pathchk", "sha256sum", "wc", "test", "comm", "arch", "du", "factor", "sha512sum", "md5sum", "tr", "runcon", "env", "dirname", "tsort", "join", "shuf", "install", "logname", "pinky", "nohup", "expr", "pr", "tty", "timeout", "tail", "[", "seq", "sha384sum", "nl", "head", "id", "mkfifo", "sum", "dircolors", "ptx", "shred", "tac", "link", "chroot", "vdir", "chown", "touch", "ls", "dd", "uname", "true", "pwd", "date", "chgrp", "chmod", "mktemp", "cat", "mknod", "sync", "ln", "false", "rm", "mv", "cp", "echo", "readlink", "sleep", "stty", "mkdir", "df", "dir", "rmdir", "touch"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "shadowutils_binaries"
-items = ["chage", "gpasswd", "lastlog", "newgrp", "sg", "adduser", "deluser", "chpasswd", "groupadd", "groupdel", "addgroup", "delgroup", "groupmems", "groupmod", "grpck", "grpconv", "grpunconv", "newusers", "pwck", "pwconv", "pwunconv", "useradd", "userdel", "usermod", "vigr", "vipw", "unix_chkpwd"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "sysdigcloud_binaries"
+items = ["setup-backend", "dragent", "sdchecks"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "shell_binaries"
-items = ["ash", "bash", "csh", "ksh", "sh", "tcsh", "zsh", "dash"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "k8s_binaries"
+items = ["hyperkube", "skydns", "kube2sky", "exechealthz", "weave-net", "loopback", "bridge", "openshift-sdn", "openshift"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "shell_config_directories"
-items = ["/etc/zsh"]
+name = "lxd_binaries"
+items = ["lxd", "lxcfs"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "known_setuid_binaries"
+items = ["sshd", "dbus-daemon-lau", "ping", "ping6", "critical-stack-", "pmmcli", "filemng", "PassengerAgent", "bwrap", "osdetect", "nginxmng", "sw-engine-fpm", "start-stop-daem"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "dev_creation_binaries"
+items = ["blkid", "rename_device", "update_engine", "sgdisk"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "bash_config_filenames"
+items = [".bashrc", ".bash_profile", ".bash_history", ".bash_login", ".bash_logout", ".inputrc", ".profile"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "bash_config_files"
+items = ["/etc/profile", "/etc/bashrc"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "csh_config_filenames"
+items = [".cshrc", ".login", ".logout", ".history", ".tcshrc", ".cshdirs"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "csh_config_files"
+items = ["/etc/csh.cshrc", "/etc/csh.login"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "zsh_config_filenames"
+items = [".zshenv", ".zprofile", ".zshrc", ".zlogin", ".zlogout"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
@@ -2854,29 +2599,49 @@ items = ["bash_config_files", "csh_config_files"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "shell_mgmt_binaries"
-items = ["add-shell", "remove-shell"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "ssh_binaries"
-items = ["sshd", "sftp-server", "ssh-agent", "ssh", "scp", "sftp", "ssh-keygen", "ssh-keysign", "ssh-keyscan", "ssh-add"]
+name = "shell_config_directories"
+items = ["/etc/zsh"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "ssh_non_standard_ports"
-items = ["80", "8080", "88", "443", "8443", "53", "4444"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "python_pth_installer_binaries"
+items = ["pipx", "uv", "virtualenv"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "sshkit_script_binaries"
-items = ["10_etc_sudoers.", "10_passwd_group"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "user_known_change_thread_namespace_binaries"
+items = ["crio", "multus"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "ssl_mgmt_binaries"
-items = ["ca-certificates"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+name = "network_plugin_binaries"
+items = ["aws-cni", "azure-vnet"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "redhat_io_images_privileged"
+items = ["registry.redhat.io/openshift-logging/fluentd-rhel8", "registry.redhat.io/openshift4/ose-csi-node-driver-registrar", "registry.redhat.io/openshift4/ose-kubernetes-nmstate-handler-rhel8", "registry.redhat.io/openshift4/ose-local-storage-diskmaker"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "known_system_procs_network_activity_binaries"
+items = ["systemd", "hostid", "id"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "http_proxy_binaries"
+items = ["curl", "wget"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "openvpn_udp_ports"
+items = ["1194", "1197", "1198", "8080", "9201"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "l2tp_udp_ports"
+items = ["500", "1701", "4500", "10000"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
 name = "statsd_ports"
@@ -2884,13 +2649,8 @@ items = ["8125"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "suspicious_web_children"
-items = ["curl", "wget", "nc", "ncat", "netcat", "socat", "python", "python3", "perl", "ruby", "nmap", "id", "whoami", "uname", "base64"]
-origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
-
-[[lists]]
-name = "sysdigcloud_binaries"
-items = ["setup-backend", "dragent", "sdchecks"]
+name = "ntp_ports"
+items = ["123"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
@@ -2899,18 +2659,18 @@ items = ["0", "9", "80", "3306"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "trusted_images"
-items = []
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "expected_udp_ports"
+items = ["53", "openvpn_udp_ports", "l2tp_udp_ports", "statsd_ports", "ntp_ports", "test_connect_ports"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "user_allowed_kube_namespace_image_list"
-items = ["user_trusted_image_list"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+name = "allowed_dev_files"
+items = ["/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/random", "/dev/urandom", "/dev/console", "/dev/kmsg"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "user_known_change_thread_namespace_binaries"
-items = ["crio", "multus"]
+name = "network_tool_binaries"
+items = ["nc", "ncat", "netcat", "nmap", "dig", "tcpdump", "tshark", "ngrep", "telnet", "mitmproxy", "socat", "zmap"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
@@ -2919,8 +2679,153 @@ items = ["hyperkube", "kubelet", "k3s-agent"]
 origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
 
 [[lists]]
-name = "user_known_k8s_images"
-items = ["mcr.microsoft.com/aks/hcp/hcp-tunnel-front"]
+name = "remote_file_copy_binaries"
+items = ["rsync", "scp", "sftp", "dcp"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "namespace_scope_network_only_subnet"
+items = []
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "ingress_remote_file_copy_binaries"
+items = ["wget"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "known_binaries_to_read_environment_variables_from_proc_files"
+items = ["scsi_id", "argoexec"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "bpf_profiled_binaries"
+items = ["falco", "bpftool", "systemd"]
+origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+
+[[lists]]
+name = "shell_mgmt_binaries"
+items = ["add-shell", "remove-shell"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "interpreted_binaries"
+items = ["lua", "node", "perl", "perl5", "perl6", "php", "python", "python2", "python3", "ruby", "tcl"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "openscap_rpm_binaries"
+items = ["probe_rpminfo", "probe_rpmverify", "probe_rpmverifyfile", "probe_rpmverifypackage"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "ssl_mgmt_binaries"
+items = ["ca-certificates"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "dhcp_binaries"
+items = ["dhclient", "dhclient-script", "11-dhclient"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "allowed_inbound_source_ipaddrs"
+items = ["\"127.0.0.1\""]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "allowed_inbound_source_networks"
+items = ["\"127.0.0.1/8\"", "\"10.0.0.0/8\""]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "allowed_inbound_source_domains"
+items = ["google.com"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "plesk_binaries"
+items = ["sw-engine", "sw-engine-fpm", "sw-engine-kv", "filemng", "f2bmng"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "ms_oms_binaries"
+items = ["omi.postinst", "omsconfig.posti", "scx.postinst", "omsadmin.sh", "omiagent"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "veritas_binaries"
+items = ["vxconfigd", "sfcache", "vxclustadm", "vxdctl", "vxprint", "vxdmpadm", "vxdisk", "vxdg", "vxassist", "vxtune"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "known_istio_files"
+items = ["/healthready", "/healthliveness"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "repository_files"
+items = ["sources.list"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "repository_directories"
+items = ["/etc/apt/sources.list.d", "/etc/yum.repos.d", "/etc/apt"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "monitored_directories"
+items = ["/boot", "/lib", "/lib64", "/usr/lib", "/usr/local/lib", "/usr/local/sbin", "/usr/local/bin", "/root/.ssh"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "safe_etc_dirs"
+items = ["/etc/cassandra", "/etc/ssl/certs/java", "/etc/logstash", "/etc/nginx/conf.d", "/etc/container_environment", "/etc/hrmconfig", "/etc/fluent/configs.d", "/etc/alertmanager"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "known_root_files"
+items = ["/root/.monit.state", "/root/.auth_tokens", "/root/.bash_history", "/root/.ash_history", "/root/.aws/credentials", "/root/.viminfo.tmp", "/root/.lesshst", "/root/.bzr.log", "/root/.gitconfig.lock", "/root/.babel.json", "/root/.localstack", "/root/.node_repl_history", "/root/.mongorc.js", "/root/.dbshell", "/root/.augeas/history", "/root/.rnd", "/root/.wget-hsts", "/health", "/exec.fifo"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "known_root_directories"
+items = ["/root/.oracle_jre_usage", "/root/.ssh", "/root/.subversion", "/root/.nami"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "falco_sensitive_mount_images"
+items = ["falco_containers", "docker.io/sysdig/sysdig", "sysdig/sysdig", "gcr.io/google_containers/hyperkube", "gcr.io/google_containers/kube-proxy", "docker.io/calico/node", "docker.io/rook/toolbox", "docker.io/cloudnativelabs/kube-router", "docker.io/consul", "docker.io/datadog/docker-dd-agent", "docker.io/datadog/agent", "docker.io/docker/ucp-agent", "docker.io/gliderlabs/logspout", "docker.io/netdata/netdata", "docker.io/google/cadvisor", "docker.io/prom/node-exporter", "amazon/amazon-ecs-agent", "prom/node-exporter", "amazon/cloudwatch-agent"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "exclude_hidden_directories"
+items = ["/root/.cassandra"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "miner_ports"
+items = ["25", "3333", "3334", "3335", "3336", "3357", "4444", "5555", "5556", "5588", "5730", "6099", "6666", "7777", "7778", "8000", "8001", "8008", "8080", "8118", "8333", "8888", "8899", "9332", "9999", "14433", "14444", "45560", "45700"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "miner_domains"
+items = ["asia1.ethpool.org", "ca.minexmr.com", "cn.stratum.slushpool.com", "de.minexmr.com", "eth-ar.dwarfpool.com", "eth-asia.dwarfpool.com", "eth-asia1.nanopool.org", "eth-au.dwarfpool.com", "eth-au1.nanopool.org", "eth-br.dwarfpool.com", "eth-cn.dwarfpool.com", "eth-cn2.dwarfpool.com", "eth-eu.dwarfpool.com", "eth-eu1.nanopool.org", "eth-eu2.nanopool.org", "eth-hk.dwarfpool.com", "eth-jp1.nanopool.org", "eth-ru.dwarfpool.com", "eth-ru2.dwarfpool.com", "eth-sg.dwarfpool.com", "eth-us-east1.nanopool.org", "eth-us-west1.nanopool.org", "eth-us.dwarfpool.com", "eth-us2.dwarfpool.com", "eu.stratum.slushpool.com", "eu1.ethermine.org", "eu1.ethpool.org", "fr.minexmr.com", "mine.moneropool.com", "mine.xmrpool.net", "pool.minexmr.com", "pool.monero.hashvault.pro", "pool.supportxmr.com", "sg.minexmr.com", "sg.stratum.slushpool.com", "stratum-eth.antpool.com", "stratum-ltc.antpool.com", "stratum-zec.antpool.com", "stratum.antpool.com", "us-east.stratum.slushpool.com", "us1.ethermine.org", "us1.ethpool.org", "us2.ethermine.org", "us2.ethpool.org", "xmr-asia1.nanopool.org", "xmr-au1.nanopool.org", "xmr-eu1.nanopool.org", "xmr-eu2.nanopool.org", "xmr-jp1.nanopool.org", "xmr-us-east1.nanopool.org", "xmr-us-west1.nanopool.org", "xmr.crypto-pool.fr", "xmr.pool.minergate.com", "rx.unmineable.com", "ss.antpool.com", "dash.antpool.com", "eth.antpool.com", "zec.antpool.com", "xmc.antpool.com", "btm.antpool.com", "stratum-dash.antpool.com", "stratum-xmc.antpool.com", "stratum-btm.antpool.com"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "https_miner_domains"
+items = ["ca.minexmr.com", "cn.stratum.slushpool.com", "de.minexmr.com", "fr.minexmr.com", "mine.moneropool.com", "mine.xmrpool.net", "pool.minexmr.com", "sg.minexmr.com", "stratum-eth.antpool.com", "stratum-ltc.antpool.com", "stratum-zec.antpool.com", "stratum.antpool.com", "xmr.crypto-pool.fr", "ss.antpool.com", "stratum-dash.antpool.com", "stratum-xmc.antpool.com", "stratum-btm.antpool.com", "btm.antpool.com"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "http_miner_domains"
+items = ["ca.minexmr.com", "de.minexmr.com", "fr.minexmr.com", "mine.moneropool.com", "mine.xmrpool.net", "pool.minexmr.com", "sg.minexmr.com", "xmr.crypto-pool.fr"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "k8s_client_binaries"
+items = ["docker", "kubectl", "crictl"]
 origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
@@ -2929,19 +2834,14 @@ items = ["registry.k8s.io/fluentd-gcp-scaler", "registry.k8s.io/node-problem-det
 origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
-name = "user_known_packet_socket_binaries"
-items = []
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "user_known_k8s_images"
+items = ["mcr.microsoft.com/aks/hcp/hcp-tunnel-front"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
-name = "user_known_sa_list"
+name = "run_as_root_image_list"
 items = []
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "user_known_shell_spawn_binaries"
-items = []
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
 name = "user_known_userfaultfd_processes"
@@ -2949,34 +2849,24 @@ items = []
 origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
-name = "user_mgmt_binaries"
-items = ["login_binaries", "passwd_binaries", "shadowutils_binaries"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "user_trusted_image_list"
+name = "known_decode_payload_containers"
 items = []
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
-
-[[lists]]
-name = "userexec_binaries"
-items = ["sudo", "su", "suexec", "critical-stack", "dzdo"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
-
-[[lists]]
-name = "veritas_binaries"
-items = ["vxconfigd", "sfcache", "vxclustadm", "vxdctl", "vxprint", "vxdmpadm", "vxdisk", "vxdg", "vxassist", "vxtune"]
 origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
-name = "vertical_pod_autoscaler_users"
-items = ["vpa-recommender", "vpa-updater"]
-origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+name = "recon_binaries"
+items = ["w", "whoami", "id", "who", "uname"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
-name = "vpn_binaries"
-items = ["openvpn"]
-origin = "falcosecurity/rules/rules/falco_rules.yaml"
+name = "node_package_managers"
+items = ["npm", "yarn", "pnpm", "bun"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "miner_binaries"
+items = ["xmrig", "xmr-stak", "minerd", "minergate", "cpuminer", "ccminer", "ethminer", "cgminer", "bfgminer", "sgminer", "claymore", "nbminer", "t-rex", "gminer", "lolminer", "phoenixminer", "teamredminer", "nanominer", "bminer", "wildrig", "srbminer"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
 name = "web_server_binaries"
@@ -2984,9 +2874,119 @@ items = ["nginx", "httpd", "httpd-foregroun", "apache", "apache2", "lighttpd", "
 origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
 
 [[lists]]
-name = "zsh_config_filenames"
-items = [".zshenv", ".zprofile", ".zshrc", ".zlogin", ".zlogout"]
-origin = "falcosecurity/rules/rules/falco-incubating_rules.yaml"
+name = "suspicious_web_children"
+items = ["curl", "wget", "nc", "ncat", "netcat", "socat", "python", "python3", "perl", "ruby", "nmap", "id", "whoami", "uname", "base64"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "gpu_device_files"
+items = ["/dev/nvidiactl", "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools", "/dev/kfd"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "gpu_management_binaries"
+items = ["nvidia-smi", "nvidia-debugdum", "nvidia-persiste", "nvidia-cuda-mps", "rocm-smi", "rocminfo"]
+origin = "falcosecurity/rules/rules/falco-sandbox_rules.yaml"
+
+[[lists]]
+name = "k8s_audit_stages"
+items = ["ResponseComplete"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "vertical_pod_autoscaler_users"
+items = ["vpa-recommender", "vpa-updater"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "allowed_k8s_users"
+items = ["minikube", "minikube-user", "kubelet", "kops", "admin", "kube", "kube-proxy", "kube-apiserver-healthcheck", "kubernetes-admin", "vertical_pod_autoscaler_users", "cluster-autoscaler", "system:addon-manager", "cloud-controller-manager", "system:kube-controller-manager"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "eks_allowed_k8s_users"
+items = ["eks:node-manager", "eks:certificate-controller", "eks:fargate-scheduler", "eks:k8s-metrics", "eks:authenticator", "eks:cluster-event-watcher", "eks:nodewatcher", "eks:pod-identity-mutating-webhook", "eks:cloud-controller-manager", "eks:vpc-resource-controller", "eks:addon-manager"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "k8s_audit_sensitive_mount_images"
+items = ["falcosecurity/falco", "docker.io/falcosecurity/falco", "public.ecr.aws/falcosecurity/falco", "docker.io/sysdig/sysdig", "sysdig/sysdig", "gcr.io/google_containers/hyperkube", "gcr.io/google_containers/kube-proxy", "docker.io/calico/node", "docker.io/rook/toolbox", "docker.io/cloudnativelabs/kube-router", "docker.io/consul", "docker.io/datadog/docker-dd-agent", "docker.io/datadog/agent", "docker.io/docker/ucp-agent", "docker.io/gliderlabs/logspout", "docker.io/netdata/netdata", "docker.io/google/cadvisor", "docker.io/prom/node-exporter", "amazon/amazon-ecs-agent", "prom/node-exporter", "amazon/cloudwatch-agent"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "k8s_audit_privileged_images"
+items = ["falcosecurity/falco", "docker.io/falcosecurity/falco", "public.ecr.aws/falcosecurity/falco", "docker.io/calico/node", "calico/node", "docker.io/cloudnativelabs/kube-router", "docker.io/docker/ucp-agent", "docker.io/mesosphere/mesos-slave", "docker.io/rook/toolbox", "docker.io/sysdig/sysdig", "gcr.io/google_containers/kube-proxy", "gcr.io/google-containers/startup-script", "gcr.io/projectcalico-org/node", "gke.gcr.io/kube-proxy", "gke.gcr.io/gke-metadata-server", "gke.gcr.io/netd-amd64", "gke.gcr.io/watcher-daemonset", "gcr.io/google-containers/prometheus-to-sd", "registry.k8s.io/ip-masq-agent-amd64", "registry.k8s.io/kube-proxy", "registry.k8s.io/prometheus-to-sd", "quay.io/calico/node", "sysdig/sysdig", "registry.k8s.io/dns/k8s-dns-node-cache", "mcr.microsoft.com/oss/kubernetes/kube-proxy"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "k8s_audit_hostnetwork_images"
+items = ["gcr.io/google-containers/prometheus-to-sd", "gcr.io/projectcalico-org/typha", "gcr.io/projectcalico-org/node", "gke.gcr.io/gke-metadata-server", "gke.gcr.io/kube-proxy", "gke.gcr.io/netd-amd64", "registry.k8s.io/ip-masq-agent-amd64", "registry.k8s.io/prometheus-to-sd"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "k8s_audit_hostpid_images"
+items = []
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "k8s_audit_hostipc_images"
+items = []
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "allowed_namespaces"
+items = ["kube-system", "kube-public", "default"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "user_trusted_image_list"
+items = []
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "user_allowed_kube_namespace_image_list"
+items = ["user_trusted_image_list"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "k8s_image_list"
+items = []
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "allowed_kube_namespace_image_list"
+items = ["gcr.io/google-containers/prometheus-to-sd", "gcr.io/projectcalico-org/node", "gke.gcr.io/addon-resizer", "gke.gcr.io/heapster", "gke.gcr.io/gke-metadata-server", "registry.k8s.io/ip-masq-agent-amd64", "registry.k8s.io/kube-apiserver", "gke.gcr.io/kube-proxy", "gke.gcr.io/netd-amd64", "gke.gcr.io/watcher-daemonset", "registry.k8s.io/addon-resizer", "registry.k8s.io/prometheus-to-sd", "registry.k8s.io/k8s-dns-dnsmasq-nanny-amd64", "registry.k8s.io/k8s-dns-kube-dns-amd64", "registry.k8s.io/k8s-dns-sidecar-amd64", "registry.k8s.io/metrics-server-amd64", "kope/kube-apiserver-healthcheck", "k8s_image_list"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "user_known_sa_list"
+items = []
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "known_sa_list"
+items = ["coredns", "coredns-autoscaler", "cronjob-controller", "daemon-set-controller", "deployment-controller", "disruption-controller", "endpoint-controller", "endpointslice-controller", "endpointslicemirroring-controller", "generic-garbage-collector", "horizontal-pod-autoscaler", "job-controller", "namespace-controller", "node-controller", "persistent-volume-binder", "pod-garbage-collector", "pv-protection-controller", "pvc-protection-controller", "replicaset-controller", "resourcequota-controller", "root-ca-cert-publisher", "service-account-controller", "statefulset-controller"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "full_admin_k8s_users"
+items = ["admin", "kubernetes-admin", "kubernetes-admin@kubernetes", "kubernetes-admin@cluster.local", "minikube-user"]
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "allowed_k8s_nodes"
+items = []
+origin = "falcosecurity/plugins/plugins/k8saudit/rules/k8s_audit_rules.yaml"
+
+[[lists]]
+name = "approved_regions"
+items = ["us-east-0"]
+origin = "falcosecurity/plugins/plugins/cloudtrail/rules/aws_cloudtrail_rules.yaml"
+
+[[lists]]
+name = "allowed_countries_list"
+items = []
+origin = "falcosecurity/plugins/plugins/okta/rules/okta_rules.yaml"
 
 [[rules]]
 name = "Add Collaborator to Repository"

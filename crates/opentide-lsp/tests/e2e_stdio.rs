@@ -964,6 +964,51 @@ fn falco_completion_follows_the_cursor_over_stdio() {
 }
 
 #[test]
+fn sysdig_lists_follow_falcos_load_order_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let rule = |lists: &str| {
+        format!(
+            "name: Lists\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000080\n  schema: rule::1.0\nconfigurations:\n  sysdig:\n    status: STAGING\n    condition: evt.type in (l1) and proc.name = bash\n    lists:\n{lists}"
+        )
+    };
+    // l1 names the later l2: it still expands (to execve), so no finding at all
+    // from the Falco checks or the block's constraints.
+    let codes = published_codes(
+        &mut lsp,
+        "file:///tmp/objects/rules/lists-forward.yaml",
+        "yaml",
+        &rule("    - name: l1\n      items: [l2]\n    - name: l2\n      items: [execve]\n"),
+    );
+    assert!(
+        !codes
+            .iter()
+            .any(|c| c.starts_with("falco_") || c.starts_with("sysdig_")),
+        "{codes:?}"
+    );
+    // l1 names itself: the name stays literal, a warning; as an event it is unknown.
+    let codes = published_codes(
+        &mut lsp,
+        "file:///tmp/objects/rules/lists-self.yaml",
+        "yaml",
+        &rule("    - name: l1\n      items: [l1, execve]\n"),
+    );
+    assert!(
+        codes.iter().any(|c| c == "sysdig_list_self_reference"),
+        "{codes:?}"
+    );
+    assert!(
+        codes.iter().any(|c| c == "falco_unknown_event"),
+        "{codes:?}"
+    );
+    assert!(
+        !codes.iter().any(|c| c == "sysdig_definition_order"),
+        "{codes:?}"
+    );
+}
+
+#[test]
 fn falco_hover_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));

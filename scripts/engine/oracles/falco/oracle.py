@@ -59,14 +59,6 @@ DOCUMENTED_DIFFERENCES = (
     ("but no rule by that name already exists", "falco_unknown_rule"),
 )
 
-#: Where sysdig-1.0 is stricter than Falco on purpose: Falco loads the rule and
-#: the engine refuses it with exactly this code. A list item naming a later list,
-#: or its own list, is loaded by Falco as a literal string item (no list has
-#: visibility of itself or later ones); sysdig-1.0 rejects it with
-#: `sysdig_definition_order`, as opentide does, because the author never means a
-#: list name as a value.
-STRICTER_BY_SPEC = ("sysdig_definition_order",)
-
 #: Falco load warnings and the engine code that reports the same condition.
 WARNING_MAP = {
     "LOAD_NO_EVTTYPE": "falco_no_evttype",
@@ -184,8 +176,6 @@ def run_engine(binary: pathlib.Path, path: pathlib.Path) -> list[dict[str, Any]]
 
 def _documented(theirs: dict[str, Any], our_errors: list[str], our_warnings: list[str]) -> str | None:
     """The documented difference that explains a verdict mismatch, if exactly one does."""
-    if theirs["successful"] and our_errors and all(c in STRICTER_BY_SPEC for c in our_errors):
-        return "stricter by spec: " + ", ".join(our_errors)
     if theirs["successful"] or our_errors or len(theirs["errors"]) != 1:
         return None
     message = theirs["errors"][0]["message"]
@@ -207,11 +197,12 @@ def main() -> int:
     parser.add_argument("--rules", type=pathlib.Path, required=True, help="falcosecurity/rules checkout")
     parser.add_argument("--docker", required=True, help="Falco image, e.g. falcosecurity/falco:0.45.2")
     parser.add_argument("--report", type=pathlib.Path, help="write every verdict as JSON")
+    parser.add_argument("--only", help="run only the cases whose id contains this text")
     args = parser.parse_args()
 
     subprocess.run(["cargo", "build", "-q", "-p", "opentide-lsp"], cwd=ROOT, check=True)
     binary = ROOT / "target" / "debug" / "opentide-lsp"
-    cases = load_cases()
+    cases = [c for c in load_cases() if not args.only or args.only in c["id"]]
     with tempfile.TemporaryDirectory() as tmp:
         scratch = pathlib.Path(tmp)
         (scratch / "falco").mkdir()
@@ -241,6 +232,10 @@ def main() -> int:
                 documented = _documented(theirs, our_errors, our_warnings)
                 if documented is None:
                     problems.append("verdict")
+            # A case may require engine warnings Falco has no code for.
+            for code in case.get("engine_warnings", []):
+                if code not in our_warnings:
+                    problems.append(f"missing engine warning {code}")
             for code, engine_code in WARNING_MAP.items():
                 if theirs["successful"] and (code in falco_warnings) != (engine_code in our_warnings):
                     problems.append(f"warning {code}/{engine_code}")

@@ -410,7 +410,9 @@ def defaults(rules: Path, plugins: Path) -> tuple[list[dict], list[dict], list[d
                 )
     return (
         sorted(macros.values(), key=lambda r: r["name"]),
-        sorted(lists.values(), key=lambda r: r["name"]),
+        # Lists in Falco's load order (the first definition's position): a list
+        # item names a list only when that list is loaded before it.
+        list(lists.values()),
         rule_rows,
     )
 

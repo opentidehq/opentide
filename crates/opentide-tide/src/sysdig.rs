@@ -5,8 +5,10 @@
 //! opentide's `SysdigConfig` validator and `platforms/sysdig/expansion.py`: a
 //! block without `status` reports only the missing field, as there; exception
 //! shapes follow Falco's `validate_exception_info`; definition order is
-//! Falco's (a list item names only earlier block lists, a macro only earlier
-//! block macros, and a macro may use any block list). Each code is an error on
+//! Falco's: a macro sees only earlier block macros (and every block list); a
+//! list naming a later list still expands, because `resolve_list` runs over the
+//! condition for every list in order; a list naming itself keeps the name as a
+//! literal (`sysdig_list_self_reference`, a warning). Each code is reported on
 //! the field path it is about.
 
 use opentide_core::{Diagnostic, codes};
@@ -231,24 +233,48 @@ fn definitions(source: &str, block: &Value, out: &mut Vec<Diagnostic>) -> Defini
     defs
 }
 
-/// `sysdig_definition_order`: Falco's definition-before-use.
+/// `sysdig_definition_order` for macros (Falco refuses a macro naming itself or
+/// a later block macro: `Undefined macro`), and `sysdig_list_self_reference`
+/// for a list naming itself (Falco keeps the name as a literal item, which on
+/// Sysdig resolves against a tenant list of that name). A list naming a later
+/// list is fine: Falco's `resolve_list` runs over the condition for every list
+/// in order, so the later list still expands.
 fn order(source: &str, defs: &Definitions, out: &mut Vec<Diagnostic>) -> bool {
-    let list_names: Vec<&str> = defs.lists.iter().map(|(_, n, _)| n.as_str()).collect();
-    for (pos, (index, name, items)) in defs.lists.iter().enumerate() {
+    for (index, name, items) in &defs.lists {
         for (item_index, item) in items.iter().enumerate() {
-            if list_names[..pos].contains(&item.as_str()) {
-                continue;
-            }
-            if list_names[pos..].contains(&item.as_str()) {
-                out.push(err(
-                    source,
-                    codes::SYSDIG_DEFINITION_ORDER,
-                    format!(
-                        "list `{name}` names `{item}`, which is not defined before it in the block: Falco gives a list no view of itself or later lists"
+            if item == name {
+                out.push(
+                    Diagnostic::warning(
+                        codes::SYSDIG_LIST_SELF_REFERENCE,
+                        format!(
+                            "list `{name}` names itself: Falco keeps `{name}` as a literal item, which on Sysdig resolves against a tenant list of that name, not this one"
+                        ),
+                        crate::elastic::path_range(
+                            source,
+                            &[
+                                BLOCK[0],
+                                BLOCK[1],
+                                "lists",
+                                &index.to_string(),
+                                "items",
+                                &item_index.to_string(),
+                            ],
+                        ),
+                    )
+                    .with_field_path(
+                        [
+                            BLOCK[0],
+                            BLOCK[1],
+                            "lists",
+                            &index.to_string(),
+                            "items",
+                            &item_index.to_string(),
+                        ]
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect(),
                     ),
-                    &["lists", &index.to_string(), "items", &item_index.to_string()],
-                ));
-                return true;
+                );
             }
         }
     }
@@ -258,6 +284,7 @@ fn order(source: &str, defs: &Definitions, out: &mut Vec<Diagnostic>) -> bool {
             .iter()
             .map(|(_, n, items)| (n.clone(), items.clone()))
             .collect(),
+        list_order: defs.lists.iter().map(|(_, n, _)| n.clone()).collect(),
         ..Context::default()
     };
     let macro_names: Vec<&str> = defs.macros.iter().map(|(_, n, _)| n.as_str()).collect();
@@ -537,12 +564,15 @@ mod tests {
                 "sysdig_tuning_keys",
                 "sysdig_tuning_keys",
                 "sysdig_exception_shape",
-                "sysdig_definition_order"
+                "sysdig_list_self_reference"
             ]
         );
         assert_eq!(found[0].1.last().map(String::as_str), Some("output"));
         assert_eq!(found[2].1.join("."), "configurations.sysdig.exceptions.0");
-        assert_eq!(found[3].1.join("."), "configurations.sysdig.lists.0.items.1");
+        assert_eq!(
+            found[3].1.join("."),
+            "configurations.sysdig.lists.0.items.1"
+        );
     }
 
     #[test]
@@ -552,16 +582,23 @@ mod tests {
 
     #[test]
     fn rule_shape_priority_and_source() {
-        assert_eq!(only_codes("    status: STAGING\n    condition: '  '\n"), ["sysdig_rule_shape"]);
+        assert_eq!(
+            only_codes("    status: STAGING\n    condition: '  '\n"),
+            ["sysdig_rule_shape"]
+        );
         assert_eq!(
             only_codes("    status: STAGING\n    append_to_rule: X\n"),
             ["sysdig_rule_shape"]
         );
         assert_eq!(
-            only_codes("    status: STAGING\n    condition: a\n    priority: HIGH\n    source: k8s-audit\n"),
+            only_codes(
+                "    status: STAGING\n    condition: a\n    priority: HIGH\n    source: k8s-audit\n"
+            ),
             ["sysdig_priority", "sysdig_source"]
         );
-        assert!(only_codes("    status: STAGING\n    condition: a\n    priority: info\n").is_empty());
+        assert!(
+            only_codes("    status: STAGING\n    condition: a\n    priority: info\n").is_empty()
+        );
     }
 
     #[test]
@@ -596,19 +633,41 @@ mod tests {
     #[test]
     fn definitions_are_named_unique_and_ordered() {
         assert_eq!(
-            only_codes("    status: STAGING\n    condition: a\n    macros:\n    - name: in\n      condition: b\n"),
+            only_codes(
+                "    status: STAGING\n    condition: a\n    macros:\n    - name: in\n      condition: b\n"
+            ),
             ["sysdig_definition_name"]
         );
         assert_eq!(
-            only_codes("    status: STAGING\n    condition: a\n    macros:\n    - name: s\n      condition: b\n    lists:\n    - name: s\n      items: [c]\n"),
+            only_codes(
+                "    status: STAGING\n    condition: a\n    macros:\n    - name: s\n      condition: b\n    lists:\n    - name: s\n      items: [c]\n"
+            ),
             ["sysdig_definition_duplicate"]
         );
         // A macro sees only earlier macros, but every block list.
         assert_eq!(
-            only_codes("    status: STAGING\n    condition: m1\n    macros:\n    - name: m1\n      condition: m2\n    - name: m2\n      condition: proc.name in (l1)\n    lists:\n    - name: l1\n      items: [bash]\n"),
+            only_codes(
+                "    status: STAGING\n    condition: m1\n    macros:\n    - name: m1\n      condition: m2\n    - name: m2\n      condition: proc.name in (l1)\n    lists:\n    - name: l1\n      items: [bash]\n"
+            ),
             ["sysdig_definition_order"]
         );
         assert!(only_codes("    status: STAGING\n    condition: m1\n    macros:\n    - name: m1\n      condition: proc.name in (l1)\n    lists:\n    - name: l1\n      items: [bash]\n").is_empty());
+    }
+
+    #[test]
+    fn lists_follow_falcos_load_order() {
+        // A later list still expands (resolve_list runs for every list in order).
+        assert!(only_codes("    status: STAGING\n    condition: a\n    lists:\n    - name: l1\n      items: [l2, zsh]\n    - name: l2\n      items: [bash]\n").is_empty());
+        // A list naming itself keeps the name: a warning, not an error.
+        let found = codes_for(
+            "    status: STAGING\n    condition: a\n    lists:\n    - name: l1\n      items: [l1, zsh]\n",
+        );
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].0, "sysdig_list_self_reference");
+        assert_eq!(
+            found[0].1.join("."),
+            "configurations.sysdig.lists.0.items.0"
+        );
     }
 
     #[test]
@@ -619,7 +678,13 @@ mod tests {
             )
         };
         assert!(only_codes(&block("[[ci]]", "in")).is_empty());
-        assert_eq!(only_codes(&block("[[ci]]", "'='")), ["sysdig_list_in_value"]);
-        assert_eq!(only_codes(&block("[['x ci']]", "in")), ["sysdig_list_in_value"]);
+        assert_eq!(
+            only_codes(&block("[[ci]]", "'='")),
+            ["sysdig_list_in_value"]
+        );
+        assert_eq!(
+            only_codes(&block("[['x ci']]", "in")),
+            ["sysdig_list_in_value"]
+        );
     }
 }

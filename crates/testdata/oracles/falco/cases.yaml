@@ -515,6 +515,8 @@
     items:
     - l1
     - zsh
+  engine_warnings:
+  - sysdig_list_self_reference
 - id: def-macro-uses-later-list
   condition: evt.type in (execve, execveat) and m1
   macros:
@@ -524,3 +526,54 @@
   - name: l1
     items:
     - bash
+- id: def-list-forward-evttype
+  condition: evt.type in (l1) and proc.name = bash
+  lists:
+  - name: l1
+    items:
+    - l2
+  - name: l2
+    items:
+    - execve
+- id: def-list-reverse-evttype
+  condition: evt.type in (l1) and proc.name = bash
+  lists:
+  - name: l2
+    items:
+    - execve
+  - name: l1
+    items:
+    - l2
+- id: def-list-forward-no-evttype
+  condition: proc.name in (l1)
+  lists:
+  - name: l1
+    items:
+    - l2
+  - name: l2
+    items:
+    - bash
+- id: def-list-forward-undefined
+  condition: evt.type in (l1) and proc.name = bash
+  lists:
+  - name: l1
+    items:
+    - l2
+- id: def-list-cycle-evttype
+  condition: evt.type in (l1) and proc.name = bash
+  lists:
+  - name: l1
+    items:
+    - l2
+  - name: l2
+    items:
+    - l1
+- id: def-list-self-evttype
+  condition: evt.type in (l1) and proc.name = bash
+  lists:
+  - name: l1
+    items:
+    - l1
+    - execve
+  engine_warnings:
+  - sysdig_list_self_reference

@@ -185,6 +185,10 @@ pub struct Catalog {
     by_name: HashMap<String, usize>,
     pub macros: BTreeMap<String, Macro>,
     pub lists: BTreeMap<String, List>,
+    /// The default lists' names in Falco's load order (`falco_rules.yaml`,
+    /// then incubating, then sandbox, then the plugin rules), which decides what
+    /// a list item can name and the order lists expand in.
+    pub list_order: Vec<String>,
     /// The Falco default rules, by name.
     pub rules: BTreeMap<String, Rule>,
     events: BTreeMap<String, Event>,
@@ -243,6 +247,7 @@ impl Catalog {
                     .into_iter()
                     .map(|m| (m.name.clone(), m))
                     .collect(),
+                list_order: defaults.lists.iter().map(|l| l.name.clone()).collect(),
                 lists: defaults
                     .lists
                     .into_iter()

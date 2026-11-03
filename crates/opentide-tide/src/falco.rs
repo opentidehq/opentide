@@ -56,6 +56,7 @@ pub(crate) fn context_for(block: Option<&serde_yaml::Value>, field_path: &[Strin
                         .collect()
                 })
                 .unwrap_or_default();
+            ctx.list_order.push(name.clone());
             ctx.lists.insert(name, items);
         }
     }
