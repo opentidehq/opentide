@@ -4,7 +4,7 @@
 use crate::jsonrpc::{self, Incoming};
 use anyhow::Result;
 use opentide_analysis::{
-    AnalyzeRequest, Catalog, MemoryWorkspace, VISIBILITY_CONFIGURATION, WorkspaceHost, analyze,
+    AnalyzeRequest, Catalog, IndexedObject, VISIBILITY_CONFIGURATION, WorkspaceHost, analyze,
     codes, compiled_kql, compiled_spl, completions, configuration_completions, configuration_hover,
     declare_dataset, hover, index_workspace, install_catalog, install_visibility,
     is_configuration_path, signature_help,
@@ -12,10 +12,12 @@ use opentide_analysis::{
 use opentide_core::{LanguageId, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Default)]
 struct Session {
@@ -26,31 +28,197 @@ struct Session {
     visibility: Option<String>,
     /// The client can watch files for the server (`didChangeWatchedFiles`).
     watch_files: bool,
+    /// The workspace's object files on disk, each read and indexed once
+    /// (#181). With a file watcher, a file is read again when it changes;
+    /// without one, every request re-reads the files and re-indexes those
+    /// whose text changed.
+    disk: RefCell<DiskObjects>,
+    /// The index the analysis sees: the disk objects, with open documents in
+    /// place of their files. Rebuilt after a Tide document or a file changes.
+    index: RefCell<Option<Arc<[IndexedObject]>>>,
 }
 
-impl Session {
-    fn host(&self) -> MemoryWorkspace {
-        let mut files: Vec<(String, String)> = self
+/// The key a file is cached under: `/` separators and a lower-case drive
+/// letter, so the directory walk (`C:\\w\\x.yaml`) and a URI
+/// (`file:///c%3A/w/x.yaml`) name one file once.
+fn path_key(path: &str) -> String {
+    let mut key = path.replace('\\', "/");
+    if key.as_bytes().get(1) == Some(&b':') {
+        key[..1].make_ascii_lowercase();
+    }
+    key
+}
+
+/// Object files under the workspace root: [`path_key`] → (text, index entry).
+#[derive(Default)]
+struct DiskObjects {
+    loaded: bool,
+    files: BTreeMap<String, (String, Option<IndexedObject>)>,
+}
+
+impl DiskObjects {
+    /// Read every object file again; re-index only those whose text changed.
+    /// Whether anything changed.
+    fn refresh(&mut self, root: &Path) -> bool {
+        let found: BTreeMap<String, (String, String)> = collect_objects(root)
+            .into_iter()
+            .map(|(path, text)| (path_key(&path), (path, text)))
+            .collect();
+        let mut changed = !self.loaded || found.len() != self.files.len();
+        self.loaded = true;
+        self.files.retain(|path, _| found.contains_key(path));
+        for (key, (path, text)) in found {
+            match self.files.get(&key) {
+                Some((known, _)) if *known == text => {}
+                _ => {
+                    let indexed = opentide_analysis::index_object(&path, &text);
+                    self.files.insert(key, (text, indexed));
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
+
+    /// Read one file again (a watcher event, or the editor closed it), or
+    /// forget it when it is gone.
+    fn refresh_path(&mut self, path: &str) {
+        match std::fs::read_to_string(path) {
+            Ok(text) => {
+                let text = opentide_core::strip_bom(&text).to_string();
+                let indexed = opentide_analysis::index_object(path, &text);
+                self.files.insert(path_key(path), (text, indexed));
+            }
+            Err(_) => {
+                self.files.remove(&path_key(path));
+            }
+        }
+    }
+}
+
+/// What a request sees of the workspace: the open documents, the object
+/// files on disk, and their index.
+struct SessionHost<'a> {
+    session: &'a Session,
+}
+
+impl WorkspaceHost for SessionHost<'_> {
+    fn document(&self, uri: &str) -> Option<String> {
+        let session = self.session;
+        if let Some((_, text)) = session.docs.get(uri) {
+            return Some(text.clone());
+        }
+        if let Some((_, (_, text))) = session
+            .docs
+            .iter()
+            .find(|(open, _)| uri_to_path(open) == uri)
+        {
+            return Some(text.clone());
+        }
+        if let Some((text, _)) = session.disk.borrow().files.get(&path_key(uri)) {
+            return Some(text.clone());
+        }
+        let elastic = session.elastic_configuration()?;
+        (elastic.0 == uri).then_some(elastic.1)
+    }
+
+    /// The open documents and the Elastic tenants file. Object files on disk
+    /// come through [`indexed_objects`](WorkspaceHost::indexed_objects).
+    fn documents(&self) -> Vec<(String, String)> {
+        let session = self.session;
+        let mut files: Vec<(String, String)> = session
             .docs
             .iter()
             .map(|(uri, (_, text))| (uri_to_path(uri), text.clone()))
             .collect();
-        if let Some(root) = &self.root {
-            for (p, t) in collect_objects(root) {
-                if !files.iter().any(|(e, _)| e == &p) {
-                    files.push((p, t));
-                }
-            }
-            // Tenants, for the stack version Elastic queries are checked against.
-            let config = root.join(opentide_analysis::ELASTIC_CONFIGURATION);
-            let path = config.display().to_string();
-            if !files.iter().any(|(e, _)| e == &path) {
-                if let Ok(text) = std::fs::read_to_string(&config) {
-                    files.push((path, text));
-                }
+        if let Some((path, text)) = session.elastic_configuration() {
+            if !files.iter().any(|(open, _)| open == &path) {
+                files.push((path, text));
             }
         }
-        MemoryWorkspace { files }
+        files
+    }
+
+    fn indexed_objects(&self) -> Option<Arc<[IndexedObject]>> {
+        let session = self.session;
+        if let Some(index) = session.index.borrow().as_ref() {
+            return Some(Arc::clone(index));
+        }
+        let open: HashMap<String, (String, &String)> = session
+            .docs
+            .iter()
+            .map(|(uri, (_, text))| {
+                let path = uri_to_path(uri);
+                (path_key(&path), (path, text))
+            })
+            .collect();
+        let mut index: Vec<IndexedObject> = session
+            .disk
+            .borrow()
+            .files
+            .iter()
+            .filter(|(path, _)| !open.contains_key(*path))
+            .filter_map(|(_, (_, indexed))| indexed.clone())
+            .collect();
+        index.extend(
+            open.values()
+                .filter_map(|(path, text)| opentide_analysis::index_object(path, text)),
+        );
+        let index: Arc<[IndexedObject]> = index.into();
+        *session.index.borrow_mut() = Some(Arc::clone(&index));
+        Some(index)
+    }
+}
+
+impl Session {
+    fn host(&self) -> SessionHost<'_> {
+        if let Some(root) = &self.root {
+            let mut disk = self.disk.borrow_mut();
+            if (!disk.loaded || !self.watch_files) && disk.refresh(root) {
+                self.index.borrow_mut().take();
+            }
+        }
+        SessionHost { session: self }
+    }
+
+    /// The index changes: rebuild it on the next request.
+    fn invalidate_index(&self) {
+        self.index.borrow_mut().take();
+    }
+
+    /// Whether `path` is a file [`collect_objects`] reads: YAML under the
+    /// root's `objects/`, or under the root when there is no `objects/`.
+    fn is_object_path(&self, path: &str) -> bool {
+        let Some(root) = &self.root else {
+            return false;
+        };
+        let objects = root.join("objects");
+        let base = if objects.is_dir() {
+            objects
+        } else {
+            root.clone()
+        };
+        let path = Path::new(path);
+        path.starts_with(&base)
+            && matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("yaml" | "yml")
+            )
+    }
+
+    /// `.opentide/configurations/platforms/elastic.toml`, from the editor when
+    /// it is open, else from disk: its tenants decide the stack Elastic
+    /// queries are checked against.
+    fn elastic_configuration(&self) -> Option<(String, String)> {
+        let root = self.root.as_ref()?;
+        let path = root
+            .join(opentide_analysis::ELASTIC_CONFIGURATION)
+            .display()
+            .to_string();
+        if let Some((_, (_, text))) = self.docs.iter().find(|(uri, _)| uri_to_path(uri) == path) {
+            return Some((path, text.clone()));
+        }
+        std::fs::read_to_string(&path).ok().map(|text| (path, text))
     }
 
     /// The language of a document, or `None` for a document this server does
@@ -122,6 +290,8 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                 let root = PathBuf::from(root);
                 install_workspace_catalog(&root);
                 session.root = Some(root);
+                *session.disk.borrow_mut() = DiskObjects::default();
+                session.invalidate_index();
             } else {
                 install_workspace_catalog(Path::new(""));
             }
@@ -176,7 +346,9 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
                             "id": "opentide-visibility",
                             "method": "workspace/didChangeWatchedFiles",
                             "registerOptions": { "watchers": [
-                                { "globPattern": format!("**/{VISIBILITY_CONFIGURATION}") }
+                                { "globPattern": format!("**/{VISIBILITY_CONFIGURATION}") },
+                                // Object files, so the server's index of them stays current.
+                                { "globPattern": "**/*.{yaml,yml}" }
                             ] }
                         }] }
                     }),
@@ -184,6 +356,9 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
             }
         }
         "workspace/didChangeWatchedFiles" => {
+            if objects_changed(session, &params) {
+                republish_all(session, writer)?;
+            }
             let touched = params
                 .get("changes")
                 .and_then(|v| v.as_array())
@@ -215,6 +390,14 @@ fn dispatch(session: &mut Session, writer: &mut impl Write, msg: Incoming) -> Re
             let uri = params.pointer("/textDocument/uri").and_then(|v| v.as_str());
             if let Some(uri) = uri {
                 let closed = session.docs.remove(uri).map(|(language, _)| language);
+                if closed == Some(LanguageId::TideYaml) {
+                    // The file on disk is the object again, as last saved.
+                    let path = uri_to_path(uri);
+                    if session.is_object_path(&path) {
+                        session.disk.borrow_mut().refresh_path(&path);
+                    }
+                    session.invalidate_index();
+                }
                 jsonrpc::write_message(
                     writer,
                     &jsonrpc::notify(
@@ -395,6 +578,9 @@ fn document_changed(
     uri: &str,
     language: LanguageId,
 ) -> Result<()> {
+    if language == LanguageId::TideYaml {
+        session.invalidate_index();
+    }
     if is_visibility(uri) {
         session.visibility = session.docs.get(uri).map(|(_, text)| text.clone());
         return visibility_edited(session, writer);
@@ -410,6 +596,28 @@ fn is_visibility(uri: &str) -> bool {
     uri_to_path(uri)
         .replace('\\', "/")
         .ends_with(VISIBILITY_CONFIGURATION)
+}
+
+/// Read again the object files a `didChangeWatchedFiles` names. Whether any
+/// did change, so the open documents are checked again.
+fn objects_changed(session: &mut Session, params: &Value) -> bool {
+    let changes = params.get("changes").and_then(|v| v.as_array());
+    let mut changed = false;
+    for change in changes.into_iter().flatten() {
+        let Some(uri) = change.get("uri").and_then(|u| u.as_str()) else {
+            continue;
+        };
+        let path = uri_to_path(uri);
+        if !session.is_object_path(&path) {
+            continue;
+        }
+        session.disk.borrow_mut().refresh_path(&path);
+        changed = true;
+    }
+    if changed {
+        session.invalidate_index();
+    }
+    changed
 }
 
 /// `visibility.toml` changed in the editor: its declared datasets apply at

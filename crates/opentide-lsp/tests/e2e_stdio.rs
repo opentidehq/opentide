@@ -1242,3 +1242,82 @@ fn an_edit_after_a_multi_byte_character_keeps_the_server_running() {
     let reply = lsp.request("shutdown", Value::Null);
     assert_eq!(reply["result"], Value::Null, "{reply}");
 }
+
+fn codes_of(diagnostics: &[Value]) -> Vec<String> {
+    diagnostics
+        .iter()
+        .filter_map(|d| d["code"].as_str().map(str::to_string))
+        .collect()
+}
+
+fn published_for(lsp: &mut Lsp, uri: &str) -> Vec<Value> {
+    loop {
+        let msg = lsp.read();
+        if msg["method"] == "textDocument/publishDiagnostics" && msg["params"]["uri"] == uri {
+            return msg["params"]["diagnostics"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+        }
+    }
+}
+
+/// #181: the server reads and indexes `objects/` once. An objective created
+/// on disk after start is found through the file watcher, and also, for a
+/// client that cannot watch files, on the next request.
+#[test]
+fn objects_written_after_start_are_indexed() {
+    let source = repo_root().join("testdata/objects");
+    for watch in [true, false] {
+        let root = std::env::temp_dir().join(format!(
+            "opentide-index-cache-{}-{watch}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let rules = root.join("objects/rules");
+        std::fs::create_dir_all(&rules).unwrap();
+        std::fs::create_dir_all(root.join("objects/objectives")).unwrap();
+        let rule_text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
+        let rule = rules.join("rule-1.0.yaml");
+        std::fs::write(&rule, &rule_text).unwrap();
+        let rule_uri = format!("file://{}", rule.display());
+
+        let mut lsp = Lsp::spawn();
+        let capabilities = if watch {
+            json!({ "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } })
+        } else {
+            json!({})
+        };
+        lsp.request(
+            "initialize",
+            json!({ "processId": null, "rootUri": format!("file://{}", root.display()), "capabilities": capabilities }),
+        );
+        lsp.notify("initialized", json!({}));
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule_text } }),
+        );
+        let before = codes_of(&published_for(&mut lsp, &rule_uri));
+        assert!(before.contains(&"invalid_ref".to_string()), "{before:?}");
+
+        let objective = root.join("objects/objectives/objective-1.0.yaml");
+        std::fs::copy(source.join("objective-1.0.yaml"), &objective).unwrap();
+        if watch {
+            lsp.notify(
+                "workspace/didChangeWatchedFiles",
+                json!({ "changes": [{ "uri": format!("file://{}", objective.display()), "type": 1 }] }),
+            );
+        } else {
+            lsp.notify(
+                "textDocument/didChange",
+                json!({ "textDocument": { "uri": rule_uri, "version": 2 }, "contentChanges": [{ "text": rule_text }] }),
+            );
+        }
+        let after = codes_of(&published_for(&mut lsp, &rule_uri));
+        assert!(
+            !after.contains(&"invalid_ref".to_string()),
+            "watch={watch}: {after:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

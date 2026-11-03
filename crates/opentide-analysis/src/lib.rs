@@ -43,7 +43,19 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub trait WorkspaceHost {
     fn document(&self, uri: &str) -> Option<String>;
     fn documents(&self) -> Vec<(String, String)>;
+
+    /// The workspace's objects, already indexed ([`index_object`] per file),
+    /// for a host that keeps an index between requests. With `None` (the
+    /// default), every Tide analysis, hover and completion re-indexes
+    /// [`documents`](Self::documents), which parses every object file. A host
+    /// that returns an index need not list object files in `documents`, but
+    /// [`document`](Self::document) still finds them by path.
+    fn indexed_objects(&self) -> Option<std::sync::Arc<[IndexedObject]>> {
+        None
+    }
 }
+
+pub use opentide_tide::index_object;
 
 #[derive(Debug, Clone, Default)]
 pub struct MemoryWorkspace {
@@ -78,6 +90,14 @@ pub struct AnalyzeResponse {
 }
 
 pub fn index_workspace(host: &dyn WorkspaceHost) -> Vec<IndexedObject> {
+    workspace_index(host).to_vec()
+}
+
+/// The host's index when it keeps one, else one built from its documents.
+fn workspace_index(host: &dyn WorkspaceHost) -> std::sync::Arc<[IndexedObject]> {
+    if let Some(index) = host.indexed_objects() {
+        return index;
+    }
     host.documents()
         .iter()
         .filter_map(|(path, src)| opentide_tide::index_object(path, src))
@@ -100,10 +120,10 @@ pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
 }
 
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
-    let workspace = if request.language == LanguageId::TideYaml {
-        index_workspace(host)
+    let workspace: std::sync::Arc<[IndexedObject]> = if request.language == LanguageId::TideYaml {
+        workspace_index(host)
     } else {
-        Vec::new()
+        std::sync::Arc::from([])
     };
     analyze_with_index(host, &workspace, request)
 }
@@ -478,7 +498,7 @@ pub fn hover(
                 let inner_pos = position_at_offset(&inj.inner, inner);
                 return query_hover(inj.language, &inj.inner, inner_pos, &inj.platform);
             }
-            let workspace = index_workspace(host);
+            let workspace = workspace_index(host);
             opentide_tide::hover_tide(text, offset, &workspace)
         }
         query => query_hover(query, text, position, ""),
@@ -520,7 +540,7 @@ pub fn completions(
             if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
                 return query_completions(inj.language, &inj.inner, inner, &inj.platform);
             }
-            let workspace = index_workspace(host);
+            let workspace = workspace_index(host);
             opentide_tide::completions_tide(text, offset, &workspace)
         }
         query => query_completions(query, text, offset, ""),
