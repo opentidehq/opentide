@@ -15,10 +15,10 @@ _EXTENSION_MCP = (
 
 
 class PlannedFile(ResultModel):
-    """``setup --plan``: one file a step would write, or leave as it is."""
+    """``setup --plan``: one file a step would write, remove, or leave as it is."""
 
     path: str = Field(description="Relative to the repository set up")
-    action: Literal["create", "merge", "skip"]
+    action: Literal["create", "merge", "skip", "delete"]
 
 
 class SetupFiles(ResultModel):

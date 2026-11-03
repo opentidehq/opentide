@@ -298,3 +298,30 @@ def test_a_fifo_or_a_socket_in_the_tree_does_not_stop_the_plan(tmp_path: Path) -
         server.close()
     assert result.exit_code == 0, result.stdout + result.stderr
     assert ".env.example" in _planned(plan)
+
+
+def test_the_plan_lists_the_files_a_step_removes(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    agents = target / ".agents" / "skills" / "opentide-detection-rule"
+    claude = target / ".claude" / "skills" / "opentide-detection-rule"
+    for folder in (agents, claude):
+        folder.mkdir(parents=True)
+        (folder / "SKILL.md").write_text("old\n", encoding="utf-8")
+    # A file an older version of the skill shipped: setup replaces opentide's copy whole.
+    (agents / "STALE.md").write_text("old\n", encoding="utf-8")
+    # The user's own file in the harness copy: setup keeps it.
+    (claude / "TEAM-NOTES.md").write_text("ours\n", encoding="utf-8")
+    before = _tree(tmp_path)
+    result, plan = _invoke("skills", "--claude-code", "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _tree(tmp_path) == before
+    deleted = _planned(plan, actions=("delete",))
+    assert deleted == {".agents/skills/opentide-detection-rule/STALE.md"}
+    assert plan["summary"]["delete"] == 1
+    assert "1 to remove" in plan["message"]
+    assert document_problems(plan) == []
+
+    result, _ = _invoke("skills", "--claude-code", "--yes", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert not (agents / "STALE.md").exists()
+    assert (claude / "TEAM-NOTES.md").read_text(encoding="utf-8") == "ours\n"

@@ -4,7 +4,8 @@ The plan runs the very same setup steps ``--yes`` runs, in a copy of the
 repository in a temporary directory, and compares that copy's files before
 and after each step. So the plan cannot drift from what setup does: a file
 is ``create`` when a step made it, ``merge`` when a step wrote over one that
-was there, and ``skip`` when a step reported it left as it was. The copy is
+was there, ``delete`` when a step removed one, and ``skip`` when a step
+reported it left as it was. The copy is
 deleted afterwards; the repository itself is only read.
 
 What the copy holds:
@@ -34,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-PlanAction = Literal["create", "merge", "skip"]
+PlanAction = Literal["create", "merge", "skip", "delete"]
 
 #: Folders the copy leaves out: nothing setup writes depends on them, and they can be large.
 SKIPPED_DIRS = frozenset(
@@ -71,7 +72,7 @@ Stamp = tuple[int, int]
 
 @dataclass(frozen=True)
 class PlannedFile:
-    """One file a step would write, or leave as it is."""
+    """One file a step would write, remove, or leave as it is."""
 
     path: str
     action: PlanAction
@@ -296,6 +297,10 @@ class Sandbox:
             planned.files.append(PlannedFile(self.shown(relative), action))
             shown.add(self.shown(relative))
             self._written.add(relative)
+        for relative in sorted(set(self._seen) - set(now)):
+            # A file the step removed (a skill folder replaced whole).
+            planned.files.append(PlannedFile(self.shown(relative), "delete"))
+            shown.add(self.shown(relative))
         for item in _reported_skips(result):
             path = self.to_real(item)
             relative = self._relative_to_target(path)
@@ -368,7 +373,7 @@ def plan_payload(
 ) -> dict[str, object]:
     """The ``--plan`` document: each step's files, the counts, and the outcome line."""
     listed = list(steps)
-    counts = {"create": 0, "merge": 0, "skip": 0}
+    counts = {"create": 0, "merge": 0, "skip": 0, "delete": 0}
     for step in listed:
         for item in step.files:
             counts[item.action] += 1
@@ -378,9 +383,10 @@ def plan_payload(
             all_warnings.append(warning)
     writes = counts["create"] + counts["merge"]
     noun = "file" if writes == 1 else "files"
+    removed = f", {counts['delete']} to remove" if counts["delete"] else ""
     message = (
         f"Plan: {writes} {noun} to write ({counts['create']} new, {counts['merge']} changed)"
-        " · nothing written"
+        f"{removed} · nothing written"
     )
     return {
         "message": message,

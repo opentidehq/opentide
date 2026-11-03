@@ -106,7 +106,7 @@ opentide --json setup --plan --name "Tutorial Detections" --org "Example Corp" \
     }
   ],
   "message": "Plan: 15 files to write (15 new, 0 changed) · nothing written",
-  "summary": { "create": 15, "merge": 0, "skip": 1, "steps": 2 }
+  "summary": { "create": 15, "merge": 0, "skip": 1, "delete": 0, "steps": 2 }
 }
 ```
 
@@ -115,10 +115,11 @@ opentide --json setup --plan --name "Tutorial Detections" --org "Example Corp" \
 | `create` | The step would write a file that does not exist yet |
 | `merge` | The step would write over a file that exists (setup merges into the ones it shares with you, such as `.gitignore`, `.vscode/mcp.json` or `.pre-commit-config.yaml`), or over one an earlier step wrote |
 | `skip` | The step would leave the file as it is, because it already says what setup would write |
+| `delete` | The step would remove the file: an older version's file in `.agents/skills/<slug>/`, which setup replaces whole |
 
 Each step's `warnings` are the warnings that step would print. Paths are relative to the repository being set up; a file outside it, such as the Git hook of a workspace in a subdirectory, is relative too (`../.git/hooks/pre-commit`).
 
-The plan is not a guess: setup runs the same steps in a copy of the repository in a temporary directory, and compares the copy's files before and after each one. The copy holds the Git work tree around the target, less dependency and cache folders (`node_modules`, `.venv`, `__pycache__`, …), and a `.git` that reads the repository's own branches, configuration and hooks. So `setup --plan` then `setup --yes` with the same flags writes exactly the files the plan listed under `create` and `merge`. The skills step still downloads the catalogue to know which files it would write. A file a step would delete is not listed.
+The plan is not a guess: setup runs the same steps in a copy of the repository in a temporary directory, and compares the copy's files before and after each one. The copy holds the Git work tree around the target, less dependency and cache folders (`node_modules`, `.venv`, `__pycache__`, …), and a `.git` that reads the repository's own branches, configuration and hooks. So `setup --plan` then `setup --yes` with the same flags writes exactly the files the plan listed under `create` and `merge`. The skills step still downloads the catalogue to know which files it would write. A plan that removes files says how many in its message (`…, 1 to remove · nothing written`).
 
 `--path` / `-C` and `--yes` / `-y` work on **every** `setup` subcommand (`repo`, `platforms`, `ci`, `env`, `hooks`, `mcp`, `skills`, `vscode`). A positional `PATH` is still accepted as a hidden alias on the subcommands that historically required it; passing both forms in one invocation is a usage error. `setup vscode` accepts `--yes` for symmetry — it writes editor-local files and never prompts.
 
@@ -309,8 +310,8 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository path (install, discover, show) |
-| `--cursor` | Copy the skills to `.cursor/skills/` |
-| `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/` |
+| `--cursor` | Copy the skills to `.cursor/skills/`, keeping files you added there |
+| `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/`, keeping files you added there |
 | `--generic` | Write `AGENTS.md` for any agent that reads `.agents/skills/` |
 | `--github-copilot` | Write `.github/copilot-instructions.md`, and `AGENTS.md` as `--generic` does |
 | `--install` | Skill slug to install (repeatable); default: `opentide-detection-rule` and `detection-engineering` |
