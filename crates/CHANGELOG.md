@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Changed
+
+- The bundled Tide catalog follows opentide's removal of its CoreTIDE compatibility ([opentidehq/opentide#745](https://github.com/opentidehq/opentide/pull/745)): a Splunk block's splunk::2.x keys (`search`, `cron_schedule`, `advanced`, `security_domain`), a rule's `meta:` and an objective's root `composition` are unknown keys rather than accepted spellings or deprecations, and each platform block's `schema` offers and accepts only its registered `platform::<platform>::1.0`. Regenerated with `scripts/sync_opentide_schemas.py`; editors running `opentide-lsp` on its own now report what `opentide validate` reports for these keys.
+
 ## [0.9.0] - 2026-11-03
 
 A rebuilt server, and the server in the browser. The protocol host now runs on `lsp-server` and `lsp-types`: it batches what is queued, answers cancelled and outdated requests as LSP says, gives each workspace folder its own objects and `visibility.toml`, and lets a client that pulls diagnostics pull them instead of also getting them pushed. Editors gain an outline, links to ATT&CK and to the objects a UUID names, a "N rules use this objective" lens, fix-all, configuration TOML checked by opentide, and `initialize` saying who hosts the server. Carbon Black queries are checked against its field catalog, queries inside Tide YAML are embedded regions of their grammar, and every language is fuzzed nightly. The browser build carries the language server itself for a Web Worker (`@opentide/lsp-worker`).

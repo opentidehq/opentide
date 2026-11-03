@@ -97,6 +97,8 @@ metadata:
   uuid: 00000000-0000-4000-8003-000000000001
   schema: rule::1.0
 status: STAGING
+response:
+  alert_severity: High
 configurations:
   sentinel:
     enabled: true
@@ -118,8 +120,16 @@ configurations:
         html.contains("<span class=\"boolean\">true</span>"),
         "{html}"
     );
+    // A value of the field's enum is a constant: `alert_severity` takes
+    // `alert_severity::1.0`.
     assert!(
-        html.contains("<span class=\"constant\">STAGING</span>"),
+        html.contains("<span class=\"constant\">High</span>"),
+        "{html}"
+    );
+    // A rule-level `status` has no enum (statuses are the workspace's own) and,
+    // since opentide#745, no default either, so its value is a string.
+    assert!(
+        html.contains("<span class=\"string\">STAGING</span>"),
         "{html}"
     );
     assert!(

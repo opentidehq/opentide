@@ -255,21 +255,28 @@ fn pydantic_object_issues_are_subset_of_lsp() {
                 && issue.field_path == ["threat", "impact"]),
         "scalar impact fixture must be rejected by pydantic"
     );
+    // opentide#745 retired `meta:` and the splunk::2.x `advanced` table: they are
+    // unknown keys, no longer deprecations, in Pydantic and in the catalog alike.
+    for path in [vec!["meta"], vec!["configurations", "splunk", "advanced"]] {
+        assert!(
+            shaped
+                .iter()
+                .any(|issue| issue.code == "schema_validation" && issue.field_path == path),
+            "legacy meta fixture: pydantic must reject {path:?} as an unknown key"
+        );
+    }
     assert!(
-        shaped
-            .iter()
-            .any(|issue| issue.code == "deprecated_field" && issue.field_path == ["meta"]),
-        "legacy meta fixture must be deprecated by pydantic"
+        !shaped.iter().any(|issue| issue.code == "deprecated_field"),
+        "a retired spelling is not a deprecation"
     );
     let claimed: Vec<_> = shaped
         .into_iter()
         .filter(|issue| {
-            matches!(
-                issue.code.as_str(),
-                "deprecated_field" | "schema_validation"
-            ) && (issue.field_path == ["threat", "impact"]
-                || issue.field_path == ["meta"] && issue.code == "deprecated_field"
-                || issue.field_path == ["metadata"])
+            issue.code == "schema_validation"
+                && (issue.field_path == ["threat", "impact"]
+                    || issue.field_path == ["meta"]
+                    || issue.field_path == ["metadata"]
+                    || issue.field_path == ["configurations", "splunk", "advanced"])
         })
         .collect();
     lsp_covers("testdata/conformance/pydantic", &claimed);

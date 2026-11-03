@@ -2005,14 +2005,24 @@ objective:
 "#;
 
     #[test]
-    fn legacy_spellings_opentide_accepts_are_accepted() {
-        // splunk::2.x: `search` fills the required `query`, flat `throttling`
-        // moves into `trigger`; both validate in opentide.
+    fn splunk_2x_spellings_are_unknown_keys() {
+        // opentide#745: `search` no longer fills `query` and flat `throttling`
+        // no longer moves into `trigger`; opentide validate refuses both.
         let source = VALID_RULE.replace(
             "    query: index=main\n",
             "    search: index=main\n    throttling:\n      period: 1h\n",
         );
-        assert_eq!(shape_findings(&source), vec![]);
+        let paths: Vec<String> = shape_findings(&source)
+            .into_iter()
+            .map(|(path, _, _)| path)
+            .collect();
+        for path in [
+            "configurations.splunk.search",
+            "configurations.splunk.throttling",
+            "configurations.splunk.query",
+        ] {
+            assert!(paths.iter().any(|p| p == path), "{path} in {paths:?}");
+        }
         // Neither the query nor its legacy spelling: required.
         let source = VALID_RULE.replace("    query: index=main\n", "");
         assert_eq!(shape_findings(&source)[0].0, "configurations.splunk.query");
@@ -2085,7 +2095,7 @@ objective:
     }
 
     #[test]
-    fn legacy_meta_is_deprecated_field() {
+    fn retired_meta_is_an_unknown_key_not_a_deprecation() {
         let src = r#"
 name: Legacy
 meta:
@@ -2102,16 +2112,23 @@ meta:
             workspace: &[],
             elastic_tenants: &[],
         });
-        let diag = r
+        // opentide#745 retired the `meta:` spelling: an unknown key, as opentide
+        // validate reports it, and `metadata` is required.
+        assert!(
+            !r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::DEPRECATED_FIELD),
+            "{:?}",
+            r.diagnostics
+        );
+        let paths: Vec<Vec<String>> = r
             .diagnostics
             .iter()
-            .find(|d| d.code == codes::DEPRECATED_FIELD)
-            .expect("deprecated meta");
-        assert_eq!(
-            diag.field_path.as_deref(),
-            Some(["meta".to_string()].as_slice())
-        );
-        assert!(diag.message.contains("metadata"));
+            .filter(|d| d.code == codes::SCHEMA_VALIDATION)
+            .filter_map(|d| d.field_path.clone())
+            .collect();
+        assert!(paths.contains(&vec!["meta".to_string()]), "{paths:?}");
+        assert!(paths.contains(&vec!["metadata".to_string()]), "{paths:?}");
     }
 
     #[test]
@@ -2151,6 +2168,9 @@ meta:
 
     #[test]
     fn workspace_deprecation_overlay_wins() {
+        let _overlay = OVERLAY_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         install_deprecation_overlay(vec![FieldDeprecation {
             schema: "rule".into(),
             path: "legacy_note".into(),
@@ -2178,6 +2198,9 @@ meta:
     /// replacement and must stay clean. Rule rows do not apply to threats.
     #[test]
     fn nested_splunk_deprecations_are_schema_scoped() {
+        let _overlay = OVERLAY_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let src = r#"
 name: Nested Splunk
 metadata:
@@ -2189,6 +2212,20 @@ configurations:
     notable:
       security_domain: Access
 "#;
+        // The bundled catalog has no deprecation since opentide#745; a
+        // workspace's own rows exercise the schema scoping.
+        install_deprecation_overlay(vec![
+            FieldDeprecation {
+                schema: "rule".into(),
+                path: "configurations.splunk.advanced".into(),
+                message: "Use nested Splunk action blocks".into(),
+            },
+            FieldDeprecation {
+                schema: "rule".into(),
+                path: "configurations.splunk.security_domain".into(),
+                message: "security_domain is now nested under the notable block".into(),
+            },
+        ]);
         let warnings = deprecation_warnings(src);
         assert_eq!(
             warnings,
@@ -2221,21 +2258,33 @@ configurations:
     advanced: {}
     security_domain: Access
 "#;
+        let leaked = deprecation_warnings(threat);
+        install_deprecation_overlay(Vec::new());
         assert!(
-            deprecation_warnings(threat).is_empty(),
-            "rule deprecations leaked onto a threat: {:?}",
-            deprecation_warnings(threat)
+            leaked.is_empty(),
+            "rule deprecations leaked onto a threat: {leaked:?}"
         );
     }
 
-    /// A workspace overlay adds rows. It does not replace the bundled catalog.
+    /// A workspace overlay adds rows, root and nested paths alike. (The bundled
+    /// catalog has none since opentide#745.)
     #[test]
-    fn deprecation_overlay_keeps_bundled_nested_paths() {
-        install_deprecation_overlay(vec![FieldDeprecation {
-            schema: "rule".into(),
-            path: "legacy_note".into(),
-            message: "removed in 1.0".into(),
-        }]);
+    fn deprecation_overlay_reports_root_and_nested_paths() {
+        let _overlay = OVERLAY_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        install_deprecation_overlay(vec![
+            FieldDeprecation {
+                schema: "rule".into(),
+                path: "legacy_note".into(),
+                message: "removed in 1.0".into(),
+            },
+            FieldDeprecation {
+                schema: "rule".into(),
+                path: "configurations.splunk.security_domain".into(),
+                message: "nested under notable".into(),
+            },
+        ]);
         let src = r#"
 name: Rule
 legacy_note: still here
@@ -2283,6 +2332,10 @@ configurations:
         assert_eq!(parsed[1].message, "from message");
         assert!(parse_deprecation_overlay("{").is_err());
     }
+
+    /// The deprecation overlay is process-wide: the tests that install one
+    /// take turns, or one would read another's rows.
+    static OVERLAY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn deprecation_warnings(source: &str) -> Vec<(Vec<String>, String)> {
         analyze(AnalyzeInput {
@@ -2641,7 +2694,8 @@ threat:
         );
         let schema_vals = token_text(RULE, &r.tokens, "tide.schema");
         assert!(schema_vals.contains(&"rule::1.0"), "{schema_vals:?}");
-        assert!(token_text(RULE, &r.tokens, "constant").contains(&"STAGING"));
+        // A rule-level status has no enum and no default since opentide#745.
+        assert!(!token_text(RULE, &r.tokens, "constant").contains(&"STAGING"));
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"clear"));
         assert!(token_text(RULE, &r.tokens, "constant").contains(&"High"));
         let uuid_keys = token_text(RULE, &r.tokens, "tide.property");

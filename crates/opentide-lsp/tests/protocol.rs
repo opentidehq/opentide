@@ -382,6 +382,15 @@ fn diagnostics_carry_what_the_client_reads() {
     let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
     let legacy =
         "name: Legacy\nmeta:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.0\n";
+    // The bundled catalog has no deprecation since opentide#745: a workspace's
+    // own deprecations.json marks `meta`, so the tag is still exercised.
+    let catalogs = root.join(".opentide/lsp/catalogs/generated");
+    std::fs::create_dir_all(&catalogs).unwrap();
+    std::fs::write(
+        catalogs.join("deprecations.json"),
+        r#"{"fields":[{"schema":"rule","path":"meta","message":"Use metadata keyword instead"}]}"#,
+    )
+    .unwrap();
     let legacy_uri = file_uri(&root.join("objects/rules/legacy.yaml"));
     let rich = json!({ "textDocument": { "publishDiagnostics": {
         "codeDescriptionSupport": true,

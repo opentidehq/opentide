@@ -463,7 +463,7 @@
     },
     "ThreatActor": {
       "additionalProperties": false,
-      "description": "One attributed actor on a threat vector (CoreTide actors definition).",
+      "description": "One attributed actor on a threat vector (the actors vocabulary).",
       "properties": {
         "name": {
           "description": "Scoped actors::1.0 value: att&ck::<id> or misp::<id>.",
@@ -8006,7 +8006,7 @@
       ],
       "title": "ThreatActor",
       "type": "object",
-      "markdownDescription": "One attributed actor on a threat vector (CoreTide ``actors`` definition)."
+      "markdownDescription": "One attributed actor on a threat vector (the ``actors`` vocabulary)."
     },
     "ThreatBody": {
       "additionalProperties": false,

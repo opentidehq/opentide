@@ -1,21 +1,5 @@
 {
-  "opentide": "0.20.2.dev11+g93732e0fd",
+  "opentide": "0.1.dev241+gefb99419b",
   "generator": "opentide.generation.lsp_catalog",
-  "fields": [
-    {
-      "schema": "rule",
-      "path": "configurations.splunk.advanced",
-      "message": "Use nested Splunk action blocks"
-    },
-    {
-      "schema": "rule",
-      "path": "configurations.splunk.security_domain",
-      "message": "security_domain is now nested under the notable block"
-    },
-    {
-      "schema": "rule",
-      "path": "meta",
-      "message": "Use metadata keyword instead"
-    }
-  ]
+  "fields": []
 }

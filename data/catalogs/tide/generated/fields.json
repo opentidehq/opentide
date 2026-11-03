@@ -1,5 +1,5 @@
 {
-  "opentide": "0.20.2.dev11+g93732e0fd",
+  "opentide": "0.1.dev241+gefb99419b",
   "generator": "opentide.generation.lsp_catalog",
   "ref_leaves": {
     "threats": "threat",
@@ -9,10 +9,7 @@
   "schemas": {
     "objective::1.0": {
       "family": "objective",
-      "closed": true,
-      "legacy": {
-        "composition": null
-      }
+      "closed": true
     },
     "rule::1.0": {
       "family": "rule",
@@ -3066,7 +3063,7 @@
       "path": "configurations.carbon_black_cloud.organizations",
       "name": "organizations",
       "title": "Organizations",
-      "description": "Accepted, including the loader alias organization. The current deployer targets the tenant the run selects and does not filter on this list.",
+      "description": "Accepted. The current deployer targets the tenant the run selects and does not filter on this list.",
       "type": "array",
       "required": false,
       "markdown": false,
@@ -3846,7 +3843,7 @@
       "path": "configurations.defender_for_endpoint.actions.files.quarantine_file",
       "name": "quarantine_file",
       "title": "Quarantine File",
-      "description": "Column identifying the file to quarantine. Loader alias: quarantine_files.",
+      "description": "Column identifying the file to quarantine.",
       "type": "string",
       "required": false,
       "markdown": false,
@@ -9075,16 +9072,7 @@
       "ref": null,
       "const": null,
       "array": false,
-      "closed": true,
-      "legacy": {
-        "search": "query",
-        "cron_schedule": "scheduling",
-        "throttling": "trigger",
-        "threshold": "trigger",
-        "notable": "actions",
-        "risk": "actions",
-        "email": "actions"
-      }
+      "closed": true
     },
     {
       "schema": "rule::1.0",
@@ -9675,23 +9663,6 @@
     },
     {
       "schema": "rule::1.0",
-      "path": "configurations.splunk.advanced",
-      "name": "advanced",
-      "title": "Advanced",
-      "description": "Extra savedsearches.conf keys, stringified at deploy. Hidden from templates. Generated schema marks the field deprecated in favour of the nested blocks.",
-      "type": "object",
-      "required": false,
-      "markdown": false,
-      "hidden": true,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
-    },
-    {
-      "schema": "rule::1.0",
       "path": "configurations.splunk.contributors",
       "name": "contributors",
       "title": "Contributors",
@@ -9717,23 +9688,6 @@
       "required": false,
       "markdown": false,
       "hidden": false,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
-    },
-    {
-      "schema": "rule::1.0",
-      "path": "configurations.splunk.cron_schedule",
-      "name": "cron_schedule",
-      "title": "Cron Schedule",
-      "description": "Legacy v2 cron. Hidden from templates. Kept after it is copied into scheduling.schedule.cron.",
-      "type": "string",
-      "required": false,
-      "markdown": false,
-      "hidden": true,
       "capture": "tide.property",
       "enum": [],
       "enum_docs": [],
@@ -9797,7 +9751,7 @@
       "path": "configurations.splunk.query",
       "name": "query",
       "title": "Query",
-      "description": "SPL. Multiline. Legacy search fills this when query is empty.",
+      "description": "SPL. Multiline.",
       "type": "string",
       "required": true,
       "markdown": true,
@@ -9825,13 +9779,7 @@
       "ref": null,
       "const": null,
       "array": false,
-      "closed": true,
-      "legacy": {
-        "frequency": "schedule",
-        "cron": "schedule",
-        "custom_time": "schedule",
-        "lookback": "timerange"
-      }
+      "closed": true
     },
     {
       "schema": "rule::1.0",
@@ -10015,23 +9963,6 @@
       "required": false,
       "markdown": false,
       "hidden": false,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
-    },
-    {
-      "schema": "rule::1.0",
-      "path": "configurations.splunk.search",
-      "name": "search",
-      "title": "Search",
-      "description": "Legacy v2 search string. Hidden from templates. Kept after it is copied to query.",
-      "type": "string",
-      "required": false,
-      "markdown": false,
-      "hidden": true,
       "capture": "tide.property",
       "enum": [],
       "enum_docs": [],
@@ -11309,7 +11240,7 @@
       "path": "severity",
       "name": "severity",
       "title": "Severity",
-      "description": "alert_severity::1.0.",
+      "description": "alert_severity::1.0. Deploy sends response.alert_severity (alert_severity); this is shown only when the rule has no response.",
       "type": "string",
       "required": false,
       "markdown": false,
@@ -11331,15 +11262,14 @@
       ],
       "ref": null,
       "const": null,
-      "array": false,
-      "default": "Informational"
+      "array": false
     },
     {
       "schema": "rule::1.0",
       "path": "status",
       "name": "status",
       "title": "Status",
-      "description": "Deployment lifecycle status.",
+      "description": "Read by no command: a rule deploys by each platform block's status (platform_statuses), the value promotion moves. Left out, it stays unset.",
       "type": "string",
       "required": false,
       "markdown": false,
@@ -11349,8 +11279,7 @@
       "enum_docs": [],
       "ref": null,
       "const": null,
-      "array": false,
-      "default": "STAGING"
+      "array": false
     },
     {
       "schema": "rule::1.0",
@@ -13404,7 +13333,7 @@
       "path": "configurations.carbon_black_cloud.organizations",
       "name": "organizations",
       "title": "Organizations",
-      "description": "Accepted, including the loader alias organization. The current deployer targets the tenant the run selects and does not filter on this list.",
+      "description": "Accepted. The current deployer targets the tenant the run selects and does not filter on this list.",
       "type": "array",
       "required": false,
       "markdown": false,
@@ -14184,7 +14113,7 @@
       "path": "configurations.defender_for_endpoint.actions.files.quarantine_file",
       "name": "quarantine_file",
       "title": "Quarantine File",
-      "description": "Column identifying the file to quarantine. Loader alias: quarantine_files.",
+      "description": "Column identifying the file to quarantine.",
       "type": "string",
       "required": false,
       "markdown": false,
@@ -19413,16 +19342,7 @@
       "ref": null,
       "const": null,
       "array": false,
-      "closed": true,
-      "legacy": {
-        "search": "query",
-        "cron_schedule": "scheduling",
-        "throttling": "trigger",
-        "threshold": "trigger",
-        "notable": "actions",
-        "risk": "actions",
-        "email": "actions"
-      }
+      "closed": true
     },
     {
       "schema": "rule::1.1",
@@ -20013,23 +19933,6 @@
     },
     {
       "schema": "rule::1.1",
-      "path": "configurations.splunk.advanced",
-      "name": "advanced",
-      "title": "Advanced",
-      "description": "Extra savedsearches.conf keys, stringified at deploy. Hidden from templates. Generated schema marks the field deprecated in favour of the nested blocks.",
-      "type": "object",
-      "required": false,
-      "markdown": false,
-      "hidden": true,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
-    },
-    {
-      "schema": "rule::1.1",
       "path": "configurations.splunk.contributors",
       "name": "contributors",
       "title": "Contributors",
@@ -20055,23 +19958,6 @@
       "required": false,
       "markdown": false,
       "hidden": false,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
-    },
-    {
-      "schema": "rule::1.1",
-      "path": "configurations.splunk.cron_schedule",
-      "name": "cron_schedule",
-      "title": "Cron Schedule",
-      "description": "Legacy v2 cron. Hidden from templates. Kept after it is copied into scheduling.schedule.cron.",
-      "type": "string",
-      "required": false,
-      "markdown": false,
-      "hidden": true,
       "capture": "tide.property",
       "enum": [],
       "enum_docs": [],
@@ -20135,7 +20021,7 @@
       "path": "configurations.splunk.query",
       "name": "query",
       "title": "Query",
-      "description": "SPL. Multiline. Legacy search fills this when query is empty.",
+      "description": "SPL. Multiline.",
       "type": "string",
       "required": true,
       "markdown": true,
@@ -20163,13 +20049,7 @@
       "ref": null,
       "const": null,
       "array": false,
-      "closed": true,
-      "legacy": {
-        "frequency": "schedule",
-        "cron": "schedule",
-        "custom_time": "schedule",
-        "lookback": "timerange"
-      }
+      "closed": true
     },
     {
       "schema": "rule::1.1",
@@ -20353,23 +20233,6 @@
       "required": false,
       "markdown": false,
       "hidden": false,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
-    },
-    {
-      "schema": "rule::1.1",
-      "path": "configurations.splunk.search",
-      "name": "search",
-      "title": "Search",
-      "description": "Legacy v2 search string. Hidden from templates. Kept after it is copied to query.",
-      "type": "string",
-      "required": false,
-      "markdown": false,
-      "hidden": true,
       "capture": "tide.property",
       "enum": [],
       "enum_docs": [],
@@ -21664,7 +21527,7 @@
       "path": "severity",
       "name": "severity",
       "title": "Severity",
-      "description": "alert_severity::1.0.",
+      "description": "alert_severity::1.0. Deploy sends response.alert_severity (alert_severity); this is shown only when the rule has no response.",
       "type": "string",
       "required": false,
       "markdown": false,
@@ -21686,15 +21549,14 @@
       ],
       "ref": null,
       "const": null,
-      "array": false,
-      "default": "Informational"
+      "array": false
     },
     {
       "schema": "rule::1.1",
       "path": "status",
       "name": "status",
       "title": "Status",
-      "description": "Deployment lifecycle status.",
+      "description": "Read by no command: a rule deploys by each platform block's status (platform_statuses), the value promotion moves. Left out, it stays unset.",
       "type": "string",
       "required": false,
       "markdown": false,
@@ -21704,8 +21566,7 @@
       "enum_docs": [],
       "ref": null,
       "const": null,
-      "array": false,
-      "default": "STAGING"
+      "array": false
     },
     {
       "schema": "rule::1.1",

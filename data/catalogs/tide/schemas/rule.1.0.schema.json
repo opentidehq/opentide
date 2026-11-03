@@ -162,45 +162,60 @@
       "type": "string"
     },
     "status": {
-      "default": "STAGING",
-      "description": "Deployment lifecycle status.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Read by no command: a rule deploys by each platform block's status (platform_statuses), the value promotion moves. Left out, it stays unset.",
       "title": "Status",
-      "type": "string"
+      "markdownDescription": "Read by no command: a rule deploys by each platform block's `status`\n(`platform_statuses`), the value promotion moves. Left out, it stays unset."
     },
     "severity": {
-      "default": "Informational",
-      "description": "alert_severity::1.0.",
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "Informational",
+            "Low",
+            "Medium",
+            "High",
+            "Critical"
+          ],
+          "markdownEnumDescriptions": [
+            "No severity level assigned, can suppport correlations or other metrics.",
+            "Response trigger is not necessarily expected, but alert should be handled.",
+            "Moderate SLAs required, can be grouped into a larger investigation.",
+            "Needs attention within tight SLAs alongside a comprehensive investigation.",
+            "Immediate and targeted response required, threat to organization absolute."
+          ],
+          "enumDescriptions": [
+            "No severity level assigned, can suppport correlations or other metrics.",
+            "Response trigger is not necessarily expected, but alert should be handled.",
+            "Moderate SLAs required, can be grouped into a larger investigation.",
+            "Needs attention within tight SLAs alongside a comprehensive investigation.",
+            "Immediate and targeted response required, threat to organization absolute."
+          ],
+          "x-enumDescriptions": [
+            "No severity level assigned, can suppport correlations or other metrics.",
+            "Response trigger is not necessarily expected, but alert should be handled.",
+            "Moderate SLAs required, can be grouped into a larger investigation.",
+            "Needs attention within tight SLAs alongside a comprehensive investigation.",
+            "Immediate and targeted response required, threat to organization absolute."
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "alert_severity::1.0. Deploy sends response.alert_severity (alert_severity); this is shown only when the rule has no response.",
       "title": "Severity",
-      "type": "string",
-      "enum": [
-        "Informational",
-        "Low",
-        "Medium",
-        "High",
-        "Critical"
-      ],
-      "markdownEnumDescriptions": [
-        "No severity level assigned, can suppport correlations or other metrics.",
-        "Response trigger is not necessarily expected, but alert should be handled.",
-        "Moderate SLAs required, can be grouped into a larger investigation.",
-        "Needs attention within tight SLAs alongside a comprehensive investigation.",
-        "Immediate and targeted response required, threat to organization absolute."
-      ],
-      "enumDescriptions": [
-        "No severity level assigned, can suppport correlations or other metrics.",
-        "Response trigger is not necessarily expected, but alert should be handled.",
-        "Moderate SLAs required, can be grouped into a larger investigation.",
-        "Needs attention within tight SLAs alongside a comprehensive investigation.",
-        "Immediate and targeted response required, threat to organization absolute."
-      ],
-      "markdownDescription": "`alert_severity::1.0`.",
-      "x-enumDescriptions": [
-        "No severity level assigned, can suppport correlations or other metrics.",
-        "Response trigger is not necessarily expected, but alert should be handled.",
-        "Moderate SLAs required, can be grouped into a larger investigation.",
-        "Needs attention within tight SLAs alongside a comprehensive investigation.",
-        "Immediate and targeted response required, threat to organization absolute."
-      ]
+      "markdownDescription": "`alert_severity::1.0`. Deploy sends `response.alert_severity`\n(`alert_severity`); this is shown only when the rule has no `response`."
     },
     "techniques": {
       "description": "MITRE ATT&CK technique ids (att&ck::1.2).",
@@ -6218,9 +6233,8 @@
             }
           ],
           "default": null,
-          "description": "Accepted, including the loader alias organization. The current deployer targets the tenant the run selects and does not filter on this list.",
-          "title": "Organizations",
-          "markdownDescription": "Accepted, including the loader alias `organization`. The current deployer targets the tenant\nthe run selects and does not filter on this list."
+          "description": "Accepted. The current deployer targets the tenant the run selects and does not filter on this list.",
+          "title": "Organizations"
         },
         "watchlist": {
           "anyOf": [
@@ -6970,9 +6984,8 @@
             }
           ],
           "default": null,
-          "description": "Column identifying the file to quarantine. Loader alias: quarantine_files.",
-          "title": "Quarantine File",
-          "markdownDescription": "Column identifying the file to quarantine. Loader alias: `quarantine_files`."
+          "description": "Column identifying the file to quarantine.",
+          "title": "Quarantine File"
         }
       },
       "title": "DefenderFileActions",
@@ -13289,10 +13302,9 @@
           "title": "Contributors"
         },
         "query": {
-          "description": "SPL. Multiline. Legacy search fills this when query is empty.",
+          "description": "SPL. Multiline.",
           "title": "Query",
-          "type": "string",
-          "markdownDescription": "SPL. Multiline. Legacy `search` fills this when `query` is empty."
+          "type": "string"
         },
         "scheduling": {
           "anyOf": [
@@ -13346,49 +13358,6 @@
           "description": "Force the Enterprise Security correlation-search action on or off. null follows the tenant.",
           "title": "Correlation Search",
           "markdownDescription": "Force the Enterprise Security correlation-search action on or off. `null` follows the\ntenant."
-        },
-        "advanced": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Extra savedsearches.conf keys, stringified at deploy. Hidden from templates. Generated schema marks the field deprecated in favour of the nested blocks.",
-          "title": "Advanced",
-          "markdownDescription": "Extra `savedsearches.conf` keys, stringified at deploy. Hidden from templates. Generated\nschema marks the field deprecated in favour of the nested blocks."
-        },
-        "search": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Legacy v2 search string. Hidden from templates. Kept after it is copied to query.",
-          "title": "Search",
-          "markdownDescription": "Legacy v2 search string. Hidden from templates. Kept after it is copied to `query`."
-        },
-        "cron_schedule": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Legacy v2 cron. Hidden from templates. Kept after it is copied into scheduling.schedule.cron.",
-          "title": "Cron Schedule",
-          "markdownDescription": "Legacy v2 cron. Hidden from templates. Kept after it is copied into\n`scheduling.schedule.cron`."
         }
       },
       "required": [
@@ -14535,25 +14504,13 @@
   },
   "required": [
     "name",
+    "metadata",
     "response",
     "description",
-    "configurations",
-    "metadata"
+    "configurations"
   ],
   "title": "Detection Rule Schema",
   "description": "A detection rule defines how a detection opportunity is implemented.",
   "additionalProperties": false,
-  "anyOf": [
-    {
-      "required": [
-        "metadata"
-      ]
-    },
-    {
-      "required": [
-        "meta"
-      ]
-    }
-  ],
   "$comment": "Generated by opentide, spec-driven development for agentic detection engineering. Regenerate with `opentide generate schemas`; do not edit by hand."
 }
