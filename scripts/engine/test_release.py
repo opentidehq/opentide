@@ -207,7 +207,50 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("gh attestation verify", jobs["release"])
 
     def test_the_published_assets_are_checked_against_every_line_of_the_sums(self) -> None:
-        self.assertIn("python3 scripts/release.py verify-sums published", workflow_jobs()["verify-assets"])
+        verify_assets = workflow_jobs()["verify-assets"]
+        self.assertIn("python3 scripts/release.py verify-sums published", verify_assets)
+
+    def test_every_attestation_check_names_the_release_workflow_and_its_ref(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        readme = (WORKFLOW.parents[2] / "README.md").read_text(encoding="utf-8")
+        for source in [text, readme]:
+            checks = re.findall(r"gh attestation verify (?:[^\n]*\\\n)*[^\n]*", source)
+            self.assertTrue(checks)
+            for check in checks:
+                self.assertIn("--cert-identity-regex", check)
+
+    @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
+    def test_the_identity_is_release_yml_on_main_or_the_tag(self) -> None:
+        lines = [
+            line.strip()
+            for line in workflow_jobs()["verify-assets"].splitlines()
+            if re.match(r"\s*(repo_re|tag_re|identity)=", line)
+        ]
+        self.assertEqual(len(lines), 3, lines)
+        script = "\n".join([*lines, 'printf %s "$identity"'])
+        env = {"GITHUB_REPOSITORY": "opentidehq/language-server", "TAG": "v1.2.3"}
+        env["PATH"] = "/usr/bin:/bin"
+        done = subprocess.run(
+            ["bash", "-c", script], capture_output=True, text=True, env=env, check=True
+        )
+        identity = re.compile(done.stdout)
+        readme = (WORKFLOW.parents[2] / "README.md").read_text(encoding="utf-8")
+        found = re.search(r"--cert-identity-regex '([^']+)'", readme)
+        assert found is not None, "README.md documents the identity"
+        documented = re.compile(found.group(1).replace(r"vX\.Y\.Z", r"v1\.2\.3"))
+        workflows = "https://github.com/opentidehq/language-server/.github/workflows"
+        workflow = f"{workflows}/release.yml"
+        for pattern in [identity, documented]:
+            self.assertTrue(pattern.fullmatch(f"{workflow}@refs/heads/main"), pattern.pattern)
+            self.assertTrue(pattern.fullmatch(f"{workflow}@refs/tags/v1.2.3"), pattern.pattern)
+            for other in [
+                f"{workflow}@refs/heads/feature",
+                f"{workflow}@refs/tags/v1.2.4",
+                f"{workflow}@refs/tags/v1x2x3",
+                f"{workflows}/ci.yml@refs/heads/main",
+                workflow.replace("opentidehq", "someone") + "@refs/heads/main",
+            ]:
+                self.assertIsNone(pattern.fullmatch(other), (pattern.pattern, other))
 
 
 if __name__ == "__main__":

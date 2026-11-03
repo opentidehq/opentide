@@ -298,7 +298,7 @@ jobs:
                 done
           fi
 
-  # What a consumer downloads checks out: the sums, and the highlights zip's
+  # What a consumer downloads checks out: the sums, and each asset's
   # attestation (#196). It runs after the release, and on its own for
   # publish_only, which resumes a release whose check may have failed: crates
   # and npm publish only once it passed.
@@ -323,7 +323,15 @@ jobs:
           # an asset it leaves out.
           (cd published && sha256sum --check --strict SHA256SUMS)
           python3 scripts/release.py verify-sums published
-          gh attestation verify "published/highlights-${TAG}.zip" --repo "${GITHUB_REPOSITORY}"
+          # --repo alone accepts an attestation any workflow of the repository
+          # signed, on any branch: each asset's must come from release.yml run
+          # from main or from this tag.
+          repo_re="${GITHUB_REPOSITORY//./\\.}"
+          tag_re="${TAG//./\\.}"
+          identity="^https://github\\.com/${repo_re}/\\.github/workflows/release\\.yml@refs/(heads/main|tags/${tag_re})\$"
+          for asset in published/*; do
+            gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --cert-identity-regex "${identity}"
+          done
 
   # crates.io is permanent: publish only once the GitHub Release exists and its
   # assets verified (verify-assets). The crates go up in dependency order, each
