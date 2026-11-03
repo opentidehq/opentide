@@ -422,6 +422,47 @@ def test_cancelling_a_queued_run_answers_130_without_running_it(
     assert calls == ["run"]
 
 
+def test_a_cancel_after_the_command_returned_keeps_its_answer(
+    client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The cancel lands while the run parses what the command printed: the
+    # command has finished, so its own document and exit code come back.
+    parsing = threading.Event()
+    release = threading.Event()
+    real = CommandRunner._document
+
+    def slow_document(self: CommandRunner, *args: Any) -> Any:
+        parsing.set()
+        while not release.is_set():
+            time.sleep(0.01)
+        return real(self, *args)
+
+    monkeypatch.setattr(CommandRunner, "_document", slow_document)
+    request_id = client.request("run", {"argv": ["explain", "vocab_unknown"]})
+    assert parsing.wait(TIMEOUT)
+    client.send({"method": "$/cancelRequest", "params": {"id": request_id}})
+    release.set()
+    result = client.answer(request_id)["result"]
+    assert result["exit_code"] == 0, result
+    assert result["document"]["command"] == "explain"
+    assert "failure" not in result["document"] or not result["document"]["failure"]
+
+
+def test_a_cancelled_run_names_its_command(client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Cancelled before the run thread started: the fallback document still
+    # carries the command.
+    def cancelled_work(self: Server, work: Any, *, job: Any = None, argv: Any = ()) -> Any:
+        assert job is not None
+        job.cancelled = True
+        return real(self, work, job=job, argv=argv)
+
+    real = Server._on_thread
+    monkeypatch.setattr(Server, "_on_thread", cancelled_work)
+    result = client.run("explain", "vocab_unknown")
+    assert result["exit_code"] == 130
+    assert result["document"]["command"] == "explain"
+
+
 class RecordingRunner(CommandRunner):
     """A runner that records each run instead of running it."""
 
@@ -429,7 +470,7 @@ class RecordingRunner(CommandRunner):
         super().__init__(base_env={}, cwd=Path.cwd())
         self.calls: list[list[str]] = []
 
-    def run(self, argv: Any, *, cwd: str | None = None, env: Any = None) -> Any:
+    def run(self, argv: Any, *, cwd: str | None = None, env: Any = None, **_: Any) -> Any:
         self.calls.append(list(argv))
         return serve_mod.RunOutcome({"ok": True}, 0)
 

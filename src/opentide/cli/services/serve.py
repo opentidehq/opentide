@@ -205,11 +205,14 @@ class CommandRunner:
         *,
         cwd: str | None = None,
         env: Mapping[str, str] | None = None,
+        on_done: Callable[[], None] | None = None,
     ) -> RunOutcome:
         """Run *argv* as ``opentide --json <argv>``; never raises for the command's sake.
 
         A ``KeyboardInterrupt`` (a cancel) while the command runs is answered
-        with exit 130, as at a terminal.
+        with exit 130, as at a terminal. *on_done* is called as soon as the
+        command has returned, before the cleanup and the parsing of what it
+        printed: from then on a cancel must leave its answer alone.
         """
         from opentide.cli.ui.mode import PROTOCOL_COMMANDS
         from opentide.core.index_manager import IndexManager
@@ -225,7 +228,8 @@ class CommandRunner:
         buffer = io.BytesIO()
         capture = io.TextIOWrapper(buffer, encoding="utf-8", newline="\n", write_through=True)
         directory = Path(cwd) if cwd else self.cwd
-        code = 1
+        #: The command's exit code, once it has returned.
+        code: int | None = None
         try:
             with self._environment(env, cwd_given=bool(cwd)):
                 os.chdir(directory)
@@ -234,14 +238,19 @@ class CommandRunner:
                 sys.stdout = capture
                 try:
                     code = self._invoke(["--json", *argv])
+                    if on_done is not None:
+                        on_done()
                 finally:
                     sys.stdout = saved_stdout
                     IndexManager._retained = None
                     IndexManager._cache = None
         except KeyboardInterrupt:
-            # A cancel that came between the command's end and the cleanup above:
-            # it is raised once, so putting everything back here is enough.
-            code = CANCELLED_EXIT_CODE
+            # A cancel before the command returned, or one that came between its
+            # end and the cleanup above: it is raised once, so putting
+            # everything back here is enough. A command that had returned keeps
+            # its own exit code.
+            if code is None:
+                code = CANCELLED_EXIT_CODE
             sys.stdout = saved_stdout
             IndexManager._retained = None
             IndexManager._cache = None
@@ -254,9 +263,9 @@ class CommandRunner:
         finally:
             with contextlib.suppress(OSError):
                 os.chdir(self.cwd)
-        if not keep:
-            # It may have written any workspace (--repo names one), so keep none.
-            self.snapshots.clear()
+            if not keep:
+                # It may have written any workspace (--repo names one), so keep none.
+                self.snapshots.clear()
         capture.flush()
         text = buffer.getvalue().decode("utf-8", errors="replace")
         return RunOutcome(self._document(argv, text, code), code)
@@ -584,12 +593,32 @@ class Server:
         try:
             # Installed from this thread, which a cancel never interrupts.
             with progress_events.sink(forward):
-                return self._on_thread(lambda: self.runner.run(argv, cwd=cwd, env=env), job=job)
+                return self._on_thread(
+                    lambda: self.runner.run(
+                        argv, cwd=cwd, env=env, on_done=lambda: self._finished(job)
+                    ),
+                    job=job,
+                    argv=argv,
+                )
         finally:
             with self._state_lock:
                 self._active = None
 
-    def _on_thread(self, work: Callable[[], RunOutcome], *, job: _Job | None = None) -> RunOutcome:
+    @staticmethod
+    def _finished(job: _Job) -> None:
+        """The command of *job* has returned: a cancel from now on changes nothing."""
+        with job.lock:
+            job.finished = True
+            # A cancel that came as the command ended must not surface later.
+            _raise_in_thread(threading.get_ident(), None)
+
+    def _on_thread(
+        self,
+        work: Callable[[], RunOutcome],
+        *,
+        job: _Job | None = None,
+        argv: Sequence[str] = (),
+    ) -> RunOutcome:
         """Run *work* on a thread of its own and wait for it."""
         box: list[RunOutcome] = []
         problem: list[BaseException] = []
@@ -607,11 +636,7 @@ class Server:
                     if outcome is None:
                         outcome = work()
                     if job is not None:
-                        with job.lock:
-                            job.finished = True
-                            # A cancel that came as the command ended must not
-                            # surface later in this thread.
-                            _raise_in_thread(threading.get_ident(), None)
+                        self._finished(job)
                     break
                 except KeyboardInterrupt:
                     if outcome is None:
@@ -629,7 +654,6 @@ class Server:
             raise problem[0]
         outcome = box[0]
         if not outcome.document:
-            argv: list[str] = []
             outcome = RunOutcome(
                 self.runner._failure_document(argv, "Interrupted", outcome.exit_code),
                 outcome.exit_code,
