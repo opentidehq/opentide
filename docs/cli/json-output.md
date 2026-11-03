@@ -78,6 +78,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `not_run` | non-zero | The command was skipped and says why in `message` |
 | `command_failed` | 1 | Any other failure |
 | `internal` | 1 | An unexpected error: a bug in opentide. See [An unexpected error](#an-unexpected-error) |
+| `interrupted` | 130 | [`opentide serve`](./serve.md#cancel): the client cancelled the run |
 
 Exit codes are in [Exit codes](./exit-codes.md). `opentide explain <code>` prints the page for each failure code, as it does for findings ([Diagnostic codes](./diagnostics.md)).
 
@@ -161,7 +162,7 @@ OPENTIDE_PROGRESS=json opentide --json generate 2> events.ndjson
 | `progress` | `step`, `done`, `total` (`null` when unknown) | `generate` and its subcommands: one per finished phase (`schemas`, `templates`, …). `validate`: `objects` as objects are checked, in batches (about 20 per run, and always the last one, where `done` equals `total`), then `queries` once the query check ran. `deploy --dry-run`: one per platform, `step` being the platform. `deploy`, `validate query` and the other commands with steps: one per finished step |
 | `tenant` | `platform`, `tenant`, `status` (`ok` or `failed`), `rows`, `elapsed_ms`; `label` when the rule holds several queries | `query`: one per tenant and query, as each answers |
 
-Each event is one line of compact JSON, written whole. Log lines share stderr (`OPENTIDE_LOG_JSON=1` makes them JSON too), so a reader keeps the lines whose `event` is `progress` or `tenant`.
+Each event is one line of compact JSON, written whole. Log lines share stderr (`OPENTIDE_LOG_JSON=1` makes them JSON too), so a reader keeps the lines whose `event` is `progress` or `tenant`. Under [`opentide serve`](./serve.md) the same events arrive as `progress` notifications instead of on stderr.
 
 ## Output modes
 
@@ -169,7 +170,7 @@ opentide decides once per command who is reading. The first rule that matches wi
 
 | Order | Rule | Mode |
 |------:|------|------|
-| 1 | `opentide mcp start` | `mcp`: stdout carries nothing but JSON-RPC |
+| 1 | `opentide mcp start`, `opentide lsp start` or `opentide serve` | `mcp`: stdout carries nothing but JSON-RPC |
 | 2 | `--json` | `json`: one document on stdout |
 | 3 | `OPENTIDE_OUTPUT` is `json`, `agent`, `plain` or `human` | that mode |
 | 4 | A coding agent is detected | `agent` |

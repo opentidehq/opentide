@@ -37,6 +37,10 @@ NOT_RUN = "not_run"
 #: ``failure.crash_log`` names the redacted log written for it.
 INTERNAL = "internal"
 
+#: ``failure.code`` of a run that was stopped before it finished: an ``opentide serve``
+#: client cancelled it. Exits 130, as Ctrl-C does.
+INTERRUPTED = "interrupted"
+
 #: ``failure.code`` when a workspace configuration file does not parse. It is
 #: also the code of the diagnostic that points at the file.
 CONFIG_PARSE = "config_parse"

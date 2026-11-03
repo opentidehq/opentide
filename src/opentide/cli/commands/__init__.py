@@ -163,6 +163,13 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         rich_help_panel=AGENTS,
     ),
     CommandSpec(
+        "serve",
+        "opentide.cli.commands.serve",
+        "serve_cmd",
+        "Run CLI commands in one warm process, for editors",
+        rich_help_panel=AGENTS,
+    ),
+    CommandSpec(
         "document",
         "opentide.cli.commands.legacy",
         "document_app",

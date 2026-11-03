@@ -24,6 +24,7 @@
     "tui",
     "new",
     "doctor",
-    "lsp"
+    "lsp",
+    "serve"
   ]
 }

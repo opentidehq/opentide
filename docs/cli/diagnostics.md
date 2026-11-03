@@ -105,6 +105,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
+| [`interrupted`](#interrupted) | The command was stopped before it finished: an `opentide serve` client cancelled the run. |
 | [`invalid_cve`](#invalid_cve) | A threat lists CVE identifiers Vulnerability-Lookup does not know. |
 | [`invalid_ref`](#invalid_ref) | A reference names an object that does not exist. |
 | [`invalid_uuid`](#invalid_uuid) | An object's `metadata.uuid` is not a UUID v4. |
@@ -1798,6 +1799,22 @@ error[internal]: RuntimeError: index exploded
 ### How to fix
 
 Open the issue from the link, and attach the crash log after reading it: opentide removes the secrets and tenant names it recognises, but not a value it cannot tell is one. Add `--debug` (or `OPENTIDE_DEBUG=1`) to print the traceback on stderr too. See [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
+
+## interrupted
+
+The command was stopped before it finished: an `opentide serve` client cancelled the run.
+
+Exit 130, as Ctrl-C at a terminal exits. The command's own cleanup ran first (an open search is stopped, a file being written is not left half-written), so whatever it had not done yet was not done. A command stopped this way prints no document of its own, so `opentide serve` answers with one that carries this code.
+
+### Example
+
+```json
+{"jsonrpc": "2.0", "method": "$/cancelRequest", "params": {"id": 7}}
+```
+
+### How to fix
+
+Nothing is broken. Run the command again when you need its result; a `validate` or `lint` that was cancelled wrote nothing.
 
 ## invalid_cve
 
