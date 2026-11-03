@@ -1,0 +1,526 @@
+- id: bool-and-or-precedence
+  condition: evt.type in (execve, execveat) and proc.name = a or proc.name = b and proc.pname = c
+- id: bool-not-repeat
+  condition: evt.type in (execve, execveat) and not not proc.name = bash
+- id: bool-not-paren-no-blank
+  condition: evt.type in (execve, execveat) and not(proc.name = bash)
+- id: bool-and-paren-no-blank
+  condition: evt.type = execve and(proc.name = bash)
+- id: bool-or-paren-no-blank
+  condition: evt.type = execve and (proc.name = a or(proc.name = b))
+- id: bool-nested-parens
+  condition: evt.type in (execve, execveat) and ((proc.name = a) and ((proc.pname = b)))
+- id: bool-unbalanced-paren
+  condition: evt.type in (execve, execveat) and (proc.name = bash
+- id: bool-dangling-and
+  condition: evt.type in (execve, execveat) and proc.name = bash and
+- id: bool-empty
+  condition: ''
+- id: bool-andand
+  condition: evt.type in (execve, execveat) and proc.name = a and and proc.pname = b
+- id: bool-uppercase-AND
+  condition: evt.type in (execve, execveat) and proc.name = a AND proc.pname = b
+- id: tok-double-quote-escape
+  condition: evt.type in (execve, execveat) and proc.cmdline contains "say \"hi\""
+- id: tok-single-quote
+  condition: evt.type in (execve, execveat) and proc.cmdline contains 'a b'
+- id: tok-unterminated-quote
+  condition: evt.type in (execve, execveat) and proc.name = "bash
+- id: tok-bare-with-slash
+  condition: evt.type in (execve, execveat) and fd.name startswith /etc/
+- id: tok-bare-with-dash-dot
+  condition: evt.type in (execve, execveat) and proc.name = run-parts.sh
+- id: tok-bare-with-paren-invalid
+  condition: evt.type in (execve, execveat) and proc.name = ba(sh
+- id: tok-number-negative
+  condition: evt.type in (execve, execveat) and proc.pid > -1
+- id: tok-number-float
+  condition: evt.type = read and evt.latency > 1.5
+- id: tok-number-exp-signed
+  condition: evt.type in (execve, execveat) and proc.pid < 1e+3
+- id: tok-number-exp-unsigned
+  condition: evt.type in (execve, execveat) and proc.pid < 1e3
+- id: tok-hex-number
+  condition: evt.type in (execve, execveat) and proc.pid > 0x1f
+- id: tok-field-uppercase-class
+  condition: evt.type in (execve, execveat) and Proc.name = bash
+- id: op-eq-string
+  condition: evt.type in (execve, execveat) and proc.name = bash
+- id: op-eqeq-string
+  condition: evt.type in (execve, execveat) and proc.name == bash
+- id: op-ne-string
+  condition: evt.type in (execve, execveat) and proc.name != bash
+- id: op-lt-string-invalid
+  condition: evt.type in (execve, execveat) and proc.name < bash
+- id: op-lt-number
+  condition: evt.type in (execve, execveat) and proc.pid < 100
+- id: op-gte-number
+  condition: evt.type in (execve, execveat) and proc.pid >= 100
+- id: op-contains
+  condition: evt.type in (execve, execveat) and proc.cmdline contains curl
+- id: op-icontains
+  condition: evt.type in (execve, execveat) and proc.cmdline icontains CURL
+- id: op-startswith
+  condition: evt.type in (execve, execveat) and proc.exepath startswith /tmp/
+- id: op-endswith
+  condition: evt.type in (execve, execveat) and proc.exepath endswith .sh
+- id: op-glob
+  condition: evt.type in (execve, execveat) and proc.exepath glob /tmp/*.sh
+- id: op-iglob
+  condition: evt.type in (execve, execveat) and proc.exepath iglob /TMP/*.SH
+- id: op-regex
+  condition: evt.type in (execve, execveat) and proc.cmdline regex "^curl .*\|\s*sh$"
+- id: op-regex-invalid
+  condition: evt.type in (execve, execveat) and proc.cmdline regex "([a-z"
+- id: op-pmatch
+  condition: evt.type in (open, openat) and fd.name pmatch (/etc, /usr/bin)
+- id: op-pmatch-on-number
+  condition: evt.type in (execve, execveat) and proc.pid pmatch (1, 2)
+- id: op-in
+  condition: evt.type in (execve, execveat) and proc.name in (bash, sh, zsh)
+- id: op-in-empty
+  condition: evt.type in (execve, execveat) and proc.name in ()
+- id: op-intersects-list-field
+  condition: evt.type in (execve, execveat) and proc.aname intersects (sshd, bash)
+- id: op-intersects-scalar-field
+  condition: evt.type in (execve, execveat) and proc.name intersects (bash)
+- id: op-exists
+  condition: evt.type in (execve, execveat) and proc.pname exists
+- id: op-exists-with-value
+  condition: evt.type in (execve, execveat) and proc.pname exists bash
+- id: op-bcontains-buffer
+  condition: evt.type = write and evt.buffer bcontains 48656c6c6f
+- id: op-bcontains-hex-prefix
+  condition: evt.type = write and evt.buffer bcontains 0x48656c6c6f
+- id: op-bcontains-odd-hex
+  condition: evt.type = write and evt.buffer bcontains 486
+- id: op-bstartswith
+  condition: evt.type = write and evt.buffer bstartswith 7f454c46
+- id: op-contains-on-number
+  condition: evt.type in (execve, execveat) and proc.pid contains 1
+- id: op-unknown-word
+  condition: evt.type in (execve, execveat) and proc.name like bash
+- id: op-gt-on-bool
+  condition: evt.type in (execve, execveat) and proc.is_exe_writable > 1
+- id: mod-startswith-anyof
+  condition: evt.type in (execve, execveat) and proc.name startswith anyof (ba, zs)
+- id: mod-eq-oneof
+  condition: evt.type in (execve, execveat) and proc.name = oneof (bash, zsh)
+- id: mod-contains-allof
+  condition: evt.type in (execve, execveat) and proc.cmdline contains allof (curl, sh)
+- id: mod-regex-anyof
+  condition: evt.type in (execve, execveat) and proc.cmdline regex anyof ("^a", "b$")
+- id: mod-glob-oneof
+  condition: evt.type in (execve, execveat) and proc.exepath glob oneof (/tmp/*, /dev/shm/*)
+- id: mod-on-numeric-op
+  condition: evt.type in (execve, execveat) and proc.pid < oneof (1, 2)
+- id: mod-unknown
+  condition: evt.type in (execve, execveat) and proc.name startswith someof (a)
+- id: mod-without-list
+  condition: evt.type in (execve, execveat) and proc.name startswith anyof bash
+- id: field-unknown
+  condition: evt.type in (execve, execveat) and proc.nmae = bash
+- id: field-unknown-class
+  condition: evt.type in (execve, execveat) and nope.thing = 1
+- id: arg-index
+  condition: evt.type in (execve, execveat) and proc.aname[2] = sshd
+- id: arg-key
+  condition: evt.type in (execve, execveat) and proc.env[HOME] = /root
+- id: arg-quoted
+  condition: evt.type in (execve, execveat) and proc.env["HOME"] = /root
+- id: arg-not-allowed
+  condition: evt.type in (execve, execveat) and proc.name[2] = bash
+- id: arg-required-missing
+  condition: evt.type in (execve, execveat) and proc.aenv = x
+- id: arg-dotted
+  condition: evt.type in (open, openat) and evt.arg.flags contains O_CREAT
+- id: arg-evt-arg-index
+  condition: evt.type = open and evt.arg[0] exists
+- id: arg-evt-rawarg
+  condition: evt.type = setuid and evt.rawarg.uid = 0
+- id: arg-index-non-numeric
+  condition: evt.type in (execve, execveat) and proc.aname[x] = sshd
+- id: field-deprecated-evt-dir
+  condition: evt.type = execve and evt.dir = <
+- id: field-na-check
+  condition: evt.type in (execve, execveat) and proc.pname = "<NA>"
+- id: val-ipv4
+  condition: evt.type = connect and fd.sip = 10.0.0.1
+- id: val-ipv4-invalid
+  condition: evt.type = connect and fd.sip = 10.0.0.300
+- id: val-cidr
+  condition: evt.type = connect and fd.snet = 10.0.0.0/8
+- id: val-cidr-in-list
+  condition: evt.type = connect and fd.snet in (10.0.0.0/8, 192.168.0.0/16)
+- id: val-ipv6
+  condition: evt.type = connect and fd.sip = ::1
+- id: val-port-number
+  condition: evt.type = connect and fd.sport = 443
+- id: val-port-text
+  condition: evt.type = connect and fd.sport = https
+- id: val-number-on-uint-invalid
+  condition: evt.type in (execve, execveat) and proc.pid = abc
+- id: val-bool-true
+  condition: evt.type in (execve, execveat) and proc.is_exe_writable = true
+- id: val-bool-invalid
+  condition: evt.type in (execve, execveat) and proc.is_exe_writable = maybe
+- id: val-uid-number
+  condition: evt.type in (execve, execveat) and user.uid = 0
+- id: val-l4proto
+  condition: evt.type = connect and fd.l4proto = tcp
+- id: val-fd-type
+  condition: evt.type in (open, openat) and fd.type = file
+- id: tr-tolower
+  condition: evt.type in (execve, execveat) and tolower(proc.name) = bash
+- id: tr-toupper
+  condition: evt.type in (execve, execveat) and toupper(proc.name) = BASH
+- id: tr-b64
+  condition: evt.type in (execve, execveat) and b64(proc.cmdline) contains x
+- id: tr-basename
+  condition: evt.type in (execve, execveat) and basename(proc.exepath) = bash
+- id: tr-len-string
+  condition: evt.type in (execve, execveat) and len(proc.name) > 3
+- id: tr-len-list
+  condition: evt.type in (execve, execveat) and len(proc.aname) > 3
+- id: tr-nested
+  condition: evt.type in (execve, execveat) and toupper(basename(proc.exepath)) = BASH
+- id: tr-join
+  condition: evt.type in (execve, execveat) and join(",", (proc.name, proc.pname)) contains sh
+- id: tr-concat
+  condition: evt.type in (execve, execveat) and concat(proc.name, "-", proc.pname) = "bash-sshd"
+- id: tr-getopt-list
+  condition: evt.type in (execve, execveat) and getopt(("-c", "id"), "c:") intersects (c, id)
+- id: tr-getopt-on-string
+  condition: evt.type in (execve, execveat) and getopt(proc.args, "c:")[c] = id
+- id: tr-tolower-on-number
+  condition: evt.type in (execve, execveat) and tolower(proc.pid) = 1
+- id: tr-unknown
+  condition: evt.type in (execve, execveat) and reverse(proc.name) = hsab
+- id: tr-len-on-uint
+  condition: evt.type in (execve, execveat) and len(proc.pid) > 1
+- id: rhs-val
+  condition: evt.type in (execve, execveat) and proc.name = val(proc.pname)
+- id: rhs-transformer
+  condition: evt.type in (execve, execveat) and proc.name = tolower(proc.pname)
+- id: rhs-val-type-mismatch
+  condition: evt.type in (execve, execveat) and proc.pid = val(proc.name)
+- id: rhs-val-unknown-field
+  condition: evt.type in (execve, execveat) and proc.name = val(proc.nope)
+- id: rhs-bare-field-as-value
+  condition: evt.type in (execve, execveat) and proc.name = proc.pname
+- id: evt-known
+  condition: evt.type = execve
+- id: evt-in
+  condition: evt.type in (open, openat, openat2)
+- id: evt-unknown
+  condition: evt.type = execv
+- id: evt-unknown-in-list
+  condition: evt.type in (open, opn)
+- id: evt-no-evttype
+  condition: proc.name = bash
+- id: evt-not-evttype
+  condition: not evt.type = execve and proc.name = bash
+- id: out-fields
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: shell %proc.name %proc.pname %user.name
+- id: out-field-arg
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: anc %proc.aname[2] env %proc.env[HOME]
+- id: out-paren-field
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: x %(proc.name)
+- id: out-unknown-field
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: x %proc.nope
+- id: out-transformer
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: x %tolower(proc.name)
+- id: out-percent-alone
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: 100% sure %proc.name
+- id: exc-tuple
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    - user.name
+    comps:
+    - '='
+    - in
+    values:
+    - - sshd
+      - - root
+        - admin
+- id: exc-tuple-default-comps
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    values:
+    - - sshd
+- id: exc-single-field
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields: proc.pname
+    values:
+    - sshd
+    - cron
+- id: exc-single-field-pmatch
+  condition: evt.type in (open, openat) and fd.name startswith /etc
+  exceptions:
+  - name: e
+    fields: fd.name
+    comps: pmatch
+    values:
+    - /etc/ssl
+- id: exc-single-modified
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields: proc.pname
+    comps: startswith oneof
+    values:
+    - ssh
+    - cro
+- id: exc-tuple-modified
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    comps:
+    - startswith anyof
+    values:
+    - - - ssh
+        - cro
+- id: exc-scalar-under-in
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    comps:
+    - in
+    values:
+    - - shell_binaries
+- id: exc-bad-comp
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    comps:
+    - '~'
+    values:
+    - - x
+- id: exc-single-bad-comp
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields: proc.pname
+    comps: '='
+    values:
+    - x
+- id: exc-misaligned
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    - user.name
+    values:
+    - - x
+- id: exc-unknown-field
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.nope
+    values:
+    - - x
+- id: exc-duplicate-name
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    values:
+    - - x
+  - name: e
+    fields:
+    - user.name
+    values:
+    - - y
+- id: exc-value-type
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  exceptions:
+  - name: e
+    fields:
+    - proc.pid
+    values:
+    - - abc
+- id: def-macro
+  condition: evt.type in (execve, execveat) and my_shell
+  macros:
+  - name: my_shell
+    condition: proc.name in (my_shells)
+  lists:
+  - name: my_shells
+    items:
+    - bash
+    - zsh
+- id: def-list-no-parens
+  condition: evt.type in (execve, execveat) and proc.name in my_shells
+  lists:
+  - name: my_shells
+    items:
+    - bash
+    - zsh
+- id: def-list-nested
+  condition: evt.type in (execve, execveat) and proc.name in (all_shells)
+  lists:
+  - name: base_shells
+    items:
+    - bash
+  - name: all_shells
+    items:
+    - base_shells
+    - zsh
+- id: def-list-empty
+  condition: evt.type in (execve, execveat) and proc.name in (none, bash)
+  lists:
+  - name: none
+    items: []
+- id: def-list-item-space
+  condition: evt.type in (execve, execveat) and proc.cmdline in (cmds)
+  lists:
+  - name: cmds
+    items:
+    - sh -c id
+    - bash
+- id: def-macro-uses-default
+  condition: evt.type in (execve, execveat) and my_m
+  macros:
+  - name: my_m
+    condition: spawned_process and shell_procs
+- id: def-default-macro
+  condition: spawned_process and container and shell_procs
+- id: def-default-list
+  condition: evt.type in (execve, execveat) and proc.name in (shell_binaries)
+- id: def-unknown-macro
+  condition: evt.type in (execve, execveat) and no_such_macro
+- id: def-macro-invalid-body
+  condition: evt.type in (execve, execveat) and bad_m
+  macros:
+  - name: bad_m
+    condition: proc.name =
+- id: app-condition
+  condition: and not proc.pname in (kubectl)
+  append_to_rule: Terminal shell in container
+- id: app-exceptions
+  append_to_rule: Terminal shell in container
+  exceptions:
+  - name: ci
+    fields:
+    - proc.pname
+    values:
+    - - gitlab-runner
+- id: app-or
+  condition: or proc.name = sshd
+  append_to_rule: Terminal shell in container
+- id: app-no-leading-and
+  condition: not proc.pname in (kubectl)
+  append_to_rule: Terminal shell in container
+- id: app-unknown-rule
+  condition: and proc.name = bash
+  append_to_rule: No such rule anywhere
+- id: warn-regex-simple
+  condition: evt.type in (execve, execveat) and proc.name regex "bash"
+- id: warn-field-as-value-quoted
+  condition: evt.type in (execve, execveat) and proc.name = "proc.pname"
+- id: warn-transformer-as-value
+  condition: evt.type in (execve, execveat) and proc.name = tolower
+- id: evt-macro-scoped
+  condition: spawned_process and proc.name = bash
+- id: evt-or-unscoped
+  condition: evt.type = execve or proc.name = bash
+- id: evt-not-in
+  condition: not evt.type in (open, openat) and proc.name = bash
+- id: evt-syscall-name
+  condition: evt.type = openat2
+- id: evt-type-ne
+  condition: evt.type != execve and proc.name = bash
+- id: evt-in-macro-list
+  condition: evt.type in (execve) and proc.name in (shell_binaries)
+- id: out-double-percent
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: 100%% sure %proc.name
+- id: out-star-prefix
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: '*%proc.name %proc.pname'
+- id: out-field-length
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: name %12proc.name
+- id: out-trailing-percent
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: name %
+- id: out-filter-only-field
+  condition: evt.type in (execve, execveat) and proc.name = bash
+  output: type %evt.type.is[open]
+- id: app-exceptions-unknown-rule
+  append_to_rule: No such rule anywhere
+  exceptions:
+  - name: e
+    fields:
+    - proc.pname
+    values:
+    - - x
+- id: app-macro-in-tuning
+  condition: and not my_m
+  append_to_rule: Terminal shell in container
+  macros:
+  - name: my_m
+    condition: proc.pname = kubectl
+- id: app-list-in-tuning
+  condition: and not proc.pname in (my_l)
+  append_to_rule: Terminal shell in container
+  lists:
+  - name: my_l
+    items:
+    - kubectl
+- id: def-macro-order-forward
+  condition: evt.type in (execve, execveat) and m1
+  macros:
+  - name: m1
+    condition: m2
+  - name: m2
+    condition: proc.name = bash
+- id: def-list-order-forward
+  condition: evt.type in (execve, execveat) and proc.name in (l1)
+  lists:
+  - name: l1
+    items:
+    - l2
+    - zsh
+  - name: l2
+    items:
+    - bash
+- id: def-list-self
+  condition: evt.type in (execve, execveat) and proc.name in (l1)
+  lists:
+  - name: l1
+    items:
+    - l1
+    - zsh
+- id: def-macro-uses-later-list
+  condition: evt.type in (execve, execveat) and m1
+  macros:
+  - name: m1
+    condition: proc.name in (l1)
+  lists:
+  - name: l1
+    items:
+    - bash

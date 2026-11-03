@@ -10,7 +10,7 @@ CI-only checks that compare the opentide engine with the parser each query langu
 | EQL | Elasticsearch `EqlBase.g4` at `2c85bbdf`, generated with antlr-ng 1.0.10 (the grammar has no actions) | `elastic/eql.mjs` | `oracle.yml` → Elastic and Lucene |
 | Kibana KQL (`kuery`) | Kibana `grammar.peggy` at `ea2712af`, compiled with peggy 5.1.1 | `elastic/kuery.cjs` | `oracle.yml` → Elastic and Lucene |
 | Lucene | Lucene 10.5.2 `QueryParser` (the version Elasticsearch pins), leading wildcards on | `elastic/LuceneOracle.java` | `oracle.yml` → Elastic and Lucene |
-| Falco | `falco --validate` (Falco 0.41, with the default `falco_rules.yaml` loaded) | `falco/validate.py`, a local binary or the `falcosecurity/falco` image | none yet: run by hand, see [Falco](#falco) |
+| Falco | `falco --validate`: Falco 0.45.2 (libs 0.26.1), `falcosecurity/falco:0.45.2`, with the three default rules files of `falcosecurity/rules@e7b066bf` loaded | `falco/oracle.py`, one Falco process per case in one container | `oracle.yml` → Falco 0.45.2; see [Falco](#falco) |
 | Tide YAML | Pydantic models in the pinned `opentide` package | `scripts/pydantic_object_issues.py` | `ci.yml` (`cargo test`, `tide_corpus.rs`) |
 | EQL, ES\|QL, Lucene | A live Elasticsearch (8.19 and 9.x release images) | `elasticsearch/`, a throwaway container | `oracle.yml` (8.19.23 and 9.5.5), and locally for the other lines; see [Live Elasticsearch](#live-elasticsearch) |
 
@@ -91,10 +91,14 @@ Kusto.Language, Splunk, Splunk SDKs, and the Elastic and Lucene references never
 
 ## Falco
 
-`falco/validate.py` wraps each public condition in `testdata/conformance/external/falco/syscall/` (and each `.broken.` twin) in a rule, validates it with `falco --validate` beside the Falco default rules, and compares the verdict with `falco_parse_error` from `opentide-lsp analyze`. Every public condition must pass both, and every broken twin must fail both. Plugin sources (`k8s_audit`, `aws_cloudtrail`, ...) are not compared, because validating them needs the plugin libraries configured.
+`falco/oracle.py` runs every case through the real Falco and through the engine, and compares them. A case is one Falco rule: a condition, its output, exceptions, the macros and lists it defines, or a tuning (`append_to_rule`). It becomes a Falco rules file (its lists and macros as real `- list:` / `- macro:` items, so Falco resolves them itself, then the rule or an `override: append` of a default rule) and an opentide rule with the same `configurations.sysdig` block, which `opentide-lsp analyze` checks. Falco validates each file with the three default rules files loaded first (`falco_rules.yaml`, `falco-incubating_rules.yaml`, `falco-sandbox_rules.yaml`), in its own process: a load failure carries over to the files after it in one run.
 
-It is not an `oracle.yml` job yet. The engine was written in a sandbox that reached neither `download.falco.org` nor a Docker daemon, so the script has not run against a real Falco; the job lands once it has, with any disagreement listed in `testdata/oracles/exceptions.toml` under `[[falco]]`. Until then the reference for the grammar is libsinsp's documented condition grammar (`userspace/libsinsp/filter/parser.h`), and `crates/opentide-analysis/tests/external_falco.rs` requires every public default-rule condition to come out of the engine with no finding at all.
+A case agrees when Falco loads it exactly when the engine reports no error (`falco_*` or the block's `sysdig_*` constraint codes), and when Falco's `LOAD_NO_EVTTYPE` matches the engine's `falco_no_evttype`. The corpora are `testdata/oracles/falco/cases.yaml`, one or more cases per row of `docs/FALCO.md`, and the conditions of the Falco default rules (`testdata/conformance/external/falco/syscall/`) with their broken twins.
+
+Two differences are documented, and the oracle counts them apart: Falco OSS refuses a macro or list it does not define (`Undefined macro`), and an append to a rule it does not have; on a Sysdig tenant either may be one Sysdig manages, so the engine warns (`falco_unknown_macro`, `falco_unknown_list`, `falco_unknown_rule`). One more is a spec decision: a list item naming a later list, or its own list, is loaded by Falco as a literal string item, while sysdig-1.0 (and opentide) reject it with `sysdig_definition_order`; the oracle reports it as *stricter by spec*. Nothing else is allowed to differ.
+
+Pins: Falco `0.45.2` (the `falcosecurity/falco` image), rules `falcosecurity/rules@e7b066bfbc8d81226ca5fa3e95ffd4dee38a2428`. Bump both in `oracle.yml` and here together. Plugin sources (`k8s_audit`, `aws_cloudtrail`, ...) are not compared: the image ships only the container plugin.
 
 ```bash
-python scripts/oracles/falco/validate.py --rules ../rules --docker falcosecurity/falco:0.41.3
+python scripts/oracles/falco/oracle.py --rules ../falcosecurity-rules --docker falcosecurity/falco:0.45.2 --report report.json
 ```
