@@ -6,6 +6,11 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Changed
+
+- The bundled Tide catalog lists the ATT&CK v18 ids for `configurations.sentinel.alert.techniques`, regenerated from opentide ([opentidehq/opentide#686](https://github.com/opentidehq/opentide/issues/686), specifications `platform-sentinel` 1.2). Microsoft Sentinel is aligned to ATT&CK version 18, so the field takes the 898 techniques and sub-techniques of the ATT&CK 18.1 Enterprise, Mobile and ICS matrices rather than the `att&ck` vocabulary's ATT&CK 20.0 ids: completion offers them, and any other value, such as `T1685` (ATT&CK v19), is `vocab_unknown`. A rule's own `techniques` and the objective and threat ATT&CK fields are unchanged.
+- The reference objective schema (`catalogs/tide/schemas/objective.1.0.schema.json`) no longer lists a `Placeholder Logsource` value for log source names: opentide 0.20.1 bundles a `visibility.toml` that declares no log source. The field catalog the engine reads did not carry it.
+
 ## [0.7.1] - 2026-11-03
 
 Declared datasets carry their columns. `visibility.toml` follows the corrected `visibility::1.0`: a log source's `name` is its dataset (KQL table, Splunk sourcetype, Elastic index pattern) and it may list the dataset's columns, which the query checks, hover and completion use like the columns of a catalog table. An unknown table is `kql_unknown_table` at its profile's severity again once tables are declared, so a Defender typo fails validation; lower-case table names are checked; column patterns in `project-reorder`, `project-away` and `project-keep` parse; and a document that starts with a UTF-8 byte-order mark is analysed.
