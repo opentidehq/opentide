@@ -39,6 +39,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      # The generated grammars as VS Code reads them (#171).
+      - name: TextMate grammars (vscode-textmate)
+        working-directory: highlights/test
+        run: npm ci && npm test
+      # The npm packages build and pack only what they publish (#167).
+      - name: npm packs
+        run: |
+          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          node scripts/check-npm-packs.mjs
       # The TypeScript client against the debug server `cargo test` built.
       - name: lsp-client (stdio)
         env:

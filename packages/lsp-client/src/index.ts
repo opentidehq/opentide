@@ -261,7 +261,11 @@ class StdioConnection {
       const exited = new Promise<void>((resolve) => child!.once("close", () => resolve()));
       await this.send("shutdown", null);
       this.notify("exit", null);
-      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 2000).unref());
+      const timeout = new Promise<void>((resolve) => {
+        // Node's timer has `unref`, so a server that never exits does not keep the process alive.
+        const timer = setTimeout(resolve, 2000) as unknown as { unref?: () => void };
+        timer.unref?.();
+      });
       await Promise.race([exited, timeout]);
     } catch {
       // Already gone: nothing to shut down.
@@ -323,7 +327,7 @@ function wasiClient(options: OpentideClientOptions): OpentideClient {
   const load = (): Promise<WebAssembly.Module> =>
     (compiled ??= (async () => {
       if (source instanceof WebAssembly.Module) return source;
-      if (source instanceof Uint8Array) return WebAssembly.compile(source);
+      if (source instanceof Uint8Array) return WebAssembly.compile(source as unknown as BufferSource);
       const { readFile } = await import("node:fs/promises");
       return WebAssembly.compile(await readFile(source));
     })());

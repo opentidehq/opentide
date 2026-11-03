@@ -35,6 +35,25 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - `initialize` says who runs the server ([#172](https://github.com/opentidehq/language-server/issues/172)): `capabilities.experimental.opentide` is `{ host, engine, catalog, configurationChecks, configurationSchemas }`. `opentide_lsp::set_host_info` names the host, and `opentide-lsp --version --json` prints the same object without starting a session.
 - Logs reach the editor ([#185](https://github.com/opentidehq/language-server/issues/185) P2.5). Catalog and `visibility.toml` loads and failures are `window/logMessage`, and a broken file on disk is shown once per session.
 
+- Carbon Black Cloud field knowledge ([#162](https://github.com/opentidehq/language-server/issues/162)). `catalogs/carbon_black/fields.toml` lists 76 process search fields, each with its type, whether it takes several values, a description, and the values a few allow. Each is attested by Carbon Black's Python SDK or pySigma's Carbon Black pipeline, as the file and its `NOTICE` record.
+  - In `configurations.carbon_black_cloud.query` (and `system: carbon_black_cloud` hunts), a field within two edits of a catalog field is `cbc_unknown_field` (warning), with the field as the suggestion (`process_nmae` → `process_name`).
+  - Hover documents Carbon Black fields, and completion offers them, or a field's values after `field:`. ECS fields are no longer offered there: they are Elastic's.
+  - `opentide-lsp analyze --platform carbon_black_cloud` checks a raw `.lucene` file in the Carbon Black dialect. `--platform` also picks the KQL schema (`defender_for_endpoint`).
+  - The external corpus gains 40 SigmaHQ rules converted by `pysigma-backend-carbonblack` (`lucene-carbon-black/`, `scripts/sigma_carbon_black_corpus.py`), each with a broken twin. `oracle.py carbon_black` compares every Carbon Black query with a tenant's `search_validation`; it runs weekly with secrets and skips without them.
+  - Not yet done: limiting the upper-case regexp hint to tokenized fields. Carbon Black documents which fields are tokenized only on developer.carbonblack.com, which could not be read when the catalog was built.
+  - API: `opentide_lucene::{carbon_black, hover_dialect, completions_dialect}`, `codes::CBC_UNKNOWN_FIELD`.
+- Queries inside Tide YAML are embedded regions of their language's TextMate grammar ([#171](https://github.com/opentidehq/language-server/issues/171)), for the paths that fix the language.
+  - `configurations.{sentinel,defender_for_endpoint}.query` → KQL, `configurations.splunk.{query,search}` → SPL, `configurations.carbon_black_cloud.query` → Lucene, as `meta.embedded.block.<id>`.
+  - Elastic queries are left to semantic tokens: their language follows sibling keys.
+  - The highlights zip ships `generated/package-contributions.json` with the `embeddedLanguages` map.
+  - A test opens the grammars with `vscode-textmate`, as VS Code does.
+  - HighlightSpec is 0.3.0; no capture changed.
+- `@opentide/lsp-client` and `@opentide/lsp-worker` build to JavaScript and declarations, and pack only those and their licences ([#167](https://github.com/opentidehq/language-server/issues/167)). Each package's `exports` point at `dist/`. A release publishes both at its version with npm trusted publishing once the repository variable `NPM_PUBLISH` is `true`, and skips a version already published. CI checks what each pack contains.
+- Fuzzing ([#182](https://github.com/opentidehq/language-server/issues/182)). `fuzz/` holds `cargo-fuzz` targets for KQL, SPL, ES|QL, EQL, kuery, Lucene and Tide YAML: each runs analysis, hover, completion and signature help, plus Tide's index, outline, links, lens and inlay hints. A `protocol` target runs LSP sessions built from arbitrary message bodies through `serve`.
+  - `scripts/fuzz.sh <target>` runs one target with its seed corpora.
+  - A nightly job (`fuzz.yml`) runs each target for five minutes and uploads its crashes. It does not gate pull requests.
+  - Saved crashes in `fuzz/regressions/` replay on stable Rust in the normal test run.
+
 ### Fixed
 
 - An incremental edit after a multi-byte character (`日本`, `é`, an emoji) no longer crashes the language server ([#178](https://github.com/opentidehq/language-server/issues/178)). The server read the editor's column, which counts UTF-16 units, as a byte offset, and sliced inside the character. Edits, completion and hover now all convert positions with `opentide_core::position_to_offset`, which counts UTF-16 as LSP does; completion and KQL hover used to count characters, which put the cursor one column off after an emoji.
@@ -75,6 +94,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - A space opens no completion list in Tide YAML.
   - An edit whose version is not newer than the document's is ignored.
 - `completionItem/resolve` documents a Tide value from the field it was completed for, carried in the item's `data`, not from the first field with that value ([#185](https://github.com/opentidehq/language-server/issues/185) P0.9).
+- Completion and hover work with the cursor right after the last character of an injected query, where it sits while the author types. They found no query there, in every language.
+- A release build of `opentide-lsp` no longer warns about the debug-only test requests, which CI's `-Dwarnings` turned into an error.
 ### Changed
 
 - The protocol host is built on `lsp-server` 0.10 and `lsp-types` 0.97, the stack rust-analyzer uses, without an async runtime ([#90](https://github.com/opentidehq/language-server/issues/90), [#185](https://github.com/opentidehq/language-server/issues/185) P1.1, P1.2, P1.5).
