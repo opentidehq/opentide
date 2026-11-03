@@ -11,13 +11,17 @@ from typing import Any
 
 import pytest
 import yaml
+from tests.gitlab_pipeline_support import (
+    GLOBAL_KEYS,
+    PIPELINES,
+    needs_of,
+    pipeline_jobs,
+    unmet_needs,
+)
 
 from opentide.ci.gitlab import pipeline_document, render_gitlab
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.text import dump_pipeline
-
-#: Top-level keys that are not jobs.
-GLOBAL_KEYS = frozenset({"workflow", "variables", "stages", "default", "include"})
 
 _PLATFORM_SETS = (
     (),
@@ -62,16 +66,13 @@ def jobs_of(pipeline: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
-def need_names(job: dict[str, Any]) -> list[tuple[str, bool]]:
-    """``(job, optional)`` for every entry of the job's ``needs``."""
-    needs = job.get("needs") or []
-    out: list[tuple[str, bool]] = []
-    for need in needs:
-        if isinstance(need, str):
-            out.append((need, False))
-        else:
-            out.append((need["job"], bool(need.get("optional"))))
-    return out
+@pytest.mark.parametrize("options", CASES, ids=_case_id)
+def test_every_pipeline_gitlab_creates_can_start(options: CiRenderOptions) -> None:
+    parsed = yaml.safe_load(render_gitlab(options))
+    for pipeline, variables in PIPELINES.items():
+        jobs = pipeline_jobs(parsed, variables)
+        if jobs is not None:
+            assert not unmet_needs(parsed, jobs), pipeline
 
 
 @pytest.mark.parametrize("options", CASES, ids=_case_id)
@@ -91,11 +92,27 @@ def test_every_job_is_well_formed(options: CiRenderOptions) -> None:
             assert isinstance(lines, list), f"{name}.{key} is not a list"
             assert all(isinstance(line, str) and line for line in lines), f"{name}.{key}"
         assert job["script"], f"{name} has an empty script (GL003)"
-        for need, _optional in need_names(job):
+        for need, _optional in needs_of(job):
             assert need in jobs, f"{name} needs {need}, which the pipeline does not define"
             assert stages.index(jobs[need]["stage"]) <= stages.index(job["stage"]), (
                 f"{name} needs {need} from a later stage"
             )
+
+
+@pytest.mark.parametrize("options", CASES, ids=_case_id)
+def test_a_job_that_rules_can_leave_out_is_an_optional_need(options: CiRenderOptions) -> None:
+    """GitLab refuses the whole pipeline when a job needs one its rules left out.
+
+    ``generate`` needed every ``validate_query_*`` job without ``optional``,
+    so any ``rules:`` on a query job broke pipeline creation with "needs job
+    ..., but it was not added to the pipeline". A job that has no ``rules``
+    is in every pipeline ``workflow:rules`` allows; any other need is optional.
+    """
+    jobs = jobs_of(yaml.safe_load(render_gitlab(options)))
+    for name, job in jobs.items():
+        for need, optional in needs_of(job):
+            if "rules" in jobs[need]:
+                assert optional, f"{name} needs {need}, which has rules, without optional: true"
 
 
 @pytest.mark.parametrize("options", CASES, ids=_case_id)

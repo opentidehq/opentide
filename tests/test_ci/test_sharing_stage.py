@@ -72,7 +72,9 @@ def test_gitlab_share_job_runs_after_production_on_the_branch_tip() -> None:
     parsed = yaml.safe_load(text)
     assert parsed["stages"] == ["validate", "generate", "deploy", "share", "document"]
     share = parsed["share"]
-    assert share["needs"] == ["generate", "deploy_production"]
+    # Optional: deploy_production has rules, and a pipeline they leave it out
+    # of would otherwise not be created at all.
+    assert share["needs"] == ["generate", {"job": "deploy_production", "optional": True}]
     assert parsed["deploy_production"]["needs"] == ["generate"]
     # The tip checkout comes first, and the share command reads it.
     assert share["script"] == [

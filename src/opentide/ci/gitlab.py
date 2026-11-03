@@ -63,12 +63,22 @@ _WORKFLOW_NOTE = (
 )
 
 
+def optional_need(job: str) -> dict[str, str | bool]:
+    """A ``needs`` entry that is ignored when *job* is not in the pipeline.
+
+    A job left out by its ``rules`` (or by rules a project adds) otherwise
+    makes GitLab refuse the whole pipeline: "needs job ..., but it was not
+    added to the pipeline". Every need of a job that has ``rules`` is one.
+    """
+    return {"job": job, "optional": True}
+
+
 def gitlab_job(
     *,
     options: CiRenderOptions,
     stage: str,
     script: list[str],
-    needs: list[str] | None = None,
+    needs: list[str | dict[str, str | bool]] | None = None,
     rules: list[Rule] | None = None,
     variables: dict[str, str] | None = None,
     extra: Job | None = None,
@@ -169,7 +179,9 @@ def _share_job(options: CiRenderOptions) -> Job:
             "opentide validate --strict",
             SHARE_COMMAND,
         ],
-        needs=["generate", "deploy_production"],
+        # deploy_production has rules; when they leave it out the share
+        # still runs, as it does after a failed deploy.
+        needs=["generate", optional_need("deploy_production")],
         rules=[
             {
                 "if": (
@@ -235,7 +247,9 @@ def pipeline_document(options: CiRenderOptions) -> Job:
             options=options,
             stage="generate",
             script=["opentide generate"],
-            needs=["validate", *query_jobs],
+            # Optional: a query job that rules leave out, such as rules a
+            # project adds, must not stop GitLab creating the pipeline.
+            needs=["validate", *(optional_need(name) for name in query_jobs)],
         ),
         **query_jobs,
     }
