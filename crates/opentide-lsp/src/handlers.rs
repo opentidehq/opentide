@@ -12,8 +12,8 @@ use lsp_types as lsp;
 use lsp_types::notification::Notification as _;
 use opentide_analysis::{
     VISIBILITY_CONFIGURATION, WorkspaceHost, codes, compiled_kql, compiled_spl, completions,
-    configuration_completions, configuration_hover, declare_dataset, hover, workspace_index,
-    signature_help,
+    configuration_completions, configuration_hover, declare_dataset, hover, signature_help,
+    workspace_index,
 };
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Position, Range, span_to_range};
 use opentide_highlight::encode_lsp_semantic_tokens;
