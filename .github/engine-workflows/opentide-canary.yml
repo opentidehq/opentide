@@ -75,7 +75,7 @@ jobs:
         # OPENTIDE_DIAGNOSTICS_DOCS: every code the server links to has its
         # section in opentide's diagnostics reference (#185 P2.3).
         env:
-          OPENTIDE_DIAGNOSTICS_DOCS: opentide-src/docs/cli/diagnostics.md
+          OPENTIDE_DIAGNOSTICS_DOCS: ${{ github.workspace }}/opentide-src/docs/cli/diagnostics.md
         run: |
           python scripts/sync_opentide_schemas.py
           git diff --stat

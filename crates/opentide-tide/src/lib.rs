@@ -435,7 +435,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         let dups: Vec<_> = input
             .workspace
             .iter()
-            .filter(|o| o.uuid == uuid && o.path != input.path)
+            .filter(|o| o.uuid == uuid && !same_file(&o.path, input.path))
             .collect();
         if !dups.is_empty() {
             diagnostics.push(
@@ -1636,6 +1636,21 @@ fn unknown_enum(schema: &str, path: &str, value: &str) -> Option<String> {
     Some(format!("unknown {} value '{value}'", field.name))
 }
 
+/// Whether two paths name one file: separators and a drive letter's case
+/// do not count, so `C:\\w\\objects/rules/x.yaml` (a path joined with `/`)
+/// and the directory walk's `c:\\w\\objects\\rules\\x.yaml` are the same
+/// object, not a `duplicate_id`.
+pub fn same_file(a: &str, b: &str) -> bool {
+    fn key(path: &str) -> String {
+        let mut key = path.replace('\\', "/");
+        if key.as_bytes().get(1) == Some(&b':') {
+            key[..1].make_ascii_lowercase();
+        }
+        key
+    }
+    a == b || key(a) == key(b)
+}
+
 fn key_range(source: &str, key: &str) -> Range {
     if let Some(idx) = source.find(&format!("{key}:")) {
         span_to_range(source, ByteSpan::new(idx, idx + key.len()))
@@ -1734,6 +1749,15 @@ pub fn workspace_symbols<'a>(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn same_file_ignores_separators_and_drive_case() {
+        assert!(super::same_file(
+            "C:\\w\\objects/rules/x.yaml",
+            "c:\\w\\objects\\rules\\x.yaml"
+        ));
+        assert!(super::same_file("/w/objects/x.yaml", "/w/objects/x.yaml"));
+        assert!(!super::same_file("/w/objects/x.yaml", "/w/objects/y.yaml"));
+    }
     use super::*;
 
     const RULE: &str = r#"
