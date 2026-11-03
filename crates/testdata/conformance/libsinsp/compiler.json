@@ -1,0 +1,2620 @@
+{
+ "source": "falcosecurity/libs@f13bc241815d463be433e947b90f42713df1abf9",
+ "file": "userspace/libsinsp/test/filter_compiler.ut.cpp",
+ "license": "Apache-2.0",
+ "skipped": [
+  "sinsp_filter_compiler.complex_filter:813: filter is not a literal"
+ ],
+ "fixtures": [
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 437,
+   "filter": "c.true exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 438,
+   "filter": "c.true = value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 439,
+   "filter": "c.true == value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 440,
+   "filter": "c.true != value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 441,
+   "filter": "c.true glob value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 442,
+   "filter": "c.true contains value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 443,
+   "filter": "c.true icontains value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 444,
+   "filter": "c.true startswith value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 445,
+   "filter": "c.true endswith value",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 446,
+   "filter": "c.true > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 447,
+   "filter": "c.true < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 448,
+   "filter": "c.true >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 449,
+   "filter": "c.true <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 450,
+   "filter": "c.true in ()",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 451,
+   "filter": "c.true intersects ()",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 452,
+   "filter": "c.true pmatch ()",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 453,
+   "filter": "c.true in()",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 454,
+   "filter": "c.buffer bcontains 12ab001fc5",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 455,
+   "filter": "c.buffer bstartswith 48545450",
+   "fail": false,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 458,
+   "filter": "c.buffer bstartswith g",
+   "fail": true,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 459,
+   "filter": "c.buffer bstartswith 123Z",
+   "fail": true,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.supported_operators",
+   "line": 460,
+   "filter": "c.buffer bstartswith abc_1",
+   "fail": true,
+   "warnings": 0,
+   "mock": true
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 469,
+   "filter": "evt.rawtime exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 470,
+   "filter": "evt.rawtime = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 471,
+   "filter": "evt.rawtime != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 472,
+   "filter": "evt.rawtime < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 473,
+   "filter": "evt.rawtime <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 474,
+   "filter": "evt.rawtime > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 475,
+   "filter": "evt.rawtime >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 476,
+   "filter": "evt.rawtime contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 477,
+   "filter": "evt.rawtime in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 478,
+   "filter": "evt.rawtime intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 479,
+   "filter": "evt.rawtime icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 480,
+   "filter": "evt.rawtime startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 481,
+   "filter": "evt.rawtime glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 482,
+   "filter": "evt.rawtime pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 483,
+   "filter": "evt.rawtime endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 484,
+   "filter": "evt.rawtime bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 485,
+   "filter": "evt.rawtime bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 486,
+   "filter": "evt.rawtime iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 487,
+   "filter": "evt.rawtime regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 490,
+   "filter": "evt.is_io exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 491,
+   "filter": "evt.is_io = true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 492,
+   "filter": "evt.is_io != true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 493,
+   "filter": "evt.is_io < true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 494,
+   "filter": "evt.is_io <= true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 495,
+   "filter": "evt.is_io > true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 496,
+   "filter": "evt.is_io >= true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 497,
+   "filter": "evt.is_io contains true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 498,
+   "filter": "evt.is_io in (true)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 499,
+   "filter": "evt.is_io intersects (true)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 500,
+   "filter": "evt.is_io icontains true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 501,
+   "filter": "evt.is_io startswith true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 502,
+   "filter": "evt.is_io glob true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 503,
+   "filter": "evt.is_io pmatch (true)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 504,
+   "filter": "evt.is_io endswith true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 505,
+   "filter": "evt.is_io bcontains 7472756500",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 506,
+   "filter": "evt.is_io bstartswith 7472756500",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 507,
+   "filter": "evt.is_io iglob true",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 508,
+   "filter": "evt.is_io regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 511,
+   "filter": "evt.buffer exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 512,
+   "filter": "evt.buffer = test",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 513,
+   "filter": "evt.buffer != test",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 514,
+   "filter": "evt.buffer < 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 515,
+   "filter": "evt.buffer <= 2",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 516,
+   "filter": "evt.buffer > 3",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 517,
+   "filter": "evt.buffer >= 4",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 518,
+   "filter": "evt.buffer contains test",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 519,
+   "filter": "evt.buffer in (test)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 520,
+   "filter": "evt.buffer intersects (test)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 521,
+   "filter": "evt.buffer icontains test",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 522,
+   "filter": "evt.buffer startswith test",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 523,
+   "filter": "evt.buffer glob test",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 524,
+   "filter": "evt.buffer pmatch (test)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 525,
+   "filter": "evt.buffer endswith test",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 526,
+   "filter": "evt.buffer bcontains 303000",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 527,
+   "filter": "evt.buffer bstartswith 303000",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 528,
+   "filter": "evt.buffer iglob test",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 529,
+   "filter": "evt.buffer regex '.*'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 532,
+   "filter": "fd.name exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 533,
+   "filter": "fd.name = true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 534,
+   "filter": "fd.name != true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 535,
+   "filter": "fd.name < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 536,
+   "filter": "fd.name <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 537,
+   "filter": "fd.name > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 538,
+   "filter": "fd.name >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 539,
+   "filter": "fd.name contains true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 540,
+   "filter": "fd.name in (true)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 541,
+   "filter": "fd.name intersects (true)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 542,
+   "filter": "fd.name icontains true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 543,
+   "filter": "fd.name startswith true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 544,
+   "filter": "fd.name glob true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 545,
+   "filter": "fd.name pmatch (true)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 546,
+   "filter": "fd.name endswith true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 547,
+   "filter": "fd.name bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 548,
+   "filter": "fd.name bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 549,
+   "filter": "fd.name iglob true",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 550,
+   "filter": "fd.name regex '/home/.*/dev'",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 553,
+   "filter": "thread.cpu exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 554,
+   "filter": "thread.cpu = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 556,
+   "filter": "thread.cpu = 1.0",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 557,
+   "filter": "thread.cpu != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 558,
+   "filter": "thread.cpu < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 559,
+   "filter": "thread.cpu <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 560,
+   "filter": "thread.cpu > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 561,
+   "filter": "thread.cpu >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 562,
+   "filter": "thread.cpu contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 563,
+   "filter": "thread.cpu in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 564,
+   "filter": "thread.cpu intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 565,
+   "filter": "thread.cpu icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 566,
+   "filter": "thread.cpu startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 567,
+   "filter": "thread.cpu glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 568,
+   "filter": "thread.cpu pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 569,
+   "filter": "thread.cpu endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 570,
+   "filter": "thread.cpu bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 571,
+   "filter": "thread.cpu bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 572,
+   "filter": "thread.cpu iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 573,
+   "filter": "thread.cpu regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 576,
+   "filter": "evt.cpu exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 577,
+   "filter": "evt.cpu = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 578,
+   "filter": "evt.cpu != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 579,
+   "filter": "evt.cpu < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 580,
+   "filter": "evt.cpu <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 581,
+   "filter": "evt.cpu > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 582,
+   "filter": "evt.cpu >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 583,
+   "filter": "evt.cpu contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 584,
+   "filter": "evt.cpu in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 585,
+   "filter": "evt.cpu intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 586,
+   "filter": "evt.cpu icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 587,
+   "filter": "evt.cpu startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 588,
+   "filter": "evt.cpu glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 589,
+   "filter": "evt.cpu pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 590,
+   "filter": "evt.cpu endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 591,
+   "filter": "evt.cpu bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 592,
+   "filter": "evt.cpu bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 593,
+   "filter": "evt.cpu iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 594,
+   "filter": "evt.cpu regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 597,
+   "filter": "fd.dev exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 598,
+   "filter": "fd.dev = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 599,
+   "filter": "fd.dev != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 600,
+   "filter": "fd.dev < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 601,
+   "filter": "fd.dev <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 602,
+   "filter": "fd.dev > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 603,
+   "filter": "fd.dev >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 604,
+   "filter": "fd.dev contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 605,
+   "filter": "fd.dev in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 606,
+   "filter": "fd.dev intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 607,
+   "filter": "fd.dev icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 608,
+   "filter": "fd.dev startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 609,
+   "filter": "fd.dev glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 610,
+   "filter": "fd.dev pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 611,
+   "filter": "fd.dev endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 612,
+   "filter": "fd.dev bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 613,
+   "filter": "fd.dev bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 614,
+   "filter": "fd.dev iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 615,
+   "filter": "fd.dev regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 618,
+   "filter": "proc.pid exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 619,
+   "filter": "proc.pid = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 620,
+   "filter": "proc.pid != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 621,
+   "filter": "proc.pid < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 622,
+   "filter": "proc.pid <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 623,
+   "filter": "proc.pid > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 624,
+   "filter": "proc.pid >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 625,
+   "filter": "proc.pid contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 626,
+   "filter": "proc.pid in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 627,
+   "filter": "proc.pid intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 628,
+   "filter": "proc.pid icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 629,
+   "filter": "proc.pid startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 630,
+   "filter": "proc.pid glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 631,
+   "filter": "proc.pid pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 632,
+   "filter": "proc.pid endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 633,
+   "filter": "proc.pid bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 634,
+   "filter": "proc.pid bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 635,
+   "filter": "proc.pid iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 636,
+   "filter": "proc.pid regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 639,
+   "filter": "fd.ip exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 640,
+   "filter": "fd.ip = 127.0.0.1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 641,
+   "filter": "fd.ip != 127.0.0.1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 642,
+   "filter": "fd.ip < 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 643,
+   "filter": "fd.ip <= 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 644,
+   "filter": "fd.ip > 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 645,
+   "filter": "fd.ip >= 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 646,
+   "filter": "fd.ip contains 127.0.0.1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 647,
+   "filter": "fd.ip in (127.0.0.1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 648,
+   "filter": "fd.ip intersects (127.0.0.1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 649,
+   "filter": "fd.ip icontains 127.0.0.1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 650,
+   "filter": "fd.ip startswith 127.0.0.1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 651,
+   "filter": "fd.ip glob 127.0.0.1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 652,
+   "filter": "fd.ip pmatch (127.0.0.1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 653,
+   "filter": "fd.ip endswith 127.0.0.1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 654,
+   "filter": "fd.ip bcontains 3132372e302e302e3100",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 655,
+   "filter": "fd.ip bstartswith 3132372e302e302e3100",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 656,
+   "filter": "fd.ip iglob 127.0.0.1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 657,
+   "filter": "fd.ip regex '.*'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 659,
+   "filter": "fd.ip == anyof (127.0.0.1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 660,
+   "filter": "fd.ip == allof (127.0.0.1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 661,
+   "filter": "fd.ip != anyof (127.0.0.1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 662,
+   "filter": "fd.ip != allof (127.0.0.1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 663,
+   "filter": "fd.ip contains anyof (127.0.0.1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 664,
+   "filter": "fd.ip regex allof ('.*')",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 667,
+   "filter": "fd.net exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 668,
+   "filter": "fd.net = 127.0.0.1/32",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 669,
+   "filter": "fd.net != 127.0.0.1/32",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 670,
+   "filter": "fd.net < 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 671,
+   "filter": "fd.net <= 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 672,
+   "filter": "fd.net > 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 673,
+   "filter": "fd.net >= 127",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 674,
+   "filter": "fd.net contains 127.0.0.1/32",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 675,
+   "filter": "fd.net in (127.0.0.1/32)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 676,
+   "filter": "fd.net intersects (127.0.0.1/32)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 677,
+   "filter": "fd.net icontains 127.0.0.1/32",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 678,
+   "filter": "fd.net startswith 127.0.0.1/32",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 679,
+   "filter": "fd.net glob 127.0.0.1/32",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 680,
+   "filter": "fd.net pmatch (127.0.0.1/32)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 681,
+   "filter": "fd.net endswith 127.0.0.1/32",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 682,
+   "filter": "fd.net bcontains 3132372e302e302e312f333200",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 683,
+   "filter": "fd.net bstartswith 3132372e302e302e312f333200",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 684,
+   "filter": "fd.net iglob 127.0.0.1/32",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 685,
+   "filter": "fd.net regex '.*'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 687,
+   "filter": "fd.net == anyof (127.0.0.1/32)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 688,
+   "filter": "fd.net == allof (127.0.0.1/32)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 689,
+   "filter": "fd.net != anyof (127.0.0.1/32)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 690,
+   "filter": "fd.net != allof (127.0.0.1/32)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 691,
+   "filter": "fd.net contains anyof (127.0.0.1/32)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 692,
+   "filter": "fd.net startswith allof (127.0.0.1/32)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 695,
+   "filter": "fd.port exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 696,
+   "filter": "fd.port = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 697,
+   "filter": "fd.port != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 698,
+   "filter": "fd.port < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 699,
+   "filter": "fd.port <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 700,
+   "filter": "fd.port > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 701,
+   "filter": "fd.port >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 702,
+   "filter": "fd.port contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 703,
+   "filter": "fd.port in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 704,
+   "filter": "fd.port intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 705,
+   "filter": "fd.port icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 706,
+   "filter": "fd.port startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 707,
+   "filter": "fd.port glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 708,
+   "filter": "fd.port pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 709,
+   "filter": "fd.port endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 710,
+   "filter": "fd.port bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 711,
+   "filter": "fd.port bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 712,
+   "filter": "fd.port iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 713,
+   "filter": "fd.port regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 716,
+   "filter": "proc.pid.ts exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 717,
+   "filter": "proc.pid.ts = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 718,
+   "filter": "proc.pid.ts != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 719,
+   "filter": "proc.pid.ts < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 720,
+   "filter": "proc.pid.ts <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 721,
+   "filter": "proc.pid.ts > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 722,
+   "filter": "proc.pid.ts >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 723,
+   "filter": "proc.pid.ts contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 724,
+   "filter": "proc.pid.ts in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 725,
+   "filter": "proc.pid.ts intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 726,
+   "filter": "proc.pid.ts icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 727,
+   "filter": "proc.pid.ts startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 728,
+   "filter": "proc.pid.ts glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 729,
+   "filter": "proc.pid.ts pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 730,
+   "filter": "proc.pid.ts endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 731,
+   "filter": "proc.pid.ts bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 732,
+   "filter": "proc.pid.ts bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 733,
+   "filter": "proc.pid.ts iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 734,
+   "filter": "proc.pid.ts regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 737,
+   "filter": "evt.count exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 738,
+   "filter": "evt.count = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 739,
+   "filter": "evt.count != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 740,
+   "filter": "evt.count < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 741,
+   "filter": "evt.count <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 742,
+   "filter": "evt.count > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 743,
+   "filter": "evt.count >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 744,
+   "filter": "evt.count contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 745,
+   "filter": "evt.count in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 746,
+   "filter": "evt.count intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 747,
+   "filter": "evt.count icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 748,
+   "filter": "evt.count startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 749,
+   "filter": "evt.count glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 750,
+   "filter": "evt.count pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 751,
+   "filter": "evt.count endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 752,
+   "filter": "evt.count bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 753,
+   "filter": "evt.count bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 754,
+   "filter": "evt.count iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 755,
+   "filter": "evt.count regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 758,
+   "filter": "evt.num exists",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 759,
+   "filter": "evt.num = 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 760,
+   "filter": "evt.num != 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 761,
+   "filter": "evt.num < 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 762,
+   "filter": "evt.num <= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 763,
+   "filter": "evt.num > 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 764,
+   "filter": "evt.num >= 1",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 765,
+   "filter": "evt.num contains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 766,
+   "filter": "evt.num in (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 767,
+   "filter": "evt.num intersects (1)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 768,
+   "filter": "evt.num icontains 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 769,
+   "filter": "evt.num startswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 770,
+   "filter": "evt.num glob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 771,
+   "filter": "evt.num pmatch (1)",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 772,
+   "filter": "evt.num endswith 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 773,
+   "filter": "evt.num bcontains 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 774,
+   "filter": "evt.num bstartswith 303000",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 775,
+   "filter": "evt.num iglob 1",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.operators_field_types_compatibility",
+   "line": 776,
+   "filter": "evt.num regex '1'",
+   "fail": true,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 821,
+   "filter": "evt.source = evt.plugininfo",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 822,
+   "filter": "evt.source = 'tolower(evt.plugininfo)'",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 823,
+   "filter": "evt.source regex syscall",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 824,
+   "filter": "evt.source regex ^syscall$",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 825,
+   "filter": "evt.source regex ^syscall",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 826,
+   "filter": "evt.source regex syscall$",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 827,
+   "filter": "evt.source regex .*syscall",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 828,
+   "filter": "evt.source regex syscall.*",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 829,
+   "filter": "evt.source regex .*syscall.*",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 830,
+   "filter": "evt.source regex .+syscall",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 831,
+   "filter": "evt.source regex syscall.+",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 832,
+   "filter": "evt.source regex .+syscall.+",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 833,
+   "filter": "evt.source regex .?syscall",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 834,
+   "filter": "evt.source regex syscall.?",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 835,
+   "filter": "evt.source regex .?syscall.?",
+   "fail": false,
+   "warnings": 1,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 838,
+   "filter": "evt.source = unknown.field",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 839,
+   "filter": "evt.source = tolower",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 840,
+   "filter": "evt.source = tolower(evt.plugininfo)",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 841,
+   "filter": "evt.source = 'tolow(evt.plugininfo)'",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 842,
+   "filter": "evt.source regex syscall.{1}",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 843,
+   "filter": "evt.source regex syscall\\.*",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 844,
+   "filter": "evt.source regex s.*l",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.compilation_warnings",
+   "line": 845,
+   "filter": "evt.source regex syscal[l]?",
+   "fail": false,
+   "warnings": 0,
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.transformer_field_arg_support",
+   "line": 853,
+   "filter": "toupper(fd.name)[x] = foo",
+   "fail": true,
+   "warnings": 0,
+   "message": "filter error: transformer 'toupper' does not support field arguments",
+   "mock": false
+  },
+  {
+   "test": "sinsp_filter_compiler.transformer_field_arg_support",
+   "line": 857,
+   "filter": "fd.name = val(proc.name)[x]",
+   "fail": true,
+   "warnings": 0,
+   "message": "filter error: transformer 'val' does not support field arguments",
+   "mock": false
+  }
+ ]
+}

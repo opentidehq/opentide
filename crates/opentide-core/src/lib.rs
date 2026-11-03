@@ -513,7 +513,21 @@ pub mod codes {
     pub const FALCO_UNKNOWN_MACRO: &str = "falco_unknown_macro";
     pub const FALCO_UNKNOWN_LIST: &str = "falco_unknown_list";
     pub const FALCO_MISPLACED_LIST: &str = "falco_misplaced_list";
-    pub const FALCO_TYPE_MISMATCH: &str = "falco_type_mismatch";
+    pub const FALCO_FIELD_ARGUMENT: &str = "falco_field_argument";
+    pub const FALCO_OPERATOR_TYPE: &str = "falco_operator_type";
+    pub const FALCO_VALUE_TYPE: &str = "falco_value_type";
+    pub const FALCO_TRANSFORMER: &str = "falco_transformer";
+    pub const FALCO_RHS_FIELD: &str = "falco_rhs_field";
+    pub const FALCO_INVALID_REGEX: &str = "falco_invalid_regex";
+    pub const FALCO_REGEX_SIMPLE: &str = "falco_regex_simple";
+    pub const FALCO_FIELD_AS_VALUE: &str = "falco_field_as_value";
+    pub const FALCO_TRANSFORMER_AS_VALUE: &str = "falco_transformer_as_value";
+    pub const FALCO_DEPRECATED_FIELD: &str = "falco_deprecated_field";
+    pub const FALCO_UNSAFE_NA_CHECK: &str = "falco_unsafe_na_check";
+    pub const FALCO_NO_EVTTYPE: &str = "falco_no_evttype";
+    pub const FALCO_OUTPUT_SYNTAX: &str = "falco_output_syntax";
+    pub const FALCO_NEWER_SYNTAX: &str = "falco_newer_syntax";
+    pub const FALCO_EXCEPTION: &str = "falco_exception";
     pub const FALCO_UNKNOWN_EVENT: &str = "falco_unknown_event";
     pub const FALCO_UNKNOWN_SOURCE: &str = "falco_unknown_source";
     pub const FALCO_APPEND_CONDITION: &str = "falco_append_condition";
@@ -621,7 +635,21 @@ pub mod codes {
         FALCO_UNKNOWN_MACRO,
         FALCO_UNKNOWN_LIST,
         FALCO_MISPLACED_LIST,
-        FALCO_TYPE_MISMATCH,
+        FALCO_FIELD_ARGUMENT,
+        FALCO_OPERATOR_TYPE,
+        FALCO_VALUE_TYPE,
+        FALCO_TRANSFORMER,
+        FALCO_RHS_FIELD,
+        FALCO_INVALID_REGEX,
+        FALCO_REGEX_SIMPLE,
+        FALCO_FIELD_AS_VALUE,
+        FALCO_TRANSFORMER_AS_VALUE,
+        FALCO_DEPRECATED_FIELD,
+        FALCO_UNSAFE_NA_CHECK,
+        FALCO_NO_EVTTYPE,
+        FALCO_OUTPUT_SYNTAX,
+        FALCO_NEWER_SYNTAX,
+        FALCO_EXCEPTION,
         FALCO_UNKNOWN_EVENT,
         FALCO_UNKNOWN_SOURCE,
         FALCO_APPEND_CONDITION,
@@ -839,16 +867,56 @@ pub mod codes {
                 "The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros."
             }
             FALCO_UNKNOWN_LIST => {
-                "The name after `in`, `intersects`, or `pmatch` is not a list of the block or of the Falco default rules."
+                "The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value."
             }
             FALCO_MISPLACED_LIST => {
-                "A list is used where Falco expects a macro: a list belongs inside a value list, `in (name)`."
+                "A list is used where its expansion breaks the condition: as a macro, or as a single value; a list belongs inside a value list, `in (name)`."
             }
-            FALCO_TYPE_MISMATCH => {
-                "The operator or value does not apply to the field's type, which Falco rejects when it loads the rule."
+            FALCO_FIELD_ARGUMENT => {
+                "A known Falco field is used with an argument it refuses, or without one it requires (libsinsp's field rules: `proc.aname[N]` takes an index, `evt.arg.NAME` an event argument)."
+            }
+            FALCO_OPERATOR_TYPE => {
+                "The operator does not apply to the field's type (libsinsp `flt_is_comparable`); Falco refuses to load the rule."
+            }
+            FALCO_VALUE_TYPE => {
+                "The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule."
+            }
+            FALCO_TRANSFORMER => {
+                "A field transformer cannot apply here: the field's type, a field that refuses transformers, or the arguments of `join`, `concat`, or `getopt`."
+            }
+            FALCO_RHS_FIELD => {
+                "A field cannot be compared with another field here (`val(...)` or a transformer on the right): not with `pmatch` or `regex`, not on networks, not on fields that refuse it, and only between fields of the same type."
+            }
+            FALCO_INVALID_REGEX => "The `regex` pattern does not compile.",
+            FALCO_REGEX_SIMPLE => {
+                "A `regex` check a plain operator (`=`, `contains`, `startswith`, `endswith`) could make, which libsinsp warns about: regex is the slowest check."
+            }
+            FALCO_FIELD_AS_VALUE => {
+                "A constant value that is a field name: compare with `val(field)` to read the field."
+            }
+            FALCO_TRANSFORMER_AS_VALUE => {
+                "A constant value that looks like a transformer call, compared as text."
+            }
+            FALCO_DEPRECATED_FIELD => {
+                "A field Falco deprecates (`evt.dir`, `evt.latency`): it no longer carries the value it used to."
+            }
+            FALCO_UNSAFE_NA_CHECK => {
+                "A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text."
+            }
+            FALCO_NO_EVTTYPE => {
+                "The rule cannot be narrowed to a few event types (`evt.type`), so it runs on every event; Falco and Sysdig warn about the performance penalty."
+            }
+            FALCO_OUTPUT_SYNTAX => {
+                "The output template does not format: a `%` at the end, a length with no field, or a token that is no field or transformer."
+            }
+            FALCO_NEWER_SYNTAX => {
+                "Syntax that only recent libsinsp releases parse (operator modifiers, `join`, `concat`, `getopt`, transformer arguments); an older Falco or Sysdig agent refuses the rule."
+            }
+            FALCO_EXCEPTION => {
+                "A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold."
             }
             FALCO_UNKNOWN_EVENT => {
-                "The event type is not a Falco syscall, tracepoint, plugin, or meta event."
+                "The event type is not in the driver's event table nor a syscall name; libsinsp refuses it."
             }
             FALCO_UNKNOWN_SOURCE => {
                 "The event source is not one Falco or its published plugins define, so its fields are not checked."

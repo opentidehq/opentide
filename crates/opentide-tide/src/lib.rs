@@ -580,6 +580,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
         diagnostics.extend(falco::source_diagnostics(input.source, block));
+        diagnostics.extend(falco::exception_diagnostics(input.source, block));
     }
 
     // Injected query analysis

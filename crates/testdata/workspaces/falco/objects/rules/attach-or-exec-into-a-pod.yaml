@@ -32,6 +32,3 @@ configurations:
       Attach/Exec to pod (user=%ka.user.name pod=%ka.target.name
       resource=%ka.target.resource ns=%ka.target.namespace
       action=%ka.target.subresource command=%ka.uri.param[command])
-    required_plugin_versions:
-    - name: k8saudit
-      version: 0.7.0

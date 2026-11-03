@@ -107,6 +107,7 @@ fn raw_falco_queries_use_the_syscall_source() {
     };
     assert!(analyze_query(&request("spawned_process and proc.name = bash")).is_empty());
     let found = analyze_query(&request("ka.verb = create"));
-    assert_eq!(found.len(), 1);
-    assert_eq!(found[0].code, codes::FALCO_UNKNOWN_FIELD);
+    let found: Vec<&str> = found.iter().map(|d| d.code.as_str()).collect();
+    // Not a field of `syscall`; and with no `evt.type`, every event type.
+    assert_eq!(found, [codes::FALCO_UNKNOWN_FIELD, codes::FALCO_NO_EVTTYPE]);
 }

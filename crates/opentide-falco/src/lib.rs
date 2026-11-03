@@ -1,34 +1,37 @@
-//! I/O-free Falco rule condition engine: parse, field, macro, list, and event
-//! checks per event source, operator and value types, highlighting, hover, and
-//! completion. Falco conditions are what Sysdig Secure runs
-//! (`configurations.sysdig`, sysdig-1.0).
+//! I/O-free Falco rule condition engine: parse, compile-time checks, Falco's
+//! rule-loader checks, highlighting, hover, and completion. Falco conditions
+//! are what Sysdig Secure runs (`configurations.sysdig`, sysdig-1.0).
 //!
-//! The grammar follows libsinsp's filter parser. Below it the engine checks:
+//! The verdicts follow the sources Falco itself runs, not documentation:
 //!
-//! - fields against the catalogue of the rule's event source (`syscall` by
-//!   default): a field of another source, or of no known source, is a warning,
-//!   because plugins add fields;
-//! - bare names: a macro of the block or of the Falco default rules; anything
-//!   else is a warning (Sysdig manages macros of its own). A list used where a
-//!   macro belongs is an error;
-//! - operators and values against the field's type, where Falco would refuse
-//!   to load the rule;
-//! - `evt.type` values against Falco's event table;
-//! - a tuning's condition (a fragment appended to the tuned rule) starts with
-//!   `and` or `or`, and a new rule's does not.
+//! - [`parser`] is a port of libsinsp's filter parser, step for step; libs' own
+//!   parser tests (`testdata/conformance/libsinsp/parser.json`) all agree;
+//! - [`compile`] is what libsinsp's filter compiler checks next: field
+//!   resolution and arguments, operator and type, values, transformers,
+//!   right-hand side fields, compile warnings; libs' compiler tests
+//!   (`compiler.json`) agree;
+//! - this module adds Falco's rule loader: lists are expanded as text before
+//!   the parse (`resolve_list`), macros resolve by name, a tuning's condition
+//!   is appended to the tuned rule's, deprecated fields and `<NA>` checks warn,
+//!   and a syscall rule whose event types cannot be narrowed warns
+//!   (`LOAD_NO_EVTTYPE`, as Sysdig's backend does).
+//!
+//! What depends on the agent (fields and macros the catalogue does not know)
+//! is a warning; what Falco refuses to load is an error. See `docs/FALCO.md`.
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, codes,
     position_to_offset, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
-use opentide_syntax::{first_error, node_span, parse as ts_parse};
-use regex::Regex;
+use opentide_syntax::parse as ts_parse;
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::OnceLock;
 use tree_sitter::Node;
 
 pub mod catalog;
+pub mod compile;
+pub mod exceptions;
+pub mod parser;
 
 pub use catalog::{Catalog, DEFAULT_SOURCE, Kind, Lookup};
 
@@ -48,6 +51,9 @@ pub struct Context {
     /// for a new rule's condition or a macro's; `None` (a raw `.falco` file)
     /// accepts both.
     pub append: Option<bool>,
+    /// A macro's condition (`macros[].condition`): Falco checks event types on
+    /// rules only.
+    pub macro_condition: bool,
 }
 
 impl Context {
@@ -81,93 +87,575 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 
 pub fn analyze_with(text: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
-    let Some(tree) = ts_parse(LanguageId::Falco, text) else {
-        return AnalyzeResult {
-            diagnostics: vec![Diagnostic::error(
-                codes::FALCO_PARSE_ERROR,
-                "failed to initialize the Falco parser",
-                Range::point(0, 0),
-            )],
-            tokens: Vec::new(),
-        };
-    };
-    let root = tree.root_node();
-    let mut diagnostics = Vec::new();
-    if let Some(err) = first_error(root) {
-        diagnostics.push(Diagnostic::error(
-            codes::FALCO_PARSE_ERROR,
-            parse_error_message(err, text),
-            range(text, node_span(err)),
-        ));
-    }
-    if let Some(d) = append_check(root, text, ctx) {
-        diagnostics.push(d);
-    }
-    let check_fields = ctx.known_source();
-    opentide_syntax::walk_with_ancestors(root, |node, _| match node.kind() {
-        "field" if check_fields => {
-            if let Some(d) = field_check(node, text, ctx) {
-                diagnostics.push(d);
-            }
-        }
-        "macro_reference" => {
-            if let Some(d) = macro_check(node, text, ctx) {
-                diagnostics.push(d);
-            }
-        }
-        "list_reference" => {
-            let name = node_text(node, text);
-            if !ctx.is_list(name) {
-                diagnostics.push(Diagnostic::warning(
-                    codes::FALCO_UNKNOWN_LIST,
-                    format!("`{name}` is not a list of this block or of the Falco default rules"),
-                    range(text, node_span(node)),
-                ));
-            }
-        }
-        "comparison" if check_fields && !node.has_error() => {
-            diagnostics.extend(comparison_checks(node, text, ctx));
-        }
-        _ => {}
-    });
     AnalyzeResult {
-        diagnostics,
+        diagnostics: condition_diagnostics(text, ctx),
         tokens: highlight(&spec, text, ctx),
     }
 }
 
-fn append_check(root: Node, text: &str, ctx: &Context) -> Option<Diagnostic> {
-    let first = root.named_child(0)?;
-    let fragment = first.kind() == "append_fragment";
-    let message = match (ctx.append?, fragment) {
-        (true, false) if !root.has_error() => {
-            "the condition of a tuning (`append_to_rule`) is appended to the tuned rule's condition: start it with `and` or `or`"
-        }
-        (false, true) => {
-            "a condition that starts with `and` or `or` only extends another rule's: set `append_to_rule`, or remove the leading operator"
-        }
-        _ => return None,
-    };
-    let span = if fragment {
-        let op = first.child_by_field_name("operator").unwrap_or(first);
-        node_span(op)
-    } else {
-        node_span(first)
-    };
-    Some(Diagnostic::error(
-        codes::FALCO_APPEND_CONDITION,
-        message,
-        range(text, span),
-    ))
+/// The placeholder for the tuned rule's condition a tuning is appended to.
+const TUNED: &str = "tuned_rule_condition";
+
+/// Text after Falco's list expansion, with every byte's offset in the text
+/// before it (`map`) and the end of the source a byte stands for (`map_end`).
+pub(crate) struct Expanded {
+    pub(crate) text: String,
+    map: Vec<usize>,
+    map_end: Vec<usize>,
 }
 
-fn field_check(node: Node, text: &str, ctx: &Context) -> Option<Diagnostic> {
-    let name_node = node.child_by_field_name("name")?;
-    let name = node_text(name_node, text);
-    let source = ctx.source();
+impl Expanded {
+    fn new(text: &str) -> Self {
+        Expanded {
+            text: text.to_string(),
+            map: (0..text.len()).collect(),
+            map_end: (1..=text.len()).collect(),
+        }
+    }
+
+    /// The span of the original text a span of this one stands for.
+    fn original(&self, span: parser::Span) -> (usize, usize) {
+        let len = self.text.len();
+        let at = |i: usize| {
+            if i < len {
+                self.map[i]
+            } else {
+                self.map.last().map_or(0, |m| m + 1)
+            }
+        };
+        let start = at(span.start.min(len));
+        let end = if span.end > span.start && span.end <= len {
+            self.map_end[span.end - 1]
+        } else {
+            start
+        };
+        (start, end.max(start))
+    }
+}
+
+/// Falco's `quote_item`.
+pub(crate) fn quote_item(item: &str) -> String {
+    if item.contains(' ') && !item.starts_with('"') && !item.starts_with('\'') {
+        format!("\"{item}\"")
+    } else {
+        item.to_string()
+    }
+}
+
+/// Falco's `resolve_list` (`rule_loader_compiler.cpp`): every occurrence of
+/// the list's name between delimiters becomes its items, quoted, comma-joined.
+fn resolve_list(t: &mut Expanded, name: &str, items: &[String]) {
+    const BLANKS: &[u8] = b" \t\n\r";
+    const DELIMS: &[u8] = b" \t\n\r(),=";
+    if name.is_empty() {
+        return;
+    }
+    let mut start = t.text.find(name);
+    while let Some(found) = start {
+        let mut s = found;
+        let mut e = s + name.len();
+        let b = t.text.as_bytes();
+        let mut next = found + 1;
+        if (s == 0 || DELIMS.contains(&b[s - 1])) && (e >= b.len() || DELIMS.contains(&b[e])) {
+            let origin = (t.map[s], t.map_end[e - 1]);
+            while s > 0 && BLANKS.contains(&b[s - 1]) {
+                s -= 1;
+            }
+            while e < b.len() && BLANKS.contains(&b[e]) {
+                e += 1;
+            }
+            let sub = items
+                .iter()
+                .map(|i| quote_item(i))
+                .collect::<Vec<_>>()
+                .join(", ");
+            if sub.is_empty() {
+                if s > 0 && b[s - 1] == b',' {
+                    s -= 1;
+                } else if e < b.len() && b[e] == b',' {
+                    e += 1;
+                }
+            }
+            let mut text = String::new();
+            let mut map = Vec::new();
+            let mut map_end = Vec::new();
+            text.push_str(&t.text[..s]);
+            map.extend_from_slice(&t.map[..s]);
+            map_end.extend_from_slice(&t.map_end[..s]);
+            if s > 0 {
+                text.push(' ');
+                map.push(origin.0);
+                map_end.push(origin.0);
+            }
+            let inserted = sub.len() + 1;
+            text.push_str(&sub);
+            text.push(' ');
+            map.extend(std::iter::repeat_n(origin.0, inserted));
+            map_end.extend(std::iter::repeat_n(origin.1, inserted));
+            text.push_str(&t.text[e..]);
+            map.extend_from_slice(&t.map[e..]);
+            map_end.extend_from_slice(&t.map_end[e..]);
+            t.text = text;
+            t.map = map;
+            t.map_end = map_end;
+            // libs: `start += sub.length() + 1`, then searches from `start + 1`.
+            next = s + sub.len() + 1 + 1;
+        }
+        start = t
+            .text
+            .get(next..)
+            .and_then(|rest| rest.find(name))
+            .map(|i| i + next);
+    }
+}
+
+/// The lists Falco would expand, items expanded through other lists, the
+/// block's after the default rules' (a later definition replaces).
+fn lists_in_order(ctx: &Context) -> Vec<(String, Vec<String>)> {
+    let catalog = Catalog::cached();
+    let mut raw: BTreeMap<&str, &[String]> = catalog
+        .lists
+        .values()
+        .map(|l| (l.name.as_str(), l.items.as_slice()))
+        .collect();
+    for (name, items) in &ctx.lists {
+        raw.insert(name.as_str(), items.as_slice());
+    }
+    fn expand(name: &str, raw: &BTreeMap<&str, &[String]>, depth: usize, out: &mut Vec<String>) {
+        for item in raw.get(name).copied().unwrap_or_default() {
+            if depth < 16 && item != name && raw.contains_key(item.as_str()) {
+                expand(item, raw, depth + 1, out);
+            } else {
+                out.push(item.clone());
+            }
+        }
+    }
+    let mut order: Vec<&str> = catalog
+        .lists
+        .keys()
+        .map(String::as_str)
+        .filter(|n| !ctx.lists.contains_key(*n))
+        .collect();
+    order.extend(ctx.lists.keys().map(String::as_str));
+    order
+        .into_iter()
+        .map(|name| {
+            let mut items = Vec::new();
+            expand(name, &raw, 0, &mut items);
+            (name.to_string(), items)
+        })
+        .collect()
+}
+
+pub(crate) fn expand_lists(text: &str, ctx: &Context) -> Expanded {
+    let mut t = Expanded::new(text);
+    for (name, items) in lists_in_order(ctx) {
+        if t.text.contains(name.as_str()) {
+            resolve_list(&mut t, &name, &items);
+        }
+    }
+    t
+}
+
+/// Length of a leading `and` / `or` (after blanks) that a tuning starts with.
+fn leading_bool_op(text: &str) -> Option<(usize, usize)> {
+    let start = text.len() - text.trim_start().len();
+    let rest = &text[start..];
+    for kw in ["and", "or"] {
+        if let Some(after) = rest.strip_prefix(kw)
+            && after.starts_with([' ', '\t', '\n', '\r', '('])
+        {
+            return Some((start, start + kw.len()));
+        }
+    }
+    None
+}
+
+fn condition_diagnostics(text: &str, ctx: &Context) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    if text.trim().is_empty() {
+        return out;
+    }
+    let lead = leading_bool_op(text);
+    match (ctx.append, lead) {
+        (Some(true), None) => out.push(Diagnostic::error(
+            codes::FALCO_APPEND_CONDITION,
+            "the condition of a tuning (`append_to_rule`) is appended to the tuned rule's condition: start it with `and` or `or`",
+            range(text, ByteSpan::new(text.len() - text.trim_start().len(), text.trim_end().len())),
+        )),
+        (Some(false), Some((s, e))) => {
+            out.push(Diagnostic::error(
+                codes::FALCO_APPEND_CONDITION,
+                "a condition that starts with `and` or `or` only extends another rule's: set `append_to_rule`, or remove the leading operator",
+                range(text, ByteSpan::new(s, e)),
+            ));
+            return out;
+        }
+        _ => {}
+    }
+    // Falco appends a tuning's condition to the tuned rule's: `<rule> <text>`.
+    let prefix = if lead.is_some() {
+        format!("{TUNED} ")
+    } else {
+        String::new()
+    };
+    let full = format!("{prefix}{text}");
+    let to_text = |(s, e): (usize, usize)| {
+        let p = prefix.len();
+        ByteSpan::new(
+            s.saturating_sub(p).min(text.len()),
+            e.saturating_sub(p).min(text.len()),
+        )
+    };
+
+    if let Some(misplaced) = misplaced_lists(&full, ctx) {
+        for (span, message) in misplaced {
+            out.push(Diagnostic::error(
+                codes::FALCO_MISPLACED_LIST,
+                message,
+                range(text, to_text((span.start, span.end))),
+            ));
+        }
+        return out;
+    }
+
+    let expanded = expand_lists(&full, ctx);
+    let ast = match parser::parse(&expanded.text) {
+        Ok(ast) => ast,
+        Err(e) => {
+            let at = expanded.original(parser::Span {
+                start: e.offset,
+                end: e.offset + 1,
+            });
+            let span = to_text(at);
+            let span = if span.start == span.end && span.start > 0 && span.start >= text.len() {
+                ByteSpan::new(text.len().saturating_sub(1), text.len())
+            } else {
+                span
+            };
+            out.push(Diagnostic::error(
+                codes::FALCO_PARSE_ERROR,
+                format!("{} (libsinsp)", e.message),
+                range(text, span),
+            ));
+            return out;
+        }
+    };
+
+    let catalog = Catalog::cached();
+    let mut compiler = compile::Compiler::new(catalog, ctx.source());
+    compiler.condition(&ast);
+    for f in compiler.findings {
+        let mut d = match f.level {
+            compile::Level::Error => Diagnostic::error(f.code, f.message, Range::point(0, 0)),
+            compile::Level::Warning => Diagnostic::warning(f.code, f.message, Range::point(0, 0)),
+        };
+        d.range = range(text, to_text(expanded.original(f.span)));
+        if let Some(s) = f.suggestion {
+            d = d.with_suggestion(s);
+        }
+        out.push(d);
+    }
+
+    let mut identifiers = Vec::new();
+    collect_identifiers(&ast, &mut identifiers);
+    for (name, span) in identifiers {
+        if name == TUNED && lead.is_some() {
+            continue;
+        }
+        if !ctx.is_macro(&name) {
+            let mut d = Diagnostic::warning(
+                codes::FALCO_UNKNOWN_MACRO,
+                format!(
+                    "`{name}` is not a macro of this block or of the Falco default rules; the tenant must define it"
+                ),
+                range(text, to_text(expanded.original(span))),
+            );
+            let names = ctx
+                .macros
+                .keys()
+                .map(String::as_str)
+                .chain(catalog.macros.keys().map(String::as_str));
+            if let Some(near) = near_miss(&name, names) {
+                d = d.with_suggestion(near);
+            }
+            out.push(d);
+        }
+    }
+
+    // Judged on the text before expansion: after it, a known list is gone.
+    let mut list_values = Vec::new();
+    if let Ok(original) = parser::parse(&full) {
+        collect_list_identifiers(&original, &mut list_values);
+    }
+    for (name, span) in list_values {
+        if ctx.is_list(&name) {
+            continue;
+        }
+        out.push(Diagnostic::warning(
+            codes::FALCO_UNKNOWN_LIST,
+            format!(
+                "`{name}` is not a list of this block or of the Falco default rules: it is compared as the single value '{name}'"
+            ),
+            range(text, to_text((span.start, span.end))),
+        ));
+    }
+
+    let mut newer = Vec::new();
+    compile::newer_syntax(&ast, &mut newer);
+    for (span, message) in newer {
+        out.push(Diagnostic::warning(
+            codes::FALCO_NEWER_SYNTAX,
+            message,
+            range(text, to_text(expanded.original(span))),
+        ));
+    }
+
+    let mut na = Vec::new();
+    compile::unsafe_na_checks(&ast, &mut na);
+    for span in na {
+        out.push(Diagnostic::warning(
+            codes::FALCO_UNSAFE_NA_CHECK,
+            "comparing a `ka.` or `jevt.` field with `<NA>`: such a field may hold the string `<NA>`, so the check does not tell a missing value apart",
+            range(text, to_text(expanded.original(span))),
+        ));
+    }
+
+    if ctx.source() == "syscall"
+        && !ctx.macro_condition
+        && lead.is_none()
+        && !out.iter().any(|d| d.severity == Severity::Error)
+    {
+        let mut resolver = EventCodes::new(ctx);
+        if let Some(codes_) = resolver.codes(&ast, false, 0)
+            && codes_.len() > 100
+        {
+            out.push(Diagnostic::warning(
+                codes::FALCO_NO_EVTTYPE,
+                format!(
+                    "the rule matches {} event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty",
+                    codes_.len()
+                ),
+                range(text, ByteSpan::new(0, text.trim_end().len().min(text.len()))),
+            ));
+        }
+    }
+    out
+}
+
+/// Lists used where Falco's text expansion breaks the condition: as a macro,
+/// as the value of a scalar operator, or after a list operator without
+/// parentheses. `None` when the text does not parse unexpanded.
+fn misplaced_lists(full: &str, ctx: &Context) -> Option<Vec<(parser::Span, String)>> {
+    let ast = parser::parse(full).ok()?;
+    let mut out = Vec::new();
+    fn walk(e: &parser::Expr, ctx: &Context, out: &mut Vec<(parser::Span, String)>) {
+        use parser::Expr;
+        match e {
+            Expr::And(c, _) | Expr::Or(c, _) => c.iter().for_each(|x| walk(x, ctx, out)),
+            Expr::Not(c, _) => walk(c, ctx, out),
+            Expr::Identifier(name, span) if ctx.is_list(name) && !ctx.is_macro(name) => out.push((
+                *span,
+                format!("`{name}` is a list, not a macro: use it in a value list, `in ({name})`"),
+            )),
+            Expr::Binary { right, .. } => {
+                // A one-item list expands into a single value, which parses.
+                if let Expr::Value(v, span) = &**right
+                    && ctx.is_list(v)
+                    && list_len(ctx, v) != 1
+                {
+                    out.push((
+                        *span,
+                        format!(
+                            "`{v}` is a list: Falco expands it here into its comma-separated items, which a single value cannot hold; write `in ({v})`"
+                        ),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    walk(&ast, ctx, &mut out);
+    (!out.is_empty()).then_some(out)
+}
+
+fn list_len(ctx: &Context, name: &str) -> usize {
+    lists_in_order(ctx)
+        .into_iter()
+        .find(|(n, _)| n == name)
+        .map_or(0, |(_, items)| items.len())
+}
+
+fn collect_identifiers(e: &parser::Expr, out: &mut Vec<(String, parser::Span)>) {
+    use parser::Expr;
+    match e {
+        Expr::And(c, _) | Expr::Or(c, _) => c.iter().for_each(|x| collect_identifiers(x, out)),
+        Expr::Not(c, _) => collect_identifiers(c, out),
+        Expr::Identifier(name, span) => out.push((name.clone(), *span)),
+        _ => {}
+    }
+}
+
+/// A list operator's right side that is a bare name (no parentheses): after
+/// list expansion it is not a known list, so libsinsp compares the name itself.
+fn collect_list_identifiers(e: &parser::Expr, out: &mut Vec<(String, parser::Span)>) {
+    use parser::Expr;
+    match e {
+        Expr::And(c, _) | Expr::Or(c, _) => c.iter().for_each(|x| collect_list_identifiers(x, out)),
+        Expr::Not(c, _) => collect_list_identifiers(c, out),
+        Expr::Binary { op, right, .. } => {
+            let list_op = parser::LIST_OPERATORS.contains(&op.as_str()) || op.contains(' ');
+            if list_op && let Expr::Value(v, span) = &**right {
+                out.push((v.clone(), *span));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// libsinsp's `ppm_event_codes` (`filter/ppm_codes.cpp`) with Falco's macro
+/// resolution: the event codes a condition can match. `None` when a macro the
+/// engine does not know is on the way, so the set cannot be told.
+struct EventCodes<'a> {
+    ctx: &'a Context,
+    all: BTreeSet<String>,
+}
+
+impl<'a> EventCodes<'a> {
+    fn new(ctx: &'a Context) -> Self {
+        EventCodes {
+            ctx,
+            all: Catalog::cached().all_codes.clone(),
+        }
+    }
+
+    fn names_to_codes(&self, names: &[&str]) -> BTreeSet<String> {
+        let catalog = Catalog::cached();
+        let mut out = BTreeSet::new();
+        for n in names {
+            if let Some(codes) = catalog.event_codes(n) {
+                out.extend(codes.iter().cloned());
+            } else if catalog.syscalls.contains(*n)
+                && let Some(generic) = catalog.event_codes("syscall")
+            {
+                out.extend(generic.iter().cloned());
+            }
+        }
+        out
+    }
+
+    fn invert(&self, set: BTreeSet<String>) -> BTreeSet<String> {
+        self.all.difference(&set).cloned().collect()
+    }
+
+    fn codes(&mut self, e: &parser::Expr, negated: bool, depth: usize) -> Option<BTreeSet<String>> {
+        use parser::Expr;
+        if depth > 32 {
+            return None;
+        }
+        let all = || self.all.clone();
+        Some(match e {
+            Expr::And(children, _) | Expr::Or(children, _) => {
+                let conjunction = matches!(e, Expr::And(..)) != negated;
+                let mut acc: Option<BTreeSet<String>> = if conjunction {
+                    Some(all())
+                } else {
+                    Some(BTreeSet::new())
+                };
+                for c in children {
+                    let s = self.codes(c, negated, depth + 1)?;
+                    acc = acc.map(|a| {
+                        if conjunction {
+                            a.intersection(&s).cloned().collect()
+                        } else {
+                            a.union(&s).cloned().collect()
+                        }
+                    });
+                }
+                acc.unwrap_or_default()
+            }
+            Expr::Not(child, _) => self.codes(child, !negated, depth + 1)?,
+            Expr::Identifier(name, _) => {
+                let condition = self.ctx.macros.get(name).cloned().or_else(|| {
+                    Catalog::cached()
+                        .macros
+                        .get(name)
+                        .map(|m| m.condition.clone())
+                })?;
+                let expanded = expand_lists(&condition, self.ctx);
+                let ast = parser::parse(&expanded.text).ok()?;
+                self.codes(&ast, negated, depth + 1)?
+            }
+            Expr::Binary {
+                left, op, right, ..
+            } => {
+                let evttype = matches!(&**left, Expr::Field { name, arg: None, .. } if name == "evt.type" || name == "syscall.type");
+                if evttype && matches!(op.as_str(), "==" | "=" | "!=" | "in") {
+                    let names: Vec<&str> = match &**right {
+                        Expr::Value(v, _) => vec![v.as_str()],
+                        Expr::List(values, _) => values.iter().map(|(v, _)| v.as_str()).collect(),
+                        _ => return Some(all()),
+                    };
+                    let mut set = self.names_to_codes(&names);
+                    if op == "!=" {
+                        set = self.invert(set);
+                    }
+                    if negated {
+                        set = self.invert(set);
+                    }
+                    set
+                } else if let Some(known) = evt_num_invariant(left, op, right) {
+                    let set = if known { all() } else { BTreeSet::new() };
+                    if negated { self.invert(set) } else { set }
+                } else {
+                    all()
+                }
+            }
+            _ => all(),
+        })
+    }
+}
+
+/// `evaluate_field_invariant`: `evt.num` starts at 1. `Some(true)` for a
+/// tautology, `Some(false)` for an unsatisfiable check.
+fn evt_num_invariant(left: &parser::Expr, op: &str, right: &parser::Expr) -> Option<bool> {
+    use parser::Expr;
+    if !matches!(left, Expr::Field { name, arg: None, .. } if name == "evt.num") {
+        return None;
+    }
+    let num = |v: &str| v.parse::<u64>().ok();
+    if op == "in" {
+        let Expr::List(values, _) = right else {
+            return None;
+        };
+        return values
+            .iter()
+            .all(|(v, _)| num(v) == Some(0))
+            .then_some(false);
+    }
+    let Expr::Value(v, _) = right else {
+        return None;
+    };
+    let n = num(v)?;
+    match op {
+        "=" | "==" if n == 0 => Some(false),
+        "!=" if n == 0 => Some(true),
+        "<" if n <= 1 => Some(false),
+        "<=" if n == 0 => Some(false),
+        ">" if n == 0 => Some(true),
+        ">=" if n <= 1 => Some(true),
+        _ => None,
+    }
+}
+
+/// A field the catalogue does not know for *source*, with a near miss.
+pub(crate) fn unknown_field_finding(
+    name: &str,
+    source: &str,
+    span: parser::Span,
+) -> compile::Finding {
     let catalog = Catalog::cached();
     let message = match catalog.lookup(name, source) {
-        Lookup::Known(_) => return None,
         Lookup::OtherSource(field) => format!(
             "`{name}` is a field of the {} source, not of `{source}`",
             field
@@ -177,231 +665,22 @@ fn field_check(node: Node, text: &str, ctx: &Context) -> Option<Diagnostic> {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        Lookup::Unknown => format!("`{name}` is not a Falco field of the `{source}` source"),
+        _ => format!("`{name}` is not a Falco field of the `{source}` source"),
     };
-    let mut d = Diagnostic::warning(
-        codes::FALCO_UNKNOWN_FIELD,
+    compile::Finding {
+        code: codes::FALCO_UNKNOWN_FIELD,
+        level: compile::Level::Warning,
         message,
-        range(text, node_span(name_node)),
-    );
-    if let Some(near) = near_miss(name, catalog.field_names_for(source).into_iter()) {
-        d = d.with_suggestion(near);
-    }
-    Some(d)
-}
-
-fn macro_check(node: Node, text: &str, ctx: &Context) -> Option<Diagnostic> {
-    let name = node_text(node, text);
-    if ctx.is_macro(name) {
-        return None;
-    }
-    let span = range(text, node_span(node));
-    if ctx.is_list(name) {
-        return Some(Diagnostic::error(
-            codes::FALCO_MISPLACED_LIST,
-            format!("`{name}` is a list, not a macro: use it in a value list, `in ({name})`"),
-            span,
-        ));
-    }
-    let mut d = Diagnostic::warning(
-        codes::FALCO_UNKNOWN_MACRO,
-        format!(
-            "`{name}` is not a macro of this block or of the Falco default rules; the tenant must define it"
-        ),
         span,
-    );
-    let names = ctx
-        .macros
-        .keys()
-        .map(String::as_str)
-        .chain(Catalog::cached().macros.keys().map(String::as_str));
-    if let Some(near) = near_miss(name, names) {
-        d = d.with_suggestion(near);
-    }
-    Some(d)
-}
-
-/// Operators Falco accepts only on strings (and paths and buffers).
-const STRING_OPERATORS: &[&str] = &[
-    "contains",
-    "icontains",
-    "bcontains",
-    "startswith",
-    "bstartswith",
-    "endswith",
-    "glob",
-    "iglob",
-    "regex",
-    "pmatch",
-];
-const ORDER_OPERATORS: &[&str] = &["<", "<=", ">", ">="];
-
-/// The kind of a comparison's left side: the field's, or the transformer's
-/// result (`len` is a number, the others strings).
-fn operand_kind(node: Node, text: &str, ctx: &Context) -> Option<(Kind, String)> {
-    match node.kind() {
-        "field" => {
-            let name = node_text(node.child_by_field_name("name")?, text);
-            match Catalog::cached().lookup(name, ctx.source()) {
-                Lookup::Known(field) => Some((field.kind, field.name.clone())),
-                _ => None,
-            }
-        }
-        "field_transformer" => {
-            let transformer = node_text(node.child_by_field_name("name")?, text);
-            if transformer == "len" {
-                Some((Kind::Number, "len(...)".into()))
-            } else {
-                Some((Kind::String, format!("{transformer}(...)")))
-            }
-        }
-        _ => None,
-    }
-}
-
-fn comparison_checks(node: Node, text: &str, ctx: &Context) -> Vec<Diagnostic> {
-    let mut out = Vec::new();
-    let (Some(left), Some(op_node)) = (
-        node.child_by_field_name("left"),
-        node.child_by_field_name("operator"),
-    ) else {
-        return out;
-    };
-    let op = node_text(op_node, text);
-    let right = node.child_by_field_name("right");
-    if let Some((kind, name)) = operand_kind(left, text, ctx) {
-        let refused = match kind {
-            Kind::String => ORDER_OPERATORS.contains(&op),
-            Kind::Number => STRING_OPERATORS.contains(&op),
-            Kind::Bool => STRING_OPERATORS.contains(&op) || ORDER_OPERATORS.contains(&op),
-            Kind::Ip | Kind::Other => false,
-        };
-        if refused {
-            out.push(type_mismatch(
-                format!(
-                    "`{op}` does not apply to `{name}`, a {} field",
-                    kind_name(kind)
-                ),
-                range(text, node_span(op_node)),
-            ));
-        } else if let Some(right) = right {
-            out.extend(value_checks(kind, &name, right, text, ctx));
-        }
-    }
-    if left.kind() == "field"
-        && ctx.source() == "syscall"
-        && left
-            .child_by_field_name("name")
-            .is_some_and(|n| matches!(node_text(n, text), "evt.type" | "syscall.type"))
-        && matches!(op, "=" | "==" | "!=" | "in" | "intersects")
-    {
-        if let Some(right) = right {
-            out.extend(event_checks(right, text, ctx));
-        }
-    }
-    out
-}
-
-fn kind_name(kind: Kind) -> &'static str {
-    match kind {
-        Kind::String => "string",
-        Kind::Number => "numeric",
-        Kind::Bool => "boolean",
-        Kind::Ip => "IP address",
-        Kind::Other => "typed",
-    }
-}
-
-fn type_mismatch(message: String, range: Range) -> Diagnostic {
-    Diagnostic::warning(codes::FALCO_TYPE_MISMATCH, message, range)
-}
-
-/// The literal values on the right of a comparison: the value itself, or the
-/// items of a value list.
-fn values<'t>(right: Node<'t>) -> Vec<Node<'t>> {
-    match right.kind() {
-        "value_list" => {
-            let mut cursor = right.walk();
-            right
-                .named_children(&mut cursor)
-                .filter(|n| matches!(n.kind(), "bare_string" | "quoted_string" | "number"))
-                .collect()
-        }
-        "bare_string" | "quoted_string" | "number" => vec![right],
-        _ => Vec::new(),
-    }
-}
-
-fn value_checks(kind: Kind, name: &str, right: Node, text: &str, ctx: &Context) -> Vec<Diagnostic> {
-    let mut out = Vec::new();
-    for value in values(right) {
-        let raw = node_text(value, text);
-        // A bare item naming a list is expanded by Falco.
-        if value.kind() == "bare_string" && ctx.is_list(raw) {
-            continue;
-        }
-        let bad = match kind {
-            Kind::Number => value.kind() == "bare_string" || value.kind() == "quoted_string",
-            Kind::Bool => !matches!(unquote(raw), "true" | "false"),
-            _ => false,
-        };
-        if bad {
-            out.push(type_mismatch(
-                format!(
-                    "`{name}` is a {} field; `{raw}` is not a {} value",
-                    kind_name(kind),
-                    if kind == Kind::Bool {
-                        "boolean"
-                    } else {
-                        "numeric"
-                    }
-                ),
-                range(text, node_span(value)),
-            ));
-        }
-    }
-    out
-}
-
-fn event_checks(right: Node, text: &str, ctx: &Context) -> Vec<Diagnostic> {
-    let catalog = Catalog::cached();
-    let mut out = Vec::new();
-    for value in values(right) {
-        let raw = node_text(value, text);
-        if value.kind() == "bare_string" && ctx.is_list(raw) {
-            continue;
-        }
-        let event = unquote(raw);
-        if value.kind() == "number" || catalog.event(event).is_some() {
-            continue;
-        }
-        let mut d = Diagnostic::warning(
-            codes::FALCO_UNKNOWN_EVENT,
-            format!("`{event}` is not a Falco event type"),
-            range(text, node_span(value)),
-        );
-        if let Some(near) = near_miss(event, catalog.events()) {
-            d = d.with_suggestion(near);
-        }
-        out.push(d);
-    }
-    out
-}
-
-fn unquote(raw: &str) -> &str {
-    let bytes = raw.as_bytes();
-    if bytes.len() >= 2
-        && (bytes[0] == b'"' || bytes[0] == b'\'')
-        && bytes[bytes.len() - 1] == bytes[0]
-    {
-        &raw[1..raw.len() - 1]
-    } else {
-        raw
+        suggestion: near_miss(name, catalog.field_names_for(source).into_iter()),
     }
 }
 
 /// The closest name within one edit (two for names of ten characters or more).
-fn near_miss<'a>(name: &str, candidates: impl Iterator<Item = &'a str>) -> Option<String> {
+pub(crate) fn near_miss<'a>(
+    name: &str,
+    candidates: impl Iterator<Item = &'a str>,
+) -> Option<String> {
     let limit = if name.len() >= 10 { 2 } else { 1 };
     let mut best: Option<(usize, &str)> = None;
     for candidate in candidates {
@@ -440,24 +719,6 @@ fn edit_distance(a: &str, b: &str) -> usize {
         }
     }
     d[a.len()][b.len()]
-}
-
-fn parse_error_message(err: Node, text: &str) -> String {
-    if err.is_missing() {
-        return format!("missing `{}`", err.kind());
-    }
-    let found = node_text(err, text).trim();
-    let unclosed = |open: char, close: char| {
-        text.chars().filter(|&c| c == open).count() > text.chars().filter(|&c| c == close).count()
-    };
-    if unclosed('(', ')') {
-        return "unbalanced parentheses: a `(` is not closed".into();
-    }
-    if found.is_empty() {
-        return "the condition is incomplete".into();
-    }
-    let short: String = found.chars().take(40).collect();
-    format!("unexpected `{short}`")
 }
 
 fn range(text: &str, span: ByteSpan) -> Range {
@@ -512,56 +773,130 @@ pub fn fields(text: &str) -> Vec<String> {
 // ---------------------------------------------------------------------------
 // Output templates
 
-fn output_field_re() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"%([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)(\[[^\]]*\])?")
-            .expect("output field pattern")
-    })
-}
-
 /// Output-only placeholders Falco expands itself.
 const OUTPUT_PLACEHOLDERS: &[&str] = &["container.info"];
 
-/// Diagnostics for an output template (`output:`): its `%field` references
-/// are checked like the condition's fields.
+/// Diagnostics for an output template (`output:`), as libsinsp's formatter
+/// (`eventformatter.cpp`) reads it: an optional leading `*`; each `%` takes an
+/// optional length, then the longest text that parses as a field or a
+/// transformer and compiles (so `%proc.namex` is `proc.name` then `x`).
 pub fn analyze_output(text: &str, ctx: &Context) -> AnalyzeResult {
     let spec = HighlightSpec::load().expect("highlight spec");
     let catalog = Catalog::cached();
     let mut diagnostics = Vec::new();
     let mut spans: Vec<(ByteSpan, &str)> = Vec::new();
-    for cap in output_field_re().captures_iter(text) {
-        let whole = cap.get(0).expect("match");
-        let name = cap.get(1).expect("field");
-        spans.push((ByteSpan::new(whole.start(), whole.end()), "property"));
-        if !ctx.known_source() || OUTPUT_PLACEHOLDERS.contains(&name.as_str()) {
+    let start = usize::from(text.starts_with('*'));
+    let bytes = text.as_bytes();
+    let mut j = start;
+    while j < bytes.len() {
+        if bytes[j] != b'%' {
+            j += 1;
             continue;
         }
-        let message = match catalog.lookup(name.as_str(), ctx.source()) {
-            Lookup::Known(_) => continue,
-            Lookup::OtherSource(_) => format!(
-                "`{}` is not a field of the `{}` source",
-                name.as_str(),
-                ctx.source()
-            ),
-            Lookup::Unknown => format!(
-                "`{}` is not a Falco field of the `{}` source",
-                name.as_str(),
-                ctx.source()
-            ),
-        };
-        let mut d = Diagnostic::warning(
-            codes::FALCO_UNKNOWN_FIELD,
-            message,
-            range(text, ByteSpan::new(name.start(), name.end())),
-        );
-        if let Some(near) = near_miss(
-            name.as_str(),
-            catalog.field_names_for(ctx.source()).into_iter(),
-        ) {
-            d = d.with_suggestion(near);
+        let pct = j;
+        if j == bytes.len() - 1 {
+            diagnostics.push(Diagnostic::error(
+                codes::FALCO_OUTPUT_SYNTAX,
+                "invalid formatting syntax: formatting cannot end with a % (libsinsp)",
+                range(text, ByteSpan::new(pct, pct + 1)),
+            ));
+            break;
         }
-        diagnostics.push(d);
+        let mut k = j + 1;
+        while k < bytes.len() && bytes[k].is_ascii_digit() {
+            k += 1;
+        }
+        if k == bytes.len() {
+            diagnostics.push(Diagnostic::error(
+                codes::FALCO_OUTPUT_SYNTAX,
+                "invalid formatting syntax: formatting cannot end with a number (libsinsp)",
+                range(text, ByteSpan::new(pct, k)),
+            ));
+            break;
+        }
+        let rest = &text[k..];
+        if let Some(p) = OUTPUT_PLACEHOLDERS.iter().find(|p| rest.starts_with(**p)) {
+            diagnostics.push(Diagnostic::warning(
+                codes::FALCO_DEPRECATED_FIELD,
+                "%container.info is deprecated and no more useful, and will be dropped by Falco 1.0.0: the container plugin adds the container fields to the output itself",
+                range(text, ByteSpan::new(pct, k + p.len())),
+            ));
+            spans.push((ByteSpan::new(pct, k + p.len()), "property"));
+            j = k + p.len();
+            continue;
+        }
+        // Shrink from the end until a prefix parses and compiles.
+        let mut chosen: Option<usize> = None;
+        let mut first_failure: Option<(parser::Expr, Vec<compile::Finding>)> = None;
+        for (expr, consumed) in compile::output_prefixes(rest) {
+            let mut compiler = compile::Compiler::new(catalog, ctx.source());
+            let ok = compiler.output_token(&expr);
+            if ok {
+                for f in compiler
+                    .findings
+                    .into_iter()
+                    .filter(|f| f.level == compile::Level::Warning)
+                {
+                    diagnostics.push(Diagnostic::warning(
+                        f.code,
+                        f.message,
+                        range(text, ByteSpan::new(k + f.span.start, k + f.span.end)),
+                    ));
+                }
+                chosen = Some(consumed);
+                break;
+            }
+            if first_failure.is_none() {
+                first_failure = Some((expr, compiler.findings));
+            }
+        }
+        match chosen {
+            Some(consumed) => {
+                spans.push((ByteSpan::new(pct, k + consumed), "property"));
+                j = k + consumed;
+            }
+            None => {
+                let (code, message, span, suggestion) = match first_failure {
+                    Some((_, findings)) if !findings.is_empty() => {
+                        let f = findings
+                            .iter()
+                            .find(|f| f.level == compile::Level::Error)
+                            .unwrap_or(&findings[0])
+                            .clone();
+                        (
+                            f.code,
+                            f.message,
+                            ByteSpan::new(k + f.span.start, k + f.span.end),
+                            f.suggestion,
+                        )
+                    }
+                    _ => (
+                        codes::FALCO_OUTPUT_SYNTAX,
+                        format!(
+                            "unknown filter: `%{}` is not a field or a transformer (libsinsp)",
+                            rest.split_whitespace().next().unwrap_or("")
+                        ),
+                        ByteSpan::new(
+                            pct,
+                            (k + rest.find(char::is_whitespace).unwrap_or(rest.len())).max(pct + 1),
+                        ),
+                        None,
+                    ),
+                };
+                let mut d = if code == codes::FALCO_UNKNOWN_FIELD || !ctx.known_source() {
+                    Diagnostic::warning(code, message, range(text, span))
+                } else {
+                    Diagnostic::error(code, message, range(text, span))
+                };
+                if let Some(s) = suggestion {
+                    d = d.with_suggestion(s);
+                }
+                if ctx.known_source() || code == codes::FALCO_OUTPUT_SYNTAX {
+                    diagnostics.push(d);
+                }
+                j = k + 1;
+            }
+        }
     }
     AnalyzeResult {
         diagnostics,
@@ -630,7 +965,34 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("toupper", "The field's value in upper case."),
     ("b64", "The field's value, base64-decoded."),
     ("basename", "The last path element of the field's value."),
-    ("len", "The length of the field's value."),
+    (
+        "len",
+        "The length of the field's value, or the number of values of a list field.",
+    ),
+    (
+        "join",
+        "Joins a list into one string: `join(\",\", proc.aname)`. Needs libsinsp 0.24.0 or later.",
+    ),
+    (
+        "concat",
+        "Concatenates strings: `concat(proc.name, \"-\", proc.pname)`. Needs libsinsp 0.24.0 or later.",
+    ),
+    (
+        "getopt",
+        "Parses command-line options: `getopt(proc.args, \"nt:\")[t]` is the value of `-t`. Needs libsinsp 0.25.0 or later.",
+    ),
+    (
+        "oneof",
+        "Modifier: exactly one value of the list satisfies the operator: `proc.name = oneof (a, b)`. Needs libsinsp 0.25.0 or later.",
+    ),
+    (
+        "anyof",
+        "Modifier: at least one value of the list satisfies the operator: `fd.name startswith anyof (/etc, /usr)`. Needs libsinsp 0.25.0 or later.",
+    ),
+    (
+        "allof",
+        "Modifier: every value of the list satisfies the operator: `proc.cmdline contains allof (-e, -c)`. Needs libsinsp 0.25.0 or later.",
+    ),
     (
         "val",
         "The value of another field, compared with this one: `proc.pname = val(proc.name)`.",
@@ -805,7 +1167,8 @@ pub fn completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionIt
         items.push(item);
     }
     for kw in [
-        "not", "and", "or", "tolower", "toupper", "b64", "basename", "len",
+        "not", "and", "or", "tolower", "toupper", "b64", "basename", "len", "join", "concat",
+        "getopt", "val",
     ] {
         items.push(CompletionItem::new(kw, "keyword"));
     }
@@ -819,9 +1182,23 @@ pub const CODES: &[(&str, Severity)] = &[
     (codes::FALCO_UNKNOWN_MACRO, Severity::Warning),
     (codes::FALCO_UNKNOWN_LIST, Severity::Warning),
     (codes::FALCO_MISPLACED_LIST, Severity::Error),
-    (codes::FALCO_TYPE_MISMATCH, Severity::Warning),
-    (codes::FALCO_UNKNOWN_EVENT, Severity::Warning),
+    (codes::FALCO_FIELD_ARGUMENT, Severity::Error),
+    (codes::FALCO_OPERATOR_TYPE, Severity::Error),
+    (codes::FALCO_VALUE_TYPE, Severity::Error),
+    (codes::FALCO_TRANSFORMER, Severity::Error),
+    (codes::FALCO_RHS_FIELD, Severity::Error),
+    (codes::FALCO_INVALID_REGEX, Severity::Error),
+    (codes::FALCO_UNKNOWN_EVENT, Severity::Error),
     (codes::FALCO_APPEND_CONDITION, Severity::Error),
+    (codes::FALCO_OUTPUT_SYNTAX, Severity::Error),
+    (codes::FALCO_EXCEPTION, Severity::Error),
+    (codes::FALCO_REGEX_SIMPLE, Severity::Warning),
+    (codes::FALCO_FIELD_AS_VALUE, Severity::Warning),
+    (codes::FALCO_TRANSFORMER_AS_VALUE, Severity::Warning),
+    (codes::FALCO_DEPRECATED_FIELD, Severity::Warning),
+    (codes::FALCO_UNSAFE_NA_CHECK, Severity::Warning),
+    (codes::FALCO_NO_EVTTYPE, Severity::Warning),
+    (codes::FALCO_NEWER_SYNTAX, Severity::Warning),
 ];
 
 #[cfg(test)]
@@ -836,7 +1213,19 @@ mod tests {
             .collect()
     }
 
+    /// A condition with no event-type check (as a macro's): most tests
+    /// are about one check, not about narrowing a rule's event types.
     fn plain(text: &str) -> Vec<String> {
+        codes_of(
+            text,
+            &Context {
+                macro_condition: true,
+                ..Context::default()
+            },
+        )
+    }
+
+    fn rule(text: &str) -> Vec<String> {
         codes_of(text, &Context::default())
     }
 
@@ -898,7 +1287,10 @@ mod tests {
     #[test]
     fn macros_and_lists_resolve_through_the_block() {
         assert_eq!(plain("my_private_macro"), vec![codes::FALCO_UNKNOWN_MACRO]);
-        let mut ctx = Context::default();
+        let mut ctx = Context {
+            macro_condition: true,
+            ..Context::default()
+        };
         ctx.macros
             .insert("my_private_macro".into(), "proc.name = x".into());
         ctx.lists.insert("my_list".into(), vec!["a".into()]);
@@ -916,31 +1308,128 @@ mod tests {
 
     #[test]
     fn operators_and_values_follow_the_field_type() {
-        assert_eq!(plain("proc.name > 5"), vec![codes::FALCO_TYPE_MISMATCH]);
+        // libsinsp compares strings with `<` and `>`; a number value is a string.
+        assert!(plain("proc.name > 5").is_empty());
         assert_eq!(
             plain("proc.pid contains 5"),
-            vec![codes::FALCO_TYPE_MISMATCH]
+            vec![codes::FALCO_OPERATOR_TYPE]
         );
-        assert_eq!(plain("proc.pid = abc"), vec![codes::FALCO_TYPE_MISMATCH]);
-        assert_eq!(
-            plain("evt.failed = maybe"),
-            vec![codes::FALCO_TYPE_MISMATCH]
-        );
+        assert_eq!(plain("proc.pid = abc"), vec![codes::FALCO_VALUE_TYPE]);
+        assert_eq!(plain("evt.failed = maybe"), vec![codes::FALCO_VALUE_TYPE]);
         assert!(plain("evt.failed = true and proc.pid > 1 and len(proc.args) > 10").is_empty());
         assert_eq!(
             plain("len(proc.args) startswith x"),
-            vec![codes::FALCO_TYPE_MISMATCH]
+            vec![codes::FALCO_OPERATOR_TYPE]
         );
         assert!(plain("tolower(proc.name) startswith bash").is_empty());
+        assert_eq!(plain("fd.sip = 10.0.0.300"), vec![codes::FALCO_VALUE_TYPE]);
+        assert!(plain("fd.snet in (10.0.0.0/8, 192.168.0.0/16)").is_empty());
+        assert_eq!(
+            plain("evt.buffer bcontains 4865Z0"),
+            vec![codes::FALCO_VALUE_TYPE]
+        );
+        assert_eq!(
+            plain("proc.name regex '('"),
+            vec![codes::FALCO_INVALID_REGEX]
+        );
+        assert_eq!(
+            plain("proc.name = val(proc.pid)"),
+            vec![codes::FALCO_RHS_FIELD]
+        );
+        assert_eq!(plain("proc.name[1] = x"), vec![codes::FALCO_FIELD_ARGUMENT]);
+        assert_eq!(
+            plain("evt.arg.nosuch = x"),
+            vec![codes::FALCO_FIELD_ARGUMENT]
+        );
     }
 
     #[test]
-    fn event_types_are_checked() {
-        assert!(plain("evt.type in (open, openat, openat2) and evt.dir = <").is_empty());
-        let d = analyze("evt.type = execvee").diagnostics;
-        assert_eq!(d.len(), 1);
-        assert_eq!(d[0].code, codes::FALCO_UNKNOWN_EVENT);
-        assert_eq!(d[0].suggestion.as_deref(), Some("execve"));
+    fn libsinsp_syntax_beyond_the_basics() {
+        for text in [
+            "proc.name = anyof (bash, sh)",
+            "proc.name startswith oneof (/usr, /bin)",
+            "not(proc.name = x)",
+            "proc.pid > 0x10 and proc.pid < 1e+9",
+            "getopt(proc.args, \"nt:\")[t] = x",
+            "concat(proc.name, \"-\", proc.pname) = a-b",
+            "join(\",\", (proc.name, proc.pname)) = \"a,b\"",
+            "fd.name exists and proc.name in ()",
+        ] {
+            let c = plain(text);
+            assert!(
+                !c.iter().any(|c| c == codes::FALCO_PARSE_ERROR),
+                "{text}: {c:?}"
+            );
+        }
+        assert_eq!(
+            plain("proc.name = anyof (bash, sh)"),
+            vec![codes::FALCO_NEWER_SYNTAX]
+        );
+        // libsinsp parses hex numbers, then refuses them as integer values.
+        assert_eq!(plain("proc.pid = 0x10"), vec![codes::FALCO_VALUE_TYPE]);
+        // A word operator needs a blank after it.
+        assert_eq!(
+            plain("proc.name contains(x)"),
+            vec![codes::FALCO_PARSE_ERROR]
+        );
+    }
+
+    #[test]
+    fn falco_loader_warnings() {
+        assert_eq!(
+            plain("proc.name = bash and evt.dir = <"),
+            vec![codes::FALCO_DEPRECATED_FIELD]
+        );
+        assert!(
+            rule("open_read and evt.dir = <").contains(&codes::FALCO_DEPRECATED_FIELD.to_string())
+        );
+        let k8s = Context {
+            source: Some("k8s_audit".into()),
+            ..Context::default()
+        };
+        assert_eq!(
+            codes_of("ka.user.name = <NA>", &k8s),
+            vec![codes::FALCO_UNSAFE_NA_CHECK]
+        );
+        // No evt.type: every event (warned); a macro narrows it.
+        assert_eq!(rule("proc.name = bash"), vec![codes::FALCO_NO_EVTTYPE]);
+        assert!(rule("spawned_process and proc.name = bash").is_empty());
+        assert!(rule("evt.type in (open, openat) and not proc.name = bash").is_empty());
+        assert_eq!(rule("not evt.type = open"), vec![codes::FALCO_NO_EVTTYPE]);
+        let macro_ctx = Context {
+            macro_condition: true,
+            ..Context::default()
+        };
+        assert!(codes_of("proc.name = bash", &macro_ctx).is_empty());
+        assert_eq!(
+            rule("proc.name regex bash"),
+            vec![codes::FALCO_REGEX_SIMPLE, codes::FALCO_NO_EVTTYPE]
+        );
+    }
+
+    #[test]
+    fn lists_expand_as_falco_expands_them() {
+        let mut ctx = Context::default();
+        ctx.lists
+            .insert("two".into(), vec!["a".into(), "b c".into()]);
+        ctx.lists.insert("one".into(), vec!["a".into()]);
+        assert!(codes_of("spawned_process and proc.name in (two, x)", &ctx).is_empty());
+        assert!(codes_of("spawned_process and proc.name in one", &ctx).is_empty());
+        assert_eq!(
+            codes_of("spawned_process and proc.name = two", &ctx),
+            vec![codes::FALCO_MISPLACED_LIST]
+        );
+        assert_eq!(
+            codes_of("spawned_process and proc.name in two", &ctx),
+            vec![codes::FALCO_MISPLACED_LIST]
+        );
+        // A value of an expanded list maps back to the list's name.
+        ctx.lists
+            .insert("pids".into(), vec!["1".into(), "x".into()]);
+        let d = analyze_with("spawned_process and proc.pid in (pids)", &ctx).diagnostics;
+        assert_eq!(d.len(), 1, "{d:?}");
+        assert_eq!(d[0].code, codes::FALCO_VALUE_TYPE);
+        assert_eq!(d[0].range.start.character, 33);
     }
 
     #[test]
@@ -972,9 +1461,12 @@ mod tests {
             &Context::default(),
         );
         let codes: Vec<_> = r.diagnostics.iter().map(|d| d.code.as_str()).collect();
-        assert_eq!(codes, vec![codes::FALCO_UNKNOWN_FIELD]);
+        assert_eq!(
+            codes,
+            vec![codes::FALCO_UNKNOWN_FIELD, codes::FALCO_DEPRECATED_FIELD]
+        );
         assert_eq!(r.diagnostics[0].suggestion.as_deref(), Some("proc.name"));
-        assert_eq!(r.tokens.len(), 4);
+        assert_eq!(r.tokens.len(), 3);
     }
 
     #[test]

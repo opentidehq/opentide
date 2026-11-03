@@ -7,6 +7,7 @@
 //! or `or`; a new rule's and a macro's are whole conditions.
 
 use opentide_core::{Diagnostic, codes};
+use opentide_falco::exceptions::{Exception, Item, Strs};
 use opentide_falco::{Catalog, Context};
 
 /// The Falco context of the value at `field_path` in the object `source`.
@@ -64,6 +65,7 @@ pub(crate) fn context_for(block: Option<&serde_yaml::Value>, field_path: &[Strin
         [.., last] if last == "output" => None,
         _ => Some(false),
     };
+    ctx.macro_condition = matches!(field_path, [_, _, m, _, _] if m == "macros");
     ctx
 }
 
@@ -93,4 +95,78 @@ pub(crate) fn source_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec
         )
         .with_field_path(path.iter().map(|p| p.to_string()).collect()),
     ]
+}
+
+fn scalar(v: &serde_yaml::Value) -> Option<String> {
+    match v {
+        serde_yaml::Value::String(s) => Some(s.clone()),
+        serde_yaml::Value::Number(n) => Some(n.to_string()),
+        serde_yaml::Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
+fn strs(v: Option<&serde_yaml::Value>) -> Option<Strs> {
+    match v? {
+        serde_yaml::Value::Sequence(items) => {
+            Some(Strs::Many(items.iter().filter_map(scalar).collect()))
+        }
+        other => scalar(other).map(Strs::One),
+    }
+}
+
+fn item(v: &serde_yaml::Value) -> Item {
+    match v {
+        serde_yaml::Value::Sequence(items) => Item::List(items.iter().map(item).collect()),
+        other => Item::Scalar(scalar(other).unwrap_or_default()),
+    }
+}
+
+/// Falco's checks on the block's `exceptions` (opentide_falco::exceptions):
+/// operators, field and value counts, and the values compiled as Falco writes
+/// them into the condition.
+pub(crate) fn exception_diagnostics(source: &str, block: &serde_yaml::Value) -> Vec<Diagnostic> {
+    let Some(list) = block.get("exceptions").and_then(|e| e.as_sequence()) else {
+        return Vec::new();
+    };
+    let exceptions: Vec<Exception> = list
+        .iter()
+        .map(|e| Exception {
+            name: e.get("name").and_then(scalar).unwrap_or_default(),
+            fields: strs(e.get("fields")),
+            comps: strs(e.get("comps")),
+            values: e
+                .get("values")
+                .and_then(|v| v.as_sequence())
+                .map(|vs| vs.iter().map(item).collect())
+                .unwrap_or_default(),
+        })
+        .collect();
+    let ctx = context_for(
+        Some(block),
+        &["configurations".into(), "sysdig".into(), "condition".into()],
+    );
+    opentide_falco::exceptions::check(&exceptions, &ctx)
+        .into_iter()
+        .map(|f| {
+            let index = f.index.to_string();
+            let path = [
+                "configurations",
+                "sysdig",
+                "exceptions",
+                index.as_str(),
+                f.key,
+            ];
+            let range = crate::elastic::path_range(source, &path);
+            let d = match f.level {
+                opentide_falco::compile::Level::Error => {
+                    Diagnostic::error(f.code, f.message, range)
+                }
+                opentide_falco::compile::Level::Warning => {
+                    Diagnostic::warning(f.code, f.message, range)
+                }
+            };
+            d.with_field_path(path.iter().map(|p| p.to_string()).collect())
+        })
+        .collect()
 }

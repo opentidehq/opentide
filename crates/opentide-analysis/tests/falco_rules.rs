@@ -230,6 +230,31 @@ fn faults_are_reported_where_they_are_written() {
             codes::FALCO_UNKNOWN_EVENT,
             "conect",
         ),
+        // An exception whose comps do not align with its fields (Falco's loader).
+        (
+            "terminal-shell-in-container.yaml",
+            "comps: ['=', startswith]",
+            "comps: ['=']",
+            codes::FALCO_EXCEPTION,
+            "comps",
+        ),
+        // An exception value the field's type cannot hold, compiled as Falco
+        // writes it into the condition.
+        (
+            "terminal-shell-in-container.yaml",
+            "fields: [proc.pname, container.image.repository]",
+            "fields: [proc.pid, container.image.repository]",
+            codes::FALCO_EXCEPTION,
+            "values",
+        ),
+        // A value the field's type cannot hold, in the condition.
+        (
+            "contact-k8s-api-server-from-container.yaml",
+            "evt.type=connect",
+            "evt.type=connect and proc.pid = abc",
+            codes::FALCO_VALUE_TYPE,
+            "abc",
+        ),
         // An event source no plugin defines.
         (
             "attach-or-exec-into-a-pod.yaml",

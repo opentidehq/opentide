@@ -43,25 +43,57 @@ pub enum Kind {
     Other,
 }
 
-/// One Falco field.
+/// Whether a field takes an argument (`EPF_ARG_REQUIRED`, `EPF_ARG_ALLOWED`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ArgRule {
+    None,
+    Allowed,
+    Required,
+}
+
+/// One Falco field, with libsinsp's type name (`CHARBUF`, `UINT64`, `IPNET`)
+/// and flags.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Field {
     pub name: String,
     #[serde(rename = "type")]
     pub field_type: String,
+    /// `EPF_IS_LIST`: the field extracts several values.
+    pub list: bool,
     pub kind: Kind,
+    /// libsinsp filter check class (`gen_event`, `thread`, ...) or plugin name.
     pub class: String,
+    /// `libsinsp` or `plugin`.
+    pub origin: String,
     /// Event sources the field applies to; `*` is every source.
     pub sources: Vec<String>,
-    /// Takes an argument: `proc.aname[2]`, `evt.arg.flags`.
-    #[serde(default)]
-    pub arg: bool,
+    pub arg: ArgRule,
+    /// `EPF_ARG_INDEX`: the argument may be a number.
+    pub arg_index: bool,
+    /// `EPF_ARG_KEY`: the argument may be a string.
+    pub arg_key: bool,
+    /// `EPF_NO_RHS`: no right-hand side field, and never one itself.
+    pub no_rhs: bool,
+    /// `EPF_NO_TRANSFORMER`.
+    pub no_transformer: bool,
+    /// `EPF_FILTER_ONLY`: not in output.
+    pub filter_only: bool,
+    /// `EPF_PRINT_ONLY`.
+    pub print_only: bool,
+    /// libsinsp's `EPF_DEPRECATED`, or deprecated by Falco's rule loader.
+    pub deprecated: bool,
     pub description: String,
 }
 
 impl Field {
     pub fn applies_to(&self, source: &str) -> bool {
         self.sources.iter().any(|s| s == "*" || s == source)
+    }
+
+    /// Takes an argument: `proc.aname[2]`, `evt.arg.flags`.
+    pub fn takes_arg(&self) -> bool {
+        self.arg != ArgRule::None
     }
 }
 
@@ -82,15 +114,28 @@ pub struct List {
     pub origin: String,
 }
 
+/// One event of the driver's event table: its category and its codes
+/// (the enter and exit events, `PPME_*`).
 #[derive(Debug, Clone, Deserialize)]
-struct Event {
-    name: String,
-    kind: String,
+pub struct Event {
+    pub name: String,
+    pub kind: String,
+    pub codes: Vec<String>,
+}
+
+/// An event argument (`evt.arg.<name>`, `evt.rawarg.<name>`) and its type, as
+/// libsinsp's longest-match lookup first finds it.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Param {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub param_type: String,
 }
 
 #[derive(Deserialize)]
 struct FieldsFile {
     sources: Vec<Source>,
+    classes: Vec<String>,
     fields: Vec<Field>,
 }
 
@@ -104,7 +149,9 @@ struct DefaultsFile {
 
 #[derive(Deserialize)]
 struct EventsFile {
+    syscalls: Vec<String>,
     events: Vec<Event>,
+    params: Vec<Param>,
 }
 
 /// Every Falco catalog.
@@ -114,7 +161,15 @@ pub struct Catalog {
     by_name: HashMap<String, usize>,
     pub macros: BTreeMap<String, Macro>,
     pub lists: BTreeMap<String, List>,
-    events: BTreeMap<String, String>,
+    events: BTreeMap<String, Event>,
+    /// libsinsp's filter check classes, in the order it tries them.
+    pub classes: Vec<String>,
+    /// Event arguments, in table order.
+    pub params: Vec<Param>,
+    /// Syscall names (`ppm_sc` codes), which `evt.type` also accepts.
+    pub syscalls: BTreeSet<String>,
+    /// Every event code of the table.
+    pub all_codes: BTreeSet<String>,
 }
 
 /// A field name, resolved for one event source.
@@ -144,8 +199,17 @@ impl Catalog {
                 .enumerate()
                 .map(|(i, f)| (f.name.clone(), i))
                 .collect();
+            let all_codes = events
+                .events
+                .iter()
+                .flat_map(|e| e.codes.iter().cloned())
+                .collect();
             Catalog {
                 sources: fields.sources,
+                classes: fields.classes,
+                params: events.params,
+                syscalls: events.syscalls.into_iter().collect(),
+                all_codes,
                 fields: fields.fields,
                 by_name,
                 macros: defaults
@@ -161,7 +225,7 @@ impl Catalog {
                 events: events
                     .events
                     .into_iter()
-                    .map(|e| (e.name, e.kind))
+                    .map(|e| (e.name.clone(), e))
                     .collect(),
             }
         })
@@ -182,7 +246,7 @@ impl Catalog {
         let mut exact = true;
         loop {
             if let Some(field) = self.field(candidate) {
-                if exact || field.arg {
+                if exact || field.takes_arg() {
                     return if field.applies_to(source) {
                         Lookup::Known(field)
                     } else {
@@ -205,9 +269,14 @@ impl Catalog {
         self.fields.iter().filter(move |f| f.applies_to(source))
     }
 
-    /// The kind of event (`syscall`, `tracepoint`, `plugin`, `metaevents`), if known.
+    /// The category of an event of the table (`file`, `process`, `net`, ...).
     pub fn event(&self, name: &str) -> Option<&str> {
-        self.events.get(name).map(String::as_str)
+        self.events.get(name).map(|e| e.kind.as_str())
+    }
+
+    /// The event codes an event name selects.
+    pub fn event_codes(&self, name: &str) -> Option<&[String]> {
+        self.events.get(name).map(|e| e.codes.as_slice())
     }
 
     pub fn events(&self) -> impl Iterator<Item = &str> {
@@ -244,7 +313,10 @@ mod tests {
         }
         assert!(c.macros.contains_key("spawned_process"));
         assert!(c.lists.contains_key("shell_binaries"));
-        assert_eq!(c.event("execve"), Some("syscall"));
+        assert_eq!(c.event("execve"), Some("process"));
+        assert!(c.syscalls.contains("execveat"));
+        assert!(c.params.iter().any(|p| p.name == "flags"));
+        assert_eq!(c.classes.first().map(String::as_str), Some("gen_event"));
     }
 
     #[test]
