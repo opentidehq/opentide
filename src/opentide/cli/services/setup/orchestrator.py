@@ -233,7 +233,12 @@ def run_setup(
             )
             record("skills", skills_result)
         except (typer.BadParameter, SkillsDownloadError, SkillsManifestError) as exc:
-            warnings.append(f"Agent skills skipped: {exc}")
+            skipped = f"Agent skills skipped: {exc}"
+            warnings.append(skipped)
+            # Not a step of the run, but a plan credits whatever it wrote before
+            # failing to it, and shows the warning there.
+            if after_step is not None:
+                after_step("skills", {"status": "skipped", "warnings": [skipped]})
 
     if options.vscode_setup:
         target = options.path.resolve()

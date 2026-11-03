@@ -384,3 +384,33 @@ def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
     assert stopped.value.code == 128 + signal.SIGTERM
     assert not copies[0].exists()
     assert signal.getsignal(signal.SIGTERM) is not None
+
+
+def test_the_plan_carries_the_runs_own_warnings(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    args = ("--no-staging", "--lint-changed", "--env", "--path", str(target))
+    _, plan = _invoke("--plan", *args)
+    _, applied = _invoke("--yes", *args)
+    ignored = [w for w in applied["warnings"] if w.startswith("CI flags")]
+    assert ignored, applied["warnings"]
+    assert ignored[0] in plan["warnings"]
+
+
+def test_a_skills_download_failure_is_a_step_with_its_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.cli.services.setup import skills as skills_mod
+    from opentide.cli.services.setup.skills_registry import SkillsManifestError
+
+    def unreachable(*args: Any, **kwargs: Any) -> Any:
+        raise SkillsManifestError("Could not fetch skills catalogue")
+
+    monkeypatch.setattr(skills_mod, "load_manifest", unreachable)
+    target = tmp_path / "repo"
+    result, plan = _invoke("--plan", "--hooks", "--skills", "claude-code", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert [step["step"] for step in plan["steps"]] == ["hooks", "skills"]
+    skipped = "Agent skills skipped: Could not fetch skills catalogue"
+    assert plan["steps"][1]["warnings"] == [skipped]
+    assert skipped in plan["warnings"]
+    assert document_problems(plan) == []

@@ -483,6 +483,8 @@ def plan_steps(
 ) -> tuple[list[PlannedStep], Mapping[str, Any]]:
     """Run *run* in a sandbox of *target*; return the planned steps and its result.
 
+    The result's ``warnings`` name the repository's paths, not the copy's.
+
     *run* gets the copy of the target and a callback to call after each step
     with the step's name and result (``run_setup`` does it for each of its
     steps). A run that never calls it is one step, *name*.
@@ -496,4 +498,6 @@ def plan_steps(
         result = run(box.shadow_target, after_step)
         if not planned:
             planned.append(box.step(name, result))
+        # The run's own warnings (flags it ignored), with the copy's paths made real.
+        result = {**result, "warnings": [box.to_real(warning) for warning in _warnings(result)]}
     return planned, result

@@ -134,7 +134,10 @@ def _emit_plan(cli: CliContext, target: Path, step: str, run: PlanRun) -> None:
         steps, result = plan_steps(target, run, name=step)
     except PlanRefused as refused:
         raise typer.BadParameter(str(refused), param_hint="--plan") from refused
-    payload = plan_payload(target, steps)
+    warnings = result.get("warnings")
+    payload = plan_payload(
+        target, steps, warnings=[str(w) for w in warnings] if isinstance(warnings, list) else ()
+    )
     if result.get("status") == "failed":
         payload["status"] = "failed"
         payload["message"] = str(result.get("message") or "Setup would fail")
