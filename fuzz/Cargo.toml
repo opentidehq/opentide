@@ -1,0 +1,81 @@
+[package]
+name = "opentide-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "EUPL-1.2"
+description = "cargo-fuzz targets for the opentide engines and the LSP host (#182)."
+
+[package.metadata]
+cargo-fuzz = true
+
+# Not a member of the repository's workspace: cargo-fuzz builds it on nightly
+# with sanitizer flags, and its lock file is its own.
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+opentide-analysis = { path = "../crates/opentide-analysis" }
+opentide-core = { path = "../crates/opentide-core" }
+opentide-lsp = { path = "../crates/opentide-lsp" }
+opentide-tide = { path = "../crates/opentide-tide" }
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "kql"
+path = "fuzz_targets/kql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "spl"
+path = "fuzz_targets/spl.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "esql"
+path = "fuzz_targets/esql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "eql"
+path = "fuzz_targets/eql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "kuery"
+path = "fuzz_targets/kuery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lucene"
+path = "fuzz_targets/lucene.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tide"
+path = "fuzz_targets/tide.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "protocol"
+path = "fuzz_targets/protocol.rs"
+test = false
+doc = false
+bench = false

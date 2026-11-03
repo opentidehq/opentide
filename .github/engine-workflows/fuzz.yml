@@ -1,0 +1,40 @@
+name: fuzz
+
+# Each engine and the LSP host under cargo-fuzz for five minutes a night
+# (#182). Informational: a crash uploads its input and fails this run only.
+# Fix it, then save the input under fuzz/regressions/<target>/ (fuzz/README.md).
+on:
+  schedule:
+    - cron: "43 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: seconds per target
+        default: "300"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [kql, spl, esql, eql, kuery, lucene, tide, protocol]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
+      - uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: fuzz ${{ matrix.target }}
+        run: bash scripts/fuzz.sh ${{ matrix.target }} ${{ inputs.seconds || '300' }}
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-${{ matrix.target }}-artifacts
+          path: fuzz/artifacts/${{ matrix.target }}
