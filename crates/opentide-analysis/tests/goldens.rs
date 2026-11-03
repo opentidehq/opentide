@@ -147,3 +147,13 @@ fn lucene_golden() {
         "event.category:process AND NOT process.name:(cmd.exe OR /power.*/) AND source.port:[1024 TO *]^2",
     );
 }
+
+#[test]
+fn falco_golden() {
+    exact_golden(
+        "falco",
+        "condition",
+        LanguageId::Falco,
+        "spawned_process and container and not proc.name in (shell_binaries, \"sh -c\") and proc.aname[2] = sshd and tolower(fd.name) startswith /etc and fd.sport > 1024",
+    );
+}

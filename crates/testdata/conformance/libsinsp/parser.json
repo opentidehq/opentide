@@ -1,0 +1,4018 @@
+{
+ "source": "falcosecurity/libs@f13bc241815d463be433e947b90f42713df1abf9",
+ "file": "userspace/libsinsp/test/filter_parser.ut.cpp",
+ "license": "Apache-2.0",
+ "skipped": [
+  "parser.recursion_depth_limit:99: test_reject_msg(std::string(100000, '('), \"exceeded max depth limit of 100\")"
+ ],
+ "fixtures": [
+  {
+   "test": "parser.recursion_depth_limit",
+   "line": 102,
+   "input": "((((((((((a))))))))))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_with_arg",
+   "line": 171,
+   "input": "getopt(proc.args, \"nt:\")[t] = value",
+   "verdict": "accept",
+   "variants": false,
+   "ast": "getopt(proc.args,nt:)[t] = value"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_syntax",
+   "line": 178,
+   "input": "evt.arg[0] = value",
+   "verdict": "accept",
+   "variants": false,
+   "ast": "evt.arg[0] = value"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_syntax",
+   "line": 183,
+   "input": "getopt(proc.args, \"nt:\")[\"t\"] = value",
+   "verdict": "accept",
+   "variants": false,
+   "ast": "getopt(proc.args,nt:)[t] = value"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_types",
+   "line": 191,
+   "input": "evt.arg[key] = value",
+   "verdict": "accept",
+   "variants": false,
+   "ast": "evt.arg[key] = value"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_types",
+   "line": 196,
+   "input": "evt.arg[\"key with space\"] = value",
+   "verdict": "accept",
+   "variants": false,
+   "ast": "evt.arg[\"key with space\"] = value"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_types",
+   "line": 202,
+   "input": "getopt(proc.args, \"nt:\")[t] = value",
+   "verdict": "accept",
+   "variants": false,
+   "ast": "getopt(proc.args,nt:)[t] = value"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_types",
+   "line": 208,
+   "input": "getopt(proc.args, \"nt:\")[\"t\"] = value",
+   "verdict": "accept",
+   "variants": false,
+   "ast": "getopt(proc.args,nt:)[t] = value"
+  },
+  {
+   "test": "parser.filtercheck_arg_optional",
+   "line": 216,
+   "input": "test.str = value",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.filtercheck_arg_optional",
+   "line": 224,
+   "input": "test.str[\"\"] = value",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.transformer_arg_optional",
+   "line": 237,
+   "input": "getopt(proc.args, \"nt:\") = value",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.transformer_arg_optional",
+   "line": 245,
+   "input": "getopt(proc.args, \"nt:\")[\"\"] = value",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_shared_field_arg_exceptions",
+   "line": 259,
+   "input": "evt.arg[] = value",
+   "verdict": "reject",
+   "variants": false,
+   "message": "expected a valid field argument: a quoted string or a bare string"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_exceptions",
+   "line": 261,
+   "input": "evt.arg[\"x\" = value",
+   "verdict": "reject",
+   "variants": false,
+   "message": "expected a ']' token"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_exceptions",
+   "line": 262,
+   "input": "getopt(proc.args, \"nt:\")[] = value",
+   "verdict": "reject",
+   "variants": false,
+   "message": "expected a valid field argument: a quoted string or a bare string"
+  },
+  {
+   "test": "parser.parse_shared_field_arg_exceptions",
+   "line": 264,
+   "input": "getopt(proc.args, \"nt:\")[\"t\" = value",
+   "verdict": "reject",
+   "variants": false,
+   "message": "expected a ']' token"
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 271,
+   "input": "  a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 272,
+   "input": "(a)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 273,
+   "input": "a and b",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 274,
+   "input": "a and b and c",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 275,
+   "input": "a and b and(c)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 276,
+   "input": "(a)and(b)and(c)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 277,
+   "input": "(a and b)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 278,
+   "input": "a or b",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 279,
+   "input": "a or b or c",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 280,
+   "input": "a or b or(c)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 281,
+   "input": "(a)or(b)or(c)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 282,
+   "input": "(a or b)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 283,
+   "input": "(a.a exists and b)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 284,
+   "input": "(a.a exists) and (b)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 285,
+   "input": "a.a exists and b",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 286,
+   "input": "a.a=1 or b.b=2 and c",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 287,
+   "input": "not (a)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 288,
+   "input": "not(a)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 289,
+   "input": "not (not (a))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 290,
+   "input": "not (a.b=1)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 291,
+   "input": "not (a.a exists)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 292,
+   "input": "not a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 293,
+   "input": "a.b = 1 and not a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 294,
+   "input": "not not a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 295,
+   "input": "(not not a)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 296,
+   "input": "not not(a)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 297,
+   "input": "not(not(a))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 298,
+   "input": "not(a)and(not(b))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 299,
+   "input": "not a.b=1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 300,
+   "input": "not a.a exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 301,
+   "input": "a.b = bla",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 302,
+   "input": "a.b = 'bla'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 303,
+   "input": "a.b = not",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 304,
+   "input": "a.b contains bla",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 305,
+   "input": "a.b icontains 'bla'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 306,
+   "input": "a.g in (1, 'a', b)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 307,
+   "input": "fd.name=*.log",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 308,
+   "input": "a.g in (1, 'a', b.c)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 309,
+   "input": "a.b = a.a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 310,
+   "input": "a and notb",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 311,
+   "input": "a or notb",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 312,
+   "input": "notz and a and b",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 313,
+   "input": "macro and not_macro",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 314,
+   "input": "macro and not not_macro",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 315,
+   "input": "macro and not(not_macro)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 316,
+   "input": "((macro) and (not_macro))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 317,
+   "input": "macro and and_macro",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 318,
+   "input": "((macro) and (and_macro))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 319,
+   "input": "macro and or_macro",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 320,
+   "input": "((macro) and (or_macro))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 323,
+   "input": "evt.arg[0] contains /bin",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 324,
+   "input": "evt.arg[a] contains /bin",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 327,
+   "input": "a andb",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 328,
+   "input": "aand b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 329,
+   "input": "a and b and",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 330,
+   "input": "a and b or",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 331,
+   "input": "a and b not",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 332,
+   "input": "and a",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 333,
+   "input": "or a",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 334,
+   "input": "a or b and",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 335,
+   "input": "a or b or",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 336,
+   "input": "a or b not",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 337,
+   "input": "a not b and",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 338,
+   "input": "a not b or",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 339,
+   "input": "a not b not",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 340,
+   "input": "a orb",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 341,
+   "input": "aor b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 342,
+   "input": "a and or b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 343,
+   "input": "a andor b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 344,
+   "input": "a not b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 345,
+   "input": "a notb",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 346,
+   "input": "anot b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 347,
+   "input": "a andnot b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 348,
+   "input": "a andnotb",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 349,
+   "input": "(a)andnot(b)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 350,
+   "input": "a ornot b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 351,
+   "input": "a ornotb",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 352,
+   "input": "(a)ornot(b)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 353,
+   "input": "evt.arg[] contains /bin",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 354,
+   "input": "a.b = b = 1",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 355,
+   "input": "(a.b = 1",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 356,
+   "input": "a.a invalidoperator xxx",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 357,
+   "input": "macro > 12",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 360,
+   "input": "a.g in ( 1 ,, , b)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 361,
+   "input": "#a and b; a and b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 362,
+   "input": "#a and b; # ; ; a and b",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_smoke_test",
+   "line": 363,
+   "input": "fd.name=/var/lo);g/httpd.log",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 370,
+   "input": "test.str = testval",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 371,
+   "input": "test.str = 0a!@#456:/\\.;!$%^&*[]{}|",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 374,
+   "input": "test.str = \"\"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 375,
+   "input": "test.str = ''",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 376,
+   "input": "test.str = \"0a!@#456:/.; !$%^&*[]{}|\"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 377,
+   "input": "test.str = \"test value\"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 378,
+   "input": "test.str = 'test value'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 381,
+   "input": "test.str[0a!@#456:/\\.;!$%^&*(){}|] = testval",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 382,
+   "input": "test.str[aaaa1] = a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 383,
+   "input": "test.str[1234] = a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 384,
+   "input": "test.str[+0.25e+10] = a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 385,
+   "input": "test.str[\"\"] = empty",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 386,
+   "input": "test.str['a aa'] = a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 387,
+   "input": "test.str[\"test \\\"with\\\"escaping\"] = a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 390,
+   "input": "test.str = \"escape double quote \\\" \"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 391,
+   "input": "test.str = \"escape double quote \\\" \"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 392,
+   "input": "test.str = 'escape single quote \\' '",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 393,
+   "input": "test.str = 'multiple escape single quote \\' \\\\''",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 394,
+   "input": "test.str = 'mixed \"'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 395,
+   "input": "test.str = \"mixed '\"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 396,
+   "input": "test.str = \"bad escape \\ \" ",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 400,
+   "input": "test.str = a,",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 401,
+   "input": "test.str = a=",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 402,
+   "input": "test.str = a('\")",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 405,
+   "input": "test.str = '",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 406,
+   "input": "test.str = \"",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 407,
+   "input": "test.str = '\"",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 408,
+   "input": "test.str = \"'",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 411,
+   "input": "test.str = missing start quote",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 412,
+   "input": "test.str = 'missing end quote",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 413,
+   "input": "test.str = \"broken escape double quote\"\"",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 414,
+   "input": "test.str = 'broken escape single quote''",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 415,
+   "input": "test.str = \"mixed \\'\"",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 416,
+   "input": "test.str = 'mixed \\\"'",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 419,
+   "input": "test.str[0a!@#456:/\\.;!$%^&*[]{}] = testval",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 420,
+   "input": "test.str[] = testval",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 421,
+   "input": "test.str[[] = testval",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 422,
+   "input": "test.str[]] = testval",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 423,
+   "input": "test.str['''] = a",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 424,
+   "input": "test.str[aaa\"] = a",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 425,
+   "input": "test.str[   test   ] = testval",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 426,
+   "input": "test.str[ = testval",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str",
+   "line": 427,
+   "input": "test.str] = testval",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 432,
+   "input": "test.num > 1000",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 433,
+   "input": "test.num < +1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 434,
+   "input": "test.num >= -1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 435,
+   "input": "test.num <= 0x12345",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 436,
+   "input": "test.num <= 0XaB00AB",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 437,
+   "input": "test.num > 1.2",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 438,
+   "input": "test.num < -1.2",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 439,
+   "input": "test.num > -0.1222e+10",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 443,
+   "input": "test.str = !0.1222e+10",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 444,
+   "input": "test.str = 0xAAA.1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 445,
+   "input": "test.str = 0aaaaa",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 446,
+   "input": "test.str = a",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 449,
+   "input": "test.num > !0.1222e+10",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 450,
+   "input": "test.num < 0xAAA.1",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 451,
+   "input": "test.num >= 0aaaaa",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_numbers",
+   "line": 452,
+   "input": "test.num <= a",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 457,
+   "input": "test.list in ()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 458,
+   "input": "test.list in (a)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 459,
+   "input": "test.list in ('single-quoted')",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 460,
+   "input": "test.list in (\"double-quoted\")",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 461,
+   "input": "test.list in (0a!@#456:/\\.;!$%^&*[]{}|)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 462,
+   "input": "test.list in (0a!@#456:/\\.;!$%^&*[]{}|, value)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 463,
+   "input": "test.list in (value, \"value\", 'value')",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 466,
+   "input": "test.list in (value)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 467,
+   "input": "test.list intersects (value)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 468,
+   "input": "test.list pmatch (value)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 471,
+   "input": "test.list in (",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 472,
+   "input": "test.list in )",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 473,
+   "input": "test.list in (value,)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 474,
+   "input": "test.list in (value,,)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 475,
+   "input": "test.list in (,)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 476,
+   "input": "test.list in (,   ,)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 479,
+   "input": "test.list > (value)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 480,
+   "input": "test.list = (value)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 481,
+   "input": "test.list < (value)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 482,
+   "input": "test.list startswith (value)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 483,
+   "input": "test.list bstartswith (value)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 484,
+   "input": "test.list contains (value)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_lists",
+   "line": 485,
+   "input": "test.list icontains (value)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 490,
+   "input": "test.op exists and macro",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 491,
+   "input": "test.op exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 492,
+   "input": "test.op = value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 493,
+   "input": "test.op =value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 494,
+   "input": "test.op == value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 495,
+   "input": "test.op ==value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 496,
+   "input": "test.op != value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 497,
+   "input": "test.op !=value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 498,
+   "input": "test.op glob value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 499,
+   "input": "test.op iglob value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 500,
+   "input": "test.op contains value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 501,
+   "input": "test.op icontains value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 502,
+   "input": "test.op bcontains 48545450",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 503,
+   "input": "test.op startswith value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 504,
+   "input": "test.op bstartswith 12ab001fc5",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 505,
+   "input": "test.op endswith value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 506,
+   "input": "test.op > 1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 507,
+   "input": "test.op >1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 508,
+   "input": "test.op < 1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 509,
+   "input": "test.op <1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 510,
+   "input": "test.op >= 1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 511,
+   "input": "test.op >=1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 512,
+   "input": "test.op <= 1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 513,
+   "input": "test.op <=1",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 514,
+   "input": "test.op in ()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 515,
+   "input": "test.op in()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 516,
+   "input": "test.op intersects ()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 517,
+   "input": "test.op intersects()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 518,
+   "input": "test.op pmatch ()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 519,
+   "input": "test.op pmatch()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 522,
+   "input": "test.op existsand macro",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 523,
+   "input": "test.op ExIsTs",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 524,
+   "input": "test.op exists something",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 525,
+   "input": "test.op ===",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 526,
+   "input": "test.op === value",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 527,
+   "input": "test.op !==",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 528,
+   "input": "test.op !== value",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 529,
+   "input": "test.op startswithvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 530,
+   "input": "test.op bstartswithvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 531,
+   "input": "test.op endswithvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 532,
+   "input": "test.op containsvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 533,
+   "input": "test.op icontainsvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 534,
+   "input": "test.op bcontainsvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 535,
+   "input": "test.op globvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 536,
+   "input": "test.op iglobvalue",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 537,
+   "input": "test.op >",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 538,
+   "input": "test.op <",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 539,
+   "input": "test.op >=",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 540,
+   "input": "test.op <=",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 541,
+   "input": "test.op in",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 542,
+   "input": "test.op intersects",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_operators",
+   "line": 543,
+   "input": "test.op pmatch",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 548,
+   "input": "tolower(test.field) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 549,
+   "input": "toupper(test.field) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 550,
+   "input": "b64(test.field) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 553,
+   "input": "b64(test.field) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 554,
+   "input": "b64(test.field) = value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 555,
+   "input": "b64(test.field) == value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 556,
+   "input": "b64(test.field) != value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 557,
+   "input": "b64(test.field) glob value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 560,
+   "input": "(b64(test.field) exists)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 561,
+   "input": "b64(test.field) exists and b64(test.field) contains 'a'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 562,
+   "input": "b64(test.field) exists or b64(test.field) contains 'a'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 563,
+   "input": "not b64(test.field) exists or b64(test.field) contains 'a'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 564,
+   "input": "b64(test.field) exists or not b64(test.field) contains 'a'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 565,
+   "input": "b64(test.field) exists or (b64(test.field) contains 'a')",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 566,
+   "input": "not (b64(test.field) exists or b64(test.field) contains 'a')",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 569,
+   "input": "b64(toupper(test.field)) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 570,
+   "input": "toupper(b64(test.field)) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 571,
+   "input": "b64( test.field) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 572,
+   "input": "b64(test.field ) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 573,
+   "input": "b64(test.field)  exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 574,
+   "input": "b64(b64(test.field)) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 575,
+   "input": "b64( b64(test.field)) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 576,
+   "input": "b64(b64( test.field)) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 577,
+   "input": "b64(b64(test.field )) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 578,
+   "input": "b64(b64(test.field) ) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 579,
+   "input": "b64(b64(test.field))  exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 582,
+   "input": "val(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 583,
+   "input": "val(val(test.field)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 584,
+   "input": "val(b64(test.field)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 585,
+   "input": "b64(val(test.field)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 588,
+   "input": "b64(test.field [1]) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 589,
+   "input": "some_fake_transformer(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 590,
+   "input": "some_fake_transformer (test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 591,
+   "input": "some.fake.transformer(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 592,
+   "input": "b64 (test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 593,
+   "input": "b64,(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 594,
+   "input": "b64(testfield)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 595,
+   "input": "b64(test_field)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 596,
+   "input": "b64(b64)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 597,
+   "input": "b64\n(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 598,
+   "input": "b64(test.field exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 599,
+   "input": "test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 600,
+   "input": "b64(b64(test.field exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 601,
+   "input": "b64(b64(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 602,
+   "input": "b64(test.field)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 603,
+   "input": "(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 604,
+   "input": "(test.field exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 605,
+   "input": "test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 606,
+   "input": "a(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 607,
+   "input": "aaaa(test.field) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_left_hand",
+   "line": 608,
+   "input": "a(b(test.field)) exists",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 618,
+   "input": "some.field = test.field",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 621,
+   "input": "some.field = val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 622,
+   "input": "some.field = tolower(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 623,
+   "input": "some.field = toupper(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 624,
+   "input": "some.field = b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 627,
+   "input": "some.field = val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 628,
+   "input": "some.field = b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 629,
+   "input": "some.field == val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 630,
+   "input": "some.field == b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 631,
+   "input": "some.field != val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 632,
+   "input": "some.field != b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 633,
+   "input": "some.field glob val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 634,
+   "input": "some.field glob b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 635,
+   "input": "some.field iglob val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 636,
+   "input": "some.field iglob b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 637,
+   "input": "some.field contains val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 638,
+   "input": "some.field contains b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 639,
+   "input": "some.field icontains val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 640,
+   "input": "some.field icontains b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 641,
+   "input": "some.field bcontains val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 642,
+   "input": "some.field bcontains b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 643,
+   "input": "some.field startswith val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 644,
+   "input": "some.field startswith b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 645,
+   "input": "some.field bstartswith val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 646,
+   "input": "some.field bstartswith b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 647,
+   "input": "some.field endswith val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 648,
+   "input": "some.field endswith b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 649,
+   "input": "some.field > val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 650,
+   "input": "some.field > b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 651,
+   "input": "some.field < val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 652,
+   "input": "some.field < b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 653,
+   "input": "some.field >= val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 654,
+   "input": "some.field >= b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 655,
+   "input": "some.field <= val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 656,
+   "input": "some.field <= b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 657,
+   "input": "some.field in val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 658,
+   "input": "some.field in b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 659,
+   "input": "some.field intersects val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 660,
+   "input": "some.field intersects b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 661,
+   "input": "some.field pmatch val(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 662,
+   "input": "some.field pmatch b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 665,
+   "input": "(some.field = b64(test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 666,
+   "input": "some.field = b64(test.field) and some.field contains b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 667,
+   "input": "some.field = b64(test.field) or some.field contains b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 668,
+   "input": "not some.field = b64(test.field) or some.field contains b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 669,
+   "input": "some.field = b64(test.field) or not some.field contains b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 670,
+   "input": "some.field = b64(test.field) or (some.field contains b64(test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 671,
+   "input": "not (some.field = b64(test.field) or some.field contains b64(test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 674,
+   "input": "some.field = b64(toupper(test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 675,
+   "input": "some.field = toupper(b64(test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 676,
+   "input": "some.field = b64( test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 677,
+   "input": "some.field = b64(test.field )",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 678,
+   "input": "some.field = b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 679,
+   "input": "some.field = b64(b64(test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 680,
+   "input": "some.field = b64( b64(test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 681,
+   "input": "some.field = b64(b64( test.field))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 682,
+   "input": "some.field = b64(b64(test.field ))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 683,
+   "input": "some.field = b64(b64(test.field) )",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 686,
+   "input": "tolower(some.field) = b64(test.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 687,
+   "input": "tolower(some.field) = b64(test.field) or tolower(other.field) = tolower(anoter.field)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 692,
+   "input": "some.field = b64and(some_macro)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 693,
+   "input": "some.field = b64or(some_macro)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 694,
+   "input": "some.field = b64 and(some_macro)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 695,
+   "input": "some.field = b64 or(some_macro)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 696,
+   "input": "some.field = 'some_fake_transformer(some_macro)'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 697,
+   "input": "some.field = \"some_fake_transformer(some_macro)\"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 700,
+   "input": "some.field = val(test.field [1])",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 701,
+   "input": "some.field = some_fake_transformer(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 702,
+   "input": "some.field = some_fake_transformer (test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 703,
+   "input": "some.field = some.fake.transformer(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 704,
+   "input": "some.field = val(val(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 705,
+   "input": "some.field = val(toupper(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 706,
+   "input": "some.field = b64(val(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 707,
+   "input": "some.field = b64 (test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 708,
+   "input": "some.field = b64,(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 709,
+   "input": "some.field = (b64(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 710,
+   "input": "some.field = (b64(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 711,
+   "input": "some.field = (b64(test.field",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 712,
+   "input": "some.field = b64(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 713,
+   "input": "some.field = b64(testfield))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 714,
+   "input": "some.field = b64(test_field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 715,
+   "input": "some.field = b64(b64))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 716,
+   "input": "some.field = ((b64(test.field)))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 717,
+   "input": "some.field = b64\n(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 718,
+   "input": "some.field = b64(test.field",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 719,
+   "input": "some.field = test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 720,
+   "input": "some.field = b64(b64(test.field",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 721,
+   "input": "some.field = b64(b64(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 722,
+   "input": "some.field = b64(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 723,
+   "input": "some.field = (test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 724,
+   "input": "some.field = (test.field",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 725,
+   "input": "some.field = test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 726,
+   "input": "some.field = a(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 727,
+   "input": "some.field = aaaa(test.field)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 728,
+   "input": "some.field = a(b(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 730,
+   "input": "some.field in (b64(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 731,
+   "input": "some.field in (a, b64(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformers_right_hand",
+   "line": 732,
+   "input": "some.field in (a, b, b64(test.field))",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_position_info",
+   "line": 738,
+   "input": "a and b",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_position_info",
+   "line": 742,
+   "input": "a and b    ",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_position_info",
+   "line": 746,
+   "input": "not b",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_position_info",
+   "line": 750,
+   "input": "not b    ",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_position_info",
+   "line": 754,
+   "input": "a    ",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_position_info",
+   "line": 758,
+   "input": "a \n and \n  b",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_position_info",
+   "line": 762,
+   "input": "a \n and \n not \n b",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.expr_all_node_types",
+   "line": 784,
+   "input": "evt.name exists and evt.type in (a, b) or proc.name=cat",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.expr_transformers",
+   "line": 810,
+   "input": "b64(evt.name) exists and tolower(toupper(evt.type)) in val(some.field) or proc.name=b64(tolower(some.field))",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.expr_parenthesis",
+   "line": 832,
+   "input": "evt.name exists and evt.type in (a, b) or proc.name=cat",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.expr_multi_negation",
+   "line": 851,
+   "input": "evt.name exists and evt.type in (a, b) or proc.name=cat",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.expr_multi_negation",
+   "line": 855,
+   "input": "not not not not not(not not(not not_macro))",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_unary_check",
+   "line": 940,
+   "input": "proc.name exists",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_binary_check",
+   "line": 948,
+   "input": "proc.name=nginx",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_binary_check_params",
+   "line": 956,
+   "input": "proc.aname[3]=nginx",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_binary_check_space_before",
+   "line": 964,
+   "input": "proc.name =nginx",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_binary_check_space_after",
+   "line": 972,
+   "input": "proc.name= nginx",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_binary_check_space_both",
+   "line": 980,
+   "input": "proc.name = nginx",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_binary_check_list",
+   "line": 988,
+   "input": "proc.name in (nginx, apache)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_binary_check_list_space_after",
+   "line": 996,
+   "input": "proc.name in ( nginx, apache)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_not",
+   "line": 1004,
+   "input": "not proc.name=nginx",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_or",
+   "line": 1012,
+   "input": "proc.name=nginx or proc.name=apache",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_or_parens",
+   "line": 1021,
+   "input": "(proc.name=nginx or proc.name=apache)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_and",
+   "line": 1030,
+   "input": "proc.name=nginx and proc.name=apache",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_and_parens",
+   "line": 1039,
+   "input": "(proc.name=nginx and proc.name=apache)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_basic",
+   "line": 1095,
+   "input": "join(\"-\", (fd.name, fd.directory)) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_basic",
+   "line": 1096,
+   "input": "join(\",\", (proc.name, proc.pid)) = \"myproc,123\"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_basic",
+   "line": 1097,
+   "input": "join(\":\", (evt.type, evt.dir)) contains connect",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_basic",
+   "line": 1100,
+   "input": "join('-', (fd.name, fd.directory)) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_basic",
+   "line": 1101,
+   "input": "join('-->', (fd.name, fd.directory)) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_basic",
+   "line": 1104,
+   "input": "join(\"-\", (fd.name)) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_basic",
+   "line": 1107,
+   "input": "join(\"-\", (fd.name, fd.directory, proc.name, proc.pid)) = test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_nested_transformers",
+   "line": 1112,
+   "input": "join(\"-\", (tolower(fd.name), fd.directory)) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_nested_transformers",
+   "line": 1113,
+   "input": "join(\"-\", (toupper(fd.name), b64(fd.directory))) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_nested_transformers",
+   "line": 1114,
+   "input": "join(\"-\", (tolower(toupper(fd.name)), fd.directory)) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_nested_transformers",
+   "line": 1117,
+   "input": "join(\"-\", (tolower(fd.name), toupper(fd.directory))) = /tmp/test",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_values",
+   "line": 1122,
+   "input": "join(\"-\", (\"aaa\", \"bbb\")) = aaa-bbb",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_values",
+   "line": 1123,
+   "input": "join(\"-\", ('aaa', 'bbb')) = aaa-bbb",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_values",
+   "line": 1126,
+   "input": "join(\"-\", (fd.name, \"literal\")) = /tmp-literal",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_values",
+   "line": 1127,
+   "input": "join(\"-\", (\"prefix\", fd.name, \"suffix\")) = prefix-/tmp-suffix",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_values",
+   "line": 1130,
+   "input": "join(\"-\", (proc.pid, 123)) contains 123",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1135,
+   "input": "join(\"-\", (fd.name, fd.directory)) exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1136,
+   "input": "join(\"-\", (fd.name, fd.directory)) = value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1137,
+   "input": "join(\"-\", (fd.name, fd.directory)) == value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1138,
+   "input": "join(\"-\", (fd.name, fd.directory)) != value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1139,
+   "input": "join(\"-\", (fd.name, fd.directory)) contains value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1140,
+   "input": "join(\"-\", (fd.name, fd.directory)) startswith value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1141,
+   "input": "join(\"-\", (fd.name, fd.directory)) endswith value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1142,
+   "input": "join(\"-\", (fd.name, fd.directory)) glob value*",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_operators",
+   "line": 1143,
+   "input": "join(\"-\", (fd.name, fd.directory)) in (a, b, c)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_in_expressions",
+   "line": 1148,
+   "input": "join(\"-\", (fd.name, fd.directory)) = /tmp and proc.name = cat",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_in_expressions",
+   "line": 1149,
+   "input": "join(\"-\", (fd.name, fd.directory)) = /tmp or proc.name = cat",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_in_expressions",
+   "line": 1150,
+   "input": "not join(\"-\", (fd.name, fd.directory)) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_in_expressions",
+   "line": 1151,
+   "input": "(join(\"-\", (fd.name, fd.directory)) = /tmp)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_in_expressions",
+   "line": 1152,
+   "input": "proc.name = cat and join(\"-\", (fd.name, fd.directory)) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_in_expressions",
+   "line": 1155,
+   "input": "join(\"-\", (fd.name, fd.directory)) = /tmp and join(\":\", (proc.name, proc.pid)) = cat:123",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_right_hand",
+   "line": 1162,
+   "input": "evt.type = tolower(join(\"-\", (fd.name, fd.directory)))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_right_hand",
+   "line": 1163,
+   "input": "evt.type = b64(join(\"-\", (fd.name, fd.directory)))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1168,
+   "input": "toupper(join(\"-\", (fd.name, fd.directory))) = VALUE",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1169,
+   "input": "tolower(join(\"-\", (fd.name, fd.directory))) = value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1170,
+   "input": "b64(join(\"-\", (fd.name, fd.directory))) = value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1171,
+   "input": "len(join(\"-\", (fd.name, fd.directory))) = 10",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1172,
+   "input": "basename(join(\"/\", (fd.name, fd.directory))) = value",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1175,
+   "input": "toupper(tolower(join(\"-\", (fd.name, fd.directory)))) = VALUE",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1176,
+   "input": "b64(toupper(join(\"-\", (fd.name, fd.directory)))) = VALUE",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1177,
+   "input": "len(toupper(join(\"-\", (fd.name, fd.directory)))) = 10",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1180,
+   "input": "toupper(join(\"-\", (fd.name, fd.directory))) contains VALUE",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1181,
+   "input": "toupper(join(\"-\", (fd.name, fd.directory))) startswith VALUE",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1182,
+   "input": "len(join(\"-\", (fd.name, fd.directory))) > 5",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1183,
+   "input": "len(join(\"-\", (fd.name, fd.directory))) >= 5",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1186,
+   "input": "toupper(join(\"-\", (fd.name, fd.directory))) = VALUE and proc.name = cat",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_outer_transformer",
+   "line": 1187,
+   "input": "not toupper(join(\"-\", (fd.name, fd.directory))) = VALUE",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_spaces",
+   "line": 1192,
+   "input": "join(\"-\", ( fd.name, fd.directory )) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_spaces",
+   "line": 1193,
+   "input": "join(\"-\", (fd.name , fd.directory)) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_spaces",
+   "line": 1194,
+   "input": "join(\"-\", ( fd.name , fd.directory )) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_spaces",
+   "line": 1195,
+   "input": "join( \"-\", (fd.name, fd.directory)) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_with_spaces",
+   "line": 1196,
+   "input": "join(\"-\" , (fd.name, fd.directory)) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_empty",
+   "line": 1201,
+   "input": "join(\"-\", ()) = /tmp",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1206,
+   "input": "join(\"-\", (fd.name, fd.directory) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1207,
+   "input": "join(\"-\", fd.name, fd.directory)) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1210,
+   "input": "join(\"-\", (,)) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1211,
+   "input": "join(\"-\", (,fd.name)) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1212,
+   "input": "join(\"-\", (fd.name,)) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1213,
+   "input": "join(\"-\", (fd.name,,fd.directory)) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1216,
+   "input": "join(\"-\", ((fd.name))) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1217,
+   "input": "join(\"-\", (macro)) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_transformer_list_invalid",
+   "line": 1218,
+   "input": "join(\"-\", (barestring)) = /tmp",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.position_transformer_list",
+   "line": 1222,
+   "input": "join(\"-\", (fd.name, fd.directory)) = value",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1233,
+   "input": "proc.name == oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1234,
+   "input": "proc.name == anyof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1235,
+   "input": "proc.name == allof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1238,
+   "input": "proc.name = oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1239,
+   "input": "proc.name = anyof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1240,
+   "input": "proc.name = allof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1243,
+   "input": "proc.name != oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1244,
+   "input": "proc.name != anyof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1245,
+   "input": "proc.name != allof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1248,
+   "input": "proc.name == oneof (cat)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1249,
+   "input": "proc.name == oneof ()",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1252,
+   "input": "proc.name == oneof (cat, nginx, apache, httpd)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1255,
+   "input": "proc.name == oneof ('single-quoted')",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1256,
+   "input": "proc.name == oneof (\"double-quoted\")",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1257,
+   "input": "proc.name == oneof ('cat', \"nginx\", bare)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1260,
+   "input": "proc.exepath == oneof (/usr/bin/bash, /bin/sh, /usr/sbin/sshd)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1261,
+   "input": "fd.name == oneof (/var/log/auth.log, /etc/passwd)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1264,
+   "input": "proc.name == oneof allowed_processes",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1265,
+   "input": "proc.name != allof my_list",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1269,
+   "input": "proc.name == oneof oneof",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1270,
+   "input": "proc.name == anyof anyof",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1273,
+   "input": "evt.arg[0] == oneof (connect, accept)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1274,
+   "input": "proc.aname[2] != oneof (bash, sh)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1277,
+   "input": "tolower(proc.name) == oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1278,
+   "input": "toupper(fd.name) != anyof (/TMP/A, /TMP/B)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1280,
+   "input": "b64(proc.cmdline) == allof (\"dGVzdA==\")",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1283,
+   "input": "proc.name == 'oneof'",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1284,
+   "input": "proc.name == \"anyof\"",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1287,
+   "input": "proc.name == oneof",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1288,
+   "input": "proc.name == anyof",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1289,
+   "input": "proc.name == allof",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1292,
+   "input": "proc.name == oneof_something",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1293,
+   "input": "proc.name == anyof_extra",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1296,
+   "input": "proc.name == oneof (cat, nginx) and fd.name exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1297,
+   "input": "proc.name == oneof (cat, nginx) or fd.name exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1298,
+   "input": "not proc.name == oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1299,
+   "input": "(proc.name == oneof (cat, nginx))",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1300,
+   "input": "proc.name == oneof (cat) and proc.name == anyof (nginx, apache)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1301,
+   "input": "proc.name == oneof (cat) or proc.name != allof (nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1305,
+   "input": "proc.name == anyof and fd.name exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1306,
+   "input": "proc.name == oneof or fd.name exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1307,
+   "input": "proc.name == allof and fd.name exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1308,
+   "input": "proc.name == anyof and proc.name == allof",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1309,
+   "input": "proc.name == oneof and proc.name == anyof (cat)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1312,
+   "input": "(proc.name == oneof)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1313,
+   "input": "(proc.name == anyof) and fd.name exists",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1314,
+   "input": "(proc.name == allof) or (proc.name == oneof)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1319,
+   "input": "proc.name contains oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1320,
+   "input": "proc.name contains anyof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1321,
+   "input": "proc.name contains allof (cat)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1322,
+   "input": "proc.name startswith oneof (/proc/, /sys/)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1323,
+   "input": "proc.name startswith anyof (/proc/, /sys/)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1324,
+   "input": "proc.name endswith allof (.so, .so.1)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1325,
+   "input": "proc.name glob oneof (cat*, *dog)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1326,
+   "input": "proc.name glob anyof (cat*, *nginx*)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1327,
+   "input": "proc.name iglob allof (cat*)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1328,
+   "input": "proc.name icontains anyof (cat, nginx)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_accept",
+   "line": 1329,
+   "input": "proc.name != oneof (a) and proc.name contains anyof (x, y)",
+   "verdict": "accept",
+   "variants": true
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1338,
+   "input": "proc.name == oneof (cat,)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1339,
+   "input": "proc.name == oneof (cat,,nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1340,
+   "input": "proc.name == oneof (,cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1343,
+   "input": "proc.name == oneof (cat, nginx",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1347,
+   "input": "proc.name ==oneof (cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1348,
+   "input": "proc.name !=anyof (cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1349,
+   "input": "proc.name =allof (cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1351,
+   "input": "proc.name ==oneof(cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1354,
+   "input": "proc.name == oneof(cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1355,
+   "input": "proc.name == anyof(cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1356,
+   "input": "proc.name == allof(cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1360,
+   "input": "proc.name == ONEOF (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1361,
+   "input": "proc.name == Anyof (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1362,
+   "input": "proc.name == ALLOF (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1369,
+   "input": "proc.num > oneof (1, 2)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1370,
+   "input": "proc.num <= anyof (1, 2)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1374,
+   "input": "proc.name contains oneof(cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1375,
+   "input": "proc.name startswith anyof(cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1376,
+   "input": "proc.name endswith allof(.so)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1379,
+   "input": "proc.name contains ONEOF (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1380,
+   "input": "proc.name startswith Anyof (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1381,
+   "input": "proc.name endswith ALLOF (.so)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1385,
+   "input": "proc.name == oneof_something (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1386,
+   "input": "proc.name startswith oneof_something (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1387,
+   "input": "proc.name contains anyof_extra (cat, nginx)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1392,
+   "input": "proc.name in oneof (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1393,
+   "input": "proc.name intersects anyof (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_reject",
+   "line": 1394,
+   "input": "proc.name pmatch allof (cat)",
+   "verdict": "reject",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1403,
+   "input": "proc.name == oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1411,
+   "input": "proc.name != anyof (cat, nginx)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1419,
+   "input": "proc.name = allof (cat)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1427,
+   "input": "proc.name == oneof ()",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1435,
+   "input": "proc.name == oneof my_list",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1445,
+   "input": "proc.name == oneof (cat, nginx) and fd.name exists",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1456,
+   "input": "proc.name == anyof and fd.name exists",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1469,
+   "input": "proc.name == oneof (cat) and proc.name == anyof",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1478,
+   "input": "proc.name contains oneof (cat, nginx)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.parse_str_op_modifier_ast",
+   "line": 1485,
+   "input": "proc.name startswith anyof (/etc/, /tmp/)",
+   "verdict": "accept",
+   "variants": false
+  },
+  {
+   "test": "parser.position_str_op_modifier",
+   "line": 1538,
+   "input": "proc.name == oneof (cat)",
+   "verdict": "accept",
+   "variants": false
+  }
+ ]
+}

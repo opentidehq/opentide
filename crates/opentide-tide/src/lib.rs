@@ -4,8 +4,10 @@
 //! with real source ranges. opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.
 
 mod elastic;
+mod falco;
 mod injection;
 mod intel;
+mod sysdig;
 mod vocabs;
 mod yaml_path;
 mod yaml_scalar;
@@ -23,6 +25,7 @@ use std::sync::{OnceLock, RwLock};
 use uuid::Uuid;
 
 pub use elastic::{ElasticTenant, duration_millis, elastic_query_language, elastic_tenants};
+pub use falco::falco_context;
 pub use injection::hunt_query_language;
 pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
@@ -59,6 +62,7 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
             Some(LanguageId::Spl)
         }
         ["configurations", "carbon_black_cloud", "query"] => Some(LanguageId::Lucene),
+        ["configurations", "sysdig", "condition"] => Some(LanguageId::Falco),
         ["configurations", "crowdstrike", ..] => None,
         _ => None,
     }
@@ -113,6 +117,19 @@ pub fn injection_at_offset(source: &str, offset: usize) -> Option<(InjectedQuery
     for inj in extract_injections(source) {
         if let Some(inner) = inj.host_map.iter().position(|&h| h == offset) {
             return Some((inj, inner));
+        }
+        // Right after the query's last character: where the cursor is while
+        // the query is typed. It belongs to the query, at its end.
+        // A plain scalar drops trailing blanks, so blanks typed after it on its
+        // last line count as its end too.
+        if inj.host_map.last().is_some_and(|&h| {
+            h < offset
+                && source
+                    .get(h + 1..offset)
+                    .is_some_and(|gap| gap.chars().all(|c| c == ' ' || c == '\t'))
+        }) {
+            let end = inj.inner.len();
+            return Some((inj, end));
         }
         if offset >= inj.host_span.start && offset < inj.host_span.end {
             let inner = inj.host_map.iter().position(|&h| h >= offset).unwrap_or(
@@ -575,6 +592,13 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
+    if let Some(block) = object.configurations.as_ref().and_then(|c| c.get("sysdig")) {
+        diagnostics.extend(falco::source_diagnostics(input.source, block));
+        diagnostics.extend(falco::tuning_diagnostics(input.source, block));
+        diagnostics.extend(sysdig::constraint_diagnostics(input.source, block));
+        diagnostics.extend(falco::exception_diagnostics(input.source, block));
+    }
+
     // Injected query analysis
     let injections = extract_injections(input.source);
     let skip: Vec<ByteSpan> = injections.iter().map(|inj| inj.host_span).collect();
@@ -634,6 +658,17 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
             query
                 .diagnostics
                 .extend(elastic::dataset_declarations(source, block));
+        }
+    }
+    // An unknown event source is the condition's: its fields go unchecked.
+    if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig")) {
+        if let Some(query) = out
+            .iter_mut()
+            .find(|q| q.query.field_path == ["configurations", "sysdig", "condition"])
+        {
+            query
+                .diagnostics
+                .extend(falco::source_diagnostics(source, block));
         }
     }
     out
@@ -715,6 +750,18 @@ fn analyze_injections(
                     });
                     opentide_ecs::merge(&mut r.diagnostics, ecs);
                 }
+                (r.diagnostics, r.tokens)
+            }
+            LanguageId::Falco => {
+                let ctx = falco::context_for(
+                    configurations.and_then(|c| c.get("sysdig")),
+                    &inj.field_path,
+                );
+                let r = if inj.field_path.last().map(String::as_str) == Some("output") {
+                    opentide_falco::analyze_output(&inj.inner, &ctx)
+                } else {
+                    opentide_falco::analyze_with(&inj.inner, &ctx)
+                };
                 (r.diagnostics, r.tokens)
             }
             LanguageId::TideYaml => (Vec::new(), Vec::new()),
@@ -2393,6 +2440,10 @@ threat:
         assert_eq!(
             language_for_field_path(&["configurations", "carbon_black_cloud", "query"]),
             Some(LanguageId::Lucene)
+        );
+        assert_eq!(
+            language_for_field_path(&["configurations", "sysdig", "condition"]),
+            Some(LanguageId::Falco)
         );
     }
 

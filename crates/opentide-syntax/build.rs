@@ -24,14 +24,14 @@ fn main() {
         &root.join("grammars/tree-sitter-opentide-spl/src"),
         "tree-sitter-opentide-spl",
     );
-    for lang in ["esql", "eql", "kuery", "lucene"] {
+    for lang in ["esql", "eql", "kuery", "lucene", "falco"] {
         compile_grammar(
             &root.join(format!("grammars/tree-sitter-opentide-{lang}/src")),
             &format!("tree-sitter-opentide-{lang}"),
         );
     }
 
-    for lang in ["kql", "spl", "esql", "eql", "kuery", "lucene"] {
+    for lang in ["kql", "spl", "esql", "eql", "kuery", "lucene", "falco"] {
         let src = root.join(format!("grammars/tree-sitter-opentide-{lang}/src"));
         println!("cargo:rerun-if-changed={}", src.join("parser.c").display());
         println!("cargo:rerun-if-changed={}", src.join("scanner.c").display());

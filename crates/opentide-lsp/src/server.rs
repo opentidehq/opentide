@@ -574,7 +574,10 @@ fn handle_completion(session: &Session, params: &Value) -> Value {
     let items: Vec<Value> = completions(&host, language, &text, offset)
         .into_iter()
         .map(|c| {
-            let edit = (c.label.contains('.') && !dotted.is_empty() && c.label.starts_with(dotted))
+            // Any label that extends the typed word replaces the whole of it:
+            // a client that splits words at `.` would otherwise filter and
+            // insert after the last dot.
+            let edit = (!dotted.is_empty() && c.label.starts_with(dotted))
                 .then(|| {
                     json!({
                         "range": { "start": start, "end": { "line": pos.line, "character": pos.character } },

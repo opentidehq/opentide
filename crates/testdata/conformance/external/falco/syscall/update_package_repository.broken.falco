@@ -1,0 +1,1 @@
+((open_write and proc.name in (oops and access_repositories) or (modify and modify_repositories)) and not package_mgmt_procs and not package_mgmt_ancestor_procs and not exe_running_docker_save and not user_known_update_package_registry

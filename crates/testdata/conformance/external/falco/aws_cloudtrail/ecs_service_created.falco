@@ -1,0 +1,1 @@
+ct.src="ecs.amazonaws.com" and ct.name="CreateService" and not ct.error exists

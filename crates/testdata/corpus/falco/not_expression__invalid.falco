@@ -1,0 +1,2 @@
+# prod:not_expression invalid
+proc.name not = bash

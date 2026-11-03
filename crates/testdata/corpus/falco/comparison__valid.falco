@@ -1,0 +1,2 @@
+# prod:comparison valid
+fd.sport > 1024 and fd.name startswith /etc and proc.pname exists and evt.dir = <

@@ -9227,6 +9227,20 @@
           "description": "Elastic Security detection rule (platform::elastic::1.0).",
           "title": "Elastic",
           "markdownDescription": "Elastic Security detection rule (`platform::elastic::1.0`)."
+        },
+        "sysdig": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SysdigConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sysdig Secure or Falco rule (platform::sysdig::1.0).",
+          "title": "Sysdig",
+          "markdownDescription": "Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."
         }
       },
       "title": "RuleConfigurations",
@@ -14184,6 +14198,385 @@
         }
       },
       "title": "SplunkTrigger",
+      "type": "object"
+    },
+    "SysdigConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether this platform block is active.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "description": "Platform-specific rule name.",
+          "title": "Name",
+          "type": "string"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform schema identifier, for example platform::sentinel::1.0.",
+          "title": "Schema",
+          "markdownDescription": "Platform schema identifier, for example `platform::sentinel::1.0`."
+        },
+        "status": {
+          "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
+          "title": "Status",
+          "type": "string",
+          "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it."
+        },
+        "flags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform flags.",
+          "title": "Flags"
+        },
+        "tenants": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Target tenant identifiers.",
+          "title": "Tenants"
+        },
+        "contributors": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform contributors.",
+          "title": "Contributors"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Falco condition. Required for a new rule. With append_to_rule, the text appended to the tuned rule's condition, usually starting with and not. Multiline; deploy joins lines with single spaces.",
+          "title": "Condition",
+          "markdownDescription": "Falco condition. Required for a new rule. With `append_to_rule`, the text appended to the\ntuned rule's condition, usually starting with `and not`. Multiline; deploy joins lines with\nsingle spaces."
+        },
+        "append_to_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name of an existing Falco or Sysdig rule this block tunes.",
+          "title": "Append To Rule"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Falco event source: syscall (the default), k8s_audit, aws_cloudtrail, gcp_auditlog, azure_platformlogs, okta, github, or another plugin's source.",
+          "title": "Source",
+          "markdownDescription": "Falco event source: `syscall` (the default), `k8s_audit`, `aws_cloudtrail`,\n`gcp_auditlog`, `azure_platformlogs`, `okta`, `github`, or another plugin's source."
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Falco output template, with %field references. Derived from the event source when omitted.",
+          "title": "Output",
+          "markdownDescription": "Falco output template, with `%field` references. Derived from the event source when\nomitted."
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Falco priority: EMERGENCY, ALERT, CRITICAL, ERROR, WARNING, NOTICE, INFORMATIONAL, or DEBUG. Derived from response.alert_severity when omitted.",
+          "title": "Priority",
+          "markdownDescription": "Falco priority: `EMERGENCY`, `ALERT`, `CRITICAL`, `ERROR`, `WARNING`, `NOTICE`,\n`INFORMATIONAL`, or `DEBUG`. Derived from `response.alert_severity` when omitted."
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Extra Falco tags. Deploy adds the derived ATT&CK, maturity, and tenant tags.",
+          "title": "Tags"
+        },
+        "exceptions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SysdigException"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Falco exceptions.",
+          "title": "Exceptions"
+        },
+        "macros": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SysdigMacro"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Macros only this rule uses, expanded into the condition at deploy.",
+          "title": "Macros"
+        },
+        "lists": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SysdigList"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lists only this rule uses, expanded into the condition at deploy.",
+          "title": "Lists"
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Names of Sysdig runtime policies the rule joins. Default: the tenant policies.",
+          "title": "Policies",
+          "markdownDescription": "Names of Sysdig runtime policies the rule joins. Default: the tenant\n`policies`."
+        },
+        "minimum_engine_version": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum Falco engine version the rule needs, as Sysdig's integer minimumEngineVersion. Omitted when unset.",
+          "title": "Minimum Engine Version",
+          "markdownDescription": "Minimum Falco engine version the rule needs, as Sysdig's integer\n`minimumEngineVersion`. Omitted when unset."
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "SysdigConfig",
+      "type": "object"
+    },
+    "SysdigException": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Exception name. Names SHOULD be unique in the block: Falco warns on a repeated name (LOAD_EXCEPTION_NAME_NOT_UNIQUE) and the engine reports it as a warning.",
+          "title": "Name",
+          "type": "string",
+          "markdownDescription": "Exception name. Names SHOULD be unique in the block: Falco warns on a repeated name\n(`LOAD_EXCEPTION_NAME_NOT_UNIQUE`) and the engine reports it as a warning."
+        },
+        "fields": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "description": "One Falco field (the single-field form) or a list of fields (the tuple form).",
+          "title": "Fields"
+        },
+        "comps": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Comparison operators, leading and trailing blanks ignored. Tuple form: a list aligned with fields, each a Falco operator or a modified operator; default = for each field. Single-field form: in, pmatch, intersects, or a modified operator (startswith oneof); default in.",
+          "title": "Comps",
+          "markdownDescription": "Comparison operators, leading and trailing blanks ignored. Tuple form: a list aligned with\n`fields`, each a Falco operator or a modified operator; default `=` for each field.\nSingle-field form: `in`, `pmatch`, `intersects`, or a modified operator (`startswith oneof`);\ndefault `in`."
+        },
+        "values": {
+          "anyOf": [
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tuple form: a list of rows, each a list aligned with fields. An item is a value or a list of values; a single value under a list comparison (in, pmatch, intersects, or a modified operator) is one value list, or the name of a list. Single-field form: a flat list of values.",
+          "title": "Values",
+          "markdownDescription": "Tuple form: a list of rows, each a list aligned with `fields`. An item is a value or a list\nof values; a single value under a list comparison (`in`, `pmatch`, `intersects`, or a modified\noperator) is one value list, or the name of a list. Single-field form: a flat list of values."
+        }
+      },
+      "required": [
+        "name",
+        "fields"
+      ],
+      "title": "SysdigException",
+      "type": "object"
+    },
+    "SysdigList": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "List name, matching ^[A-Za-z_][A-Za-z0-9_]*$.",
+          "title": "Name",
+          "type": "string",
+          "markdownDescription": "List name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."
+        },
+        "items": {
+          "description": "List items. An item may name another list of this block.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "items"
+      ],
+      "title": "SysdigList",
+      "type": "object"
+    },
+    "SysdigMacro": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Macro name, matching ^[A-Za-z_][A-Za-z0-9_]*$.",
+          "title": "Name",
+          "type": "string",
+          "markdownDescription": "Macro name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."
+        },
+        "condition": {
+          "description": "Falco condition. It may reference other macros and lists of this block.",
+          "title": "Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "condition"
+      ],
+      "title": "SysdigMacro",
       "type": "object"
     }
   },

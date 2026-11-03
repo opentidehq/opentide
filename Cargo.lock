@@ -344,6 +344,7 @@ dependencies = [
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
+ "opentide-falco",
  "opentide-highlight",
  "opentide-kql",
  "opentide-kuery",
@@ -398,6 +399,20 @@ dependencies = [
  "opentide-lucene",
  "opentide-syntax",
  "serde",
+ "toml",
+ "tree-sitter",
+]
+
+[[package]]
+name = "opentide-falco"
+version = "0.7.1"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-syntax",
+ "regex",
+ "serde",
+ "serde_json",
  "toml",
  "tree-sitter",
 ]
@@ -504,6 +519,7 @@ dependencies = [
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
+ "opentide-falco",
  "opentide-highlight",
  "opentide-kql",
  "opentide-kuery",

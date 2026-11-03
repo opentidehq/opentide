@@ -37,6 +37,10 @@ editors / @opentide/lsp-client / WASM worker
 | `configurations.elastic.threat.query` | `threat.language` (`kuery` default, or `lucene`) |
 | `configurations.elastic.query` with `type: machine_learning` | none |
 | `configurations.carbon_black_cloud.query` | Lucene (Carbon Black dialect) |
+| `configurations.sysdig.condition` | Falco condition, with the block's `macros` and `lists` in scope and the fields of its `source` (`syscall` default); a fragment that starts with `and`/`or` when the block sets `append_to_rule` |
+| `configurations.sysdig.macros[].condition` | Falco condition, same scope |
+| `configurations.sysdig.output` | Falco output template, read as libsinsp's formatter reads it: `%field` and `%transformer(...)` tokens compiled for the `source` |
+| `configurations.sysdig.exceptions` | Not a query: Falco's exception rules (operators, counts, fields) and the text Falco writes from them, compiled with the condition (`opentide_falco::exceptions`, reported on the YAML keys) |
 | `response.procedure.searches[].query` with `system: elastic` | `language` on the entry (`esql`, `eql`, `kuery`, `lucene`); none when omitted (specifications#58) |
 | `response.procedure.searches[].query` with `system: sentinel`, `defender_for_endpoint`, `splunk` or `carbon_black_cloud` | that platform's language and profile, whatever the order of the entry's keys; any other `system` (`Sentinel`, `Splunk ES`) is free text and is not analysed |
 | `configurations.splunk.actions.notable.drilldown.search` | none: a `$token$` template, not the rule's query |

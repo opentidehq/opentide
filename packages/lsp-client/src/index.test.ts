@@ -53,6 +53,7 @@ const SAMPLES: Record<string, string> = {
   eql: 'process where process.name : "cmd.exe"',
   kuery: "event.category:process and not user.name:SYSTEM",
   lucene: "event.category:process AND process.name:/power.*/",
+  falco: "spawned_process and container and proc.name in (shell_binaries)",
   "opentide-yaml": TIDE_RULE,
 };
 
@@ -82,7 +83,7 @@ async function using<T>(client: OpentideClient, body: (c: OpentideClient) => Pro
 
 test("document selector covers every language", () => {
   const ids = LANGUAGES.map((l) => l.id);
-  assert.deepEqual(ids, ["opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene"]);
+  assert.deepEqual(ids, ["opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco"]);
   for (const id of ids) {
     assert.ok(DOCUMENT_SELECTOR.some((s) => "language" in s && s.language === id), id);
   }

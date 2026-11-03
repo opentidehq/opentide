@@ -1,0 +1,35 @@
+# Converted from the Falco k8saudit rule "Create Privileged Pod"
+# (falcosecurity/plugins, plugins/k8saudit/rules/k8s_audit_rules.yaml,
+# Apache-2.0). Unmodified.
+name: Create Privileged Pod
+metadata:
+  uuid: 9ff7cdba-8648-4839-b826-560d47845ab7
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+  organisation:
+    uuid: 5f3c2a10-7b6e-4c1d-9a8f-2e4b6d0c1a73
+    name: Detection Engineering
+description: |
+  Detect an attempt to start a pod with a privileged container.
+techniques:
+- T1610
+response:
+  alert_severity: Medium
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    source: k8s_audit
+    condition: >
+      kevt and pod and kcreate and any_container_privileged
+      and not ka.req.pod.containers.image.repository in (k8s_audit_privileged_images)
+    output: >-
+      Pod started with privileged container (user=%ka.user.name pod=%ka.resp.name
+      resource=%ka.target.resource ns=%ka.target.namespace
+      images=%ka.req.pod.containers.image init_images=%ka.req.pod.initContainers.image
+      ephemeral_images=%ka.req.pod.ephemeralContainers.image)

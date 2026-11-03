@@ -21,6 +21,7 @@ opentide-esql.workspace = true
 opentide-eql.workspace = true
 opentide-kuery.workspace = true
 opentide-lucene.workspace = true
+opentide-falco.workspace = true
 opentide-ecs.workspace = true
 opentide-tide.workspace = true
 serde.workspace = true

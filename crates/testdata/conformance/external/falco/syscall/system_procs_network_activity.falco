@@ -1,0 +1,1 @@
+inbound_outbound and fd.sockfamily = ip and (system_procs or proc.name in (shell_binaries)) and not proc.name in (known_system_procs_network_activity_binaries) and not login_doing_dns_lookup and not user_expected_system_procs_network_activity_conditions

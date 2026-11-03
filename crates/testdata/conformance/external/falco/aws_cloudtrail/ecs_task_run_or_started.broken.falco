@@ -1,0 +1,1 @@
+ct.src="ecs.amazonaws.com" and proc.name in (oops and (ct.name="RunTask" or ct.name="StartTask") and not ct.error exists

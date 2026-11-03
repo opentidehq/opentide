@@ -25,6 +25,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-eql` | no | `Diagnostic` | EQL catalog, sequence and sample checks |
 | `opentide-kuery` | no | `Diagnostic` | Kibana KQL checks |
 | `opentide-lucene` | no | `Diagnostic` | Lucene `query_string` checks |
+| `opentide-falco` | no | `Diagnostic` | Falco conditions: fields per event source, default macros and lists, events (`OnceLock`), output templates |
 | `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
 | `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
 | `opentide-analysis` | no | — | `WorkspaceHost` orchestrator |
@@ -59,7 +60,7 @@ Pinned stack (do not bump in passing):
 
 ## Types agents get wrong
 
-`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, or `opentide-yaml`. `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
+`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, or `opentide-yaml`. `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
 
 Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list it in `codes::ALL` and give it a sentence in `codes::describe` (a unit test fails otherwise; `opentide explain` prints it). Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
 

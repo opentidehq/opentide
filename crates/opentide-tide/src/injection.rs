@@ -10,6 +10,8 @@
 //! | `configurations.splunk.search` (legacy splunk::2.x) | SPL | `splunk` |
 //! | `configurations.elastic.query`, `configurations.elastic.threat.query` | [`elastic_query_language`] | `elastic` |
 //! | `response.procedure.searches.<n>.query` | the entry's `system`, in any key order | the `system` |
+//! | `configurations.sysdig.condition`, `configurations.sysdig.macros.<n>.condition` | Falco | `sysdig` |
+//! | `configurations.sysdig.output` | Falco output template (`%field` checks) | `sysdig` |
 //!
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
@@ -75,6 +77,12 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
             let language = value(&["configurations", "elastic", "threat", "language"]);
             elastic_query_language(Some("threat_match"), language.as_deref())
                 .map(|l| (l, "elastic".into()))
+        }
+        ["configurations", "sysdig", "condition" | "output"] => {
+            Some((LanguageId::Falco, "sysdig".into()))
+        }
+        ["configurations", "sysdig", "macros", item, "condition"] if is_index(item) => {
+            Some((LanguageId::Falco, "sysdig".into()))
         }
         ["configurations", platform, "query" | "search"] => {
             language_for_field_path(&path).map(|l| (l, (*platform).to_string()))

@@ -1,0 +1,1 @@
+outbound and container and fd.sip="169.254.169.254" and not user_known_metadata_access

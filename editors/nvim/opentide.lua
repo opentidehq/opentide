@@ -1,6 +1,6 @@
 -- Neovim sample: opentide LSP.
 -- Disable yamlls on objects/**. Languages: opentide-yaml, kql, spl, esql, eql,
--- kuery (Kibana KQL), lucene (not sql).
+-- kuery (Kibana KQL), lucene, falco (Falco conditions; not sql).
 
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   pattern = { "objects/**/*.yaml", "objects/**/*.yml" },
@@ -23,7 +23,7 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   end,
 })
 
-for _, lang in ipairs({ "esql", "eql", "kuery", "lucene" }) do
+for _, lang in ipairs({ "esql", "eql", "kuery", "lucene", "falco" }) do
   vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
     pattern = { "*." .. lang },
     callback = function()
@@ -33,7 +33,7 @@ for _, lang in ipairs({ "esql", "eql", "kuery", "lucene" }) do
 end
 
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene" },
+  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco" },
   callback = function()
     vim.lsp.start({
       name = "opentide-lsp",

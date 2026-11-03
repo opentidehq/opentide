@@ -48,6 +48,10 @@ pub const LUCENE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
     "/highlights/queries/lucene/highlights.scm"
 ));
+pub const FALCO_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/falco/highlights.scm"
+));
 
 /// The tree-sitter highlight query for a language.
 pub fn highlights_scm(language: LanguageId) -> &'static str {
@@ -59,6 +63,7 @@ pub fn highlights_scm(language: LanguageId) -> &'static str {
         LanguageId::Eql => EQL_HIGHLIGHTS_SCM,
         LanguageId::Kuery => KUERY_HIGHLIGHTS_SCM,
         LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
+        LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
     }
 }
 
@@ -775,8 +780,8 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
         LanguageId::Kql | LanguageId::Esql | LanguageId::Eql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
         LanguageId::Spl => Some("```[^`]*```"),
-        // Kibana KQL and Lucene have no comment syntax.
-        LanguageId::Kuery | LanguageId::Lucene => None,
+        // Kibana KQL, Lucene, and Falco conditions have no comment syntax.
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco => None,
     };
     if let Some(comment_match) = comment_match {
         patterns.push(serde_json::json!({
@@ -1075,6 +1080,13 @@ mod tests {
                 include_str!(concat!(
                     env!("OPENTIDE_ASSETS"),
                     "/grammars/tree-sitter-opentide-lucene/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Falco,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-falco/queries/highlights.scm"
                 )),
             ),
         ];

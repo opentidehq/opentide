@@ -264,6 +264,41 @@ Engine checks below the grammar (Elastic dialect unless noted):
 | lucene.term-query | `term_query` | `term_query__valid`, `term_query__invalid` | `string` |
 | lucene.wildcard-term | `wildcard_term` | `wildcard_term__valid`, `wildcard_term__invalid` | `string` |
 
+## Falco
+
+Language id `falco` (`.falco`). Falco rule conditions, which Sysdig Secure runs: `configurations.sysdig.condition`, `macros[].condition`, and `output` in Tide (sysdig-1.0). Verdicts follow the sources Falco runs, not documentation; `docs/FALCO.md` is the conformance matrix.
+
+- **Syntax** is a port of libsinsp's filter parser (`crates/opentide-falco/src/parser.rs`, falcosecurity/libs `filter/parser.cpp`): keywords matched as prefixes, word operators (`contains`, `startswith`, ...) that need a blank after them, `not(`, operator modifiers (`= anyof (a, b)`, `startswith oneof (...)`), multi-argument transformers (`join`, `concat`, `getopt`) with transformer lists and a trailing argument (`getopt(proc.args, "nt:")[t]`), hex and exponent numbers, both quote styles with libsinsp's escapes, and its recursion limit. All 571 expressions of libs' parser tests agree, messages included (`testdata/conformance/libsinsp/parser.json`).
+- **Compile checks** follow libsinsp's filter compiler (`compile.rs`): field resolution class by class with each field's argument rules, operator and type (`flt_is_comparable`), values parsed as the field's type, transformer types and arity, right-hand side fields, and libsinsp's compile warnings. All 326 filters of libs' compiler tests agree (`compiler.json`).
+- **Falco's rule loader** (`lib.rs`, `exceptions.rs`): lists expand as text before the parse, macros resolve by name, a tuning is appended to the tuned rule's condition, exceptions are validated and compiled as Falco writes them, output templates format as libsinsp's formatter reads them, deprecated fields and `<NA>` checks warn, and a syscall rule that cannot be narrowed to a few event types warns.
+
+The field catalogue is generated from libsinsp's own field tables (types and flags) and the plugin READMEs, and the event and syscall names from the driver tables (`scripts/sync_falco_catalog.py`). The block's `source` picks the fields (`syscall` default; `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its `macros` and `lists` are in scope, as deploy expands them.
+
+Errors are what Falco refuses to load: `falco_parse_error`, `falco_unknown_field`, `falco_field_argument`, `falco_operator_type`, `falco_value_type`, `falco_transformer`, `falco_rhs_field`, `falco_invalid_regex`, `falco_unknown_event`, `falco_misplaced_list`, `falco_append_condition`, `falco_output_syntax`, `falco_exception`. Warnings are what depends on the agent or is advice: `falco_unknown_macro`, `falco_unknown_list`, `falco_unknown_rule`, `falco_unknown_source`, `falco_regex_simple`, `falco_field_as_value`, `falco_transformer_as_value`, `falco_deprecated_field`, `falco_unsafe_na_check`, `falco_no_evttype`, `falco_newer_syntax`.
+
+Every condition of the Falco default rules (`testdata/conformance/external/falco/`, 241 rules across the six sources) comes out with no finding. Hover explains fields (type, sources, description), macros and lists (the block's, or the default rules' with the defining file), operators, modifiers, transformers, and event types; completion offers the source's fields, macros and transformers in condition position, operators after a field, and lists (and event types after `evt.type`) inside a value list.
+
+The tree-sitter grammar drives highlighting and editor structure; it accepts libsinsp's syntax, but its verdict is not the engine's.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| falco.and-expression | `and_expression` | `and_expression__valid`, `and_expression__invalid` | `keyword` |
+| falco.or-expression | `or_expression` | `or_expression__valid`, `or_expression__invalid` | `keyword` |
+| falco.not-expression | `not_expression` | `not_expression__valid`, `not_expression__invalid` | `keyword` |
+| falco.append-fragment | `append_fragment` | `append_fragment__valid`, `append_fragment__invalid` | `keyword` |
+| falco.parenthesized | `parenthesized_expression` | `parenthesized_expression__valid`, `parenthesized_expression__invalid` | `punctuation.bracket` |
+| falco.macro | `macro_reference` | `macro_reference__valid`, `macro_reference__invalid` | `macro` |
+| falco.comparison | `comparison` | `comparison__valid`, `comparison__invalid` | `operator`, `keyword` |
+| falco.field | `field` | `field__valid`, `field__invalid` | `property` |
+| falco.field-argument | `field_argument` | `field_argument__valid`, `field_argument__invalid` | `string` |
+| falco.field-transformer | `field_transformer` | `field_transformer__valid`, `field_transformer__invalid` | `function.builtin` |
+| falco.value-transformer | `value_transformer` | `value_transformer__valid`, `value_transformer__invalid` | `function.builtin` |
+| falco.value-list | `value_list` | `value_list__valid`, `value_list__invalid` | `string`, `variable` (a list) |
+| falco.list-reference | `list_reference` | `list_reference__valid`, `list_reference__invalid` | `variable` |
+| falco.quoted-string | `quoted_string` | `quoted_string__valid`, `quoted_string__invalid` | `string` |
+| falco.operator-modifier | `operator_modifier` | `operator_modifier__valid`, `operator_modifier__invalid` | `keyword` |
+| falco.transformer-list | `transformer_list` | `transformer_list__valid`, `transformer_list__invalid` | `function.builtin` (inner transformers) |
+
 ## Elastic indices and ECS
 
 ES|QL, EQL, kuery, and Lucene know which indices a query reads where it is written down: ES|QL from its `FROM` (or `TS`) command, the others from the Tide rule's elastic block, `index` for `query` and `threat.index` for `threat.query`. A `data_view_id`, an omitted `index` (the tenant's `setup.index`), a hunt, or a raw `.kuery`, `.lucene`, or `.eql` file leaves them unknown.
