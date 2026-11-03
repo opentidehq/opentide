@@ -422,6 +422,37 @@ def test_cancelling_a_queued_run_answers_130_without_running_it(
     assert calls == ["run"]
 
 
+class RecordingRunner(CommandRunner):
+    """A runner that records each run instead of running it."""
+
+    def __init__(self) -> None:
+        super().__init__(base_env={}, cwd=Path.cwd())
+        self.calls: list[list[str]] = []
+
+    def run(self, argv: Any, *, cwd: str | None = None, env: Any = None) -> Any:
+        self.calls.append(list(argv))
+        return serve_mod.RunOutcome({"ok": True}, 0)
+
+
+@pytest.mark.parametrize("ending", ["close_input", "exit"])
+def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(ending: str) -> None:
+    written: list[dict[str, Any]] = []
+    runner = RecordingRunner()
+    server = Server(written.append, runner=runner)
+    for request_id in (1, 2, 3):
+        message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
+        message["params"] = {"argv": ["deploy", "--strategy", "PRODUCTION"]}
+        server.receive(json.dumps(message))
+    if ending == "exit":
+        server.receive(json.dumps({"jsonrpc": "2.0", "method": "exit"}))
+    else:
+        server.close_input()
+    assert server.serve() == 0
+    assert runner.calls == []
+    answers = {message["id"]: message["result"]["exit_code"] for message in written}
+    assert answers == {1: 130, 2: 130, 3: 130}
+
+
 def test_a_cancel_for_a_finished_run_changes_nothing(client: Client) -> None:
     request_id = client.request("run", {"argv": ["explain", "vocab_unknown"]})
     assert client.answer(request_id)["result"]["exit_code"] == 0

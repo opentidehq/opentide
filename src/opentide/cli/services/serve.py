@@ -412,6 +412,8 @@ class Server:
         self._cancelled: set[Any] = set()
         self._state_lock = threading.Lock()
         self._shut_down = False
+        #: Set by ``exit`` or the end of input: queued runs answer 130 unrun.
+        self._closing = False
         self._digest: str | None = None
 
     # --- output ---------------------------------------------------------------------
@@ -457,14 +459,23 @@ class Server:
                 self.cancel(params["id"])
             return
         if message["method"] == "exit":
-            # Stop the running command now, then leave once it has answered.
-            self._cancel_active()
-            self._queue.put(None)
+            self._close()
             return
         self._queue.put(message)
 
     def close_input(self) -> None:
         """The client closed stdin: as ``exit``."""
+        self._close()
+
+    def _close(self) -> None:
+        """Stop the running command now and run no queued one, then leave.
+
+        The client has gone, or is going: a queued ``deploy`` or ``generate``
+        must not run with nobody to answer. Each queued ``run`` is answered
+        ``130`` instead, as a cancelled one is.
+        """
+        with self._state_lock:
+            self._closing = True
         self._cancel_active()
         self._queue.put(None)
 
@@ -556,7 +567,7 @@ class Server:
         self, request_id: Any, argv: list[str], cwd: str | None, env: dict[str, str] | None
     ) -> RunOutcome:
         with self._state_lock:
-            if _id_key(request_id) in self._cancelled:
+            if self._closing or _id_key(request_id) in self._cancelled:
                 self._cancelled.discard(_id_key(request_id))
                 return RunOutcome(
                     self.runner._failure_document(argv, "Interrupted", CANCELLED_EXIT_CODE),

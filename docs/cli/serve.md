@@ -11,7 +11,7 @@ description: Run CLI commands in one warm process, for editors, over newline-del
 opentide serve
 ```
 
-The editor starts the process and owns it: it ends on `exit`, or when the editor closes stdin. Like [`opentide mcp start`](../mcp/index.md) and [`opentide lsp start`](./lsp.md), it runs in the `mcp` [output mode](./json-output.md#output-modes): stdout carries the protocol and nothing else, logs go to stderr. Root options given to `serve` (`--repo`, `--data`, `--proxy`, `--debug`) are the defaults of every run.
+The editor starts the process and owns it: it ends on `exit`, or when the editor closes stdin. Either cancels the running command, and no queued one runs. Like [`opentide mcp start`](../mcp/index.md) and [`opentide lsp start`](./lsp.md), it runs in the `mcp` [output mode](./json-output.md#output-modes): stdout carries the protocol and nothing else, logs go to stderr. Root options given to `serve` (`--repo`, `--data`, `--proxy`, `--debug`) are the defaults of every run.
 
 ## The protocol
 
@@ -25,7 +25,7 @@ JSON-RPC 2.0, one JSON message per line, on stdin and stdout, as MCP's stdio tra
 | `progress` | notification, server to client | `{id: <run request id>, event: <progress event>}` | — |
 | `$/cancelRequest` | notification | `{id}` | the cancelled `run` answers with exit code `130` |
 | `shutdown` | request | — | `null` |
-| `exit` | notification | — | the process exits `0` |
+| `exit` | notification | — | the running `run` is cancelled, each queued one answers `130` without running, and the process exits `0` |
 
 `version` is the opentide version. `commands_digest` is the sha256 of the document `opentide --json commands` prints, without `duration_ms`, with sorted keys and no spaces: a client that keeps a copy of the command tree reads it again only when the digest changes.
 
