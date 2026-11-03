@@ -67,7 +67,7 @@ A body `lsp-server` cannot parse is answered from the bytes it read (`Recording`
 
 Providers: incremental sync, hover, completion (resolve, trigger characters; a space opens no list in Tide YAML), signature help, definition, references, document symbol (a tree for Tide: object, sections, platform blocks, queries), workspace symbol, document highlight, code action (`quickfix`, `source.fixAll.opentide`), folding, selection range, inlay hints (label parts that lead to the object), document links (ATT&CK ids, object UUIDs), code lens (`opentide.showReferences` with `[uri, position, locations]`), pull and workspace diagnostics, semantic tokens (full).
 
-Custom methods: `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`, `opentide/compiledSpl`, `opentide/fs/read`.
+Custom methods: `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`, `opentide/compiledSpl`, `opentide/fs/read`, `opentide/catalog` (#198; the notification `opentide/catalogChanged` goes out from `Session::flush_publishes` when a root's catalog digest changes, once the client asked for that root). An index entry's references are found once in `index_object`; a handler reads `IndexedObject::refs`, never walks bodies.
 
 ## Session
 

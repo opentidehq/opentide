@@ -8,6 +8,7 @@ mod falco;
 mod injection;
 mod intel;
 mod outline;
+mod refs;
 mod sysdig;
 mod vocabs;
 mod yaml_path;
@@ -35,6 +36,7 @@ pub use outline::{
     LinkTarget, OutlineKind, OutlineNode, ReferenceLens, TideLink, attack_url, document_links,
     outline, reference_lens,
 };
+pub use refs::{ObjectRef, object_refs};
 pub use vocabs::{Vocab, VocabKey, bundled_vocabs, vocab_for_field};
 pub use yaml_path::{
     YamlCursor, document_schema_id, key_span, key_span_in, uuid_span, yaml_cursor,
@@ -211,13 +213,59 @@ pub struct TideMetadata {
     pub organisation: Option<serde_yaml::Value>,
 }
 
+/// One object of the workspace index: what its file says, read once per
+/// text.
 #[derive(Debug, Clone)]
 pub struct IndexedObject {
     pub path: String,
+    /// The schema family (`rule`, `objective`, `threat`).
     pub object_type: String,
     pub uuid: String,
     pub name: String,
     pub body: serde_yaml::Value,
+    /// `metadata.schema` as written (`rule::1.1`).
+    pub schema: String,
+    /// The range of the `name` value (the key's when the value is not on
+    /// its line), or the start of the file without one.
+    pub name_range: Range,
+    /// Each UUID the body names, other than the object's own, with where
+    /// ([`object_refs`], #198).
+    pub refs: Vec<ObjectRef>,
+}
+
+impl IndexedObject {
+    /// An index entry for an object whose text is not at hand: its
+    /// references come from `body` alone, each at the start of the file.
+    pub fn from_body(
+        path: impl Into<String>,
+        object_type: impl Into<String>,
+        uuid: impl Into<String>,
+        name: impl Into<String>,
+        body: serde_yaml::Value,
+    ) -> Self {
+        let uuid = uuid.into();
+        let refs = object_refs("", &body, &uuid);
+        Self {
+            path: path.into(),
+            object_type: object_type.into(),
+            name: name.into(),
+            schema: body
+                .get("metadata")
+                .and_then(|m| m.get("schema"))
+                .and_then(|s| s.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            uuid,
+            body,
+            name_range: Range::point(0, 0),
+            refs,
+        }
+    }
+
+    /// Whether the body names `uuid` (not as the object's own).
+    pub fn names(&self, uuid: &str) -> bool {
+        self.refs.iter().any(|r| r.uuid == uuid)
+    }
 }
 
 pub struct AnalyzeInput<'a> {
@@ -1687,36 +1735,54 @@ pub fn snippet(kind: &str) -> Option<&'static str> {
     }
 }
 
+/// Index one object file: its identity, its name's range and the UUIDs it
+/// names ([`object_refs`]). Ranges are in `source` without a byte-order mark,
+/// the text an editor shows.
 pub fn index_object(path: &str, source: &str) -> Option<IndexedObject> {
-    let value: serde_yaml::Value = serde_yaml::from_str(opentide_core::strip_bom(source)).ok()?;
+    let source = opentide_core::strip_bom(source);
+    let value: serde_yaml::Value = serde_yaml::from_str(source).ok()?;
     let meta = value.get("metadata")?;
     let uuid = meta.get("uuid")?.as_str()?.to_string();
-    let schema = meta.get("schema")?.as_str().unwrap_or("");
+    let schema = meta.get("schema")?.as_str().unwrap_or("").to_string();
     let object_type = schema.split("::").next()?.to_string();
     let name = value.get("name")?.as_str().unwrap_or("").to_string();
+    let refs = object_refs(source, &value, &uuid);
     Some(IndexedObject {
         path: path.to_string(),
         object_type,
+        name_range: name_range(source, &name),
         uuid,
         name,
         body: value,
+        schema,
+        refs,
     })
 }
 
+/// The `name` value's range on the key's line, else the key's, else the
+/// start of the file.
+fn name_range(source: &str, name: &str) -> Range {
+    let Some(key) = yaml_path::key_span(source, &["name"]) else {
+        return Range::point(0, 0);
+    };
+    let line_end = source[key.end..]
+        .find('\n')
+        .map_or(source.len(), |i| key.end + i);
+    let span = (!name.is_empty())
+        .then(|| source[key.end..line_end].find(name))
+        .flatten()
+        .map_or(key, |i| {
+            ByteSpan::new(key.end + i, key.end + i + name.len())
+        });
+    span_to_range(source, span)
+}
+
+/// The objects of `workspace` other than `uuid`'s own whose body names it,
+/// from the references kept in the index.
 pub fn find_refs<'a>(workspace: &'a [IndexedObject], uuid: &str) -> Vec<&'a IndexedObject> {
     workspace
         .iter()
-        .filter(|o| {
-            fn walk(v: &serde_yaml::Value, uuid: &str) -> bool {
-                match v {
-                    serde_yaml::Value::String(s) => s == uuid,
-                    serde_yaml::Value::Sequence(seq) => seq.iter().any(|x| walk(x, uuid)),
-                    serde_yaml::Value::Mapping(map) => map.values().any(|x| walk(x, uuid)),
-                    _ => false,
-                }
-            }
-            o.uuid != uuid && walk(&o.body, uuid)
-        })
+        .filter(|o| o.uuid != uuid && o.names(uuid))
         .collect()
 }
 
@@ -2810,13 +2876,13 @@ configurations:
 
     #[test]
     fn duplicate_id_across_workspace() {
-        let obj = IndexedObject {
-            path: "other.yaml".into(),
-            object_type: "rule".into(),
-            uuid: "00000000-0000-4000-8003-000000000001".into(),
-            name: "Other".into(),
-            body: serde_yaml::Value::Null,
-        };
+        let obj = IndexedObject::from_body(
+            "other.yaml",
+            "rule",
+            "00000000-0000-4000-8003-000000000001",
+            "Other",
+            serde_yaml::Value::Null,
+        );
         let r = analyze(AnalyzeInput {
             path: "objects/rules/sentinel-kql-rule.yaml",
             source: RULE,

@@ -104,6 +104,7 @@ pitfall: [EDITORS.md](EDITORS.md#structure-providers).
 - `opentide/compiledKql`
 - `opentide/compiledSpl`
 - `opentide/fs/read`
+- `opentide/catalog` and the notification `opentide/catalogChanged` (#198): the workspace index (each object's identity, its name's range and the UUIDs its body names, with their ranges) for catalogue and graph views. `index_object` finds the references once per text and keeps them in `IndexedObject::refs` (`opentide_tide::object_refs`); `find_refs` and the reference lens read them instead of walking every body. The host compares a digest of each root's catalog at the end of a batch whose index changed and notifies a client that has asked for it. Shapes: [EDITORS.md](EDITORS.md#custom-rpcs).
 
 ## Development
 

@@ -66,6 +66,8 @@ pub(crate) struct Root {
     /// The editor's `visibility.toml` buffer while the file is open: it wins
     /// over the file on disk.
     pub visibility: Option<String>,
+    /// What the client was last told of this root's catalog (#198).
+    catalog: CatalogState,
     /// The last `visibility.toml` text that parsed: a buffer that is not
     /// TOML yet (mid-edit) keeps these declarations.
     good_visibility: RefCell<Option<Option<String>>>,
@@ -79,8 +81,16 @@ impl Root {
             checked: Cell::new(0),
             index: RefCell::default(),
             visibility: None,
+            catalog: CatalogState::default(),
             good_visibility: RefCell::default(),
         }
+    }
+
+    /// The index is out of date: it is rebuilt on the next request, and the
+    /// catalog is compared again at the end of the batch.
+    fn drop_index(&self) {
+        self.index.borrow_mut().take();
+        self.catalog.dirty.set(true);
     }
 
     /// Whether `path` is one of the files [`collect_objects`] reads: YAML
@@ -98,12 +108,46 @@ impl Root {
     /// it), or forget it when it is gone.
     pub(crate) fn refresh_object(&self, path: &str) {
         self.disk.borrow_mut().refresh_path(path);
-        self.index.borrow_mut().take();
+        self.drop_index();
     }
 
     fn visibility_path(&self) -> PathBuf {
         self.path.join(VISIBILITY_CONFIGURATION)
     }
+}
+
+/// What a client was last told of a root's catalog (`opentide/catalog`,
+/// #198): nothing until it asks for it, then the digest of what it got.
+/// `dirty` says the index changed since.
+#[derive(Default)]
+pub(crate) struct CatalogState {
+    sent: Cell<Option<u64>>,
+    dirty: Cell<bool>,
+}
+
+/// The digest of what `opentide/catalog` reports of an index that
+/// `opentide/catalogChanged` follows: each object's file, identity, name and
+/// the UUIDs it names. Ranges are left out: they move with every edit above
+/// them, and the client asks again for them.
+pub(crate) fn catalog_digest(index: &[IndexedObject]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    // Each object's own digest, keyed by its file and sorted, so the order
+    // the index lists them in does not count.
+    let mut entries: Vec<(String, u64)> = index
+        .iter()
+        .map(|o| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            (&o.uuid, &o.name, &o.schema, &o.object_type).hash(&mut hasher);
+            for r in &o.refs {
+                (&r.uuid, &r.field_path).hash(&mut hasher);
+            }
+            (path_key(&o.path), hasher.finish())
+        })
+        .collect();
+    entries.sort();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    entries.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Whether YAML text names a Tide schema in its top-level `metadata` block
@@ -287,6 +331,8 @@ pub(crate) struct Session {
     /// The broken-file warning was shown (once per session).
     warned: Cell<bool>,
     loose_index: RefCell<Option<Arc<[IndexedObject]>>>,
+    /// The catalog of the documents outside every root, when there is no root.
+    loose_catalog: CatalogState,
     /// What a host with no filesystem supplied on `initialize`.
     pub supplied: Supplied,
 }
@@ -416,7 +462,7 @@ impl Session {
                 r.checked.set(self.batch.get());
                 let mut disk = r.disk.borrow_mut();
                 if (!disk.loaded || !self.caps.watch_files) && disk.refresh(&r.path) {
-                    r.index.borrow_mut().take();
+                    r.drop_index();
                     self.touch();
                 }
             }
@@ -502,11 +548,10 @@ impl Session {
     /// the next request.
     pub(crate) fn invalidate_index(&self, root: Option<usize>) {
         match root.and_then(|i| self.roots.get(i)) {
-            Some(r) => {
-                r.index.borrow_mut().take();
-            }
+            Some(r) => r.drop_index(),
             None => {
                 self.loose_index.borrow_mut().take();
+                self.loose_catalog.dirty.set(true);
             }
         }
         self.touch();
@@ -613,9 +658,10 @@ impl Session {
             }
         }
         for r in &self.roots {
-            r.index.borrow_mut().take();
+            r.drop_index();
         }
         self.loose_index.borrow_mut().take();
+        self.loose_catalog.dirty.set(true);
         self.reactivate();
         if !self.docs.is_empty() {
             self.mark_all();
@@ -723,11 +769,81 @@ impl Session {
         self.open_documents.set(true);
     }
 
+    /// The catalog state of a root (`None`: outside every root).
+    fn catalog_state(&self, root: Option<usize>) -> Option<&CatalogState> {
+        match root {
+            Some(i) => self.roots.get(i).map(|r| &r.catalog),
+            None => Some(&self.loose_catalog),
+        }
+    }
+
+    /// The roots `opentide/catalog` reports: every root, or the documents
+    /// outside them when there is none.
+    pub(crate) fn catalog_roots(&self) -> Vec<Option<usize>> {
+        if self.roots.is_empty() {
+            vec![None]
+        } else {
+            (0..self.roots.len()).map(Some).collect()
+        }
+    }
+
+    /// A root's index for `opentide/catalog`, remembered as what the client
+    /// now knows.
+    pub(crate) fn catalog_index(&self, root: Option<usize>) -> Arc<[IndexedObject]> {
+        let index = opentide_analysis::workspace_index(&self.host(root));
+        if let Some(state) = self.catalog_state(root) {
+            state.sent.set(Some(catalog_digest(&index)));
+            state.dirty.set(false);
+        }
+        index
+    }
+
+    /// The `root` of `opentide/catalog` and `opentide/catalogChanged`: the
+    /// root's `file:` URI, or `null` outside every root.
+    pub(crate) fn catalog_root_uri(&self, root: Option<usize>) -> serde_json::Value {
+        root.and_then(|i| self.roots.get(i))
+            .map_or(serde_json::Value::Null, |r| {
+                serde_json::Value::String(crate::uri::path_to_uri(&r.path.display().to_string()))
+            })
+    }
+
+    /// `opentide/catalogChanged {root}` for each root whose catalog the
+    /// client has asked for and whose index changed in this batch (#198): a
+    /// file saved, created or deleted, or an open object's UUID, name or
+    /// references edited.
+    fn flush_catalog_changes(&self) {
+        for root in self.catalog_roots() {
+            let Some(state) = self.catalog_state(root) else {
+                continue;
+            };
+            let Some(sent) = state.sent.get() else {
+                continue;
+            };
+            if !state.dirty.replace(false) {
+                continue;
+            }
+            let index = opentide_analysis::workspace_index(&self.host(root));
+            let digest = catalog_digest(&index);
+            // `host` may have read the disk and dropped the index again.
+            state.dirty.set(false);
+            if digest != sent {
+                state.sent.set(Some(digest));
+                self.notify::<crate::handlers::custom::CatalogChanged>(
+                    crate::handlers::custom::CatalogChangedParams {
+                        root: self.catalog_root_uri(root),
+                    },
+                );
+            }
+        }
+    }
+
     /// Publish what the batch changed, each document once. A client that
     /// pulls is asked to pull again instead, and one that can refresh its
     /// semantic tokens, inlay hints and lenses is asked to after a change
-    /// that reaches beyond one document.
+    /// that reaches beyond one document. A catalog that changed is announced
+    /// first.
     pub(crate) fn flush_publishes(&mut self) {
+        self.flush_catalog_changes();
         let everything = self.everything.replace(false);
         let tide_documents = self.open_documents.replace(false);
         let pending = std::mem::take(&mut *self.pending.borrow_mut());
