@@ -53,25 +53,18 @@ Pinned stack (do not bump in passing):
 | `regex` 1 | lockfile | compile once |
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
-| `lsp-types` | 0.97.0 | declared on `opentide-lsp`, unused by the hand-rolled loop. See `lsp-host` |
-| `insta` 1 | dev-dependency | declared, no `assert_snapshot!` yet |
 
 `Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI does not pass `--locked`. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/cloud-agent-install.sh` does this restore after warming the build.
 
 ## Types agents get wrong
 
-`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, or `opentide-yaml`. `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
+`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
 
 Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list it in `codes::ALL` and give it a sentence in `codes::describe` (a unit test fails otherwise; `opentide explain` prints it). Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
 
 LSP `character` is a UTF-16 code unit count. `é` is one unit; an emoji outside the BMP is two. Ranges **sent** to the client go through `span_to_range` / `offset_to_position` in `opentide-core`, which uses `char::len_utf16`.
 
-Two older inbound converters do not match that. Do not add a third, and do not "fix" one of them in a drive-by:
-
-- `offset_at` in `crates/opentide-lsp/src/server.rs` treats `character` as a **byte** index into the line (capped by the line's byte length). Incremental `didChange` uses it.
-- `position_to_offset` (the lsp server and `opentide-kql`) counts Unicode scalar values (`col += 1` per `char`).
-
-A change to any of the three needs a fixture containing `é` and a non-BMP character, and the other two call sites reviewed in the same change. Do not index the source with `position.character` as a byte index in new code; call one of these helpers.
+Inbound positions (LSP → byte offset) go through `opentide_core::position_to_offset`, which counts UTF-16 and always returns a char boundary. The host converts once, in `offset` (`crates/opentide-lsp/src/handlers.rs`), and the engines take byte offsets; `position_to_offset` in `opentide-kql` is a thin wrapper over it (#178: the byte-index version panicked after `日本`). Do not add another converter, and do not index the source with `position.character` as a byte index; a change here needs a fixture with `é`, a CJK character and a non-BMP character.
 
 `uuid::Uuid::parse_str` plus `get_version_num() == 4` is the object-id check (`is_uuidv4`). Do not add another parser. A 36-character hex UUID that is not version 4 is a different future check (configuration `organisation_uuid`) and does not belong in this function.
 
@@ -103,13 +96,13 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 
 - Engine unit tests sit next to the code (`#[cfg(test)]`) or in `crates/<crate>/tests/*.rs`.
 - Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `testdata/`.
-- Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct with `insta` unless the user asked. `insta` is a dev-dependency and nothing calls it.
+- Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct unless the user asked; there is no snapshot crate.
 - `cargo test --workspace` is the default. Name the test binary when iterating: `cargo test -p opentide-kql --lib`.
 - `cargo fmt --all` before finishing. rustfmt is not optional.
 
 ## What not to add
 
-- `tower-lsp`, `lsp-server`, or a second JSON-RPC stack. See `lsp-host`.
+- `tower-lsp`, `async-lsp`, or a second JSON-RPC stack beside `lsp-server`. See `lsp-host`.
 - `std::fs` in an engine `src/` tree. Pass the text in.
 - `async` / `tokio` in the engine. The server is a blocking stdio loop.
 - A new `LanguageId` without the `add-language` skill.

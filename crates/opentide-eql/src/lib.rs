@@ -17,8 +17,8 @@ mod semantics;
 pub use ecs::ecs_diagnostics;
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Position, Range,
-    Severity, SignatureHelp, SignatureInformation, codes, position_to_offset, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, ParameterInformation, Range, Severity,
+    SignatureHelp, SignatureInformation, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{first_error, node_span, parse as ts_parse};
@@ -449,13 +449,15 @@ fn check_string(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
         };
         if bad {
             let at = node.start_byte() + i;
+            // The escaped character may be several bytes (`\é`): the span and
+            // the message take all of it.
+            let escaped = t[i + 1..].chars().next().unwrap_or(next as char);
             out.push(Diagnostic::error(
                 codes::EQL_PARSE_ERROR,
                 format!(
-                    "invalid escape `\\{}`: EQL strings accept \\b \\t \\n \\f \\r \\\" \\' \\\\ and \\u{{2-8 hex}}; use `\\\\` or a triple-quoted string",
-                    next as char
+                    "invalid escape `\\{escaped}`: EQL strings accept \\b \\t \\n \\f \\r \\\" \\' \\\\ and \\u{{2-8 hex}}; use `\\\\` or a triple-quoted string"
                 ),
-                range(source, ByteSpan::new(at, at + 2)),
+                range(source, ByteSpan::new(at, at + 1 + escaped.len_utf8())),
             ));
             return;
         }
@@ -1101,8 +1103,10 @@ pub fn sequence_maxspans(source: &str) -> Vec<(ByteSpan, u64)> {
 
 // ---- Hover ----------------------------------------------------------------
 
-pub fn hover(source: &str, position: Position) -> Option<String> {
-    let offset = position_to_offset(source, position);
+/// Hover at byte `offset` of `source` (an LSP host converts the editor's
+/// UTF-16 position once, with `opentide_core::position_to_offset`).
+pub fn hover(source: &str, offset: usize) -> Option<String> {
+    let offset = offset.min(source.len());
     let (tree, _) = parse_prepared(source)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let catalog = Catalog::cached();
@@ -1344,10 +1348,9 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
         i += 1;
     }
     let (open, commas) = *stack.last()?;
-    let name_start = before[..open]
-        .rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '~'))
-        .map(|i| i + 1)
-        .unwrap_or(0);
+    let name_start = opentide_core::word_start(&before[..open], |c| {
+        c.is_ascii_alphanumeric() || c == '_' || c == '~'
+    });
     let name = before[name_start..open].to_string();
     (!name.is_empty()).then_some((name, commas))
 }
@@ -1364,6 +1367,36 @@ mod tests {
             .filter(|d| d.severity != Severity::Hint)
             .map(|d| d.code)
             .collect()
+    }
+
+    /// #180: a backslash before a multi-byte character panicked.
+    #[test]
+    fn an_invalid_escape_of_a_multi_byte_character_is_one_error_on_it() {
+        for (src, escaped) in [
+            (r#"process where a == "x\é""#, "é"),
+            (r#"process where a == "D:\日本""#, "日"),
+            (r#"process where a == "tab\😀t""#, "😀"),
+        ] {
+            let found = analyze(src).diagnostics;
+            let errors: Vec<_> = found
+                .iter()
+                .filter(|d| d.code == codes::EQL_PARSE_ERROR)
+                .collect();
+            assert_eq!(errors.len(), 1, "{src}: {found:?}");
+            assert!(
+                errors[0].message.contains(&format!("`\\{escaped}`")),
+                "{src}: {}",
+                errors[0].message
+            );
+            let line = src.lines().next().unwrap();
+            let start = errors[0].range.start.character as usize;
+            let end = errors[0].range.end.character as usize;
+            let utf16: Vec<u16> = line.encode_utf16().collect();
+            assert_eq!(
+                String::from_utf16(&utf16[start..end]).unwrap(),
+                format!("\\{escaped}")
+            );
+        }
     }
 
     #[test]
@@ -1536,16 +1569,12 @@ mod tests {
     #[test]
     fn hover_and_signature_help() {
         let src = "process where startsWith~(process.name, \"a\")";
-        let h = hover(src, Position::new(0, 16)).expect("hover");
+        let h = hover(src, 16).expect("hover");
         assert!(h.contains("startsWith") && h.contains("elastic.co"), "{h}");
         let partial = "process where between(file.path, \"a\", ";
         let help = signature_help(partial, partial.len()).expect("signature");
         assert_eq!(help.active_parameter, 2);
-        let h = hover(
-            "sequence [a where true] [b where true]",
-            Position::new(0, 2),
-        )
-        .expect("keyword");
+        let h = hover("sequence [a where true] [b where true]", 2).expect("keyword");
         assert!(h.contains("sequence"));
     }
 
@@ -1827,7 +1856,7 @@ mod tests {
     #[test]
     fn parameter_descriptions_reach_hover_and_signature_help() {
         let src = "process where substring(process.name, 1)";
-        let h = hover(src, Position::new(0, 16)).expect("hover");
+        let h = hover(src, 16).expect("hover");
         let row = Catalog::cached().function("substring").unwrap();
         for p in &row.parameters {
             assert!(!p.docs.is_empty(), "{} has no description", p.name);

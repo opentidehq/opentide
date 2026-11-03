@@ -4,12 +4,34 @@
   "description": "opentide language client. createOpentideClient — never createOtideClient.",
   "license": "MIT",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["src"],
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "scripts": {
-    "test": "node --experimental-strip-types --test src/index.test.ts"
+    "test": "node --experimental-strip-types --test src/index.test.ts",
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build"
+  },
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opentidehq/language-server.git",
+    "directory": "packages/lsp-client"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "5.9.3"
   }
 }

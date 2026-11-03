@@ -5,7 +5,7 @@
 //! positions survive grammar rewrites.
 
 use opentide_core::{ByteSpan, Diagnostic, codes, span_to_range};
-use opentide_syntax::node_span;
+use opentide_syntax::{node_span, prev_sibling};
 use tree_sitter::Node;
 
 /// A badly broken query reports this many error regions, not one per token.
@@ -121,7 +121,7 @@ fn missing(node: Node) -> (ByteSpan, String) {
         _ => None,
     };
     if let Some(opener) = opener {
-        let mut sibling = node.prev_sibling();
+        let mut sibling = prev_sibling(node);
         while let Some(s) = sibling {
             if s.kind() == opener && !s.is_missing() {
                 return (
@@ -129,7 +129,7 @@ fn missing(node: Node) -> (ByteSpan, String) {
                     format!("SPL syntax error: '{opener}' is never closed"),
                 );
             }
-            sibling = s.prev_sibling();
+            sibling = prev_sibling(s);
         }
     }
     (

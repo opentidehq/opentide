@@ -1984,10 +1984,12 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
     items
 }
 
-pub fn hover(source: &str, position: opentide_core::Position, profile: Profile) -> Option<String> {
+/// Hover at byte `offset` of `source` (an LSP host converts the editor's
+/// UTF-16 position once, with `opentide_core::position_to_offset`).
+pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
     let workspace = Catalog::for_workspace(profile, source);
     let catalog = &*workspace;
-    let offset = position_to_offset(source, position);
+    let offset = offset.min(source.len());
     let word = word_at(source, offset)?;
     if let Some(md) = column_hover(source, offset, catalog) {
         return Some(md);
@@ -2395,23 +2397,6 @@ fn parameters_from_signature(sig: &str) -> Vec<ParameterInformation> {
         .collect()
 }
 
-fn position_to_offset(source: &str, position: opentide_core::Position) -> usize {
-    let mut line = 0u32;
-    let mut col = 0u32;
-    for (idx, ch) in source.char_indices() {
-        if line == position.line && col >= position.character {
-            return idx;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-    source.len()
-}
-
 fn word_at(source: &str, offset: usize) -> Option<String> {
     let bytes = source.as_bytes();
     if bytes.is_empty() {
@@ -2729,11 +2714,7 @@ mod tests {
 
     #[test]
     fn hover_where_operator() {
-        let h = hover(
-            "SecurityEvent | where EventID == 1",
-            opentide_core::Position::new(0, 16),
-            Profile::Core,
-        );
+        let h = hover("SecurityEvent | where EventID == 1", 16, Profile::Core);
         assert!(h.unwrap().contains("where"));
     }
 
@@ -2798,12 +2779,10 @@ mod tests {
     #[test]
     fn sentinel_columns_hover_and_complete() {
         let src = "SecurityEvent | where EventID == 4688";
-        let h = hover(src, opentide_core::Position::new(0, 24), Profile::Sentinel)
-            .expect("EventID hover");
+        let h = hover(src, 24, Profile::Sentinel).expect("EventID hover");
         assert!(h.contains("EventID"), "{h}");
         assert!(h.contains("SecurityEvent"), "{h}");
-        let table =
-            hover(src, opentide_core::Position::new(0, 0), Profile::Sentinel).expect("table hover");
+        let table = hover(src, 0, Profile::Sentinel).expect("table hover");
         assert!(
             table.contains("EventID") || table.contains("Columns"),
             "{table}"
@@ -3254,29 +3233,6 @@ mod tests {
             help.signatures[0].label.starts_with("strcat("),
             "{}",
             help.signatures[0].label
-        );
-    }
-
-    #[test]
-    fn position_to_offset_counts_scalars_not_utf16() {
-        let src = "aéX";
-        assert_eq!(
-            position_to_offset(src, opentide_core::Position::new(0, 1)),
-            1
-        );
-        assert_eq!(
-            position_to_offset(src, opentide_core::Position::new(0, 2)),
-            1 + "é".len()
-        );
-
-        let src = "a😀b";
-        assert_eq!(
-            position_to_offset(src, opentide_core::Position::new(0, 2)),
-            1 + "😀".len()
-        );
-        assert_eq!(
-            position_to_offset(src, opentide_core::Position::new(1, 0)),
-            src.len()
         );
     }
 }

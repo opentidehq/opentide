@@ -14,8 +14,21 @@ use opentide_highlight::{
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(name = "opentide-lsp", version, about = "opentide language server")]
+#[command(
+    name = "opentide-lsp",
+    about = "opentide language server",
+    disable_version_flag = true
+)]
 struct Cli {
+    /// Print the version (`--json`: what `initialize` reports in
+    /// `capabilities.experimental.opentide`, without starting a session).
+    #[arg(long, short = 'V')]
+    version: bool,
+
+    /// With `--version`: print it as JSON.
+    #[arg(long, requires = "version")]
+    json: bool,
+
     /// Speak LSP over stdin/stdout.
     #[arg(long)]
     stdio: bool,
@@ -35,6 +48,11 @@ enum Command {
         file: PathBuf,
         #[arg(long)]
         language: Option<String>,
+        /// The detection platform a query file is for, as a `configurations`
+        /// key: `carbon_black_cloud` checks Lucene in the Carbon Black
+        /// dialect, `defender_for_endpoint` KQL against the Defender schema.
+        #[arg(long)]
+        platform: Option<String>,
     },
     /// Highlight a file and print JSON tokens.
     Highlight {
@@ -53,14 +71,31 @@ enum Command {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.version {
+        if cli.json {
+            println!("{}", opentide_lsp::host_info());
+        } else {
+            println!("opentide-lsp {}", opentide_lsp::VERSION);
+        }
+        return Ok(());
+    }
     if cli.stdio {
-        return server::run_stdio();
+        // LSP: exit 0 after `shutdown` then `exit`, 1 when the client exits
+        // or closes the stream without shutting the server down.
+        if !server::run_stdio_status()? {
+            std::process::exit(1);
+        }
+        return Ok(());
     }
     if let Some(addr) = cli.listen {
         return server::run_listen(&addr);
     }
     match cli.command {
-        Some(Command::Analyze { file, language }) => cmd_analyze(&file, language.as_deref()),
+        Some(Command::Analyze {
+            file,
+            language,
+            platform,
+        }) => cmd_analyze(&file, language.as_deref(), platform.as_deref()),
         Some(Command::Highlight {
             file,
             language,
@@ -86,9 +121,19 @@ fn detect_language(path: &Path, override_lang: Option<&str>) -> Result<LanguageI
         .with_context(|| format!("cannot detect language from extension {ext:?}; pass --language"))
 }
 
-fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
+fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> Result<()> {
     let text = read_document(file)?;
     let language = detect_language(file, language)?;
+    if let Some(platform) = platform.filter(|_| language != LanguageId::TideYaml) {
+        let diagnostics = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+            language,
+            platform: Some(platform.to_string()),
+            stack: None,
+            text,
+        });
+        println!("{}", serde_json::to_string_pretty(&diagnostics)?);
+        return Ok(());
+    }
     let mut files = vec![(file.display().to_string(), text.clone())];
     // Only Tide YAML resolves references across the workspace; a raw query
     // file is analysed on its own.
@@ -173,6 +218,10 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
         ),
         (root.join("helix.toml"), generate_helix(&spec)),
         (
+            root.join("package-contributions.json"),
+            serde_json::to_string_pretty(&opentide_highlight::generate_package_contributions())?,
+        ),
+        (
             root.join("legend.json"),
             serde_json::to_string_pretty(&spec.legend)?,
         ),
@@ -195,14 +244,8 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
 }
 
 fn find_objects_root(file: &Path) -> Option<PathBuf> {
-    for ancestor in file.ancestors() {
-        let objects = ancestor.join("objects");
-        if objects.is_dir() {
-            return Some(objects);
-        }
-        if ancestor.join(".opentide").is_dir() {
-            return Some(ancestor.join("objects"));
-        }
+    if let Some(root) = server::workspace_root(file) {
+        return Some(root.join("objects"));
     }
     file.parent()
         .and_then(|p| p.parent())
@@ -219,37 +262,5 @@ fn read_document(path: &Path) -> std::io::Result<String> {
 /// The workspace YAML under `root`. A file that cannot be read as UTF-8 is
 /// left out rather than failing the file being analysed.
 fn collect_yaml(root: &Path, files: &mut Vec<(String, String)>) {
-    if !root.is_dir() {
-        return;
-    }
-    for entry in walk(root) {
-        if !matches!(
-            entry.extension().and_then(|s| s.to_str()),
-            Some("yaml" | "yml")
-        ) {
-            continue;
-        }
-        if let Ok(text) = read_document(&entry) {
-            files.push((entry.display().to_string(), text));
-        }
-    }
-}
-
-/// Every file under `dir`. A directory that cannot be listed is skipped.
-fn walk(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    fn rec(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for p in entries.flatten().map(|e| e.path()) {
-            if p.is_dir() {
-                rec(&p, out);
-            } else {
-                out.push(p);
-            }
-        }
-    }
-    rec(dir, &mut out);
-    out
+    files.extend(opentide_lsp::server::yaml_files(root));
 }

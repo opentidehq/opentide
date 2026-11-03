@@ -1,102 +1,10 @@
 //! Protocol tests over stdio. The CLI never speaks JSON-RPC; `--stdio` does.
 
+mod common;
+
+use common::*;
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
-
-fn bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_opentide-lsp"))
-}
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-struct Lsp {
-    child: std::process::Child,
-    reader: BufReader<std::process::ChildStdout>,
-    stdin: std::process::ChildStdin,
-    next_id: i64,
-}
-
-impl Lsp {
-    fn spawn() -> Self {
-        let mut child = Command::new(bin())
-            .arg("--stdio")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawn opentide-lsp");
-        let stdin = child.stdin.take().unwrap();
-        let stdout = child.stdout.take().unwrap();
-        Self {
-            child,
-            reader: BufReader::new(stdout),
-            stdin,
-            next_id: 1,
-        }
-    }
-
-    fn write(&mut self, body: &Value) {
-        let payload = serde_json::to_vec(body).unwrap();
-        write!(self.stdin, "Content-Length: {}\r\n\r\n", payload.len()).unwrap();
-        self.stdin.write_all(&payload).unwrap();
-        self.stdin.flush().unwrap();
-    }
-
-    fn read(&mut self) -> Value {
-        let mut content_length = None;
-        loop {
-            let mut header = String::new();
-            self.reader.read_line(&mut header).unwrap();
-            let header = header.trim_end();
-            if header.is_empty() {
-                break;
-            }
-            if let Some(v) = header.strip_prefix("Content-Length:") {
-                content_length = Some(v.trim().parse::<usize>().unwrap());
-            }
-        }
-        let len = content_length.expect("Content-Length");
-        let mut buf = vec![0u8; len];
-        self.reader.read_exact(&mut buf).unwrap();
-        serde_json::from_slice(&buf).unwrap()
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Value {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.write(&json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params
-        }));
-        loop {
-            let msg = self.read();
-            if msg.get("id") == Some(&json!(id)) {
-                return msg;
-            }
-            // skip notifications (publishDiagnostics)
-        }
-    }
-
-    fn notify(&mut self, method: &str, params: Value) {
-        self.write(&json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-        }));
-    }
-}
-
-impl Drop for Lsp {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-    }
-}
 
 #[test]
 fn initialize_and_analyze_kql() {
@@ -105,7 +13,7 @@ fn initialize_and_analyze_kql() {
         "initialize",
         json!({
             "capabilities": {},
-            "rootUri": format!("file://{}", repo_root().display())
+            "rootUri": file_uri(&repo_root())
         }),
     );
     assert_eq!(init["result"]["serverInfo"]["name"], "opentide-lsp");
@@ -285,13 +193,13 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
         "initialize",
         json!({
             "capabilities": {},
-            "rootUri": format!("file://{}", root.display())
+            "rootUri": file_uri(&root)
         }),
     );
     lsp.notify("initialized", json!({}));
     let path = root.join("objects/rules/rule-0001-sentinel-kql.yaml");
     let text = std::fs::read_to_string(&path).unwrap();
-    let uri = format!("file://{}", path.display());
+    let uri = file_uri(&path);
     lsp.notify(
         "textDocument/didOpen",
         json!({
@@ -403,9 +311,13 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|h| h["label"]
+            .any(|h| h["label"][0]["value"]
                 .as_str()
-                .is_some_and(|l| l.to_lowercase().contains("objective"))),
+                .is_some_and(|l| l.to_lowercase().contains("objective"))
+                // The label leads to the object (#185 P3.5).
+                && h["label"][0]["location"]["uri"]
+                    .as_str()
+                    .is_some_and(|u| u.ends_with("objective-0001-credential-access.yaml"))),
         "{inlays}"
     );
 
@@ -486,11 +398,11 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", scratch.0.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(&scratch.0) }),
     );
     lsp.notify("initialized", json!({}));
     let yaml = "name: Sentinel Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: clear\ndescription: |\n  hello\n  world\n";
-    let uri = format!("file://{}", scratch.0.join("struct-rule.yaml").display());
+    let uri = file_uri(&scratch.0.join("struct-rule.yaml"));
     let uri = uri.as_str();
     lsp.notify(
         "textDocument/didOpen",
@@ -544,7 +456,8 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
         "textDocument/codeAction",
         json!({
             "textDocument": { "uri": uri },
-            "range": { "start": { "line": 4, "character": 0 }, "end": { "line": 4, "character": 4 } }
+            "range": { "start": { "line": 4, "character": 0 }, "end": { "line": 4, "character": 4 } },
+            "context": { "diagnostics": [] }
         }),
     );
     assert_eq!(actions["result"].as_array().unwrap().len(), 0, "{actions}");
@@ -586,30 +499,6 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
         pull["result"]["items"].as_array().unwrap().is_empty(),
         "{pull}"
     );
-}
-
-/// Open a document, return its published diagnostic codes.
-fn published_codes(lsp: &mut Lsp, uri: &str, language_id: &str, text: &str) -> Vec<String> {
-    lsp.notify(
-        "textDocument/didOpen",
-        json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": language_id,
-                "version": 1,
-                "text": text
-            }
-        }),
-    );
-    let msg = lsp.read();
-    assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
-    msg["params"]["diagnostics"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|d| d["code"].as_str().map(str::to_string))
-        .collect()
 }
 
 #[test]
@@ -1071,20 +960,35 @@ fn initialize_installs_the_workspace_field_catalog() {
     )
     .unwrap();
     let rule = "name: House Rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n  tlp: house\n";
-    let uri = format!("file://{}/objects/rules/house-rule.yaml", root.display());
+    let uri = file_uri(&root.join("objects/rules/house-rule.yaml"));
 
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(&root) }),
     );
     let with_catalog = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
     drop(lsp);
 
+    // Without a root, the workspace around the document is found (#185
+    // P2.1): its catalog applies.
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
-    let bundled = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    let discovered = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    drop(lsp);
+
+    // A document in no workspace gets the bundled catalogs.
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let bundled = published_codes(
+        &mut lsp,
+        "file:///opentide-no-such-workspace/objects/rules/house-rule.yaml",
+        "opentide-yaml",
+        rule,
+    );
     std::fs::remove_dir_all(&root).ok();
+
+    assert_eq!(discovered, with_catalog);
 
     assert!(
         !with_catalog.contains(&"vocab_unknown".to_string()),
@@ -1094,37 +998,6 @@ fn initialize_installs_the_workspace_field_catalog() {
         bundled.contains(&"vocab_unknown".to_string()),
         "{bundled:?}"
     );
-}
-
-/// A fresh directory under the system temp dir, removed on drop.
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("opentide-e2e-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let path = entry.unwrap().path();
-        let target = to.join(path.file_name().unwrap());
-        if path.is_dir() {
-            copy_dir(&path, &target);
-        } else {
-            std::fs::copy(&path, &target).unwrap();
-        }
-    }
 }
 
 fn cli_codes(file: &std::path::Path) -> Vec<String> {
@@ -1167,17 +1040,12 @@ fn an_unreadable_workspace_file_does_not_break_analysis() {
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", scratch.0.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(&scratch.0) }),
     );
     lsp.notify("initialized", json!({}));
     let path = scratch.0.join(rule);
     let text = std::fs::read_to_string(&path).unwrap();
-    let mut published = published_codes(
-        &mut lsp,
-        &format!("file://{}", path.display()),
-        "opentide-yaml",
-        &text,
-    );
+    let mut published = published_codes(&mut lsp, &file_uri(&path), "opentide-yaml", &text);
     published.sort();
     assert_eq!(published, expected);
 }
@@ -1206,12 +1074,12 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
         visibility,
     )
     .unwrap();
-    let uri = format!("file://{}/hunt.kql", root.display());
+    let uri = file_uri(&root.join("hunt.kql"));
 
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
     );
     let codes = published_codes(&mut lsp, &uri, "kql", "NTAIpDetails | take 1");
     assert_eq!(codes, vec!["kql_table_not_declared".to_string()]);
@@ -1219,7 +1087,8 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
         "textDocument/codeAction",
         json!({
             "textDocument": { "uri": uri },
-            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } }
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } },
+            "context": { "diagnostics": [] }
         }),
     );
     let action = actions["result"]
@@ -1256,11 +1125,11 @@ fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
         "[[logsources]]\nname = \"WinEventLog:Security\"\ndescription = \"Events.\"\nsystem = \"splunk\"\n",
     )
     .unwrap();
-    let uri = format!("file://{}/hunt.spl", root.display());
+    let uri = file_uri(&root.join("hunt.spl"));
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
     );
     let codes = published_codes(&mut lsp, &uri, "spl", "sourcetype=sysmon EventCode=1");
     assert!(
@@ -1271,7 +1140,8 @@ fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
         "textDocument/codeAction",
         json!({
             "textDocument": { "uri": uri },
-            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 17 } }
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 17 } },
+            "context": { "diagnostics": [] }
         }),
     );
     let action = actions["result"]
@@ -1289,35 +1159,59 @@ fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
     );
 }
 
-/// No visibility.toml: the quick fix on `kql_unknown_table` creates it.
+/// No visibility.toml: the quick fix on `kql_unknown_table` creates it, for
+/// a client that can create files (#185 P2.4). Any other client gets no
+/// such action.
 #[test]
 fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
     let scratch = Scratch::new("declare-create");
     let root = &scratch.0;
-    let uri = format!("file://{}/hunt.kql", root.display());
+    let uri = file_uri(&root.join("hunt.kql"));
+    let request = json!({
+        "textDocument": { "uri": uri },
+        "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } },
+        "context": { "diagnostics": [] }
+    });
+    let title = "Add a [[logsources]] entry declaring 'MyCustom_CL' to visibility.toml";
+
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
-        json!({ "capabilities": {}, "rootUri": format!("file://{}", root.display()) }),
+        json!({ "capabilities": {}, "rootUri": file_uri(root) }),
+    );
+    published_codes(&mut lsp, &uri, "kql", "MyCustom_CL | take 1");
+    let actions = lsp.request("textDocument/codeAction", request.clone());
+    assert!(
+        !actions["result"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["title"] == title),
+        "{actions}"
+    );
+    drop(lsp);
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({
+            "capabilities": { "workspace": { "workspaceEdit": {
+                "documentChanges": true, "resourceOperations": ["create"]
+            } } },
+            "rootUri": file_uri(root)
+        }),
     );
     let codes = published_codes(&mut lsp, &uri, "kql", "MyCustom_CL | take 1");
     assert_eq!(codes, vec!["kql_unknown_table".to_string()]);
-    let actions = lsp.request(
-        "textDocument/codeAction",
-        json!({
-            "textDocument": { "uri": uri },
-            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } }
-        }),
-    );
+    let actions = lsp.request("textDocument/codeAction", request);
     let action = actions["result"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| {
-            a["title"] == "Add a [[logsources]] entry declaring 'MyCustom_CL' to visibility.toml"
-        })
+        .find(|a| a["title"] == title)
         .unwrap_or_else(|| panic!("{actions}"))
         .clone();
+    assert_eq!(action["isPreferred"], true, "{action}");
     let changes = action["edit"]["documentChanges"].as_array().unwrap();
     assert_eq!(changes[0]["kind"], "create");
     let text = changes[1]["edits"][0]["newText"].as_str().unwrap();
@@ -1325,20 +1219,6 @@ fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
         text.contains("name = \"MyCustom_CL\"\ndescription = \"\"\nsystem = \"sentinel\""),
         "{text}"
     );
-}
-
-fn next_diagnostics(lsp: &mut Lsp, uri: &str) -> Vec<String> {
-    loop {
-        let msg = lsp.read();
-        if msg["method"] == "textDocument/publishDiagnostics" && msg["params"]["uri"] == uri {
-            return msg["params"]["diagnostics"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|d| d["code"].as_str().map(str::to_string))
-                .collect();
-        }
-    }
 }
 
 /// visibility.toml applies as it is edited: in the editor, before it is
@@ -1350,7 +1230,7 @@ fn editing_visibility_toml_rechecks_open_queries() {
     let config = root.join(".opentide/configurations");
     std::fs::create_dir_all(&config).unwrap();
     let path = config.join("visibility.toml");
-    let visibility_uri = format!("file://{}", path.display());
+    let visibility_uri = file_uri(&path);
     let declare = |tables: &[&str]| {
         tables
             .iter()
@@ -1361,12 +1241,12 @@ fn editing_visibility_toml_rechecks_open_queries() {
             })
             .collect::<String>()
     };
-    let uri = format!("file://{}/hunt.kql", root.display());
+    let uri = file_uri(&root.join("hunt.kql"));
 
     let mut lsp = Lsp::spawn();
     let init = json!({
         "capabilities": { "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } },
-        "rootUri": format!("file://{}", root.display())
+        "rootUri": file_uri(root)
     });
     lsp.request("initialize", init);
     lsp.notify("initialized", json!({}));
@@ -1509,5 +1389,500 @@ fn a_bom_tide_document_is_analysed_like_one_without() {
             .iter()
             .any(|i| i["label"] == "EventID"),
         "{completion}"
+    );
+}
+
+/// The standalone binary has no configuration checker: a configuration file
+/// is `opentide-config`, never parsed as YAML, and gets no diagnostics, no
+/// tokens and no hover. Other TOML is not read at all.
+#[test]
+fn configuration_toml_without_a_host_checker_reports_nothing() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let open = |lsp: &mut Lsp, uri: &str, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": {
+                "uri": uri, "languageId": "toml", "version": 1, "text": text
+            }}),
+        );
+    };
+    open(
+        &mut lsp,
+        "file:///w/Cargo.toml",
+        "[package]\nname = \"x\"\n",
+    );
+    let sharing = "file:///w/.opentide/configurations/sharing.toml";
+    open(
+        &mut lsp,
+        sharing,
+        "[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\n",
+    );
+    // Cargo.toml published nothing: the first frame is sharing.toml's.
+    let msg = lsp.read();
+    assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
+    assert_eq!(msg["params"]["uri"], sharing, "{msg}");
+    assert_eq!(msg["params"]["diagnostics"], json!([]), "{msg}");
+
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": sharing } }),
+    );
+    assert_eq!(tokens["result"]["data"], json!([]), "{tokens}");
+    let hover = lsp.request(
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": sharing }, "position": { "line": 2, "character": 2 } }),
+    );
+    assert_eq!(hover["result"], Value::Null, "{hover}");
+}
+
+/// #178: an incremental edit after a multi-byte character panicked the
+/// server (it read the UTF-16 column as a byte index).
+#[test]
+fn an_edit_after_a_multi_byte_character_keeps_the_server_running() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///q.kql";
+    let text = "SecurityEvent | where Account == \"日本\"";
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "kql", "version": 1, "text": text } }),
+    );
+    next_diagnostics(&mut lsp, uri);
+    // Column 35 is after `日本`, and 36 after the emoji's two units.
+    for (version, character, insert) in [(2, 35, "😀"), (3, 37, "é")] {
+        lsp.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": { "uri": uri, "version": version },
+                "contentChanges": [{
+                    "range": {
+                        "start": { "line": 0, "character": character },
+                        "end": { "line": 0, "character": character }
+                    },
+                    "text": insert
+                }]
+            }),
+        );
+        next_diagnostics(&mut lsp, uri);
+    }
+    let reply = lsp.request("shutdown", Value::Null);
+    assert_eq!(reply["result"], Value::Null, "{reply}");
+}
+
+/// #181: the server reads and indexes `objects/` once. An objective created
+/// on disk after start is found through the file watcher, and also, for a
+/// client that cannot watch files, on the next request.
+#[test]
+fn objects_written_after_start_are_indexed() {
+    let source = repo_root().join("testdata/objects");
+    for watch in [true, false] {
+        let root = std::env::temp_dir().join(format!(
+            "opentide-index-cache-{}-{watch}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let rules = root.join("objects/rules");
+        std::fs::create_dir_all(&rules).unwrap();
+        std::fs::create_dir_all(root.join("objects/objectives")).unwrap();
+        let rule_text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
+        let rule = rules.join("rule-1.0.yaml");
+        std::fs::write(&rule, &rule_text).unwrap();
+        let rule_uri = file_uri(&rule);
+
+        let mut lsp = Lsp::spawn();
+        let capabilities = if watch {
+            json!({ "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } })
+        } else {
+            json!({})
+        };
+        lsp.request(
+            "initialize",
+            json!({ "processId": null, "rootUri": file_uri(&root), "capabilities": capabilities }),
+        );
+        lsp.notify("initialized", json!({}));
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule_text } }),
+        );
+        let before = codes_of(&published_for(&mut lsp, &rule_uri));
+        assert!(before.contains(&"invalid_ref".to_string()), "{before:?}");
+
+        let objective = root.join("objects/objectives/objective-1.0.yaml");
+        std::fs::copy(source.join("objective-1.0.yaml"), &objective).unwrap();
+        if watch {
+            lsp.notify(
+                "workspace/didChangeWatchedFiles",
+                json!({ "changes": [{ "uri": file_uri(&objective), "type": 1 }] }),
+            );
+        } else {
+            lsp.notify(
+                "textDocument/didChange",
+                json!({ "textDocument": { "uri": rule_uri, "version": 2 }, "contentChanges": [{ "text": rule_text }] }),
+            );
+        }
+        let after = codes_of(&published_for(&mut lsp, &rule_uri));
+        assert!(
+            !after.contains(&"invalid_ref".to_string()),
+            "watch={watch}: {after:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+/// #185 P0.1: editors send any YAML as `yaml`. Only Tide objects are read:
+/// a CI workflow gets nothing, while a rule is analysed under `objects/` or,
+/// in a folder `paths.toml` moved, when it names a Tide schema.
+#[test]
+fn only_tide_yaml_is_analysed() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let open = |lsp: &mut Lsp, uri: &str, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": uri, "languageId": "yaml", "version": 1, "text": text } }),
+        );
+    };
+    let rule =
+        std::fs::read_to_string(repo_root().join("testdata/objects/rules/rule-1.0.yaml")).unwrap();
+    open(
+        &mut lsp,
+        "file:///w/.github/workflows/ci.yml",
+        "name: CI\non: push\njobs: {}\n",
+    );
+    open(&mut lsp, "file:///w/.pre-commit-config.yaml", "repos: []\n");
+    open(&mut lsp, "file:///w/detections/rules/r.yaml", &rule);
+    // The first frame is the rule's: neither CI file published anything.
+    let first = lsp.read();
+    assert_eq!(
+        first["params"]["uri"], "file:///w/detections/rules/r.yaml",
+        "{first}"
+    );
+    open(
+        &mut lsp,
+        "file:///w/objects/rules/broken.yaml",
+        "name: Broken\n",
+    );
+    // The rule is checked again (it may reference the new object), then the
+    // new one.
+    let mut second = lsp.read();
+    while second["params"]["uri"] == "file:///w/detections/rules/r.yaml" {
+        second = lsp.read();
+    }
+    assert_eq!(
+        second["params"]["uri"], "file:///w/objects/rules/broken.yaml",
+        "{second}"
+    );
+    assert!(
+        !second["params"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+/// #185 P0.2: only `<root>/objects` is walked, and a symlinked directory is
+/// not entered, so a link back up the tree indexes nothing twice.
+#[test]
+fn the_workspace_walk_stays_in_objects_and_ignores_symlinked_directories() {
+    let source = repo_root().join("testdata/objects");
+    let root = std::env::temp_dir().join(format!("opentide-walk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let rules = root.join("objects/rules");
+    std::fs::create_dir_all(&rules).unwrap();
+    let rule_text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
+    std::fs::write(rules.join("rule-1.0.yaml"), &rule_text).unwrap();
+    // A copy of the same object outside objects/: never read.
+    std::fs::create_dir_all(root.join("backup")).unwrap();
+    std::fs::write(root.join("backup/rule-1.0.yaml"), &rule_text).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&rules, rules.join("loop")).unwrap();
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": file_uri(&root), "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let uri = file_uri(&rules.join("rule-1.0.yaml"));
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "opentide-yaml", "version": 1, "text": rule_text } }),
+    );
+    let codes = next_diagnostics(&mut lsp, &uri);
+    assert!(!codes.contains(&"duplicate_id".to_string()), "{codes:?}");
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "" }));
+    let count = symbols["result"].as_array().map_or(0, Vec::len);
+    assert_eq!(count, 1, "{symbols}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// #185 P0.6: the LSP lifecycle, and the exit code that says whether the
+/// client shut the server down first.
+#[test]
+fn the_lifecycle_is_enforced_and_the_exit_code_reports_it() {
+    let hover = json!({ "textDocument": { "uri": "file:///q.kql" }, "position": { "line": 0, "character": 0 } });
+
+    // Before initialize: a request is refused, a notification dropped.
+    let mut lsp = Lsp::spawn();
+    let early = lsp.request("textDocument/hover", hover.clone());
+    assert_eq!(early["error"]["code"], -32002, "{early}");
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": "file:///q.kql", "languageId": "kql", "version": 1, "text": "T | wher x" } }),
+    );
+    let init = lsp.request("initialize", json!({ "capabilities": {} }));
+    assert!(init["result"]["capabilities"].is_object(), "{init}");
+    // Nothing was published for the dropped didOpen: the next frame is the
+    // answer to the second initialize, which is refused.
+    let again = lsp.request("initialize", json!({ "capabilities": {} }));
+    assert_eq!(again["error"]["code"], -32600, "{again}");
+
+    // After shutdown: requests are refused; exit then exits 0.
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+    let late = lsp.request("textDocument/hover", hover.clone());
+    assert_eq!(late["error"]["code"], -32600, "{late}");
+    lsp.notify("exit", Value::Null);
+    assert_eq!(exit_code(lsp), 0);
+
+    // exit without shutdown: 1.
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("exit", Value::Null);
+    assert_eq!(exit_code(lsp), 1);
+
+    // The stream ends without shutdown: 1.
+    let status = Command::new(bin())
+        .arg("--stdio")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(1));
+}
+
+/// #185 P0.7: a frame whose body is not a message is answered with
+/// `id: null`, and the session goes on.
+#[test]
+fn malformed_frames_are_answered_and_the_session_continues() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    for (body, code) in [
+        ("{not json", -32700),
+        (
+            "[{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}]",
+            -32600,
+        ),
+    ] {
+        raw(&mut lsp, body);
+        let reply = lsp.read();
+        assert_eq!(reply["error"]["code"], code, "{body}: {reply}");
+        assert_eq!(reply["id"], Value::Null, "{reply}");
+    }
+    // No `jsonrpc` member and a lower-case header: still answered.
+    raw(
+        &mut lsp,
+        r#"{"id": 7, "method": "textDocument/hover", "params": {"textDocument": {"uri": "file:///none.kql"}, "position": {"line": 0, "character": 0}}}"#,
+    );
+    let reply = lsp.read();
+    assert_eq!(reply["id"], 7, "{reply}");
+    // `"id": null` is not a valid id: answered with `id: null`.
+    raw(
+        &mut lsp,
+        r#"{"jsonrpc": "2.0", "id": null, "method": "opentide/not-a-method"}"#,
+    );
+    let reply = lsp.read();
+    assert!(reply.get("id").is_some_and(Value::is_null), "{reply}");
+    assert_eq!(reply["error"]["code"], -32600, "{reply}");
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+}
+
+/// #185 P0.5: a handler that panics fails its request, not the session.
+#[test]
+fn a_panicking_handler_fails_its_request_and_the_session_continues() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let failed = lsp.request("opentide/__panic", Value::Null);
+    assert_eq!(failed["error"]["code"], -32603, "{failed}");
+    let hover = lsp.request(
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": "file:///none.kql" }, "position": { "line": 0, "character": 0 } }),
+    );
+    assert!(hover.get("result").is_some(), "{hover}");
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+}
+
+/// #185 P0.4: navigation reads and writes LSP columns (UTF-16 units) on
+/// lines with multi-byte characters, where bytes and columns differ.
+#[test]
+fn navigation_uses_utf16_columns_after_multi_byte_characters() {
+    let objective =
+        std::fs::read_to_string(repo_root().join("testdata/objects/objective-1.0.yaml")).unwrap();
+    let uuid = "00000000-0000-4000-8002-000000000001";
+    assert!(objective.contains(uuid));
+    let prefix = "# 😀日本é ";
+    let line_text = format!("{prefix}{uuid}");
+    let text = format!("name: Emoji 😀 notes\n{line_text}\n");
+    let col = prefix.encode_utf16().count() as u64; // 8, where the byte index is 15
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let open = |lsp: &mut Lsp, uri: &str, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": uri, "languageId": "opentide-yaml", "version": 1, "text": text } }),
+        );
+    };
+    open(&mut lsp, "file:///w/objects/objectives/o.yaml", &objective);
+    open(&mut lsp, "file:///w/objects/notes.yaml", &text);
+    let at = |character: u64| json!({ "textDocument": { "uri": "file:///w/objects/notes.yaml" }, "position": { "line": 1, "character": character } });
+
+    let definition = lsp.request("textDocument/definition", at(col + 3));
+    assert!(
+        definition["result"].is_object()
+            || definition["result"]
+                .as_array()
+                .is_some_and(|a| !a.is_empty()),
+        "{definition}"
+    );
+
+    let highlights = lsp.request("textDocument/documentHighlight", at(col + 3));
+    let first = &highlights["result"][0]["range"];
+    assert_eq!(first["start"]["character"], col, "{highlights}");
+    assert_eq!(
+        first["end"]["character"],
+        col + uuid.len() as u64,
+        "{highlights}"
+    );
+
+    let selection = lsp.request(
+        "textDocument/selectionRange",
+        json!({ "textDocument": { "uri": "file:///w/objects/notes.yaml" }, "positions": [{ "line": 1, "character": 0 }] }),
+    );
+    assert_eq!(
+        selection["result"][0]["range"]["end"]["character"],
+        line_text.encode_utf16().count() as u64,
+        "{selection}"
+    );
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+}
+
+/// #185 P0.9: resolving a completion item keeps its `textEdit` and
+/// `filterText` (the dotted field's replace range), and only adds docs.
+#[test]
+fn resolving_a_completion_item_keeps_its_edit() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let uri = "file:///q.esql";
+    let text = "FROM logs-endpoint.events.process-* | WHERE process.pa";
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "esql", "version": 1, "text": text } }),
+    );
+    let items = lsp.request(
+        "textDocument/completion",
+        json!({ "textDocument": { "uri": uri }, "position": { "line": 0, "character": text.len() } }),
+    );
+    let item = items["result"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item.get("textEdit").is_some()))
+        .cloned()
+        .unwrap_or_else(|| panic!("a dotted item with a textEdit: {items}"));
+    let resolved = lsp.request("completionItem/resolve", item.clone());
+    let resolved = &resolved["result"];
+    for key in ["label", "textEdit", "filterText", "kind", "insertText"] {
+        assert_eq!(resolved[key], item[key], "{key}: {resolved}");
+    }
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+}
+
+/// #185 P0.8: a client that pulls diagnostics and supports refresh gets
+/// them only by pulling, with a refresh request when another file changes
+/// what they say; any other client gets them only pushed. Never both.
+#[test]
+fn diagnostics_are_either_pulled_or_pushed_never_both() {
+    let uri = "file:///q.kql";
+    let text = "SecurityEvent | wher EventID == 4688";
+    let pull_capabilities = json!({
+        "textDocument": { "diagnostic": { "dynamicRegistration": false } },
+        "workspace": { "diagnostics": { "refreshSupport": true } }
+    });
+
+    let mut lsp = Lsp::spawn();
+    let init = lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": pull_capabilities }),
+    );
+    assert!(
+        init["result"]["capabilities"]["diagnosticProvider"].is_object(),
+        "{init}"
+    );
+    lsp.notify("initialized", json!({}));
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "kql", "version": 1, "text": text } }),
+    );
+    // Nothing is pushed: the next frame is the pull's answer.
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": 50, "method": "textDocument/diagnostic", "params": { "textDocument": { "uri": uri } } }));
+    let pulled = lsp.read();
+    assert_eq!(pulled["id"], 50, "nothing pushed before the pull: {pulled}");
+    let items = pulled["result"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "{pulled}");
+    assert!(
+        items[0].get("data").is_some(),
+        "pulled items carry data: {pulled}"
+    );
+    // visibility.toml changes what every document may say: ask for a pull.
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": "file:///w/.opentide/configurations/visibility.toml", "languageId": "toml", "version": 1, "text": "" } }),
+    );
+    let refresh = lsp.read();
+    assert_eq!(
+        refresh["method"], "workspace/diagnostic/refresh",
+        "{refresh}"
+    );
+    assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
+
+    let mut lsp = Lsp::spawn();
+    let init = lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    assert!(
+        init["result"]["capabilities"]
+            .get("diagnosticProvider")
+            .is_none(),
+        "{init}"
+    );
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "kql", "version": 1, "text": text } }),
+    );
+    let pushed = lsp.read();
+    assert_eq!(
+        pushed["method"], "textDocument/publishDiagnostics",
+        "{pushed}"
     );
 }

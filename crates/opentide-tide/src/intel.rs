@@ -13,6 +13,10 @@ use opentide_highlight::{TideField, load_tide_fields, tide_children, tide_field_
 pub struct TideInlay {
     pub position: Position,
     pub label: String,
+    /// The UUID the hint names, and the file of the object it names, for a
+    /// label that leads to the object (#185 P3.5).
+    pub uuid: String,
+    pub path: String,
 }
 
 pub fn field_markdown(field: &TideField) -> String {
@@ -367,6 +371,8 @@ pub fn inlay_hints(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> 
             out.push(TideInlay {
                 position: offset_to_position(source, m.end()),
                 label: format!("{} {}", obj.object_type, obj.name),
+                uuid: obj.uuid.clone(),
+                path: obj.path.clone(),
             });
         }
     }

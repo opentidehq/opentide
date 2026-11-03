@@ -7,10 +7,17 @@
 //! [`MessageSession`] is the same server for a host with no stdio (the
 //! browser build, `opentide-wasm`): one JSON-RPC message in, its replies out.
 
-mod jsonrpc;
+mod handlers;
+mod protocol;
 pub mod server;
+mod session;
+pub mod uri;
 
-pub use server::{MessageSession, WORKSPACE_CATALOGS, run_listen, run_stdio, use_host_catalogs};
+pub use handlers::{DIAGNOSTICS_DOCS, SHOW_REFERENCES};
+pub use server::{
+    MessageSession, WORKSPACE_CATALOGS, host_info, run_listen, run_stdio, run_stdio_status, serve,
+    serve_with_status, set_host_info, use_host_catalogs,
+};
 
 /// The server's version: the crate version every `opentide-*` crate shares.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

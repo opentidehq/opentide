@@ -1,0 +1,1 @@
+device_os:WINDOWS (((process_name:\\AnyDesk.exe OR process_name:\\AnyDeskMSI.exe) (filemod_name:.dll OR filemod_name:.exe)) (-filemod_name:\\gcapi.dll))

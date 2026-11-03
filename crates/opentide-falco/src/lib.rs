@@ -20,8 +20,7 @@
 //! is a warning; what Falco refuses to load is an error. See `docs/FALCO.md`.
 
 use opentide_core::{
-    ByteSpan, CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, codes,
-    position_to_offset, span_to_range,
+    ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::parse as ts_parse;
@@ -1085,8 +1084,10 @@ const KEYWORDS: &[(&str, &str)] = &[
     ),
 ];
 
-pub fn hover(text: &str, position: Position, ctx: &Context) -> Option<String> {
-    let offset = position_to_offset(text, position);
+/// Hover at byte `offset` of `text` (a host converts the editor's UTF-16
+/// position once, with `opentide_core::position_to_offset`).
+pub fn hover(text: &str, offset: usize, ctx: &Context) -> Option<String> {
+    let offset = offset.min(text.len());
     let tree = ts_parse(LanguageId::Falco, text)?;
     let node = tree.root_node().descendant_for_byte_range(offset, offset)?;
     let word = node_text(node, text);
@@ -1860,10 +1861,7 @@ mod tests {
     fn hover_names_differing_later_definitions() {
         let h = hover(
             "evt.type = connect and inbound_outbound",
-            Position {
-                line: 0,
-                character: 26,
-            },
+            26,
             &Context::default(),
         )
         .unwrap();
@@ -1908,10 +1906,7 @@ mod tests {
     fn hover_explains_fields_macros_lists_and_operators() {
         let ctx = Context::default();
         let text = "spawned_process and proc.name in (shell_binaries) and fd.name startswith /etc";
-        let at = |needle: &str| {
-            let off = text.find(needle).unwrap() + 1;
-            opentide_core::offset_to_position(text, off)
-        };
+        let at = |needle: &str| text.find(needle).unwrap() + 1;
         assert!(
             hover(text, at("proc.name"), &ctx)
                 .unwrap()

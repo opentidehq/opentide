@@ -5,7 +5,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 hits="$(
-  grep -RIn --exclude-dir=target --exclude-dir=.git --exclude-dir=node_modules \
+  grep -RIn --exclude-dir=target --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
     -E 'createOtideClient\(|opentide-sql' "$root" \
     | grep -v 'check-names' \
     | grep -vE 'not a valid|never use|never |There is no|out of scope|@deprecated|is rejected' \

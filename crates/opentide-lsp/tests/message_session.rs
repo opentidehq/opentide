@@ -196,12 +196,24 @@ fn malformed_messages_unknown_methods_and_exit() {
     assert_eq!(replies.len(), 1);
     assert_eq!(replies[0]["error"]["code"], -32700);
 
+    // The lifecycle is the stdio server's: nothing before `initialize`.
+    let replies = send(&mut session, json!({ "id": 6, "method": "shutdown" }));
+    assert_eq!(replies[0]["id"], 6);
+    assert_eq!(replies[0]["error"]["code"], -32002);
+
+    let mut session = start(Value::Null);
     let replies = send(
         &mut session,
         json!({ "id": 7, "method": "opentide/nothing", "params": {} }),
     );
     assert_eq!(replies[0]["id"], 7);
     assert_eq!(replies[0]["error"]["code"], -32601);
+
+    // A body that is a message but not a valid one is answered, and the
+    // session goes on.
+    let replies = session.handle("[1, 2]");
+    let reply: Value = serde_json::from_str(&replies[0]).unwrap();
+    assert_eq!(reply["error"]["code"], -32600);
 
     assert_eq!(
         request(&mut session, 8, "shutdown", Value::Null),
@@ -210,9 +222,32 @@ fn malformed_messages_unknown_methods_and_exit() {
     assert!(!session.is_closed());
     assert!(send(&mut session, json!({ "method": "exit" })).is_empty());
     assert!(session.is_closed());
+    assert!(session.shut_down());
     assert!(
         session
             .handle(r#"{"jsonrpc":"2.0","id":9,"method":"shutdown"}"#)
             .is_empty()
+    );
+}
+
+/// A host that knows every object by its metadata and opens one of them:
+/// the open file is that object, not a second one with its UUID.
+#[test]
+fn an_open_object_is_not_a_duplicate_of_its_own_metadata() {
+    let objective = format!(
+        "name: Suspicious process creation\nmetadata:\n  uuid: {OBJECTIVE}\n  schema: objective::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: Process creation.\n"
+    );
+    let mut session = start(json!({ "workspace": { "objects": [
+        { "uuid": OBJECTIVE, "schema": "objective::1.0", "name": "Suspicious process creation" }
+    ] } }));
+    let diagnostics = open(
+        &mut session,
+        "objects/objectives/suspicious-process-creation.yaml",
+        "opentide-yaml",
+        &objective,
+    );
+    assert!(
+        !codes(&diagnostics).contains(&"duplicate_id"),
+        "{diagnostics:?}"
     );
 }

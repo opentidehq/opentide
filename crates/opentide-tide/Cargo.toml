@@ -29,4 +29,3 @@ regex.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-insta.workspace = true

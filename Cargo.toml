@@ -45,17 +45,21 @@ opentide-lsp = { path = "crates/opentide-lsp", version = "=0.8.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
+# Spans of configuration TOML keys (opentide-analysis `config`). The version
+# `toml` 0.8 already locks.
+toml_edit = { version = "0.22", default-features = false, features = ["parse"] }
 thiserror = "2"
 anyhow = "1"
-regex = "1"
+# The LSP host (#90, #185): framing, typed messages, file URIs.
+lsp-server = "0.10"
 lsp-types = "0.97"
+url = "2.5"
+regex = "1"
 serde_yaml = "0.9"
 clap = { version = "4", features = ["derive"] }
 tree-sitter = "0.25"
 cc = "1"
 uuid = "1"
-similar = "2"
-insta = "1"
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 

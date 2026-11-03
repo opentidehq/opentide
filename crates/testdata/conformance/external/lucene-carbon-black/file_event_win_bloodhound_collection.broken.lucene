@@ -1,0 +1,1 @@
+(device_os:WINDOWS ((filemod_name:BloodHound.zip OR filemod_name:_computers.json OR filemod_name:_containers.json OR filemod_name:_gpos.json OR filemod_name:_groups.json OR filemod_name:_ous.json OR filemod_name:_users.json) (-(process_name:\\svchost.exe filemod_name:C\:\\Program\ Files\\WindowsApps\\Microsoft.* filemod_name:\\pocket_containers.json)))
