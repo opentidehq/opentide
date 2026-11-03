@@ -777,7 +777,7 @@ Microsoft Sentinel is aligned to ATT&CK v18, while the `att&ck` vocabulary that 
 'T1685' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; T1685 (Disable or Modify Tools) is newer than ATT&CK v18: use T1562 or T1562.001 or T1562.006, which it replaced
 ```
 
-An id ATT&CK added after v18 with no predecessor, such as T1696, says it has no v18 equivalent; leave it out of the Sentinel block. Editors offer the v18 ids after `opentide generate schemas`. The list applies to this field only: the techniques deploy resolves from the rule's objective still come from the `att&ck` vocabulary.
+An id ATT&CK added after v18 with no predecessor, such as T1696, says it has no v18 equivalent; leave it out of the Sentinel block. An id ATT&CK retired before v18, which an imported or older rule may carry, names the v18 id that replaced it (`T1086`: use `T1059.001`), or says it has no replacement (`T1064`). Editors offer the v18 ids after `opentide generate schemas`. The list applies to this field only: the techniques deploy resolves from the rule's objective still come from the `att&ck` vocabulary.
 
 ## Still stuck?
 

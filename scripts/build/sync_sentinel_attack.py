@@ -8,19 +8,23 @@ vocabulary: every technique and sub-technique of the ATT&CK 18.1 Enterprise,
 Mobile and ICS matrices that is neither revoked nor deprecated. 18.0 carries the
 same ids, names and tactics, so the list is "v18" either way (#686).
 
-So that ``validate`` can say what to write instead, the file also lists the ids
-the ATT&CK release opentide's vocabulary pins (20.0) has and 18.1 does not, each
-with the v18 ids it revoked in their favour (``T1685`` replaces ``T1562``,
-``T1562.001`` and ``T1562.006``).
+So that ``validate`` can say what to write instead, the file also lists:
 
-The list is generated from MITRE's STIX bundles into
+- ``later``: the ids of the release the ``att&ck`` vocabulary pins (its
+  ``source_version``) that 18.1 does not have, each with the v18 ids revoked in
+  its favour (``T1685`` replaces ``T1562``, ``T1562.001`` and ``T1562.006``);
+- ``retired``: the ids 18.1 lists as revoked or deprecated, each with the v18 ids
+  that replace it (``T1086``, PowerShell, is ``T1059.001``) or none.
+
+Revocations are followed through every hop, so an id revoked twice still names
+its v18 counterpart. The list is generated from MITRE's STIX bundles into
 ``src/opentide/data/sentinel/attack-v18.json``::
 
     uv run python scripts/build/sync_sentinel_attack.py            # download and write
     uv run python scripts/build/sync_sentinel_attack.py --check    # exit 1 when it would change
     uv run python scripts/build/sync_sentinel_attack.py --stix-dir <attack-stix-data checkout>
 
-``--stix-dir`` reads ``{domain}-attack/{domain}-attack-{18.1,20.0}.json`` from a local
+``--stix-dir`` reads ``{domain}-attack/{domain}-attack-{release}.json`` from a local
 checkout of mitre-attack/attack-stix-data instead of downloading them.
 """
 
@@ -31,17 +35,22 @@ import json
 import re
 import sys
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-from opentide.vocabulary.stix_attack import load_stix_bundle
+from opentide.vocabulary.stix_attack import _mitre_external_id, load_stix_bundle
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "src" / "opentide" / "data" / "sentinel" / "attack-v18.json"
+VOCABULARY = ROOT / "src" / "opentide" / "data" / "vocabulary" / "att&ck.vocab.toml"
 ATTACK_RELEASE = "18.1"
-#: The release opentide's ``att&ck`` vocabulary pins (``att&ck::1.2``).
-LATER_RELEASE = "20.0"
 DOMAINS = ("enterprise", "mobile", "ics")
 SOURCE = (
     "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/"
@@ -50,12 +59,46 @@ SOURCE = (
 TECHNIQUE_ID = re.compile(r"^T\d{4}(\.\d{3})?$")
 
 
+def vocabulary_release() -> str:
+    """The ATT&CK release the bundled ``att&ck`` vocabulary was generated from."""
+    data = tomllib.loads(VOCABULARY.read_text(encoding="utf-8"))
+    return str(data["source_version"])
+
+
+@dataclass
+class Release:
+    """One ATT&CK release's techniques across the three matrices."""
+
+    names: dict[str, str] = field(default_factory=dict)
+    """Active ids to their names, a sub-technique's prefixed with its parent's."""
+    retired: dict[str, str] = field(default_factory=dict)
+    """Revoked or deprecated ids to their names."""
+    revoked_by: dict[str, set[str]] = field(default_factory=dict)
+    """Each revoked id to the ids its revoked-by relationships name."""
+
+    def successors(self, identifier: str) -> list[str]:
+        """The active ids *identifier* was revoked in favour of, through every hop."""
+        found: set[str] = set()
+        seen: set[str] = set()
+        todo = [identifier]
+        while todo:
+            current = todo.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            if current in self.names and current != identifier:
+                found.add(current)
+                continue
+            todo.extend(self.revoked_by.get(current, ()))
+        return sorted(found)
+
+
 def _bundle_path(stix_dir: Path, domain: str, release: str) -> Path:
     return stix_dir / f"{domain}-attack" / f"{domain}-attack-{release}.json"
 
 
-def _download(directory: Path) -> Path:
-    for release in (ATTACK_RELEASE, LATER_RELEASE):
+def _download(directory: Path, releases: tuple[str, ...]) -> Path:
+    for release in releases:
         for domain in DOMAINS:
             url = SOURCE.format(domain=domain, release=release)
             destination = _bundle_path(directory, domain, release)
@@ -65,78 +108,72 @@ def _download(directory: Path) -> Path:
     return directory
 
 
-def _mitre_id(obj: dict[str, Any]) -> str | None:
-    for reference in obj.get("external_references") or []:
-        if reference.get("source_name") == "mitre-attack" and reference.get("external_id"):
-            return str(reference["external_id"])
-    return None
-
-
-def _active(stix_dir: Path, release: str) -> tuple[dict[str, str], dict[str, list[str]]]:
-    """``({id: name}, {id: [ids it revoked]})`` for one release's three matrices.
-
-    A sub-technique's name is prefixed with its parent's (``Modify Authentication
-    Process: Conditional Access Policies``), as the ``att&ck`` vocabulary names them.
-    """
-    names: dict[str, str] = {}
+def load_release(stix_dir: Path, release: str) -> Release:
+    """Read one release's Enterprise, Mobile and ICS bundles."""
+    loaded = Release()
     by_stix: dict[str, str] = {}
-    revoked_by: list[tuple[str, str]] = []
+    relationships: list[tuple[str, str]] = []
+    raw_names: dict[str, str] = {}
     for domain in DOMAINS:
         for obj in load_stix_bundle(_bundle_path(stix_dir, domain, release)):
             if obj.get("type") == "relationship" and obj.get("relationship_type") == "revoked-by":
-                revoked_by.append((str(obj["source_ref"]), str(obj["target_ref"])))
+                relationships.append((str(obj["source_ref"]), str(obj["target_ref"])))
                 continue
             if obj.get("type") != "attack-pattern":
                 continue
-            identifier = _mitre_id(obj)
+            identifier = _mitre_external_id(obj)
             if identifier is None or not TECHNIQUE_ID.match(identifier):
                 continue
             by_stix[str(obj["id"])] = identifier
+            name = str(obj.get("name", "")).strip()
             if obj.get("revoked") or obj.get("x_mitre_deprecated"):
-                continue
-            names.setdefault(identifier, str(obj["name"]).strip())
-    labelled = {
-        identifier: (
-            f"{names[identifier.split('.')[0]]}: {name}"
-            if "." in identifier and identifier.split(".")[0] in names
-            else name
-        )
-        for identifier, name in names.items()
-    }
-    replaces: dict[str, list[str]] = {}
-    for source, target in revoked_by:
+                loaded.retired.setdefault(identifier, name)
+            else:
+                raw_names.setdefault(identifier, name)
+    for identifier, name in raw_names.items():
+        parent = identifier.split(".")[0]
+        if "." in identifier and parent in raw_names:
+            name = f"{raw_names[parent]}: {name}"
+        loaded.names[identifier] = name
+    # An id can be both active in one matrix and retired in another; active wins.
+    loaded.retired = {k: v for k, v in loaded.retired.items() if k not in loaded.names}
+    for source, target in relationships:
         if source in by_stix and target in by_stix:
-            replaces.setdefault(by_stix[target], []).append(by_stix[source])
-    return dict(sorted(labelled.items())), replaces
+            loaded.revoked_by.setdefault(by_stix[source], set()).add(by_stix[target])
+    loaded.names = dict(sorted(loaded.names.items()))
+    return loaded
 
 
-def techniques(stix_dir: Path) -> dict[str, str]:
-    """``{id: name}`` for the active ATT&CK 18.1 techniques and sub-techniques, sorted by id."""
-    return _active(stix_dir, ATTACK_RELEASE)[0]
-
-
-def later(stix_dir: Path, v18: dict[str, str]) -> dict[str, dict[str, Any]]:
-    """The ids active in ATT&CK 20.0 but not in 18.1, with the v18 ids each replaces."""
-    names, replaces = _active(stix_dir, LATER_RELEASE)
-    return {
-        identifier: {
-            "name": name,
-            "replaces": sorted({old for old in replaces.get(identifier, []) if old in v18}),
-        }
-        for identifier, name in names.items()
-        if identifier not in v18
-    }
-
-
-def document(stix_dir: Path) -> str:
+def document(stix_dir: Path, later_release: str) -> str:
     """The data file's text."""
-    payload = {
+    v18 = load_release(stix_dir, ATTACK_RELEASE)
+    later = load_release(stix_dir, later_release)
+    # For each later id, the v18 ids whose revocation chain (in the later release) ends at it.
+    replaces: dict[str, set[str]] = {}
+    for old in v18.names:
+        for new in later.successors(old):
+            replaces.setdefault(new, set()).add(old)
+    payload: dict[str, Any] = {
         "attack": ATTACK_RELEASE,
         "domains": list(DOMAINS),
         "source": SOURCE.replace("{release}", ATTACK_RELEASE),
         "generator": "scripts/build/sync_sentinel_attack.py",
-        "techniques": (v18 := techniques(stix_dir)),
-        "later": {"attack": LATER_RELEASE, "techniques": later(stix_dir, v18)},
+        "techniques": v18.names,
+        "retired": {
+            identifier: {
+                "name": name,
+                "replaced_by": [new for new in v18.successors(identifier) if new in v18.names],
+            }
+            for identifier, name in sorted(v18.retired.items())
+        },
+        "later": {
+            "attack": later_release,
+            "techniques": {
+                identifier: {"name": name, "replaces": sorted(replaces.get(identifier, ()))}
+                for identifier, name in later.names.items()
+                if identifier not in v18.names
+            },
+        },
     }
     return json.dumps(payload, indent=1, ensure_ascii=False) + "\n"
 
@@ -146,9 +183,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="exit 1 when the file would change")
     parser.add_argument("--stix-dir", type=Path, help="a local attack-stix-data checkout")
     args = parser.parse_args(argv)
+    later_release = vocabulary_release()
     with tempfile.TemporaryDirectory() as scratch:
-        stix_dir = args.stix_dir or _download(Path(scratch))
-        expected = document(stix_dir)
+        stix_dir = args.stix_dir or _download(Path(scratch), (ATTACK_RELEASE, later_release))
+        expected = document(stix_dir, later_release)
     current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""
     if args.check:
         if current != expected:

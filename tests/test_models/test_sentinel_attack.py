@@ -7,16 +7,18 @@ vocabulary, which follows the current ATT&CK release.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 import yaml
 from pydantic import ValidationError
+from pydantic.fields import FieldInfo
 from tests.corpus_support import TIDE_CORPUS_ROOT
 
 from opentide.models.platform_configs import SentinelAlert
 from opentide.models.sentinel_attack import (
     SENTINEL_ATTACK_VERSION,
+    SentinelTechnique,
     _data,
     check_sentinel_technique,
     sentinel_techniques,
@@ -90,6 +92,35 @@ def test_a_near_miss_suggests_the_v18_id(typo: str) -> None:
     assert _error([typo])["msg"].endswith(
         "did you mean T1556.009 (Modify Authentication Process: Conditional Access Policies)?"
     )
+
+
+def test_an_id_retired_before_v18_names_its_replacement() -> None:
+    """A string match would suggest T1608 (Stage Capabilities) for T1086."""
+    assert _error(["T1086"])["msg"].endswith(
+        "ATT&CK retired T1086 (PowerShell) before v18: use T1059.001, which replaced it"
+    )
+
+
+def test_an_id_retired_before_v18_without_a_replacement_says_so() -> None:
+    assert _error(["T1064"])["msg"].endswith(
+        "ATT&CK retired T1064 (Scripting) before v18 without a replacement"
+    )
+
+
+def test_retired_ids_are_not_v18_ids_and_point_at_v18_ids() -> None:
+    retired = _data()["retired"]
+    techniques = sentinel_techniques()
+
+    assert not set(retired) & set(techniques)
+    for entry in retired.values():
+        assert set(entry["replaced_by"]) <= set(techniques)
+
+
+def test_the_enum_is_built_when_a_schema_is_generated_not_at_import() -> None:
+    """The 898-entry enum is a callable ``json_schema_extra``, run by schema generation."""
+    (info,) = [meta for meta in get_args(SentinelTechnique)[1:] if isinstance(meta, FieldInfo)]
+
+    assert callable(info.json_schema_extra)
 
 
 def test_an_unrelated_value_has_no_suggestion() -> None:

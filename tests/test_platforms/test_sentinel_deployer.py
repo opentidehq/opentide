@@ -475,7 +475,8 @@ def test_new_attack_stages_are_sent_as_defense_evasion(
 
     assert body["properties"]["tactics"] == ["Execution", "DefenseEvasion"]
     assert body["properties"]["techniques"] == ["T1059", "T1027", "T1685", "T1562", "T0820"]
-    assert body["properties"]["subTechniques"] == ["T1685.002", "T1562.001"]
+    # T1685.002 is newer than ATT&CK v18: only its parent goes to Sentinel.
+    assert body["properties"]["subTechniques"] == ["T1562.001"]
 
 
 def test_stage_without_a_sentinel_tactic_is_dropped_with_a_warning(
@@ -568,4 +569,39 @@ def test_resolved_techniques_replace_the_alert_block_sub_techniques(
     body, _ = _sent_body(_corpus_rule(alert=alert))
 
     assert body["properties"]["techniques"] == ["T1059"]
+    assert "subTechniques" not in body["properties"]
+
+
+def test_resolved_sub_technique_newer_than_v18_is_dropped_with_a_warning(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sentinel is aligned to ATT&CK v18; the objective's ids follow the vocabulary's release."""
+    monkeypatch.setattr(
+        deployer_module, "techniques_resolver", lambda uuid: ["T1027.018", "T1556.009"]
+    )
+    logger = MagicMock()
+    monkeypatch.setattr(deployer_module, "logger", logger)
+    rule = _corpus_rule()
+
+    compiled = SentinelDeploy().compile_deployment(service=None, data=rule, tenant="tenant-a")
+
+    props = compiled["properties"]
+    assert props["techniques"] == ["T1027", "T1556"]
+    assert props["subTechniques"] == ["T1556.009"]
+    logger.warning.assert_any_call(
+        "dropping_sub_technique_newer_than_sentinel_attack",
+        rule=rule.metadata.uuid,
+        technique="T1027.018",
+        attack="18",
+    )
+
+
+def test_only_newer_sub_techniques_send_no_sub_techniques_key(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(deployer_module, "techniques_resolver", lambda uuid: ["T1027.018"])
+
+    body, _ = _sent_body(_corpus_rule())
+
+    assert body["properties"]["techniques"] == ["T1027"]
     assert "subTechniques" not in body["properties"]
