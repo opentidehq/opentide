@@ -70,6 +70,9 @@ REJECT = {
     # Elasticsearch parses fuzziness itself and fails the query string on a
     # value Lucene's plain parser would clamp (`~3`, `~0.5`).
     "lucene": {"lucene_parse_error", "lucene_regexp", "lucene_escape", "lucene_fuzzy"},
+    # Carbon Black Cloud: a syntax error, or a field near a process search
+    # field (`search_validation` refuses an unknown field).
+    "carbon_black": {"lucene_parse_error", "lucene_escape", "cbc_unknown_field"},
 }
 ELASTIC_LANGUAGES = ("esql", "eql", "kuery", "lucene")
 UNKNOWN_NAME = {
@@ -83,6 +86,7 @@ REFERENCE = {
     "eql": "EqlBase.g4",
     "kuery": "Kibana grammar.peggy",
     "lucene": "Lucene QueryParser",
+    "carbon_black": "Carbon Black Cloud search_validation",
 }
 
 # Pinned Elastic references, fetched at CI time and never committed: the
@@ -134,6 +138,8 @@ class Query:
 
 
 def corpus(language: str) -> list[Query]:
+    if language == "carbon_black":
+        return carbon_black_corpus()
     files = sorted(
         [
             *ROOT.glob(f"testdata/corpus/{language}/*.{language}"),
@@ -290,6 +296,69 @@ def embedded(language: str) -> list[Query]:
     return queries
 
 
+def carbon_black_corpus() -> list[Query]:
+    """Carbon Black Cloud queries: the converted SigmaHQ corpus with its
+    twins, the probes, and every `configurations.carbon_black_cloud.query`
+    and `system: carbon_black_cloud` hunt in a Tide rule under `testdata/`."""
+    import yaml
+
+    files = sorted(
+        [
+            *ROOT.glob("testdata/conformance/external/lucene-carbon-black/*.lucene"),
+            *ROOT.glob("testdata/oracles/carbon_black/*.lucene"),
+        ]
+    )
+    queries = [Query(rel(p), p.read_text(), ".broken." in p.name) for p in files]
+    for path in sorted(ROOT.glob("testdata/**/*.yaml")):
+        try:
+            doc = yaml.safe_load(path.read_text())
+        except yaml.YAMLError:
+            continue
+        if not isinstance(doc, dict):
+            continue
+        config = (doc.get("configurations") or {}).get("carbon_black_cloud")
+        if isinstance(config, dict) and isinstance(config.get("query"), str):
+            # Deploy joins the lines with spaces.
+            text = " ".join(config["query"].splitlines())
+            queries.append(Query(f"{rel(path)}#configurations.carbon_black_cloud.query", text, False))
+        searches = ((doc.get("response") or {}).get("procedure") or {}).get("searches") or []
+        for n, search in enumerate(searches if isinstance(searches, list) else []):
+            if isinstance(search, dict) and search.get("system") == "carbon_black_cloud" and isinstance(search.get("query"), str):
+                ident = f"{rel(path)}#response.procedure.searches.{n}.query"
+                queries.append(Query(ident, " ".join(search["query"].splitlines()), False))
+    return queries
+
+
+def carbon_black_reference(queries: list[Query]) -> dict[str, list[str]]:
+    """Each query through `POST /api/investigate/v2/orgs/{org}/processes/search_validation`,
+    as cbc_sdk's `validate_process_query` sends it."""
+    url = os.environ["OPENTIDE_CBC_URL"].rstrip("/")
+    org = os.environ["OPENTIDE_CBC_ORG_KEY"]
+    token = os.environ["OPENTIDE_CBC_TOKEN"]  # "<api secret>/<api id>"
+    endpoint = f"{url}/api/investigate/v2/orgs/{org}/processes/search_validation"
+    verdicts: dict[str, list[str]] = {}
+    for query in queries:
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps({"query": query.text}).encode(),
+            headers={"X-Auth-Token": token, "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = json.load(response)
+        except urllib.error.HTTPError as err:
+            sys.exit(f"search_validation failed on {query.id}: HTTP {err.code}")
+        if body.get("valid"):
+            verdicts[query.id] = []
+        else:
+            message = body.get("invalid_message") or "invalid"
+            if body.get("error_offset") is not None:
+                message += f" (offset {body['error_offset']})"
+            verdicts[query.id] = [message]
+    return verdicts
+
+
 def rel(path: pathlib.Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
@@ -309,10 +378,14 @@ def ours(language: str, queries: list[Query], scratch: pathlib.Path) -> dict[str
 
     def analyze(item: tuple[int, Query]) -> tuple[str, list[dict]]:
         n, query = item
-        path = scratch / f"ours-{n}.{language}"
+        extension = "lucene" if language == "carbon_black" else language
+        path = scratch / f"ours-{n}.{extension}"
         path.write_text(query.text)
+        args = ["--language", extension]
+        if language == "carbon_black":
+            args += ["--platform", "carbon_black_cloud"]
         run = subprocess.run(
-            [str(exe), "analyze", "--language", language, str(path)],
+            [str(exe), "analyze", *args, str(path)],
             capture_output=True,
             text=True,
         )
@@ -329,7 +402,11 @@ def rejected_by_ours(language: str, diagnostics: list[dict]) -> list[str]:
         f"{d['code']}: {d['message']}"
         for d in diagnostics
         if d["code"] in REJECT[language]
-        and (language not in ELASTIC_LANGUAGES or d["severity"] == "error")
+        and (
+            language not in (*ELASTIC_LANGUAGES, "carbon_black")
+            or d["severity"] == "error"
+            or d["code"] == "cbc_unknown_field"
+        )
     ]
 
 
@@ -895,6 +972,15 @@ def main() -> int:
     args = parser.parse_args()
     language = args.language
 
+    if language == "carbon_black" and not all(
+        os.environ.get(k) for k in ("OPENTIDE_CBC_URL", "OPENTIDE_CBC_ORG_KEY", "OPENTIDE_CBC_TOKEN")
+    ):
+        message = "Carbon Black Cloud oracle: OPENTIDE_CBC_URL, OPENTIDE_CBC_ORG_KEY and OPENTIDE_CBC_TOKEN are not all set"
+        if os.environ.get("OPENTIDE_ORACLE_REQUIRED") == "1":
+            print(f"error: {message}", file=sys.stderr)
+            return 1
+        print(f"skipped: {message}")
+        return 0
     queries = corpus(language)
     errors: list[str] = []
     known = ledger(language, {q.id for q in queries}, errors)
@@ -906,6 +992,10 @@ def main() -> int:
             reference = kql_reference(queries, scratch)
             names = kql_names(flagged)
             kql_columns(queries, diagnostics, kql_semantic(queries, scratch), known, errors)
+        elif language == "carbon_black":
+            # The tenant has no Carbon Black catalogue to compare names with.
+            reference = carbon_black_reference(queries)
+            names = {}
         elif language in ELASTIC_LANGUAGES:
             # Catalog names come from the pinned Elasticsearch docs through
             # the sync scripts; the parser references carry no catalog.

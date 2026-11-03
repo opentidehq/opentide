@@ -247,7 +247,11 @@ Engine checks below the grammar (Elastic dialect unless noted):
 - `lucene_unescaped_slash` (warning): `a/b/c` or `path:/var/log` reads `/b/` or `/var/` as a regexp. An unclosed `/` is a `lucene_parse_error` that says so.
 - `lucene_bare_term` (hint; warning for Carbon Black): `f:v w` searches `w` in every field.
 - `lucene_looks_like_kuery` (warning): two different kinds of KQL syntax (lower-case operators, `f >= 10`, a leading `not`, text only KQL parses) suggest `language: kuery`.
-- Carbon Black Cloud (`configurations.carbon_black_cloud.query`): newlines count as spaces (deploy joins lines), `_exists_`, `f:>v`, and `f\*:` are `lucene_elasticsearch_only` warnings, regexp and fuzzy problems are warnings (the Solr version is not known), and upper-case letters in a regexp get a hint because Carbon Black matches lower-cased tokens. There is no Carbon Black field catalogue yet.
+- Carbon Black Cloud (`configurations.carbon_black_cloud.query`): newlines count as spaces (deploy joins lines), `_exists_`, `f:>v`, and `f\*:` are `lucene_elasticsearch_only` warnings, regexp and fuzzy problems are warnings (the Solr version is not known), and upper-case letters in a regexp get a hint because Carbon Black matches lower-cased tokens.
+- Carbon Black fields come from `catalogs/carbon_black/fields.toml`: 76 process search fields with their type, whether a process can hold several values, and the values a few take (`device_os`, `process_integrity_level`). The file says where each field is attested (Carbon Black's Python SDK and pySigma's Carbon Black pipeline). In a Carbon Black query:
+  - `cbc_unknown_field` (warning) names a field within two edits of a catalog field and suggests it (`process_nmae` → `process_name`). A field far from every catalog field is left alone: the catalog may lack it.
+  - Hover shows a field's type and description, and completion offers the catalog's fields, or a field's values after `field:`. ECS fields are never offered: they are Elastic's. A raw `.lucene` file keeps the Elastic behaviour; `opentide-lsp analyze --platform carbon_black_cloud` checks one in the Carbon Black dialect.
+  - Which fields Carbon Black tokenizes is not in the catalog (Carbon Black documents it only on developer.carbonblack.com), so the upper-case regexp hint still fires on every field.
 
 | id | grammar rule | fixture ids | capture |
 | --- | --- | --- | --- |

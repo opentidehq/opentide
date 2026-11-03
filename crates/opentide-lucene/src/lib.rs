@@ -9,6 +9,7 @@
 //! `/regexp/` bodies are Lucene's own regular-expression grammar
 //! ([`regexp`]). Those are the checks this engine adds after the grammar.
 
+pub mod carbon_black;
 mod ecs;
 pub mod regexp;
 
@@ -88,6 +89,7 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
             field_wildcard(node, text, &mut diagnostics);
             if !elastic {
                 elasticsearch_field_syntax(node, text, &mut diagnostics);
+                carbon_black::check_field(node, text, &mut diagnostics);
             }
         }
         "field_query" => range_operator(node, text, dialect, &mut diagnostics),
@@ -862,6 +864,47 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
         .iter()
         .find(|(k, _)| *k == word)
         .map(|(k, d)| format!("**`{k}`** (Lucene)\n\n{d}\n\n[Elastic docs]({SYNTAX_DOCS})"))
+}
+
+/// Hover in a dialect: Carbon Black fields from its process search catalog,
+/// then the operators every dialect shares.
+pub fn hover_dialect(source: &str, offset: usize, dialect: Dialect) -> Option<String> {
+    if dialect == Dialect::CarbonBlack {
+        let offset = offset.min(source.len());
+        if let Some(tree) = ts_parse(LanguageId::Lucene, source) {
+            // A field name is a `term` (or a wildcard) under `field_name`.
+            let mut node = tree.root_node().descendant_for_byte_range(offset, offset);
+            while let Some(n) = node {
+                if n.kind() == "field_name" {
+                    if let Some(f) = carbon_black::field(text(n, source)) {
+                        return Some(carbon_black::markdown(f));
+                    }
+                    break;
+                }
+                node = n.parent();
+            }
+        }
+    }
+    hover(source, offset)
+}
+
+/// Completion in a dialect: a Carbon Black query is offered its process
+/// search fields (or a field's values), never ECS fields.
+pub fn completions_dialect(source: &str, offset: usize, dialect: Dialect) -> Vec<CompletionItem> {
+    match dialect {
+        Dialect::Elastic => completions(source, offset),
+        Dialect::CarbonBlack => {
+            let before = &source[..offset.min(source.len())];
+            let mut items = Vec::new();
+            if before.ends_with(char::is_whitespace) && !before.trim().is_empty() {
+                for kw in ["AND", "OR", "NOT"] {
+                    items.push(CompletionItem::new(kw, "keyword"));
+                }
+            }
+            items.extend(carbon_black::completions(before));
+            items
+        }
+    }
 }
 
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {

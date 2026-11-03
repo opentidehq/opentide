@@ -527,6 +527,9 @@ pub mod codes {
     pub const ECS_TYPE_MISMATCH: &str = "ecs_type_mismatch";
     pub const ECS_UNKNOWN_FIELD: &str = "ecs_unknown_field";
     pub const ELASTIC_DATASET_NOT_DECLARED: &str = "elastic_dataset_not_declared";
+    /// A Carbon Black Cloud query field one edit or two from a catalog field
+    /// (#162).
+    pub const CBC_UNKNOWN_FIELD: &str = "cbc_unknown_field";
     /// The host's configuration checker failed on a configuration file.
     pub const CONFIG_CHECK_FAILED: &str = "config_check_failed";
 
@@ -628,6 +631,7 @@ pub mod codes {
         ECS_TYPE_MISMATCH,
         ECS_UNKNOWN_FIELD,
         ELASTIC_DATASET_NOT_DECLARED,
+        CBC_UNKNOWN_FIELD,
         CONFIG_CHECK_FAILED,
     ];
 
@@ -831,6 +835,9 @@ pub mod codes {
             }
             ECS_UNKNOWN_FIELD => {
                 "The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields."
+            }
+            CBC_UNKNOWN_FIELD => {
+                "A field in a Carbon Black Cloud query is a near miss of a process search field."
             }
             ELASTIC_DATASET_NOT_DECLARED => {
                 "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml."

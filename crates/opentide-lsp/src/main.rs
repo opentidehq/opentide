@@ -48,6 +48,11 @@ enum Command {
         file: PathBuf,
         #[arg(long)]
         language: Option<String>,
+        /// The detection platform a query file is for, as a `configurations`
+        /// key: `carbon_black_cloud` checks Lucene in the Carbon Black
+        /// dialect, `defender_for_endpoint` KQL against the Defender schema.
+        #[arg(long)]
+        platform: Option<String>,
     },
     /// Highlight a file and print JSON tokens.
     Highlight {
@@ -86,7 +91,11 @@ fn main() -> Result<()> {
         return server::run_listen(&addr);
     }
     match cli.command {
-        Some(Command::Analyze { file, language }) => cmd_analyze(&file, language.as_deref()),
+        Some(Command::Analyze {
+            file,
+            language,
+            platform,
+        }) => cmd_analyze(&file, language.as_deref(), platform.as_deref()),
         Some(Command::Highlight {
             file,
             language,
@@ -112,9 +121,19 @@ fn detect_language(path: &Path, override_lang: Option<&str>) -> Result<LanguageI
         .with_context(|| format!("cannot detect language from extension {ext:?}; pass --language"))
 }
 
-fn cmd_analyze(file: &Path, language: Option<&str>) -> Result<()> {
+fn cmd_analyze(file: &Path, language: Option<&str>, platform: Option<&str>) -> Result<()> {
     let text = read_document(file)?;
     let language = detect_language(file, language)?;
+    if let Some(platform) = platform.filter(|_| language != LanguageId::TideYaml) {
+        let diagnostics = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
+            language,
+            platform: Some(platform.to_string()),
+            stack: None,
+            text,
+        });
+        println!("{}", serde_json::to_string_pretty(&diagnostics)?);
+        return Ok(());
+    }
     let mut files = vec![(file.display().to_string(), text.clone())];
     // Only Tide YAML resolves references across the workspace; a raw query
     // file is analysed on its own.

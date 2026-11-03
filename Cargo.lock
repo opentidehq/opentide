@@ -559,6 +559,8 @@ dependencies = [
  "opentide-ecs",
  "opentide-highlight",
  "opentide-syntax",
+ "serde",
+ "toml",
  "tree-sitter",
 ]
 

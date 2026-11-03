@@ -19,11 +19,15 @@ on:
       - "catalogs/spl/**"
       - "catalogs/esql/**"
       - "catalogs/eql/**"
+      - "catalogs/carbon_black/**"
       - "testdata/**"
       - "scripts/oracles/**"
       - "scripts/ci-oracle.sh"
       - ".github/workflows/oracle.yml"
   workflow_dispatch:
+  schedule:
+    # The Carbon Black Cloud tenant is checked weekly, not on every push.
+    - cron: "17 4 * * 1"
 
 env:
   CARGO_TERM_COLOR: always
@@ -123,3 +127,26 @@ jobs:
       - name: Stop Elasticsearch
         if: always()
         run: docker rm -f opentide-es-oracle-9200
+
+  # Carbon Black Cloud (#162): every Carbon Black query through a tenant's
+  # search_validation. It needs a tenant: OPENTIDE_CBC_URL, OPENTIDE_CBC_ORG_KEY
+  # and OPENTIDE_CBC_TOKEN (`<api secret>/<api id>`, org.search.events READ) as
+  # secrets. Weekly and on demand only, never on a pull request, so a fork
+  # never sees them; without them the job says so and passes.
+  carbon_black:
+    name: Carbon Black Cloud
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      OPENTIDE_ORACLE_REQUIRED: "0"
+      OPENTIDE_CBC_URL: ${{ secrets.OPENTIDE_CBC_URL }}
+      OPENTIDE_CBC_ORG_KEY: ${{ secrets.OPENTIDE_CBC_ORG_KEY }}
+      OPENTIDE_CBC_TOKEN: ${{ secrets.OPENTIDE_CBC_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - run: bash scripts/ci-oracle.sh carbon_black

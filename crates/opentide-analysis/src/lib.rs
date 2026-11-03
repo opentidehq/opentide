@@ -516,6 +516,10 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Kuery => {
             opentide_kuery::hover(text, offset).or_else(|| ecs::hover(text, offset))
         }
+        // Carbon Black has its own fields: no ECS (#162).
+        LanguageId::Lucene if platform == "carbon_black_cloud" => {
+            opentide_lucene::hover_dialect(text, offset, opentide_lucene::Dialect::CarbonBlack)
+        }
         LanguageId::Lucene => {
             opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
         }
@@ -552,6 +556,13 @@ fn query_completions(
     match language {
         LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
+        LanguageId::Lucene if platform == "carbon_black_cloud" => {
+            opentide_lucene::completions_dialect(
+                text,
+                offset,
+                opentide_lucene::Dialect::CarbonBlack,
+            )
+        }
         LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
             let mut items = match language {
                 LanguageId::Esql => opentide_esql::completions(text, offset),
