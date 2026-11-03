@@ -6820,21 +6820,6 @@
           "default": null,
           "description": "Log source names from the workspace visibility.toml.",
           "title": "Logsources",
-          "items": {
-            "enum": [
-              "Placeholder Logsource"
-            ],
-            "markdownEnumDescriptions": [
-              "### Placeholder Logsource **System**: splunk **Description**: Customize this field by adding logsources and assets entries under logsources.toml"
-            ],
-            "uniqueItems": true,
-            "enumDescriptions": [
-              "Placeholder Logsource. System: splunk. Description: Customize this field by adding logsources and assets entries under logsources.toml"
-            ],
-            "x-enumDescriptions": [
-              "Placeholder Logsource. System: splunk. Description: Customize this field by adding logsources and assets entries under logsources.toml"
-            ]
-          },
           "markdownDescription": "Log source names from the workspace `visibility.toml`."
         }
       },
