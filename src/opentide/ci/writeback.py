@@ -40,10 +40,10 @@ DEFAULT_RULES_FOLDER = "objects/rules"
 def rules_folder(repo: Path | None) -> str:
     """The workspace rules folder, relative to the repository root.
 
-    Read from the workspace configuration at render time, so a catalogue on
-    the legacy ``Objects/Detection Rules/`` layout commits that folder. A
-    render without a checkout, or a rules folder outside the repository,
-    falls back to the bundled ``objects/rules``.
+    Read from the workspace configuration under ``.opentide/configurations/``
+    at render time, so a workspace that keeps its rules somewhere other than
+    ``objects/rules/`` commits that folder. A render without a checkout, or a
+    rules folder outside the repository, falls back to ``objects/rules``.
     """
     if repo is None:
         return DEFAULT_RULES_FOLDER

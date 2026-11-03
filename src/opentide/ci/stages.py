@@ -13,8 +13,9 @@ from opentide.cli.ui.ci import REPORTS_DIR
 
 _ENV_REF = re.compile(r"\$([A-Z][A-Z0-9_]*)")
 _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations" / "platforms"
-# Tenant URLs and ``$VAR`` references live anywhere under this directory
-# (``platforms/``, legacy ``systems/``, and a root ``platforms.toml``).
+# Tenant URLs and ``$VAR`` references can live in any file under this
+# directory (``platforms/<name>.toml``, a root ``platforms.toml``), so the
+# whole directory is restored from the default branch.
 _WORKSPACE_CONFIG_DIR = ".opentide/configurations"
 
 
