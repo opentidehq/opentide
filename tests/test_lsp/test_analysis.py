@@ -436,3 +436,27 @@ def test_a_system_that_declares_no_dataset_is_unchecked(bundled_catalog: None) -
     assert engine().dataset_status("sentinel_one", "NTANetAnalytics") == "unchecked"
     assert _table("NTANetAnalytics") == "unchecked"
     engine().install_visibility()
+
+
+def test_an_app_command_finding_promises_no_declaration() -> None:
+    """``spl_unknown_command`` asked to "declare" a search-head app's command, and no
+    setting declares one (0.20.1 migration: ``decrypt``, ``mispsearch``)."""
+    [finding] = check_query("index=main | mispsearch value=x", language="spl", platform="splunk")
+
+    assert finding.code == "spl_unknown_command"
+    assert finding.severity == "warning"
+    assert "declare it" not in finding.message
+    assert finding.message == (
+        "'mispsearch' is not a command opentide knows; an app on the search head may provide "
+        "it (opentide cannot declare app commands yet)"
+    )
+
+
+def test_a_typo_of_a_command_is_still_named() -> None:
+    from opentide.cli.ui.diagnostics import diagnostic_from_engine
+
+    [finding] = check_query("index=main | stas count", language="spl", platform="splunk")
+
+    assert finding.severity == "error"
+    diagnostic = diagnostic_from_engine(finding, file_path=Path("q.spl"), workspace=None)
+    assert diagnostic.help == "did you mean 'stats'?"
