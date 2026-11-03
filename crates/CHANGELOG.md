@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Changed
+
+- The ES|QL TextMate grammar's scope is `source.opentide.esql`, as `docs/EDITORS.md` promised, not `source.esql`, the scope of Elastic's ES|QL extension ([#195](https://github.com/opentidehq/language-server/issues/195)). An editor that loaded both grammars kept only one. An editor that includes the grammar by scope includes `source.opentide.esql` now. The other grammars keep `source.<id>`; `docs/EDITORS.md` says why. HighlightSpec captures are unchanged.
+
 ## [0.9.1] - 2026-11-03
 
 The bundled Tide catalog catches up with opentide's removal of its CoreTIDE compatibility, so `opentide-lsp` on its own reports the same unknown keys and platform `schema` values that `opentide validate` reports.

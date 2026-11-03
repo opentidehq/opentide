@@ -143,5 +143,5 @@
       "name": "punctuation.delimiter.opentide"
     }
   ],
-  "scopeName": "source.esql"
+  "scopeName": "source.opentide.esql"
 }

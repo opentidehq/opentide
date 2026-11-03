@@ -22,7 +22,7 @@ const files = {
   'source.kql': 'kql.tmLanguage.json',
   'source.spl': 'spl.tmLanguage.json',
   'source.lucene': 'lucene.tmLanguage.json',
-  'source.esql': 'esql.tmLanguage.json',
+  'source.opentide.esql': 'esql.tmLanguage.json',
   'source.eql': 'eql.tmLanguage.json',
   'source.kuery': 'kuery.tmLanguage.json',
   'source.falco': 'falco.tmLanguage.json',
