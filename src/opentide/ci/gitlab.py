@@ -21,6 +21,7 @@ from opentide.ci.inflight import (
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     CODEQUALITY_REPORT,
+    OPENTIDE_VERSION_VARIABLE,
     REPORTS_DIR,
     SHARE_COMMAND,
     codequality_merge_command,
@@ -55,6 +56,20 @@ _DEFAULT_BRANCH = '"$CI_DEFAULT_BRANCH"'
 FULL_HISTORY = {"GIT_DEPTH": "0"}
 
 DEFAULT_BRANCH_RULE: Rule = {"if": "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"}
+
+#: The deploy jobs record deployments, so GitLab keeps their history, lists
+#: the environments, can protect them (approvals, protected variables) and
+#: counts production deployments in its DORA metrics. Staging is one
+#: environment per merge request: with a single ``staging``, GitLab's
+#: "Prevent outdated deployment jobs" would fail the staging job of an older
+#: merge request's pipeline once a newer one had deployed. Nothing undeploys a
+#: staging environment's rules, so it is only marked stopped after a week.
+STAGING_ENVIRONMENT = {
+    "name": "staging/mr-$CI_MERGE_REQUEST_IID",
+    "deployment_tier": "staging",
+    "auto_stop_in": "1 week",
+}
+PRODUCTION_ENVIRONMENT = {"name": "production", "deployment_tier": "production"}
 
 _WORKFLOW_NOTE = (
     "# Merge request and default-branch pipelines only. Every job then runs in\n"
@@ -93,7 +108,7 @@ def gitlab_job(
         job["variables"] = variables
     if extra:
         job.update(extra)
-    job["before_script"] = [*(before or []), pip_install(options)]
+    job["before_script"] = [*(before or []), pip_install()]
     job["script"] = script
     if after:
         job["after_script"] = after
@@ -264,7 +279,10 @@ def pipeline_document(options: CiRenderOptions) -> Job:
             needs=["generate"],
             rules=[{"if": gitlab_premerge_rule()}],
             variables=dict(FULL_HISTORY),
-            extra=_report_artifacts(expose_as="opentide staging plan"),
+            extra={
+                "environment": dict(STAGING_ENVIRONMENT),
+                **_report_artifacts(expose_as="opentide staging plan"),
+            },
             before=[GITLAB_INSTALL_GIT],
         )
     jobs["deploy_production"] = gitlab_job(
@@ -275,9 +293,11 @@ def pipeline_document(options: CiRenderOptions) -> Job:
         rules=[dict(DEFAULT_BRANCH_RULE)],
         variables=dict(FULL_HISTORY),
         extra={
-            # One production deploy at a time, in pipeline order: two at once
-            # would both create the same new rule.
+            # One production deploy at a time: two at once would both create
+            # the same new rule. A resource group is ``unordered`` until its
+            # process mode is set to ``oldest_first`` (API only; see the docs).
             "resource_group": "opentide-production",
+            "environment": dict(PRODUCTION_ENVIRONMENT),
             **_report_artifacts(),
         },
         # ``python:<ver>-slim`` ships without git; the write-back needs it.
@@ -287,11 +307,9 @@ def pipeline_document(options: CiRenderOptions) -> Job:
     if options.inflight:
         jobs["inflight_shards"] = gitlab_inflight_job(
             python_version=options.python_version,
-            opentide_version=options.opentide_version,
         )
         jobs["inflight_prune"] = gitlab_inflight_prune_job(
             python_version=options.python_version,
-            opentide_version=options.opentide_version,
         )
     if options.sharing:
         jobs["share"] = _share_job(options)
@@ -306,7 +324,12 @@ def pipeline_document(options: CiRenderOptions) -> Job:
 
     return {
         "workflow": {"rules": [{"if": rule} for rule in gitlab_workflow_rules()]},
-        "variables": {"OPENTIDE_REPO_ROOT": "$CI_PROJECT_DIR"},
+        "variables": {
+            "OPENTIDE_REPO_ROOT": "$CI_PROJECT_DIR",
+            # Every job installs this release; a project or group CI/CD
+            # variable of the same name overrides it.
+            OPENTIDE_VERSION_VARIABLE: options.opentide_version,
+        },
         "stages": stages,
         "default": {"image": f"python:{options.python_version}-slim"},
         **jobs,

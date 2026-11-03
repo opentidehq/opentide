@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from pathlib import Path
@@ -19,8 +20,23 @@ _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations"
 _WORKSPACE_CONFIG_DIR = ".opentide/configurations"
 
 
-def pip_install(options: CiRenderOptions) -> str:
-    return f'pip install "opentide=={options.opentide_version}"'
+#: The pipeline-level variable that pins the opentide release every job
+#: installs: one place to change, where each job used to repeat the literal.
+OPENTIDE_VERSION_VARIABLE = "OPENTIDE_VERSION"
+
+
+def pip_install() -> str:
+    """Install the release :data:`OPENTIDE_VERSION_VARIABLE` names (every provider runs bash)."""
+    return f'pip install "opentide==${OPENTIDE_VERSION_VARIABLE}"'
+
+
+def opentide_version_entry(options: CiRenderOptions) -> str:
+    """``OPENTIDE_VERSION: "0.20.1"`` for the string-built GitHub and Azure files.
+
+    Double-quoted JSON is a YAML string, so a version such as ``1.0`` stays
+    one instead of becoming a float.
+    """
+    return f"{OPENTIDE_VERSION_VARIABLE}: {json.dumps(options.opentide_version)}"
 
 
 #: Printed when the default branch has no configuration to restore.

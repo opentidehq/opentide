@@ -166,3 +166,29 @@ def test_merge_requests_validate_and_stage_and_branches_wait_for_one() -> None:
     }
     # No branch pipeline beside the merge request pipeline: one pipeline per push.
     assert pipelines["push to a feature branch"] is None
+
+
+def test_deploy_jobs_record_deployments_in_an_environment() -> None:
+    """Without ``environment:`` GitLab kept no deployment history and no DORA metrics."""
+    parsed = yaml.safe_load(render_gitlab(CiRenderOptions(ci="gitlab", platforms=["sentinel"])))
+    assert parsed["deploy_production"]["environment"] == {
+        "name": "production",
+        "deployment_tier": "production",
+    }
+    staging = parsed["deploy_staging"]["environment"]
+    # One per merge request: GitLab fails an older pipeline's deployment job
+    # once a newer one deployed to the same environment.
+    assert staging["name"] == "staging/mr-$CI_MERGE_REQUEST_IID"
+    assert staging["deployment_tier"] == "staging"
+    assert staging["auto_stop_in"] == "1 week"
+    deploying = {
+        name
+        for name, job in parsed.items()
+        if isinstance(job, dict)
+        and any("opentide deploy --strategy" in line for line in job.get("script", []))
+    }
+    assert deploying == {"deploy_staging", "deploy_production"}
+    with_environment = [
+        name for name, job in parsed.items() if isinstance(job, dict) and "environment" in job
+    ]
+    assert sorted(with_environment) == sorted(deploying)

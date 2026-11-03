@@ -151,16 +151,14 @@ def _publish_on_default_branch(*, push: str, fetch: str) -> str:
 def github_inflight_job(
     *,
     python_version: str,
-    opentide_version: str,
     default_branch: str,
 ) -> str:
     """Render the GitHub Actions job that updates ``.opentide/inflight/`` on PRs."""
     opts = CiRenderOptions(
         ci="github",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
-    install = pip_install(opts)
+    install = pip_install()
     generate_cmd = inflight_generate_steps(opts)[0]
     default_ref = f"origin/{default_branch}"
     checkout_inflight = textwrap.indent(
@@ -212,15 +210,13 @@ def github_inflight_job(
 def github_inflight_prune_job(
     *,
     python_version: str,
-    opentide_version: str,
     default_branch: str,
 ) -> str:
     opts = CiRenderOptions(
         ci="github",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
-    install = pip_install(opts)
+    install = pip_install()
     prune_cmd = inflight_prune_steps(opts)[0]
     prod_if = f"github.event_name == 'push' && github.ref == 'refs/heads/{default_branch}'"
     commit_push = textwrap.indent(
@@ -269,19 +265,18 @@ GITLAB_IDENTITY = (
 )
 
 
-def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> dict[str, Any]:
+def gitlab_inflight_job(*, python_version: str) -> dict[str, Any]:
     """The GitLab job that publishes ``.opentide/inflight/`` from a merge request."""
     opts = CiRenderOptions(
         ci="gitlab",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
     return {
         "stage": "deploy",
         "image": f"python:{python_version}-slim",
         "rules": [{"if": gitlab_premerge_rule()}],
         "variables": {"GIT_DEPTH": "0"},
-        "before_script": [GITLAB_INSTALL_GIT, pip_install(opts)],
+        "before_script": [GITLAB_INSTALL_GIT, pip_install()],
         "script": [
             'git fetch origin "$CI_DEFAULT_BRANCH"',
             *_default_branch_shards("origin/$CI_DEFAULT_BRANCH"),
@@ -295,12 +290,11 @@ def gitlab_inflight_job(*, python_version: str, opentide_version: str) -> dict[s
     }
 
 
-def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> dict[str, Any]:
+def gitlab_inflight_prune_job(*, python_version: str) -> dict[str, Any]:
     """The GitLab job that drops superseded shards after a merge."""
     opts = CiRenderOptions(
         ci="gitlab",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
     commit_push = _commit_and_push(
         message="ci: prune inflight preview shards [skip ci]",
@@ -313,7 +307,7 @@ def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> 
         "image": f"python:{python_version}-slim",
         "rules": [{"if": "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"}],
         "variables": {"GIT_DEPTH": "0"},
-        "before_script": [GITLAB_INSTALL_GIT, pip_install(opts)],
+        "before_script": [GITLAB_INSTALL_GIT, pip_install()],
         "script": [
             'export OPENTIDE_REPO_ROOT="$CI_PROJECT_DIR"',
             inflight_prune_steps(opts)[0],
@@ -324,13 +318,12 @@ def gitlab_inflight_prune_job(*, python_version: str, opentide_version: str) -> 
     }
 
 
-def azure_inflight_job(*, python_version: str, opentide_version: str, default_branch: str) -> str:
+def azure_inflight_job(*, python_version: str, default_branch: str) -> str:
     from opentide.ci.azure import _azure_job, _job_steps
 
     opts = CiRenderOptions(
         ci="azure",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
     generate_cmd = inflight_generate_steps(opts)[0]
     default_ref = f"origin/{default_branch}"
@@ -356,15 +349,12 @@ def azure_inflight_job(*, python_version: str, opentide_version: str, default_br
     )
 
 
-def azure_inflight_prune_job(
-    *, python_version: str, opentide_version: str, default_branch: str
-) -> str:
+def azure_inflight_prune_job(*, python_version: str, default_branch: str) -> str:
     from opentide.ci.azure import _azure_job, _job_steps
 
     opts = CiRenderOptions(
         ci="azure",
         python_version=python_version,
-        opentide_version=opentide_version,
     )
     prune_cmd = inflight_prune_steps(opts)[0]
     prune_script = "\n".join(

@@ -16,6 +16,7 @@ from opentide.ci.stages import (
     github_deploy_env,
     header_comment,
     object_validate_commands,
+    opentide_version_entry,
     pip_install,
     production_deploy_steps,
     query_platforms,
@@ -47,7 +48,7 @@ def _setup_steps(options: CiRenderOptions, *, full_history: bool = False) -> str
         "- uses: actions/setup-python@v5\n"
         "  with:\n"
         f'    python-version: "{options.python_version}"\n'
-        f"- run: {pip_install(options)}"
+        f"- run: {pip_install()}"
     )
 
 
@@ -222,7 +223,7 @@ def _share_job(options: CiRenderOptions, prod_if: str) -> str:
         "- uses: actions/setup-python@v5\n"
         "  with:\n"
         f'    python-version: "{options.python_version}"\n'
-        f"- run: {pip_install(options)}"
+        f"- run: {pip_install()}"
     )
     return _github_job(
         "share",
@@ -390,14 +391,12 @@ def render_github(options: CiRenderOptions) -> str:
         jobs.append(
             github_inflight_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
         jobs.append(
             github_inflight_prune_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
@@ -462,6 +461,7 @@ def render_github(options: CiRenderOptions) -> str:
         "\n"
         "env:\n"
         "  OPENTIDE_REPO_ROOT: ${{ github.workspace }}\n"
+        f"  {opentide_version_entry(options)}\n"
         "\n"
         f"{permissions}jobs:\n"
     )

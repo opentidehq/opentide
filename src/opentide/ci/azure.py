@@ -13,6 +13,7 @@ from opentide.ci.stages import (
     document_steps,
     header_comment,
     object_validate_commands,
+    opentide_version_entry,
     pip_install,
     production_deploy_steps,
     reviewed_query_validation_command,
@@ -34,7 +35,7 @@ def _python_setup(options: CiRenderOptions) -> str:
         "- task: UsePythonVersion@0\n"
         "  inputs:\n"
         f"    versionSpec: '{options.python_version}'\n"
-        f"- script: {pip_install(options)}\n"
+        f"- script: {pip_install()}\n"
         "  displayName: Install opentide"
     )
 
@@ -280,14 +281,12 @@ def render_azure(options: CiRenderOptions) -> str:
         deploy_jobs.append(
             azure_inflight_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
         deploy_jobs.append(
             azure_inflight_prune_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
@@ -355,6 +354,7 @@ def render_azure(options: CiRenderOptions) -> str:
         "\n"
         "variables:\n"
         "  OPENTIDE_REPO_ROOT: $(Build.SourcesDirectory)\n"
+        f"  {opentide_version_entry(options)}\n"
         "\n"
         "# Azure cannot serialise a job from YAML alone. Add an Exclusive lock\n"
         "# check to a resource the Deploy stage uses (for example an environment\n"
