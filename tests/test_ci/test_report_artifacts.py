@@ -98,17 +98,19 @@ def _gitlab(**options: Any) -> dict[str, Any]:
 def test_gitlab_validate_job_keeps_code_quality_reports() -> None:
     validate = _gitlab()["validate"]
     assert validate["script"] == object_validate_commands("codequality")
+    # One file: GitLab Runner 18.9 failed the job on two ("only one file can
+    # be sent as raw"), after both commands had passed.
     assert validate["artifacts"] == {
         "when": "always",
         "expose_as": "opentide reports",
         "paths": ["opentide-reports/"],
-        "reports": {
-            "codequality": [
-                "opentide-reports/validate.codequality.json",
-                "opentide-reports/lint.codequality.json",
-            ]
-        },
+        "reports": {"codequality": "opentide-reports/codequality.json"},
     }
+    # Merged in after_script, which also runs when a gate command failed.
+    assert validate["after_script"] == [
+        "python -m opentide.ci.codequality --output opentide-reports/codequality.json"
+        " opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json"
+    ]
 
 
 @pytest.mark.parametrize(

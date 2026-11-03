@@ -87,10 +87,7 @@ def test_render_gitlab_is_parseable_yaml(options: CiRenderOptions) -> None:
     ]
     artifacts = parsed["validate"]["artifacts"]
     assert artifacts["when"] == "always"
-    assert artifacts["reports"]["codequality"] == [
-        "opentide-reports/validate.codequality.json",
-        "opentide-reports/lint.codequality.json",
-    ]
+    assert artifacts["reports"]["codequality"] == "opentide-reports/codequality.json"
     if options.inflight:
         assert "inflight_shards" in parsed
     if "sentinel" in options.platforms:

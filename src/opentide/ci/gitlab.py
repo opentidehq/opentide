@@ -20,15 +20,15 @@ from opentide.ci.inflight import (
 )
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
-    GATE_COMMANDS,
+    CODEQUALITY_REPORT,
     REPORTS_DIR,
     SHARE_COMMAND,
+    codequality_merge_command,
     document_steps,
     header_comment,
     object_validate_commands,
     pip_install,
     production_deploy_steps,
-    report_path,
     reviewed_query_validation_command,
     staging_deploy_steps,
     trusted_platform_config_commands,
@@ -101,17 +101,17 @@ def _report_artifacts(*, expose_as: str | None = None, codequality: bool = False
     """Keep what opentide wrote under ``opentide-reports/``, failed jobs included.
 
     Every opentide command appends its summary to ``GITLAB_SUMMARY`` in a
-    GitLab job. The validate job also keeps its findings as Code Quality
-    reports, which GitLab shows in the merge request and its diff.
+    GitLab job. The validate job also keeps its findings as a Code Quality
+    report, which GitLab shows in the merge request and its diff. It declares
+    one file, :data:`CODEQUALITY_REPORT`: the runner uploads a ``raw`` report
+    as a single file and failed the job when it listed one per command.
     """
     artifacts: Job = {"when": "always"}
     if expose_as:
         artifacts["expose_as"] = expose_as
     artifacts["paths"] = [f"{REPORTS_DIR}/" if codequality else GITLAB_SUMMARY]
     if codequality:
-        artifacts["reports"] = {
-            "codequality": [report_path(command, "codequality") for command in GATE_COMMANDS]
-        }
+        artifacts["reports"] = {"codequality": CODEQUALITY_REPORT}
     return {"artifacts": artifacts}
 
 
@@ -227,6 +227,9 @@ def pipeline_document(options: CiRenderOptions) -> Job:
             stage="validate",
             script=object_validate_commands("codequality"),
             extra=_report_artifacts(expose_as="opentide reports", codequality=True),
+            # ``after_script`` runs after a failed command too, so the merge
+            # request shows the findings of the command that failed.
+            after=[codequality_merge_command()],
         ),
         "generate": gitlab_job(
             options=options,

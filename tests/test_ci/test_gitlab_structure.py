@@ -98,6 +98,39 @@ def test_every_job_is_well_formed(options: CiRenderOptions) -> None:
             )
 
 
+@pytest.mark.parametrize("options", CASES, ids=_case_id)
+def test_every_report_is_one_file(options: CiRenderOptions) -> None:
+    """GitLab Runner 18.9 uploads a ``raw`` report as one file and fails the job on more.
+
+    ``failed to copy content to form: only one file can be sent as raw``: the
+    validate job declared a Code Quality file per gate command and failed
+    after both commands passed.
+    """
+    jobs = jobs_of(yaml.safe_load(render_gitlab(options)))
+    declared = 0
+    for name, job in jobs.items():
+        reports = job.get("artifacts", {}).get("reports", {})
+        for kind, files in reports.items():
+            declared += 1
+            assert isinstance(files, str) or len(files) == 1, f"{name}: {kind} lists {files}"
+            assert "*" not in str(files), f"{name}: {kind} is a glob"
+    assert declared, "no report declared: the check checks nothing"
+
+
+def test_the_validate_job_merges_every_report_it_writes() -> None:
+    from opentide.ci.stages import CODEQUALITY_REPORT, GATE_COMMANDS, report_path
+
+    validate = yaml.safe_load(render_gitlab(CASES[0]))["validate"]
+    (merge,) = validate["after_script"]
+    assert merge.startswith("python -m opentide.ci.codequality ")
+    assert f"--output {CODEQUALITY_REPORT}" in merge
+    for command in GATE_COMMANDS:
+        written = report_path(command, "codequality")
+        assert any(written in line for line in validate["script"])
+        assert written in merge
+    assert validate["artifacts"]["reports"]["codequality"] == CODEQUALITY_REPORT
+
+
 def test_dump_pipeline_quotes_what_yaml_would_read_differently() -> None:
     document = {
         "job": {

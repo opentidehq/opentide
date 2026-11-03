@@ -337,10 +337,19 @@ opentide lint --strict --format codequality --output opentide-reports/lint.codeq
 | Provider | Validate job |
 |----------|--------------|
 | GitHub Actions | `--format sarif` reports, uploaded as the `opentide-reports` artifact, and on a public repository sent to code scanning by a `code_scanning` job that needs `validate`, downloads the artifact and runs `github/codeql-action/upload-sarif@v4`. That job holds only `security-events: write`, so the token that writes alerts never sits next to the platform secrets. The alerts are in the categories `opentide/validate/` and `opentide/lint/` (each SARIF run's `automationDetails.id`); a failed upload never fails the run. Code scanning on a private repository needs GitHub Advanced Security: once it is on, remove `!github.event.repository.private` from the job's `if` |
-| GitLab CI | `--format codequality` reports under `artifacts:reports:codequality`, and `opentide-reports/` exposed in the merge request as "opentide reports". The query, staging and production jobs keep `opentide-reports/summary.md` |
+| GitLab CI | `--format codequality` reports, one per command, merged by `after_script` into `opentide-reports/codequality.json`, the one file `artifacts:reports:codequality` declares; `opentide-reports/` is exposed in the merge request as "opentide reports". The query, staging and production jobs keep `opentide-reports/summary.md` |
 | Azure Pipelines | `--format sarif` reports published as the `CodeAnalysisLogs` artifact, which the SARIF SAST Scans Tab extension reads |
 
 Regenerate an existing pipeline with `opentide setup ci <github|gitlab|azure> --yes` to get them.
+
+GitLab Runner uploads a Code Quality report as a single file and fails a job that declares more (`failed to copy content to form: only one file can be sent as raw`, seen on Runner 18.9). The generated validate job therefore writes `validate.codequality.json` and `lint.codequality.json`, and its `after_script` merges them:
+
+```bash
+python -m opentide.ci.codequality --output opentide-reports/codequality.json \
+  opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json
+```
+
+`after_script` runs after a failed command too, so the merge request shows the findings of the command that failed. A report that is missing (`lint` never ran because `validate` failed), empty, or cut short by a crash is skipped with a note in the log, so the merged file is always a valid report; an issue whose fingerprint is already in it is kept once. Through 0.20.1 the job declared both files, and on GitLab Runner 18.9 it failed after both commands had passed; regenerate it with `opentide setup ci gitlab --yes`.
 
 ## JSON output for gates
 

@@ -197,6 +197,21 @@ def report_path(command: str, report_format: str) -> str:
     return f"{REPORTS_DIR}/{command}{suffix}"
 
 
+#: The one Code Quality report the GitLab validate job declares: GitLab Runner
+#: uploads a ``raw`` report as a single file, and fails a job that lists more.
+CODEQUALITY_REPORT = f"{REPORTS_DIR}/codequality.json"
+
+
+def codequality_merge_command() -> str:
+    """Merge every gate command's Code Quality report into :data:`CODEQUALITY_REPORT`.
+
+    Runs in ``after_script``, after a failed command too; a report that is
+    missing or broken is skipped (see :mod:`opentide.ci.codequality`).
+    """
+    inputs = " ".join(report_path(command, "codequality") for command in GATE_COMMANDS)
+    return f"python -m opentide.ci.codequality --output {CODEQUALITY_REPORT} {inputs}"
+
+
 def object_validate_commands(report_format: str | None = None) -> list[str]:
     """The catalogue gate. Warnings fail, and a misnamed file fails too.
 
