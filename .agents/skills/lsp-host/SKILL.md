@@ -1,6 +1,6 @@
 ---
 name: lsp-host
-description: Implement the opentide stdio language server. Covers Content-Length JSON-RPC, UTF-16 positions, semantic tokens, and the opentide/* custom RPCs. The CLI never speaks JSON-RPC. Use when editing crates/opentide-lsp, editors/, or LSP tests. Do not introduce tower-lsp.
+description: Implement the opentide stdio language server. Covers the lsp-server/lsp-types host (batches, lifecycle, capabilities), UTF-16 positions, semantic tokens, and the opentide/* custom RPCs. The CLI never speaks JSON-RPC. Use when editing crates/opentide-lsp, editors/, or LSP tests. Do not introduce tower-lsp.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -8,81 +8,103 @@ metadata:
 
 # LSP host
 
-`opentide-lsp` is a blocking stdio (and optional TCP) server. The protocol code is `crates/opentide-lsp/src/jsonrpc.rs` and `server.rs`. It is not `tower-lsp`, not `lsp-server`, and not an `lsp-types` typed loop. `lsp-types` is not a dependency (it was declared and never imported; #181 removed it). Moving the loop onto `lsp-server` and `lsp-types` is #90. Adding `tower-lsp` replaces the loop the e2e tests speak and is out of scope.
+`opentide-lsp` is a synchronous stdio (and optional TCP) server on `lsp-server` 0.10 (framing) and `lsp-types` 0.97 (typed messages) — the rust-analyzer stack, without an async runtime, so wasip1 and the PyO3 thread run it unchanged (#90, #185). It is not `tower-lsp` or `async-lsp`; do not add either.
+
+| File | Holds |
+| --- | --- |
+| `src/protocol.rs` | frames (`lsp_server::Message::read`/`write`), the lifecycle, batches, cancellation, `ContentModified`, panic isolation, the two sources |
+| `src/session.rs` | open documents, workspace roots and their disk objects, client capabilities, the analysis cache, coalesced publishing, the outgoing request queue (`ReqQueue`), logs |
+| `src/handlers.rs` | one typed function per method, the `Dispatcher`, `ServerCapabilities`, the `opentide/*` request types |
+| `src/server.rs` | the public entry points, catalogs, host info, the workspace walk |
+| `src/uri.rs` | `file:` URI ↔ path through the `url` crate |
 
 Read `references/wire-format.md` before adding a method.
 
 ## Two protocols, one binary
 
-The server is also a library: `opentide_lsp::run_stdio()` is what the `opentide` Python package calls for `opentide lsp start`. Keep it free of process-wide side effects beyond stdin, stdout and the catalog install, and never print to stdout outside the protocol.
+The server is also a library: `opentide_lsp::run_stdio_status()` is what the `opentide` Python package calls for `opentide lsp start`. Keep it free of process-wide side effects beyond stdin, stdout, the catalog install and the host info, and never print to stdout outside the protocol.
 
 | Invocation | Bytes on stdout |
 | --- | --- |
 | `--stdio` | LSP `Content-Length` frames |
 | `--listen 127.0.0.1:2087` | the same frames, after one TCP accept |
+| `--version [--json]` | the version, or `host_info()` as JSON |
 | `analyze <file>` | pretty JSON array of diagnostics |
 | `highlight <file>` | pretty JSON highlight result, or HTML with `--html` |
 | `generate-highlights` | writes `highlights/generated/`; `--check` exits non-zero on drift |
 
-`main` handles `--stdio` and `--listen` before the clap subcommand. A subcommand must not call `jsonrpc::write_message`. The CLI never speaks JSON-RPC.
+`main` handles `--version`, `--stdio` and `--listen` before the clap subcommand. A subcommand never writes a frame.
+
+## The loop
+
+`protocol::run` takes batches from a `Source`: every message the client sent that the server has not handled yet. `Threaded` (stdio and `--listen` on native targets) reads on its own thread, so what arrives while a request runs is the next batch. `Direct` (`serve`, and stdio on wasip1, which has no threads) reads on the caller's thread and batches the frames already buffered. In a batch:
+
+- notifications apply in order; `$/cancelRequest` answers its queued request `RequestCanceled` (-32800);
+- a semantic tokens, code action, inlay hint, pulled diagnostic, code lens or document link request for a document a later `didChange` in the batch edits gets `ContentModified` (-32801);
+- diagnostics are published once, after the batch, for each document it changed (`Session::mark`, `mark_open`, `mark_all`), so twenty queued keystrokes cost one analysis and one publish.
+
+The lifecycle is enforced before a handler sees a message: before `initialize` a request gets `-32002` and a notification is dropped; after `shutdown` a request gets `-32600` and nothing is published (what was pending is published before the `shutdown` reply); a second `initialize` gets `-32600`; `exit` or the end of input ends the loop, and the status says whether `shutdown` came first (the binary exits 0 or 1).
+
+A body `lsp-server` cannot parse is answered from the bytes it read (`Recording`): not JSON `-32700`, a batch or another non-message `-32600`, with the id it names or `id: null`; `"id": null` is `-32600` with `id: null`. A response with an id the server never sent is logged. A broken header ends the session. Each message runs under `catch_unwind`: a panicking request gets `-32603`. Debug builds add `opentide/__panic`, `opentide/__sleep` (`{ ms }`, so tests can queue a batch) and `opentide/__stats` (`{ analyses }`).
+
+## Dispatch and capabilities
+
+`handlers::request` chains `Dispatcher::on::<R>` for each `lsp_types::request::Request`; params that do not deserialize are `-32602`, an unknown method `-32601`. Notifications go through the same pattern and an invalid one is logged. A custom method is a `Request` impl in `handlers::custom`. Never read params with `Value::pointer`.
+
+`initialize` reads the client's capabilities once into `ClientCaps` and builds `ServerCapabilities` from them. When you add a provider, advertise it there and route the method in the same change. What is gated on the client:
+
+| Client capability | Effect |
+| --- | --- |
+| `textDocument.diagnostic` + `workspace.diagnostics.refreshSupport` | pull only (`diagnosticProvider`, with `workspaceDiagnostics`), `workspace/diagnostic/refresh` instead of publishing; otherwise push only. Never both: VS Code would show each diagnostic twice |
+| `hover.contentFormat`, `completionItem.documentationFormat` without Markdown | plain text |
+| `workspaceEdit.documentChanges` + `resourceOperations: ["create"]` | the quick fix that creates `visibility.toml`; left out otherwise |
+| `publishDiagnostics.codeDescriptionSupport` / `tagSupport` / `relatedInformation` / `versionSupport` | `codeDescription.href` (`DIAGNOSTICS_DOCS#<code>`), `Deprecated` on deprecation codes, the other file of a `duplicate_id`, the document version |
+| `workspace.{semanticTokens,inlayHint,codeLens}.refreshSupport` | a refresh request after a change beyond one document |
+| `didChangeWatchedFiles.dynamicRegistration` | watchers for object YAML, `.opentide/configurations/**/*.toml` and the generated catalogs; an analysis is then cached across batches |
+| `workspace.workspaceFolders` | `workspace.workspaceFolders` with change notifications |
+
+`positionEncoding` is always `utf-16`. `capabilities.experimental.opentide` is `host_info()` (#172): `{ host, engine, catalog, configurationChecks, configurationSchemas }`, the same as `--version --json`; a key is added in a minor release and never removed.
+
+Providers: incremental sync, hover, completion (resolve, trigger characters; a space opens no list in Tide YAML), signature help, definition, references, document symbol (a tree for Tide: object, sections, platform blocks, queries), workspace symbol, document highlight, code action (`quickfix`, `source.fixAll.opentide`), folding, selection range, inlay hints (label parts that lead to the object), document links (ATT&CK ids, object UUIDs), code lens (`opentide.showReferences` with `[uri, position, locations]`), pull and workspace diagnostics, semantic tokens (full).
+
+Custom methods: `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`, `opentide/compiledSpl`, `opentide/fs/read`.
 
 ## Session
 
-`Session` maps URI → (`LanguageId`, text). `language_for` returns `opentide-config` for a TOML file under `.opentide/configurations/` whatever id the client reports, and `None` (not read, nothing published) for any other `.toml`. Otherwise it uses a reported language id when `LanguageId::parse` accepts it (never `opentide-config`), else the URI suffix through `LanguageId::from_extension` (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, else Tide YAML). An unknown reported id is ignored. `.sql` is Tide YAML and is not validated as SQL. A change to `visibility.toml` or to any `opentide-config` document re-publishes every open document; `visibility.toml` is an `opentide-config` document too.
+Documents are keyed by the URI the client sent, with their language, text, version and root. `language_for` returns `opentide-config` for a TOML file under `.opentide/configurations/` whatever id the client reports, and `None` (not read, nothing published) for any other `.toml`. Otherwise it uses a reported language id when `LanguageId::parse` accepts it (never `opentide-config`), else the URI suffix (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, else Tide YAML); YAML is Tide only under `objects/`, with an `opentide-yaml` id, or when it names a Tide schema. A `didChange` whose version is not newer than the document's is ignored.
 
-The analysis crate sees a `MemoryWorkspace` built from open documents plus YAML files under the workspace `objects/` directory. The engine still does not call `std::fs`. The host does.
+Roots are the workspace folders (`workspaceFolders`, else `rootUri`, else `rootPath`), plus the `.opentide/`/`objects/` ancestor (`server::workspace_root`, shared with `analyze`) of a document opened outside every folder. A document belongs to the deepest root holding it, else the first. Each root has its own disk objects, index, `visibility.toml` and catalogs; the engine's catalog and dataset layers are process-wide, so `Session::activate` installs the root's before a request reads them (once, with one root). The engine never calls `std::fs`; the host does.
 
-`initialize` reads `rootUri` and installs the workspace catalogs from `.opentide/lsp/catalogs/generated/` (`fields.json`, `deprecations.json`) when they exist, through `opentide_analysis::install_catalog`; the install is process-wide. A host that supplies its own catalogs calls `opentide_analysis::set_default_catalog` (used wherever the bundled ones would be) and `opentide_lsp::use_host_catalogs()` (then `initialize` reads no workspace files): `opentide lsp start` does both. `Session::host` also hands the analysis layer `.opentide/configurations/platforms/elastic.toml` (`opentide_analysis::ELASTIC_CONFIGURATION`) when it exists: its tenants' `setup.version` decides the stack Elastic queries are checked against. The CLI `analyze` does the same. This reads one key. Configuration diagnostics come from the host's checker (`opentide_analysis::set_configuration_checker`, #158): with none installed, as in `opentide-lsp` on its own, an `opentide-config` document gets none. `opentide_lsp::serve(reader, writer)` runs a session on any streams (`tests/host_configuration.rs`). Capabilities are the JSON object in the `initialize` arm. When you add a provider, advertise it there and handle the method in the same change. An unhandled request that still has an `id` hits the `_` arm and returns `-32601`, so the client unblocks with a failure instead of waiting.
+`Session::analysis(uri)` is the one place that analyses an open document: cached per document state and workspace generation (bumped by any edit, file change, `visibility.toml` or root change), and shared by publish, pull, semantic tokens, code actions, symbols, lenses and links. Without a file watcher the cache lives for one batch, and each batch reads the disk again.
 
-Current providers: incremental sync (`textDocumentSync: 2`), hover, completion (resolve, trigger characters), signature help, definition, references, document symbol, workspace symbol, document highlight, code action, folding, selection range, inlay hints, pull diagnostics, semantic tokens (full).
+A host that supplies its own catalogs calls `opentide_analysis::set_default_catalog` and `opentide_lsp::use_host_catalogs()`; `opentide lsp start` does both, and `set_host_info("opentide", <version>)`. Configuration diagnostics come from the host's checker (`opentide_analysis::set_configuration_checker`, #158): with none installed, an `opentide-config` document gets none. `.opentide/configurations/platforms/elastic.toml` reaches the analysis through the host: its tenants' `setup.version` decides the Elastic stack.
 
-Diagnostics are pulled or pushed, never both (a client such as VS Code keeps the two apart and would show each twice). A client that declares `textDocument.diagnostic` and `workspace.diagnostics.refreshSupport` gets `diagnosticProvider` and no `publishDiagnostics`; where another file changes what a document says (`visibility.toml`, a configuration file, an object on disk), the server sends `workspace/diagnostic/refresh` instead of republishing. Every other client gets push only, and `diagnosticProvider` is not advertised (the request is still answered). Pushed and pulled items are built by one function, `diagnostic_json`.
-
-Custom methods:
-
-- `opentide/analyze`
-- `opentide/highlight`
-- `opentide/compiledKql`
-- `opentide/compiledSpl`
-- `opentide/fs/read`
-
-`serve_with_status` (and `serve`, `run_stdio`, `run_stdio_status`) enforce the LSP lifecycle before `dispatch` sees a message:
-- Before `initialize`, a request gets `-32002` and a notification is dropped.
-- After `shutdown`, a request gets `-32600` and nothing is published. A second `initialize` also gets `-32600`.
-- `exit`, or the end of input, ends the loop; the status says whether `shutdown` came first, and the binary exits 0 if so and 1 if not.
-
-A frame whose body is not a message gets `-32700` or `-32600` with `id: null`, and the loop goes on. Header names are matched case-insensitively, and `jsonrpc` is optional on input. `"id": null` is a request whose reply carries `id: null`.
-
-Each message is dispatched under `catch_unwind`: a handler that panics fails its request with `-32603` and the session continues. Debug builds answer `opentide/__panic` with a panic, for that test. Notifications (`initialized`, `didOpen`, `didChange`, `didClose`) get no response; requests always get `id` plus `result` or `error`.
+Logs go to the client as `window/logMessage` once it is initialized (catalog and `visibility.toml` loads and failures, a failed server request), and a broken file on disk is shown once per session (`window/showMessage`). Frame errors and panics are stderr traces.
 
 ## Positions
 
-LSP positions are zero-based line and UTF-16 `character`. `opentide_core::offset_to_position` is the UTF-8 byte → position conversion for every range that leaves the process (`range_json`). Do not send byte offsets as `character`.
+LSP positions are zero-based line and UTF-16 `character`. Ranges leave the process through `opentide_core::span_to_range` / `LineIndex`; never send byte offsets as `character`. An inbound position becomes a byte offset once, in `handlers::offset` (over `opentide_core::position_to_offset`, which always returns a char boundary), before an engine sees it; the engines take byte offsets only.
 
-Inbound conversion is `opentide_core::position_to_offset` (UTF-16, always a char boundary). `apply_content_changes` walks `contentChanges` in order and splices with `offset_at`, and completion and hover use `position_to_offset`; both wrap it. See `skills/rust-engine/SKILL.md`. New protocol code calls one of those helpers instead of slicing the source with `position.character`.
-
-Semantic tokens are the LSP integer array `[deltaLine, deltaStartChar, length, tokenType, tokenModifiers]` from `encode_lsp_semantic_tokens`. A token cannot cross a newline; `length` is the UTF-16 length on the start line. Split multiline comments and strings before encoding. `tokenModifiers` is 0.
-
-The legend advertised at `initialize` is `opentide_highlight::LSP_TOKEN_TYPES` (the standard VS Code token types: `keyword`, `function`, `operator`, …). It is **not** `HighlightSpec.legend`. Captures such as `operator.pipe` and `tide.keyword` are mapped onto those standard types in `lsp_token_type_index`, because default themes do not style opentide capture names. Do not replace `tokenTypes` with the HighlightSpec legend. TextMate / Monaco / Helix scopes still come from `highlights/spec.toml`.
+Semantic tokens are `[deltaLine, deltaStartChar, length, tokenType, tokenModifiers]` from `encode_lsp_semantic_tokens`, sent as `lsp_types::SemanticToken`. The legend is `opentide_highlight::LSP_TOKEN_TYPES` (the standard VS Code token types), **not** `HighlightSpec.legend`. TextMate / Monaco / Helix scopes still come from `highlights/spec.toml`.
 
 ## Diagnostics
 
-`textDocument/publishDiagnostics` uses `source: "opentide"`, the stable `code`, and a numeric severity (error 1, warning 2, information 3, hint 4). Tide object checks match the Pydantic issue's `{code, field_path, severity}` and add a range. Extra query diagnostics inside an injected `query: |` block are allowed. Do not drop a code to make a fixture quiet; fix the document or the engine.
+Diagnostics carry `source: "opentide"`, the stable `code`, an LSP severity, and `data: { field_path, suggestion }`, which a code action reads back from `context.diagnostics`. Tide object checks match the Pydantic issue's `{code, field_path, severity}` and add a range. Do not drop a code to make a fixture quiet; fix the document or the engine. `DIAGNOSTICS_DOCS` is where every code has a section (opentide's `docs/cli/diagnostics.md`).
 
 CrowdStrike paths produce `crowdstrike_unsupported` or no fake success. Do not parse Falcon FQL here.
 
 ## Editors in this repo
 
-`editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is `opentidehq/vscode-extension`, a different repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
+`editors/helix/languages.toml`, `editors/nvim/opentide.lua`, `editors/zed/opentide.json`. VS Code is a separate repository. Samples disable yamlls on `objects/**`. Semantic tokens come from this server. TextMate grammars are generated (`generate-highlights`), never hand-authored in an editor repo.
 
 Language ids in editors: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `opentide-config` (`.opentide/configurations/**/*.toml`, the editor's TOML grammar, generic TOML servers off). Not `sql`. Not `otide`.
 
 ## Tests
 
-`crates/opentide-lsp/tests/e2e_stdio.rs` spawns `CARGO_BIN_EXE_opentide-lsp --stdio` and writes real frames. A new method gets a frame in that test: `initialize`, `initialized`, the request, then assert the response `id` and payload. Run:
+`tests/common/mod.rs` is the one test client: it spawns `CARGO_BIN_EXE_opentide-lsp --stdio`, writes real frames, gives each `didChange` a version, and skips `window/logMessage` in `read` (`read_any` keeps it). `tests/e2e_stdio.rs` covers the features, `tests/protocol.rs` the host (capabilities, batches, cancellation, cache, refresh, roots, watchers, code actions, logs), `tests/host_configuration.rs` an in-process `serve` with a host checker. A new method gets a test there: `initialize`, `initialized`, the request, then assert the response `id` and payload. The Windows CI job runs this crate's tests; the informational `clients` job drives real clients: `tests/clients` (pytest-lsp with the capabilities VS Code, Neovim and Emacs record) and `scripts/nvim-smoke.lua` (Neovim's own client, one diagnostic each).
 
 ```bash
-cargo test -p opentide-lsp --test e2e_stdio
+cargo test -p opentide-lsp
 ```
 
-Stderr is the server log. Stdout is protocol only. Do not `println!` from the server. Use `eprintln!` for listen-address and generator logs.
+Stderr is the server log. Stdout is protocol only. Do not `println!` from the server.

@@ -56,6 +56,31 @@ jobs:
       - name: test (opentide-lsp, opentide-core)
         run: cargo test -p opentide-lsp -p opentide-core
 
+  # Real clients against the server (#185 P2.8): pytest-lsp replays the
+  # capabilities VS Code, Neovim and Emacs send and checks each response
+  # against them, and Neovim's own client must show each diagnostic once.
+  # Informational while the recorded capabilities and Ubuntu's Neovim move.
+  clients:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cargo build -p opentide-lsp
+      - name: pytest-lsp (VS Code, Neovim, Emacs capabilities)
+        env:
+          OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
+        run: |
+          pip install -r tests/clients/requirements.txt
+          cd tests/clients && python -m pytest -q
+      - name: Neovim headless
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q neovim
+          nvim --headless --clean -l scripts/nvim-smoke.lua target/debug/opentide-lsp
+
   # Every crate builds from its packaged sources, as it will from crates.io:
   # a crate that reads a file outside OPENTIDE_ASSETS fails here, not at release.
   package:

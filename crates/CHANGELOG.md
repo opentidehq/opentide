@@ -17,6 +17,24 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - There is no TOML highlighting: the editor's TOML grammar stays.
   - API: `opentide_analysis::config` (`ConfigRequest`, `ConfigIssue`, `configuration_diagnostics`, `configuration_hover`, `configuration_completions`, `configuration_path`), `LanguageId::Config`, `Severity::parse`, `opentide_lsp::serve`. The editor samples associate the glob and start `opentide lsp start` for it.
 
+- Editor features built on the Tide index ([#185](https://github.com/opentidehq/language-server/issues/185) P3).
+  - **Outline:** a Tide object's document symbols are a tree: the object, each top-level section, each `configurations.<platform>` block, and each query with its language.
+  - **Links:** ATT&CK technique and tactic ids (`T1059.001`, `TA0002`) link to attack.mitre.org, and the UUID of another object links to its file.
+  - **Lens:** an objective or threat shows `N rules use this objective` on its UUID. The lens runs `opentide.showReferences` with `[uri, position, locations]`, which a client registers.
+  - **Fix all:** `source.fixAll.opentide` applies every suggestion of the document as one edit, when the client asks for source actions.
+  - **Inlay hints:** each hint's label leads to the object it names (Ctrl-click).
+  - **Closed files:** `workspace/diagnostic` reports every object file nobody has open (`duplicate_id`, `invalid_ref`), for a client that pulls.
+  - API: `opentide_tide::{outline, document_links, reference_lens, attack_url}`; `TideInlay` carries the object's `uuid` and `path`.
+- Workspace folders ([#185](https://github.com/opentidehq/language-server/issues/185) P2.1). The server reads `workspaceFolders` (else `rootUri`) and `workspace/didChangeWorkspaceFolders`. Each folder has its own objects, index, `visibility.toml` and catalogs, so a rule in one folder is not an `invalid_ref` or `duplicate_id` because of another. A document opened outside every folder belongs to its `.opentide/` or `objects/` ancestor, as for `opentide-lsp analyze`. A client that sent only `workspaceFolders` used to have no root and a false `invalid_ref` on every rule.
+- Richer diagnostics, each for a client that reads it ([#185](https://github.com/opentidehq/language-server/issues/185) P2.3).
+  - `codeDescription.href` links to the code's section of opentide's diagnostics reference.
+  - Deprecations carry the `Deprecated` tag.
+  - A `duplicate_id` names the other file in `relatedInformation`.
+  - Published sets carry the document `version`.
+  - The opentide canary checks that every code has a section there.
+- `initialize` says who runs the server ([#172](https://github.com/opentidehq/language-server/issues/172)): `capabilities.experimental.opentide` is `{ host, engine, catalog, configurationChecks, configurationSchemas }`. `opentide_lsp::set_host_info` names the host, and `opentide-lsp --version --json` prints the same object without starting a session.
+- Logs reach the editor ([#185](https://github.com/opentidehq/language-server/issues/185) P2.5). Catalog and `visibility.toml` loads and failures are `window/logMessage`, and a broken file on disk is shown once per session.
+
 ### Fixed
 
 - An incremental edit after a multi-byte character (`日本`, `é`, an emoji) no longer crashes the language server ([#178](https://github.com/opentidehq/language-server/issues/178)). The server read the editor's column, which counts UTF-16 units, as a byte offset, and sliced inside the character. Edits, completion and hover now all convert positions with `opentide_core::position_to_offset`, which counts UTF-16 as LSP does; completion and KQL hover used to count characters, which put the cursor one column off after an emoji.
@@ -42,10 +60,32 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - Go to definition and references no longer find a UUID when the cursor is past the end of the line.
 - Windows: a `file:` URI and the path the workspace walk finds name the same file ([#185](https://github.com/opentidehq/language-server/issues/185) P0.3). The server converts URIs with the `url` crate, so `file:///c%3A/Users/u/det` is `c:\Users\u\det` and `file://server/share/r.yaml` is the UNC path `\\server\share\r.yaml`; the hand-written converter gave `c:/Users/...` and dropped the UNC host. CI runs the protocol tests on Windows. API: `opentide_lsp::uri::{uri_to_path, path_to_uri}`.
 
+- The server keeps up with typing ([#185](https://github.com/opentidehq/language-server/issues/185) P1.3, P1.4).
+  - Each document state is analysed once, and publish, pull, semantic tokens, code actions, symbols, lenses and links share that analysis. A VS Code keystroke used to run about ten analyses.
+  - Messages that arrive while a request runs are handled as one batch: twenty queued edits are analysed and published once.
+  - A request the batch cancels gets `RequestCanceled`. A semantic tokens, code action, inlay hint, pulled diagnostic, lens or link request for a document a later edit in the batch changes gets `ContentModified`.
+- A client that can refresh is asked to after `visibility.toml`, a configuration file, a catalog or an object on disk changes: `workspace/{semanticTokens,inlayHint,codeLens}/refresh`, with `workspace/diagnostic/refresh` for a client that pulls ([#185](https://github.com/opentidehq/language-server/issues/185) P1.6).
+- The server watches configuration TOML and the generated catalogs as well as object YAML ([#185](https://github.com/opentidehq/language-server/issues/185) P2.2). A referenced objective deleted on disk is an `invalid_ref` in the open rule at once.
+- Code actions follow the request ([#185](https://github.com/opentidehq/language-server/issues/185) P2.4).
+  - Quick fixes are built from the diagnostics the client sends back (their `data`), name the diagnostic, and are preferred.
+  - `context.only` is honoured.
+  - The fix that creates `visibility.toml` is offered only to a client that can create files.
+- The server follows what the client can do ([#185](https://github.com/opentidehq/language-server/issues/185) P2.6).
+  - Hover and completion documentation is plain text for a client that renders no Markdown.
+  - A space opens no completion list in Tide YAML.
+  - An edit whose version is not newer than the document's is ignored.
+- `completionItem/resolve` documents a Tide value from the field it was completed for, carried in the item's `data`, not from the first field with that value ([#185](https://github.com/opentidehq/language-server/issues/185) P0.9).
 ### Changed
 
+- The protocol host is built on `lsp-server` 0.10 and `lsp-types` 0.97, the stack rust-analyzer uses, without an async runtime ([#90](https://github.com/opentidehq/language-server/issues/90), [#185](https://github.com/opentidehq/language-server/issues/185) P1.1, P1.2, P1.5).
+  - The hand-written framing (`jsonrpc.rs`) is gone. Each method is a typed handler, so params that do not deserialize get `InvalidParams` (-32602).
+  - The capabilities are built from the client's.
+  - `positionEncoding` is advertised as `utf-16`.
+  - A request with `"id": null` gets `InvalidRequest` (-32600) with `id: null`, where it got `MethodNotFound`.
+  - On native targets, stdio and `--listen` read on a thread of their own. `serve` and wasip1 read on the caller's thread. CI runs a wasip1 `--stdio` session.
+  - Clients are checked too: an informational CI job runs pytest-lsp with the capabilities VS Code, Neovim and Emacs record, plus a Neovim headless session.
 - API: the engines take byte offsets, never LSP positions ([#185](https://github.com/opentidehq/language-server/issues/185) P1.5). `opentide_analysis::hover` and `signature_help`, and each language crate's `hover`, take a `usize` offset as `completions` already did. A host converts the editor's UTF-16 position once, with `opentide_core::position_to_offset`. SPL's hover had its own column counter that counted characters, which put hover one column off after an emoji. A byte-order mark at the start counts as bytes.
-- The unused dependencies `lsp-types`, `insta` and `similar` are gone, along with `thiserror` from `opentide-kql`. A clean build no longer compiles them.
+- The unused dependencies `insta` and `similar` are gone, along with `thiserror` from `opentide-kql`. A clean build no longer compiles them.
 - A `.toml` file outside `.opentide/configurations/` (`Cargo.toml`, `pyproject.toml`) is no longer read. The server used to analyse it as Tide YAML when an editor sent it.
 
 ## [0.7.1] - 2026-11-03

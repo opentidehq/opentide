@@ -1,108 +1,10 @@
 //! Protocol tests over stdio. The CLI never speaks JSON-RPC; `--stdio` does.
 
+mod common;
+
+use common::*;
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
 use std::process::{Command, Stdio};
-
-fn bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_opentide-lsp"))
-}
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-/// A path's `file:` URI as the platform's editors write it (`file:///C:/…`
-/// on Windows), so the tests run on every platform (#185 P0.3).
-fn file_uri(path: &std::path::Path) -> String {
-    opentide_lsp::uri::path_to_uri(&path.display().to_string())
-}
-
-struct Lsp {
-    child: std::process::Child,
-    reader: BufReader<std::process::ChildStdout>,
-    stdin: std::process::ChildStdin,
-    next_id: i64,
-}
-
-impl Lsp {
-    fn spawn() -> Self {
-        let mut child = Command::new(bin())
-            .arg("--stdio")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawn opentide-lsp");
-        let stdin = child.stdin.take().unwrap();
-        let stdout = child.stdout.take().unwrap();
-        Self {
-            child,
-            reader: BufReader::new(stdout),
-            stdin,
-            next_id: 1,
-        }
-    }
-
-    fn write(&mut self, body: &Value) {
-        let payload = serde_json::to_vec(body).unwrap();
-        write!(self.stdin, "Content-Length: {}\r\n\r\n", payload.len()).unwrap();
-        self.stdin.write_all(&payload).unwrap();
-        self.stdin.flush().unwrap();
-    }
-
-    fn read(&mut self) -> Value {
-        let mut content_length = None;
-        loop {
-            let mut header = String::new();
-            self.reader.read_line(&mut header).unwrap();
-            let header = header.trim_end();
-            if header.is_empty() {
-                break;
-            }
-            if let Some(v) = header.strip_prefix("Content-Length:") {
-                content_length = Some(v.trim().parse::<usize>().unwrap());
-            }
-        }
-        let len = content_length.expect("Content-Length");
-        let mut buf = vec![0u8; len];
-        self.reader.read_exact(&mut buf).unwrap();
-        serde_json::from_slice(&buf).unwrap()
-    }
-
-    fn request(&mut self, method: &str, params: Value) -> Value {
-        let id = self.next_id;
-        self.next_id += 1;
-        self.write(&json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params
-        }));
-        loop {
-            let msg = self.read();
-            if msg.get("id") == Some(&json!(id)) {
-                return msg;
-            }
-            // skip notifications (publishDiagnostics)
-        }
-    }
-
-    fn notify(&mut self, method: &str, params: Value) {
-        self.write(&json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-        }));
-    }
-}
-
-impl Drop for Lsp {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-    }
-}
 
 #[test]
 fn initialize_and_analyze_kql() {
@@ -409,9 +311,13 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|h| h["label"]
+            .any(|h| h["label"][0]["value"]
                 .as_str()
-                .is_some_and(|l| l.to_lowercase().contains("objective"))),
+                .is_some_and(|l| l.to_lowercase().contains("objective"))
+                // The label leads to the object (#185 P3.5).
+                && h["label"][0]["location"]["uri"]
+                    .as_str()
+                    .is_some_and(|u| u.ends_with("objective-0001-credential-access.yaml"))),
         "{inlays}"
     );
 
@@ -550,7 +456,8 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
         "textDocument/codeAction",
         json!({
             "textDocument": { "uri": uri },
-            "range": { "start": { "line": 4, "character": 0 }, "end": { "line": 4, "character": 4 } }
+            "range": { "start": { "line": 4, "character": 0 }, "end": { "line": 4, "character": 4 } },
+            "context": { "diagnostics": [] }
         }),
     );
     assert_eq!(actions["result"].as_array().unwrap().len(), 0, "{actions}");
@@ -592,30 +499,6 @@ fn tide_structure_methods_are_not_whole_buffer_stubs() {
         pull["result"]["items"].as_array().unwrap().is_empty(),
         "{pull}"
     );
-}
-
-/// Open a document, return its published diagnostic codes.
-fn published_codes(lsp: &mut Lsp, uri: &str, language_id: &str, text: &str) -> Vec<String> {
-    lsp.notify(
-        "textDocument/didOpen",
-        json!({
-            "textDocument": {
-                "uri": uri,
-                "languageId": language_id,
-                "version": 1,
-                "text": text
-            }
-        }),
-    );
-    let msg = lsp.read();
-    assert_eq!(msg["method"], "textDocument/publishDiagnostics", "{msg}");
-    msg["params"]["diagnostics"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|d| d["code"].as_str().map(str::to_string))
-        .collect()
 }
 
 #[test]
@@ -732,10 +615,25 @@ fn initialize_installs_the_workspace_field_catalog() {
     let with_catalog = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
     drop(lsp);
 
+    // Without a root, the workspace around the document is found (#185
+    // P2.1): its catalog applies.
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
-    let bundled = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    let discovered = published_codes(&mut lsp, &uri, "opentide-yaml", rule);
+    drop(lsp);
+
+    // A document in no workspace gets the bundled catalogs.
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    let bundled = published_codes(
+        &mut lsp,
+        "file:///opentide-no-such-workspace/objects/rules/house-rule.yaml",
+        "opentide-yaml",
+        rule,
+    );
     std::fs::remove_dir_all(&root).ok();
+
+    assert_eq!(discovered, with_catalog);
 
     assert!(
         !with_catalog.contains(&"vocab_unknown".to_string()),
@@ -745,37 +643,6 @@ fn initialize_installs_the_workspace_field_catalog() {
         bundled.contains(&"vocab_unknown".to_string()),
         "{bundled:?}"
     );
-}
-
-/// A fresh directory under the system temp dir, removed on drop.
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("opentide-e2e-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap() {
-        let path = entry.unwrap().path();
-        let target = to.join(path.file_name().unwrap());
-        if path.is_dir() {
-            copy_dir(&path, &target);
-        } else {
-            std::fs::copy(&path, &target).unwrap();
-        }
-    }
 }
 
 fn cli_codes(file: &std::path::Path) -> Vec<String> {
@@ -865,7 +732,8 @@ fn an_undeclared_table_has_a_code_action_that_declares_it() {
         "textDocument/codeAction",
         json!({
             "textDocument": { "uri": uri },
-            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } }
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } },
+            "context": { "diagnostics": [] }
         }),
     );
     let action = actions["result"]
@@ -917,7 +785,8 @@ fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
         "textDocument/codeAction",
         json!({
             "textDocument": { "uri": uri },
-            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 17 } }
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 17 } },
+            "context": { "diagnostics": [] }
         }),
     );
     let action = actions["result"]
@@ -935,35 +804,59 @@ fn an_undeclared_splunk_sourcetype_has_a_code_action_that_adds_it() {
     );
 }
 
-/// No visibility.toml: the quick fix on `kql_unknown_table` creates it.
+/// No visibility.toml: the quick fix on `kql_unknown_table` creates it, for
+/// a client that can create files (#185 P2.4). Any other client gets no
+/// such action.
 #[test]
 fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
     let scratch = Scratch::new("declare-create");
     let root = &scratch.0;
     let uri = file_uri(&root.join("hunt.kql"));
+    let request = json!({
+        "textDocument": { "uri": uri },
+        "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } },
+        "context": { "diagnostics": [] }
+    });
+    let title = "Add a [[logsources]] entry declaring 'MyCustom_CL' to visibility.toml";
+
     let mut lsp = Lsp::spawn();
     lsp.request(
         "initialize",
         json!({ "capabilities": {}, "rootUri": file_uri(root) }),
     );
-    let codes = published_codes(&mut lsp, &uri, "kql", "MyCustom_CL | take 1");
-    assert_eq!(codes, vec!["kql_unknown_table".to_string()]);
-    let actions = lsp.request(
-        "textDocument/codeAction",
+    published_codes(&mut lsp, &uri, "kql", "MyCustom_CL | take 1");
+    let actions = lsp.request("textDocument/codeAction", request.clone());
+    assert!(
+        !actions["result"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["title"] == title),
+        "{actions}"
+    );
+    drop(lsp);
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
         json!({
-            "textDocument": { "uri": uri },
-            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 0, "character": 3 } }
+            "capabilities": { "workspace": { "workspaceEdit": {
+                "documentChanges": true, "resourceOperations": ["create"]
+            } } },
+            "rootUri": file_uri(root)
         }),
     );
+    let codes = published_codes(&mut lsp, &uri, "kql", "MyCustom_CL | take 1");
+    assert_eq!(codes, vec!["kql_unknown_table".to_string()]);
+    let actions = lsp.request("textDocument/codeAction", request);
     let action = actions["result"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|a| {
-            a["title"] == "Add a [[logsources]] entry declaring 'MyCustom_CL' to visibility.toml"
-        })
+        .find(|a| a["title"] == title)
         .unwrap_or_else(|| panic!("{actions}"))
         .clone();
+    assert_eq!(action["isPreferred"], true, "{action}");
     let changes = action["edit"]["documentChanges"].as_array().unwrap();
     assert_eq!(changes[0]["kind"], "create");
     let text = changes[1]["edits"][0]["newText"].as_str().unwrap();
@@ -971,20 +864,6 @@ fn the_quick_fix_creates_visibility_toml_when_there_is_none() {
         text.contains("name = \"MyCustom_CL\"\ndescription = \"\"\nsystem = \"sentinel\""),
         "{text}"
     );
-}
-
-fn next_diagnostics(lsp: &mut Lsp, uri: &str) -> Vec<String> {
-    loop {
-        let msg = lsp.read();
-        if msg["method"] == "textDocument/publishDiagnostics" && msg["params"]["uri"] == uri {
-            return msg["params"]["diagnostics"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|d| d["code"].as_str().map(str::to_string))
-                .collect();
-        }
-    }
 }
 
 /// visibility.toml applies as it is edited: in the editor, before it is
@@ -1244,25 +1123,6 @@ fn an_edit_after_a_multi_byte_character_keeps_the_server_running() {
     assert_eq!(reply["result"], Value::Null, "{reply}");
 }
 
-fn codes_of(diagnostics: &[Value]) -> Vec<String> {
-    diagnostics
-        .iter()
-        .filter_map(|d| d["code"].as_str().map(str::to_string))
-        .collect()
-}
-
-fn published_for(lsp: &mut Lsp, uri: &str) -> Vec<Value> {
-    loop {
-        let msg = lsp.read();
-        if msg["method"] == "textDocument/publishDiagnostics" && msg["params"]["uri"] == uri {
-            return msg["params"]["diagnostics"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
-        }
-    }
-}
-
 /// #181: the server reads and indexes `objects/` once. An objective created
 /// on disk after start is found through the file watcher, and also, for a
 /// client that cannot watch files, on the next request.
@@ -1360,7 +1220,12 @@ fn only_tide_yaml_is_analysed() {
         "file:///w/objects/rules/broken.yaml",
         "name: Broken\n",
     );
-    let second = lsp.read();
+    // The rule is checked again (it may reference the new object), then the
+    // new one.
+    let mut second = lsp.read();
+    while second["params"]["uri"] == "file:///w/detections/rules/r.yaml" {
+        second = lsp.read();
+    }
     assert_eq!(
         second["params"]["uri"], "file:///w/objects/rules/broken.yaml",
         "{second}"
@@ -1407,15 +1272,6 @@ fn the_workspace_walk_stays_in_objects_and_ignores_symlinked_directories() {
     let count = symbols["result"].as_array().map_or(0, Vec::len);
     assert_eq!(count, 1, "{symbols}");
     let _ = std::fs::remove_dir_all(&root);
-}
-
-fn raw(lsp: &mut Lsp, body: &str) {
-    write!(lsp.stdin, "content-length: {}\r\n\r\n{body}", body.len()).unwrap();
-    lsp.stdin.flush().unwrap();
-}
-
-fn exit_code(mut lsp: Lsp) -> i32 {
-    lsp.child.wait().expect("server exits").code().unwrap_or(-1)
 }
 
 /// #185 P0.6: the LSP lifecycle, and the exit code that says whether the
@@ -1488,14 +1344,14 @@ fn malformed_frames_are_answered_and_the_session_continues() {
     );
     let reply = lsp.read();
     assert_eq!(reply["id"], 7, "{reply}");
-    // `"id": null` is echoed.
+    // `"id": null` is not a valid id: answered with `id: null`.
     raw(
         &mut lsp,
         r#"{"jsonrpc": "2.0", "id": null, "method": "opentide/not-a-method"}"#,
     );
     let reply = lsp.read();
     assert!(reply.get("id").is_some_and(Value::is_null), "{reply}");
-    assert_eq!(reply["error"]["code"], -32601, "{reply}");
+    assert_eq!(reply["error"]["code"], -32600, "{reply}");
     assert_eq!(lsp.request("shutdown", Value::Null)["result"], Value::Null);
 }
 

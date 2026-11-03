@@ -5,13 +5,16 @@
 //! [`run_stdio`] speaks LSP on the process's stdin and stdout until the client
 //! sends `exit` or closes stdin. Nothing else may write to stdout meanwhile.
 
-mod jsonrpc;
+mod handlers;
+mod protocol;
 pub mod server;
+mod session;
 pub mod uri;
 
+pub use handlers::{DIAGNOSTICS_DOCS, SHOW_REFERENCES};
 pub use server::{
-    WORKSPACE_CATALOGS, run_listen, run_stdio, run_stdio_status, serve, serve_with_status,
-    use_host_catalogs,
+    WORKSPACE_CATALOGS, host_info, run_listen, run_stdio, run_stdio_status, serve,
+    serve_with_status, set_host_info, use_host_catalogs,
 };
 
 /// The server's version: the crate version every `opentide-*` crate shares.

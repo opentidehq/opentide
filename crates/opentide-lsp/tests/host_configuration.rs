@@ -113,63 +113,71 @@ fn the_host_checks_configuration_and_the_server_places_it() {
     install_schemas();
 
     let sharing = "[[misp]]\nname = \"misp-internal\"\ndistribution = \"this-community\"\nrule_statuses = [\"STAGING\"]\nmax_tlp = \"red\"\n";
-    let mut input = Vec::new();
-    let mut send = |body: Value| input.extend(frame(&body));
-    send(
+    let opens = [
         json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"capabilities": {}}}),
-    );
-    send(json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
-    send(
+        json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}),
         json!({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {
         "uri": SHARING, "languageId": "toml", "version": 1, "text": sharing}}}),
-    );
-    send(
         json!({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {
         "uri": DEPLOYMENT, "languageId": "toml", "version": 1, "text": "[[statuses]]\nname = \"PRODUCTION\"\n"}}}),
+    ];
+    let session = |bodies: &[Value]| {
+        let mut input = Vec::new();
+        for body in bodies {
+            input.extend(frame(body));
+        }
+        input.extend(frame(
+            &json!({"jsonrpc": "2.0", "id": 99, "method": "shutdown"}),
+        ));
+        input.extend(frame(&json!({"jsonrpc": "2.0", "method": "exit"})));
+        let mut output = Vec::new();
+        opentide_lsp::serve(std::io::Cursor::new(input), &mut output).unwrap();
+        frames(&output)
+    };
+
+    // #172: the host says who it is; its checker and schemas are reported.
+    opentide_lsp::set_host_info("opentide", "9.9.9");
+    // STAGING is not a status of the open deployment.toml.
+    let messages = session(&opens);
+    let init = messages.iter().find(|m| m["id"] == 1).unwrap();
+    let info = &init["result"]["capabilities"]["experimental"]["opentide"];
+    assert_eq!(
+        info["host"],
+        json!({ "name": "opentide", "version": "9.9.9" })
     );
-    // Declaring STAGING in the open deployment.toml clears sharing.toml.
-    send(
+    assert_eq!(info["configurationChecks"], true);
+    assert_eq!(info["configurationSchemas"], true);
+    assert_eq!(
+        published(&messages, SHARING),
+        [[
+            ("unknown_key".to_string(), 2),
+            ("rule_status_unknown".to_string(), 3)
+        ]],
+        "{messages:#?}"
+    );
+
+    // Declaring STAGING in the open deployment.toml clears sharing.toml. The
+    // frames arrive as one batch: sharing.toml is published once, as it ends.
+    let mut bodies = opens.to_vec();
+    bodies.extend([
         json!({"jsonrpc": "2.0", "method": "textDocument/didChange", "params": {
         "textDocument": {"uri": DEPLOYMENT, "version": 2},
         "contentChanges": [{"text": "[[statuses]]\nname = \"PRODUCTION\"\n\n[[statuses]]\nname = \"STAGING\"\n"}]}}),
-    );
-    send(
         json!({"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {
         "uri": "file:///w/Cargo.toml", "languageId": "toml", "version": 1, "text": "[package]\nname = \"x\"\n"}}}),
-    );
-    send(
         json!({"jsonrpc": "2.0", "id": 2, "method": "textDocument/completion", "params": {
         "textDocument": {"uri": SHARING}, "position": {"line": 4, "character": 10}}}),
-    );
-    send(
         json!({"jsonrpc": "2.0", "id": 3, "method": "textDocument/hover", "params": {
         "textDocument": {"uri": SHARING}, "position": {"line": 4, "character": 2}}}),
-    );
-    send(
         json!({"jsonrpc": "2.0", "id": 4, "method": "textDocument/semanticTokens/full", "params": {
         "textDocument": {"uri": SHARING}}}),
-    );
-    send(json!({"jsonrpc": "2.0", "id": 5, "method": "shutdown"}));
-    send(json!({"jsonrpc": "2.0", "method": "exit"}));
-
-    let mut output = Vec::new();
-    opentide_lsp::serve(std::io::Cursor::new(input), &mut output).unwrap();
+    ]);
+    let messages = session(&bodies);
     set_configuration_checker(None);
     install_configuration_schemas(None, &[]).unwrap();
-    let messages = frames(&output);
-
-    let sharing_rounds = published(&messages, SHARING);
     assert_eq!(
-        sharing_rounds[0],
-        [
-            ("unknown_key".to_string(), 2),
-            ("rule_status_unknown".to_string(), 3)
-        ],
-        "{messages:#?}"
-    );
-    assert_eq!(
-        sharing_rounds.last().unwrap(),
-        &[("unknown_key".to_string(), 2)],
+        published(&messages, SHARING),
+        [[("unknown_key".to_string(), 2)]],
         "editing deployment.toml re-checks sharing.toml"
     );
     assert!(

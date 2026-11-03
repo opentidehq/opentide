@@ -14,8 +14,21 @@ use opentide_highlight::{
 use std::path::{Path, PathBuf};
 
 #[derive(Parser, Debug)]
-#[command(name = "opentide-lsp", version, about = "opentide language server")]
+#[command(
+    name = "opentide-lsp",
+    about = "opentide language server",
+    disable_version_flag = true
+)]
 struct Cli {
+    /// Print the version (`--json`: what `initialize` reports in
+    /// `capabilities.experimental.opentide`, without starting a session).
+    #[arg(long, short = 'V')]
+    version: bool,
+
+    /// With `--version`: print it as JSON.
+    #[arg(long, requires = "version")]
+    json: bool,
+
     /// Speak LSP over stdin/stdout.
     #[arg(long)]
     stdio: bool,
@@ -53,6 +66,14 @@ enum Command {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.version {
+        if cli.json {
+            println!("{}", opentide_lsp::host_info());
+        } else {
+            println!("opentide-lsp {}", opentide_lsp::VERSION);
+        }
+        return Ok(());
+    }
     if cli.stdio {
         // LSP: exit 0 after `shutdown` then `exit`, 1 when the client exits
         // or closes the stream without shutting the server down.
@@ -196,14 +217,8 @@ fn cmd_generate_highlights(check: bool) -> Result<()> {
 }
 
 fn find_objects_root(file: &Path) -> Option<PathBuf> {
-    for ancestor in file.ancestors() {
-        let objects = ancestor.join("objects");
-        if objects.is_dir() {
-            return Some(objects);
-        }
-        if ancestor.join(".opentide").is_dir() {
-            return Some(ancestor.join("objects"));
-        }
+    if let Some(root) = server::workspace_root(file) {
+        return Some(root.join("objects"));
     }
     file.parent()
         .and_then(|p| p.parent())

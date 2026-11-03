@@ -88,8 +88,9 @@ Pydantic remains CLI authority. The LSP emits the same `{code, field_path, sever
 ## Structure providers
 
 `initialize` advertises document symbols, workspace symbols, document
-highlight, code actions, folding, selection range, inlay hints, and pull
-diagnostics. Behavior, the visibility.toml fixes, and the quickfix range
+highlight, code actions, folding, selection range, inlay hints, document
+links, code lenses, and pull and workspace diagnostics (for a client that
+pulls). Behavior, the visibility.toml fixes, and the quickfix range
 pitfall: [EDITORS.md](EDITORS.md#structure-providers).
 
 ## Custom RPCs

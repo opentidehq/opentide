@@ -63,7 +63,7 @@ Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list i
 
 LSP `character` is a UTF-16 code unit count. `é` is one unit; an emoji outside the BMP is two. Ranges **sent** to the client go through `span_to_range` / `offset_to_position` in `opentide-core`, which uses `char::len_utf16`.
 
-Inbound positions (LSP → byte offset) go through `opentide_core::position_to_offset`, which counts UTF-16 and always returns a char boundary. `offset_at` (incremental `didChange`) and `position_to_offset` in `crates/opentide-lsp/src/server.rs`, and `position_to_offset` in `opentide-kql`, are thin wrappers over it (#178: the byte-index version panicked after `日本`). Do not add another converter, and do not index the source with `position.character` as a byte index; a change here needs a fixture with `é`, a CJK character and a non-BMP character.
+Inbound positions (LSP → byte offset) go through `opentide_core::position_to_offset`, which counts UTF-16 and always returns a char boundary. The host converts once, in `offset` (`crates/opentide-lsp/src/handlers.rs`), and the engines take byte offsets; `position_to_offset` in `opentide-kql` is a thin wrapper over it (#178: the byte-index version panicked after `日本`). Do not add another converter, and do not index the source with `position.character` as a byte index; a change here needs a fixture with `é`, a CJK character and a non-BMP character.
 
 `uuid::Uuid::parse_str` plus `get_version_num() == 4` is the object-id check (`is_uuidv4`). Do not add another parser. A 36-character hex UUID that is not version 4 is a different future check (configuration `organisation_uuid`) and does not belong in this function.
 
@@ -101,7 +101,7 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 
 ## What not to add
 
-- `tower-lsp`, `lsp-server`, or a second JSON-RPC stack. See `lsp-host`.
+- `tower-lsp`, `async-lsp`, or a second JSON-RPC stack beside `lsp-server`. See `lsp-host`.
 - `std::fs` in an engine `src/` tree. Pass the text in.
 - `async` / `tokio` in the engine. The server is a blocking stdio loop.
 - A new `LanguageId` without the `add-language` skill.

@@ -1,6 +1,6 @@
-# JSON-RPC wire format
+# Wire format
 
-Implementation: `crates/opentide-lsp/src/jsonrpc.rs`. Spec: LSP base protocol, `Content-Length` headers. <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart>
+Framing is `lsp-server` 0.10 (`Message::read` / `Message::write`, `crates/opentide-lsp/src/protocol.rs`); message types are `lsp-types` 0.97. Spec: LSP 3.17 base protocol. <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart>
 
 ## Framing
 
@@ -10,43 +10,17 @@ Content-Length: <utf-8 byte length>\r\n
 {json body}
 ```
 
-`read_message` ignores headers other than `Content-Length`, then reads exactly that many bytes. The next frame starts after the body. `write_message` writes the header, `\r\n\r\n`, the body, and flushes. The length is the JSON byte length, not the character length, and not including the header.
-
-A missing `Content-Length` is an error. A short read is an error. EOF before a header returns `Ok(None)` and the stdio loop exits.
+Header names match in any case; headers other than `Content-Length` are ignored; lines end in `\r\n`. A broken header ends the session; a body that is not a message is answered (`-32700`/`-32600`) and reading goes on. EOF before a header ends the loop.
 
 ## Messages
 
-Request:
+`lsp_server::Message` is a `Request` (`id` an integer or a string), a `Response` or a `Notification`; `jsonrpc` is optional on input and always written. Build replies with `Response::new_ok` / `Response::new_err` and `ErrorCode`: `-32700` parse, `-32600` invalid request, `-32601` method not found, `-32602` invalid params, `-32603` internal, `-32002` not initialized, `-32800` cancelled, `-32801` content modified. Do not invent a success payload on an unknown method; the dispatcher answers `-32601` with the request id.
 
-```json
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-```
-
-Notification (no `id`):
-
-```json
-{"jsonrpc":"2.0","method":"initialized","params":{}}
-```
-
-Success:
-
-```json
-{"jsonrpc":"2.0","id":1,"result":{}}
-```
-
-Failure:
-
-```json
-{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"method not found"}}
-```
-
-Use the helpers `success`, `failure`, and `notify`. Standard codes: `-32700` parse, `-32600` invalid request, `-32601` method not found, `-32602` invalid params, `-32603` internal. Do not invent a success payload on an unknown method; return an error with the request id so the client unblocks.
-
-`Incoming.id` is `Option<serde_json::Value>` because ids may be numbers or strings. Echo the same JSON value back. Do not coerce it to `i64`.
+A handler is a typed function `fn(&mut Session, R::Params) -> R::Result` routed with `Dispatcher::on::<R>`. A server-to-client request goes through `Session::send_request::<R>` (ids from `ReqQueue`), a notification through `Session::notify::<N>`; both are written after the message that queued them, before its reply.
 
 ## Sync
 
-`textDocumentSync: 2` means incremental. `didChange` applies `contentChanges` in order. The host stores the full text after the change and re-analyzes. Do not switch the capability to full (`1`) without updating the client and the e2e test. Do not assume the client sends the whole document on every keystroke.
+`textDocumentSync` is incremental (`2`). `didChange` applies `contentChanges` in order, and carries a version: one not newer than the document's is ignored. The host stores the full text after the change and re-analyzes. Do not switch the capability to full (`1`) without updating the clients and the tests.
 
 ## Semantic tokens
 
@@ -60,14 +34,14 @@ Tokens are sorted by `(line, character)`. An unsorted slice produces a negative 
 
 ## Hover and completion
 
-Hover returns a `contents` value the e2e test already understands (markup or a string). Completion items use the engine's `CompletionItem` (`label`, `detail`, `kind`, `documentation`). Kinds are strings the server maps onto LSP completion kinds. Do not return the engine struct unchanged if the test expects LSP numeric kinds; follow the existing mapper in `server.rs`.
+Hover is `MarkupContent`, Markdown unless the client renders only plain text. Completion items map the engine's `CompletionItem` (`label`, `detail`, `kind`, `documentation`) onto `lsp_types::CompletionItem`; kinds are strings mapped in `completion_kind`. An item carries `data: { language, schema?, field_path? }`: `completionItem/resolve` documents a Tide value from that field and keeps the item's `textEdit` and `filterText`.
 
-Trigger characters are part of the capability. Adding a trigger without handling it in completion is harmless. Removing `|`, `(`, or `` ` `` changes KQL and SPL completion and needs a test.
+Trigger characters are part of the capability. A space never opens a list in Tide YAML. Removing `|`, `(`, or `` ` `` changes KQL and SPL completion and needs a test.
 
 ## Custom RPCs
 
 `opentide/analyze` and `opentide/highlight` take the same logical input as the CLI and return the same JSON the CLI prints, inside a JSON-RPC result. Editors that cannot spawn the CLI use these. Do not make the CLI call itself over stdio to implement `analyze`.
 
-`opentide/fs/read` is a host method. The engine never reads the path. Validate the path stays inside the workspace the client initialized. Do not widen it into an arbitrary file read.
+`opentide/fs/read` returns a file as the server sees it: an open buffer, an object file the index read, or a root's Elastic configuration. It never reads another path.
 
 `opentide/compiledKql` and `opentide/compiledSpl` return the compiled query the engine already produces. They are not a second compiler.
