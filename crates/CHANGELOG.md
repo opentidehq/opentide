@@ -27,6 +27,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - The server reads and indexes the workspace's object files once, where every request re-read and re-parsed all of them. Hover on a 1,000-object workspace went from a 73 ms median to under 1 ms.
   - A file changed on disk is read again when the client's file watcher reports it (the server now asks to watch `**/*.{yaml,yml}`), or when the editor closes it. A client that cannot watch files has each request re-read the files, and only those whose text changed are re-indexed.
   - `WorkspaceHost::indexed_objects` lets any host hand the engine an index it keeps.
+- YAML that is not a Tide object is no longer analysed as one ([#185](https://github.com/opentidehq/language-server/issues/185) P0.1). Editors send every YAML file as `yaml`, so `.github/workflows/ci.yml` got `schema_validation` and `.pre-commit-config.yaml` got `filename_slug`. A YAML document is read when the editor names it `opentide-yaml`, when it is under an `objects/` folder, or when its `metadata` names a Tide schema (`schema: rule::1.0`), which covers object folders that `paths.toml` moves.
+- The server reads only `<root>/objects` (#185 P0.2). A root without `objects/` used to have every YAML file under it read on each request (`/tmp` gave false `duplicate_id` errors). A symlinked directory is no longer entered, so a link back up the tree no longer indexes each object many times. `opentide-lsp analyze` shares the walk.
 
 ### Changed
 

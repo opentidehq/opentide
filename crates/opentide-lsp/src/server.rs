@@ -38,6 +38,30 @@ struct Session {
     index: RefCell<Option<Arc<[IndexedObject]>>>,
 }
 
+/// Whether YAML text names a Tide schema in its top-level `metadata` block
+/// (`  schema: rule::1.0`), read line by line so a half-typed document counts.
+fn names_tide_schema(text: &str) -> bool {
+    let mut in_metadata = false;
+    for line in text.lines() {
+        if !line.starts_with([' ', '\t']) {
+            in_metadata = line.trim_end() == "metadata:";
+            continue;
+        }
+        if in_metadata {
+            if let Some(value) = line.trim_start().strip_prefix("schema:") {
+                let value = value.trim().trim_matches(['"', '\'']);
+                if ["rule::", "threat::", "objective::"]
+                    .iter()
+                    .any(|family| value.starts_with(family))
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 /// The key a file is cached under: `/` separators and a lower-case drive
 /// letter, so the directory walk (`C:\\w\\x.yaml`) and a URI
 /// (`file:///c%3A/w/x.yaml`) name one file once.
@@ -187,19 +211,13 @@ impl Session {
     }
 
     /// Whether `path` is a file [`collect_objects`] reads: YAML under the
-    /// root's `objects/`, or under the root when there is no `objects/`.
+    /// root's `objects/`.
     fn is_object_path(&self, path: &str) -> bool {
         let Some(root) = &self.root else {
             return false;
         };
-        let objects = root.join("objects");
-        let base = if objects.is_dir() {
-            objects
-        } else {
-            root.clone()
-        };
         let path = Path::new(path);
-        path.starts_with(&base)
+        path.starts_with(root.join("objects"))
             && matches!(
                 path.extension().and_then(|e| e.to_str()),
                 Some("yaml" | "yml")
@@ -243,6 +261,23 @@ impl Session {
                 .and_then(|(_, ext)| LanguageId::from_extension(ext))
                 .unwrap_or(LanguageId::TideYaml),
         )
+    }
+
+    /// Whether a document that [`language_for`](Self::language_for) calls Tide
+    /// YAML is one. Editors send any YAML as `yaml` (CI workflows,
+    /// `.pre-commit-config.yaml`): only an `opentide-yaml` id, a file under an
+    /// `objects/` folder, or a document that names a Tide schema
+    /// (`schema: rule::1.0` under `metadata`) is analysed. The last case keeps
+    /// object folders that `paths.toml` moves elsewhere.
+    fn reads_as_tide(&self, uri: &str, reported: Option<&str>, text: &str) -> bool {
+        if matches!(reported, Some("opentide-yaml" | "tide" | "tide-yaml")) {
+            return true;
+        }
+        let path = uri_to_path(uri).replace('\\', "/");
+        if path.split('/').any(|segment| segment == "objects") {
+            return true;
+        }
+        names_tide_schema(text)
     }
 }
 
@@ -561,6 +596,10 @@ fn handle_did_open(session: &mut Session, writer: &mut impl Write, params: &Valu
         // Not a document this server reads (`Cargo.toml`).
         return Ok(());
     };
+    if language == LanguageId::TideYaml && !session.reads_as_tide(uri, lang, text) {
+        // Some other YAML (`.github/workflows/ci.yml`).
+        return Ok(());
+    }
     // A byte-order mark is not text: the editor counts no column for it.
     let text = opentide_core::strip_bom(text).to_string();
     session.docs.insert(uri.to_string(), (language, text));
@@ -676,7 +715,13 @@ fn handle_did_change(session: &mut Session, writer: &mut impl Write, params: &Va
         .docs
         .get(uri)
         .map(|(l, _)| *l)
-        .or_else(|| session.language_for(uri, None))
+        // A document opened before is tracked; one never opened is read only
+        // when it is not YAML (whose kind its text decides at didOpen).
+        .or_else(|| {
+            session
+                .language_for(uri, None)
+                .filter(|language| *language != LanguageId::TideYaml)
+        })
     else {
         return Ok(());
     };
@@ -1612,31 +1657,47 @@ fn position_to_offset(source: &str, position: Position) -> usize {
     opentide_core::position_to_offset(source, position)
 }
 
-/// The workspace's object YAML. A file or directory that cannot be read (not
-/// UTF-8, no permission) is left out; the rest of the index still loads.
+/// The workspace's object YAML: the files under `<root>/objects`. A root
+/// without `objects/` has none, and nothing else under it is read (a root of
+/// `/tmp` or a home directory once had every YAML file there indexed).
 fn collect_objects(root: &Path) -> Vec<(String, String)> {
-    let objects = if root.join("objects").is_dir() {
-        root.join("objects")
-    } else {
-        root.to_path_buf()
-    };
-    let mut out = Vec::new();
+    yaml_files(&root.join("objects"))
+}
+
+/// Every `.yaml` and `.yml` file under `dir`, with its text (byte-order mark
+/// dropped). A symlinked directory is not entered, so a link back up the tree
+/// cannot index a file twice or loop; a symlinked file is read. A file or
+/// directory that cannot be read (not UTF-8, no permission) is left out. The
+/// `opentide-lsp analyze` command and the server share this walk.
+pub fn yaml_files(dir: &Path) -> Vec<(String, String)> {
     fn rec(dir: &Path, out: &mut Vec<(String, String)>) {
         let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };
-        for p in entries.flatten().map(|e| e.path()) {
-            if p.is_dir() {
-                rec(&p, out);
-            } else if matches!(p.extension().and_then(|s| s.to_str()), Some("yaml" | "yml")) {
-                if let Ok(text) = std::fs::read_to_string(&p) {
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if kind.is_dir() {
+                rec(&path, out);
+            } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+                && matches!(
+                    path.extension().and_then(|s| s.to_str()),
+                    Some("yaml" | "yml")
+                )
+            {
+                if let Ok(text) = std::fs::read_to_string(&path) {
                     let text = opentide_core::strip_bom(&text).to_string();
-                    out.push((p.display().to_string(), text));
+                    out.push((path.display().to_string(), text));
                 }
             }
         }
     }
-    rec(&objects, &mut out);
+    let mut out = Vec::new();
+    rec(dir, &mut out);
     out
 }
 

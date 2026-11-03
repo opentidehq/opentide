@@ -215,37 +215,5 @@ fn read_document(path: &Path) -> std::io::Result<String> {
 /// The workspace YAML under `root`. A file that cannot be read as UTF-8 is
 /// left out rather than failing the file being analysed.
 fn collect_yaml(root: &Path, files: &mut Vec<(String, String)>) {
-    if !root.is_dir() {
-        return;
-    }
-    for entry in walk(root) {
-        if !matches!(
-            entry.extension().and_then(|s| s.to_str()),
-            Some("yaml" | "yml")
-        ) {
-            continue;
-        }
-        if let Ok(text) = read_document(&entry) {
-            files.push((entry.display().to_string(), text));
-        }
-    }
-}
-
-/// Every file under `dir`. A directory that cannot be listed is skipped.
-fn walk(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    fn rec(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for p in entries.flatten().map(|e| e.path()) {
-            if p.is_dir() {
-                rec(&p, out);
-            } else {
-                out.push(p);
-            }
-        }
-    }
-    rec(dir, &mut out);
-    out
+    files.extend(opentide_lsp::server::yaml_files(root));
 }

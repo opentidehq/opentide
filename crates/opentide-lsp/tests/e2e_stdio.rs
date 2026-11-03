@@ -1321,3 +1321,69 @@ fn objects_written_after_start_are_indexed() {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
+
+/// #185 P0.1: editors send any YAML as `yaml`. Only Tide objects are read:
+/// a CI workflow gets nothing, while a rule is analysed under `objects/` or,
+/// in a folder `paths.toml` moved, when it names a Tide schema.
+#[test]
+fn only_tide_yaml_is_analysed() {
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": null, "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let open = |lsp: &mut Lsp, uri: &str, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": uri, "languageId": "yaml", "version": 1, "text": text } }),
+        );
+    };
+    let rule = std::fs::read_to_string(repo_root().join("testdata/objects/rules/rule-1.0.yaml")).unwrap();
+    open(&mut lsp, "file:///w/.github/workflows/ci.yml", "name: CI\non: push\njobs: {}\n");
+    open(&mut lsp, "file:///w/.pre-commit-config.yaml", "repos: []\n");
+    open(&mut lsp, "file:///w/detections/rules/r.yaml", &rule);
+    // The first frame is the rule's: neither CI file published anything.
+    let first = lsp.read();
+    assert_eq!(first["params"]["uri"], "file:///w/detections/rules/r.yaml", "{first}");
+    open(&mut lsp, "file:///w/objects/rules/broken.yaml", "name: Broken\n");
+    let second = lsp.read();
+    assert_eq!(second["params"]["uri"], "file:///w/objects/rules/broken.yaml", "{second}");
+    assert!(!second["params"]["diagnostics"].as_array().unwrap().is_empty());
+}
+
+/// #185 P0.2: only `<root>/objects` is walked, and a symlinked directory is
+/// not entered, so a link back up the tree indexes nothing twice.
+#[test]
+fn the_workspace_walk_stays_in_objects_and_ignores_symlinked_directories() {
+    let source = repo_root().join("testdata/objects");
+    let root = std::env::temp_dir().join(format!("opentide-walk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let rules = root.join("objects/rules");
+    std::fs::create_dir_all(&rules).unwrap();
+    let rule_text = std::fs::read_to_string(source.join("rules/rule-1.0.yaml")).unwrap();
+    std::fs::write(rules.join("rule-1.0.yaml"), &rule_text).unwrap();
+    // A copy of the same object outside objects/: never read.
+    std::fs::create_dir_all(root.join("backup")).unwrap();
+    std::fs::write(root.join("backup/rule-1.0.yaml"), &rule_text).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&rules, rules.join("loop")).unwrap();
+
+    let mut lsp = Lsp::spawn();
+    lsp.request(
+        "initialize",
+        json!({ "processId": null, "rootUri": format!("file://{}", root.display()), "capabilities": {} }),
+    );
+    lsp.notify("initialized", json!({}));
+    let uri = format!("file://{}", rules.join("rule-1.0.yaml").display());
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "opentide-yaml", "version": 1, "text": rule_text } }),
+    );
+    let codes = next_diagnostics(&mut lsp, &uri);
+    assert!(!codes.contains(&"duplicate_id".to_string()), "{codes:?}");
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "" }));
+    let count = symbols["result"].as_array().map_or(0, Vec::len);
+    assert_eq!(count, 1, "{symbols}");
+    let _ = std::fs::remove_dir_all(&root);
+}
