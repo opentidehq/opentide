@@ -23,7 +23,6 @@ from opentide.models.platform import (
     PLATFORM_CONFIG_MODELS,
     CarbonBlackConfig,
     SentinelConfig,
-    SplunkConfig,
 )
 
 
@@ -131,41 +130,10 @@ def test_sentinel_one_config_loader_parses_correlation() -> None:
     assert config.condition.correlation.sub_queries[0].query == "a"
 
 
-def test_splunk_config_loader_normalizes_flat_v2_trigger_and_actions() -> None:
-    config = load_splunk_config(
-        {
-            "schema": "splunk::2.1",
-            "status": "STAGING",
-            "query": "index=main | stats count",
-            "scheduling": {"frequency": "1h", "lookback": "2h"},
-            "throttling": {"duration": "1h", "fields": ["host"]},
-            "threshold": 5,
-            "notable": {"security_domain": "threat"},
-            "risk": {"message": "risk message"},
-        }
-    )
-    assert isinstance(config, SplunkConfig)
-    assert config.query == "index=main | stats count"
-    assert config.scheduling is not None
-    assert config.scheduling.schedule is not None
-    assert config.scheduling.schedule.frequency == "1h"
-    assert config.scheduling.timerange is not None
-    assert config.scheduling.timerange.lookback == "2h"
-    assert config.trigger is not None
-    assert config.trigger.threshold == 5
-    assert config.trigger.throttling is not None
-    assert config.trigger.throttling.duration == "1h"
-    assert config.actions is not None
-    assert config.actions.notable is not None
-    assert config.actions.notable.security_domain == "threat"
-    assert config.actions.risk is not None
-    assert config.actions.risk.message == "risk message"
-
-
 def test_splunk_config_loader_handles_missing_scheduling() -> None:
     config = load_splunk_config(
         {
-            "schema": "splunk::3.0",
+            "schema": "platform::splunk::1.0",
             "status": "STAGING",
             "query": "index=main",
             "trigger": {"threshold": 1},
@@ -176,34 +144,27 @@ def test_splunk_config_loader_handles_missing_scheduling() -> None:
     assert config.trigger.threshold == 1
 
 
-def test_splunk_config_loader_ignores_unexpected_scheduling_keys() -> None:
-    """Stray keys under scheduling (e.g. from stale index data) must not ValidationError."""
-    config = load_splunk_config(
-        {
-            "schema": "splunk::3.0",
-            "status": "STAGING",
-            "query": "index=main",
-            "scheduling": {
-                "type": "Scheduled",
-                "expires": "2h",
-                "schedule": {"frequency": "1h"},
-                "timerange": {"lookback": "2h"},
-                "event": {"title": "should be ignored"},
-            },
-        }
-    )
-    assert config.scheduling is not None
-    assert config.scheduling.type == "Scheduled"
-    assert config.scheduling.expires == "2h"
-    assert config.scheduling.schedule is not None
-    assert config.scheduling.timerange is not None
-    assert config.scheduling.timerange.lookback == "2h"
+def test_splunk_config_loader_refuses_unexpected_scheduling_keys() -> None:
+    """A key validate refuses under scheduling is refused by deploy too, never dropped."""
+    with pytest.raises(ValidationError, match=r"scheduling\.event"):
+        load_splunk_config(
+            {
+                "schema": "platform::splunk::1.0",
+                "status": "STAGING",
+                "query": "index=main",
+                "scheduling": {
+                    "type": "Scheduled",
+                    "schedule": {"frequency": "1h"},
+                    "event": {"title": "not a scheduling key"},
+                },
+            }
+        )
 
 
 def test_carbon_black_config_loader_parses_typed_fields() -> None:
     config = load_carbon_black_config(
         {
-            "schema": "carbon_black_cloud::3.0",
+            "schema": "platform::carbon_black_cloud::1.0",
             "status": "STAGING",
             "query": "process_name:cmd.exe",
             "organizations": ["org-a"],
