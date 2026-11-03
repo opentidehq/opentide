@@ -5,6 +5,7 @@ from __future__ import annotations
 import yaml
 
 from opentide.ci.azure import render_azure
+from opentide.ci.gates import github_not_skipped, gitlab_skip_deploy_rules
 from opentide.ci.github import render_github
 from opentide.ci.gitlab import render_gitlab
 from opentide.ci.models import CiRenderOptions
@@ -43,7 +44,8 @@ def test_github_share_job_runs_after_production_on_the_branch_tip() -> None:
     # A failed or no-op deploy still shares; a failed generate or a cancel does not.
     assert share["if"] == (
         "${{ !cancelled() && needs.generate.result == 'success' && "
-        "github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
+        "github.event_name == 'push' && github.ref == 'refs/heads/main' && "
+        f"{github_not_skipped()} }}}}"
     )
     assert "format(" not in text
     checkout = next(
@@ -85,7 +87,10 @@ def test_gitlab_share_job_runs_after_production_on_the_branch_tip() -> None:
     ]
     assert any("apt-get install" in line for line in share["before_script"])
     assert share["variables"]["GIT_DEPTH"] == "0"
-    rule = share["rules"][0]
+    # [skip deploy] leaves the share out with the deploy, then the branch rule.
+    skip = gitlab_skip_deploy_rules()
+    assert share["rules"][: len(skip)] == skip
+    rule = share["rules"][len(skip)]
     assert "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH" in rule["if"]
     assert "merge_request_event" in rule["if"]
     # A failed deploy still shares, as on GitHub and Azure.
@@ -93,7 +98,9 @@ def test_gitlab_share_job_runs_after_production_on_the_branch_tip() -> None:
     assert text.count(_COMMAND) == 1
     # ``when: always`` is the share rule's own; the deploy rule keeps the default.
     # (The deploy's ``artifacts: when: always`` is unrelated.)
-    assert all("when" not in rule for rule in parsed["deploy_production"]["rules"])
+    assert parsed["deploy_production"]["rules"][len(skip) :] == [
+        {"if": "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"}
+    ]
 
 
 def test_azure_share_stage_runs_after_deploy_on_the_branch_tip() -> None:

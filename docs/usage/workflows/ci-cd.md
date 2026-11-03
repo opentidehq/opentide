@@ -118,6 +118,20 @@ Through 0.14.2 the production job dropped `DISABLED` and `REMOVED` rules before 
 
 An Azure pipeline from **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch, so a topic-branch push still validates. Azure Repos Git ignores `pr:`. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy.
 
+### Skipping deploys for a catalogue-wide change
+
+A migration, a bulk rename or a reformat changes every rule file. Its pull or merge request would staging-deploy every rule that maps to `PREVIEW` and live-check every query, and its merge would promote every such rule and redeploy the catalogue. Mark the change instead, and the generated pipeline runs no live query check, no deploy and no share for it; object validation, `lint`, `generate`, the documentation and the inflight shards still run:
+
+| CI | Pull or merge request | Default branch, after the merge |
+|----|-----------------------|---------------------------------|
+| GitLab | `[skip deploy]` in the merge request title or in its latest commit message, or the label `skip-deploy` | `[skip deploy]` in the pushed commit's message |
+| GitHub | `[skip deploy]` in the pull request title, or the label `skip-deploy` | `[skip deploy]` in the pushed commit's message |
+| Azure | `[skip deploy]` in the pull request's source commit message (Azure exposes no labels to a pipeline) | `[skip deploy]` in the first line of the pushed commit's message |
+
+The default-branch run reads the merged commit's message, not the label. GitLab's default merge and squash commit messages and GitHub's merge commit message carry the request's title, and an Azure Repos merge is `Merged PR <n>: <title>`, so putting `[skip deploy]` in the title skips both runs; with a fast-forward or rebase merge, put it in the last commit's message. A label or title change on GitHub takes effect on the next push to the pull request, not on a re-run, which replays the original event.
+
+Use it only for a change that leaves what each rule deploys unchanged. The next push to the default branch deploys only its own changes, so a skipped rule change reaches the tenants only when that rule changes again, or with `opentide deploy --strategy RELEASE --all` run by hand. Promotion is skipped too: rules merged in a `PREVIEW` status keep it. On GitLab the skipped jobs are left out of the pipeline (`rules: ... when: never`), and every `needs` on them is optional, so the pipeline still starts; on GitHub and Azure they show as skipped.
+
 ### GitLab write-back credentials
 
 The GitLab jobs that commit (`deploy_production`, its `after_script`, `inflight_shards` and `inflight_prune`) push to an explicit URL, not to `origin`:

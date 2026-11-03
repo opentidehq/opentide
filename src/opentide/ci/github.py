@@ -6,7 +6,7 @@ import json
 import shlex
 import textwrap
 
-from opentide.ci.gates import github_premerge_if
+from opentide.ci.gates import github_not_skipped, github_premerge_if
 from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
@@ -120,7 +120,9 @@ def _code_scanning_steps() -> str:
     return "\n".join(steps)
 
 
-def _reviewed_tenants_step(name: str, default_branch: str, commands: list[str]) -> str:
+def _reviewed_tenants_step(
+    name: str, default_branch: str, commands: list[str], *, if_cond: str | None = None
+) -> str:
     """Run ``commands`` against the default branch's configuration.
 
     One step, not one per command: the restore exits early when the default
@@ -131,7 +133,8 @@ def _reviewed_tenants_step(name: str, default_branch: str, commands: list[str]) 
         return ""
     restore = trusted_platform_config_commands(shlex.quote(default_branch))
     script = "\n".join([*restore, *commands])
-    return f"- name: {name}\n  run: |\n" + indent(script, 4)
+    condition = f"  if: ${{{{ {if_cond} }}}}\n" if if_cond else ""
+    return f"- name: {name}\n{condition}  run: |\n" + indent(script, 4)
 
 
 def _github_job(
@@ -244,7 +247,7 @@ def _share_job(options: CiRenderOptions, prod_if: str) -> str:
         "share",
         name="Share",
         needs="[generate, deploy_production]",
-        if_cond="${{ " + SHARE_IF_PREFIX + prod_if + " }}",
+        if_cond="${{ " + SHARE_IF_PREFIX + prod_if + " && " + github_not_skipped() + " }}",
         steps=join_blocks(
             setup,
             "\n".join([_SHARE_STEPS_NOTE, _run_steps([SHARE_COMMAND])]),
@@ -364,7 +367,10 @@ def render_github(options: CiRenderOptions) -> str:
         # pushed commit's parent: neither is in a one-commit checkout.
         _setup_steps(options, full_history=bool(queries)),
         _run_steps(object_validate_commands("sarif")),
-        _reviewed_tenants_step("Validate queries on reviewed tenants", branch, queries),
+        # ``--changed`` live checks follow the deploys: off for a skipped change.
+        _reviewed_tenants_step(
+            "Validate queries on reviewed tenants", branch, queries, if_cond=github_not_skipped()
+        ),
         _report_artifact_step(),
     )
     deploy_env = github_deploy_env()
@@ -391,7 +397,7 @@ def render_github(options: CiRenderOptions) -> str:
                 "deploy_staging",
                 name="Deploy Staging",
                 needs="generate",
-                if_cond=github_premerge_if(branch),
+                if_cond=f"${{{{ {github_premerge_if(branch)} && {github_not_skipped()} }}}}",
                 env=deploy_env,
                 steps=join_blocks(
                     _setup_steps(options, full_history=True),
@@ -423,7 +429,7 @@ def render_github(options: CiRenderOptions) -> str:
             "deploy_production",
             name="Deploy Production",
             needs="generate",
-            if_cond=prod_if,
+            if_cond=f"${{{{ {prod_if} && {github_not_skipped()} }}}}",
             env=deploy_env,
             # The write-back step pushes to the default branch.
             permissions="contents: write",

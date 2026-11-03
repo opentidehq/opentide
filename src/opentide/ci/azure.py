@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 import shlex
 
-from opentide.ci.gates import azure_premerge_condition
+from opentide.ci.gates import (
+    azure_not_skipped,
+    azure_premerge_condition,
+    azure_pull_request_skip_guard,
+)
 from opentide.ci.inflight import azure_inflight_job, azure_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
@@ -208,7 +212,8 @@ def _share_stage(options: CiRenderOptions) -> str:
         "  dependsOn: [Generate, Deploy]\n"
         f"  condition: and({SHARE_STATUS_CONDITION}, "
         f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'), "
-        "ne(variables['Build.Reason'], 'PullRequest'))\n"
+        "ne(variables['Build.Reason'], 'PullRequest'), "
+        f"{azure_not_skipped()})\n"
         "  jobs:\n"
         + indent(
             _azure_job(
@@ -243,9 +248,15 @@ def render_azure(options: CiRenderOptions) -> str:
             _azure_job(
                 f"validate_query_{safe}",
                 display_name=f"Validate query ({platform})",
+                # ``--changed`` live checks follow the deploys: off for a skipped change.
+                condition=f"and(succeeded(), {azure_not_skipped()})",
                 steps=_job_steps(
                     options,
-                    [*restore, reviewed_query_validation_command(platform, repo=options.repo)],
+                    [
+                        azure_pull_request_skip_guard(),
+                        *restore,
+                        reviewed_query_validation_command(platform, repo=options.repo),
+                    ],
                     # The checkout token is removed before later steps unless it
                     # is persisted, and the endpoint restore has to fetch.
                     persist_credentials=True,
@@ -286,7 +297,7 @@ def render_azure(options: CiRenderOptions) -> str:
                 condition=azure_premerge_condition(branch),
                 steps=_job_steps(
                     options,
-                    [*restore, *staging_deploy_steps(options)],
+                    [azure_pull_request_skip_guard(), *restore, *staging_deploy_steps(options)],
                     persist_credentials=True,
                     full_history=True,
                 ),
@@ -309,7 +320,10 @@ def render_azure(options: CiRenderOptions) -> str:
         _azure_job(
             "deploy_production",
             display_name="Deploy Production",
-            condition=f"eq(variables['Build.SourceBranch'], 'refs/heads/{branch}')",
+            condition=(
+                f"and(eq(variables['Build.SourceBranch'], 'refs/heads/{branch}'), "
+                f"{azure_not_skipped()})"
+            ),
             # Persisted credentials let the write-back step push.
             steps=_job_steps(
                 options,

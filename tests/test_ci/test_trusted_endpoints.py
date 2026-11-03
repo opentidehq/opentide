@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from opentide.ci.azure import render_azure
+from opentide.ci.gates import azure_pull_request_skip_guard
 from opentide.ci.github import render_github
 from opentide.ci.gitlab import render_gitlab
 from opentide.ci.models import CiRenderOptions
@@ -131,6 +132,7 @@ def test_azure_query_and_staging_jobs_pin_endpoints() -> None:
     # One step, so the restore's ``exit 0`` also skips the credentialed commands.
     assert _azure_scripts(query)[-1].splitlines() == [
         "set -e",
+        azure_pull_request_skip_guard(),
         *restore,
         reviewed_query_validation_command("elastic"),
     ]
@@ -139,6 +141,7 @@ def test_azure_query_and_staging_jobs_pin_endpoints() -> None:
     staging = jobs["deploy_staging"]
     assert _azure_scripts(staging)[-1].splitlines() == [
         "set -e",
+        azure_pull_request_skip_guard(),
         *restore,
         "opentide deploy --dry-run --strategy PREVIEW",
         "opentide deploy --strategy PREVIEW --skip-unconfigured",

@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from opentide.ci.gates import gitlab_premerge_rule, gitlab_workflow_rules
+from opentide.ci.gates import (
+    gitlab_premerge_rule,
+    gitlab_skip_deploy_rules,
+    gitlab_workflow_rules,
+)
 from opentide.ci.inflight import (
     GITLAB_FETCH,
     GITLAB_INSTALL_GIT,
@@ -199,13 +203,14 @@ def _share_job(options: CiRenderOptions) -> Job:
         # still runs, as it does after a failed deploy.
         needs=["generate", optional_need("deploy_production")],
         rules=[
+            *gitlab_skip_deploy_rules(),
             {
                 "if": (
                     "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && "
                     '$CI_PIPELINE_SOURCE != "merge_request_event"'
                 ),
                 "when": "always",
-            }
+            },
         ],
         variables=dict(FULL_HISTORY),
         # ``python:<ver>-slim`` ships without git; the tip checkout needs it.
@@ -214,6 +219,7 @@ def _share_job(options: CiRenderOptions) -> Job:
 
 
 def _query_job(options: CiRenderOptions, platform: str) -> Job:
+    """``--changed`` live checks, left out with the deploys by ``[skip deploy]``."""
     return gitlab_job(
         options=options,
         stage="validate",
@@ -221,6 +227,7 @@ def _query_job(options: CiRenderOptions, platform: str) -> Job:
             *trusted_platform_config_commands(_DEFAULT_BRANCH),
             reviewed_query_validation_command(platform, repo=options.repo),
         ],
+        rules=[*gitlab_skip_deploy_rules(), {"when": "on_success"}],
         variables=dict(FULL_HISTORY),
         extra=_report_artifacts(expose_as=f"opentide query {platform}"),
         # python slim has no git; without it the endpoint checkout cannot run.
@@ -263,8 +270,8 @@ def pipeline_document(options: CiRenderOptions) -> Job:
             options=options,
             stage="generate",
             script=["opentide generate"],
-            # Optional: a query job that rules leave out, such as rules a
-            # project adds, must not stop GitLab creating the pipeline.
+            # Optional: a query job that rules leave out ([skip deploy], or
+            # rules a project adds) must not stop GitLab creating the pipeline.
             needs=["validate", *(optional_need(name) for name in query_jobs)],
         ),
         **query_jobs,
@@ -278,7 +285,7 @@ def pipeline_document(options: CiRenderOptions) -> Job:
                 *staging_deploy_steps(options),
             ],
             needs=["generate"],
-            rules=[{"if": gitlab_premerge_rule()}],
+            rules=[*gitlab_skip_deploy_rules(), {"if": gitlab_premerge_rule()}],
             variables=dict(FULL_HISTORY),
             extra={
                 "environment": dict(STAGING_ENVIRONMENT),
@@ -291,7 +298,7 @@ def pipeline_document(options: CiRenderOptions) -> Job:
         stage="deploy",
         script=_production_script(options),
         needs=["generate"],
-        rules=[dict(DEFAULT_BRANCH_RULE)],
+        rules=[*gitlab_skip_deploy_rules(), dict(DEFAULT_BRANCH_RULE)],
         variables=dict(FULL_HISTORY),
         extra={
             # One production deploy at a time: two at once would both create
