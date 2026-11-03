@@ -49,6 +49,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - A test opens the grammars with `vscode-textmate`, as VS Code does.
   - HighlightSpec is 0.3.0; no capture changed.
 - `@opentide/lsp-client` and `@opentide/lsp-worker` build to JavaScript and declarations, and pack only those and their licences ([#167](https://github.com/opentidehq/language-server/issues/167)). Each package's `exports` point at `dist/`. A release publishes both at its version with npm trusted publishing once the repository variable `NPM_PUBLISH` is `true`, and skips a version already published. CI checks what each pack contains.
+- `cargo bench -p opentide-analysis --bench analyze` times `analyze()` per language over its corpus, and hover among 1,000 indexed objects ([#181](https://github.com/opentidehq/language-server/issues/181)). A CI job writes the numbers to its summary and gates nothing.
 - Fuzzing ([#182](https://github.com/opentidehq/language-server/issues/182)). `fuzz/` holds `cargo-fuzz` targets for KQL, SPL, ES|QL, EQL, kuery, Lucene, Falco and Tide YAML: each runs analysis, hover, completion and signature help, plus Tide's index, outline, links, lens and inlay hints. A `protocol` target runs LSP sessions built from arbitrary message bodies through `serve`.
   - `scripts/fuzz.sh <target>` runs one target with its seed corpora.
   - A nightly job (`fuzz.yml`) runs each target for five minutes and uploads its crashes. It does not gate pull requests.

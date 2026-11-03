@@ -90,6 +90,19 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q neovim
           nvim --headless --clean -l scripts/nvim-smoke.lua target/debug/opentide-lsp
 
+  # analyze() per language and hover in a 1,000-object workspace (#181).
+  # The numbers go in the job summary for comparing runs; they gate nothing.
+  bench:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo bench (opentide-analysis)
+        run: |
+          cargo bench -p opentide-analysis --bench analyze | tee bench.txt
+          { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
   # Every crate builds from its packaged sources, as it will from crates.io:
   # a crate that reads a file outside OPENTIDE_ASSETS fails here, not at release.
   package:
