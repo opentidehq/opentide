@@ -1,0 +1,52 @@
+# Converted from the Falco default rule "Terminal shell in container"
+# (falcosecurity/rules, rules/falco_rules.yaml, Apache-2.0).
+name: Terminal shell in container
+metadata:
+  uuid: 3f0b8d52-6c1e-4a7b-9e2d-5a8c1f4b7e63
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A shell was used as the entrypoint or exec point into a container with an
+  attached terminal. Common when using kubectl exec in Kubernetes.
+techniques:
+- T1059.004
+references:
+  public:
+    1: https://github.com/falcosecurity/rules/blob/main/rules/falco_rules.yaml
+response:
+  alert_severity: Low
+  procedure:
+    analysis: |
+      Correlate with Kubernetes audit exec events to find who opened the shell.
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: STAGING
+    source: syscall
+    condition: >
+      spawned_process
+      and container
+      and shell_procs
+      and proc.tty != 0
+      and container_entrypoint
+      and not container.image.repository in (allowed_debug_images)
+    output: >
+      A shell was spawned in a container with an attached terminal |
+      user=%user.name process=%proc.name parent=%proc.pname
+      command=%proc.cmdline terminal=%proc.tty container_id=%container.id
+      image=%container.image.repository
+    exceptions:
+    - name: known_shell_parents
+      fields: [proc.pname, container.image.repository]
+      comps: ['=', startswith]
+      values:
+      - [kubectl, registry.example.com/ops/]
+    lists:
+    - name: allowed_debug_images
+      items: [busybox, registry.example.com/ops/toolbox]
+    tags: [container, shell]

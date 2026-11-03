@@ -360,7 +360,7 @@ def validate_query_cmd(
         "--file",
         help=(
             "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, "
-            ".lucene) offline (repeatable)"
+            ".lucene, .falco) offline (repeatable)"
         ),
     ),
     uuid: list[str] | None = typer.Option(

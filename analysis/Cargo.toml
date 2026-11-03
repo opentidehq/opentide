@@ -27,8 +27,8 @@ pyo3 = { version = "0.30.1", features = ["abi3-py310", "generate-import-lib"] }
 # opentidehq/language-server#158 (configuration checker hook) and #185 (the
 # host on lsp-server and lsp-types), before their
 # release.
-opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "27365cdac2a40644c46366d1689dfdc1e417d271" }
-opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "27365cdac2a40644c46366d1689dfdc1e417d271" }
+opentide-analysis = { git = "https://github.com/opentidehq/language-server", rev = "1a5340c779d72e00e08470d64bb8d55069320d84" }
+opentide-lsp = { git = "https://github.com/opentidehq/language-server", rev = "1a5340c779d72e00e08470d64bb8d55069320d84" }
 
 [build-dependencies]
 pyo3-build-config = "0.30.1"

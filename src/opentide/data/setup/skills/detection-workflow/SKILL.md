@@ -42,6 +42,7 @@ opentide deploy --dry-run --strategy PREVIEW --all
 | Carbon Black | yes | Lucene |
 | CrowdStrike | yes | no |
 | HarfangLab | yes | no |
+| Sysdig Secure (Falco) | yes | no |
 
 Never fake query validation for CrowdStrike or HarfangLab.
 

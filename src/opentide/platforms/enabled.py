@@ -16,6 +16,7 @@ SYSTEM_KEYS = (
     "harfanglab",
     "carbon_black_cloud",
     "elastic",
+    "sysdig",
 )
 
 

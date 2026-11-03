@@ -47,14 +47,14 @@ Only `opentide lsp start` checks configuration files. The `opentide-lsp` binary 
 
 ### Configuring an editor
 
-Run `opentide lsp start` as the server command, for YAML files under `objects/`, for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`), and for `.opentide/configurations/**/*.toml`. The server reads a TOML file under `.opentide/configurations/` as language `opentide-config`, whatever id the editor sends, and no other `.toml`. Turn off other YAML language servers for `objects/**`, and other TOML language servers (Taplo, Even Better TOML) for `.opentide/configurations/**`: opentide reports those files' diagnostics itself.
+Run `opentide lsp start` as the server command, for YAML files under `objects/`, for query files (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`), and for `.opentide/configurations/**/*.toml`. The server reads a TOML file under `.opentide/configurations/` as language `opentide-config`, whatever id the editor sends, and no other `.toml`. Turn off other YAML language servers for `objects/**`, and other TOML language servers (Taplo, Even Better TOML) for `.opentide/configurations/**`: opentide reports those files' diagnostics itself.
 
 Neovim (0.11 or later):
 
 ```lua
 vim.lsp.config("opentide", {
   cmd = { "opentide", "lsp", "start" },
-  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene" },
+  filetypes = { "yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco" },
   root_markers = { ".opentide" },
 })
 vim.lsp.enable("opentide")

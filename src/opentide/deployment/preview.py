@@ -87,7 +87,7 @@ def _compile_failure(rule: DetectionRule, exc: Exception) -> dict[str, Any]:
 #: Platforms whose request body opentide builds from the rule alone, with no
 #: tenant: ``validate`` compiles each rule they would deploy, so a rule that
 #: validates compiles.
-OFFLINE_COMPILERS = frozenset({"sentinel", "elastic"})
+OFFLINE_COMPILERS = frozenset({"sentinel", "elastic", "sysdig"})
 
 
 def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
@@ -103,6 +103,11 @@ def compile_offline(platform: str, rule: DetectionRule) -> dict[str, Any]:
         from opentide.platforms.elastic.compile import compile_rule
 
         return compile_rule(rule)
+    if platform == "sysdig":
+        from opentide.platforms.sysdig.compile import api_body
+        from opentide.platforms.sysdig.deployer import SysdigDeploy
+
+        return api_body(SysdigDeploy().compile_deployment(rule))
     raise ValueError(f"{platform} has no offline compiler")
 
 
@@ -132,10 +137,24 @@ def _elastic_compile_preview(rule: DetectionRule) -> dict[str, Any] | None:
     return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": payload}
 
 
+def _sysdig_compile_preview(rule: DetectionRule) -> dict[str, Any]:
+    """The Sysdig Secure ``/api/secure/rules`` body the deploy would send."""
+    try:
+        from opentide.platforms.sysdig.compile import api_body
+        from opentide.platforms.sysdig.deployer import SysdigDeploy
+
+        compiled = SysdigDeploy().compile_deployment(rule)
+    except Exception as exc:
+        return _compile_failure(rule, exc)
+    return {"uuid": rule.metadata.uuid, "name": rule.name, "api_request": api_body(compiled)}
+
+
 def preview_rule_deployment(platform: str, rule: DetectionRule) -> dict[str, Any]:
     """Return a serialisable preview of the API payload for one rule on a platform."""
     if platform == "sentinel":
         return _sentinel_compile_preview(rule)
+    if platform == "sysdig":
+        return _sysdig_compile_preview(rule)
     if platform == "elastic":
         compiled = _elastic_compile_preview(rule)
         if compiled is not None:

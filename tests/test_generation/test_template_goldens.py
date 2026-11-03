@@ -51,6 +51,7 @@ PLATFORM_FILES = {
     "harfanglab": "HarfangLab Template.yaml",
     "carbon_black_cloud": "Carbon Black Cloud Enterprise EDR Template.yaml",
     "elastic": "Elastic Security Template.yaml",
+    "sysdig": "Sysdig Secure Template.yaml",
 }
 
 

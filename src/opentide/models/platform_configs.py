@@ -767,3 +767,37 @@ class ElasticMachineLearning(TideModel):
     create jobs."""
     anomaly_threshold: int
     """Anomaly score cutoff on Kibana's 0–100 scale."""
+
+
+# --- Sysdig Secure (platform::sysdig::1.0) ---------------------------------------------
+
+
+class SysdigException(TideModel):
+    name: str
+    """Exception name. Names SHOULD be unique in the block: Falco warns on a repeated name
+    (`LOAD_EXCEPTION_NAME_NOT_UNIQUE`) and the engine reports it as a warning."""
+    fields: str | list[str]
+    """One Falco field (the single-field form) or a list of fields (the tuple form)."""
+    comps: str | list[str] | None = None
+    """Comparison operators, leading and trailing blanks ignored. Tuple form: a list aligned with
+    `fields`, each a Falco operator or a modified operator; default `=` for each field.
+    Single-field form: `in`, `pmatch`, `intersects`, or a modified operator (`startswith oneof`);
+    default `in`."""
+    values: list[Any] | None = None
+    """Tuple form: a list of rows, each a list aligned with `fields`. An item is a value or a list
+    of values; a single value under a list comparison (`in`, `pmatch`, `intersects`, or a modified
+    operator) is one value list, or the name of a list. Single-field form: a flat list of values."""
+
+
+class SysdigMacro(TideModel):
+    name: str
+    """Macro name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
+    condition: str = TideField(schema_extra={"tide.template.multiline": True})
+    """Falco condition. It may reference other macros and lists of this block."""
+
+
+class SysdigList(TideModel):
+    name: str
+    """List name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
+    items: list[str | int | float]
+    """List items. An item may name another list of this block."""

@@ -386,6 +386,35 @@ class ElasticConfiguration(PlatformConfigurationBase):
     tenants: list[ElasticTenant] = Field(default_factory=list, description="Elastic tenants.")
 
 
+# --- Sysdig Secure --------------------------------------------------------------------
+
+
+class SysdigSetup(TenantSetup):
+    """`[tenants.setup]` for Sysdig Secure."""
+
+    url: str = Field(description="Sysdig Secure base URL for the account's region.")
+    api_token: EnvPlaceholder = Field(
+        description="Sysdig Secure API token. Must be a $NAME placeholder."
+    )
+    policies: list[str] = Field(
+        default_factory=list,
+        description="Runtime policies every new rule joins when its block names none.",
+    )
+    tags: list[str] | None = Field(default=None, description="Tags added to every rule.")
+
+
+class SysdigTenant(TenantBase):
+    """`[[tenants]]` for Sysdig Secure."""
+
+    setup: SysdigSetup = Field(description="Connection settings.")
+
+
+class SysdigConfiguration(PlatformConfigurationBase):
+    """Merged `platforms/sysdig.toml`."""
+
+    tenants: list[SysdigTenant] = Field(default_factory=list, description="Sysdig tenants.")
+
+
 # --- Any other platform file ----------------------------------------------------------
 
 
@@ -429,4 +458,5 @@ PLATFORM_CONFIGURATION_MODELS: dict[str, type[PlatformConfigurationBase]] = {
     "crowdstrike": CrowdstrikeConfiguration,
     "harfanglab": HarfangLabConfiguration,
     "elastic": ElasticConfiguration,
+    "sysdig": SysdigConfiguration,
 }

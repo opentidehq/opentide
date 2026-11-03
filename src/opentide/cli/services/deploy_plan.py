@@ -5,11 +5,11 @@ tenant yet), with one action:
 
 ``create`` / ``update``
     Platforms that keep vendor ids in ``.opentide/states/deployment/``
-    (CrowdStrike, Defender for Endpoint, SentinelOne): ``update`` when the
+    (CrowdStrike, Defender for Endpoint, SentinelOne, Sysdig ``api`` tenants): ``update`` when the
     shard holds an id for the tenant, otherwise ``create``.
 ``upsert``
     Platforms that address a rule by its own UUID (Sentinel, Splunk, Elastic,
-    Carbon Black, HarfangLab) write it whether or not it exists; opentide
+    Carbon Black, HarfangLab, Sysdig ``file`` tenants) write it whether or not it exists; opentide
     cannot tell a create from an update without asking the vendor, so it does
     not claim either.
 ``disable`` / ``delete``

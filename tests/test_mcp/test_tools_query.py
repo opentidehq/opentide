@@ -110,6 +110,27 @@ def test_validate_query_never_fakes_an_unsupported_platform(platform: str) -> No
     assert "not supported" in result["message"]
 
 
+def test_validate_query_checks_a_falco_condition_offline() -> None:
+    """Sysdig has no tenant check, but the engine checks Falco offline, as Falco loads it."""
+    deprecated = tools.tool_validate_query("evt.type = execve and evt.dir = <", "sysdig")
+    assert deprecated["mode"] == "offline"
+    assert deprecated["valid"] is True
+    assert [w["code"] for w in deprecated["warnings"]] == ["falco_deprecated_field"]
+    # Falco refuses a rule with an unknown field, so the engine reports an error.
+    unknown = tools.tool_validate_query("evt.type = execve and proc.nmae = bash", "sysdig")
+    assert unknown["valid"] is False
+    assert {e["code"] for e in unknown["errors"]} == {"falco_unknown_field"}
+    broken = tools.tool_validate_query("spawned_process and (proc.name = bash", "sysdig")
+    assert broken["valid"] is False
+    assert {e["code"] for e in broken["errors"]} == {"falco_parse_error"}
+
+
+def test_validate_query_sysdig_live_is_unsupported() -> None:
+    result = tools.tool_validate_query("proc.name = bash", "sysdig", live=True)
+    assert result["supported"] is False
+    assert result["valid"] is None
+
+
 def test_validate_query_truncates_the_preview() -> None:
     result = tools.tool_validate_query("A" * 500, "sentinel_one")
     assert len(result["query_preview"]) == 200

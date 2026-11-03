@@ -66,6 +66,10 @@
       "schema": "platforms.elastic.schema.json",
       "merge": "deep"
     },
+    "platforms/sysdig.toml": {
+      "schema": "platforms.sysdig.schema.json",
+      "merge": "deep"
+    },
     "platforms/*.toml": {
       "schema": "platforms.schema.json",
       "merge": "deep"
