@@ -30,6 +30,15 @@ Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CH
 
 The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release with the changelog notes, creating the tag. Then it publishes the crates to crates.io in dependency order (a re-run resumes where a failed one stopped).
 
+Every asset of a GitHub Release is listed in its `SHA256SUMS` (`scripts/release.py sums`) and carries a [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) signed by the Release workflow. To check a download:
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS        # only the assets you downloaded
+gh attestation verify highlights-vX.Y.Z.zip --repo opentidehq/language-server
+```
+
+The workflow runs both on the published assets before it publishes the crates.
+
 crates.io publishing uses [trusted publishing](https://crates.io/docs/trusted-publishing): the first release publishes with the `CARGO_REGISTRY_TOKEN` secret (scopes `publish-new`, `publish-update`, `trusted-publishing`) and registers `release.yml` as each crate's trusted publisher; later releases log in with the workflow's OIDC identity. The token is then needed only to publish a crate that does not exist yet.
 
 The crates embed catalogs and grammars from the repository root; `scripts/release.py vendor` copies them into each crate first, and CI packages every crate on each pull request so a missing file fails there.

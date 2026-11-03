@@ -34,7 +34,7 @@ Run **Release** on `main` (Actions → Release → Run workflow, or `workflow_di
 
 1. `verify`: the tag, pins and changelog agree; every crate packages; the licence scan finds no oracle reference.
 2. `native` (8 targets), `wasm`, `highlights`.
-3. `release`: opens the GitHub Release with the changelog section, creating the tag.
+3. `release`: writes `SHA256SUMS` for every asset (`release.py sums dist`), attests each asset's build provenance (`actions/attest-build-provenance`), opens the GitHub Release with the changelog section, creating the tag, then downloads the assets again and checks `sha256sum -c` and `gh attestation verify` on the highlights zip.
 4. `crates`: publishes in dependency order. A re-run resumes past crates already published.
 
 Watch every job to the end, `crates` included. A green `release` with a red `crates` is a release opentide cannot use.
@@ -50,7 +50,7 @@ for c in opentide-analysis opentide-lsp opentide-core; do
 done
 ```
 
-The latest release is `vX.Y.Z` with its binaries, WASM builds, highlights zip and licence files; each crate's `max_version` is `X.Y.Z`. `gh release list` uses GraphQL, which cloud sessions cannot reach: use `gh api` (REST).
+The latest release is `vX.Y.Z` with its binaries, WASM builds, highlights zip, licence files and `SHA256SUMS`; each crate's `max_version` is `X.Y.Z`. `gh release list` uses GraphQL, which cloud sessions cannot reach: use `gh api` (REST).
 
 ## 4. Repin the engine in opentide
 

@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- Each GitHub Release carries `SHA256SUMS`, covering every asset, and a build provenance attestation for each asset ([#196](https://github.com/opentidehq/language-server/issues/196)): `sha256sum -c SHA256SUMS` and `gh attestation verify <asset> --repo opentidehq/language-server` check a download. The Release workflow checks both on the published assets. `scripts/release.py sums DIR` writes the file.
+
 ### Changed
 
 - The ES|QL TextMate grammar's scope is `source.opentide.esql`, as `docs/EDITORS.md` promised, not `source.esql`, the scope of Elastic's ES|QL extension ([#195](https://github.com/opentidehq/language-server/issues/195)). An editor that loaded both grammars kept only one. An editor that includes the grammar by scope includes `source.opentide.esql` now. The other grammars keep `source.<id>`; `docs/EDITORS.md` says why. HighlightSpec captures are unchanged.

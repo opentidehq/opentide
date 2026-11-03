@@ -192,6 +192,11 @@ jobs:
     needs: [verify, native, wasm, highlights]
     if: ${{ !inputs.publish_only }}
     runs-on: ubuntu-latest
+    # id-token and attestations: write sign each asset's build provenance (#196).
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     env:
       TAG: ${{ needs.verify.outputs.tag }}
     steps:
@@ -218,6 +223,17 @@ jobs:
           for f in licenses/wasi-libc/*; do
             printf '==> %s <==\n\n' "$f"; cat "$f"; printf '\n'
           done > dist/WASI-LIBC-LICENSES.txt
+      # Last, once dist holds every asset (#196): a consumer runs
+      # `sha256sum -c SHA256SUMS` on what it downloads.
+      - name: SHA256SUMS
+        run: python3 scripts/release.py sums dist
+      # Sigstore-signed SLSA provenance for every asset, SHA256SUMS included, so
+      # `gh attestation verify <asset> --repo opentidehq/language-server` works on
+      # a downloaded file.
+      - name: attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
       - name: attach GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -234,6 +250,17 @@ jobs:
             --title "opentide-lsp ${TAG}" \
             --notes-file notes.md \
             || gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+      # What a consumer downloads checks out: the sums, and the highlights zip's
+      # attestation (#196).
+      - name: verify the published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p published
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir published
+          (cd published && sha256sum --check --strict SHA256SUMS)
+          gh attestation verify "published/highlights-${TAG}.zip" --repo "${GITHUB_REPOSITORY}"
 
   # crates.io is permanent: publish only once the GitHub Release exists. The
   # crates go up in dependency order, each pinned to this version; a crate
