@@ -823,6 +823,7 @@ def check_vscode(ctx: DoctorContext) -> list[Check]:
     )
     recommended = _read_json(extensions) if extensions.is_file() else None
     recommendations = recommended.get("recommendations") if isinstance(recommended, dict) else None
+    unwanted = recommended.get("unwantedRecommendations") if isinstance(recommended, dict) else None
     if data is None:
         checks.append(
             Check(
@@ -865,6 +866,15 @@ def check_vscode(ctx: DoctorContext) -> list[Check]:
     elif isinstance(recommendations, list) and EXTENSION_ID in recommendations:
         checks.append(
             Check("vscode_settings", "pass", f".vscode/extensions.json recommends {EXTENSION_ID}")
+        )
+    elif isinstance(unwanted, list) and EXTENSION_ID in unwanted:
+        # setup vscode leaves it out on purpose: offering it as the fix would change nothing.
+        checks.append(
+            Check(
+                "vscode_settings",
+                "skip",
+                f".vscode/extensions.json lists {EXTENSION_ID} under unwantedRecommendations",
+            )
         )
     else:
         checks.append(

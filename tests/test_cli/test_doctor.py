@@ -580,6 +580,24 @@ def test_vscode_settings_and_snippets(workspace: Path) -> None:
     assert "extensions.json is not valid JSON" in broken["vscode_settings"].message
 
 
+def test_vscode_settings_skips_an_extension_the_workspace_lists_as_unwanted(
+    workspace: Path,
+) -> None:
+    """setup vscode leaves an unwanted extension out on purpose, so doctor must not warn
+    and offer setup vscode, which would change nothing."""
+    vscode = workspace / ".vscode"
+    vscode.mkdir()
+    (vscode / "extensions.json").write_text(
+        '{"recommendations": [], "unwantedRecommendations": ["opentidehq.opentide"]}',
+        encoding="utf-8",
+    )
+    checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    check = checks["vscode_settings"]
+    assert check.status == "skip", check
+    assert "unwantedRecommendations" in check.message
+    assert check.fix is None
+
+
 def test_vscode_and_mcp_checks_read_files_saved_with_a_bom(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
