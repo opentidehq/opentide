@@ -704,7 +704,8 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
     );
     // The datasets the Elastic block reads (`index`, `threat.index`,
     // `data_view_id`) are its query's, so `opentide validate` reports them as
-    // the editor does.
+    // the editor does, except on a placeholder query, which validate skips
+    // (the editor still reports them on the block).
     if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic")) {
         if let Some(query) = out.iter_mut().find(|q| {
             q.query.field_path == ["configurations", "elastic", "query"]
