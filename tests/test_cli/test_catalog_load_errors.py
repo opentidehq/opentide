@@ -57,3 +57,19 @@ def test_no_uuid_reads_as_null(tmp_path: Path) -> None:
     row = _row(tmp_path, "name: Nothing\nmetadata:\n  tlp: clear\n[\n")
     assert row["uuid"] is None
     assert row["name"] == "Nothing"
+
+
+def test_a_comment_after_metadata_still_opens_the_block(tmp_path: Path) -> None:
+    """``metadata:  # comment`` read the comment as the key's value, so the block was not
+    metadata and the row lost its uuid and schema."""
+    row = _row(
+        tmp_path,
+        "name: Commented  # x\n"
+        "metadata:  # identity\n"
+        f"  uuid: {META_UUID}\n"
+        "  schema: rule::1.0  # revision\n"
+        "broken: [\n",
+    )
+    assert row["uuid"] == META_UUID
+    assert row["schema"] == "rule::1.0"
+    assert _row(tmp_path, "name: # no name yet\n[\n")["name"] == "broken"
