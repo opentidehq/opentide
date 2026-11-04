@@ -13,6 +13,7 @@ from dataclasses import dataclass, field, replace
 
 import structlog
 
+from opentide.core import progress_events
 from opentide.core.errors import Errors
 from opentide.models.rule import DetectionRule
 from opentide.models.system_config import SystemConfig
@@ -164,6 +165,8 @@ def run_query(
             run.outcomes = [
                 TenantOutcome(tenant=tenant.name, error=str(exc)) for tenant in selected
             ]
+            for outcome in run.outcomes:
+                _report_tenant(platform, outcome)
             return run
     for tenant in selected:
         for item in queries:
@@ -186,7 +189,21 @@ def run_query(
             if item.note:
                 outcome.warnings.insert(0, item.note)
             run.outcomes.append(outcome)
+            _report_tenant(platform, outcome)
     return run
+
+
+def _report_tenant(platform: str, outcome: TenantOutcome) -> None:
+    """One ``tenant`` progress event (``OPENTIDE_PROGRESS=json``)."""
+    result = outcome.result
+    progress_events.tenant(
+        platform,
+        outcome.tenant,
+        ok=outcome.ok,
+        rows=0 if result is None else len(result.rows),
+        elapsed_ms=outcome.elapsed_ms,
+        label=outcome.label,
+    )
 
 
 def _queries(

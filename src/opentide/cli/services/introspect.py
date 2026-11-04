@@ -90,7 +90,10 @@ def environment() -> list[dict[str, str]]:
         },
         {
             "name": "OPENTIDE_PROGRESS",
-            "meaning": "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal",
+            "meaning": (
+                "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal; "
+                "json writes progress events on stderr"
+            ),
         },
         {
             "name": "OPENTIDE_CACHE_DIR",

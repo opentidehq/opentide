@@ -108,6 +108,12 @@ class DeployResult(CommandDocument):
         None, description="Platform configuration files with no tenant, by platform"
     )
     platform: str | None = Field(None, description="The platform selected with --platform")
+    scope: Literal["selected"] | None = Field(
+        None, description="selected: --uuid or --file named the rules instead of the diff"
+    )
+    unmatched: list[str] | None = Field(
+        None, description="--uuid or --file values that matched no rule file"
+    )
     advice: str | None = None
     detail: str | None = Field(None, description="A note on the plan, such as the rules left out")
     skipped: list[SkippedBlock] | None = Field(

@@ -82,7 +82,7 @@ INDEXED_OPTIONS: dict[tuple[str, ...], frozenset[str]] = {
     ("query",): frozenset({"--platform", "--file"}),
     ("lint",): frozenset({"--file"}),
     ("info",): frozenset({"--platform", "--technique"}),
-    ("deploy",): frozenset({"--platform", "--strategy"}),
+    ("deploy",): frozenset({"--uuid", "--file", "--platform", "--strategy"}),
     ("deploy", "metadata"): frozenset({"--platform"}),
     ("setup",): frozenset({"--platform"}),
     ("setup", "repo"): frozenset({"--platform"}),

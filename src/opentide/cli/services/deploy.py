@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -18,6 +18,7 @@ from opentide.cli.ui.contract import (
     did_you_mean,
 )
 from opentide.cli.ui.glyphs import glyph
+from opentide.core import progress_events
 from opentide.core.errors import UserFileError
 from opentide.core.index_manager import IndexManager
 
@@ -25,6 +26,7 @@ logger = structlog.get_logger("opentide.cli.services.deploy")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
     from opentide.cli.ui.progress import Checklist
+    from opentide.deployment.git_repo import RuleScope
     from opentide.models.deployment_enums import RunStrategies
 
 
@@ -199,6 +201,8 @@ def run_deploy(
     *,
     strategies: list[str] | tuple[str, ...] = (),
     all_files: bool = False,
+    uuids: Sequence[str] = (),
+    files: Sequence[str] = (),
     platform: DetectionPlatform | None = None,
     dry_run: bool = False,
     skip_promotion: bool = False,
@@ -212,7 +216,9 @@ def run_deploy(
     *strategies* are ``--strategy`` values (``PREVIEW``, ``RELEASE``). The
     rule files are those the run's diff changed (the pull or merge request,
     the push, or outside CI the last commit), or every rule file with
-    *all_files*. Each rule reaches the tenants that accept a run strategy that
+    *all_files*, or those *uuids* and *files* select (as ``validate query --uuid``
+    and ``--file`` do), which also skips status promotion. Each rule reaches the
+    tenants that accept a run strategy that
     deploys it. *keep_deprecated* ``None`` keeps ``DISABLEMENT`` and
     ``DELETION`` rules unless *all_files*; see :func:`keeps_deprecated`.
     *persist_state_externally* lets a CI run other than a ``RELEASE`` push
@@ -251,6 +257,8 @@ def run_deploy(
                 plan_skipped,
                 strategies=strategies,
                 all_files=all_files,
+                uuids=uuids,
+                files=files,
                 platform=platform,
                 dry_run=dry_run,
                 skip_promotion=skip_promotion,
@@ -262,6 +270,8 @@ def run_deploy(
             for path, problem in _unread_object_files(unreadable, exclude=error.path):
                 logger.error("malformed_object_yaml", path=path, error=problem)
             raise
+    if uuids or files:
+        result.setdefault("scope", "selected")
     unread = _unread_object_files(unreadable)
     if unread:
         plan_warnings.append(_unread_warning(unread))
@@ -401,6 +411,8 @@ def _deploy(
     strategies: list[str] | tuple[str, ...],
     all_files: bool,
     platform: DetectionPlatform | None,
+    uuids: Sequence[str] = (),
+    files: Sequence[str] = (),
     dry_run: bool,
     skip_promotion: bool,
     keep_deprecated: bool | None,
@@ -438,6 +450,24 @@ def _deploy(
     from opentide.platforms.plugins import EnabledPlatforms
 
     Opentide.reload()
+    scope: RuleScope | None = None
+    if uuids or files:
+        from opentide.cli.services.validation import _selected_rule_scope
+        from opentide.deployment.git_repo import rules_folder_in_repo
+
+        scope, unmatched = _selected_rule_scope(files, uuids)
+        if unmatched:
+            return {
+                "status": "failed",
+                "message": (
+                    f"No rule file directly in {rules_folder_in_repo()} matched: "
+                    f"{', '.join(unmatched)}"
+                ),
+                "scope": "selected",
+                "unmatched": unmatched,
+                "dry_run": dry_run,
+                "_exit_code": 1,
+            }
     try:
         run = resolve_run_strategies(strategies)
     except ValueError as exc:
@@ -455,6 +485,7 @@ def _deploy(
         if (
             StatusStrategy.RELEASE in run
             and not all_files
+            and scope is None
             and not skip_promotion
             and not dry_run
             and not local_debug
@@ -474,6 +505,7 @@ def _deploy(
             wide_scope=wide,
             keep_deprecated=keeps_deprecated(all_files, keep_deprecated),
             warnings=plan_warnings,
+            scope=scope,
             all_files=all_files,
             skipped=plan_skipped,
         )
@@ -609,7 +641,7 @@ def _deploy(
                 scope=plan_scope(len(deployment_list), tenant_count),
                 tally=plan_message(changes),
             )
-        for system, uuids in deployment_list.items():
+        for position, (system, uuids) in enumerate(deployment_list.items(), start=1):
             deployer = cast(Any, mdr_deployers[system])
             if run_log is None:  # a dry run: nothing is sent, so nothing reports
                 logger.info(
@@ -620,6 +652,8 @@ def _deploy(
                 payloads[system] = preview_platform_deployment(system, uuids)
                 if system not in missing_tenants:
                     deployed.append(system)
+                # A dry run has no checklist step to report it (OPENTIDE_PROGRESS=json).
+                progress_events.progress(system, position, len(deployment_list))
                 continue
             with checklist.step(system, unit="rule") as step:
                 step.done(len(uuids))
