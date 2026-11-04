@@ -373,7 +373,7 @@ def test_build_yaml_schema_mappings_lists_folders_without_common_parent(monkeypa
     }
     monkeypatch.setattr(
         "opentide.cli.services.setup.vscode.resolve_configurations",
-        lambda: {**configs, "paths": cfg},
+        lambda workspace=None: {**configs, "paths": cfg},
     )
     assert build_yaml_schema_mappings() == {
         ROUTER: ["intel/threats/**/*.yaml", "objectives/**/*.yaml", "rules/**/*.yaml"]
@@ -767,3 +767,40 @@ def test_rewriting_a_router_mapping_in_place_keeps_the_rest_of_the_file(tmp_path
         "yaml.schemas": {"other.json": "x/*.yaml", ROUTER: ["playbooks/**/*.yaml"]},
         "editor.tabSize": 4,
     }
+
+
+def test_setup_vscode_from_another_directory_reads_the_targets_object_folders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``setup vscode -C <repo>`` run elsewhere read the current directory's paths.toml, so
+    the router mapping of a repository with its own object folders stayed."""
+    from tests.test_cli.conftest import clear_runtime_caches
+
+    from opentide.cli.services import doctor
+    from opentide.cli.services.doctor import DoctorContext
+
+    repo = tmp_path / "repo"
+    (repo / ".opentide" / "configurations").mkdir(parents=True)
+    (repo / ".opentide" / "configurations" / "paths.toml").write_text(
+        '[paths.objects]\nthreat = "content/threats/"\n'
+        'objective = "content/objectives/"\nrule = "content/rules/"\n',
+        encoding="utf-8",
+    )
+    (repo / ".vscode").mkdir()
+    settings = repo / ".vscode" / "settings.json"
+    settings.write_text(
+        json.dumps({"yaml.schemas": {ROUTER: "content/**/*.yaml"}, "editor.tabSize": 2}),
+        encoding="utf-8",
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.delenv("OPENTIDE_REPO_ROOT", raising=False)
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    clear_runtime_caches()
+
+    warned = {c.code: c for c in doctor.check_vscode(DoctorContext(workspace=repo))}
+    assert ROUTER in warned["vscode_settings"].message
+
+    assert write_vscode_settings(repo) == ".vscode/settings.json"
+    assert json.loads(settings.read_text(encoding="utf-8")) == {"editor.tabSize": 2}

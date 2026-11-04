@@ -102,7 +102,7 @@ def snippet_file_rel(*, workspace: Path | None = None) -> str:
     from opentide.registry.paths import resolve_workspace_paths
 
     base = (workspace or discover_workspace()).resolve()
-    paths = resolve_workspace_paths(resolve_configurations(), workspace=base)
+    paths = resolve_workspace_paths(resolve_configurations(base), workspace=base)
     snippet = Path(paths["snippet_file"])
     try:
         return str(snippet.relative_to(base))
@@ -151,8 +151,13 @@ def emit_vscode_deprecation() -> None:
     render_warnings(get_console(), [DEPRECATION_MESSAGE.rstrip(".")])
 
 
-def _paths_config() -> dict[str, Any]:
-    configs = resolve_configurations()
+def _paths_config(workspace: Path | None = None) -> dict[str, Any]:
+    """``paths`` of *workspace*'s configuration (default: the discovered workspace).
+
+    ``setup vscode -C <repo>`` run from another directory must read the target's
+    object folders, not the current directory's.
+    """
+    configs = resolve_configurations(workspace.resolve() if workspace is not None else None)
     return configs["paths"]
 
 
@@ -193,8 +198,7 @@ def build_yaml_schema_mappings(*, workspace: Path | None = None) -> dict[str, st
     ``setup vscode`` no longer writes it; :func:`write_vscode_settings` and
     ``doctor`` use it to recognise it.
     """
-    del workspace  # reserved for future workspace-relative schema URIs
-    cfg = _paths_config()
+    cfg = _paths_config(workspace)
     return {_router_schema_uri(cfg): _object_glob(_object_folders(cfg))}
 
 
@@ -229,15 +233,17 @@ def _router_remainder(globs: object, generated: set[str]) -> tuple[bool, object]
     return True, (theirs or None)
 
 
-def is_opentide_schema_mapping(schema: str, globs: object) -> bool:
+def is_opentide_schema_mapping(
+    schema: str, globs: object, *, workspace: Path | None = None
+) -> bool:
     """Whether a ``yaml.schemas`` entry holds a mapping ``setup vscode`` wrote.
 
     The router schema (``.opentide/schemas/opentide.schema.json``) mapped to the
     object folders, or a per-folder revision mapping of an earlier release. A
     mapping of another schema, or of opentide's to the user's own folders
-    only, is theirs.
+    only, is theirs. Object folders are *workspace*'s (default: the discovered one).
     """
-    cfg = _paths_config()
+    cfg = _paths_config(workspace)
     if schema.removeprefix("./") == _router_schema_uri(cfg):
         return _router_remainder(globs, _generated_globs(cfg))[0]
     families = list(cfg.get("objects") or CORE_OBJECT_TYPES)
@@ -345,7 +351,7 @@ def write_vscode_settings(target: Path, *, warnings: list[str] | None = None) ->
     yaml_schemas = existing.get("yaml.schemas")
     if not isinstance(yaml_schemas, dict):
         return None
-    cfg = _paths_config()
+    cfg = _paths_config(target)
     kept = {
         schema: rest
         for schema, globs in yaml_schemas.items()

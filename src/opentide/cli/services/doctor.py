@@ -816,7 +816,7 @@ def check_vscode(ctx: DoctorContext) -> list[Check]:
         sorted(
             str(schema)
             for schema, globs in schemas.items()
-            if is_opentide_schema_mapping(str(schema), globs)
+            if is_opentide_schema_mapping(str(schema), globs, workspace=ctx.workspace)
         )
         if isinstance(schemas, dict)
         else []
