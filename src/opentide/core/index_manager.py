@@ -8,6 +8,37 @@ from opentide.core.types import IndexSnapshot
 from opentide.registry.builder import build_registry
 from opentide.registry.paths import legacy_path_aliases, resolve_workspace_paths
 
+#: What a retained snapshot was built from: the workspace and data roots, the
+#: working directory, and every ``OPENTIDE_*`` variable.
+RetentionKey = tuple[str, str, str, tuple[tuple[str, str], ...]]
+
+#: ``OPENTIDE_*`` variables that change how output looks, never what the registry holds.
+_PRESENTATION_VARIABLES = frozenset(
+    {
+        "OPENTIDE_JSON_INDENT",
+        "OPENTIDE_LINKS",
+        "OPENTIDE_LOG_JSON",
+        "OPENTIDE_OUTPUT",
+        "OPENTIDE_PROGRESS",
+    }
+)
+
+
+def retention_key() -> RetentionKey:
+    """The key :attr:`IndexManager._retained` files the snapshot built now under."""
+    import os
+
+    from opentide.core.root import get_data_root, get_repo_root
+
+    variables = tuple(
+        sorted(
+            (name, value)
+            for name, value in os.environ.items()
+            if name.startswith("OPENTIDE_") and name not in _PRESENTATION_VARIABLES
+        )
+    )
+    return (str(get_repo_root()), str(get_data_root()), os.getcwd(), variables)
+
 
 class _IndexCacheMeta(type):
     """Drop the FlatIndex memo whenever the registry snapshot is discarded.
@@ -38,13 +69,28 @@ class IndexManager(metaclass=_IndexCacheMeta):
     #: Snapshot the chaining memo belongs to, on the same terms as the flat one.
     _chain_cache_index: IndexSnapshot | None = None
 
+    #: Snapshots a long-lived host keeps between command runs (``opentide serve``),
+    #: by :func:`retention_key`. ``None``, the default, keeps none: every command
+    #: run that drops ``_cache`` builds the registry again.
+    _retained: dict[RetentionKey, IndexSnapshot] | None = None
+
     @classmethod
     def load(cls) -> IndexSnapshot:
         """Build registry index (cached for process lifetime)."""
         if cls._cache is not None:
             return cls._cache
-        cls._cache = cast(IndexSnapshot, build_registry())
-        return cls._cache
+        retained = cls._retained
+        key = retention_key() if retained is not None else None
+        if retained is not None and key is not None:
+            kept = retained.get(key)
+            if kept is not None:
+                cls._cache = kept
+                return kept
+        snapshot = cast(IndexSnapshot, build_registry())
+        cls._cache = snapshot
+        if retained is not None and key is not None:
+            retained[key] = snapshot
+        return snapshot
 
     @classmethod
     def reload(cls) -> IndexSnapshot:

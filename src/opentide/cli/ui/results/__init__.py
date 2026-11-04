@@ -132,7 +132,7 @@ PENDING_MODELS: dict[str, str] = {}
 
 #: Commands that never print a JSON document, not even for a usage error:
 #: stdout is JSON-RPC.
-NO_DOCUMENT = frozenset({"mcp start", "lsp start"})
+NO_DOCUMENT = frozenset({"mcp start", "lsp start", "serve"})
 
 
 def result_model(path: str) -> type[CommandDocument] | None:

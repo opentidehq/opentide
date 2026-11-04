@@ -35,6 +35,7 @@ Run `opentide --help` for the live command tree.
 | [`commands`](#command-tree-for-agents) | Every command with its options, defaults and an example; `--json` for the tree |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
 | [`lsp`](./lsp.md) | Language server for editors (`lsp start`) |
+| [`serve`](./serve.md) | CLI commands in one warm process, for editors: JSON-RPC on stdio |
 
 <Callout type="info">
 
@@ -147,8 +148,8 @@ opentide --json commands
   "$defs": { "QueryValidationResult": { "…": "…" }, "CommandError": { "…": "…" } },
   "ok": true,
   "status": "completed",
-  "message": "57 commands",
-  "summary": { "commands": 57, "groups": 15 },
+  "message": "58 commands",
+  "summary": { "commands": 58, "groups": 15 },
   "…": "envelope keys"
 }
 ```
@@ -163,10 +164,10 @@ opentide --json commands
 | `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … A `string` the command checks itself lists its values in `choices` too: `validate --type`, `deploy --strategy`, `info`'s section. `share --target` takes the configured targets, so it has none. |
 | `options[].envvars` | Environment variables that set the option. |
 | `example` | The first example in the command's `--help`. A command whose help has none yet gets a placeholder: the command with its required arguments and options filled in. A placeholder names the command but may not run as it is (`opentide deploy` still needs `--strategy`). |
-| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error, such as an unknown subcommand, so its schema is `CommandError`. `null` for `mcp start`, which prints JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
+| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error, such as an unknown subcommand, so its schema is `CommandError`. `null` for `mcp start`, `lsp start` and `serve`, which print JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
 | `$defs` | The schemas each `output_schema` refers to. |
 
-Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 57 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
+Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 58 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
 
 ## Choosing between CLI, SDK, and MCP
 

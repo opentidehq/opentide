@@ -19,6 +19,7 @@ SUMMARIES: dict[str, str] = {
     "mcp": "Run the opentide MCP server for editors and agents",
     "mcp start": "Serve MCP on stdio until the host closes stdin",
     "lsp start": "Serve LSP on stdio until the editor closes stdin",
+    "serve": "Run CLI commands in one warm process, for editors",
     "validate query": "Check rule queries offline, or on the tenants (--live)",
     "new threat": "Scaffold a threat",
     "new objective": "Scaffold a detection objective",
@@ -83,6 +84,7 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "mcp start": ("opentide mcp start",),
     "lsp": ("opentide lsp start",),
     "lsp start": ("opentide lsp start",),
+    "serve": ("opentide serve",),
     "setup": (
         "opentide setup",
         'opentide setup --yes --name "Detections" --platform sentinel --ci github',

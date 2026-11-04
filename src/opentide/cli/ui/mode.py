@@ -3,7 +3,8 @@
 The mode is resolved once per command run (see ``docs/internal/cli-experience.md``,
 "Output modes") and read through :func:`get_mode`. The first rule that matches wins:
 
-1. ``opentide mcp start`` or ``opentide lsp start`` → ``mcp`` (stdout is the protocol's)
+1. ``opentide mcp start``, ``opentide lsp start`` or ``opentide serve`` → ``mcp`` (stdout is
+   the protocol's)
 2. ``--json`` → ``json``
 3. ``OPENTIDE_OUTPUT`` set to ``json``, ``agent``, ``plain`` or ``human`` → that mode
 4. a coding agent is detected → ``agent``
@@ -37,8 +38,9 @@ class OutputMode(str, Enum):
         return self.value
 
 
-#: Commands whose stdout carries a JSON-RPC protocol: the MCP and the language server.
-PROTOCOL_COMMANDS = frozenset({("mcp", "start"), ("lsp", "start")})
+#: Commands whose stdout carries a JSON-RPC protocol: the MCP, the language server and
+#: ``opentide serve``.
+PROTOCOL_COMMANDS = frozenset({("mcp", "start"), ("lsp", "start"), ("serve",)})
 
 #: ``OPENTIDE_OUTPUT`` values. ``mcp`` is not one: only the protocol commands run in it.
 OUTPUT_ENV_VALUES = frozenset({"json", "agent", "plain", "human"})

@@ -81,8 +81,20 @@ def _print_version(line: str) -> None:
         raise SystemExit(1) from None
 
 
+#: The environment the console script started with, before the root callback
+#: exported the workspace into it (``opentide serve`` starts each run from it).
+_launch_environment: dict[str, str] | None = None
+
+
+def launch_environment() -> dict[str, str]:
+    """A copy of the environment :func:`main` started with; the current one outside it."""
+    return dict(os.environ if _launch_environment is None else _launch_environment)
+
+
 def main() -> None:
     """Console script entry point."""
+    global _launch_environment
+    _launch_environment = dict(os.environ)
     argv = sys.argv[1:]
     if _asks_only_for_version(argv):
         # Before Typer, Rich or the registry: a pipeline that logs the version
