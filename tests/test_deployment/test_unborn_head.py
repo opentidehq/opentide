@@ -102,8 +102,21 @@ def test_last_commit_diff_without_commits_is_empty(unborn: Path) -> None:
 
 def test_no_commits_warning_names_the_cause_and_the_advice(unborn: Path) -> None:
     assert no_commits_warning("pass --all") == (
-        "The git repository has no commits yet, so no file has changed: pass --all"
+        "HEAD names no commit yet (a new repository or an orphan branch), "
+        "so no file has changed: pass --all"
     )
+
+
+def test_an_orphan_branch_in_a_repository_with_history_has_no_last_commit(unborn: Path) -> None:
+    """``git checkout --orphan`` leaves HEAD on a branch with no commit, history or not."""
+    _commit(unborn)
+    _git(unborn, "checkout", "-q", "--orphan", "fresh")
+
+    assert open_repo(unborn).has_commits is False
+    assert diff_calculation(DiffSource.LAST_COMMIT) == []
+    warning = no_commits_warning("pass --all")
+    assert warning is not None
+    assert warning.startswith("HEAD names no commit yet (a new repository or an orphan branch)")
 
 
 def test_no_commits_warning_is_none_once_a_commit_exists(unborn: Path) -> None:

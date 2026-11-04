@@ -267,7 +267,10 @@ def no_commits_warning(advice: str) -> str | None:
         return None
     if repo.has_commits:
         return None
-    return f"The git repository has no commits yet, so no file has changed: {advice}"
+    return (
+        "HEAD names no commit yet (a new repository or an orphan branch), "
+        f"so no file has changed: {advice}"
+    )
 
 
 def diff_error_message(exc: Exception, doing: str) -> str:

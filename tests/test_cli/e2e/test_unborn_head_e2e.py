@@ -20,7 +20,9 @@ from tests.test_cli.conftest import LOCAL_SHELL_UNSET, without_envelope
 
 pytestmark = pytest.mark.cli_e2e
 
-NO_COMMITS = "The git repository has no commits yet, so no file has changed: "
+NO_COMMITS = (
+    "HEAD names no commit yet (a new repository or an orphan branch), so no file has changed: "
+)
 
 
 @pytest.fixture
