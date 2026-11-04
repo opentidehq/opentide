@@ -1,0 +1,276 @@
+"""CLI E2E: ``opentide --json info catalog`` on the tide_corpus workspace (#749)."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+from tests.corpus_support import (
+    CORPUS_OBJECTIVE_UUID,
+    CORPUS_RULE_UUIDS,
+    CORPUS_THREAT_UUID,
+    TIDE_CORPUS_ROOT,
+)
+from tests.test_cli.conftest import assert_json_ok, parse_cli_json
+
+pytestmark = pytest.mark.cli_e2e
+
+SECOND_THREAT = "00000000-0000-4000-8001-000000000749"
+MISSING_THREAT = "00000000-0000-4000-8001-0000000dead1"
+CHILD_SIGNAL = "00000000-0000-4000-8099-000000000749"
+SIGNAL_RULE = "00000000-0000-4000-8003-000000000749"
+DANGLING_RULE = "00000000-0000-4000-8003-000000000750"
+MISSING_OBJECTIVE = "00000000-0000-4000-8002-0000000dead2"
+BROKEN_UUID = "00000000-0000-4000-8003-000000000751"
+DEFENDER_RULE = CORPUS_RULE_UUIDS["defender_for_endpoint"]
+
+THREAT_DIR = "Objects/Threat Vectors"
+OBJECTIVE_DIR = "Objects/Detection Objectives"
+RULE_DIR = "Objects/Detection Rules"
+
+
+def _rule_text(uuid: str, name: str, detection_model: str) -> str:
+    source = TIDE_CORPUS_ROOT / RULE_DIR / "rule-0001-sentinel-kql.yaml"
+    return (
+        source.read_text(encoding="utf-8")
+        .replace(CORPUS_RULE_UUIDS["sentinel"], uuid)
+        .replace("name: Sentinel KQL Rule", f"name: {name}")
+        .replace(f"detection_model: {CORPUS_OBJECTIVE_UUID}", f"detection_model: {detection_model}")
+        .replace("  - T1059\n", "  - T1003.001\n")
+    )
+
+
+def _extend_corpus(repo: Path) -> None:
+    """Add one object per edge kind the corpus lacks, a load error and a deployment binding."""
+    threat = (repo / THREAT_DIR / "threat-0001-simulated-actor.yaml").read_text(encoding="utf-8")
+    second = (
+        threat.replace(CORPUS_THREAT_UUID, SECOND_THREAT)
+        .replace("name: Simulated Actor", "name: Follow-up Actor")
+        .replace("    - T1059\n", "    - T1003\n")
+    )
+    second += (
+        "  chaining:\n"
+        f"    - relation: sequence::preceeds\n      vector: {CORPUS_THREAT_UUID}\n"
+        f"    - relation: sequence::succeeds\n      vector: {MISSING_THREAT}\n"
+    )
+    (repo / THREAT_DIR / "threat-0749-follow-up-actor.yaml").write_text(second, encoding="utf-8")
+
+    objective_path = repo / OBJECTIVE_DIR / "objective-0001-credential-access.yaml"
+    objective = objective_path.read_text(encoding="utf-8")
+    objective = objective.replace(
+        "        requirements: Security event logs\n",
+        "        requirements: Security event logs\n"
+        "        logsources:\n"
+        "          - Windows Security Events\n"
+        f"    - name: Child signal\n"
+        f"      uuid: {CHILD_SIGNAL}\n"
+        "      description: Narrower authentication activity\n"
+        "      severity: Medium\n"
+        "      methodology: Statistical\n"
+        "      parent: 00000000-0000-4000-8099-000000000001\n"
+        "      entities:\n"
+        "        - Host::Hostname\n"
+        "      data:\n"
+        "        availability: Complete\n"
+        "        requirements: Security event logs\n",
+    )
+    objective_path.write_text(objective, encoding="utf-8")
+
+    rules = repo / RULE_DIR
+    (rules / "rule-0749-signal.yaml").write_text(
+        _rule_text(SIGNAL_RULE, "Signal Rule", CHILD_SIGNAL), encoding="utf-8"
+    )
+    (rules / "rule-0750-dangling.yaml").write_text(
+        _rule_text(DANGLING_RULE, "Dangling Rule", MISSING_OBJECTIVE), encoding="utf-8"
+    )
+    (rules / "rule-0751-broken.yaml").write_text(
+        f"name: Broken Rule\n\nmetadata:\n  uuid: {BROKEN_UUID}\n  schema: rule::1.0\n"
+        "techniques: [T1059\n",
+        encoding="utf-8",
+    )
+    shards = repo / ".opentide" / "states" / "deployment"
+    shards.mkdir(parents=True)
+    shard = {
+        "schema": "deployment.state::1.0",
+        "object_uuid": DEFENDER_RULE,
+        "platforms": {"defender_for_endpoint": {"prod": "4242"}},
+    }
+    (shards / f"{DEFENDER_RULE}.json").write_text(json.dumps(shard), encoding="utf-8")
+
+
+@pytest.fixture
+def catalog(invoke_cli, tide_corpus_repo: Path) -> dict[str, Any]:
+    _extend_corpus(tide_corpus_repo)
+    return assert_json_ok(invoke_cli("info", "catalog"))
+
+
+def _edges(document: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    return [edge for edge in document["edges"] if edge["kind"] == kind]
+
+
+def _object(document: dict[str, Any], uuid: str) -> dict[str, Any]:
+    return next(row for row in document["objects"] if row["uuid"] == uuid)
+
+
+def test_catalog_lists_every_object_with_its_location(
+    catalog: dict[str, Any], tide_corpus_repo: Path
+) -> None:
+    rule = _object(catalog, CORPUS_RULE_UUIDS["sentinel"])
+    assert rule["type"] == "rule"
+    assert rule["schema"] == "rule::1.0"
+    assert rule["name"] == "Sentinel KQL Rule"
+    assert rule["path"] == f"{RULE_DIR}/rule-0001-sentinel-kql.yaml"
+    assert Path(rule["file_path"]).is_absolute()
+    assert Path(rule["file_path"]).read_text(encoding="utf-8").splitlines()[rule["line"] - 1] == (
+        "name: Sentinel KQL Rule"
+    )
+    assert rule["tlp"] == "clear"
+    assert rule["created"] == "2026-01-01"
+    assert rule["platforms"] == [
+        {"id": "sentinel", "enabled": True, "status": "STAGING", "strategy": "PREVIEW"}
+    ]
+    assert rule["techniques"] == {"own": ["T1059"], "inherited": []}
+    assert rule["tactics"] == ["execution"]
+    assert rule["actors"] == ["att&ck::G0006"]
+    assert rule["load_error"] is None
+    summary = catalog["summary"]
+    assert summary["threats"] == 2 and summary["objectives"] == 1
+    assert summary["rules"] == 12  # the corpus ten, and two added here
+    assert summary["signals"] == 2
+    assert summary["edges"] == len(catalog["edges"])
+    assert summary["objects"] == len(catalog["objects"])
+
+
+def test_catalog_has_every_edge_kind(catalog: dict[str, Any]) -> None:
+    covers = _edges(catalog, "covers")
+    assert {
+        "from": CORPUS_OBJECTIVE_UUID,
+        "to": CORPUS_THREAT_UUID,
+        "kind": "covers",
+        "field_path": "objective.threats",
+        "relation": None,
+        "missing": False,
+    } in covers
+    implements = {
+        (edge["from"], edge["to"], edge["missing"]) for edge in _edges(catalog, "implements")
+    }
+    assert (CORPUS_RULE_UUIDS["sentinel"], CORPUS_OBJECTIVE_UUID, False) in implements
+    assert (SIGNAL_RULE, CHILD_SIGNAL, False) in implements
+    assert (DANGLING_RULE, MISSING_OBJECTIVE, True) in implements
+    [parent] = _edges(catalog, "parent")
+    assert parent["from"] == CHILD_SIGNAL
+    assert parent["to"] == "00000000-0000-4000-8099-000000000001"
+    assert parent["field_path"] == "objective.signals.1.parent"
+    assert parent["missing"] is False
+    chains = {
+        (edge["from"], edge["to"], edge["relation"], edge["missing"])
+        for edge in _edges(catalog, "chains")
+    }
+    assert chains == {
+        (SECOND_THREAT, CORPUS_THREAT_UUID, "sequence::preceeds", False),
+        (SECOND_THREAT, MISSING_THREAT, "sequence::succeeds", True),
+    }
+    techniques = {
+        (edge["from"], edge["to"], edge["field_path"]) for edge in _edges(catalog, "technique")
+    }
+    assert (CORPUS_THREAT_UUID, "T1059", "threat.mitre_attack") in techniques
+    assert (SIGNAL_RULE, "T1003.001", "techniques") in techniques
+    [logsource] = _edges(catalog, "logsource")
+    assert logsource["from"] == "00000000-0000-4000-8099-000000000001"
+    assert logsource["to"] == "Windows Security Events"
+    assert logsource["field_path"] == "objective.signals.0.data.logsources"
+    # Only object references can dangle.
+    assert not any(edge["missing"] for edge in _edges(catalog, "technique"))
+
+
+def test_catalog_signals_and_inherited_techniques(catalog: dict[str, Any]) -> None:
+    signals = {row["uuid"]: row for row in catalog["signals"]}
+    assert signals[CHILD_SIGNAL] == {
+        "uuid": CHILD_SIGNAL,
+        "name": "Child signal",
+        "objective": CORPUS_OBJECTIVE_UUID,
+        "parent": "00000000-0000-4000-8099-000000000001",
+    }
+    # Signals are edge endpoints, not object rows.
+    assert CHILD_SIGNAL not in {row["uuid"] for row in catalog["objects"]}
+    rule = _object(catalog, SIGNAL_RULE)
+    assert rule["techniques"] == {"own": ["T1003.001"], "inherited": ["T1059"]}
+    assert rule["tactics"] == ["execution", "credential-access"]
+    objective = _object(catalog, CORPUS_OBJECTIVE_UUID)
+    assert objective["techniques"] == {"own": [], "inherited": ["T1059"]}
+    dangling = _object(catalog, DANGLING_RULE)
+    assert dangling["techniques"]["inherited"] == []
+
+
+def test_catalog_reports_deployment_state(catalog: dict[str, Any]) -> None:
+    assert _object(catalog, DEFENDER_RULE)["deployment"] == [
+        {"platform": "defender_for_endpoint", "tenant": "prod", "deployed": True, "rule_id": "4242"}
+    ]
+    assert _object(catalog, CORPUS_RULE_UUIDS["sentinel"])["deployment"] == []
+
+
+def test_catalog_keeps_a_file_that_failed_to_load(catalog: dict[str, Any]) -> None:
+    broken = _object(catalog, BROKEN_UUID)
+    assert broken["path"] == f"{RULE_DIR}/rule-0751-broken.yaml"
+    assert broken["name"] == "Broken Rule"
+    assert broken["type"] == "rule"
+    assert broken["schema"] == "rule::1.0"
+    assert broken["line"] == 1
+    error = broken["load_error"]
+    assert error["code"] == "yaml_parse"
+    assert error["message"]
+    assert error["line"] == 7
+    assert catalog["summary"]["load_errors"] == 1
+    assert catalog["status"] == "issues"
+
+
+def test_catalog_attack_skeleton(catalog: dict[str, Any]) -> None:
+    attack = catalog["attack"]
+    tactics = attack["tactics"]
+    assert [tactic["shortname"] for tactic in tactics][:3] == [
+        "reconnaissance",
+        "resource-development",
+        "initial-access",
+    ]
+    credential = next(tactic for tactic in tactics if tactic["id"] == "TA0006")
+    assert credential["shortname"] == "credential-access"
+    assert credential["name"] == "Credential Access"
+    assert "T1003" in credential["techniques"]
+    assert "T1003.001" not in credential["techniques"]
+    techniques = attack["techniques"]
+    assert techniques["T1003"]["name"] == "OS Credential Dumping"
+    assert techniques["T1003"]["parent"] is None
+    assert "T1003.001" in techniques["T1003"]["subtechniques"]
+    assert techniques["T1003.001"] == {
+        "name": "LSASS Memory",
+        "parent": "T1003",
+        "subtechniques": [],
+    }
+    # Enterprise only.
+    assert not any(row["name"].startswith("Mobile : ") for row in techniques.values())
+
+
+def test_info_catalog_human_summary(cli_runner, tide_corpus_repo: Path) -> None:
+    from opentide.cli import app
+
+    _extend_corpus(tide_corpus_repo)
+    result = cli_runner.invoke(
+        app, ["--no-color", "--repo", str(tide_corpus_repo), "info", "catalog"]
+    )
+    assert result.exit_code == 0, result.stdout
+    rows = [" ".join(line.split()) for line in result.stdout.splitlines()]
+    assert any(row.startswith("objects ") and "2 threats" in row for row in rows)
+    assert "edges 31" in rows
+    assert "2 chains" in rows
+    assert "2 missing: name no object" in rows
+    assert "load errors 1" in rows
+
+
+def test_info_catalog_is_listed_as_a_section(invoke_cli) -> None:
+    """The extension finds the catalogue in ``opentide --json commands``."""
+    document = parse_cli_json(invoke_cli("commands"))
+    info = next(command for command in document["commands"] if command["path"] == "info")
+    section = next(argument for argument in info["arguments"] if argument["name"] == "section")
+    assert "catalog" in section["choices"]

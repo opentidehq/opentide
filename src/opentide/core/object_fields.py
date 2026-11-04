@@ -174,6 +174,24 @@ def object_techniques(body: Any) -> set[str]:
     return _collect(body, FieldRole.TECHNIQUES)
 
 
+def object_role_values(body: Any, role: FieldRole) -> list[tuple[str, str]]:
+    """``(dotted field path, value)`` for each value *body*'s model tags with *role*.
+
+    Values come in authored order, each once, with the path of the field that
+    holds it (``threat.mitre_attack``, ``techniques``, ``threat.actors.name``).
+    """
+    resolved = as_body(body)
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for path in sorted(_role_paths(_schema_id(resolved), role)):
+        for value in _resolve_path(resolved, path):
+            for name in _names(value):
+                if name not in seen:
+                    seen.add(name)
+                    found.append((".".join(path), name))
+    return found
+
+
 def object_actors(body: Any) -> set[str]:
     """Lowercased actor identifiers, plus the bare suffix of namespaced names.
 

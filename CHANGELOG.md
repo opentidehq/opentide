@@ -10,6 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - **A wheel for Windows on Arm** (`cp310-abi3-win_arm64`, [#748](https://github.com/opentidehq/opentide/issues/748)). `pip install opentide` on Windows on Arm compiled opentide from its sdist, which needs Rust; it now installs a wheel with the engine compiled in, and a release is refused without one. cryptography, which the Azure SDK needs, publishes no Windows on Arm wheel after 46.0.3, so install with `pip install --only-binary cryptography opentide` on CPython 3.11 or later. See [Installation](docs/usage/installation.md#windows-and-powershell).
 - **Every `validate`, `validate query` and `lint` finding carries `end_line`** ([#755](https://github.com/opentidehq/opentide/issues/755)), the one-based line its span ends on: `line` for a span on one line, the real end of a query finding over several lines of a block scalar (a KQL bracket left open, an unterminated ES|QL string). `end_column` is on `end_line`. SARIF regions carry `endLine`, and a GitHub annotation of such a finding has `endLine` and no `endColumn`. `opentide --json commands` names the key in each output schema.
+- **`opentide --json info catalog`: the catalogue and its relationships in one document** ([#749](https://github.com/opentidehq/opentide/issues/749)). `info` listed UUIDs only. The `catalog` section adds:
+  - `objects`: one row per threat, objective and rule, with its path and the line of `name:`, metadata, platform blocks with their status strategy, deployment-state bindings, own and inherited techniques, tactics and actors. A file that did not load keeps its row, with a `load_error` (`code`, `message`, `line`).
+  - `edges`: `covers`, `implements`, `parent`, `chains` (with its `relation`), `technique` and `logsource`, each with the field that holds it, and `missing: true` for a reference to no object.
+  - `signals`, and `attack`: the Enterprise ATT&CK matrix from the bundled vocabulary (tactics in order, techniques with their names, parents and sub-techniques).
+
+  It is built in one pass over the registry: a 500-rule workspace answers in about 1.3 s. Without `--json` it prints a short summary. See [The catalogue](docs/cli/info.md#the-catalogue).
+- **`opentide --json info` lists each platform's tenants** ([#754](https://github.com/opentidehq/opentide/issues/754)). Each `platforms[]` entry, also under `info --platform <id>`, gains `tenants[]`: `name`, `description`, `strategies`, `manual` and `variables`, each `$VAR` the tenant's setup references with whether it is set. A value is never printed. See [Tenants](docs/cli/info.md#tenants).
 
 ### Changed
 

@@ -1,6 +1,6 @@
 ---
 title: opentide info
-description: Repository statistics, platform capabilities, object listings, ATT&CK coverage lookup, and vocabulary contract revisions.
+description: Repository statistics, platform capabilities, object listings, the catalogue with its relationships, ATT&CK coverage lookup, and vocabulary contract revisions.
 ---
 
 # opentide info
@@ -12,13 +12,14 @@ opentide info
 opentide --json info --platform sentinel
 opentide --json info rules
 opentide --json info --technique T1059 coverage
+opentide --json info catalog
 ```
 
 ## Arguments and options
 
 | Input | Purpose |
 |-------|---------|
-| `[section]` | Optional section: `rules`, `threats`, `objectives`, `coverage` (requires `--technique`), or `vocab` |
+| `[section]` | Optional section: `rules`, `threats`, `objectives`, `coverage` (requires `--technique`), `vocab`, or `catalog` (see [The catalogue](#the-catalogue)) |
 | `[name]` | With `vocab` only: the vocabulary to inspect (see [Vocabulary contract revisions](#vocabulary-contract-revisions)) |
 | `--platform` | Filter platform table to one platform |
 | `--technique` | ATT&CK technique ID — use with positional `coverage` |
@@ -55,6 +56,7 @@ With a section, the table for that section replaces the summary:
 | `threats`, `objectives` | UUID and name |
 | `coverage` | `Coverage for T1059: 1 rule`, then the matching rules as in `rules` |
 | `vocab` | The vocabularies table, or with a name, that vocabulary's summary, revisions and pins |
+| `catalog` | Objects by family, signals, edges by kind (and how many name no object), the ATT&CK techniques the catalogue reaches, and load errors |
 
 An empty section prints `No rules found` (or threats, objectives).
 
@@ -71,7 +73,7 @@ Every view ends with one line counting the catalogue: `✓ 1 rule · 1 threat ·
   "counts": { "rules": 1, "threats": 1, "objectives": 1 },
   "parse_error_count": 0,
   "platforms": [
-    { "name": "sentinel", "enabled": true, "can_deploy": true, "can_validate": true }
+    { "name": "sentinel", "enabled": true, "can_deploy": true, "can_validate": true, "tenants": [] }
   ],
   "ok": true,
   "status": "completed",
@@ -86,6 +88,29 @@ Every view ends with one line counting the catalogue: `✓ 1 rule · 1 threat ·
 }
 ```
 
+### Tenants
+
+Each `platforms[]` entry lists the platform's `[[tenants]]` from `.opentide/configurations/platforms/<id>.toml`, so a client can show them and their credentials without reading TOML:
+
+| Key | Content |
+|-----|---------|
+| `name`, `description` | From the tenant's table |
+| `strategies` | The run strategies the tenant accepts (`PREVIEW`, `RELEASE`); both when the file omits `strategies` |
+| `manual` | `true` when only rules whose block names the tenant reach it |
+| `variables` | `{name, set}` for each `$VAR` (or `${VAR}`) the tenant's `[tenants.setup]` references, in order: whether the process environment sets it to a non-empty value |
+
+A variable's value is never printed, in either output. A tenant's setup values that are not variable references are not printed either. `opentide doctor`'s `credentials` check reports the same variables as a pass or a warning.
+
+```json illustrative
+{
+  "name": "sentinel",
+  "tenants": [
+    { "name": "prod", "description": "Production workspace", "strategies": ["RELEASE"], "manual": false,
+      "variables": [ { "name": "AZURE_CLIENT_ID", "set": true }, { "name": "AZURE_CLIENT_SECRET", "set": false } ] }
+  ]
+}
+```
+
 The keys from `schema_version` on are the envelope every command adds; see [JSON output](./json-output.md). Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
 With coverage, the payload adds a `coverage` object:
@@ -95,6 +120,92 @@ With coverage, the payload adds a `coverage` object:
   "coverage": { "technique": "T1059", "rules": ["..."], "count": 1 }
 }
 ```
+
+## The catalogue
+
+`info catalog` prints every object, how the objects relate, and the ATT&CK Enterprise matrix in one document. It is what an editor needs for a catalogue tree, a coverage graph, an ATT&CK matrix and search, without reading YAML itself:
+
+```bash
+opentide info catalog
+opentide --json info catalog
+```
+
+The document holds the `info` keys, plus `objects`, `edges`, `signals` and `attack`. `summary` adds `objects` (rows, load errors included), `signals` and `edges` to the four counts. In the [tutorial](../usage/tutorial.md) repository:
+
+```json output-of="opentide --json info catalog"
+{
+  "summary": { "rules": 1, "threats": 1, "objectives": 1, "load_errors": 0, "objects": 3 }
+}
+```
+
+**`objects`**: one row per threat, objective and rule, threats first, each family sorted by path.
+
+| Key | Content |
+|-----|---------|
+| `uuid`, `type`, `schema`, `name` | Identity: `metadata.uuid`, `threat`/`objective`/`rule`, `metadata.schema`, `name` |
+| `path`, `file_path`, `line` | The file relative to the workspace (forward slashes), the same file absolute, and the 1-based line of the `name:` key (1 when there is none) |
+| `tlp`, `author`, `created`, `modified`, `reviewed` | From `metadata`; `null` when unset |
+| `platforms` | A rule's platform blocks: `{id, enabled, status, strategy}`, the strategy being the one `deployment.toml` maps the status to |
+| `deployment` | A rule's tenant bindings in `.opentide/states/deployment/`: `{platform, tenant, deployed, rule_id}`. Only Defender, SentinelOne, CrowdStrike and Sysdig keep one |
+| `techniques` | `own`: the ATT&CK ids the object lists. `inherited`: those its objective or threats give it that it does not list |
+| `tactics` | The tactic shortnames of all those techniques, in matrix order |
+| `actors` | The actors of the threat, of the threats an objective covers, or of the threats of a rule's objective, as written (`att&ck::G0006`) |
+| `load_error` | `null`, or `{code, message, line}` for a file that did not load |
+
+A file that did not load still has a row, so an editor can show it: its `load_error` says why (`yaml_parse` with the line of the problem, `missing_uuid`), and `uuid`, `name` and `schema` are read from the text where they can be (`uuid` is `null` otherwise). It also counts in `summary.load_errors`, and sets `status` to `issues` as in every view.
+
+**`edges`**: one per reference, `{from, to, kind, field_path, relation, missing}`. `field_path` is the dotted path of the field holding the reference; a signal's starts at its entry in the objective (`objective.signals.1.parent`).
+
+| `kind` | From → to | Read from |
+|--------|-----------|-----------|
+| `covers` | objective → threat | `objective.threats` |
+| `implements` | rule → objective or signal | `detection_model` |
+| `parent` | signal → parent signal | `objective.signals[].parent` |
+| `chains` | threat → threat, with `relation` as written (`sequence::preceeds`) | `threat.chaining` |
+| `technique` | threat, objective or rule → ATT&CK id | `threat.mitre_attack`, `objective.mitre_attack`, `techniques` |
+| `logsource` | signal → log source name from `visibility.toml` | `objective.signals[].data.logsources` |
+
+`missing` is `true` when `to` should name an object or signal and none carries that UUID: a dangling reference, which `opentide validate` reports as `invalid_ref`.
+
+**`signals`**: signals live inside objectives, so they are not `objects` rows. Each is `{uuid, name, objective, parent}`, and is an endpoint of `implements`, `parent` and `logsource` edges.
+
+**`attack`**: the Enterprise matrix of the bundled `att&ck` vocabulary, as the object schemas pin it (keys retired after the pinned revision included), so a client can draw the gaps:
+
+- `tactics`: in matrix order, each `{id, shortname, name, techniques}` (`TA0006`, `credential-access`, `Credential Access`), `techniques` listing its techniques, not their sub-techniques.
+- `techniques`: by id, each `{name, parent, subtechniques}`. A sub-technique's name drops its parent's (`T1003.001` is `LSASS Memory`, under `T1003`).
+
+The shape of one object, edge and tactic (values from a larger repository, not captured output):
+
+```json illustrative
+{
+  "objects": [
+    {
+      "uuid": "…", "type": "rule", "schema": "rule::1.0", "name": "LSASS access",
+      "path": "objects/rules/lsass-access.yaml", "file_path": "/repo/objects/rules/lsass-access.yaml",
+      "line": 1, "tlp": "amber", "author": "…", "created": "2026-10-23", "modified": "2026-10-23",
+      "reviewed": null,
+      "platforms": [{ "id": "sentinel", "enabled": true, "status": "DESIGN", "strategy": "INERT" }],
+      "deployment": [],
+      "techniques": { "own": ["T1003.001"], "inherited": ["T1003"] },
+      "tactics": ["credential-access"],
+      "actors": ["att&ck::G0016"],
+      "load_error": null
+    }
+  ],
+  "edges": [
+    { "from": "<rule uuid>", "to": "<objective uuid>", "kind": "implements",
+      "field_path": "detection_model", "relation": null, "missing": false }
+  ],
+  "signals": [{ "uuid": "…", "name": "…", "objective": "<objective uuid>", "parent": null }],
+  "attack": {
+    "tactics": [{ "id": "TA0006", "shortname": "credential-access", "name": "Credential Access",
+                  "techniques": ["T1003", "…"] }],
+    "techniques": { "T1003.001": { "name": "LSASS Memory", "parent": "T1003", "subtechniques": [] } }
+  }
+}
+```
+
+The document is built from one registry load, in time linear in the catalogue: a 500-rule workspace answers in about 1.3 s, most of it the load every `info` view pays.
 
 ## Vocabulary contract revisions
 
@@ -156,4 +267,4 @@ A staged vocabulary whose field is not scoped takes the bare key name; only a sc
 
 ## Source
 
-`src/opentide/cli/commands/info.py`, `src/opentide/cli/services/info.py`
+`src/opentide/cli/commands/info.py`, `src/opentide/cli/services/info.py`, `src/opentide/cli/services/catalog.py`

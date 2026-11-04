@@ -256,12 +256,36 @@ class LintResult(CommandDocument):
 # --------------------------------------------------------------------------
 
 
+class TenantVariable(ResultModel):
+    """An environment variable a tenant's setup names. Its value is never printed."""
+
+    name: str = Field(description="The variable, without the $")
+    set: bool = Field(description="Whether the environment sets it to a non-empty value")
+
+
+class TenantInfo(ResultModel):
+    """One [[tenants]] entry of the platform's configuration file."""
+
+    name: str
+    description: str
+    strategies: list[str] = Field(
+        description="The run strategies the tenant accepts; both when the file omits them"
+    )
+    manual: bool = Field(description="true: only rules whose block lists the tenant reach it")
+    variables: list[TenantVariable] = Field(
+        description="Each $VAR the tenant's setup references, in order"
+    )
+
+
 class PlatformInfo(ResultModel):
     name: str
     enabled: bool
     can_deploy: bool
     can_validate: bool
     can_query: bool = Field(False, description="Whether opentide query runs on the platform")
+    tenants: list[TenantInfo] = Field(
+        default_factory=list, description="The platform's configured tenants"
+    )
 
 
 class TechniqueCoverage(ResultModel):
@@ -310,11 +334,114 @@ class VocabularyDetail(VocabularyOverview):
     pins: list[VocabularyPin] = Field(default_factory=list)
 
 
+class CatalogPlatform(ResultModel):
+    """One platform block of a rule."""
+
+    id: str = Field(description="The configurations key, such as sentinel")
+    enabled: bool
+    status: str | None = Field(description="The block's status, such as STAGING")
+    strategy: str | None = Field(
+        description="The strategy deployment.toml maps the status to; null when unknown"
+    )
+
+
+class CatalogDeployment(ResultModel):
+    """One tenant binding in .opentide/states/deployment/."""
+
+    platform: str
+    tenant: str
+    deployed: bool
+    rule_id: str = Field(description="The id the platform assigned to the rule")
+
+
+class CatalogTechniques(ResultModel):
+    own: list[str] = Field(description="ATT&CK ids the object lists itself")
+    inherited: list[str] = Field(
+        description="ATT&CK ids from its objective or threats, not listed by the object"
+    )
+
+
+class CatalogLoadError(ResultModel):
+    """Why a file did not load."""
+
+    code: str = Field(description="yaml_parse, missing_uuid, …")
+    message: str
+    line: int | None = Field(description="1-based line of the problem, when known")
+
+
+class CatalogObject(ResultModel):
+    """One threat, objective or rule, or a file that should have been one."""
+
+    uuid: str | None = Field(description="metadata.uuid; null when a file that failed has none")
+    type: Literal["threat", "objective", "rule"] | None
+    schema_: str | None = Field(alias="schema", description="metadata.schema, such as rule::1.0")
+    name: str
+    path: str | None = Field(description="Workspace-relative, with forward slashes")
+    file_path: str | None = Field(description="Absolute")
+    line: int = Field(description="1-based line of the name: key, or 1")
+    tlp: str | None
+    author: str | None
+    created: str | None
+    modified: str | None
+    reviewed: str | None
+    platforms: list[CatalogPlatform] = Field(description="A rule's platform blocks")
+    deployment: list[CatalogDeployment] = Field(
+        description="A rule's tenant bindings from deployment state"
+    )
+    techniques: CatalogTechniques
+    tactics: list[str] = Field(description="ATT&CK tactic shortnames, in matrix order")
+    actors: list[str] = Field(
+        description="Actors of the threats the object is, covers, or implements an objective of"
+    )
+    load_error: CatalogLoadError | None = Field(description="null when the file loaded")
+
+
+class CatalogEdge(ResultModel):
+    """One reference between objects, or from an object to a technique or log source."""
+
+    from_: str = Field(alias="from", description="The object or signal UUID that holds it")
+    to: str = Field(description="An object or signal UUID, an ATT&CK id or a log source name")
+    kind: Literal["covers", "implements", "parent", "chains", "technique", "logsource"]
+    field_path: str = Field(description="Dotted path of the field holding the reference")
+    relation: str | None = Field(description="A chains edge's relation, as written")
+    missing: bool = Field(description="true when to should name an object and none has it")
+
+
+class CatalogSignal(ResultModel):
+    uuid: str
+    name: str
+    objective: str | None = Field(description="The objective that defines the signal")
+    parent: str | None = Field(description="The parent signal's UUID")
+
+
+class AttackTactic(ResultModel):
+    id: str | None = Field(description="TA id, such as TA0006")
+    shortname: str = Field(description="Such as credential-access")
+    name: str
+    techniques: list[str] = Field(description="Techniques (not sub-techniques) of the tactic")
+
+
+class AttackTechnique(ResultModel):
+    name: str
+    parent: str | None
+    subtechniques: list[str]
+
+
+class AttackSkeleton(ResultModel):
+    """The Enterprise matrix of the bundled att&ck vocabulary, at the revision pins admit."""
+
+    tactics: list[AttackTactic] = Field(description="In matrix order")
+    techniques: dict[str, AttackTechnique] = Field(description="By ATT&CK id")
+
+
 class InfoSummary(ResultModel):
     rules: int = 0
     threats: int = 0
     objectives: int = 0
     load_errors: int = 0
+    objects: int | None = Field(None, description="catalog: object rows, load errors included")
+    signals: int | None = Field(None, description="catalog: signals")
+    edges: int | None = Field(None, description="catalog: edges")
 
 
 class InfoResult(CommandDocument):
@@ -337,6 +464,10 @@ class InfoResult(CommandDocument):
     vocabulary: VocabularyDetail | None = Field(
         None, description="For the vocab section with a name"
     )
+    objects: list[CatalogObject] | None = Field(None, description="For the catalog section")
+    edges: list[CatalogEdge] | None = Field(None, description="For the catalog section")
+    signals: list[CatalogSignal] | None = Field(None, description="For the catalog section")
+    attack: AttackSkeleton | None = Field(None, description="For the catalog section")
     summary: InfoSummary
 
 

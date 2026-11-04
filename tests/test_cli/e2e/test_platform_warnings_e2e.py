@@ -120,6 +120,7 @@ def test_info_in_a_sentinel_only_repo_does_not_warn(invoke_cli, tutorial_repo: P
         "can_deploy": True,
         "can_validate": True,
         "can_query": True,
+        "tenants": [],
     }
     assert _noisy(result) == []
 
