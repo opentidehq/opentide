@@ -19,7 +19,7 @@ explorer_app = typer.Typer(
     no_args_is_help=True,
 )
 
-_VERSION_HELP = f"{EXPLORER_PACKAGE} release to run: a version, range or dist-tag (0.5.0, ^0.5)"
+_VERSION_HELP = f"{EXPLORER_PACKAGE} release to run: a version, range or dist-tag (0.5.1, ^0.5)"
 _LATEST_HELP = f"Run the latest {EXPLORER_PACKAGE} release (the default)"
 
 

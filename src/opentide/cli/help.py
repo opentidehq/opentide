@@ -72,7 +72,7 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "explorer build": (
         "opentide explorer build",
         "opentide explorer build --output site --base-path /detections",
-        "opentide explorer build --version 0.5.0",
+        "opentide explorer build --version 0.5.1",
     ),
     "explorer serve": ("opentide explorer serve", "opentide explorer serve --port 8080 --latest"),
     "new threat": ('opentide new threat --name "Credential Dumping"',),

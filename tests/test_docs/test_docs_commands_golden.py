@@ -540,7 +540,7 @@ def test_resolution_rejects_commands_the_cli_does_not_have(
         ("generate", "explorer"),
         ("explorer", "build", "--base-path", "/repo"),
         ("explorer", "serve", "--port", "8080"),
-        ("explorer", "build", "--version", "0.5.0"),
+        ("explorer", "build", "--version", "0.5.1"),
         ("explorer", "serve", "--latest"),
     ],
 )

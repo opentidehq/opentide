@@ -1,7 +1,8 @@
 """``opentide explorer`` through a real ``npx``, against a stand-in package.
 
-The stand-in has the published package's two bins, so a command line that
-cannot tell npx which bin to run fails here the way it would against npm.
+The stand-in has the two bins @opentide/explorer 0.5.0 shipped (0.5.1 has
+one), so a command line that leaves npx to pick the bin fails here the way it
+would against that release, which ``--version 0.5.0`` still runs.
 It records its arguments instead of running ``next build``, which keeps the
 test offline; ``OPENTIDE_EXPLORER_PACKAGE`` points npx at it.
 """

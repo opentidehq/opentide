@@ -419,4 +419,4 @@ The flavor adapts to where the docs are read: `--flavor` if given, else the CI p
     REPOSITORY_NAME: ${{ github.event.repository.name }}
 ```
 
-The job no longer checks out `opentidehq/explorer` or runs `npm ci` in it. Workflows written by an earlier `setup ci` keep working; re-run `opentide setup ci github --explorer-pages --yes` to switch to the package. To hold the site on one release, replace `@latest` with a version such as `@0.5.0` in the workflow. Enable Pages with **Settings → Pages → Source: GitHub Actions**. To preview the same site locally, run [`opentide explorer serve`](../../cli/explorer.md).
+The job no longer checks out `opentidehq/explorer` or runs `npm ci` in it. Workflows written by an earlier `setup ci` keep working; re-run `opentide setup ci github --explorer-pages --yes` to switch to the package. To hold the site on one release, replace `@latest` with a version such as `@0.5.1` in the workflow. Enable Pages with **Settings → Pages → Source: GitHub Actions**. To preview the same site locally, run [`opentide explorer serve`](../../cli/explorer.md).

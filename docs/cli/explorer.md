@@ -12,7 +12,7 @@ opentide explorer serve
 opentide explorer serve --port 8080 --host 0.0.0.0
 opentide explorer build
 opentide explorer build --output site --base-path /detections
-opentide explorer build --version 0.5.0
+opentide explorer build --version 0.5.1
 opentide --json explorer build
 ```
 
@@ -28,18 +28,18 @@ npx --yes --package @opentide/explorer@latest opentide-explorer build --exports-
 
 ## Choosing the explorer release
 
-opentide does not pin the package. Without a flag, or with `--latest`, `npx` runs the newest published release (the `latest` dist-tag), so the explorer can ship fixes without an opentide release. `--version` runs a specific one: an exact version (`0.5.0`), a range npm resolves (`0.5`, `^0.5.1`) or another dist-tag (`next`). Pin one in scripts that must build the same site every time. Passing both flags, or a value that is not a version, range or tag, is a usage error: exit `2` before anything is exported.
+opentide does not pin the package. Without a flag, or with `--latest`, `npx` runs the newest published release (the `latest` dist-tag), so the explorer can ship fixes without an opentide release. `--version` runs a specific one: an exact version (`0.5.1`), a range npm resolves (`0.5`, `^0.5.1`) or another dist-tag (`next`). Pin one in scripts that must build the same site every time. Passing both flags, or a value that is not a version, range or tag, is a usage error: exit `2` before anything is exported.
 
 ```bash
 opentide explorer serve --latest
-opentide explorer build --version 0.5.0
+opentide explorer build --version 0.5.1
 opentide explorer build --version ^0.5
 ```
 
 To run a build that is not on the registry, such as a local tarball or a fork, set `OPENTIDE_EXPLORER_PACKAGE` to any spec `npx --package` accepts. It replaces the package spec entirely, so combining it with `--version` or `--latest` is a usage error:
 
 ```bash
-OPENTIDE_EXPLORER_PACKAGE=./opentide-explorer-0.5.0.tgz opentide explorer build
+OPENTIDE_EXPLORER_PACKAGE=./opentide-explorer-0.5.1.tgz opentide explorer build
 ```
 
 ## `explorer build`
@@ -57,7 +57,7 @@ The output directory holds plain HTML, JavaScript and the exported JSON, ready f
 
 ## `explorer serve`
 
-Exports the corpus, builds the site (always without a base path), and serves it on a local HTTP server until you press Ctrl-C. Stopping the server is a successful exit.
+Exports the corpus, builds the site (always without a base path), and serves it on a local HTTP server until you press Ctrl-C. Stopping the server is a successful exit. Ctrl-C, `SIGTERM` or a cancel from [`opentide serve`](./serve.md) stops the package's own processes too, so nothing keeps the port; an interrupted `build` exits `130`.
 
 | Flag | Default | Purpose |
 |------|---------|---------|

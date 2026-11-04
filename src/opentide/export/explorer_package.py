@@ -12,8 +12,10 @@ import re
 EXPLORER_PACKAGE = "@opentide/explorer"
 #: The release ``npx`` resolves when no version is asked for.
 DEFAULT_EXPLORER_VERSION = "latest"
-#: The package's command. It ships two bins, so ``npx <package>`` alone cannot
-#: tell which to run; ``npx --package <spec> opentide-explorer`` names it.
+#: The package's command. ``npx --package <spec> opentide-explorer`` names it
+#: rather than leaving npx to infer it: 0.5.0 shipped two bins, so a bare
+#: ``npx @opentide/explorer@0.5.0`` could not tell which to run, and a fork or
+#: tarball given through ``OPENTIDE_EXPLORER_PACKAGE`` may do the same.
 EXPLORER_BIN = "opentide-explorer"
 #: Oldest Node.js the package supports (its ``engines.node``).
 MIN_NODE_VERSION = (20, 19)

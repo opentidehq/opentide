@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -169,7 +174,7 @@ def no_generate(tide_corpus_repo: Path) -> Any:
 
 
 def _npx(returncode: int = 0) -> MagicMock:
-    return MagicMock(return_value=subprocess.CompletedProcess([], returncode))
+    return MagicMock(return_value=returncode)
 
 
 def test_build_reports_json_and_keeps_npx_output_off_stdout(
@@ -178,7 +183,7 @@ def test_build_reports_json_and_keeps_npx_output_off_stdout(
     npx = _npx()
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
-        patch.object(service.subprocess, "run", npx),
+        patch.object(service, "run_package", npx),
     ):
         result = invoke_cli("explorer", "build", "--base-path", "/corpus")
     payload = assert_json_ok(result)
@@ -209,7 +214,7 @@ def test_build_without_json_lets_npx_print(
     npx = _npx()
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
-        patch.object(service.subprocess, "run", npx),
+        patch.object(service, "run_package", npx),
     ):
         result = invoke_cli("explorer", "build", json_output=False)
     assert result.exit_code == 0, result.stdout + result.stderr
@@ -226,7 +231,7 @@ def test_build_resolves_a_relative_output_against_the_working_directory(
     monkeypatch.chdir(tmp_path)
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
-        patch.object(service.subprocess, "run", _npx()),
+        patch.object(service, "run_package", _npx()),
     ):
         payload = assert_json_ok(invoke_cli("explorer", "build", "--output", "site"))
     assert payload["output"] == str((tmp_path / "site").resolve())
@@ -235,7 +240,7 @@ def test_build_resolves_a_relative_output_against_the_working_directory(
 def test_build_fails_when_npx_fails(invoke_cli, no_generate: MagicMock) -> None:
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
-        patch.object(service.subprocess, "run", _npx(returncode=1)),
+        patch.object(service, "run_package", _npx(returncode=1)),
     ):
         result = invoke_cli("explorer", "build")
     assert result.exit_code == 1
@@ -263,7 +268,7 @@ def test_failed_export_is_the_command_result(invoke_cli) -> None:
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
         patch.object(service, "run_generate", return_value=failed),
-        patch.object(service.subprocess, "run", npx),
+        patch.object(service, "run_package", npx),
     ):
         result = invoke_cli("explorer", "build")
     assert result.exit_code == 1
@@ -275,7 +280,7 @@ def test_serve_passes_port_and_host(invoke_cli, no_generate: MagicMock) -> None:
     npx = _npx()
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
-        patch.object(service.subprocess, "run", npx),
+        patch.object(service, "run_package", npx),
     ):
         payload = assert_json_ok(invoke_cli("explorer", "serve", "--port", "0", "--host", "::1"))
     argv = npx.call_args.args[0]
@@ -297,11 +302,21 @@ def test_serve_stopped_with_ctrl_c_succeeds(
     )
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
-        patch.object(service.subprocess, "run", npx),
+        patch.object(service, "run_package", npx),
     ):
         result = invoke_cli("explorer", "serve")
     assert json.loads(result.stdout)["ok"] is True
     assert result.exit_code == 0
+
+
+def test_an_interrupted_build_is_an_interrupted_command(invoke_cli, no_generate: MagicMock) -> None:
+    with (
+        patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
+        patch.object(service, "run_package", MagicMock(side_effect=KeyboardInterrupt)),
+    ):
+        result = invoke_cli("explorer", "build")
+    assert result.exit_code == 130
+    assert "Explorer built" not in result.stdout
 
 
 def test_serve_rejects_an_out_of_range_port(invoke_cli) -> None:
@@ -328,7 +343,7 @@ def test_build_runs_the_requested_release(
     npx = _npx()
     with (
         patch.object(service, "find_node_toolchain", return_value=TOOLCHAIN),
-        patch.object(service.subprocess, "run", npx),
+        patch.object(service, "run_package", npx),
     ):
         payload = assert_json_ok(invoke_cli("explorer", "build", *flags))
     assert payload["package"] == spec
@@ -359,3 +374,108 @@ def test_a_bad_version_fails_before_node_or_export(invoke_cli, monkeypatch) -> N
     assert payload["failure"]["argument"] == "file:../x"
     toolchain.assert_not_called()
     generate.assert_not_called()
+
+
+# --------------------------------------------------------------------------
+# run_package: a real process tree, as npx starts one (npm → sh → node)
+# --------------------------------------------------------------------------
+
+_TREE = """\
+import pathlib, subprocess, sys, time
+grandchild = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+pathlib.Path(sys.argv[1]).write_text(str(grandchild.pid), encoding="utf-8")
+pathlib.Path(sys.argv[2]).write_text(repr(sys.stdin.read()), encoding="utf-8")
+grandchild.wait()
+"""
+
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX process groups")
+
+
+def _alive(pid: int) -> bool:
+    """Whether *pid* still runs; a zombie nobody has reaped yet does not count."""
+    status = Path(f"/proc/{pid}/status")
+    if status.exists():
+        try:
+            return "\nState:\tZ" not in status.read_text(encoding="utf-8")
+        except OSError:
+            return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _wait_for(path: Path, seconds: float = 30.0) -> str:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if path.exists() and (text := path.read_text(encoding="utf-8")):
+            return text
+        time.sleep(0.05)
+    raise AssertionError(f"{path} was not written")
+
+
+def _tree(tmp_path: Path) -> tuple[list[str], Path, Path]:
+    script = tmp_path / "tree.py"
+    script.write_text(_TREE, encoding="utf-8")
+    pid_file, stdin_file = tmp_path / "grandchild.pid", tmp_path / "stdin.txt"
+    return [sys.executable, str(script), str(pid_file), str(stdin_file)], pid_file, stdin_file
+
+
+def _assert_stops(pid: int) -> None:
+    deadline = time.monotonic() + 15
+    while _alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not _alive(pid), "the package's child outlived the interrupt"
+
+
+def test_run_package_returns_the_exit_status(tmp_path: Path) -> None:
+    argv = [sys.executable, "-c", "import sys; sys.exit(3)"]
+    assert service.run_package(argv, cwd=tmp_path, stdout=None) == 3
+
+
+@posix_only
+def test_a_cancel_in_the_command_thread_stops_the_whole_tree(tmp_path: Path) -> None:
+    """``opentide serve`` cancels by raising KeyboardInterrupt in the command's thread.
+
+    A thread blocked in ``waitpid`` never sees it, and killing npx alone leaves
+    its node child serving on the port.
+    """
+    from opentide.cli.services.serve import _raise_in_thread
+
+    argv, pid_file, stdin_file = _tree(tmp_path)
+    raised: list[BaseException] = []
+
+    def command() -> None:
+        try:
+            service.run_package(argv, cwd=tmp_path, stdout=None)
+        except BaseException as exc:
+            raised.append(exc)
+
+    worker = threading.Thread(target=command)
+    worker.start()
+    grandchild = int(_wait_for(pid_file))
+    # stdin is closed, never the terminal or serve's request stream.
+    assert _wait_for(stdin_file) == "''"
+    assert worker.ident is not None
+    _raise_in_thread(worker.ident, KeyboardInterrupt)
+    worker.join(timeout=30)
+    assert not worker.is_alive()
+    assert len(raised) == 1
+    assert isinstance(raised[0], KeyboardInterrupt)
+    _assert_stops(grandchild)
+
+
+@posix_only
+def test_sigterm_stops_the_whole_tree(tmp_path: Path) -> None:
+    argv, pid_file, _ = _tree(tmp_path)
+    timer = threading.Thread(
+        target=lambda: (_wait_for(pid_file), os.kill(os.getpid(), signal.SIGTERM))
+    )
+    previous = signal.getsignal(signal.SIGTERM)
+    timer.start()
+    with pytest.raises(KeyboardInterrupt):
+        service.run_package(argv, cwd=tmp_path, stdout=None)
+    timer.join()
+    assert signal.getsignal(signal.SIGTERM) is previous
+    _assert_stops(int(pid_file.read_text(encoding="utf-8")))

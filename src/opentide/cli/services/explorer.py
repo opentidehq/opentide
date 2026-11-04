@@ -5,7 +5,12 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import signal
 import subprocess
+import sys
+import threading
+from collections.abc import Generator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -28,7 +33,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger("opentide.cli.services.explorer")
 
 #: Replaces ``@opentide/explorer@<version>``: a mirror, a fork, or a
-#: local tarball (``./opentide-explorer-0.5.0.tgz``).
+#: local tarball (``./opentide-explorer-0.5.1.tgz``).
 PACKAGE_ENV = "OPENTIDE_EXPLORER_PACKAGE"
 _BUNDLE = "explorer.bundle.json"
 _NODE_VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)")
@@ -39,6 +44,12 @@ _INSTALL_NODE = (
 #: How a server stopped with Ctrl-C reports itself: killed by SIGINT, or the
 #: shell convention 128 + SIGINT when npx exits on the child's behalf.
 _INTERRUPTED = frozenset({-2, 130})
+
+#: How often the wait for npx returns to Python, so that a cancel raised in
+#: this thread (``opentide serve`` raises one at the next bytecode) is seen.
+_POLL_SECONDS = 0.2
+#: How long npx and the package get to stop after an interrupt before they are killed.
+_STOP_GRACE_SECONDS = 5.0
 
 ExplorerCommand = Literal["build", "serve"]
 
@@ -117,7 +128,7 @@ def package_spec(version: str | None = None) -> str:
     if version is not None and not is_explorer_version(version):
         raise ValueError(
             f"--version takes a version, range or dist-tag of {EXPLORER_PACKAGE} "
-            f"(0.5.0, ^0.5, latest), not {version!r}"
+            f"(0.5.1, ^0.5, latest), not {version!r}"
         )
     return explorer_package_spec(version)
 
@@ -150,6 +161,98 @@ def explorer_argv(
     if host:
         argv += ["--host", host]
     return argv
+
+
+@contextmanager
+def _termination_interrupts() -> Generator[None]:
+    """SIGTERM and SIGHUP raise ``KeyboardInterrupt`` while npx runs, so it is stopped too.
+
+    Only the main thread can install handlers; elsewhere (``opentide serve``)
+    a cancel already arrives as ``KeyboardInterrupt``.
+    """
+    names = ("SIGTERM", "SIGHUP")
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def interrupt(signum: int, frame: object) -> None:
+        raise KeyboardInterrupt
+
+    previous = {
+        number: signal.signal(number, interrupt)
+        for number in (getattr(signal, name) for name in names if hasattr(signal, name))
+    }
+    try:
+        yield
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
+def _signal_group(process: subprocess.Popen[bytes], *, kill: bool) -> None:
+    """Interrupt, or kill, every process npx started: npm, the shell, node."""
+    if sys.platform == "win32":
+        if not kill:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            # taskkill /T ends the whole tree; terminate() would end npx alone.
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(process.pid)],
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+        return
+    with suppress(ProcessLookupError, PermissionError):
+        os.killpg(process.pid, signal.SIGKILL if kill else signal.SIGINT)
+
+
+def _stop(process: subprocess.Popen[bytes]) -> None:
+    """Interrupt the package, then kill whatever is left once the grace period is up."""
+    try:
+        _signal_group(process, kill=False)
+        process.wait(timeout=_STOP_GRACE_SECONDS)
+    except (subprocess.TimeoutExpired, KeyboardInterrupt):
+        pass
+    finally:
+        # npx can exit before its child does: sweep the group either way.
+        _signal_group(process, kill=True)
+        with suppress(subprocess.TimeoutExpired):
+            process.wait(timeout=_STOP_GRACE_SECONDS)
+
+
+def run_package(argv: list[str], *, cwd: Path, stdout: int | None) -> int:
+    """Run *argv* (npx) to the end and return its exit status.
+
+    npx runs in a process group of its own, which an interrupt (Ctrl-C, SIGTERM,
+    or a cancel from ``opentide serve``) stops as a whole before
+    ``KeyboardInterrupt`` is raised again. Killing npx alone would leave the
+    package's node process behind, still serving on its port. stdin is closed:
+    nothing should be read from the terminal, or from ``opentide serve``'s
+    request stream.
+    """
+    with _termination_interrupts():
+        if sys.platform == "win32":
+            process = subprocess.Popen(
+                argv,
+                cwd=cwd,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+        else:
+            process = subprocess.Popen(
+                argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=stdout, start_new_session=True
+            )
+        try:
+            while True:
+                try:
+                    return process.wait(timeout=_POLL_SECONDS)
+                except subprocess.TimeoutExpired:
+                    continue
+        except KeyboardInterrupt:
+            _stop(process)
+            raise
 
 
 def _failure(message: str, **data: object) -> dict[str, object]:
@@ -218,12 +321,13 @@ def run_explorer(
     try:
         # With --json, stdout carries only the result document: the package's
         # progress goes to stderr instead.
-        done = subprocess.run(
-            argv, cwd=cli.repo, stdout=2 if cli.json_output else None, check=False
-        )
-        returncode = done.returncode
+        returncode = run_package(argv, cwd=cli.repo, stdout=2 if cli.json_output else None)
     except KeyboardInterrupt:
-        returncode = -2
+        # The package has been stopped. Stopping a server is how it ends; an
+        # interrupted build is an interrupted command (exit 130).
+        if command != "serve":
+            raise
+        return {"message": "Explorer server stopped", **data}
     except OSError as exc:
         message = f"Could not run {toolchain.npx}: {exc}"
         return _failure(message, error=message, **data)
