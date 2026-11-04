@@ -4,7 +4,8 @@ name: Release
 # releases the version in Cargo.toml and creates its tag with the GitHub
 # Release. "Run workflow" with publish_only resumes crates.io publishing for a
 # version whose GitHub Release already exists: it builds and releases nothing,
-# and publishes only the crates crates.io does not have yet.
+# checks the published assets as a release does, and publishes only the crates
+# crates.io does not have yet.
 on:
   push:
     tags:
@@ -16,8 +17,10 @@ on:
         type: boolean
         default: false
 
+# Read-only unless a job asks for more: only release writes the repository,
+# and only attest, crates and npm hold an OIDC token.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # The tag, the crate pins, and CHANGELOG.md agree, and every crate builds from
@@ -188,17 +191,15 @@ jobs:
           name: highlights-zip
           path: highlights-v*.zip
 
-  release:
+  # Every asset, with the licences and SHA256SUMS. No OIDC token here: crates.io
+  # and npm trust release.yml as a whole, so a token minted in any of its jobs
+  # can publish, and cargo-about builds third-party crates (their build.rs run).
+  assets:
     needs: [verify, native, wasm, highlights]
     if: ${{ !inputs.publish_only }}
     runs-on: ubuntu-latest
-    # id-token and attestations: write sign each asset's build provenance (#196).
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    env:
-      TAG: ${{ needs.verify.outputs.tag }}
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -223,35 +224,94 @@ jobs:
           for f in licenses/wasi-libc/*; do
             printf '==> %s <==\n\n' "$f"; cat "$f"; printf '\n'
           done > dist/WASI-LIBC-LICENSES.txt
+      - name: every asset is there
+        run: |
+          set -euo pipefail
+          test -n "$(find dist -name 'highlights-*.zip' -print -quit)"
+          test -s dist/THIRD-PARTY-LICENSES.html && test -s dist/NOTICE && test -s dist/WASI-LIBC-LICENSES.txt
       # Last, once dist holds every asset (#196): a consumer runs
       # `sha256sum -c SHA256SUMS` on what it downloads.
       - name: SHA256SUMS
         run: python3 scripts/release.py sums dist
-      # Sigstore-signed SLSA provenance for every asset, SHA256SUMS included, so
-      # `gh attestation verify <asset> --repo opentidehq/language-server` works on
-      # a downloaded file.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+
+  # Sigstore-signed SLSA provenance for every asset, SHA256SUMS included (#196).
+  # The one job besides crates and npm that holds an OIDC token: it downloads
+  # the assets and runs the attest action, nothing else.
+  attest:
+    needs: assets
+    if: ${{ !inputs.publish_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
       - name: attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
+
+  release:
+    needs: [verify, attest]
+    if: ${{ !inputs.publish_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
       - name: attach GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test -n "$(find dist -name 'highlights-*.zip' -print -quit)"
-          test -s dist/THIRD-PARTY-LICENSES.html && test -s dist/NOTICE && test -s dist/WASI-LIBC-LICENSES.txt
           python3 scripts/release.py notes "${TAG}" > notes.md
           # From "Run workflow", the tag does not exist yet: the release creates it
           # on the commit this run built.
-          gh release create "${TAG}" dist/* \
+          if ! gh release create "${TAG}" dist/* \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
             --title "opentide-lsp ${TAG}" \
-            --notes-file notes.md \
-            || gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
-      # What a consumer downloads checks out: the sums, and the highlights zip's
-      # attestation (#196).
+            --notes-file notes.md; then
+            gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+            # A re-run, or a release created by hand: an asset this run did not
+            # build has no line in SHA256SUMS and no attestation, so it goes.
+            gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' \
+              | while read -r name; do
+                  if [ ! -e "dist/${name}" ]; then
+                    echo "removing ${name}, which this run did not build"
+                    gh release delete-asset "${TAG}" "${name}" --repo "${GITHUB_REPOSITORY}" --yes
+                  fi
+                done
+          fi
+
+  # What a consumer downloads checks out: the sums, and each asset's
+  # attestation (#196). It runs after the release, and on its own for
+  # publish_only, which resumes a release whose check may have failed: crates
+  # and npm publish only once it passed.
+  verify-assets:
+    needs: [verify, release]
+    if: ${{ always() && needs.verify.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
       - name: verify the published assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -259,12 +319,24 @@ jobs:
           set -euo pipefail
           mkdir -p published
           gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir published
+          # sha256sum checks the names SHA256SUMS lists; verify-sums also fails on
+          # an asset it leaves out.
           (cd published && sha256sum --check --strict SHA256SUMS)
-          gh attestation verify "published/highlights-${TAG}.zip" --repo "${GITHUB_REPOSITORY}"
+          python3 scripts/release.py verify-sums published
+          # --repo alone accepts an attestation any workflow of the repository
+          # signed, on any branch: each asset's must come from release.yml run
+          # from main or from this tag.
+          repo_re="${GITHUB_REPOSITORY//./\\.}"
+          tag_re="${TAG//./\\.}"
+          identity="^https://github\\.com/${repo_re}/\\.github/workflows/release\\.yml@refs/(heads/main|tags/${tag_re})\$"
+          for asset in published/*; do
+            gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --cert-identity-regex "${identity}"
+          done
 
-  # crates.io is permanent: publish only once the GitHub Release exists. The
-  # crates go up in dependency order, each pinned to this version; a crate
-  # already published is skipped, so a re-run resumes. crates.io rate-limits
+  # crates.io is permanent: publish only once the GitHub Release exists and its
+  # assets verified (verify-assets). The crates go up in dependency order, each
+  # pinned to this version; a crate already published is skipped, so a re-run
+  # resumes. crates.io rate-limits
   # new crates (one every ten minutes after the first few), which only the
   # first release meets.
   #
@@ -274,9 +346,10 @@ jobs:
   # the workflow's OIDC identity instead of the token. The token then only
   # publishes a crate that does not exist yet, which crates.io requires.
   crates:
-    needs: [verify, release]
-    # After the release, or on its own for publish_only (the release job is skipped then).
-    if: ${{ always() && needs.verify.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
+    needs: [verify, release, verify-assets]
+    # After the release, or on its own for publish_only (the release job is
+    # skipped then); either way only once the published assets verified.
+    if: ${{ always() && needs.verify.result == 'success' && needs.verify-assets.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -326,7 +399,7 @@ jobs:
   # trusted publisher; until then it is skipped. A version already on npm is
   # skipped, so a re-run resumes.
   npm:
-    needs: [verify, release]
+    needs: [verify, release, verify-assets]
     if: vars.NPM_PUBLISH == 'true'
     runs-on: ubuntu-latest
     permissions:

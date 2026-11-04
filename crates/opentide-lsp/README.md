@@ -34,8 +34,11 @@ Every asset of a GitHub Release is listed in its `SHA256SUMS` (`scripts/release.
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS        # only the assets you downloaded
-gh attestation verify highlights-vX.Y.Z.zip --repo opentidehq/language-server
+gh attestation verify highlights-vX.Y.Z.zip --repo opentidehq/language-server \
+  --cert-identity-regex '^https://github\.com/opentidehq/language-server/\.github/workflows/release\.yml@refs/(heads/main|tags/vX\.Y\.Z)$'
 ```
+
+`--repo` alone accepts an attestation that any workflow of the repository signed, from any branch; `--cert-identity-regex` requires the Release workflow, run from `main` or from the version's tag.
 
 The workflow runs both on the published assets before it publishes the crates.
 

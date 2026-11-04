@@ -9,6 +9,7 @@
     release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
     release.py sums DIR             write DIR/SHA256SUMS for every file in DIR
+    release.py verify-sums DIR      DIR/SHA256SUMS lists exactly DIR's files, each digest right
 
 Crates embed catalogs, grammars, and highlight queries from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
@@ -30,6 +31,10 @@ left alone; without a token it does nothing.
 (the GitHub Release's assets), so `sha256sum -c SHA256SUMS` checks a download. It
 fails on a subdirectory or a name `sha256sum -c` cannot read back, rather than
 leave an asset out.
+
+`verify-sums` checks a downloaded release the other way round: SHA256SUMS lists
+every file in DIR and no other, and each digest matches. `sha256sum -c` checks
+only the names the file lists, so an asset with no line passes it.
 """
 
 from __future__ import annotations
@@ -344,6 +349,45 @@ def sha256sums(directory: Path) -> str:
     return "".join(lines)
 
 
+def verify_sums(directory: Path) -> list[str]:
+    """What is wrong with `directory`'s SHA256SUMS as the record of every file
+    beside it: a line `sha256sum` would not write, a file it does not list, a
+    name it lists that is not there, or a digest that does not match."""
+    sums = directory / SUMS
+    if not sums.is_file():
+        return [f"{sums} is missing"]
+    problems = []
+    listed: dict[str, str] = {}
+    for number, line in enumerate(sums.read_text(encoding="utf-8").splitlines(), 1):
+        match = re.fullmatch(r"([0-9a-f]{64}) [ *](\S+)", line)
+        if not match:
+            problems.append(f"{SUMS}:{number}: not a sha256sum line: {line!r}")
+            continue
+        digest, name = match.groups()
+        if name in listed:
+            problems.append(f"{SUMS}:{number}: {name} is listed twice")
+        listed[name] = digest
+    present = {entry.name for entry in directory.iterdir() if entry.name != SUMS}
+    for name in sorted(present - listed.keys()):
+        problems.append(f"{name} has no line in {SUMS}")
+    for name in sorted(listed.keys() - present):
+        problems.append(f"{name} is in {SUMS} but not an asset")
+    for name in sorted(present & listed.keys()):
+        entry = directory / name
+        if not entry.is_file():
+            problems.append(f"{name} is not a file")
+            continue
+        digest = hashlib.sha256()
+        with entry.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != listed[name]:
+            problems.append(f"{name}: the digest does not match {SUMS}")
+    if not listed and not problems:
+        problems.append(f"{SUMS} lists no asset")
+    return problems
+
+
 def write_sums(directory: Path) -> Path:
     target = directory / SUMS
     target.write_text(sha256sums(directory), encoding="utf-8", newline="\n")
@@ -382,6 +426,13 @@ def main(argv: list[str]) -> None:
             except (OSError, ValueError) as error:
                 sys.exit(f"sums: {error}")
             print(f"wrote {target}")
+        case ["verify-sums", directory]:
+            problems = verify_sums(Path(directory))
+            for problem in problems:
+                print(f"error: {problem}", file=sys.stderr)
+            if problems:
+                sys.exit(1)
+            print(f"{Path(directory) / SUMS} covers every asset")
         case _:
             sys.exit(__doc__)
 
