@@ -37,10 +37,19 @@ Run **Release** on `main` (Actions → Release → Run workflow, or `workflow_di
 3. `assets`: the licence files (`cargo-about`) and `SHA256SUMS` for every asset (`release.py sums dist`), with no OIDC token.
 4. `attest`: each asset's build provenance (`actions/attest-build-provenance`). It downloads the assets and runs the action, nothing else: crates.io and npm trust `release.yml` as a whole, so an OIDC token minted in any of its jobs can publish, and only `attest`, `crates` and `npm` may mint one (`scripts/test_release.py` checks).
 5. `release`: opens the GitHub Release with the changelog section, creating the tag.
-6. `verify-assets`: downloads the published assets and checks `sha256sum -c`, `release.py verify-sums` (SHA256SUMS lists every asset and no other) and `gh attestation verify` on every asset, with `--cert-identity-regex` tying the signature to `release.yml` run from `main` or from the tag (`--repo` alone accepts any workflow of the repository, on any branch). On a re-run, `release` removes an asset this run did not build, which would have no line in SHA256SUMS. It runs for `publish_only` too, so a release whose check failed is not resumed past it.
+6. `verify-assets`: downloads the published assets and checks `sha256sum -c`, `release.py verify-sums` (SHA256SUMS lists every asset and no other) and `gh attestation verify` on every asset, with `--cert-identity-regex` tying the signature to `release.yml` run from `main` or from the tag (`--repo` alone accepts any workflow of the repository, on any branch). It runs for `publish_only` too, so a release whose check failed is not resumed past it.
 7. `crates` and `npm`: only once `verify-assets` passed. `crates` publishes in dependency order; a re-run resumes past crates already published.
 
 Watch every job to the end, `crates` included. A green `release` with a red `crates` is a release opentide cannot use.
+
+### Re-running
+
+A GitHub Release's assets are never uploaded twice. The zips do not rebuild byte for byte, and consumers pin the published digests (`SHA256SUMS`, the extension's pinned highlights zip), so `release.py unpublished vX.Y.Z` fails once the release has any asset: in `verify` for a tag push, and in `release` before it uploads to a release that already exists (one created by hand, with notes only, passes).
+
+- `crates` or `npm` failed: **Re-run failed jobs**; `crates` skips what crates.io already has. From a later commit, run the workflow on `main` with `publish_only`: it builds nothing, checks the published assets (`verify-assets`) and publishes what is missing, as long as the crate sources are still the tag's.
+- `verify-assets` failed: fix the cause (it is the published assets that failed), then `publish_only`.
+- `release` failed partway: `gh release create` uploads to a draft and publishes it at the end. Delete the draft (nobody could download it) and re-run the workflow.
+- `publish_only` fails for a version released before #196: those releases have no `SHA256SUMS` and no attestations, so `verify-assets` cannot pass. Cut a patch release instead.
 
 crates.io uses trusted publishing: later releases log in with the workflow's OIDC identity; `CARGO_REGISTRY_TOKEN` is needed only for a crate's first version.
 

@@ -44,6 +44,9 @@ jobs:
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
             tag="${GITHUB_REF_NAME}"
+            # A re-run of the tag push would rebuild assets that do not
+            # reproduce byte for byte and upload them over the published ones.
+            python3 scripts/release.py unpublished "${tag}"
           else
             if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
               echo "::error::Run the release from main, not ${GITHUB_REF_NAME}"
@@ -286,16 +289,12 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "opentide-lsp ${TAG}" \
             --notes-file notes.md; then
-            gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
-            # A re-run, or a release created by hand: an asset this run did not
-            # build has no line in SHA256SUMS and no attestation, so it goes.
-            gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' \
-              | while read -r name; do
-                  if [ ! -e "dist/${name}" ]; then
-                    echo "removing ${name}, which this run did not build"
-                    gh release delete-asset "${TAG}" "${name}" --repo "${GITHUB_REPOSITORY}" --yes
-                  fi
-                done
+            # The release exists: created by hand, with notes only. Never upload
+            # over assets it already has (a re-run of this job): consumers
+            # pinned their digests, and this run's differ. Without --clobber, an
+            # asset that appeared meanwhile fails the upload too.
+            python3 scripts/release.py unpublished "${TAG}"
+            gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}"
           fi
 
   # What a consumer downloads checks out: the sums, and each asset's
