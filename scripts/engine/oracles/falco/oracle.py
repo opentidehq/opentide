@@ -13,7 +13,7 @@ macros and lists it defines, or a tuning (`append_to_rule`). The case becomes
   `opentide-lsp analyze` checks.
 
 Falco runs once per case (a load failure carries over to later files in one
-run), all in one container. A case agrees when Falco loads it exactly when the
+run), all in one container, as many cases at once as there are CPUs. A case agrees when Falco loads it exactly when the
 engine reports no `falco_*` or `sysdig_*` error, and when each mapped Falco warning
 (`LOAD_NO_EVTTYPE`, ...) is reported by the engine and the reverse. Engine
 warnings Falco cannot know (a field of an unknown plugin, newer syntax, a
@@ -32,7 +32,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -133,18 +135,26 @@ def run_falco(image: str, rules: pathlib.Path, scratch: pathlib.Path, ids: list[
     for name in DEFAULT_RULES_FILES:
         (scratch / name).write_bytes((rules / "rules" / name).read_bytes())
         defaults += f" -V /w/{name}"
+    # One Falco process per case, as many at once as there are CPUs: each loads
+    # the default rules first, which is most of its time. Each case's output goes
+    # to its own file, printed in case order once all are done. The image (Wolfi)
+    # has xargs but no nproc, so the count comes from here.
     script = scratch / "run.sh"
     script.write_text(
+        "mkdir -p /tmp/out\n"
+        f'xargs -n 1 -P "$JOBS" sh -c \'falco -o json_output=true{defaults} -V "/w/falco/$1.yaml" '
+        "> \"/tmp/out/$1\" 2>/dev/null; exit 0' _ < /w/ids.txt\n"
         "for id in $(cat /w/ids.txt); do\n"
         '  printf "@@%s\\n" "$id"\n'
-        f"  falco -o json_output=true{defaults} -V /w/falco/$id.yaml 2>/dev/null\n"
+        '  cat "/tmp/out/$id"\n'
         '  printf "\\n"\n'
         "done\n",
         encoding="utf-8",
     )
     (scratch / "ids.txt").write_text("\n".join(ids) + "\n", encoding="utf-8")
+    jobs = str(os.cpu_count() or 1)
     out = subprocess.run(
-        ["docker", "run", "--rm", "-v", f"{scratch}:/w:ro", "--entrypoint", "sh", image, "/w/run.sh"],
+        ["docker", "run", "--rm", "-e", f"JOBS={jobs}", "-v", f"{scratch}:/w:ro", "--entrypoint", "sh", image, "/w/run.sh"],
         check=True,
         capture_output=True,
         text=True,
@@ -218,11 +228,14 @@ def main() -> int:
             tide = yaml.safe_dump(tide_rule(case, index), sort_keys=False, width=10_000)
             (rules_dir / f"{fid}.yaml").write_text(tide, encoding="utf-8")
         falco = run_falco(args.docker, args.rules, scratch, ids)
+        # One `analyze` process per case, independent of each other: run them at once.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+            engine = dict(zip(ids, pool.map(lambda fid: run_engine(binary, rules_dir / f"{fid}.yaml"), ids)))
         report = []
         disagreements = 0
         for case in cases:
             theirs = falco[case["_fid"]]
-            ours = run_engine(binary, rules_dir / f"{case['_fid']}.yaml")
+            ours = engine[case["_fid"]]
             our_errors = sorted({d["code"] for d in ours if d["severity"] == "error"})
             our_warnings = sorted({d["code"] for d in ours if d["severity"] == "warning"})
             falco_warnings = sorted({w["code"] for w in theirs["warnings"]})
