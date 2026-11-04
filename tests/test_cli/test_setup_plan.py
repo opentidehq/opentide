@@ -368,6 +368,36 @@ def test_the_plan_does_not_copy_build_output(tmp_path: Path) -> None:
     assert copied == {"objects", "objects/x.bin"}
 
 
+@pytest.mark.parametrize("folder", ["build", "target", "dist"])
+def test_a_target_below_a_folder_named_like_build_output_is_planned(
+    tmp_path: Path, folder: str
+) -> None:
+    """The copy left out every folder named like build output, the target's own
+    ancestors included: the plan listed nothing, and the run then wrote."""
+    repo = tmp_path / "mono"
+    target = repo / folder / "detections"
+    target.mkdir(parents=True)
+    (repo / folder / "x.bin").write_bytes(b"x")
+    (target / "build").mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    before = _tree(repo)
+    result, plan = _invoke("--plan", "--env", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert ".env.example" in _planned(plan), plan["message"]
+    result, _ = _invoke("--yes", "--env", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    written = _changed(before, _tree(repo))
+    assert _relative(written, repo, target) == _planned(plan)
+
+    from opentide.cli.services.setup.plan import Sandbox
+
+    box = Sandbox(target, tmp_path / "scratch")
+    assert box.shadow_target.is_dir()
+    assert (box.shadow_top / folder / "x.bin").is_file()
+    # Build output below the target is still left out.
+    assert not (box.shadow_target / "build").exists()
+
+
 def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
     import signal
 

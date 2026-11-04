@@ -361,26 +361,45 @@ class _Copier:
                 continue
 
 
-def _copy_tree(top: Path, shadow_top: Path) -> None:
-    """Copy the work tree *top* to *shadow_top*, less ``.git`` and the folders no step reads."""
+def _ancestry(top: Path, target: Path) -> frozenset[Path]:
+    """*target* and its folders up to *top*: never left out, whatever their name."""
+    if not target.is_relative_to(top):
+        return frozenset()
+    return frozenset({target, *(p for p in target.parents if p.is_relative_to(top))})
+
+
+def _copy_tree(top: Path, shadow_top: Path, target: Path | None = None) -> None:
+    """Copy the work tree *top* to *shadow_top*, less ``.git`` and the folders no step reads.
+
+    A folder on the way to *target* is copied even when it is named like build
+    output (a detection repository in ``build/detections`` of a monorepo).
+    """
     _Copier(top, [(top, shadow_top)]).copy_dir(
-        top, shadow_top, home=top, skipped=SKIPPED_DIRS | {".git"}
+        top,
+        shadow_top,
+        home=top,
+        skipped=SKIPPED_DIRS | {".git"},
+        keep=_ancestry(top, target if target is not None else top),
     )
 
 
-def stamps(root: Path, *git_dirs: Path) -> dict[str, Stamp]:
+def stamps(root: Path, *git_dirs: Path, target: Path | None = None) -> dict[str, Stamp]:
     """Every file under *root* and *git_dirs*, by its absolute path: size and mtime.
 
     ``objects`` of ``root/.git`` and of each git directory is left out: it is
-    the real store's alternate, never written.
+    the real store's alternate, never written. So are the folders the copy
+    leaves out, except those on the way to *target*.
     """
     found: dict[str, Stamp] = {}
     skipped = {root / ".git" / "objects", *(folder / "objects" for folder in git_dirs)}
+    keep = _ancestry(root, target if target is not None else root)
     for top in (root, *git_dirs):
         for directory, dirs, files in os.walk(top):
             here = Path(directory)
             dirs[:] = [
-                name for name in dirs if name not in SKIPPED_DIRS and here / name not in skipped
+                name
+                for name in dirs
+                if (name not in SKIPPED_DIRS or here / name in keep) and here / name not in skipped
             ]
             for name in files:
                 path = here / name
@@ -424,7 +443,7 @@ class Sandbox:
         #: directory kept beside it (:func:`_copy_git`).
         self._roots: list[tuple[Path, Path]] = [(self.shadow_top, top)]
         if top.is_dir():
-            _copy_tree(top, self.shadow_top)
+            _copy_tree(top, self.shadow_top, self.real_target)
             self._roots.extend(_copy_git(top, self.shadow_top, root))
         else:
             self.shadow_top.mkdir(parents=True)
@@ -432,7 +451,11 @@ class Sandbox:
         self._written: set[str] = set()
 
     def _stamps(self) -> dict[str, Stamp]:
-        return stamps(self.shadow_top, *(shadow for shadow, _ in self._roots[1:]))
+        return stamps(
+            self.shadow_top,
+            *(shadow for shadow, _ in self._roots[1:]),
+            target=self.shadow_target,
+        )
 
     def real_path(self, shadow: str) -> Path:
         """The repository's path for *shadow*, a path in the copy (or relative to its top)."""
