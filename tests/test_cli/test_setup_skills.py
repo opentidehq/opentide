@@ -571,3 +571,51 @@ def test_skills_linked_to_agents_skills_stay_in_place(tmp_path: Path, plan: bool
     skill = tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md"
     assert skill.is_file() is not plan
     assert (tmp_path / ".claude" / "skills").is_symlink()
+
+
+@pytest.mark.parametrize("harness", [SkillTarget.cursor, SkillTarget.claude_code])
+def test_a_linked_file_in_a_skill_folder_is_replaced_not_written_through(
+    tmp_path: Path, harness: SkillTarget
+) -> None:
+    """The copy followed a link at a shipped path: it overwrote the file outside the
+    repository it pointed at, or failed (``shutil.Error``, same file) when it pointed at
+    ``.agents/skills``' own copy."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    options = SkillsSetupOptions(path=repo, targets=[harness], name="SOC", yes=True)
+    run_skills_setup(options)
+    folder = ".cursor" if harness is SkillTarget.cursor else ".claude"
+    dest = repo / folder / "skills" / "opentide-detection-rule"
+    outside = tmp_path / "mine.md"
+    outside.write_text("MY OWN VERSION\n", encoding="utf-8")
+    (dest / "SKILL.md").unlink()
+    (dest / "SKILL.md").symlink_to(outside)
+    result = run_skills_setup(options)
+    assert outside.read_text(encoding="utf-8") == "MY OWN VERSION\n"
+    assert not (dest / "SKILL.md").is_symlink()
+    shipped = repo / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md"
+    assert (dest / "SKILL.md").read_bytes() == shipped.read_bytes()
+    assert any("SKILL.md" in str(w) and "link" in str(w) for w in result.get("warnings") or [])
+
+    (dest / "SKILL.md").unlink()
+    (dest / "SKILL.md").symlink_to(
+        Path("../../..") / ".agents/skills/opentide-detection-rule/SKILL.md"
+    )
+    run_skills_setup(options)  # was shutil.Error: the same file
+    assert not (dest / "SKILL.md").is_symlink()
+    assert (dest / "SKILL.md").read_bytes() == shipped.read_bytes()
+
+
+def test_a_skill_folder_linked_out_of_the_repository_is_left_as_it_is(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".cursor" / "skills").mkdir(parents=True)
+    shared = tmp_path / "shared-skill"
+    shared.mkdir()
+    (shared / "SKILL.md").write_text("shared\n", encoding="utf-8")
+    (repo / ".cursor" / "skills" / "opentide-detection-rule").symlink_to(shared)
+    options = SkillsSetupOptions(path=repo, targets=[SkillTarget.cursor], yes=True)
+    result = run_skills_setup(options)
+    assert (shared / "SKILL.md").read_text(encoding="utf-8") == "shared\n"
+    assert sorted(path.name for path in shared.iterdir()) == ["SKILL.md"]
+    warnings = [str(w) for w in result.get("warnings") or []]
+    assert any(".cursor/skills/opentide-detection-rule" in w and "outside" in w for w in warnings)

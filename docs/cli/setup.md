@@ -323,6 +323,8 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | `--installed` | `discover`: keep only the skills installed in `.agents/skills/` |
 | `--refresh` | `discover` / `show`: fetch `manifest.json` again rather than reuse the in-process copy from the last 30 seconds; each CLI run fetches it once anyway |
 
+`--cursor` and `--claude-code` never write through a link: a link in a skill's folder at a path the skill ships is replaced by the skill's file, and a skill folder that links out of the repository is left as it is. Each is reported in `warnings`.
+
 Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 
 #### The Agent Plugin
