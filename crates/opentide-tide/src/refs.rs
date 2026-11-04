@@ -138,7 +138,10 @@ fn field_path(steps: &[Step]) -> String {
 
 /// The UUID's span: its first occurrence not already taken after the key
 /// that holds it ([`key_span_in`], the list item each index names) or, in a
-/// flow mapping, after its nearest block ancestor, else anywhere in the text. A UUID quoted in prose before its field is not the
+/// flow mapping, after its nearest block ancestor, else anywhere in the text.
+/// An occurrence that stands as a scalar of its own ([`stands_alone`]) wins
+/// over one in a comment or in another scalar's prose: a UUID quoted in
+/// prose before its field, or in a comment between list items, is not the
 /// field's.
 fn locate(
     source: &str,
@@ -165,15 +168,68 @@ fn locate(
         .rev()
         .find_map(|n| key_span_in(source, &keys[..n]).or_else(|| key_span(source, &names[..n])))
         .map_or(0, |span| span.end);
-    let free = |from: usize, used: &BTreeSet<usize>| {
+    let free = |from: usize, alone: bool, used: &BTreeSet<usize>| {
         source[from..]
             .match_indices(uuid)
             .map(|(i, _)| from + i)
-            .find(|start| !used.contains(start))
+            .find(|start| {
+                !used.contains(start) && (!alone || stands_alone(source, *start, uuid.len()))
+            })
     };
-    let start = free(anchor, used).or_else(|| free(0, used))?;
+    let start = free(anchor, true, used)
+        .or_else(|| free(0, true, used))
+        .or_else(|| free(anchor, false, used))
+        .or_else(|| free(0, false, used))?;
     used.insert(start);
     Some(ByteSpan::new(start, start + uuid.len()))
+}
+
+/// Whether `source[start..start + len]` is a whole scalar, read on its line
+/// alone: not in a comment, and either the whole of a quoted scalar or a
+/// plain one that starts after a line's indent, `:`, `-`, `[`, `{` or `,`
+/// and ends at the line's end, `,`, `]`, `}` or a comment. A block scalar's
+/// line is read like any other, so a line that is nothing but the UUID
+/// passes.
+fn stands_alone(source: &str, start: usize, len: usize) -> bool {
+    let line_start = source[..start].rfind('\n').map_or(0, |i| i + 1);
+    let line_end = source[start..]
+        .find('\n')
+        .map_or(source.len(), |i| start + i);
+    let before = &source[line_start..start];
+    let after = source[start + len..line_end].trim_end_matches('\r');
+    // Where a quoted scalar opened, if one is open at `start`.
+    let mut quote: Option<(char, usize)> = None;
+    let mut chars = before.char_indices().peekable();
+    let mut previous = ' ';
+    while let Some((i, c)) = chars.next() {
+        match quote {
+            Some(('\'', _)) if c == '\'' => {
+                if chars.peek().is_some_and(|(_, n)| *n == '\'') {
+                    chars.next();
+                } else {
+                    quote = None;
+                }
+            }
+            Some(('"', _)) if c == '\\' => {
+                chars.next();
+            }
+            Some(('"', _)) if c == '"' => quote = None,
+            Some(_) => {}
+            None if c == '#' && previous.is_whitespace() => return false,
+            None if c == '\'' || c == '"' => quote = Some((c, i)),
+            None => {}
+        }
+        previous = c;
+    }
+    if let Some((mark, opened)) = quote {
+        return opened + mark.len_utf8() == before.len() && after.starts_with(mark);
+    }
+    let lead = before.trim_end();
+    let tail = after.trim_start();
+    (lead.is_empty() || lead.ends_with([':', '-', '[', '{', ',']))
+        && (tail.is_empty()
+            || tail.starts_with([',', ']', '}'])
+            || (tail.starts_with('#') && tail.len() < after.len()))
 }
 
 #[cfg(test)]
@@ -240,6 +296,66 @@ mod tests {
         assert_eq!(found[0].field_path, "objective.threats.0");
         assert_eq!(found[0].range.start.line, 1, "{found:?}");
         assert_eq!(text_at(&source, found[0].range), MODEL);
+    }
+
+    /// Each ref's line and the text its range covers.
+    fn placed(source: &str) -> Vec<(String, u32, String)> {
+        refs(source)
+            .into_iter()
+            .map(|r| {
+                let text = text_at(source, r.range).to_string();
+                (r.field_path, r.range.start.line, text)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_uuid_in_a_comment_or_in_another_scalar_is_not_the_refs_range() {
+        let a = "00000000-0000-4000-8001-00000000000a";
+        let b = "00000000-0000-4000-8001-00000000000b";
+        let owned = |v: &[(&str, u32, &str)]| -> Vec<(String, u32, String)> {
+            v.iter()
+                .map(|(p, l, t)| (p.to_string(), *l, t.to_string()))
+                .collect()
+        };
+        // A comment after an earlier item names the next one.
+        let source =
+            format!("objective:\n  threats:\n    - {a}  # chained before {b}\n    - {b}\n");
+        assert_eq!(
+            placed(&source),
+            owned(&[("objective.threats.0", 2, a), ("objective.threats.1", 3, b)])
+        );
+        // A comment line above the item.
+        let source = format!("objective:\n  threats:\n    # supersedes {a}\n    - {a}\n");
+        assert_eq!(placed(&source), owned(&[("objective.threats.0", 3, a)]));
+        // A comment after the key, the value on the next line.
+        let source = format!(
+            "objective:\n  signals:\n    - name: s\n      parent: # refined from {a}\n        {a}\n"
+        );
+        assert_eq!(
+            placed(&source),
+            owned(&[("objective.signals.0.parent", 4, a)])
+        );
+        // Prose in a flow mapping, quoted or plain, before the field.
+        for prose in [format!("\"replaces {a}\""), format!("replaces {a}")] {
+            let source = format!("objective: {{ description: {prose}, threats: [{a}] }}\n");
+            let found = refs(&source);
+            assert_eq!(found.len(), 1, "{found:?}");
+            let line = source.lines().next().unwrap();
+            assert_eq!(
+                found[0].range.start.character as usize,
+                line.rfind(a).unwrap(),
+                "{source}"
+            );
+        }
+        // A quoted value is its own.
+        let source = format!(
+            "description: '{a}'\ndetection_model: \"{a}\"\nobjective:\n  threats: ['{b}']\n"
+        );
+        assert_eq!(
+            placed(&source),
+            owned(&[("detection_model", 1, a), ("objective.threats.0", 3, b)])
+        );
     }
 
     #[test]
