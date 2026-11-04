@@ -64,7 +64,9 @@ def emit(event: Mapping[str, Any]) -> None:
         return
     if not requested():
         return
-    line = json.dumps(dict(event), ensure_ascii=False, separators=(",", ":"), default=str)
+    # ASCII: a stderr that cannot encode a character (Windows' cp1252) writes it as a
+    # Python escape, ``\U0001f680``, which is not JSON; ``\ud83d\ude80`` is.
+    line = json.dumps(dict(event), ensure_ascii=True, separators=(",", ":"), default=str)
     stream = sys.stderr
     if stream is None:
         return

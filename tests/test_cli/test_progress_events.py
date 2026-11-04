@@ -100,6 +100,26 @@ def test_a_closed_stderr_is_not_a_crash(monkeypatch: pytest.MonkeyPatch) -> None
     progress_events.progress("schemas", 1, 1)
 
 
+def test_an_event_stays_json_on_a_stderr_that_cannot_encode_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows' cp1252 stderr writes an unencodable character as a Python escape
+    (backslashreplace), which is not JSON: the line must be ASCII."""
+    monkeypatch.setenv("OPENTIDE_PROGRESS", "json")
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="cp1252", errors="backslashreplace")
+    monkeypatch.setattr("sys.stderr", stream)
+    progress_events.progress("r\u00e8gle \U0001f680", 1, 1)
+    stream.flush()
+    line = raw.getvalue().decode("cp1252")
+    assert json.loads(line) == {
+        "event": "progress",
+        "step": "r\u00e8gle \U0001f680",
+        "done": 1,
+        "total": 1,
+    }
+
+
 def test_a_ticker_reports_in_batches_and_always_the_last_unit() -> None:
     received: list[dict[str, Any]] = []
     with progress_events.sink(received.append):
