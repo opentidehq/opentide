@@ -8,6 +8,7 @@
     release.py vendor [--clean]     copy each crate's shared assets into crates/*/assets
     release.py publish              publish every crate to crates.io, dependencies first
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
+    release.py sums DIR             write DIR/SHA256SUMS for every file in DIR
 
 Crates embed catalogs, grammars, and highlight queries from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
@@ -24,10 +25,16 @@ publisher of every published crate, with a crates.io token that has the
 trusted-publishing scope in CRATES_IO_TOKEN, so later releases publish with the
 workflow's OIDC identity instead of a stored token. Crates already registered are
 left alone; without a token it does nothing.
+
+`sums` writes `SHA256SUMS` in DIR, in `sha256sum` format, for every file DIR holds
+(the GitHub Release's assets), so `sha256sum -c SHA256SUMS` checks a download. It
+fails on a subdirectory or a name `sha256sum -c` cannot read back, rather than
+leave an asset out.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -46,6 +53,7 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]
+SUMS = "SHA256SUMS"
 
 
 def workspace_version() -> str:
@@ -311,6 +319,37 @@ def trust(workflow: str) -> None:
         sys.exit(f"trusted publishing not registered for {', '.join(failed)}")
 
 
+def sha256sums(directory: Path) -> str:
+    """`sha256sum` lines for every file in `directory`, sorted by name.
+
+    A release's assets are one flat directory: a subdirectory, or a name with
+    whitespace or a backslash (which `sha256sum` escapes), is an error rather
+    than an asset the sums would leave out.
+    """
+    lines = []
+    for entry in sorted(directory.iterdir(), key=lambda p: p.name):
+        if entry.name == SUMS:
+            continue
+        if not entry.is_file():
+            raise ValueError(f"{entry} is not a file; release assets are one flat directory")
+        if re.search(r"[\s\\]", entry.name):
+            raise ValueError(f"{entry.name!r}: sha256sum cannot read back this name")
+        digest = hashlib.sha256()
+        with entry.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+        lines.append(f"{digest.hexdigest()}  {entry.name}\n")
+    if not lines:
+        raise ValueError(f"{directory} has no assets")
+    return "".join(lines)
+
+
+def write_sums(directory: Path) -> Path:
+    target = directory / SUMS
+    target.write_text(sha256sums(directory), encoding="utf-8", newline="\n")
+    return target
+
+
 def main(argv: list[str]) -> None:
     match argv:
         case ["version"]:
@@ -337,6 +376,12 @@ def main(argv: list[str]) -> None:
             publish()
         case ["trust", workflow]:
             trust(workflow)
+        case ["sums", directory]:
+            try:
+                target = write_sums(Path(directory))
+            except (OSError, ValueError) as error:
+                sys.exit(f"sums: {error}")
+            print(f"wrote {target}")
         case _:
             sys.exit(__doc__)
 
