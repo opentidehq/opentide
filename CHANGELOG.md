@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-11-04
+
+Minor release. The opentide VS Code extension ([`opentidehq.opentide`](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide)) ships its first release with it, and builds its catalogue, graph, relations and deploy-plan views on two new commands: `opentide --json info catalog`, the catalogue and its relationships in one document, and `opentide serve`, CLI commands from one warm process. `setup vscode` recommends the extension and stops mapping opentide's schemas for the YAML extension. `pip install opentide` no longer installs pandas or numpy, and Windows on Arm installs a wheel. `deploy --uuid` and `--file`, `setup --plan`, progress events and each platform's tenants in `info` are new. A minor because it adds commands, changes the files `setup vscode` and `generate snippets` write, changes the `end_column` of a query finding over several lines, and drops two dependencies: run `opentide setup vscode --settings --no-generate` and `opentide generate snippets`, and add pandas or numpy to your own requirements if your code imports them.
+
 ### Added
 
 - **A wheel for Windows on Arm** (`cp310-abi3-win_arm64`, [#748](https://github.com/opentidehq/opentide/issues/748)). `pip install opentide` on Windows on Arm compiled opentide from its sdist, which needs Rust; it now installs a wheel with the engine compiled in, and a release is refused without one. cryptography, which the Azure SDK needs, publishes no Windows on Arm wheel after 46.0.3, so install with `pip install --only-binary cryptography opentide`, which takes 46.0.3's wheel. Use CPython 3.11 or later: on 3.10, pydantic-core, orjson, rpds-py and cffi have no Windows on Arm wheel, and pip compiles them. See [Installation](docs/usage/installation.md#windows-and-powershell).
@@ -44,6 +48,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **`setup skills --claude-code` no longer deletes the skills when `.claude/skills` links to `.agents/skills`.** That layout made the copy's source and destination the same folder: the folder was removed, the skill just written with it, and the copy then failed with `internal`. A destination that is the skill's own folder is now left as it is.
 - **`setup vscode` reads a `.vscode/settings.json` saved with a byte-order mark, and leaves one it cannot parse as it is.** VS Code's "UTF-8 with BOM", common on Windows, made `setup vscode` (and `setup --vscode-setup`) exit 1 with `internal` before writing the extension recommendation or the snippets. A BOM is now read, by `doctor`'s `vscode_settings` and `mcp_config` checks too, which reported such a `settings.json`, `extensions.json` or `.vscode/mcp.json` as not valid JSON; a `settings.json` or `extensions.json` that does not parse is left unchanged, with a warning saying what to do by hand, and the other steps run.
 - **`setup vscode` keeps the comments, layout and line endings of `.vscode/settings.json` and `extensions.json`.** Both were rewritten with `json.dumps`, so every comment went and CRLF became LF, a whole-file diff, and `extensions.json` was rewritten on every run, VS Code's own template comment included, even when it already recommended the extension. Setup now changes only the entry it removes or the id it adds, and keeps the comments beside them (one after the previous entry's comma, before the next entry, or in an array or object that holds nothing else), writes nothing when the extension is already recommended (or listed as unwanted), and leaves a commented file it cannot edit that way unchanged, with a warning.
+
+### Install
+
+```bash
+pip install opentide==0.22.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
 
 ## [0.21.0] — 2026-11-03
 
@@ -1543,7 +1555,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/opentidehq/opentide/releases/tag/v0.22.0
 [0.21.0]: https://github.com/opentidehq/opentide/releases/tag/v0.21.0
 [0.20.1]: https://github.com/opentidehq/opentide/releases/tag/v0.20.1
 [0.20.0]: https://github.com/opentidehq/opentide/releases/tag/v0.20.0

@@ -7,6 +7,45 @@ description: Public package versions of opentide on PyPI.
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.22.0 — 4 November 2026
+
+Minor release, for the editor. The [opentide VS Code extension](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) (`opentidehq.opentide`) ships its first release with it: its catalogue, graph, relations and deploy-plan views run on `opentide --json info catalog` and `opentide serve`. The install is smaller without pandas and numpy, and Windows on Arm installs a wheel. After upgrading, run `opentide setup vscode --settings --no-generate` to drop the `yaml.schemas` mappings earlier releases wrote, install the extension, and run `opentide generate snippets`. Code that imports pandas or numpy because opentide installed them must add them to its own requirements.
+
+**Install**
+
+```bash
+pip install opentide==0.22.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+opentide setup vscode --settings --no-generate
+opentide generate snippets
+```
+
+**What changes**
+
+- **`opentide --json info catalog`** ([#749](https://github.com/opentidehq/opentide/issues/749)): every threat, objective and rule with its metadata, platform blocks, deployment state and techniques, the edges between them (dangling references marked `missing`), the signals and the ATT&CK matrix, in one document. A 500-rule workspace answers in about 1.3 s.
+- **`opentide serve`** ([#750](https://github.com/opentidehq/opentide/issues/750)): JSON-RPC on stdio, answering each `run` with the document `opentide --json <argv>` prints, from one warm process. A repeat `validate --file` at 500 rules takes about 0.3 s instead of 1.6 s.
+- **`setup vscode` sets up the extension** ([#752](https://github.com/opentidehq/opentide/issues/752)). It recommends `opentidehq.opentide` instead of `redhat.vscode-yaml`, writes no `yaml.schemas` and removes the mappings earlier releases wrote, keeping comments, line endings and every other setting. Snippets are scoped to `yaml,opentide-yaml`.
+- **`pip install opentide` no longer installs pandas or numpy** ([#747](https://github.com/opentidehq/opentide/issues/747)). Deployed configurations are unchanged.
+- **A wheel for Windows on Arm** ([#748](https://github.com/opentidehq/opentide/issues/748)). Use CPython 3.11 or later and `pip install --only-binary cryptography opentide` ([Installation](./installation.md#windows-and-powershell)).
+- **`setup --plan`** ([#751](https://github.com/opentidehq/opentide/issues/751)) lists each file setup would write or remove, and writes nothing; new `setup` flags answer every question the wizard asks.
+- **`deploy --uuid` and `--file`** ([#753](https://github.com/opentidehq/opentide/issues/753)) select the rules a run reads.
+- **`info` lists each platform's tenants** ([#754](https://github.com/opentidehq/opentide/issues/754)), and which of their `$VAR` references are set.
+- **Progress events** with `OPENTIDE_PROGRESS=json` ([#756](https://github.com/opentidehq/opentide/issues/756)), one JSON line on stderr per step.
+- **Findings carry `end_line`** ([#755](https://github.com/opentidehq/opentide/issues/755)), and a query finding over several lines has its `end_column` on `end_line`, after its last character.
+- **Tenant setup values.** `${VAR}` resolves on every platform, and a secret that only starts with `$` is used as written. Re-run `opentide setup ci <provider> --yes` so the live query job guards the same names.
+- **Fixes.** `deploy` and `--changed` in a repository with no commit yet; a duplicate UUID counted as a load error by `info`; an interrupted `generate` no longer leaves an empty schema; `setup skills` keeps the files you added to a skill's folder.
+- **The engine is [language-server 0.10.0](https://github.com/opentidehq/language-server/releases/tag/v0.10.0)**, from crates.io: placeholder queries `opentide new` leaves are not reported, `opentide/catalog` serves editors the workspace index, and folders moved under `objects/` are re-read.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0220--2026-11-04) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.22.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.22.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+- [opentide for VS Code](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide)
+
 ## 0.21.0 — 3 November 2026
 
 Minor release. Sysdig Secure and Falco become the ninth platform. Migrating CoreTIDE content is not a supported path, and the files, keys and commands that suggested otherwise are removed. Run `opentide validate --strict` after upgrading: it names each retired file and key and what replaces it. Then re-run `opentide setup ci <provider> --yes` to pick up the pipeline fixes.
