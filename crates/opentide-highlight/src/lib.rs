@@ -759,6 +759,21 @@ pub fn tokens_from_spans(
     Ok(out)
 }
 
+/// The TextMate `scopeName` of `language`'s generated grammar (#195).
+///
+/// ES|QL is `source.opentide.esql`: `source.esql` is the scope of Elastic's own
+/// ES|QL extension, which registers the same `esql` language id, and two
+/// grammars with one scope replace each other. The other grammars keep
+/// `source.<id>`: no known extension owns those scopes (`docs/EDITORS.md`).
+/// This is not a HighlightSpec capture, so the rename does not bump
+/// `highlights/spec.toml`.
+pub fn tm_scope_name(language: LanguageId) -> String {
+    match language {
+        LanguageId::Esql => "source.opentide.esql".to_string(),
+        other => format!("source.{}", other.as_str()),
+    }
+}
+
 /// Generate TextMate / Monaco / Helix maps from the frozen spec.
 pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde_json::Value {
     let scm = highlights_scm(language);
@@ -918,7 +933,7 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
         patterns.insert(0, tide_embedded_queries(spec));
     }
     serde_json::json!({
-        "scopeName": format!("source.{}", language.as_str()),
+        "scopeName": tm_scope_name(language),
         "name": format!("opentide {}", language),
         "patterns": patterns,
         "opentideHighlightSpec": spec.version,
@@ -964,7 +979,7 @@ fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
         .iter()
         .map(|(platforms, keys, language)| {
             let scope = embedded_scope(*language);
-            let include = format!("source.{}", language.as_str());
+            let include = tm_scope_name(*language);
             let keys = keys.join("|");
             serde_json::json!({
                 "comment": format!("configurations.{{{}}}: {} queries (#171)", platforms.join(","), language.as_str()),
@@ -1018,7 +1033,7 @@ pub fn generate_package_contributions() -> serde_json::Value {
         "contributes": {
             "grammars": [{
                 "language": LanguageId::TideYaml.as_str(),
-                "scopeName": format!("source.{}", LanguageId::TideYaml.as_str()),
+                "scopeName": tm_scope_name(LanguageId::TideYaml),
                 "path": "./tide.tmLanguage.json",
                 "embeddedLanguages": embedded,
             }]
@@ -1420,5 +1435,57 @@ mod tm_language_stub_bug {
         assert_eq!(embedded["meta.embedded.block.spl"], "spl");
         assert_eq!(embedded["meta.embedded.block.lucene"], "lucene");
         assert_eq!(embedded["meta.embedded.block.falco"], "falco");
+    }
+
+    /// #195: ES|QL's grammar must not take Elastic's `source.esql` scope.
+    #[test]
+    fn esql_grammar_scope_is_opentide_not_elastic() {
+        let spec = crate::HighlightSpec::load().unwrap();
+        let tm = crate::generate_tm_language(opentide_core::LanguageId::Esql, &spec);
+        assert_eq!(tm["scopeName"], "source.opentide.esql");
+        let esql = include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/highlights/generated/esql.tmLanguage.json"
+        ));
+        let v: serde_json::Value = serde_json::from_str(esql).expect("json");
+        assert_eq!(v["scopeName"], "source.opentide.esql");
+        let generated = [
+            ("esql.tmLanguage.json", esql),
+            (
+                "tide.tmLanguage.json",
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/highlights/generated/tide.tmLanguage.json"
+                )),
+            ),
+            (
+                "package-contributions.json",
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/highlights/generated/package-contributions.json"
+                )),
+            ),
+            (
+                "monaco.json",
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/highlights/generated/monaco.json"
+                )),
+            ),
+        ];
+        for (name, text) in generated {
+            assert!(
+                !text.contains("\"source.esql\""),
+                "{name} still names Elastic's source.esql scope"
+            );
+        }
+        assert_eq!(
+            crate::tm_scope_name(opentide_core::LanguageId::Kql),
+            "source.kql"
+        );
+        assert_eq!(
+            crate::tm_scope_name(opentide_core::LanguageId::TideYaml),
+            "source.opentide-yaml"
+        );
     }
 }
