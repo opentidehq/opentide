@@ -33,7 +33,7 @@ See `editors/zed/opentide.json`.
 
 Lives in **opentidehq/vscode-extension** (other repository, #17). MIT client, EUPL engine notices.
 
-Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern.
+Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern (`opentide-config` is `**/.opentide/configurations/**/*.toml`). Its patterns match `file:` URIs only. On vscode.dev and github.dev, where documents are `vscode-vfs:` and other virtual URIs, use `WEB_DOCUMENT_SELECTOR`: the same filters with no scheme ([#197](https://github.com/opentidehq/language-server/issues/197)).
 
 `esql` is also the id of Elastic's own ES|QL extension. The ids are the shared vocabulary, so the opentide extension registers `esql` too, never a second id for the same language. Its TextMate grammar uses the scope `source.opentide.esql`, not Elastic's `source.esql`, so the two grammars never collide. The server's semantic tokens are authoritative for colour either way. The other three Elastic ids (`eql`, `kuery`, `lucene`) have no prior VS Code owner.
 

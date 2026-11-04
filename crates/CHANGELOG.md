@@ -8,6 +8,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- `@opentide/lsp-client`: `DOCUMENT_SELECTOR` and `LANGUAGES` include `opentide-config` (`**/.opentide/configurations/**/*.toml`), so a client built from the selector sends configuration TOML to `opentide lsp start` ([#197](https://github.com/opentidehq/language-server/issues/197)). `analyze` and `highlight` refuse it: only a host checks it. `WEB_DOCUMENT_SELECTOR` is the same selector with no scheme, for vscode.dev and github.dev, whose documents are not `file:` URIs; `DOCUMENT_SELECTOR` keeps `scheme: "file"` for the desktop.
 - Each GitHub Release carries `SHA256SUMS`, covering every asset, and a build provenance attestation for each asset ([#196](https://github.com/opentidehq/language-server/issues/196)): `sha256sum -c SHA256SUMS` and `gh attestation verify <asset> --repo opentidehq/language-server` check a download. The Release workflow checks both on the published assets. `scripts/release.py sums DIR` writes the file.
 
 ### Changed

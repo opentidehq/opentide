@@ -19,6 +19,7 @@ import {
   LANGUAGES,
   MessageDecoder,
   type OpentideClient,
+  WEB_DOCUMENT_SELECTOR,
 } from "./index.ts";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -88,12 +89,87 @@ async function using<T>(client: OpentideClient, body: (c: OpentideClient) => Pro
 
 test("document selector covers every language", () => {
   const ids = LANGUAGES.map((l) => l.id);
-  assert.deepEqual(ids, ["opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco"]);
-  for (const id of ids) {
+  assert.deepEqual(ids, ["opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "opentide-config"]);
+  for (const selector of [DOCUMENT_SELECTOR, WEB_DOCUMENT_SELECTOR]) {
+    for (const id of ids) {
+      assert.ok(selector.some((s) => "language" in s && s.language === id), id);
+    }
+    assert.ok(selector.some((s) => "pattern" in s && s.pattern === "**/*.esql"));
+    assert.ok(!selector.some((s) => "pattern" in s && s.pattern === "**/*.sql"), "no SQL");
+  }
+});
+
+// The language ids docs/EDITORS.md promises editors (#197).
+function editorLanguageIds(): string[] {
+  const editors = readFileSync(join(root, "docs/EDITORS.md"), "utf8");
+  const line = editors.match(/^Language ids are the server's: (.*)$/m);
+  assert.ok(line, "docs/EDITORS.md lists the language ids");
+  return [...line[1].split(". ")[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+}
+
+test("document selector covers each language docs/EDITORS.md lists, opentide-config included", () => {
+  const documented = editorLanguageIds();
+  assert.ok(documented.includes("opentide-config"), documented.join(", "));
+  assert.deepEqual([...documented].sort(), LANGUAGES.map((l) => l.id).sort());
+  for (const id of documented) {
     assert.ok(DOCUMENT_SELECTOR.some((s) => "language" in s && s.language === id), id);
   }
-  assert.ok(DOCUMENT_SELECTOR.some((s) => "pattern" in s && s.pattern === "**/*.esql"));
-  assert.ok(!DOCUMENT_SELECTOR.some((s) => "pattern" in s && s.pattern === "**/*.sql"), "no SQL");
+});
+
+/** A glob as VS Code's document filters read one: `**` crosses folders, `*` does not. */
+function globRegExp(glob: string): RegExp {
+  let out = "";
+  for (let i = 0; i < glob.length; i++) {
+    if (glob.startsWith("**/", i)) {
+      out += "(?:.*/)?";
+      i += 2;
+    } else if (glob.startsWith("**", i)) {
+      out += ".*";
+      i += 1;
+    } else if (glob[i] === "*") {
+      out += "[^/]*";
+    } else {
+      out += glob[i].replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${out}$`);
+}
+
+/** Whether a selector picks a document, as VS Code scores a filter: every field it sets must match. */
+function selects(
+  selector: ReadonlyArray<{ language?: string; scheme?: string; pattern?: string }>,
+  uri: string,
+  languageId: string,
+): boolean {
+  const url = new URL(uri);
+  const scheme = url.protocol.replace(/:$/, "");
+  const path = url.pathname.replace(/^\/+/, "");
+  return selector.some(
+    (f) =>
+      (f.language === undefined || f.language === languageId) &&
+      (f.scheme === undefined || f.scheme === scheme) &&
+      (f.pattern === undefined || globRegExp(f.pattern).test(path)),
+  );
+}
+
+test("the web selector matches vscode-vfs: URIs by pattern; the desktop one only file: URIs", () => {
+  // A language id no extension registered, as on vscode.dev without one.
+  const plain = "plaintext";
+  const cases: Array<[string, boolean]> = [
+    ["vscode-vfs://github/opentidehq/detections/objects/rules/rule.yaml", true],
+    ["vscode-vfs://github/opentidehq/detections/.opentide/configurations/platforms/sentinel.toml", true],
+    ["vscode-vfs://github/opentidehq/detections/queries/hunt.esql", true],
+    ["vscode-vfs://github/opentidehq/detections/pyproject.toml", false],
+    ["vscode-vfs://github/opentidehq/detections/notes/readme.yaml", false],
+  ];
+  for (const [uri, expected] of cases) {
+    assert.equal(selects(WEB_DOCUMENT_SELECTOR, uri, plain), expected, uri);
+    assert.equal(selects(DOCUMENT_SELECTOR, uri, plain), false, `desktop selector matched ${uri}`);
+    const file = uri.replace("vscode-vfs://github/", "file:///home/user/");
+    assert.equal(selects(DOCUMENT_SELECTOR, file, plain), expected, file);
+  }
+  assert.ok(WEB_DOCUMENT_SELECTOR.every((f) => !("scheme" in f)), "no scheme in the web selector");
+  assert.ok(selects(WEB_DOCUMENT_SELECTOR, "vscode-vfs://github/o/r/x.txt", "opentide-config"), "by language id");
 });
 
 test("decoder reassembles messages split across chunks", () => {
@@ -115,6 +191,8 @@ test("an unknown transport or language is refused", async () => {
   assert.throws(() => createOpentideClient({ transport: "tcp" as never }), /unsupported transport/);
   const client = createOpentideClient({ transport: "worker", module: { highlight: () => ({}), legend: () => [] } });
   await assert.rejects(client.highlight("sql", "select 1"), /unknown language "sql"/);
+  // Configuration TOML is a host's to check (#158); the client does not answer it empty.
+  await assert.rejects(client.highlight("opentide-config", "[x]"), /checked by the host/);
 });
 
 test("a transport without its artifact is refused, not answered empty", async () => {
