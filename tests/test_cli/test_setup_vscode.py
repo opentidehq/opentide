@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 from opentide.cli.services.setup.vscode import (
+    _strip_jsonc,
     build_yaml_schema_mappings,
+    is_opentide_schema_mapping,
     run_vscode_all,
     run_vscode_settings,
     run_vscode_setup,
@@ -329,13 +331,11 @@ def test_write_vscode_extensions_recommends_the_opentide_extension(tmp_path: Pat
 def test_write_vscode_extensions_respects_unwanted_recommendations(tmp_path: Path) -> None:
     vscode_dir = tmp_path / ".vscode"
     vscode_dir.mkdir()
-    (vscode_dir / "extensions.json").write_text(
-        json.dumps({"unwantedRecommendations": ["opentidehq.opentide"]}),
-        encoding="utf-8",
-    )
-    write_vscode_extensions(tmp_path)
-    extensions = json.loads((vscode_dir / "extensions.json").read_text(encoding="utf-8"))
-    assert extensions["recommendations"] == []
+    text = json.dumps({"unwantedRecommendations": ["opentidehq.opentide"]})
+    (vscode_dir / "extensions.json").write_text(text, encoding="utf-8")
+    # The extension is unwanted: nothing to add, so the file is not written.
+    assert write_vscode_extensions(tmp_path) is None
+    assert (vscode_dir / "extensions.json").read_text(encoding="utf-8") == text
 
 
 def test_write_vscode_extensions_merges_recommendations(tmp_path: Path) -> None:
@@ -403,7 +403,9 @@ def test_write_vscode_settings_drops_every_mapping_opentide_wrote(tmp_path: Path
         encoding="utf-8",
     )
     write_vscode_settings(tmp_path)
-    settings = json.loads((vscode_dir / "settings.json").read_text(encoding="utf-8"))
+    text = (vscode_dir / "settings.json").read_text(encoding="utf-8")
+    assert "// user comment survives parsing" in text
+    settings = json.loads(_strip_jsonc(text))
     assert settings["editor.tabSize"] == 2
     assert settings["yaml.schemas"] == {
         ".opentide/schemas/rule.1.0.schema.json": "legacy/rules/*.yaml",
@@ -586,7 +588,7 @@ def test_the_deprecation_is_a_warning_line_not_an_event_slug(capsys, monkeypatch
     [
         "objects/**/*.yaml",
         ["objects/**/*.yaml"],
-        ["hunts/**/*.yaml", "./objects/**/*.yaml"],
+        ["./objects/**/*.yaml", "objects/rules/*.yaml"],
         "objects/rules/*.yaml",
     ],
 )
@@ -606,4 +608,162 @@ def test_write_vscode_settings_removes_the_router_mapping_as_a_string_or_in_a_li
     assert json.loads(settings.read_text(encoding="utf-8")) == {
         "editor.tabSize": 2,
         "yaml.schemas": {"own.json": "x.yaml"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("value", "kept"),
+    [
+        (["hunts/**/*.yaml", "./objects/**/*.yaml"], ["hunts/**/*.yaml"]),
+        (["objects/**/*.yaml", "playbooks/**/*.yaml"], ["playbooks/**/*.yaml"]),
+        ("playbooks/**/*.yaml", "playbooks/**/*.yaml"),
+    ],
+)
+def test_write_vscode_settings_keeps_the_users_own_globs_on_the_router(
+    tmp_path: Path, value: object, kept: object
+) -> None:
+    """Only the globs opentide wrote go; a folder the user mapped to the router stays."""
+    settings = tmp_path / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"yaml.schemas": {ROUTER: value}}), encoding="utf-8")
+    write_vscode_settings(tmp_path)
+    assert json.loads(settings.read_text(encoding="utf-8")) == {"yaml.schemas": {ROUTER: kept}}
+    assert not is_opentide_schema_mapping(ROUTER, kept)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        b'\xef\xbb\xbf{\r\n  "editor.tabSize": 2\r\n}\r\n',
+        b'{ "editor.tabSize": 2, oops }\n',
+    ],
+    ids=["bom", "unparsable"],
+)
+def test_setup_vscode_leaves_a_settings_file_it_cannot_read_and_carries_on(
+    tmp_path: Path, content: bytes
+) -> None:
+    from tests.corpus_support import clear_runtime_caches
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+
+    settings = tmp_path / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_bytes(content)
+    clear_runtime_caches()
+    result = CliRunner().invoke(
+        app, ["--json", "--repo", str(tmp_path), "setup", "vscode", str(tmp_path)]
+    )
+    clear_runtime_caches()
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert settings.read_bytes() == content
+    assert (tmp_path / SNIPPET_REL).is_file()
+    assert (tmp_path / ".vscode" / "extensions.json").is_file()
+    unreadable = [w for w in payload.get("warnings") or [] if "settings.json" in w]
+    assert bool(unreadable) == (content[:3] != b"\xef\xbb\xbf")
+
+
+def test_an_unreadable_extensions_json_is_left_unchanged(tmp_path: Path) -> None:
+    extensions = tmp_path / ".vscode" / "extensions.json"
+    extensions.parent.mkdir()
+    extensions.write_bytes(b"{ not json\n")
+    warnings: list[str] = []
+    assert write_vscode_extensions(tmp_path, warnings=warnings) is None
+    assert extensions.read_bytes() == b"{ not json\n"
+    assert warnings and "extensions.json" in warnings[0]
+
+
+VSCODE_TEMPLATE = (
+    "{\r\n"
+    "\t// See https://go.microsoft.com/fwlink/?LinkId=827846 to learn about workspace "
+    "recommendations.\r\n"
+    "\t// Extension identifier format: ${publisher}.${name}.\r\n"
+    '\t"recommendations": [\r\n'
+    '\t\t"ms-python.python"\r\n'
+    "\t]\r\n"
+    "}\r\n"
+)
+
+
+def test_an_extensions_json_that_recommends_the_extension_is_not_rewritten(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".vscode" / "extensions.json"
+    path.parent.mkdir()
+    original = VSCODE_TEMPLATE.replace('"ms-python.python"', '"opentidehq.opentide"').encode()
+    path.write_bytes(original)
+    assert write_vscode_extensions(tmp_path) is None
+    assert path.read_bytes() == original
+
+
+def test_merging_into_a_commented_crlf_extensions_json_keeps_it(tmp_path: Path) -> None:
+    path = tmp_path / ".vscode" / "extensions.json"
+    path.parent.mkdir()
+    path.write_bytes(VSCODE_TEMPLATE.encode())
+    assert write_vscode_extensions(tmp_path) == ".vscode/extensions.json"
+    assert (
+        path.read_bytes()
+        == VSCODE_TEMPLATE.replace(
+            '\t\t"ms-python.python"\r\n',
+            '\t\t"ms-python.python",\r\n\t\t"opentidehq.opentide"\r\n',
+        ).encode()
+    )
+
+
+def test_an_extensions_json_without_recommendations_gains_them_in_place(tmp_path: Path) -> None:
+    path = tmp_path / ".vscode" / "extensions.json"
+    path.parent.mkdir()
+    path.write_bytes(b'{\n  // ours\n  "unwantedRecommendations": ["x.y"]\n}\n')
+    write_vscode_extensions(tmp_path)
+    text = path.read_text(encoding="utf-8")
+    assert "// ours" in text
+    assert json.loads(_strip_jsonc(text)) == {
+        "recommendations": ["opentidehq.opentide"],
+        "unwantedRecommendations": ["x.y"],
+    }
+
+
+def test_removing_the_mapping_keeps_comments_crlf_and_a_bom(tmp_path: Path) -> None:
+    path = tmp_path / ".vscode" / "settings.json"
+    path.parent.mkdir()
+    original = (
+        "\ufeff{\r\n"
+        "  // team settings\r\n"
+        '  "editor.tabSize": 2,\r\n'
+        '  "yaml.schemas": {\r\n'
+        f'    "{ROUTER}": "objects/**/*.yaml" // keep me\r\n'
+        "  }\r\n"
+        "}\r\n"
+    )
+    path.write_bytes(original.encode("utf-8"))
+    assert write_vscode_settings(tmp_path) == ".vscode/settings.json"
+    raw = path.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf")
+    text = raw.decode("utf-8-sig")
+    assert "// team settings" in text
+    assert "\n" not in text.replace("\r\n", "")
+    assert json.loads(_strip_jsonc(text)) == {"editor.tabSize": 2}
+
+
+def test_rewriting_a_router_mapping_in_place_keeps_the_rest_of_the_file(tmp_path: Path) -> None:
+    path = tmp_path / ".vscode" / "settings.json"
+    path.parent.mkdir()
+    original = (
+        "{\n"
+        '  "yaml.schemas": {\n'
+        '    "other.json": "x/*.yaml", // theirs\n'
+        f'    "{ROUTER}": ["playbooks/**/*.yaml", "objects/**/*.yaml"],\n'
+        "  },\n"
+        "  /* block */\n"
+        '  "editor.tabSize": 4,\n'
+        "}\n"
+    )
+    path.write_text(original, encoding="utf-8")
+    write_vscode_settings(tmp_path)
+    text = path.read_text(encoding="utf-8")
+    assert "// theirs" in text and "/* block */" in text
+    assert json.loads(_strip_jsonc(text)) == {
+        "yaml.schemas": {"other.json": "x/*.yaml", ROUTER: ["playbooks/**/*.yaml"]},
+        "editor.tabSize": 4,
     }

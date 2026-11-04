@@ -232,7 +232,7 @@ def warnings_once(warnings: Iterable[str]) -> list[str]:
 
 
 def render_plan_files(console: Console, payload: Mapping[str, Any]) -> None:
-    """``setup --plan``: each step, then one row per file, ``create``, ``merge`` or ``skip``.
+    """``setup --plan``: each step, then a row per file (create, merge, delete or skip).
 
     The outcome line (the counts, "nothing written") follows from the result.
     """

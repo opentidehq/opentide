@@ -153,3 +153,36 @@ def test_github_annotations_span_lines_without_an_end_column(tmp_path: Path) -> 
     assert "endColumn" not in spanning
     one = ci.github_annotation(_engine(_ONE_LINE, tmp_path), root=tmp_path)
     assert "line=9,endLine=9,col=5,endColumn=8," in one
+
+
+def test_a_span_ending_at_column_one_ends_on_the_line_before(tmp_path: Path) -> None:
+    """The engine's end is exclusive: (2, 8)-(3, 1) is the newline at the end of line 2."""
+    from opentide.analysis import check_query
+
+    [finding] = [
+        item
+        for item in check_query("SecurityEvent | where (\n a == 1\n", language="kql")
+        if item.severity == "error"
+    ]
+    assert (finding.line, finding.end_line) == (2, 2)
+    assert finding.end_column > finding.column
+    diagnostic = _engine(finding, tmp_path)
+    assert diagnostic.fields()["end_line"] == 2
+    assert not diagnostic.multiline
+    annotation = ci.github_annotation(diagnostic, root=tmp_path)
+    assert "endLine" not in annotation or "endLine=2" in annotation
+    assert "endLine=3" not in annotation
+
+
+def test_a_longer_span_ending_at_column_one_ends_after_the_previous_line() -> None:
+    from opentide.analysis import _span_end
+
+    text = "a = (\n  b,\n  c\nd"
+    # Line 1 column 5 to line 4 column 1: the last character is line 3's newline.
+    assert _span_end(1, 5, 4, 1, text) == (3, 4)
+    assert _span_end(1, 5, 4, 1, text.replace("\n", "\r\n")) == (3, 4)
+    # Without the text, a span onto the next line still collapses to one line.
+    assert _span_end(2, 8, 3, 1, None) == (2, 9)
+    # Any other end is left as the engine gave it.
+    assert _span_end(4, 7, 6, 3, text) == (6, 3)
+    assert _span_end(2, 1, 2, 1, text) == (2, 1)

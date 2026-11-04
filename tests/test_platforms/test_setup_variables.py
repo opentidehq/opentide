@@ -67,8 +67,13 @@ def test_a_braced_reference_names_the_variable_the_loader_resolves(
 
 
 def test_a_dollar_literal_is_left_as_written_and_not_logged(
-    capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Outside debug mode: a debug run logs the local_secrets import with a stack,
+    # which quotes this test's own source line.
+    monkeypatch.setattr(DebugHelpers, "is_debug", staticmethod(lambda: False))
     resolved = DebugHelpers.fetch_config_envvar({"secret": "$uP3r-S3cret!pass"})
     assert resolved == {"secret": "$uP3r-S3cret!pass"}
     captured = capsys.readouterr()

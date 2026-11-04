@@ -246,3 +246,247 @@ def test_human_plan_lists_each_step_and_file(tmp_path: Path) -> None:
     assert "create  .env.example" in result.stdout
     assert "nothing written" in result.stdout
     assert not (tmp_path / "r").exists()
+
+
+# --- what the copy holds ---------------------------------------------------------------
+
+
+def test_the_plan_never_writes_through_a_link_out_of_the_repository(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    target.mkdir()
+    outside = tmp_path / "dotfiles"
+    (outside / "vscode").mkdir(parents=True)
+    (outside / "mcp.json").write_text('{"mcpServers": {"other": {"command": "x"}}}\n', "utf-8")
+    (target / ".mcp.json").symlink_to(outside / "mcp.json")
+    (target / ".vscode").symlink_to(outside / "vscode")
+    before = _tree(tmp_path)
+    result, plan = _invoke("mcp", "--claude-code", "--vscode", "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _tree(tmp_path) == before, "the plan wrote through a link"
+    assert {".mcp.json", ".vscode/mcp.json"} <= _planned(plan)
+    assert plan["summary"]["create"] + plan["summary"]["merge"] >= 2
+
+
+def test_a_link_inside_the_repository_stays_a_link_in_the_copy(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    (target / "shared").mkdir(parents=True)
+    (target / ".vscode").symlink_to(target / "shared")
+    before = _tree(tmp_path)
+    result, plan = _invoke("mcp", "--vscode", "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _tree(tmp_path) == before
+    assert "shared/mcp.json" in _planned(plan)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no FIFOs on this platform")
+def test_a_fifo_or_a_socket_in_the_tree_does_not_stop_the_plan(tmp_path: Path) -> None:
+    import socket
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    os.mkfifo(target / "pipe")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    previous = Path.cwd()
+    os.chdir(target)  # AF_UNIX paths are short: bind by a relative name
+    try:
+        server.bind("sock")
+    finally:
+        os.chdir(previous)
+    try:
+        result, plan = _invoke("env", "--plan", "--path", str(target))
+    finally:
+        server.close()
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert ".env.example" in _planned(plan)
+
+
+def test_the_plan_lists_the_files_a_step_removes(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    agents = target / ".agents" / "skills" / "opentide-detection-rule"
+    claude = target / ".claude" / "skills" / "opentide-detection-rule"
+    for folder in (agents, claude):
+        folder.mkdir(parents=True)
+        (folder / "SKILL.md").write_text("old\n", encoding="utf-8")
+    # A file an older version of the skill shipped: setup replaces opentide's copy whole.
+    (agents / "STALE.md").write_text("old\n", encoding="utf-8")
+    # The user's own file in the harness copy: setup keeps it.
+    (claude / "TEAM-NOTES.md").write_text("ours\n", encoding="utf-8")
+    before = _tree(tmp_path)
+    result, plan = _invoke("skills", "--claude-code", "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _tree(tmp_path) == before
+    deleted = _planned(plan, actions=("delete",))
+    assert deleted == {".agents/skills/opentide-detection-rule/STALE.md"}
+    assert plan["summary"]["delete"] == 1
+    assert "1 to remove" in plan["message"]
+    assert document_problems(plan) == []
+
+    result, _ = _invoke("skills", "--claude-code", "--yes", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert not (agents / "STALE.md").exists()
+    assert (claude / "TEAM-NOTES.md").read_text(encoding="utf-8") == "ours\n"
+
+
+def test_the_plan_refuses_to_copy_a_home_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".ssh").mkdir()
+    (home / ".ssh" / "id_ed25519").write_text("secret\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    result, document = _invoke("env", "--plan", "--path", str(home))
+    assert result.exit_code == 2, result.stdout
+    assert "home folder" in document["failure"]["message"]
+
+
+def test_the_plan_refuses_a_tree_too_big_to_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.cli.services.setup import plan as plan_mod
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    for number in range(5):
+        (target / f"file-{number}.txt").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(plan_mod, "MAX_COPY_FILES", 3)
+    result, document = _invoke("env", "--plan", "--path", str(target))
+    assert result.exit_code == 2, result.stdout
+    assert "more than 3 files" in document["failure"]["message"]
+
+
+def test_the_plan_does_not_copy_build_output(tmp_path: Path) -> None:
+    from opentide.cli.services.setup.plan import Sandbox
+
+    target = tmp_path / "repo"
+    for folder in ("target", "dist", "build", ".terraform", ".cache", "objects"):
+        (target / folder).mkdir(parents=True)
+        (target / folder / "x.bin").write_bytes(b"x")
+    box = Sandbox(target, tmp_path / "scratch")
+    copied = {path.relative_to(box.shadow_top).as_posix() for path in box.shadow_top.rglob("*")}
+    assert copied == {"objects", "objects/x.bin"}
+
+
+def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
+    import signal
+
+    from opentide.cli.services.setup.plan import sandbox
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    (target / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    copies: list[Path] = []
+    with pytest.raises(SystemExit) as stopped, sandbox(target) as box:
+        copies.append(box.shadow_top)
+        assert (box.shadow_top / ".env").is_file()
+        os.kill(os.getpid(), signal.SIGTERM)
+    assert stopped.value.code == 128 + signal.SIGTERM
+    assert not copies[0].exists()
+    assert signal.getsignal(signal.SIGTERM) is not None
+
+
+def test_the_plan_carries_the_runs_own_warnings(tmp_path: Path) -> None:
+    target = tmp_path / "repo"
+    args = ("--no-staging", "--lint-changed", "--env", "--path", str(target))
+    _, plan = _invoke("--plan", *args)
+    _, applied = _invoke("--yes", *args)
+    ignored = [w for w in applied["warnings"] if w.startswith("CI flags")]
+    assert ignored, applied["warnings"]
+    assert ignored[0] in plan["warnings"]
+
+
+def test_a_skills_download_failure_is_a_step_with_its_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.cli.services.setup import skills as skills_mod
+    from opentide.cli.services.setup.skills_registry import SkillsManifestError
+
+    def unreachable(*args: Any, **kwargs: Any) -> Any:
+        raise SkillsManifestError("Could not fetch skills catalogue")
+
+    monkeypatch.setattr(skills_mod, "load_manifest", unreachable)
+    target = tmp_path / "repo"
+    result, plan = _invoke("--plan", "--hooks", "--skills", "claude-code", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert [step["step"] for step in plan["steps"]] == ["hooks", "skills"]
+    skipped = "Agent skills skipped: Could not fetch skills catalogue"
+    assert plan["steps"][1]["warnings"] == [skipped]
+    assert skipped in plan["warnings"]
+    assert document_problems(plan) == []
+
+
+# --- the plan's .git -------------------------------------------------------------------
+
+
+def _plan_and_apply(target: Path, *argv: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    result, plan = _invoke(*argv, "--plan", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    result, applied = _invoke(*argv, "--yes", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    return plan, applied
+
+
+def test_an_absolute_hooks_path_inside_the_repository_is_planned_as_written(
+    git_repo: Path,
+) -> None:
+    subprocess.run(
+        ["git", "-C", str(git_repo), "config", "core.hooksPath", str(git_repo / ".githooks")],
+        check=True,
+    )
+    plan, applied = _plan_and_apply(git_repo, "hooks")
+    assert ".githooks/pre-commit" in set(applied["files"])
+    assert ".githooks/pre-commit" in _planned(plan)
+    assert plan.get("warnings", []) == applied.get("warnings", [])
+    assert not any("outside this repository" in w for w in plan.get("warnings", []))
+
+
+def _commit(repo: Path) -> None:
+    (repo / "README.md").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "README.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "x"],
+        check=True,
+    )
+
+
+def test_a_linked_worktree_plans_the_hook_the_run_writes(git_repo: Path) -> None:
+    _commit(git_repo)
+    worktree = git_repo.parent / "linked"
+    subprocess.run(
+        ["git", "-C", str(git_repo), "worktree", "add", "-q", str(worktree), "-b", "side"],
+        check=True,
+    )
+    plan, applied = _plan_and_apply(worktree, "hooks")
+    hook = "../work/.git/hooks/pre-commit"
+    assert hook in set(applied["files"]), applied["files"]
+    assert hook in _planned(plan)
+    assert ".git/hooks/pre-commit" not in _planned(plan)
+
+
+def test_a_submodule_plans_the_hook_the_run_writes(git_repo: Path, tmp_path: Path) -> None:
+    library = tmp_path / "library"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(library)], check=True)
+    _commit(library)
+    _commit(git_repo)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(git_repo),
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            str(library),
+            "sub",
+        ],
+        check=True,
+    )
+    plan, applied = _plan_and_apply(git_repo / "sub", "hooks")
+    hook = "../.git/modules/sub/hooks/pre-commit"
+    assert hook in set(applied["files"]), applied["files"]
+    assert applied.get("installed") is not False
+    assert hook in _planned(plan)
+    assert not any("Not a Git repository" in w for w in plan.get("warnings", []))

@@ -106,7 +106,7 @@ opentide --json setup --plan --name "Tutorial Detections" --org "Example Corp" \
     }
   ],
   "message": "Plan: 15 files to write (15 new, 0 changed) · nothing written",
-  "summary": { "create": 15, "merge": 0, "skip": 1, "steps": 2 }
+  "summary": { "create": 15, "merge": 0, "skip": 1, "delete": 0, "steps": 2 }
 }
 ```
 
@@ -115,10 +115,11 @@ opentide --json setup --plan --name "Tutorial Detections" --org "Example Corp" \
 | `create` | The step would write a file that does not exist yet |
 | `merge` | The step would write over a file that exists (setup merges into the ones it shares with you, such as `.gitignore`, `.vscode/mcp.json` or `.pre-commit-config.yaml`), or over one an earlier step wrote |
 | `skip` | The step would leave the file as it is, because it already says what setup would write |
+| `delete` | The step would remove the file: an older version's file in `.agents/skills/<slug>/`, which setup replaces whole |
 
 Each step's `warnings` are the warnings that step would print. Paths are relative to the repository being set up; a file outside it, such as the Git hook of a workspace in a subdirectory, is relative too (`../.git/hooks/pre-commit`).
 
-The plan is not a guess: setup runs the same steps in a copy of the repository in a temporary directory, and compares the copy's files before and after each one. The copy holds the Git work tree around the target, less dependency and cache folders (`node_modules`, `.venv`, `__pycache__`, …), and a `.git` that reads the repository's own branches, configuration and hooks. So `setup --plan` then `setup --yes` with the same flags writes exactly the files the plan listed under `create` and `merge`. The skills step still downloads the catalogue to know which files it would write. A file a step would delete is not listed.
+The plan is not a guess: setup runs the same steps in a copy of the repository in a temporary directory, and compares the copy's files before and after each one. The copy holds the Git work tree around the target (the target alone outside Git), less dependency, cache and build folders (`node_modules`, `.venv`, `__pycache__`, `.cache`, `target`, `dist`, `build`, `.terraform`, …) and anything that is not a file, folder or link, and a `.git` that reads the repository's own branches, configuration and hooks. A link that points outside the tree is copied as what it points at, so nothing is written through it. The plan refuses (exit `2`) to copy a home folder or a file system root, and a tree of more than 50,000 files or 512 MB: point `--path` at the repository. The copy is deleted when the plan ends, also when it is stopped with SIGTERM or SIGHUP. So `setup --plan` then `setup --yes` with the same flags writes exactly the files the plan listed under `create` and `merge`. The skills step still downloads the catalogue to know which files it would write. A plan that removes files says how many in its message (`…, 1 to remove · nothing written`).
 
 `--path` / `-C` and `--yes` / `-y` work on **every** `setup` subcommand (`repo`, `platforms`, `ci`, `env`, `hooks`, `mcp`, `skills`, `vscode`). A positional `PATH` is still accepted as a hidden alias on the subcommands that historically required it; passing both forms in one invocation is a usage error. `setup vscode` accepts `--yes` for symmetry — it writes editor-local files and never prompts.
 
@@ -309,8 +310,8 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository path (install, discover, show) |
-| `--cursor` | Copy the skills to `.cursor/skills/` |
-| `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/` |
+| `--cursor` | Copy the skills to `.cursor/skills/`, keeping files you added there |
+| `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/`, keeping files you added there |
 | `--generic` | Write `AGENTS.md` for any agent that reads `.agents/skills/` |
 | `--github-copilot` | Write `.github/copilot-instructions.md`, and `AGENTS.md` as `--generic` does |
 | `--install` | Skill slug to install (repeatable); default: `opentide-detection-rule` and `detection-engineering` |
@@ -345,7 +346,7 @@ Recommends the opentide VS Code extension and writes the object snippets. By def
 
 `.vscode/extensions.json` recommends `opentidehq.opentide`, the opentide extension: its language server checks object files, and it bundles the templates and the MCP server. Recommendations already there are kept, and the extension is not added when the file lists it under `unwantedRecommendations`.
 
-The command writes no `yaml.schemas`: a YAML language server mapped to opentide's schemas reports what the opentide language server already does. When `.vscode/settings.json` exists, it removes the entries earlier releases wrote, the `.opentide/schemas/opentide.schema.json` router mapping and the per-folder revision mappings (for example `.opentide/schemas/rule.1.0.schema.json` → `objects/rules/**/*.yaml`), and drops `yaml.schemas` when nothing else is left in it. A mapping counts whether its globs are a string or a list. Other settings and other `yaml.schemas` entries are kept. It never creates `settings.json`, and leaves it untouched when it holds no such entry; `files` lists it only when it was rewritten.
+The command writes no `yaml.schemas`: a YAML language server mapped to opentide's schemas reports what the opentide language server already does. When `.vscode/settings.json` exists, it removes the entries earlier releases wrote, the `.opentide/schemas/opentide.schema.json` router mapping and the per-folder revision mappings (for example `.opentide/schemas/rule.1.0.schema.json` → `objects/rules/**/*.yaml`), and drops `yaml.schemas` when nothing else is left in it. A mapping counts whether its globs are a string or a list. Only the globs setup wrote go: a folder you mapped to the router yourself (`playbooks/**/*.yaml`) stays mapped. Other settings and other `yaml.schemas` entries are kept. It never creates `settings.json`, and leaves it untouched when it holds no such entry; `files` lists it only when it was rewritten. Both files are edited in place: only the removed entry, or the added recommendation, changes, so comments, layout, line endings and a byte-order mark stay. `extensions.json` is not written when it already recommends `opentidehq.opentide` or lists it under `unwantedRecommendations`. A commented file setup cannot edit that way, or one that does not parse, is left unchanged, with a warning.
 
 The snippets have `scope: "yaml,opentide-yaml"`, so they complete in plain YAML files and in the extension's object files (language `opentide-yaml`).
 

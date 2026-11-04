@@ -176,9 +176,9 @@ jobs:
           python -m pip install cibuildwheel==4.3.5
           python -m cibuildwheel --output-dir wheelhouse
 
-      # cibuildwheel would test the win_arm64 wheel on CPython 3.10, for which
-      # cryptography has no Windows on Arm wheel (its cp311-abi3 wheels stop at
-      # 46.0.3), so pip would compile it. Install it the way a user on 3.12
+      # cibuildwheel's test install would take the newest cryptography, which
+      # publishes no Windows on Arm wheel (the last are 46.0.3's cp38-abi3 and
+      # cp311-abi3 ones), and compile it. Install the wheel the way a user
       # does, with cryptography from a wheel, and check the engine and doctor.
       - name: Install the win_arm64 wheel and run doctor
         if: matrix.os == 'windows-11-arm'

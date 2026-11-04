@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 
@@ -80,12 +81,34 @@ def _skill_reachable(slug: str, *, source: str, ref: str) -> bool:
     return fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref) is not None
 
 
+def _extra_files(dest: Path, shipped: Iterable[str]) -> list[str]:
+    """Files under *dest*, relative to it, that are not in *shipped*: the user's own."""
+    if dest.is_symlink() or not dest.is_dir():
+        return []
+    names = set(shipped)
+    return sorted(
+        rel
+        for path in dest.rglob("*")
+        if path.is_file() and (rel := path.relative_to(dest).as_posix()) not in names
+    )
+
+
+def _kept_warning(where: str, kept: list[str]) -> str:
+    shown = ", ".join(kept[:5]) + (f" and {len(kept) - 5} more" if len(kept) > 5 else "")
+    return (
+        f"Kept {len(kept)} file(s) in {where} that the skill does not ship ({shown}); "
+        "delete them by hand if they are left over from an older version."
+    )
+
+
 def _replace_tree(dest: Path, files: dict[str, bytes]) -> list[str]:
     """Swap *dest* for *files* only after every byte is on disk.
 
     A failed download must not delete the previous tree or leave a partial one
     beside it. The incoming directory is renamed into place, which replaces the
-    old tree in one step on the same filesystem.
+    old tree in one step on the same filesystem. ``.agents/skills/<slug>`` is
+    opentide's copy of the skill, so a file an older version shipped goes; the
+    harness copies made from it keep the user's files (:func:`_copy_skill`).
     """
     parent = dest.parent
     parent.mkdir(parents=True, exist_ok=True)
@@ -150,7 +173,12 @@ def _install_bundled_skill(slug: str, dest: Path) -> list[str]:
 
 
 def _download_skill(
-    slug: str, dest: Path, *, source: str, ref: str, tree: GithubTree | None = None
+    slug: str,
+    dest: Path,
+    *,
+    source: str,
+    ref: str,
+    tree: GithubTree | None = None,
 ) -> list[str]:
     """Install one skill tree.
 
@@ -220,15 +248,31 @@ def unavailable_skills(options: SkillsSetupOptions) -> list[str]:
     ]
 
 
-def _install_cursor(target: Path, slugs: list[str]) -> list[str]:
+def _copy_skill(src: Path, dest: Path, where: str, warnings: list[str]) -> None:
+    """Copy the skill *src* over *dest*, keeping the files in *dest* it does not ship.
+
+    The folder used to be deleted first, and with it whatever the user had
+    put there (team notes, local edits to a file the skill does not ship).
+    """
+    if dest.exists() and dest.resolve() == src.resolve():
+        # ``.claude/skills`` links to ``.agents/skills`` (or this skill's folder
+        # does): the skill is already there, and copying it onto itself would
+        # delete it.
+        return
+    shipped = [path.relative_to(src).as_posix() for path in src.rglob("*") if path.is_file()]
+    kept = _extra_files(dest, shipped)
+    shutil.copytree(src, dest, dirs_exist_ok=True)
+    if kept:
+        warnings.append(_kept_warning(where, kept))
+
+
+def _install_cursor(target: Path, slugs: list[str], warnings: list[str]) -> list[str]:
     written: list[str] = []
     for slug in slugs:
         src = target / ".agents" / "skills" / slug
         dest = target / ".cursor" / "skills" / slug
         if src.is_dir():
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(src, dest)
+            _copy_skill(src, dest, f".cursor/skills/{slug}", warnings)
             written.append(f".cursor/skills/{slug}/SKILL.md")
     return written
 
@@ -271,9 +315,7 @@ def _install_claude_code(
         src = target / ".agents" / "skills" / slug
         dest = target / ".claude" / "skills" / slug
         if src.is_dir():
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(src, dest)
+            _copy_skill(src, dest, f".claude/skills/{slug}", entrypoints.warnings)
             written.append(f".claude/skills/{slug}/SKILL.md")
     return written
 
@@ -319,13 +361,13 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     copies = [t for t in options.targets if not (options.plugin and t is SkillTarget.claude_code)]
     slugs = _resolve_skill_slugs(options) if copies else []
     context = _entrypoint_context(options, target)
+    entrypoints = _Entrypoints()
     if slugs:
         written.extend(_install_skill_trees(target, slugs))
-    entrypoints = _Entrypoints()
     also_applied: list[str] = []
     for skill_target in options.targets:
         if skill_target is SkillTarget.cursor:
-            written.extend(_install_cursor(target, slugs))
+            written.extend(_install_cursor(target, slugs, entrypoints.warnings))
         elif skill_target is SkillTarget.claude_code:
             own = [] if options.plugin else slugs
             written.extend(_install_claude_code(target, own, context, entrypoints))

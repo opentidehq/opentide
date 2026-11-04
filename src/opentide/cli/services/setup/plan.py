@@ -4,17 +4,21 @@ The plan runs the very same setup steps ``--yes`` runs, in a copy of the
 repository in a temporary directory, and compares that copy's files before
 and after each step. So the plan cannot drift from what setup does: a file
 is ``create`` when a step made it, ``merge`` when a step wrote over one that
-was there, and ``skip`` when a step reported it left as it was. The copy is
+was there, ``delete`` when a step removed one, and ``skip`` when a step
+reported it left as it was. The copy is
 deleted afterwards; the repository itself is only read.
 
 What the copy holds:
 
 - the Git work tree around the target (the target alone outside Git), less
   the folders no setup step reads (``node_modules``, virtual environments,
-  caches);
+  caches) and anything that is not a file, a folder or a link. A link that
+  points outside the tree is copied as what it points at, so no step writes
+  through it (:func:`_copy_tree`);
 - a small ``.git`` with the real repository's ``HEAD``, configuration, refs and
   hooks, and its object store as an alternate, so ``git`` answers in the copy
-  as it does in the repository (branches, ``core.hooksPath``).
+  as it does in the repository (branches, ``core.hooksPath``); a linked
+  worktree's or a submodule's ``.git`` file keeps its layout (:func:`_copy_git`).
 
 A step that would write outside the repository (a ``core.hooksPath`` shared
 with other repositories) writes nothing there in a plan either: it warns, as
@@ -25,6 +29,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import tempfile
 from collections.abc import Callable, Generator, Iterable, Mapping
 from contextlib import contextmanager
@@ -32,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-PlanAction = Literal["create", "merge", "skip"]
+PlanAction = Literal["create", "merge", "skip", "delete"]
 
 #: Folders the copy leaves out: nothing setup writes depends on them, and they can be large.
 SKIPPED_DIRS = frozenset(
@@ -46,8 +51,23 @@ SKIPPED_DIRS = frozenset(
         ".mypy_cache",
         ".pytest_cache",
         ".ruff_cache",
+        ".cache",
+        ".terraform",
+        "target",
+        "dist",
+        "build",
     }
 )
+#: The most the copy holds before the plan refuses: a work tree this big is not
+#: a detection repository, or one whose copy would fill the temporary folder.
+MAX_COPY_FILES = 50_000
+MAX_COPY_BYTES = 512 * 1024 * 1024
+
+
+class PlanRefused(Exception):
+    """``--plan`` will not copy this tree; the message says why and what to do."""
+
+
 #: What of ``.git`` the copy keeps; objects are read from the real store as an alternate.
 _GIT_FILES = ("HEAD", "config", "packed-refs", "description")
 _GIT_DIRS = ("refs", "hooks", "info")
@@ -69,7 +89,7 @@ Stamp = tuple[int, int]
 
 @dataclass(frozen=True)
 class PlannedFile:
-    """One file a step would write, or leave as it is."""
+    """One file a step would write, remove, or leave as it is."""
 
     path: str
     action: PlanAction
@@ -130,62 +150,219 @@ def _git_dirs(top: Path) -> tuple[Path, Path] | None:
     return git_dir, common
 
 
-def _copy_git(top: Path, shadow_top: Path) -> None:
-    """A ``.git`` in the copy that ``git`` reads as the real one, sharing its objects."""
+def _copy_git(top: Path, shadow_top: Path, scratch: Path) -> list[tuple[Path, Path]]:
+    """A ``.git`` in the copy that ``git`` reads as the real one, sharing its objects.
+
+    The copy keeps the repository's layout. A plain ``.git`` folder is copied
+    into the copy's top. A ``.git`` file (a linked worktree, a submodule) stays
+    a file, pointing at a copy of its git directory beside the copy, whose
+    ``commondir`` points at a copy of the common directory: so the hooks of a
+    worktree land in the common directory, as they do for real, and a
+    submodule's ``core.worktree`` no longer points out of the copy.
+
+    Returns the ``(copy, repository)`` pairs of the git directories kept
+    outside the copy's top, for :class:`Sandbox` to watch and map back.
+    """
     found = _git_dirs(top)
     if found is None:
-        return
+        return []
     git_dir, common = found
-    target = shadow_top / ".git"
-    target.mkdir(parents=True, exist_ok=True)
+    roots: list[tuple[Path, Path]] = []
+    if (top / ".git").is_dir() and git_dir == common:
+        shadow_git = shadow_common = shadow_top / ".git"
+    else:
+        shadow_common = scratch / "git-common"
+        roots.append((shadow_common, common))
+        shadow_git = shadow_common
+        if git_dir != common:
+            shadow_git = scratch / "git-dir"
+            roots.append((shadow_git, git_dir))
+    shadow_git.mkdir(parents=True, exist_ok=True)
+    shadow_common.mkdir(parents=True, exist_ok=True)
     head = git_dir / "HEAD"
     if head.is_file():
-        shutil.copy2(head, target / "HEAD")
+        shutil.copy2(head, shadow_git / "HEAD")
+    if shadow_git != shadow_common:
+        (shadow_git / "commondir").write_text(f"{shadow_common}\n", encoding="utf-8")
+        worktree_config = git_dir / "config.worktree"
+        if worktree_config.is_file():
+            shutil.copy2(worktree_config, shadow_git / "config.worktree")
+    if roots:
+        (shadow_top / ".git").write_text(f"gitdir: {shadow_git}\n", encoding="utf-8")
     for name in _GIT_FILES[1:]:
         source = common / name
         if source.is_file():
-            shutil.copy2(source, target / name)
+            shutil.copy2(source, shadow_common / name)
     for name in _GIT_DIRS:
         source = common / name
         if source.is_dir():
-            shutil.copytree(source, target / name, symlinks=True, dirs_exist_ok=True)
-    objects = target / "objects"
+            shutil.copytree(source, shadow_common / name, symlinks=True, dirs_exist_ok=True)
+    objects = shadow_common / "objects"
     (objects / "info").mkdir(parents=True, exist_ok=True)
     (objects / "pack").mkdir(exist_ok=True)
     real_objects = common / "objects"
     if real_objects.is_dir():
         (objects / "info" / "alternates").write_text(f"{real_objects}\n", encoding="utf-8")
+    config = shadow_common / "config"
+    if config.is_file() and roots:
+        # A submodule's points back at the real work tree: the copy's is where its .git is.
+        _git("config", "--file", str(config), "--unset", "core.worktree")
+    _pin_hooks_path(top, shadow_top, config)
+    return roots
 
 
-def _ignore(directory: str, names: list[str]) -> set[str]:
-    ignored = {name for name in names if name in SKIPPED_DIRS}
-    if ".git" in names:
-        ignored.add(".git")
-    return ignored
+def _git(*args: str) -> subprocess.CompletedProcess[str] | None:
+    """``git *args*`` with no inherited ``GIT_DIR`` and friends; ``None`` without Git."""
+    env = {name: value for name, value in os.environ.items() if name not in _GIT_VARIABLES}
+    try:
+        return subprocess.run(["git", *args], capture_output=True, text=True, check=False, env=env)
+    except OSError:
+        return None
 
 
-def stamps(root: Path) -> dict[str, Stamp]:
-    """Every file under *root*, by its path relative to *root*: size and mtime.
+def _pin_hooks_path(top: Path, shadow_top: Path, config: Path) -> None:
+    """Give the copy the ``core.hooksPath`` the repository has, mapped into the copy.
 
-    ``.git/objects`` is left out: it is the real store's alternate, never written.
+    Read from the repository, so a value set by an ``includeIf "gitdir:…"`` that
+    matches the real path but not the copy's still applies. An absolute path
+    inside the repository (``$PWD/.githooks``) would point the copy back at
+    the repository, where the hooks step sees a folder outside its tree and
+    leaves it alone as shared: it becomes the same folder in the copy.
+    """
+    probe = _git("-C", str(top), "config", "--get", "core.hooksPath")
+    if probe is None or probe.returncode != 0 or not probe.stdout.strip():
+        return
+    value = probe.stdout.strip()
+    path = Path(os.path.expanduser(value))
+    if path.is_absolute():
+        resolved = path.resolve()
+        real_top = top.resolve()
+        if resolved.is_relative_to(real_top):
+            value = str(shadow_top / resolved.relative_to(real_top))
+    if config.is_file():
+        _git("config", "--file", str(config), "core.hooksPath", value)
+
+
+def _copy_tree(top: Path, shadow_top: Path) -> None:
+    """Copy *top* to *shadow_top* so that nothing a step writes there lands outside it.
+
+    - A symbolic link that resolves inside *top* stays a link, to the same place
+      in the copy: a relative one as it is, an absolute one rewritten.
+    - One that resolves outside *top* (a dotfile manager's ``.mcp.json``, a
+      shared ``.vscode``) becomes a copy of what it points at, so a write
+      through it changes the copy, and the plan lists it. A dangling one is
+      left out: a step then creates the file, as it would through the link.
+    - Sockets, FIFOs and device nodes are left out: nothing setup reads is one,
+      and copying one fails.
+    """
+    real_top = top.resolve()
+    #: Folders outside the tree copied through a link.
+    outside: set[Path] = set()
+    copied = [0, 0]
+
+    def count(path: Path) -> None:
+        copied[0] += 1
+        copied[1] += path.stat().st_size
+        if copied[0] > MAX_COPY_FILES or copied[1] > MAX_COPY_BYTES:
+            raise PlanRefused(
+                f"--plan copies the work tree around the target into a temporary folder, "
+                f"and {top} holds more than {MAX_COPY_FILES:,} files or "
+                f"{MAX_COPY_BYTES // (1024 * 1024)} MB outside the folders it skips. "
+                "Plan a smaller tree with --path, or run setup without --plan."
+            )
+
+    def copy_link(source: Path, dest: Path) -> None:
+        try:
+            resolved = source.resolve(strict=True)
+        except (OSError, RuntimeError):
+            resolved = None
+        raw = os.readlink(source)
+        if resolved is None:
+            # Dangling: keep a relative link that stays inside the copy.
+            lexical = Path(os.path.normpath(source.parent / raw))
+            if not Path(raw).is_absolute() and lexical.is_relative_to(top):
+                os.symlink(raw, dest)
+            return
+        if resolved.is_relative_to(real_top):
+            if Path(raw).is_absolute():
+                os.symlink(shadow_top / resolved.relative_to(real_top), dest)
+            else:
+                os.symlink(raw, dest)
+            return
+        if resolved.is_dir():
+            # A folder above the tree, or one copied already, would never end.
+            if real_top.is_relative_to(resolved) or resolved in outside:
+                return
+            outside.add(resolved)
+            copy_dir(resolved, dest)
+        elif resolved.is_file():
+            count(resolved)
+            shutil.copy2(resolved, dest)
+
+    def copy_dir(source: Path, dest: Path) -> None:
+        dest.mkdir(parents=True, exist_ok=True)
+        try:
+            entries = sorted(os.scandir(source), key=lambda entry: entry.name)
+        except OSError:
+            return
+        for entry in entries:
+            if entry.name in SKIPPED_DIRS or entry.name == ".git":
+                continue
+            path = Path(entry.path)
+            target = dest / entry.name
+            try:
+                if entry.is_symlink():
+                    copy_link(path, target)
+                elif entry.is_dir(follow_symlinks=False):
+                    copy_dir(path, target)
+                elif entry.is_file(follow_symlinks=False):
+                    count(path)
+                    shutil.copy2(path, target, follow_symlinks=False)
+                # Anything else (socket, FIFO, device) is not copied.
+            except OSError:
+                # Unreadable: a step cannot read it in the repository either.
+                continue
+
+    copy_dir(top, shadow_top)
+
+
+def stamps(root: Path, *git_dirs: Path) -> dict[str, Stamp]:
+    """Every file under *root* and *git_dirs*, by its absolute path: size and mtime.
+
+    ``objects`` of ``root/.git`` and of each git directory is left out: it is
+    the real store's alternate, never written.
     """
     found: dict[str, Stamp] = {}
-    git_dir = root / ".git"
-    for directory, dirs, files in os.walk(root):
-        here = Path(directory)
-        dirs[:] = [
-            name
-            for name in dirs
-            if name not in SKIPPED_DIRS and not (here == git_dir and name == "objects")
-        ]
-        for name in files:
-            path = here / name
-            try:
-                stat = path.lstat()
-            except OSError:
-                continue
-            found[path.relative_to(root).as_posix()] = (stat.st_size, stat.st_mtime_ns)
+    skipped = {root / ".git" / "objects", *(folder / "objects" for folder in git_dirs)}
+    for top in (root, *git_dirs):
+        for directory, dirs, files in os.walk(top):
+            here = Path(directory)
+            dirs[:] = [
+                name for name in dirs if name not in SKIPPED_DIRS and here / name not in skipped
+            ]
+            for name in files:
+                path = here / name
+                try:
+                    stat = path.lstat()
+                except OSError:
+                    continue
+                found[str(path)] = (stat.st_size, stat.st_mtime_ns)
     return found
+
+
+def _refuse_to_copy(top: Path) -> None:
+    """Refuse a tree no plan should copy: a home folder or a file system root."""
+    try:
+        home = Path.home().resolve()
+    except (OSError, RuntimeError):
+        home = None
+    if top.parent == top or (home is not None and top.resolve() == home):
+        where = "your home folder" if top.parent != top else "a file system root"
+        raise PlanRefused(
+            f"--plan would copy {where} ({top}) into a temporary folder, its secrets "
+            "included. Point --path at the detection repository, or run `git init` "
+            "in it so the plan copies that repository alone."
+        )
 
 
 class Sandbox:
@@ -197,23 +374,37 @@ class Sandbox:
         top = _git_root(anchor)
         if top is None or not self.real_target.is_relative_to(top):
             top = self.real_target
+        _refuse_to_copy(top)
         self.real_top = top
         self.shadow_top = root / (top.name or "repo")
         self.shadow_target = self.shadow_top / self.real_target.relative_to(top)
+        #: ``(copy, repository)`` folder pairs: the copy's top, then any git
+        #: directory kept beside it (:func:`_copy_git`).
+        self._roots: list[tuple[Path, Path]] = [(self.shadow_top, top)]
         if top.is_dir():
-            shutil.copytree(top, self.shadow_top, symlinks=True, ignore=_ignore)
-            _copy_git(top, self.shadow_top)
+            _copy_tree(top, self.shadow_top)
+            self._roots.extend(_copy_git(top, self.shadow_top, root))
         else:
             self.shadow_top.mkdir(parents=True)
-        self._seen = stamps(self.shadow_top)
+        self._seen = self._stamps()
         self._written: set[str] = set()
 
-    def real_path(self, relative: str) -> Path:
-        return self.real_top / relative
+    def _stamps(self) -> dict[str, Stamp]:
+        return stamps(self.shadow_top, *(shadow for shadow, _ in self._roots[1:]))
 
-    def shown(self, relative: str) -> str:
-        """*relative* (to the copy's top) as the plan shows it: relative to the target."""
-        path = self.real_path(relative)
+    def real_path(self, shadow: str) -> Path:
+        """The repository's path for *shadow*, a path in the copy (or relative to its top)."""
+        path = Path(shadow)
+        if not path.is_absolute():
+            return self.real_top / path
+        for copy, real in self._roots:
+            if path.is_relative_to(copy):
+                return real / path.relative_to(copy)
+        return path
+
+    def shown(self, shadow: str) -> str:
+        """*shadow* (a path in the copy) as the plan shows it: relative to the target."""
+        path = self.real_path(shadow)
         try:
             return path.relative_to(self.real_target).as_posix()
         except ValueError:
@@ -221,7 +412,7 @@ class Sandbox:
 
     def step(self, name: str, result: Mapping[str, Any]) -> PlannedStep:
         """What the step that just ran wrote: the files that changed since the last one."""
-        now = stamps(self.shadow_top)
+        now = self._stamps()
         planned = PlannedStep(name, warnings=[self.to_real(str(w)) for w in _warnings(result)])
         shown: set[str] = set()
         for relative in sorted(now):
@@ -232,6 +423,10 @@ class Sandbox:
             planned.files.append(PlannedFile(self.shown(relative), action))
             shown.add(self.shown(relative))
             self._written.add(relative)
+        for relative in sorted(set(self._seen) - set(now)):
+            # A file the step removed (a skill folder replaced whole).
+            planned.files.append(PlannedFile(self.shown(relative), "delete"))
+            shown.add(self.shown(relative))
         for item in _reported_skips(result):
             path = self.to_real(item)
             relative = self._relative_to_target(path)
@@ -253,10 +448,12 @@ class Sandbox:
 
     def to_real(self, text: str) -> str:
         """*text* with the copy's paths replaced by the repository's."""
-        for shadow, real in (
+        pairs = [
             (str(self.shadow_target), str(self.real_target)),
-            (str(self.shadow_top), str(self.real_top)),
-        ):
+            *((str(copy), str(real)) for copy, real in self._roots),
+        ]
+        # Longest first: the target sits inside the copy's top.
+        for shadow, real in sorted(pairs, key=lambda pair: len(pair[0]), reverse=True):
             text = text.replace(shadow, real)
         return text
 
@@ -272,10 +469,42 @@ def _reported_skips(result: Mapping[str, Any]) -> list[str]:
 
 
 @contextmanager
+def _exit_on_termination() -> Generator[None, None, None]:
+    """Turn SIGTERM and SIGHUP into ``SystemExit`` while the copy exists.
+
+    Python's default for both ends the process without running ``finally``
+    blocks, so the copy, the repository's secrets included, stayed in the
+    temporary folder when an editor or a CI timeout stopped the plan.
+    Only the main thread can install handlers; elsewhere this does nothing.
+    """
+    import signal
+    import threading
+
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def stop(signum: int, _frame: object) -> None:
+        raise SystemExit(128 + signum)
+
+    names = [name for name in ("SIGTERM", "SIGHUP") if hasattr(signal, name)]
+    previous = {name: signal.signal(getattr(signal, name), stop) for name in names}
+    try:
+        yield
+    finally:
+        for name, handler in previous.items():
+            # None: a handler installed outside Python, which cannot be put back.
+            signal.signal(getattr(signal, name), signal.SIG_DFL if handler is None else handler)
+
+
+@contextmanager
 def sandbox(target: Path) -> Generator[Sandbox, None, None]:
     """A :class:`Sandbox` for *target*, with the workspace variables pointing at the copy."""
     saved = {name: os.environ.get(name) for name in (*_WORKSPACE_VARIABLES, *_GIT_VARIABLES)}
-    with tempfile.TemporaryDirectory(prefix="opentide-setup-plan-") as scratch:
+    with (
+        _exit_on_termination(),
+        tempfile.TemporaryDirectory(prefix="opentide-setup-plan-") as scratch,
+    ):
         box = Sandbox(target, Path(scratch))
         for name in _GIT_VARIABLES:
             os.environ.pop(name, None)
@@ -304,7 +533,7 @@ def plan_payload(
 ) -> dict[str, object]:
     """The ``--plan`` document: each step's files, the counts, and the outcome line."""
     listed = list(steps)
-    counts = {"create": 0, "merge": 0, "skip": 0}
+    counts = {"create": 0, "merge": 0, "skip": 0, "delete": 0}
     for step in listed:
         for item in step.files:
             counts[item.action] += 1
@@ -314,9 +543,10 @@ def plan_payload(
             all_warnings.append(warning)
     writes = counts["create"] + counts["merge"]
     noun = "file" if writes == 1 else "files"
+    removed = f", {counts['delete']} to remove" if counts["delete"] else ""
     message = (
         f"Plan: {writes} {noun} to write ({counts['create']} new, {counts['merge']} changed)"
-        " · nothing written"
+        f"{removed} · nothing written"
     )
     return {
         "message": message,
@@ -338,6 +568,8 @@ def plan_steps(
 ) -> tuple[list[PlannedStep], Mapping[str, Any]]:
     """Run *run* in a sandbox of *target*; return the planned steps and its result.
 
+    The result's ``warnings`` name the repository's paths, not the copy's.
+
     *run* gets the copy of the target and a callback to call after each step
     with the step's name and result (``run_setup`` does it for each of its
     steps). A run that never calls it is one step, *name*.
@@ -351,4 +583,6 @@ def plan_steps(
         result = run(box.shadow_target, after_step)
         if not planned:
             planned.append(box.step(name, result))
+        # The run's own warnings (flags it ignored), with the copy's paths made real.
+        result = {**result, "warnings": [box.to_real(warning) for warning in _warnings(result)]}
     return planned, result
