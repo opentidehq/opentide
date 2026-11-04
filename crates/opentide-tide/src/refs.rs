@@ -12,7 +12,8 @@ use std::collections::BTreeSet;
 /// One UUID an object's body names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectRef {
-    /// The UUID, as written.
+    /// The value, as written: a UUID, or whatever a malformed field holds
+    /// (a ref no object carries, as `invalid_ref` reports it).
     pub uuid: String,
     /// Where it sits in the object: mapping keys and list indexes joined
     /// with `.` (`detection_model`, `objective.signals.0.parent`), as
@@ -26,17 +27,6 @@ pub struct ObjectRef {
 enum Step {
     Key(String),
     Index(usize),
-}
-
-/// Whether a scalar is a UUID (any version: a reference may name an object
-/// whose UUID is not a v4, which the check of that object reports).
-pub(crate) fn is_uuid(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    bytes.len() == 36
-        && bytes.iter().enumerate().all(|(i, b)| match i {
-            8 | 13 | 18 | 23 => *b == b'-',
-            _ => b.is_ascii_hexdigit(),
-        })
 }
 
 /// Whether a field names an object or a signal by its UUID: the reference
@@ -62,9 +52,11 @@ fn is_reference(path: &[Step]) -> bool {
     }
 }
 
-/// Every UUID-valued reference field of `body` ([`is_reference`]) that does
-/// not name the object itself (`own`), in document order, each placed in
-/// `source`, the text `body` was parsed from.
+/// Every reference field of `body` ([`is_reference`]) whose string value is
+/// not empty and does not name the object itself (`own`), in document order,
+/// each placed in `source`, the text `body` was parsed from. A value that is
+/// not a UUID (a typo, `TODO`) is kept: `invalid_ref` reports it, and it is
+/// a ref no object carries.
 pub fn object_refs(source: &str, body: &serde_yaml::Value, own: &str) -> Vec<ObjectRef> {
     let mut found: Vec<(Vec<Step>, String)> = Vec::new();
     let mut path = Vec::new();
@@ -97,7 +89,7 @@ fn collect(
 ) {
     match value {
         serde_yaml::Value::String(text) => {
-            if text != own && is_uuid(text) && is_reference(path) {
+            if text != own && !text.trim().is_empty() && is_reference(path) {
                 let steps = path
                     .iter()
                     .map(|step| match step {
@@ -146,7 +138,10 @@ fn field_path(steps: &[Step]) -> String {
 
 /// The UUID's span: its first occurrence not already taken after the key
 /// that holds it ([`key_span_in`], the list item each index names) or, in a
-/// flow mapping, after its nearest block ancestor, else anywhere in the text. A UUID quoted in prose before its field is not the
+/// flow mapping, after its nearest block ancestor, else anywhere in the text.
+/// An occurrence that stands as a scalar of its own ([`stands_alone`]) wins
+/// over one in a comment or in another scalar's prose: a UUID quoted in
+/// prose before its field, or in a comment between list items, is not the
 /// field's.
 fn locate(
     source: &str,
@@ -173,15 +168,68 @@ fn locate(
         .rev()
         .find_map(|n| key_span_in(source, &keys[..n]).or_else(|| key_span(source, &names[..n])))
         .map_or(0, |span| span.end);
-    let free = |from: usize, used: &BTreeSet<usize>| {
+    let free = |from: usize, alone: bool, used: &BTreeSet<usize>| {
         source[from..]
             .match_indices(uuid)
             .map(|(i, _)| from + i)
-            .find(|start| !used.contains(start))
+            .find(|start| {
+                !used.contains(start) && (!alone || stands_alone(source, *start, uuid.len()))
+            })
     };
-    let start = free(anchor, used).or_else(|| free(0, used))?;
+    let start = free(anchor, true, used)
+        .or_else(|| free(0, true, used))
+        .or_else(|| free(anchor, false, used))
+        .or_else(|| free(0, false, used))?;
     used.insert(start);
     Some(ByteSpan::new(start, start + uuid.len()))
+}
+
+/// Whether `source[start..start + len]` is a whole scalar, read on its line
+/// alone: not in a comment, and either the whole of a quoted scalar or a
+/// plain one that starts after a line's indent, `:`, `-`, `[`, `{` or `,`
+/// and ends at the line's end, `,`, `]`, `}` or a comment. A block scalar's
+/// line is read like any other, so a line that is nothing but the UUID
+/// passes.
+fn stands_alone(source: &str, start: usize, len: usize) -> bool {
+    let line_start = source[..start].rfind('\n').map_or(0, |i| i + 1);
+    let line_end = source[start..]
+        .find('\n')
+        .map_or(source.len(), |i| start + i);
+    let before = &source[line_start..start];
+    let after = source[start + len..line_end].trim_end_matches('\r');
+    // Where a quoted scalar opened, if one is open at `start`.
+    let mut quote: Option<(char, usize)> = None;
+    let mut chars = before.char_indices().peekable();
+    let mut previous = ' ';
+    while let Some((i, c)) = chars.next() {
+        match quote {
+            Some(('\'', _)) if c == '\'' => {
+                if chars.peek().is_some_and(|(_, n)| *n == '\'') {
+                    chars.next();
+                } else {
+                    quote = None;
+                }
+            }
+            Some(('"', _)) if c == '\\' => {
+                chars.next();
+            }
+            Some(('"', _)) if c == '"' => quote = None,
+            Some(_) => {}
+            None if c == '#' && previous.is_whitespace() => return false,
+            None if c == '\'' || c == '"' => quote = Some((c, i)),
+            None => {}
+        }
+        previous = c;
+    }
+    if let Some((mark, opened)) = quote {
+        return opened + mark.len_utf8() == before.len() && after.starts_with(mark);
+    }
+    let lead = before.trim_end();
+    let tail = after.trim_start();
+    (lead.is_empty() || lead.ends_with([':', '-', '[', '{', ',']))
+        && (tail.is_empty()
+            || tail.starts_with([',', ']', '}'])
+            || (tail.starts_with('#') && tail.len() < after.len()))
 }
 
 #[cfg(test)]
@@ -250,6 +298,66 @@ mod tests {
         assert_eq!(text_at(&source, found[0].range), MODEL);
     }
 
+    /// Each ref's line and the text its range covers.
+    fn placed(source: &str) -> Vec<(String, u32, String)> {
+        refs(source)
+            .into_iter()
+            .map(|r| {
+                let text = text_at(source, r.range).to_string();
+                (r.field_path, r.range.start.line, text)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_uuid_in_a_comment_or_in_another_scalar_is_not_the_refs_range() {
+        let a = "00000000-0000-4000-8001-00000000000a";
+        let b = "00000000-0000-4000-8001-00000000000b";
+        let owned = |v: &[(&str, u32, &str)]| -> Vec<(String, u32, String)> {
+            v.iter()
+                .map(|(p, l, t)| (p.to_string(), *l, t.to_string()))
+                .collect()
+        };
+        // A comment after an earlier item names the next one.
+        let source =
+            format!("objective:\n  threats:\n    - {a}  # chained before {b}\n    - {b}\n");
+        assert_eq!(
+            placed(&source),
+            owned(&[("objective.threats.0", 2, a), ("objective.threats.1", 3, b)])
+        );
+        // A comment line above the item.
+        let source = format!("objective:\n  threats:\n    # supersedes {a}\n    - {a}\n");
+        assert_eq!(placed(&source), owned(&[("objective.threats.0", 3, a)]));
+        // A comment after the key, the value on the next line.
+        let source = format!(
+            "objective:\n  signals:\n    - name: s\n      parent: # refined from {a}\n        {a}\n"
+        );
+        assert_eq!(
+            placed(&source),
+            owned(&[("objective.signals.0.parent", 4, a)])
+        );
+        // Prose in a flow mapping, quoted or plain, before the field.
+        for prose in [format!("\"replaces {a}\""), format!("replaces {a}")] {
+            let source = format!("objective: {{ description: {prose}, threats: [{a}] }}\n");
+            let found = refs(&source);
+            assert_eq!(found.len(), 1, "{found:?}");
+            let line = source.lines().next().unwrap();
+            assert_eq!(
+                found[0].range.start.character as usize,
+                line.rfind(a).unwrap(),
+                "{source}"
+            );
+        }
+        // A quoted value is its own.
+        let source = format!(
+            "description: '{a}'\ndetection_model: \"{a}\"\nobjective:\n  threats: ['{b}']\n"
+        );
+        assert_eq!(
+            placed(&source),
+            owned(&[("detection_model", 1, a), ("objective.threats.0", 3, b)])
+        );
+    }
+
     #[test]
     fn columns_count_utf16_units() {
         let source =
@@ -295,6 +403,39 @@ mod tests {
         );
         let paths: Vec<String> = refs(&threat).into_iter().map(|r| r.field_path).collect();
         assert_eq!(paths, ["threat.chaining.0.vector"]);
+    }
+
+    /// `invalid_ref` reports a reference field whatever its value, and
+    /// opentide's catalog has a missing edge for it: a value that is not a
+    /// UUID is a ref no object carries, not silently dropped.
+    #[test]
+    fn a_reference_field_whose_value_is_not_a_uuid_is_still_a_ref() {
+        let typo = "00000000-0000-4000-8002-00000000001";
+        let source = format!(
+            "name: R\nmetadata:\n  uuid: {OWN}\n  schema: rule::1.0\ndetection_model: {typo}\n"
+        );
+        let found = refs(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].uuid, typo);
+        assert_eq!(found[0].field_path, "detection_model");
+        assert_eq!(found[0].range.start.line, 4);
+        assert_eq!(text_at(&source, found[0].range), typo);
+
+        let found = refs(
+            "objective:\n  threats:\n    - TODO\n  signals:\n    - name: s\n      parent: tbd\n      uuid: ''\n",
+        );
+        let found: Vec<(&str, &str)> = found
+            .iter()
+            .map(|r| (r.field_path.as_str(), r.uuid.as_str()))
+            .collect();
+        // An empty value names nothing.
+        assert_eq!(
+            found,
+            [
+                ("objective.threats.0", "TODO"),
+                ("objective.signals.0.parent", "tbd")
+            ]
+        );
     }
 
     #[test]

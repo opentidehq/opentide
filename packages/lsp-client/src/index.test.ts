@@ -99,20 +99,83 @@ test("document selector covers every language", () => {
   }
 });
 
-// The language ids docs/EDITORS.md promises editors (#197).
-function editorLanguageIds(): string[] {
+// The language ids docs/EDITORS.md promises editors (#197): the first
+// sentence of the line that starts with `lead`.
+function editorLanguageIds(lead: string): string[] {
   const editors = readFileSync(join(root, "docs/EDITORS.md"), "utf8");
-  const line = editors.match(/^Language ids are the server's: (.*)$/m);
-  assert.ok(line, "docs/EDITORS.md lists the language ids");
-  return [...line[1].split(". ")[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  const line = editors.split(/\r?\n/).find((l) => l.startsWith(lead));
+  assert.ok(line, `docs/EDITORS.md has a line starting "${lead}"`);
+  return [...line.slice(lead.length).split(". ")[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]);
 }
 
 test("document selector covers each language docs/EDITORS.md lists, opentide-config included", () => {
-  const documented = editorLanguageIds();
-  assert.ok(documented.includes("opentide-config"), documented.join(", "));
-  assert.deepEqual([...documented].sort(), LANGUAGES.map((l) => l.id).sort());
-  for (const id of documented) {
-    assert.ok(DOCUMENT_SELECTOR.some((s) => "language" in s && s.language === id), id);
+  // The list at the top of the page and the one under VS Code.
+  for (const lead of ["Languages: ", "Language ids are the server's: "]) {
+    const documented = editorLanguageIds(lead);
+    assert.ok(documented.includes("opentide-config"), `${lead}${documented.join(", ")}`);
+    assert.deepEqual([...documented].sort(), LANGUAGES.map((l) => l.id).sort(), lead);
+    for (const id of documented) {
+      assert.ok(DOCUMENT_SELECTOR.some((s) => "language" in s && s.language === id), id);
+    }
+  }
+});
+
+// `LanguageClientOptions.documentSelector` in vscode-languageclient is
+// vscode-languageserver-protocol 3.17's `DocumentSelector`, a mutable array: a
+// readonly selector does not compile there (TS2322).
+test("the selectors type-check as vscode-languageclient's documentSelector, a mutable array", (t) => {
+  const pkg = fileURLToPath(new URL("../", import.meta.url));
+  const tsc = join(pkg, "node_modules/typescript/bin/tsc");
+  if (!existsSync(tsc)) {
+    t.skip("run npm ci in packages/lsp-client for tsc");
+    return;
+  }
+  const dir = mkdtempSync(join(tmpdir(), "opentide-selector-"));
+  try {
+    const index = join(pkg, "src/index.ts").replaceAll("\\", "/");
+    const fixture = join(dir, "selector.mts");
+    writeFileSync(
+      fixture,
+      `import { DOCUMENT_SELECTOR, WEB_DOCUMENT_SELECTOR } from ${JSON.stringify(index)};
+type TextDocumentFilter =
+  | { language: string; scheme?: string; pattern?: string }
+  | { language?: string; scheme: string; pattern?: string }
+  | { language?: string; scheme?: string; pattern: string };
+type DocumentSelector = (string | TextDocumentFilter)[];
+interface LanguageClientOptions {
+  documentSelector?: DocumentSelector | string[];
+}
+export const desktop: LanguageClientOptions = { documentSelector: DOCUMENT_SELECTOR };
+export const web: LanguageClientOptions = { documentSelector: WEB_DOCUMENT_SELECTOR };
+`,
+    );
+    const run = spawnSync(
+      process.execPath,
+      [
+        tsc,
+        "--noEmit",
+        "--strict",
+        "--skipLibCheck",
+        "--target",
+        "ES2022",
+        "--module",
+        "nodenext",
+        "--moduleResolution",
+        "nodenext",
+        "--allowImportingTsExtensions",
+        "--lib",
+        "ES2022,DOM,WebWorker",
+        "--typeRoots",
+        join(pkg, "node_modules/@types"),
+        "--types",
+        "node",
+        fixture,
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

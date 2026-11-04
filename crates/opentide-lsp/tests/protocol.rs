@@ -340,7 +340,8 @@ fn files_changed_on_disk_reach_the_open_documents() {
     assert_eq!(
         globs,
         [
-            "**/*.{yaml,yml}",
+            "**/objects",
+            "**/objects/**",
             "**/.opentide/configurations/**/*.toml",
             "**/.opentide/lsp/catalogs/generated/*"
         ]

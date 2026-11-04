@@ -7,6 +7,7 @@ of .github/workflows/release.yml (#196).
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -14,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -132,6 +134,71 @@ class VerifySumsTest(unittest.TestCase):
         self.assertIn("extra.wasm has no line in SHA256SUMS", bad.stderr)
 
 
+class UnpublishedTest(unittest.TestCase):
+    """`release.py unpublished TAG`: a release that already carries assets is
+    never uploaded again. Its zips do not rebuild byte for byte, and consumers
+    pin the published digests."""
+
+    def gh(self, returncode: int, stdout: str = "", stderr: str = "") -> mock.MagicMock:
+        done = subprocess.CompletedProcess([], returncode, stdout=stdout, stderr=stderr)
+        return mock.patch.object(release.subprocess, "run", return_value=done)
+
+    def release_json(self, names: list[str], draft: bool = False) -> str:
+        return json.dumps({"isDraft": draft, "assets": [{"name": n} for n in names]})
+
+    def test_a_release_with_assets_is_published(self) -> None:
+        with self.gh(0, self.release_json(["SHA256SUMS", "highlights-v1.0.0.zip"])) as run:
+            self.assertEqual(release.published_assets("v1.0.0", "o/r"), ["SHA256SUMS", "highlights-v1.0.0.zip"])
+        args = run.call_args.args[0]
+        self.assertEqual(args[:4], ["gh", "release", "view", "v1.0.0"])
+        self.assertIn("o/r", args)
+        # One from before SHA256SUMS (#196) too: its assets were downloaded as they are.
+        with self.gh(0, self.release_json(["opentide-lsp-v0.9.1-x86_64-unknown-linux-gnu"])):
+            self.assertTrue(release.published_assets("v0.9.1", "o/r"))
+
+    def test_no_release_or_one_without_assets_is_not(self) -> None:
+        with self.gh(1, stderr="release not found\n"):
+            self.assertEqual(release.published_assets("v1.0.0", "o/r"), [])
+        # Notes only: created by hand, or backfilled.
+        with self.gh(0, self.release_json([])):
+            self.assertEqual(release.published_assets("v1.0.0", "o/r"), [])
+
+    def test_a_gh_failure_is_an_error_not_an_unreleased_tag(self) -> None:
+        with self.gh(1, stderr="HTTP 502: Bad Gateway\n"), self.assertRaises(RuntimeError):
+            release.published_assets("v1.0.0", "o/r")
+
+    def test_the_cli_refuses_a_released_tag(self) -> None:
+        env = {"GITHUB_REPOSITORY": "o/r"}
+        with mock.patch.dict(release.os.environ, env), self.gh(0, self.release_json(["SHA256SUMS"])):
+            with self.assertRaises(SystemExit) as refused:
+                release.main(["unpublished", "v1.0.0"])
+        self.assertIn("publish_only", str(refused.exception.code))
+        with mock.patch.dict(release.os.environ, env), self.gh(1, stderr="release not found"):
+            release.main(["unpublished", "v1.0.0"])
+
+
+class PublishTest(unittest.TestCase):
+    def test_cargo_publish_builds_nothing(self) -> None:
+        # The job holds an OIDC token and the registry tokens: a verify build
+        # would run every dependency's build script with them. The verify job
+        # already built each crate from its package.
+        crates = [{"name": "opentide-core"}, {"name": "opentide-lsp"}]
+        done = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with (
+            mock.patch.object(release, "workspace_version", return_value="1.0.0"),
+            mock.patch.object(release, "publishable_crates", return_value=crates),
+            mock.patch.object(release, "publish_order", side_effect=lambda c: c),
+            mock.patch.object(release, "on_crates_io", return_value=False),
+            mock.patch.object(release.subprocess, "run", return_value=done) as run,
+        ):
+            release.publish()
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(len(commands), 2, commands)
+        for command in commands:
+            self.assertEqual(command[:2], ["cargo", "publish"], command)
+            self.assertIn("--no-verify", command)
+
+
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml"
 
 
@@ -205,6 +272,31 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("always()", jobs["npm"])
         # The release job no longer checks: verify-assets does, for both paths.
         self.assertNotIn("gh attestation verify", jobs["release"])
+
+    def test_a_released_tag_is_never_uploaded_again(self) -> None:
+        jobs = workflow_jobs()
+        # A re-run of a tag push stops before it builds anything.
+        verify = jobs["verify"]
+        push = verify.index('if [ "${GITHUB_EVENT_NAME}" = "push" ]; then')
+        dispatch = verify.index("else", push)
+        self.assertIn('python3 scripts/release.py unpublished "${tag}"', verify[push:dispatch])
+        # And the release job checks again before it replaces anything: a
+        # single job can be re-run on its own.
+        attach = jobs["release"]
+        guard = attach.index('python3 scripts/release.py unpublished "${TAG}"')
+        self.assertLess(attach.index("gh release create"), guard)
+        self.assertLess(guard, attach.index("gh release upload"))
+        self.assertNotIn("--clobber", attach)
+        self.assertNotIn("delete-asset", attach)
+
+    def test_verify_assets_may_read_the_attestations_and_write_nothing(self) -> None:
+        verify_assets = workflow_jobs()["verify-assets"]
+        permissions = re.search(r"^    permissions:\n((?:      .*\n)+)", verify_assets + "\n", re.M)
+        assert permissions is not None, "verify-assets states its permissions"
+        self.assertEqual(
+            sorted(permissions.group(1).split()),
+            sorted(["contents:", "read", "attestations:", "read"]),
+        )
 
     def test_the_published_assets_are_checked_against_every_line_of_the_sums(self) -> None:
         verify_assets = workflow_jobs()["verify-assets"]

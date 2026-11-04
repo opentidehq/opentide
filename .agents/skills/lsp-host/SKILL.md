@@ -60,7 +60,7 @@ A body `lsp-server` cannot parse is answered from the bytes it read (`Recording`
 | `workspaceEdit.documentChanges` + `resourceOperations: ["create"]` | the quick fix that creates `visibility.toml`; left out otherwise |
 | `publishDiagnostics.codeDescriptionSupport` / `tagSupport` / `relatedInformation` / `versionSupport` | `codeDescription.href` (`DIAGNOSTICS_DOCS#<code>`), `Deprecated` on deprecation codes, the other file of a `duplicate_id`, the document version |
 | `workspace.{semanticTokens,inlayHint,codeLens}.refreshSupport` | a refresh request after a change beyond one document |
-| `didChangeWatchedFiles.dynamicRegistration` | watchers for object YAML, `.opentide/configurations/**/*.toml` and the generated catalogs; an analysis is then cached across batches |
+| `didChangeWatchedFiles.dynamicRegistration` | watchers for `objects/` and everything in it (`**/objects`, `**/objects/**`: a client reports a deleted folder as one event for the folder, which re-reads the root's objects), `.opentide/configurations/**/*.toml` and the generated catalogs; an analysis is then cached across batches |
 | `workspace.workspaceFolders` | `workspace.workspaceFolders` with change notifications |
 
 `positionEncoding` is always `utf-16`. `capabilities.experimental.opentide` is `host_info()` (#172): `{ host, engine, catalog, configurationChecks, configurationSchemas }`, the same as `--version --json`; a key is added in a minor release and never removed.

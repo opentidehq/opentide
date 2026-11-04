@@ -10,6 +10,7 @@
     release.py trust WORKFLOW       register WORKFLOW as each crate's trusted publisher
     release.py sums DIR             write DIR/SHA256SUMS for every file in DIR
     release.py verify-sums DIR      DIR/SHA256SUMS lists exactly DIR's files, each digest right
+    release.py unpublished vX.Y.Z   fail when the tag's GitHub Release already has assets
 
 Crates embed catalogs, grammars, and highlight queries from the repository root.
 Cargo packages only what sits inside a crate, so `vendor` copies the files each
@@ -17,9 +18,11 @@ crate reads (every `OPENTIDE_ASSETS` path in its sources, plus the directories i
 `[package.metadata.opentide] assets`) into `crates/<name>/assets/`, where build.rs
 looks when the workspace root is not there. `vendor --clean` removes the copies.
 
-`publish` can be re-run: it skips each crate whose version crates.io already has, and
-waits out the rate limit crates.io puts on brand-new crates, so a first release that
-stops partway resumes where it stopped.
+`publish` uploads each crate's package with `cargo publish --no-verify`: it builds
+nothing where the publishing tokens are (the Release workflow's `verify` job built
+every package, with no token). It can be re-run: it skips each crate whose version
+crates.io already has, and waits out the rate limit crates.io puts on brand-new
+crates, so a first release that stops partway resumes where it stopped.
 
 `trust` registers this repository's WORKFLOW (e.g. release.yml) as the trusted
 publisher of every published crate, with a crates.io token that has the
@@ -35,6 +38,12 @@ leave an asset out.
 `verify-sums` checks a downloaded release the other way round: SHA256SUMS lists
 every file in DIR and no other, and each digest matches. `sha256sum -c` checks
 only the names the file lists, so an asset with no line passes it.
+
+`unpublished` fails when the GitHub Release of the tag (in GITHUB_REPOSITORY)
+already carries assets, a draft's included: the Release workflow never uploads
+over them. A rebuild does not reproduce the zips byte for byte, and consumers
+pin the published digests (SHA256SUMS, an editor's pinned highlights). No
+release, or one with notes only, passes.
 """
 
 from __future__ import annotations
@@ -231,7 +240,10 @@ def publish() -> None:
         env = dict(os.environ)
         for attempt in range(1, RATE_LIMIT_TRIES + 1):
             result = subprocess.run(
-                ["cargo", "publish", "-p", name, "--allow-dirty"],
+                # No verify build: this runs where the OIDC token and the registry
+                # tokens are, and a build runs every dependency's build script.
+                # The verify job built each crate from its package, with neither.
+                ["cargo", "publish", "-p", name, "--allow-dirty", "--no-verify"],
                 cwd=ROOT,
                 capture_output=True,
                 text=True,
@@ -388,6 +400,23 @@ def verify_sums(directory: Path) -> list[str]:
     return problems
 
 
+def published_assets(tag: str, repo: str) -> list[str]:
+    """The asset names of the GitHub Release of `tag` in `repo`: none when it
+    has no release. A `gh` failure other than a missing release raises, so an
+    outage is never read as "not released"."""
+    result = subprocess.run(
+        ["gh", "release", "view", tag, "--repo", repo, "--json", "assets"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        if "release not found" in result.stderr.lower():
+            return []
+        raise RuntimeError(f"gh release view {tag}: {result.stderr.strip()}")
+    return [asset["name"] for asset in json.loads(result.stdout).get("assets", [])]
+
+
 def write_sums(directory: Path) -> Path:
     target = directory / SUMS
     target.write_text(sha256sums(directory), encoding="utf-8", newline="\n")
@@ -433,6 +462,22 @@ def main(argv: list[str]) -> None:
             if problems:
                 sys.exit(1)
             print(f"{Path(directory) / SUMS} covers every asset")
+        case ["unpublished", tag]:
+            repo = os.environ.get("GITHUB_REPOSITORY", "")
+            if not repo:
+                sys.exit("unpublished: set GITHUB_REPOSITORY (owner/name)")
+            try:
+                names = published_assets(tag, repo)
+            except RuntimeError as error:
+                sys.exit(f"unpublished: {error}")
+            if names:
+                sys.exit(
+                    f"error: {tag} is already released with {len(names)} assets; a rebuild would "
+                    "replace the digests consumers pinned. Resume crates.io and npm with Run "
+                    "workflow and publish_only; fix anything else with a patch release. A draft "
+                    "that never published can be deleted, then released again."
+                )
+            print(f"{tag} has no published assets")
         case _:
             sys.exit(__doc__)
 

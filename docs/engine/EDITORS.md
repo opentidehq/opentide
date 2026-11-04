@@ -2,7 +2,7 @@
 
 The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.
 
-Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene` (never `sql`), and `opentide-config`.
+Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene`, `falco` and `opentide-config`. There is no `sql`.
 
 Semantic tokens come from the server. TextMate grammars must be **copied from the language-server highlight zip**, never hand-authored.
 
@@ -34,6 +34,18 @@ See `editors/zed/opentide.json`.
 Lives in **opentidehq/vscode-extension** (other repository, #17). MIT client, EUPL engine notices.
 
 Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern (`opentide-config` is `**/.opentide/configurations/**/*.toml`). Its patterns match `file:` URIs only. On vscode.dev and github.dev, where documents are `vscode-vfs:` and other virtual URIs, use `WEB_DOCUMENT_SELECTOR`: the same filters with no scheme ([#197](https://github.com/opentidehq/language-server/issues/197)).
+
+Both are plain arrays, so they are vscode-languageclient's `documentSelector` as they are:
+
+```ts
+import { DOCUMENT_SELECTOR, WEB_DOCUMENT_SELECTOR } from "@opentide/lsp-client";
+import * as vscode from "vscode";
+import type { LanguageClientOptions } from "vscode-languageclient";
+
+const clientOptions: LanguageClientOptions = {
+  documentSelector: vscode.env.uiKind === vscode.UIKind.Web ? WEB_DOCUMENT_SELECTOR : DOCUMENT_SELECTOR,
+};
+```
 
 `esql` is also the id of Elastic's own ES|QL extension. The ids are the shared vocabulary, so the opentide extension registers `esql` too, never a second id for the same language. Its TextMate grammar uses the scope `source.opentide.esql`, not Elastic's `source.esql`, so the two grammars never collide. The server's semantic tokens are authoritative for colour either way. The other three Elastic ids (`eql`, `kuery`, `lucene`) have no prior VS Code owner.
 
@@ -133,14 +145,14 @@ The workspace index, for catalogue, graph and search views that follow unsaved e
 
 - **Objects** are the ones the other requests see: each object file of the root, an open document in place of its file, and the objects a host supplied on `initialize` (`initializationOptions.workspace`; one known by its metadata alone has the `uri` the host gave, else `opentide-object:<uuid>`, and no refs). They are sorted by path, then UUID.
 - **`range`** is the `name` value's (the key's when the value is not on its line; the file's start without a `name`). Positions are UTF-16, as everywhere.
-- **`refs`** are the UUIDs the reference fields of the body name, other than the object's own `metadata.uuid`, in document order: a rule's `detection_model`, an objective's `objective.threats.<i>` and `objective.signals.<i>.parent`, and a threat's `threat.chaining.<i>.vector`. A signal's own UUID is listed too (`objective.signals.0.uuid`): signals live inside their objective and are not objects here, so this is where a client finds them, and a rule's `detection_model` naming a signal is a ref to one of those. Other UUID-valued fields identify something that is not an object and are not refs: `metadata.organisation.uuid`, a platform's ids (`configurations.sentinel.template.uuid`). Any other ref whose `uuid` no object of the root carries dangles (the object's diagnostics say `invalid_ref` where the check applies). Ranges are those of the indexed text: the open buffer, else the file.
+- **`refs`** are the values the reference fields of the body hold, other than the object's own `metadata.uuid` and empty ones, in document order: a rule's `detection_model`, an objective's `objective.threats.<i>` and `objective.signals.<i>.parent`, and a threat's `threat.chaining.<i>.vector`. A signal's own UUID is listed too (`objective.signals.0.uuid`): signals live inside their objective and are not objects here, so this is where a client finds them, and a rule's `detection_model` naming a signal is a ref to one of those. Other UUID-valued fields identify something that is not an object and are not refs: `metadata.organisation.uuid`, a platform's ids (`configurations.sentinel.template.uuid`). Any other ref whose `uuid` no object of the root carries dangles (the object's diagnostics say `invalid_ref` where the check applies). A value that is not a UUID (a typo, `TODO`) is such a ref too, with that value as its `uuid`, as `invalid_ref` reports it. Ranges are those of the indexed text: the open buffer, else the file.
 - The references are kept in the index, found once per text; `textDocument/references` and the reference lens read them too.
 
 ### `opentide/catalogChanged`
 
 A notification, `{ root }` (the same `root` as above), sent at the end of a batch, once the client has asked for a catalog:
 
-- for a root whose catalog the client got and whose index changed: an object file created, saved with other contents, or deleted (reported by the client's file watcher; without one, the server notices on the next request that reads the workspace), or an open object's UUID, name, schema or references edited. An edit that changes only ranges or prose sends none;
+- for a root whose catalog the client got and whose index changed: an object file created, saved with other contents, or deleted, or a folder of objects under `objects/` deleted, created or moved (reported by the client's file watcher, which reports a deleted folder as one event for the folder; without one, the server notices on the next request that reads the workspace), or an open object's UUID, name, schema or references edited. An edit that changes only ranges or prose sends none;
 - for a root the client got that is gone: a workspace folder removed (`workspace/didChangeWorkspaceFolders`), or `root: null` once the documents outside every root have a root;
 - for a root that appeared, once the client has asked for every root (`{}`): a folder added, or the `.opentide/` or `objects/` ancestor of a document opened outside every folder. That root is followed from then on.
 

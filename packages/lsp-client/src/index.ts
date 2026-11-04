@@ -74,8 +74,11 @@ export interface PatternFilter {
  * pattern, so a file is served even when no extension registered its id
  * (for example `.esql` when Elastic's own extension owns the id). Its
  * patterns match `file:` URIs only: use it on the desktop.
+ *
+ * A plain array, so it is vscode-languageclient's `documentSelector` as it
+ * is; do not change it in place.
  */
-export const DOCUMENT_SELECTOR: ReadonlyArray<LanguageFilter | FileFilter> = LANGUAGES.flatMap((l) => [
+export const DOCUMENT_SELECTOR: Array<LanguageFilter | FileFilter> = LANGUAGES.flatMap((l) => [
   { language: l.id },
   ...l.patterns.map((pattern): FileFilter => ({ scheme: "file", pattern })),
 ]);
@@ -84,9 +87,9 @@ export const DOCUMENT_SELECTOR: ReadonlyArray<LanguageFilter | FileFilter> = LAN
  * The same selector with no scheme, for web hosts (vscode.dev, github.dev),
  * where documents are `vscode-vfs:`, `vscode-remote:` or other virtual URIs,
  * not `file:` ones. A pattern without a scheme matches the URI's path
- * whatever its scheme.
+ * whatever its scheme. A plain array, like `DOCUMENT_SELECTOR`.
  */
-export const WEB_DOCUMENT_SELECTOR: ReadonlyArray<LanguageFilter | PatternFilter> = LANGUAGES.flatMap((l) => [
+export const WEB_DOCUMENT_SELECTOR: Array<LanguageFilter | PatternFilter> = LANGUAGES.flatMap((l) => [
   { language: l.id },
   ...l.patterns.map((pattern): PatternFilter => ({ pattern })),
 ]);

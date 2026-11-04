@@ -28,7 +28,7 @@ Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CH
 2. Merge it, then run the **Release** workflow on `main` (Actions → Release → Run workflow). Pushing a `vX.Y.Z` tag does the same.
 3. Open a PR in [opentidehq/opentide](https://github.com/opentidehq/opentide) that pins `opentide-analysis` and `opentide-lsp` in `analysis/Cargo.toml` to `"=X.Y.Z"`, and merge it. opentide compiles the engine into its Python package and cannot publish while it builds from a git revision, so a release is not done until that PR is merged.
 
-The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release with the changelog notes, creating the tag. Then it publishes the crates to crates.io in dependency order (a re-run resumes where a failed one stopped).
+The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release with the changelog notes, creating the tag. Then it publishes the crates to crates.io in dependency order (re-running the failed `crates` job resumes where it stopped). Assets are never uploaded over: once a GitHub Release has them, a re-run of its tag push or of the release job fails, so each asset keeps the digest consumers pinned. To finish publishing a released version, run the workflow on `main` with `publish_only`.
 
 Every asset of a GitHub Release is listed in its `SHA256SUMS` (`scripts/release.py sums`) and carries a [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) signed by the Release workflow. To check a download:
 
