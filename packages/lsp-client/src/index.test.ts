@@ -99,20 +99,24 @@ test("document selector covers every language", () => {
   }
 });
 
-// The language ids docs/EDITORS.md promises editors (#197).
-function editorLanguageIds(): string[] {
+// The language ids docs/EDITORS.md promises editors (#197): the first
+// sentence of the line that starts with `lead`.
+function editorLanguageIds(lead: string): string[] {
   const editors = readFileSync(join(root, "docs/EDITORS.md"), "utf8");
-  const line = editors.match(/^Language ids are the server's: (.*)$/m);
-  assert.ok(line, "docs/EDITORS.md lists the language ids");
-  return [...line[1].split(". ")[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  const line = editors.split(/\r?\n/).find((l) => l.startsWith(lead));
+  assert.ok(line, `docs/EDITORS.md has a line starting "${lead}"`);
+  return [...line.slice(lead.length).split(". ")[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]);
 }
 
 test("document selector covers each language docs/EDITORS.md lists, opentide-config included", () => {
-  const documented = editorLanguageIds();
-  assert.ok(documented.includes("opentide-config"), documented.join(", "));
-  assert.deepEqual([...documented].sort(), LANGUAGES.map((l) => l.id).sort());
-  for (const id of documented) {
-    assert.ok(DOCUMENT_SELECTOR.some((s) => "language" in s && s.language === id), id);
+  // The list at the top of the page and the one under VS Code.
+  for (const lead of ["Languages: ", "Language ids are the server's: "]) {
+    const documented = editorLanguageIds(lead);
+    assert.ok(documented.includes("opentide-config"), `${lead}${documented.join(", ")}`);
+    assert.deepEqual([...documented].sort(), LANGUAGES.map((l) => l.id).sort(), lead);
+    for (const id of documented) {
+      assert.ok(DOCUMENT_SELECTOR.some((s) => "language" in s && s.language === id), id);
+    }
   }
 });
 
