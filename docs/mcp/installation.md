@@ -35,7 +35,7 @@ All nine platform adapters ship in the same wheel — enable them in the repo wi
 
 ## Verify
 
-`opentide mcp` with no subcommand prints help and exits. It does not start the server. `opentide mcp start` blocks until the host closes stdin. That is what an editor expects. Stop is the host closing stdin. Reload is the host spawning the command again. There is no `reload` or `stop` subcommand.
+`opentide mcp` with no subcommand does not start the server: it names `start` and exits `2` ([`opentide mcp`](../cli/mcp.md#mcp)); `opentide mcp --help` prints the help. `opentide mcp start` blocks until the host closes stdin. That is what an editor expects. Stop is the host closing stdin. Reload is the host spawning the command again. There is no `reload` or `stop` subcommand.
 
 ```bash
 which opentide

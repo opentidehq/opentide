@@ -13,7 +13,7 @@ from opentide.cli.ui.results import PENDING_MODELS
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = ROOT / "docs" / "internal" / "cli-experience.md"
-INDEX = ROOT / "docs" / "cli" / "index.md"
+COMMANDS_PAGE = ROOT / "docs" / "cli" / "commands.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 
 #: Wording a stacked PR wrote about work that had not merged yet.
@@ -54,10 +54,10 @@ def test_the_brand_rule_agrees_with_the_no_color_rule() -> None:
     assert "`NO_COLOR` on its own selects `plain`" in rules
 
 
-def test_the_command_index_counts_match_the_cli() -> None:
+def test_the_command_tree_counts_match_the_cli() -> None:
     result = CliRunner().invoke(app, ["--json", "commands"])
     summary = json.loads(result.stdout)["summary"]
-    text = INDEX.read_text(encoding="utf-8")
+    text = COMMANDS_PAGE.read_text(encoding="utf-8")
     documented = re.search(r'"summary": \{ "commands": (\d+), "groups": (\d+) \}', text)
     assert documented is not None
     assert (int(documented[1]), int(documented[2])) == (summary["commands"], summary["groups"])

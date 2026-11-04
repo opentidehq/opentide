@@ -66,10 +66,12 @@ from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
 DOC_COMMANDS = documented_commands()
 
 #: Roots whose documented samples are safe to execute: they read the
-#: repository and write only inside it. `deploy` and `generate extract` reach
-#: for a vendor API, `setup` and `migrate` rewrite the tree out from under the
-#: other cases, and `--live` query validation needs credentials.
-EXECUTABLE_ROOTS = frozenset({"validate", "lint", "info", "generate"})
+#: repository and write only inside it (`explain` and `commands` read only what
+#: the package bundles). `deploy` and `generate extract` reach for a vendor API,
+#: `setup` and `migrate` rewrite the tree out from under the other cases,
+#: `--live` query validation needs credentials, and `mcp start`, `lsp start` and
+#: `serve` block on stdin.
+EXECUTABLE_ROOTS = frozenset({"validate", "lint", "info", "generate", "explain", "commands"})
 SKIPPED_SUBCOMMANDS = frozenset({"extract", "inflight"})
 #: Tokens standing in for something the reader substitutes.
 PLACEHOLDER_MARKERS = ("<", "/path/to/", "...", "$")

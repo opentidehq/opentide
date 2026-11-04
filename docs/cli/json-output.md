@@ -208,7 +208,7 @@ A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHON
 
 ## The command tree
 
-`opentide --json commands` describes every command an agent can run, with its options, types, choices, defaults, environment variables and an example. See [Command tree for agents](./index.md#command-tree-for-agents).
+`opentide --json commands` describes every command an agent can run, with its options, types, choices, defaults, environment variables and an example. See [`opentide commands`](./commands.md).
 
 ## Output schemas
 

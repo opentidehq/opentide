@@ -13,10 +13,23 @@ opentide generate schemas            # single phase
 opentide generate schemas templates vocabs snippets
 opentide generate docs --output docs
 opentide generate exports navigator
+opentide generate explorer
 opentide generate inflight
 opentide generate inflight prune
 opentide generate extract sentinel   # opt-in platform import
 ```
+
+| Subcommand | Writes |
+|------------|--------|
+| [`generate docs`](#generate-docs) | Markdown pages for rules, objectives and threats, and their indexes |
+| [`generate exports`](#generate-exports) | `.opentide/exports/`: the ATT&CK Navigator layer, the objects export and the revisions export |
+| [`generate explorer`](#generate-explorer) | `.opentide/exports/explorer.bundle.json` and `explorer.search.json`, for the explorer site |
+| [`generate inflight`](#generate-inflight) | Preview shards of changed objects under `.opentide/inflight/` |
+| [`generate extract`](#generate-extract) | `Imported/`: rules exported from a platform, converted to opentide rules |
+
+## Phases
+
+`opentide generate` with no argument runs every phase below, in order. Name one or more of `schemas`, `templates`, `vocabs` and `snippets` to run only those, in the order you give them: `opentide generate schemas templates vocabs snippets` regenerates the editor files without rendering the documentation. A name that is neither a phase nor a subcommand is a usage error (exit `2`). `docs` and `exports` are subcommands, with options of their own.
 
 ## Default pipeline order
 
@@ -189,6 +202,23 @@ opentide generate exports revisions
 
 `generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are objects whose `name` is a scoped vocabulary ID (`att&ck::G0006`); the export enriches those names to display names.
 
+`generate exports revisions` writes `.opentide/exports/revisions.export.json`: for each object UUID, its `name`, its kind (`object`, the display name of its family), its `description`, and `versions`, keyed by `metadata.version`, each with that version's `schema`, `created`, `modified` and `author`. It snapshots the versions in the working tree; git keeps their history. An object without `metadata.version` is left out. Keys are sorted, so the file changes only when a version or its metadata does.
+
+## generate explorer
+
+Writes the bundle the [explorer](https://github.com/opentidehq/explorer) static site reads, under `.opentide/exports/`:
+
+```bash
+opentide generate explorer
+```
+
+| File | Holds |
+|------|-------|
+| `explorer.bundle.json` | `models` (every threat, objective, signal and rule body by family), `flatIndex` (the same bodies by UUID), `summaries` (per object: `uuid`, `type`, `name`, `schema`, `version`, `tlp`, `status`, `techniques`, `actors`, `relatedCount`, `platforms`), `chaining` (the threat chaining graph), `signals`, `stagingIndex` (objects by status: production, staging, other), `version` (the bundle format) and `generatedAt` |
+| `explorer.search.json` | `documents`: one search document per summary, with the first 4,000 characters of the object's body as `content` |
+
+The explorer previews open pull requests: the bundle is built with the [inflight](#generate-inflight) shards on `.opentide/inflight/` applied over the object files, as `generate docs` is. Every other command reads the object files alone. `generate explorer` is not a phase of the default run. The pipelines `opentide setup ci github --explorer-pages` writes run `opentide --json generate explorer` and publish the site to GitHub Pages ([setup](./setup.md)).
+
 ## generate inflight
 
 Write preview shards for changed objects, or remove shards superseded by committed objects:
@@ -248,12 +278,14 @@ Schema and template phases reload `IndexManager` and `Opentide` registry caches.
 
 ## Deprecated shims
 
+The top-level commands of earlier releases are hidden: each prints a `DEPRECATED` warning and runs its replacement, with the same options.
+
 | Legacy command | Replacement |
 |----------------|-------------|
-| `opentide generate docs` | `opentide generate docs` |
-| `opentide generate exports …` | `opentide generate exports …` |
-| `opentide generate extract …` | `opentide generate extract …` |
+| `opentide document` (`rules`, `objectives`, `threats`, `index`) | `opentide generate docs` (same subcommands) |
+| `opentide export …` | `opentide generate exports …` |
+| `opentide extract …` | `opentide generate extract …` |
 
 ## Source
 
-`src/opentide/cli/commands/generate.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`
+`src/opentide/cli/commands/generate.py`, `src/opentide/cli/commands/legacy.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`, `src/opentide/export/` (`explorer_export.py`, `revisions_export.py`)
