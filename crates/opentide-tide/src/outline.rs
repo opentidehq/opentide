@@ -461,13 +461,13 @@ mod tests {
     }
 
     fn object(path: &str, kind: &str, uuid: &str, body: &str) -> IndexedObject {
-        IndexedObject {
-            path: path.into(),
-            object_type: kind.into(),
-            uuid: uuid.into(),
-            name: format!("{kind} {uuid}"),
-            body: serde_yaml::from_str(body).unwrap(),
-        }
+        IndexedObject::from_body(
+            path,
+            kind,
+            uuid,
+            format!("{kind} {uuid}"),
+            serde_yaml::from_str(body).unwrap(),
+        )
     }
 
     #[test]

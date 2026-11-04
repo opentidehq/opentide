@@ -76,6 +76,39 @@ pub mod custom {
         const METHOD: &'static str = "opentide/fs/read";
     }
 
+    /// The workspace index, for catalogue and graph views (#198):
+    /// `{ root? }` → `{ roots: [{ root, objects: [{ uuid, object_type,
+    /// schema, name, uri, range, refs: [{ uuid, field_path, range }] }] }] }`.
+    pub enum Catalog {}
+    impl lsp_types::request::Request for Catalog {
+        /// Every key is optional, so are the params: a request without
+        /// them, or with `null`, asks for every root.
+        type Params = Option<CatalogParams>;
+        type Result = Value;
+        const METHOD: &'static str = "opentide/catalog";
+    }
+
+    /// Sent after a root's index changed, once the client has asked for its
+    /// catalog: `{ root }`.
+    pub enum CatalogChanged {}
+    impl lsp_types::notification::Notification for CatalogChanged {
+        type Params = CatalogChangedParams;
+        const METHOD: &'static str = "opentide/catalogChanged";
+    }
+
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    #[serde(default)]
+    pub struct CatalogParams {
+        /// A root's URI; every root without it.
+        pub root: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize, Serialize)]
+    pub struct CatalogChangedParams {
+        /// The root's URI, or `null` for the documents outside every root.
+        pub root: Value,
+    }
+
     /// Debug builds: a handler that panics, for the isolation test.
     #[cfg(debug_assertions)]
     pub enum Panic {}
@@ -226,6 +259,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         .on::<CodeLensRequest>(handle_code_lens)
         .on::<custom::Analyze>(handle_custom_analyze)
         .on::<custom::Highlight>(|_, p| handle_custom_highlight(p))
+        .on::<custom::Catalog>(handle_catalog)
         .on::<custom::CompiledKql>(|_, p| custom::Compiled {
             compiled: compiled_kql(&p.query, &p.tenant),
         })
@@ -1913,6 +1947,60 @@ fn handle_custom_analyze(session: &mut Session, params: custom::TextParams) -> V
         },
     );
     json!({ "diagnostics": response.diagnostics })
+}
+
+/// `opentide/catalog` (#198): each root's indexed objects, with their
+/// references, from the index the other requests share. Open documents are
+/// read as edited, the rest from disk.
+fn handle_catalog(session: &mut Session, params: Option<custom::CatalogParams>) -> Value {
+    let params = params.unwrap_or_default();
+    let wanted = params
+        .root
+        .as_deref()
+        .map(|uri| crate::session::root_key(&uri_to_path(uri)));
+    let roots: Vec<Option<usize>> = session
+        .catalog_roots()
+        .into_iter()
+        .filter(|root| match (&wanted, root) {
+            (None, _) => true,
+            (Some(want), Some(i)) => {
+                crate::session::root_key(&session.roots[*i].path.display().to_string()) == *want
+            }
+            (Some(_), None) => false,
+        })
+        .collect();
+    if wanted.is_none() {
+        session.catalog_every_root();
+    }
+    let range = |r: Range| serde_json::to_value(lsp_range(r)).unwrap_or(Value::Null);
+    let entries: Vec<Value> = roots
+        .into_iter()
+        .map(|root| {
+            let index = session.catalog_index(root);
+            let mut objects: Vec<&opentide_analysis::IndexedObject> = index.iter().collect();
+            objects.sort_by(|a, b| (&a.path, &a.uuid).cmp(&(&b.path, &b.uuid)));
+            let objects: Vec<Value> = objects
+                .into_iter()
+                .map(|o| {
+                    json!({
+                        "uuid": o.uuid,
+                        "object_type": o.object_type,
+                        "schema": o.schema,
+                        "name": o.name,
+                        "uri": path_to_uri(&o.path),
+                        "range": range(o.name_range),
+                        "refs": o.refs.iter().map(|r| json!({
+                            "uuid": r.uuid,
+                            "field_path": r.field_path,
+                            "range": range(r.range),
+                        })).collect::<Vec<_>>(),
+                    })
+                })
+                .collect();
+            json!({ "root": session.catalog_root_uri(root), "objects": objects })
+        })
+        .collect();
+    json!({ "roots": entries })
 }
 
 fn handle_custom_highlight(params: custom::TextParams) -> Value {

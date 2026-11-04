@@ -102,6 +102,50 @@ On Tide keys the range is the key, so applying the edit overwrites the key
 text. On query tokens the range is the bad name, so the edit replaces that
 name. The Elastic engines attach suggestions too ([LANGUAGE.md](LANGUAGE.md)).
 
+## Custom RPCs
+
+Requests beyond LSP, for clients that know them. `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`, `opentide/compiledSpl` and `opentide/fs/read` are listed in [ARCHITECTURE.md](ARCHITECTURE.md#custom-rpcs).
+
+### `opentide/catalog`
+
+The workspace index, for catalogue, graph and search views that follow unsaved edits, on the web too ([#198](https://github.com/opentidehq/language-server/issues/198)). Params `{ root? }`: a root's URI, as the catalog reports it, or every root without it (params `{}`, `null` or none). A root on disk is its `file:` URI; a workspace folder of another scheme (`vscode-vfs://github/org/repo` on vscode.dev and github.dev) is the folder's own URI, as are its objects'. A `root` the server does not have gives `{ roots: [] }`.
+
+```jsonc
+{
+  "roots": [{
+    "root": "file:///w",                 // null when there is no root: the documents outside every root
+    "objects": [{
+      "uuid": "00000000-0000-4000-8003-000000000001",
+      "object_type": "rule",             // the schema family
+      "schema": "rule::1.0",             // metadata.schema as written
+      "name": "Sentinel KQL Rule",
+      "uri": "file:///w/objects/rules/rule.yaml",
+      "range": { "start": { "line": 0, "character": 6 }, "end": { "line": 0, "character": 23 } },
+      "refs": [{
+        "uuid": "00000000-0000-4000-8002-000000000001",
+        "field_path": "detection_model",  // keys and list indexes joined with "."
+        "range": { "start": { "line": 16, "character": 17 }, "end": { "line": 16, "character": 53 } }
+      }]
+    }]
+  }]
+}
+```
+
+- **Objects** are the ones the other requests see: each object file of the root, an open document in place of its file, and the objects a host supplied on `initialize` (`initializationOptions.workspace`; one known by its metadata alone has the `uri` the host gave, else `opentide-object:<uuid>`, and no refs). They are sorted by path, then UUID.
+- **`range`** is the `name` value's (the key's when the value is not on its line; the file's start without a `name`). Positions are UTF-16, as everywhere.
+- **`refs`** are the UUIDs the reference fields of the body name, other than the object's own `metadata.uuid`, in document order: a rule's `detection_model`, an objective's `objective.threats.<i>` and `objective.signals.<i>.parent`, and a threat's `threat.chaining.<i>.vector`. A signal's own UUID is listed too (`objective.signals.0.uuid`): signals live inside their objective and are not objects here, so this is where a client finds them, and a rule's `detection_model` naming a signal is a ref to one of those. Other UUID-valued fields identify something that is not an object and are not refs: `metadata.organisation.uuid`, a platform's ids (`configurations.sentinel.template.uuid`). Any other ref whose `uuid` no object of the root carries dangles (the object's diagnostics say `invalid_ref` where the check applies). Ranges are those of the indexed text: the open buffer, else the file.
+- The references are kept in the index, found once per text; `textDocument/references` and the reference lens read them too.
+
+### `opentide/catalogChanged`
+
+A notification, `{ root }` (the same `root` as above), sent at the end of a batch, once the client has asked for a catalog:
+
+- for a root whose catalog the client got and whose index changed: an object file created, saved with other contents, or deleted (reported by the client's file watcher; without one, the server notices on the next request that reads the workspace), or an open object's UUID, name, schema or references edited. An edit that changes only ranges or prose sends none;
+- for a root the client got that is gone: a workspace folder removed (`workspace/didChangeWorkspaceFolders`), or `root: null` once the documents outside every root have a root;
+- for a root that appeared, once the client has asked for every root (`{}`): a folder added, or the `.opentide/` or `objects/` ancestor of a document opened outside every folder. That root is followed from then on.
+
+The client asks for `opentide/catalog` again.
+
 ## TypeScript client
 
 `@opentide/lsp-client` reaches the engine three ways. Each answers `highlight()`, `legend()` and, where the transport has an analyzer, `analyze()`. A transport that cannot answer rejects; it never returns an empty result in place of one.

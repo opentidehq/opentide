@@ -8,12 +8,19 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+- `opentide/catalog {root?}` and the notification `opentide/catalogChanged {root}` ([#198](https://github.com/opentidehq/language-server/issues/198)): the workspace index for catalogue, graph and search views, served from the engine's index so it follows unsaved edits and works in the browser build. Each object comes with its `uuid`, `object_type`, `schema`, `name`, `uri`, the name's `range`, and `refs`: each UUID its reference fields name (`detection_model`, `objective.threats`, a signal's `uuid` and `parent`, `threat.chaining.<i>.vector`), with its `field_path` and `range`, so a dangling `detection_model` is a ref no object carries. The notification follows a change of a root's objects, names or references once the client has asked for that root. `docs/EDITORS.md` (Custom RPCs) has the shapes.
+- The workspace index keeps each object's references, `schema` and name range (`IndexedObject::{refs, schema, name_range}`, `opentide_tide::object_refs`, `IndexedObject::from_body`); `textDocument/references` and the reference lens read them instead of walking every object's YAML per request.
 - `@opentide/lsp-client`: `DOCUMENT_SELECTOR` and `LANGUAGES` include `opentide-config` (`**/.opentide/configurations/**/*.toml`), so a client built from the selector sends configuration TOML to `opentide lsp start` ([#197](https://github.com/opentidehq/language-server/issues/197)). `analyze` and `highlight` refuse it: only a host checks it. `WEB_DOCUMENT_SELECTOR` is the same selector with no scheme, for vscode.dev and github.dev, whose documents are not `file:` URIs; `DOCUMENT_SELECTOR` keeps `scheme: "file"` for the desktop.
 - Each GitHub Release carries `SHA256SUMS`, covering every asset, and a build provenance attestation for each asset ([#196](https://github.com/opentidehq/language-server/issues/196)): `sha256sum -c SHA256SUMS` and `gh attestation verify <asset> --repo opentidehq/language-server` check a download. The Release workflow checks both on the published assets. `scripts/release.py sums DIR` writes the file.
 
 ### Changed
 
 - The ES|QL TextMate grammar's scope is `source.opentide.esql`, as `docs/EDITORS.md` promised, not `source.esql`, the scope of Elastic's ES|QL extension ([#195](https://github.com/opentidehq/language-server/issues/195)). An editor that loaded both grammars kept only one. An editor that includes the grammar by scope includes `source.opentide.esql` now. The other grammars keep `source.<id>`; `docs/EDITORS.md` says why. HighlightSpec captures are unchanged.
+
+### Fixed
+
+- A workspace folder removed with `workspace/didChangeWorkspaceFolders` is no longer a root: `workspace/diagnostic` and `workspace/symbol` stopped covering it, and an open document of that folder reads the `.opentide/` or `objects/` root around it, as when it is opened outside every folder. The folder was kept as if the server had found it around a document.
+- A location in another document of a workspace that is not on disk (`vscode-vfs://github/org/repo` on vscode.dev and github.dev, `untitled:`) is that document's own URI: `textDocument/definition`, `textDocument/references`, `workspace/symbol`, document links and a `duplicate_id`'s related information gave `file:///vscode-vfs://…`, which the editor could not open.
 
 ## [0.9.1] - 2026-11-03
 

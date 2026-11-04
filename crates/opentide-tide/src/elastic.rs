@@ -768,20 +768,20 @@ ssl = true
             advisory_codes(&own, &[]),
             vec![codes::TECHNIQUE_NOT_ENTERPRISE]
         );
-        let objective = IndexedObject {
-            path: "objectives/o.yaml".into(),
-            object_type: "objective".into(),
-            uuid: "o-1".into(),
-            name: "o".into(),
-            body: serde_yaml::from_str("objective:\n  threats: [t-1]\n").unwrap(),
-        };
-        let threat = IndexedObject {
-            path: "threats/t.yaml".into(),
-            object_type: "threat".into(),
-            uuid: "t-1".into(),
-            name: "t".into(),
-            body: serde_yaml::from_str("threat:\n  mitre_attack: [T1626, T1059]\n").unwrap(),
-        };
+        let objective = IndexedObject::from_body(
+            "objectives/o.yaml",
+            "objective",
+            "o-1",
+            "o",
+            serde_yaml::from_str("objective:\n  threats: [t-1]\n").unwrap(),
+        );
+        let threat = IndexedObject::from_body(
+            "threats/t.yaml",
+            "threat",
+            "t-1",
+            "t",
+            serde_yaml::from_str("threat:\n  mitre_attack: [T1626, T1059]\n").unwrap(),
+        );
         let inherited = format!("detection_model: o-1\n{}", block(""));
         let source = inherited.clone();
         let rule: serde_yaml::Value = serde_yaml::from_str(&source).unwrap();

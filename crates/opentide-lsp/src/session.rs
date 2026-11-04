@@ -66,6 +66,8 @@ pub(crate) struct Root {
     /// The editor's `visibility.toml` buffer while the file is open: it wins
     /// over the file on disk.
     pub visibility: Option<String>,
+    /// Whether this root's catalog may have changed (#198).
+    catalog: CatalogState,
     /// The last `visibility.toml` text that parsed: a buffer that is not
     /// TOML yet (mid-edit) keeps these declarations.
     good_visibility: RefCell<Option<Option<String>>>,
@@ -79,8 +81,16 @@ impl Root {
             checked: Cell::new(0),
             index: RefCell::default(),
             visibility: None,
+            catalog: CatalogState::default(),
             good_visibility: RefCell::default(),
         }
+    }
+
+    /// The index is out of date: it is rebuilt on the next request, and the
+    /// catalog is compared again at the end of the batch.
+    fn drop_index(&self) {
+        self.index.borrow_mut().take();
+        self.catalog.dirty.set(true);
     }
 
     /// Whether `path` is one of the files [`collect_objects`] reads: YAML
@@ -98,12 +108,57 @@ impl Root {
     /// it), or forget it when it is gone.
     pub(crate) fn refresh_object(&self, path: &str) {
         self.disk.borrow_mut().refresh_path(path);
-        self.index.borrow_mut().take();
+        self.drop_index();
     }
 
     fn visibility_path(&self) -> PathBuf {
         self.path.join(VISIBILITY_CONFIGURATION)
     }
+}
+
+/// Whether a root's index changed since its catalog was last compared with
+/// what the client was told (`opentide/catalog`, #198). What it was told is
+/// kept by the session ([`CatalogSent`]), by the root's URI, so a root that
+/// is removed or re-created keeps it.
+#[derive(Default)]
+pub(crate) struct CatalogState {
+    dirty: Cell<bool>,
+}
+
+/// What the client was told of the catalog (#198): the digest of each root's
+/// catalog it got, from a response or since a `opentide/catalogChanged`, by
+/// the root's `opentide/catalog` URI (`""` for the documents outside every
+/// root), and whether it asked for every root, so a root that appears is
+/// announced.
+#[derive(Default)]
+pub(crate) struct CatalogSent {
+    digests: BTreeMap<String, u64>,
+    every_root: bool,
+}
+
+/// The digest of what `opentide/catalog` reports of an index that
+/// `opentide/catalogChanged` follows: each object's file, identity, name and
+/// the UUIDs it names. Ranges are left out: they move with every edit above
+/// them, and the client asks again for them.
+pub(crate) fn catalog_digest(index: &[IndexedObject]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    // Each object's own digest, keyed by its file and sorted, so the order
+    // the index lists them in does not count.
+    let mut entries: Vec<(String, u64)> = index
+        .iter()
+        .map(|o| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            (&o.uuid, &o.name, &o.schema, &o.object_type).hash(&mut hasher);
+            for r in &o.refs {
+                (&r.uuid, &r.field_path).hash(&mut hasher);
+            }
+            (path_key(&o.path), hasher.finish())
+        })
+        .collect();
+    entries.sort();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    entries.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Whether YAML text names a Tide schema in its top-level `metadata` block
@@ -139,6 +194,22 @@ pub(crate) fn path_key(path: &str) -> String {
         key[..1].make_ascii_lowercase();
     }
     key
+}
+
+/// The key a root is compared under: its [`path_key`] without trailing
+/// separators, so `/w/` (a client that sends its folder with a slash, as
+/// Emacs eglot does) and `/w` are one root. A bare `/` and a drive root
+/// (`c:/`) keep theirs.
+pub(crate) fn root_key(path: &str) -> String {
+    let key = path_key(path);
+    let trimmed = key.trim_end_matches('/');
+    if trimmed.is_empty() && !key.is_empty() {
+        return "/".to_string();
+    }
+    if trimmed.len() == 2 && trimmed.as_bytes()[1] == b':' {
+        return format!("{trimmed}/");
+    }
+    trimmed.to_string()
 }
 
 /// Object files under a root: [`path_key`] → (text, index entry).
@@ -287,6 +358,10 @@ pub(crate) struct Session {
     /// The broken-file warning was shown (once per session).
     warned: Cell<bool>,
     loose_index: RefCell<Option<Arc<[IndexedObject]>>>,
+    /// The catalog of the documents outside every root, when there is no root.
+    loose_catalog: CatalogState,
+    /// What the client was told of the catalog (#198).
+    catalog_sent: RefCell<CatalogSent>,
     /// What a host with no filesystem supplied on `initialize`.
     pub supplied: Supplied,
 }
@@ -416,7 +491,7 @@ impl Session {
                 r.checked.set(self.batch.get());
                 let mut disk = r.disk.borrow_mut();
                 if (!disk.loaded || !self.caps.watch_files) && disk.refresh(&r.path) {
-                    r.index.borrow_mut().take();
+                    r.drop_index();
                     self.touch();
                 }
             }
@@ -502,11 +577,10 @@ impl Session {
     /// the next request.
     pub(crate) fn invalidate_index(&self, root: Option<usize>) {
         match root.and_then(|i| self.roots.get(i)) {
-            Some(r) => {
-                r.index.borrow_mut().take();
-            }
+            Some(r) => r.drop_index(),
             None => {
                 self.loose_index.borrow_mut().take();
+                self.loose_catalog.dirty.set(true);
             }
         }
         self.touch();
@@ -567,37 +641,60 @@ impl Session {
     /// workspace folder: its `.opentide/` or `objects/` ancestor
     /// ([`workspace_root`]).
     pub(crate) fn discover_root(&mut self, path: &str) {
+        if self.add_found_root(path) {
+            self.reassign_roots();
+        }
+    }
+
+    /// Add the root found around a document outside every root, if there is
+    /// one. Whether a root was added.
+    fn add_found_root(&mut self, path: &str) -> bool {
         let inside = self
             .roots
             .iter()
             .any(|r| Path::new(path).starts_with(&r.path));
         if inside || !path.starts_with(['/', '\\']) && path.as_bytes().get(1) != Some(&b':') {
-            return;
+            return false;
         }
-        if let Some(found) = workspace_root(Path::new(path)) {
-            self.roots.push(Root::new(found));
-            self.reassign_roots();
+        match workspace_root(Path::new(path)) {
+            Some(found) => {
+                self.roots.push(Root::new(found));
+                true
+            }
+            None => false,
         }
     }
 
     /// The workspace folders changed: each document's root is found again.
     pub(crate) fn set_folders(&mut self, folders: Vec<PathBuf>) {
         let mut roots: Vec<Root> = Vec::new();
-        let mut old: Vec<Root> = std::mem::take(&mut self.roots);
+        let mut old: Vec<(bool, Root)> = std::mem::take(&mut self.roots)
+            .into_iter()
+            .enumerate()
+            .map(|(i, r)| (i < self.folders, r))
+            .collect();
         for path in &folders {
-            match old.iter().position(|r| &r.path == path) {
-                Some(i) => roots.push(old.remove(i)),
+            match old.iter().position(|(_, r)| &r.path == path) {
+                Some(i) => roots.push(old.remove(i).1),
                 None => roots.push(Root::new(path.clone())),
             }
         }
         self.folders = roots.len();
-        // Roots found around documents stay while no folder holds them.
-        for r in old {
-            if !folders.iter().any(|f| r.path.starts_with(f)) {
-                roots.push(r);
-            }
-        }
+        // Roots found around documents stay while no folder holds them; a
+        // folder that was removed goes.
+        roots.extend(
+            old.into_iter()
+                .filter(|(folder, r)| !folder && !folders.iter().any(|f| r.path.starts_with(f)))
+                .map(|(_, r)| r),
+        );
         self.roots = roots;
+        // A document of a folder that went is outside every folder now: its
+        // root is found around it, as when it is opened there.
+        let mut paths: Vec<String> = self.docs.keys().map(|uri| uri_to_path(uri)).collect();
+        paths.sort();
+        for path in paths {
+            self.add_found_root(&path);
+        }
         self.reassign_roots();
     }
 
@@ -613,9 +710,10 @@ impl Session {
             }
         }
         for r in &self.roots {
-            r.index.borrow_mut().take();
+            r.drop_index();
         }
         self.loose_index.borrow_mut().take();
+        self.loose_catalog.dirty.set(true);
         self.reactivate();
         if !self.docs.is_empty() {
             self.mark_all();
@@ -723,11 +821,132 @@ impl Session {
         self.open_documents.set(true);
     }
 
+    /// The catalog state of a root (`None`: outside every root).
+    fn catalog_state(&self, root: Option<usize>) -> Option<&CatalogState> {
+        match root {
+            Some(i) => self.roots.get(i).map(|r| &r.catalog),
+            None => Some(&self.loose_catalog),
+        }
+    }
+
+    /// The roots `opentide/catalog` reports: every root, or the documents
+    /// outside them when there is none.
+    pub(crate) fn catalog_roots(&self) -> Vec<Option<usize>> {
+        if self.roots.is_empty() {
+            vec![None]
+        } else {
+            (0..self.roots.len()).map(Some).collect()
+        }
+    }
+
+    /// A root's index for `opentide/catalog`, remembered as what the client
+    /// now knows.
+    pub(crate) fn catalog_index(&self, root: Option<usize>) -> Arc<[IndexedObject]> {
+        let index = opentide_analysis::workspace_index(&self.host(root));
+        if let Some(state) = self.catalog_state(root) {
+            state.dirty.set(false);
+        }
+        self.catalog_sent
+            .borrow_mut()
+            .digests
+            .insert(self.catalog_key(root), catalog_digest(&index));
+        index
+    }
+
+    /// The client asked for every root's catalog: a root that appears is
+    /// announced from now on, as one that goes is.
+    pub(crate) fn catalog_every_root(&self) {
+        self.catalog_sent.borrow_mut().every_root = true;
+    }
+
+    /// The `root` of `opentide/catalog` and `opentide/catalogChanged`: the
+    /// root's URI, or `null` outside every root.
+    pub(crate) fn catalog_root_uri(&self, root: Option<usize>) -> serde_json::Value {
+        root.and_then(|i| self.roots.get(i))
+            .map_or(serde_json::Value::Null, |r| {
+                serde_json::Value::String(crate::uri::path_to_uri(&r.path.display().to_string()))
+            })
+    }
+
+    /// The key of a root in [`CatalogSent`]: its URI, or `""` outside every
+    /// root.
+    fn catalog_key(&self, root: Option<usize>) -> String {
+        match self.catalog_root_uri(root) {
+            serde_json::Value::String(uri) => uri,
+            _ => String::new(),
+        }
+    }
+
+    /// `opentide/catalogChanged {root}` at the end of a batch (#198), once
+    /// the client has asked for a catalog:
+    ///
+    /// - for each root it was told of whose catalog changed: a file saved,
+    ///   created or deleted, or an open object's UUID, name or references
+    ///   edited;
+    /// - for each root it was told of that is gone (a workspace folder
+    ///   removed, or the documents outside every root once a root is found);
+    /// - for each root that appeared, once it has asked for every root (a
+    ///   folder added, or a root found around a document opened outside
+    ///   every folder). From then on that root is followed too.
+    fn flush_catalog_changes(&self) {
+        use crate::handlers::custom::{CatalogChanged, CatalogChangedParams};
+        let mut sent = self.catalog_sent.borrow_mut();
+        if sent.digests.is_empty() && !sent.every_root {
+            return;
+        }
+        let roots: Vec<(Option<usize>, String)> = self
+            .catalog_roots()
+            .into_iter()
+            .map(|root| (root, self.catalog_key(root)))
+            .collect();
+        let uri = |key: &str| match key {
+            "" => serde_json::Value::Null,
+            uri => serde_json::Value::String(uri.to_string()),
+        };
+        let mut changed: Vec<String> = Vec::new();
+        let gone: Vec<String> = sent
+            .digests
+            .keys()
+            .filter(|key| !roots.iter().any(|(_, k)| k == *key))
+            .cloned()
+            .collect();
+        for key in gone {
+            sent.digests.remove(&key);
+            changed.push(key);
+        }
+        for (root, key) in roots {
+            let Some(state) = self.catalog_state(root) else {
+                continue;
+            };
+            let known = sent.digests.get(&key).copied();
+            if known.is_none() && !sent.every_root {
+                continue;
+            }
+            if !state.dirty.replace(false) && known.is_some() {
+                continue;
+            }
+            let index = opentide_analysis::workspace_index(&self.host(root));
+            let digest = catalog_digest(&index);
+            // `host` may have read the disk and dropped the index again.
+            state.dirty.set(false);
+            if known != Some(digest) {
+                sent.digests.insert(key.clone(), digest);
+                changed.push(key);
+            }
+        }
+        drop(sent);
+        for key in changed {
+            self.notify::<CatalogChanged>(CatalogChangedParams { root: uri(&key) });
+        }
+    }
+
     /// Publish what the batch changed, each document once. A client that
     /// pulls is asked to pull again instead, and one that can refresh its
     /// semantic tokens, inlay hints and lenses is asked to after a change
-    /// that reaches beyond one document.
+    /// that reaches beyond one document. A catalog that changed is announced
+    /// first.
     pub(crate) fn flush_publishes(&mut self) {
+        self.flush_catalog_changes();
         let everything = self.everything.replace(false);
         let tide_documents = self.open_documents.replace(false);
         let pending = std::mem::take(&mut *self.pending.borrow_mut());
@@ -870,5 +1089,21 @@ impl Session {
         uri_to_path(uri)
             .replace('\\', "/")
             .ends_with(VISIBILITY_CONFIGURATION)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::root_key;
+
+    #[test]
+    fn a_root_is_the_same_root_with_or_without_a_trailing_separator() {
+        assert_eq!(root_key("/w/"), "/w");
+        assert_eq!(root_key("/w"), "/w");
+        assert_eq!(root_key(r"C:\w\"), "c:/w");
+        assert_eq!(root_key("/"), "/");
+        assert_eq!(root_key("c:/"), "c:/");
+        assert_eq!(root_key("C:"), "c:/");
+        assert_eq!(root_key(r"c:\"), "c:/");
     }
 }
