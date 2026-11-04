@@ -444,7 +444,11 @@ def _deploy(
     from opentide.core.registry import Opentide
     from opentide.deployment import CIEnvironment, make_deploy_plan, modified_mdr_files
     from opentide.deployment.ci import is_change_request
-    from opentide.deployment.git_repo import MissingGitCheckout, missing_checkout_message
+    from opentide.deployment.git_repo import (
+        MissingGitCheckout,
+        diff_error_message,
+        missing_checkout_message,
+    )
     from opentide.models.deployment_enums import StatusStrategy
     from opentide.mutation.promotion import PromoteMDR
     from opentide.platforms.plugins import EnabledPlatforms
@@ -519,7 +523,7 @@ def _deploy(
     except UserFileError:
         raise  # the CLI points at the file
     except Exception as exc:
-        message = str(exc).strip() or (f"{type(exc).__name__} while selecting the rules to deploy")
+        message = diff_error_message(exc, "selecting the rules to deploy")
         return {"status": "failed", "message": message, "_exit_code": 1}
     if platform is not None:
         platform_key = platform.value

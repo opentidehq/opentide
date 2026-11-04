@@ -768,7 +768,11 @@ def _query_rule_scope(
         message = "--changed cannot be combined with --file or --uuid"
         return None, None, _query_scope_refused(platform, message, exit_code=2, mode=mode)
     if changed:
-        from opentide.deployment.git_repo import MissingGitCheckout, changed_rule_scope
+        from opentide.deployment.git_repo import (
+            MissingGitCheckout,
+            changed_rule_scope,
+            diff_error_message,
+        )
 
         try:
             scope, diff = changed_rule_scope()
@@ -776,7 +780,7 @@ def _query_rule_scope(
             message = f"--changed needs a git checkout; no .git was found from {exc.searched}"
             return None, None, _query_scope_refused(platform, message, exit_code=1, mode=mode)
         except Exception as exc:
-            message = str(exc).strip() or f"{type(exc).__name__} while computing the changed rules"
+            message = diff_error_message(exc, "computing the changed rules")
             return None, None, _query_scope_refused(platform, message, exit_code=1, mode=mode)
         logger.info("query_scope_changed", diff=diff.name, rules=len(scope.files))
         return scope, "changed", None
@@ -823,6 +827,43 @@ def validate_query_platform(
     take *check_timeout* seconds on a tenant (``--check-timeout``; default:
     :func:`~opentide.query.check.check_timeout`).
     """
+    result = _validate_query_platform(
+        ctx,
+        platform,
+        strategies=strategies,
+        wide=wide,
+        live=live,
+        changed=changed,
+        files=files,
+        uuids=uuids,
+        strict=strict,
+        queries=queries,
+        check_timeout=check_timeout,
+    )
+    if changed and result.get("status") != "failed":
+        from opentide.deployment.git_repo import no_commits_warning
+
+        note = no_commits_warning("commit the rules, or drop --changed to check every rule")
+        if note is not None:
+            earlier = result.get("warnings")
+            result["warnings"] = [note, *(earlier if isinstance(earlier, list) else [])]
+    return result
+
+
+def _validate_query_platform(
+    ctx: CliContext,
+    platform: str | None,
+    *,
+    strategies: Sequence[str] = (),
+    wide: bool = False,
+    live: bool = False,
+    changed: bool = False,
+    files: Sequence[str] = (),
+    uuids: Sequence[str] = (),
+    strict: bool = False,
+    queries: QueriesMode = QueriesMode.error,
+    check_timeout: float | None = None,
+) -> dict[str, object]:
     ctx.apply_environment()
     from opentide.validation.query_platforms import OFFLINE_QUERY_PLATFORMS
 
