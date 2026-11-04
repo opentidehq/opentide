@@ -9,7 +9,13 @@ from typing import Any
 from opentide.core import registry
 from opentide.core.logging import get_logger
 from opentide.deployment.ci import CIEnvironment
-from opentide.deployment.git_backend import CommitInfo, DulwichRepo, open_repo
+from opentide.deployment.git_backend import (
+    CommitInfo,
+    DulwichRepo,
+    GitLookupError,
+    key_text,
+    open_repo,
+)
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
@@ -244,6 +250,43 @@ def _local_repository() -> DulwichRepo:
     return open_repo(worktree)
 
 
+def no_commits_warning(advice: str) -> str | None:
+    """Why the run's changed files are none: the checkout has no commit yet.
+
+    Outside CI the diff is the last commit's (:attr:`DiffSource.LAST_COMMIT`).
+    Right after ``git init`` there is no commit, so nothing has changed and
+    :func:`diff_calculation` returns no path; every file is uncommitted, and
+    uncommitted edits are never in the diff. *advice* says what to do instead.
+    ``None`` in CI, outside a checkout, and once ``HEAD`` names a commit.
+    """
+    if CIEnvironment().environment is not CIEnvironment.CIPlatforms.LocalDebug:
+        return None
+    try:
+        repo = _local_repository()
+    except MissingGitCheckout:
+        return None
+    if repo.has_commits:
+        return None
+    return f"The git repository has no commits yet, so no file has changed: {advice}"
+
+
+def diff_error_message(exc: Exception, doing: str) -> str:
+    """The sentence a failed git diff reports, never a key repr such as ``b'HEAD'``.
+
+    Dulwich raises a bare ``KeyError`` naming the missing ref or object as
+    bytes, and ``str()`` of it is that repr. *doing* names the step
+    (``computing the changed rules``) for an exception with no text.
+    """
+    if (
+        isinstance(exc, KeyError)
+        and not isinstance(exc, GitLookupError)
+        and exc.args
+        and isinstance(exc.args[0], bytes)
+    ):
+        return f"Could not find git ref or object {key_text(exc)} while {doing}"
+    return str(exc).strip() or f"{type(exc).__name__} while {doing}"
+
+
 def _production_base(repo: DulwichRepo) -> str | None:
     """HEAD's first parent (``HEAD^1``) when that object is in the checkout.
 
@@ -394,6 +437,10 @@ def diff_calculation(source: DiffSource) -> list[str]:
         if source is DiffSource.CHANGE_REQUEST:
             raise Exception("A pull or merge request diff needs a CI run")
         repo = _local_repository()
+        if not repo.has_commits:
+            # Right after ``git init``: there is no last commit, so it changed nothing.
+            logger.info("git_repository_has_no_commits", path=str(repo.path))
+            return []
         base = _production_base(repo)
         if base is None:
             return []

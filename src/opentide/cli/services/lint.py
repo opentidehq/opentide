@@ -670,6 +670,11 @@ class _Scope:
     files: frozenset[Path]
     #: The flags that chose them, for the ``lint --fix`` next step.
     flags: tuple[str, ...]
+    #: Why ``--changed`` chose nothing, when the checkout has no commit yet.
+    warning: str | None = None
+
+
+_NO_COMMITS_ADVICE = "commit the files, or drop --changed to lint every object file"
 
 
 def _scope_refused(target: Path, message: str, *, exit_code: int) -> dict[str, object]:
@@ -721,7 +726,12 @@ def _lint_scope(
         return _Scope("selected", chosen, flags)
     if not changed:
         return None
-    from opentide.deployment.git_repo import MissingGitCheckout, changed_files_under
+    from opentide.deployment.git_repo import (
+        MissingGitCheckout,
+        changed_files_under,
+        diff_error_message,
+        no_commits_warning,
+    )
 
     try:
         diff, source = changed_files_under(target)
@@ -729,12 +739,13 @@ def _lint_scope(
         message = f"--changed needs a git checkout; no .git was found from {exc.searched}"
         return _scope_refused(target, message, exit_code=1)
     except Exception as exc:  # the diff's own failures: a shallow clone, a missing commit
-        message = str(exc).strip() or f"{type(exc).__name__} while computing the changed files"
+        message = diff_error_message(exc, "computing the changed files")
         return _scope_refused(target, message, exit_code=1)
     logger.info("lint_scope_changed", diff=source.name, files=len(diff))
     changed_files = set(diff)
     chosen = frozenset(path for path in candidates if path in changed_files)
-    return _Scope("changed", chosen, ("--changed",))
+    warning = None if diff else no_commits_warning(_NO_COMMITS_ADVICE)
+    return _Scope("changed", chosen, ("--changed",), warning)
 
 
 def run_lint(
@@ -857,6 +868,8 @@ def run_lint(
     }
     if scope is not None:
         result["scope"] = scope.label
+        if scope.warning is not None:
+            result["warnings"] = [scope.warning]
         if not linted and not left:
             result["_outcome"] = (
                 "No changed object file to lint"

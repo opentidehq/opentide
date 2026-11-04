@@ -12,6 +12,7 @@ from opentide.deployment.git_repo import (
     RuleScope,
     local_rule_scope,
     modified_rule_scope,
+    no_commits_warning,
     rules_folder_in_repo,
 )
 from opentide.models.deployment_enums import RunStrategies, StatusStrategy, deployed_by, deploys
@@ -156,6 +157,19 @@ def _report_nested_rules(nested: tuple[str, ...], warnings: list[str] | None) ->
     warnings.append(_nested_rules_warning(nested))
 
 
+def _report_no_commits(warnings: list[str] | None) -> None:
+    """Say why the diff read no rule when the checkout has no commit yet."""
+    note = no_commits_warning("commit the rules, or pass --all to read every rule file")
+    if note is None:
+        return
+    if warnings is None:
+        logger.warning("git_repository_has_no_commits", detail=note)
+        return
+    # The caller prints the message: a warning-level log would print it twice.
+    logger.debug("git_repository_has_no_commits", detail=note)
+    warnings.append(note)
+
+
 def statuses_deployed_by(strategies: RunStrategies) -> list[str]:
     """The ``[[statuses]]`` names, in order, whose strategy one of *strategies* deploys."""
     names: list[str] = []
@@ -226,6 +240,8 @@ def make_deploy_plan(
         logger.info("full_redeploy_scope", mdr_count=len(scope.files))
     else:
         scope = modified_rule_scope()
+        if not scope.files and not scope.nested:
+            _report_no_commits(warnings)
     if scope.nested:
         _report_nested_rules(scope.nested, warnings)
 
