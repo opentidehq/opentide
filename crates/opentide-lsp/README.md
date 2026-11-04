@@ -58,6 +58,19 @@ cargo run -p opentide-lsp -- --stdio   # editor protocol
 
 The **CLI never speaks JSON-RPC**. `--stdio` / `--listen` is the editor protocol. `analyze` / `highlight` print plain JSON.
 
+## Command line
+
+| Command | Does |
+| --- | --- |
+| `opentide-lsp --stdio` | Serve LSP on stdin and stdout. Exits `0` after `shutdown` then `exit`, `1` when the client exits or closes the stream without `shutdown` |
+| `opentide-lsp --listen <addr>` | Serve LSP to one TCP client (`127.0.0.1:2087`); says where it listens on stderr. Not in the WASI build |
+| `opentide-lsp --version` (`-V`) | Print `opentide-lsp <version>`. With `--json`, print what `initialize` reports in `capabilities.experimental.opentide` ([EDITORS.md](docs/EDITORS.md#structure-providers)), without starting a session |
+| `opentide-lsp analyze <file> [--language <id>] [--platform <key>]` | Print the file's diagnostics as a JSON array. The language comes from the extension (`.yaml` and `.yml` are Tide YAML) unless `--language` names it. `--platform` is the `configurations` key a query file is for: `carbon_black_cloud` checks Lucene in the Carbon Black dialect, `defender_for_endpoint` KQL against the Defender schema. A Tide file under an `objects/` folder is analysed with its workspace: the other object files, the catalog in `.opentide/lsp/catalogs/generated/` (else the bundled one) and the Elastic tenants' `setup.version`. A query file is analysed on its own |
+| `opentide-lsp highlight <file> [--language <id>] [--html]` | Print the file's highlight tokens as JSON, or with `--html` a page that shows them |
+| `opentide-lsp generate-highlights [--check]` | Rewrite `highlights/generated/` (the TextMate grammars, the Monaco and Helix maps, `package-contributions.json`) from `highlights/spec.toml`; `--check` fails when they are stale. For this repository's CI |
+
+With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in the `opentide` Python package, runs the same server with the catalog, configuration checks and schemas opentide generates for the workspace ([EDITORS.md](docs/EDITORS.md#configuration-toml)).
+
 ## Hard rules
 
 - I/O-free engine crates (`opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`). No `std::fs`.

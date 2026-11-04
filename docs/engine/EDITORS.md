@@ -116,7 +116,17 @@ name. The Elastic engines attach suggestions too ([LANGUAGE.md](LANGUAGE.md)).
 
 ## Custom RPCs
 
-Requests beyond LSP, for clients that know them. `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`, `opentide/compiledSpl` and `opentide/fs/read` are listed in [ARCHITECTURE.md](ARCHITECTURE.md#custom-rpcs).
+Requests beyond LSP, for clients that know them (`crates/opentide-lsp/src/handlers.rs`, `mod custom`). Params and results are JSON objects, and positions are UTF-16, as everywhere. Params that do not deserialize are `InvalidParams` (-32602); a method the server does not know is `MethodNotFound` (-32601). `language` takes a language id or one of its aliases (`kusto` for `kql`, `kibana-kql` for `kuery`, `yaml` and `tide` for `opentide-yaml`, `opentide-<id>` for each), as `LanguageId::parse` reads them.
+
+| Method | Params | Result |
+| --- | --- | --- |
+| `opentide/analyze` | `{ text, language?, uri? }` | `{ diagnostics }`, in the engine's own shape: `{ code, message, severity, range, suggestion? }`, `severity` a word (`error`, `warning`, `information`, `hint`). The text need not be open. Without `language` it is Tide YAML. `uri` picks the root whose workspace (`visibility.toml`, the index) the analysis reads; without it the text is analysed as `memory`, outside every root |
+| `opentide/highlight` | `{ text, language? }` | `{ language_id, legend, tokens }`: each token's `capture` (a HighlightSpec capture), `range`, `span` (bytes) and `token_type` (an index into `legend`). Without `language` it is KQL |
+| `opentide/compiledKql` | `{ query, tenant? }` | `{ compiled }`: the KQL Sentinel runs for the query on `tenant` (`opentide_kql::compile_kql_query`, with no exclusions) |
+| `opentide/compiledSpl` | `{ query }` | `{ compiled }`: the search Splunk runs, the authored text (an implicit leading `\| search` is not a rewrite) |
+| `opentide/fs/read` | `{ path }` | `{ text }`: the file as the server sees it, the open buffer first, else the file on disk; `""` when there is neither |
+
+Debug builds also answer `opentide/__panic`, `opentide/__sleep` and `opentide/__stats`, for the server's own tests. Release builds do not have them.
 
 ### `opentide/catalog`
 
