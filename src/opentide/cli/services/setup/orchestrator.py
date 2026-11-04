@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -90,6 +91,12 @@ class SetupOptions:
     mcp_hosts: list[McpHost] = field(default_factory=list)
     run_skills: bool = False
     skill_targets: list[SkillTarget] = field(default_factory=list)
+    #: ``--plugin``: register the opentidehq/skills Agent Plugin for Claude Code.
+    plugin: bool = False
+    #: ``--hooks``: the validate-on-commit hooks of ``setup hooks``.
+    run_hooks: bool = False
+    #: ``--env``: the ``.env.example`` of ``setup env``.
+    run_env: bool = False
     warnings: list[str] = field(default_factory=list)
 
 
@@ -122,7 +129,13 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
     )
 
 
-def run_setup(options: SetupOptions) -> dict[str, object]:
+#: Called after each step with its name and result (``setup --plan`` compares files there).
+StepObserver = Callable[[str, Mapping[str, object]], None]
+
+
+def run_setup(
+    options: SetupOptions, *, after_step: StepObserver | None = None
+) -> dict[str, object]:
     """Run configured setup steps and aggregate results."""
     steps: list[dict[str, object]] = []
     warnings: list[str] = list(options.warnings)
@@ -135,6 +148,8 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
     def record(step: str, result: dict[str, object]) -> None:
         # Human output prints only the top-level warnings, never steps[].warnings.
         steps.append({"step": step, **result})
+        if after_step is not None:
+            after_step(step, result)
         step_warnings = result.get("warnings")
         if isinstance(step_warnings, list):
             for warning in map(str, step_warnings):
@@ -187,13 +202,23 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
         ci_result = run_ci_setup(_ci_options(options))
         record("ci", ci_result)
 
+    if options.run_env:
+        from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
+
+        record("env", run_env_setup(EnvSetupOptions(path=options.path, yes=options.yes)))
+
+    if options.run_hooks:
+        from opentide.cli.services.setup.hooks import HooksSetupOptions, run_hooks_setup
+
+        record("hooks", run_hooks_setup(HooksSetupOptions(path=options.path, yes=options.yes)))
+
     if options.run_mcp and options.mcp_hosts:
         mcp_result = run_mcp_setup(
             McpSetupOptions(path=options.path, hosts=options.mcp_hosts, yes=options.yes)
         )
         record("mcp", mcp_result)
 
-    if options.run_skills and options.skill_targets:
+    if options.run_skills and (options.skill_targets or options.plugin):
         try:
             skills_result = run_skills_setup(
                 SkillsSetupOptions(
@@ -202,6 +227,7 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
                     name=options.name,
                     org=options.org,
                     description=options.description,
+                    plugin=options.plugin,
                     yes=options.yes,
                 )
             )

@@ -14,6 +14,7 @@ opentide setup platforms --sentinel --splunk --yes
 opentide setup ci github --yes
 opentide setup env --yes
 opentide setup hooks --yes
+opentide setup --plan --platform sentinel --ci github --mcp vscode --hooks --env
 ```
 
 The interactive wizard opens with the opentide logo and the tagline (the one-line pill in a terminal narrower than 82 columns, and no mark with `--no-color` or `NO_COLOR`), then uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. An empty repository name is refused on screen. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
@@ -58,9 +59,66 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--python-version` | CI Python version (default `3.12`) |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |
 | `--vscode-setup` | Deprecated `setup vscode`: recommend the opentide extension, write snippets (generate-first) |
+| `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
+| `--skills` | Agent skills for `claude-code`, `cursor`, `github-copilot` or `generic` (repeatable): the [setup skills](#setup-skills) step, with its default skills |
+| `--plugin` | Register the opentidehq/skills Agent Plugin for Claude Code, as `setup skills --plugin` |
+| `--hooks` | Validate-on-commit hooks: the [setup hooks](#setup-hooks) step |
+| `--env` | `.env.example` and the `.env` ignore rule: the [setup env](#setup-env) step |
+| `--plan` | List the files each step would write, and write nothing (see [Plan before you write](#plan-before-you-write)) |
 | `--yes` / `-y` | Confirm explicit options without prompting |
 
-Use subcommands for MCP and skills — parent `--mcp` / `--skills` enums were removed.
+With `--mcp`, `--skills`, `--plugin`, `--hooks` and `--env`, every question the wizard asks has a flag, so the whole wizard is one non-interactive command:
+
+```bash
+opentide setup --yes --name "Detections" --platform sentinel --ci github \
+  --mcp vscode --skills generic --hooks --env
+```
+
+The steps run in this order: `repo`, `platforms`, `ci`, `env`, `hooks`, `mcp`, `skills`, `vscode`. Like `--ci`, the new flags do not scaffold the repository on their own: `opentide setup --yes --hooks` configures the hooks only, and adding `--name`, `--org`, `--description` or `--platform` scaffolds it too.
+
+## Plan before you write
+
+`--plan` lists the files each step would write and writes nothing. It works on `setup` and on every subcommand (`setup repo --plan`, `setup mcp --cursor --plan`, …), and given before a subcommand it applies to it, as `--path` and `--yes` do. A plan never prompts, so it needs no `--yes`, but it needs the same choices a scripted run needs: `setup mcp --plan` without a host exits `2`, as `setup mcp --yes` does.
+
+```bash
+opentide --json setup --plan --name "Tutorial Detections" --org "Example Corp" \
+  --platform sentinel --path ./tutorial-detections
+```
+
+```json illustrative
+{
+  "plan": true,
+  "path": "/home/me/tutorial-detections",
+  "steps": [
+    {
+      "step": "repo",
+      "files": [
+        { "path": "README.md", "action": "create" },
+        { "path": ".gitignore", "action": "create" },
+        { "path": ".opentide/configurations/platforms/sentinel.toml", "action": "create" }
+      ],
+      "warnings": []
+    },
+    {
+      "step": "platforms",
+      "files": [{ "path": ".opentide/configurations/platforms/sentinel.toml", "action": "skip" }],
+      "warnings": []
+    }
+  ],
+  "message": "Plan: 15 files to write (15 new, 0 changed) · nothing written",
+  "summary": { "create": 15, "merge": 0, "skip": 1, "steps": 2 }
+}
+```
+
+| `action` | Meaning |
+|----------|---------|
+| `create` | The step would write a file that does not exist yet |
+| `merge` | The step would write over a file that exists (setup merges into the ones it shares with you, such as `.gitignore`, `.vscode/mcp.json` or `.pre-commit-config.yaml`), or over one an earlier step wrote |
+| `skip` | The step would leave the file as it is, because it already says what setup would write |
+
+Each step's `warnings` are the warnings that step would print. Paths are relative to the repository being set up; a file outside it, such as the Git hook of a workspace in a subdirectory, is relative too (`../.git/hooks/pre-commit`).
+
+The plan is not a guess: setup runs the same steps in a copy of the repository in a temporary directory, and compares the copy's files before and after each one. The copy holds the Git work tree around the target, less dependency and cache folders (`node_modules`, `.venv`, `__pycache__`, …), and a `.git` that reads the repository's own branches, configuration and hooks. So `setup --plan` then `setup --yes` with the same flags writes exactly the files the plan listed under `create` and `merge`. The skills step still downloads the catalogue to know which files it would write. A file a step would delete is not listed.
 
 `--path` / `-C` and `--yes` / `-y` work on **every** `setup` subcommand (`repo`, `platforms`, `ci`, `env`, `hooks`, `mcp`, `skills`, `vscode`). A positional `PATH` is still accepted as a hidden alias on the subcommands that historically required it; passing both forms in one invocation is a usage error. `setup vscode` accepts `--yes` for symmetry — it writes editor-local files and never prompts.
 
