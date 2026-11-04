@@ -79,3 +79,102 @@ def test_decode_and_encode_keep_the_bom_and_newline() -> None:
     source = JsoncText.decode(raw)
     assert source.bom and source.newline == "\r\n"
     assert source.encode() == raw
+
+
+def _comments(text: str) -> list[str]:
+    """Every comment in *text*, as written, in order."""
+    masked = mask(text)
+    found: list[str] = []
+    index = 0
+    while index < len(text):
+        if text[index] != masked[index] and text.startswith(("//", "/*"), index):
+            end = index
+            while end < len(text) and (text[end] != masked[end] or text[end] in "\r\n"):
+                if text[end] in "\r\n" and text.startswith("//", index):
+                    break
+                end += 1
+            found.append(text[index:end].strip())
+            index = end
+            continue
+        index += 1
+    return found
+
+
+ROUTER_ENTRY = '".opentide/schemas/opentide.schema.json": "objects/**/*.yaml"'
+
+SETTINGS_CASES = {
+    "a comment before the next member": (
+        '{\n    "yaml.schemas": {\n        ' + ROUTER_ENTRY + "\n    },\n\n"
+        '    // Python settings\n    "python.defaultInterpreterPath": ".venv/bin/python"\n}\n',
+        {"python.defaultInterpreterPath": ".venv/bin/python"},
+    ),
+    "a trailing comment on the previous member": (
+        '{\n    "editor.tabSize": 2, // two spaces, team rule\n    "yaml.schemas": {\n'
+        "        " + ROUTER_ENTRY + "\n    }\n}\n",
+        {"editor.tabSize": 2},
+    ),
+    "a trailing comma and a comment after it": (
+        '{\n    "a": 1,\n    "yaml.schemas": {\n        ' + ROUTER_ENTRY + "\n    }, // end\n}\n",
+        {"a": 1},
+    ),
+    "a schema entry between commented ones": (
+        '{\n  "yaml.schemas": {\n    "x.json": "x/*.yaml", // x\n    ' + ROUTER_ENTRY + ",\n"
+        '    // y next\n    "y.json": "y/*.yaml"\n  }\n}\n',
+        {"yaml.schemas": {"x.json": "x/*.yaml", "y.json": "y/*.yaml"}},
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(SETTINGS_CASES))
+def test_removing_a_mapping_keeps_every_comment_around_it(tmp_path, case: str) -> None:
+    from opentide.cli.services.setup.vscode import write_vscode_settings
+
+    text, expected = SETTINGS_CASES[case]
+    (tmp_path / ".vscode").mkdir()
+    path = tmp_path / ".vscode" / "settings.json"
+    path.write_text(text, encoding="utf-8")
+    warnings: list[str] = []
+    assert write_vscode_settings(tmp_path, warnings=warnings) == ".vscode/settings.json"
+    assert warnings == []
+    edited = path.read_text(encoding="utf-8")
+    assert json.loads(_strip_jsonc(edited)) == expected
+    assert _comments(edited) == _comments(text), edited
+
+
+EXTENSIONS_CASES = {
+    "an object holding only a comment": "{\n  // TODO add recommendations\n}\n",
+    "an empty array of commented-out ids": (
+        '{\n  "recommendations": [\n    // "redhat.vscode-yaml"\n  ]\n}\n'
+    ),
+    "a block comment before the first id": (
+        '{\n  "recommendations": [\n    /* core */ "ms-python.python"\n  ]\n}\n'
+    ),
+    "a trailing comment on the last id": (
+        '{\n  "recommendations": [\n    "ms-python.python" // python\n  ]\n}\n'
+    ),
+    "a commented-out id after the last": (
+        '{\n  "recommendations": [\n    "ms-python.python",\n    // "redhat.vscode-yaml"\n  ]\n}\n'
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(EXTENSIONS_CASES))
+def test_adding_the_recommendation_keeps_every_comment(tmp_path, case: str) -> None:
+    from opentide.cli.services.setup.vscode import write_vscode_extensions
+
+    text = EXTENSIONS_CASES[case]
+    (tmp_path / ".vscode").mkdir()
+    path = tmp_path / ".vscode" / "extensions.json"
+    path.write_text(text, encoding="utf-8")
+    warnings: list[str] = []
+    assert write_vscode_extensions(tmp_path, warnings=warnings) == ".vscode/extensions.json"
+    assert warnings == []
+    edited = path.read_text(encoding="utf-8")
+    before = json.loads(_strip_jsonc(text)).get("recommendations", [])
+    after = json.loads(_strip_jsonc(edited))["recommendations"]
+    assert after == [*before, "opentidehq.opentide"]
+    assert _comments(edited) == _comments(text), edited
+    if "python" in text:
+        # A trailing comment stays on the id it was written beside.
+        python_line = next(line for line in edited.splitlines() if "ms-python.python" in line)
+        assert ("// python" in python_line) == ("// python" in text)

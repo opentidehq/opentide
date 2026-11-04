@@ -186,37 +186,59 @@ def members(masked: str, start: int) -> tuple[list[Member], int]:
         index = after if comma is None else comma + 1
 
 
-def _drop_blank_line(text: str, position: int) -> str:
-    """Remove the line holding *position* when the edit left it blank."""
-    start = text.rfind("\n", 0, position) + 1
-    end = text.find("\n", position)
-    end = len(text) if end < 0 else end + 1
-    if text[start:end].strip():
-        return text
-    return text[:start] + text[end:]
+def _cut(text: str, start: int, end: int) -> str:
+    """*text* without ``text[start:end]``, and without the line it leaves blank.
+
+    Spaces after the cut go with it. When the line keeps something (a comment
+    written after the cut), its indent stays; when nothing is left, the whole
+    line goes, its line break included.
+    """
+    line_start = text.rfind("\n", 0, start) + 1
+    alone = not text[line_start:start].strip()
+    after = end
+    while after < len(text) and text[after] in " \t":
+        after += 1
+    if after < len(text) and text[after] not in "\r\n":
+        return text[:start] + text[after:]
+    if not alone:
+        return text[:start] + text[after:]
+    if text.startswith("\r\n", after):
+        after += 2
+    elif after < len(text):
+        after += 1
+    return text[:line_start] + text[after:]
 
 
 def remove_member(text: str, object_start: int, key: str) -> str:
-    """*text* without the member *key* of the object opening at *object_start*."""
+    """*text* without the member *key* of the object opening at *object_start*.
+
+    Only the member and its own comma go: a comment before the next member, or
+    after the previous one's comma, stays where it is.
+    """
     masked = mask(text)
     found, _ = members(masked, object_start)
     for position, member in enumerate(found):
         if member.key != key:
             continue
         if member.comma is not None:
-            following = _skip_space(masked, member.comma + 1)
-            if masked[following] != "}":
-                # Up to the next member: it takes this one's place and indent.
-                return text[: member.key_start] + text[following:]
-            start, end = member.key_start, member.comma + 1
-        elif position > 0 and found[position - 1].comma is not None:
+            return _cut(text, member.key_start, member.comma + 1)
+        if position > 0 and found[position - 1].comma is not None:
+            # The last member: the previous one's comma goes too, and nothing else
+            # (a comment after that comma is the previous member's).
             previous = found[position - 1].comma
             assert previous is not None
-            start, end = previous, member.value_end
-        else:
-            start, end = member.key_start, member.value_end
-        return _drop_blank_line(text[:start] + text[end:], start)
+            text = _cut(text, member.key_start, member.value_end)
+            return text[:previous] + text[previous + 1 :]
+        return _cut(text, member.key_start, member.value_end)
     return text
+
+
+def _indent_of_first_line(text: str, start: int, end: int, fallback: str) -> str:
+    """The indent of the first line between *start* and *end* that holds something."""
+    for line in text[start:end].splitlines()[1:]:
+        if line.strip():
+            return line[: len(line) - len(line.lstrip())]
+    return fallback
 
 
 def replace_value(text: str, object_start: int, key: str, value: str) -> str:
@@ -230,24 +252,48 @@ def replace_value(text: str, object_start: int, key: str, value: str) -> str:
 
 
 def append_to_array(text: str, start: int, item: str, newline: str) -> str:
-    """*text* with *item* (JSON text) added at the end of the array opening at *start*."""
+    """*text* with *item* (JSON text) added at the end of the array opening at *start*.
+
+    Comments stay: in an array that holds only comments the item goes first, and
+    on a line that ends in a comment after the last item, the item goes on the
+    next line, so the comment stays beside the item it was written for.
+    """
     masked = mask(text)
     end = _value_end(masked, start) - 1  # the ]
     last = end - 1
     while last > start and masked[last] in " \t\r\n":
         last -= 1
     if last == start:
-        return text[: start + 1] + item + text[end:]
+        inner = text[start + 1 : end]
+        if not inner.strip():
+            return text[: start + 1] + item + text[end:]
+        # Only comments (a commented-out id): the item goes before them.
+        if "\n" not in inner:
+            return text[: start + 1] + item + " " + inner.lstrip() + text[end:]
+        indent = _indent_of_first_line(text, start, end, "  ")
+        return text[: start + 1] + newline + indent + item + text[start + 1 :]
     first = _skip_space(masked, start + 1)
     multiline = "\n" in text[start:first]
     if multiline:
         line_start = text.rfind("\n", 0, first) + 1
-        separator = newline + text[line_start:first]
+        prefix = text[line_start:first]
+        # The indent alone: a block comment before the first item is that item's.
+        separator = newline + prefix[: len(prefix) - len(prefix.lstrip(" \t"))]
     else:
         separator = " "
     lead = "" if masked[last] == "," else ","
     insert_at = last + 1
-    return text[:insert_at] + lead + separator + item + text[insert_at:]
+    text = text[:insert_at] + lead + text[insert_at:]
+    masked = masked[:insert_at] + lead + masked[insert_at:]
+    insert_at += len(lead)
+    if multiline:
+        line_end = insert_at
+        while line_end < len(text) and text[line_end] not in "\r\n":
+            line_end += 1
+        if not masked[insert_at:line_end].strip():
+            # Past a comment that ends the last item's line.
+            insert_at = line_end
+    return text[:insert_at] + separator + item + text[insert_at:]
 
 
 def add_member(text: str, object_start: int, key: str, value: str, newline: str) -> str:
@@ -258,7 +304,14 @@ def add_member(text: str, object_start: int, key: str, value: str, newline: str)
     found, close = members(masked, object_start)
     member = f"{json.dumps(key)}: {value}"
     if not found:
-        return text[: object_start + 1] + newline + "  " + member + newline + text[close:]
+        inner = text[object_start + 1 : close]
+        if not inner.strip():
+            return text[: object_start + 1] + newline + "  " + member + newline + text[close:]
+        # Only comments: the member goes first, and they stay.
+        indent = _indent_of_first_line(text, object_start, close, "  ")
+        if "\n" not in inner:
+            return text[: object_start + 1] + " " + member + inner + text[close:]
+        return text[: object_start + 1] + newline + indent + member + text[object_start + 1 :]
     first = found[0].key_start
     line_start = text.rfind("\n", 0, first) + 1
     indent = text[line_start:first] if not text[line_start:first].strip() else ""
