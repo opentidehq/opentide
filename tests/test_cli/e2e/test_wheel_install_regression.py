@@ -361,8 +361,11 @@ _PLATFORM_SDK_IMPORTS = (
     "azure.monitor.query",
     "splunklib.client",
     "cbc_sdk.rest_api",
-    "pandas",
 )
+
+
+#: What a bare install no longer brings (#747).
+_NOT_INSTALLED = ("pandas", "numpy", "openpyxl")
 
 
 def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
@@ -395,6 +398,14 @@ def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
     )
     metadata = _run([str(python), "-c", print_extras], timeout=60)
     assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr
+    # No command needs them since #747: they were 100 MB of the VS Code bundle.
+    print_installed = (
+        "import importlib.metadata as m; "
+        "print(sorted(d.metadata['Name'].lower() for d in m.distributions()))"
+    )
+    installed = _run([str(python), "-c", print_installed], timeout=60)
+    for heavy in _NOT_INSTALLED:
+        assert f"'{heavy}'" not in installed.stdout, installed.stdout + installed.stderr
 
 
 def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path) -> None:

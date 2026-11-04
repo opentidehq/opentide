@@ -62,8 +62,10 @@ dependencies = [
     "azure-identity>=1.17",
     "azure-monitor-query>=1.4",
     "splunk-sdk>=2.0",
-    "pandas>=2.0",
     "carbon-black-cloud-sdk>=1.0",
+    # cbc_sdk imports boto3 when it loads (credential_providers imports its AWS
+    # Secrets Manager provider at module level), though opentide passes the
+    # tenant's token and never uses that provider.
     # carbon-black-cloud-sdk requires boto3 unpinned. botocore caps
     # python-dateutil below 3, and once 3.0.0 was out uv's resolver chose it and
     # walked boto3 back to 0.0.3, whose botocore fails on `six.moves`. The floor
@@ -172,6 +174,9 @@ skip = ["*-win32", "*_i686", "*_ppc64le", "*_s390x", "*_armv7l", "*_riscv64"]
 # The workflow sets the version from the release tag: the Linux containers
 # build from a copy of the checkout.
 environment-pass = ["SETUPTOOLS_SCM_PRETEND_VERSION"]
+# cryptography has no CPython 3.10 wheel for Windows on Arm, so the test
+# install would compile it: publish-pypi.yml installs that wheel on 3.12.
+test-skip = "*-win_arm64"
 test-command = [
     "opentide --version",
     "python -c \"from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']\"",

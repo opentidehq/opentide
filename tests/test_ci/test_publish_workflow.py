@@ -520,6 +520,7 @@ def platform_dist(tmp_path: Path) -> Path:
         "musllinux_1_2_x86_64",
         "macosx_11_0_arm64",
         "win_amd64",
+        "win_arm64",
     ):
         (tmp_path / "dist" / f"opentide-1.2.0-cp310-abi3-{platform}.whl").write_bytes(b"")
     (tmp_path / "dist" / "opentide-1.2.0.tar.gz").write_bytes(b"")
@@ -537,3 +538,46 @@ def test_publish_refuses_files_of_another_version_than_the_guard_approved(
     result = _run_reject(platform_dist, "1.3.0")
     assert result.returncode == 1
     assert "built ['1.2.0'], but the guard approved 1.3.0" in result.stdout
+
+
+def test_publish_refuses_a_release_without_a_windows_on_arm_wheel(platform_dist: Path) -> None:
+    """Windows on Arm fell back to the sdist, which needs Rust (#748)."""
+    (platform_dist / "dist" / "opentide-1.2.0-cp310-abi3-win_arm64.whl").unlink()
+    result = _run_reject(platform_dist, "1.2.0")
+    assert result.returncode == 1
+    assert "Refusing to publish: no win_arm64 wheel" in result.stdout
+
+
+def _wheel_steps() -> list[dict[str, Any]]:
+    return _job("wheels")["steps"]
+
+
+def test_wheels_are_built_on_windows_on_arm() -> None:
+    assert "windows-11-arm" in _job("wheels")["strategy"]["matrix"]["os"]
+    assert "windows-latest" in _job("wheels")["strategy"]["matrix"]["os"]
+
+
+def test_the_windows_on_arm_wheel_is_installed_and_doctor_runs() -> None:
+    """cibuildwheel skips testing it, so the workflow installs it itself (#748)."""
+    from opentide.core.io import load_toml
+
+    pyproject = load_toml(ROOT / "pyproject.toml")
+    assert pyproject["tool"]["cibuildwheel"]["test-skip"] == "*-win_arm64"
+    names = [step.get("name") for step in _wheel_steps()]
+    build = names.index("Build wheels")
+    smoke = names.index("Install the win_arm64 wheel and run doctor")
+    rust = names.index("Rust on Windows on Arm")
+    assert rust < build < smoke
+    step = _wheel_steps()[smoke]
+    assert step["if"] == "matrix.os == 'windows-11-arm'"
+    assert step["env"] == {"PIP_ONLY_BINARY": "cryptography"}
+    script = step["run"]
+    assert "$PSNativeCommandUseErrorActionPreference = $true" in script
+    assert "*-cp310-abi3-win_arm64.whl" in script
+    assert "--json doctor --offline" in script
+    assert "--json setup --path $workspace --yes" in script
+    # Every action stays pinned by commit SHA.
+    for job in _workflow()["jobs"].values():
+        for item in job.get("steps", []):
+            if "uses" in item:
+                assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", item["uses"]), item["uses"]
