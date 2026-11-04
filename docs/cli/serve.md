@@ -71,7 +71,7 @@ At 500 rules on 4 CPUs, a repeat `validate --file` answers in about 0.3 s, again
 
 ### Cancel
 
-`$/cancelRequest {id}` stops the run *id* as Ctrl-C would: `KeyboardInterrupt` is raised in the thread that runs it, so its cleanup runs (a CrowdStrike search is stopped), and it answers `exit_code` `130` with a document whose `failure.code` is [`interrupted`](./diagnostics.md#interrupted). A run blocked in one call (waiting on a tenant's answer) stops when that call returns. A cancel for a queued run answers it with `130` without running it; a cancel for a run that has answered changes nothing.
+`$/cancelRequest {id}` stops the run *id* as Ctrl-C would: `KeyboardInterrupt` is raised in the thread that runs it, so its cleanup runs (a CrowdStrike search is stopped), and it answers `exit_code` `130` with a document whose `failure.code` is [`interrupted`](./diagnostics.md#interrupted). A run blocked in one call (waiting on a tenant's answer) stops when that call returns. A cancel for a queued run answers it with `130` without running it; a cancel for a run that has answered, or for an id no request carries, changes nothing, also for a later request that reuses the id.
 
 ### Progress
 

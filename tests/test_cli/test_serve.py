@@ -537,6 +537,14 @@ def test_a_cancel_for_a_finished_run_changes_nothing(client: Client) -> None:
     assert client.answer(request_id)["result"]["exit_code"] == 0
     client.send({"method": "$/cancelRequest", "params": {"id": request_id}})
     assert client.run("explain", "vocab_unknown")["exit_code"] == 0
+    # Nor does it for a later request that reuses the id: it was answered 130 unrun.
+    client.send(
+        {"id": request_id, "method": "run", "params": {"argv": ["explain", "vocab_unknown"]}}
+    )
+    assert client.answer(request_id)["result"]["exit_code"] == 0
+    # A cancel for an id never sent is not kept either.
+    client.send({"method": "$/cancelRequest", "params": {"id": "never-sent"}})
+    assert client.server._cancelled == set()
 
 
 def test_a_crash_answers_internal_and_the_server_keeps_serving(
