@@ -19,6 +19,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Fixed
 
+- `@opentide/lsp-client`: `DOCUMENT_SELECTOR` and `WEB_DOCUMENT_SELECTOR` are plain arrays, so `documentSelector: DOCUMENT_SELECTOR` compiles in vscode-languageclient's `LanguageClientOptions`. They were `ReadonlyArray`s, which TypeScript does not assign to that mutable `DocumentSelector` (TS2322).
 - A workspace folder removed with `workspace/didChangeWorkspaceFolders` is no longer a root: `workspace/diagnostic` and `workspace/symbol` stopped covering it, and an open document of that folder reads the `.opentide/` or `objects/` root around it, as when it is opened outside every folder. The folder was kept as if the server had found it around a document.
 - A location in another document of a workspace that is not on disk (`vscode-vfs://github/org/repo` on vscode.dev and github.dev, `untitled:`) is that document's own URI: `textDocument/definition`, `textDocument/references`, `workspace/symbol`, document links and a `duplicate_id`'s related information gave `file:///vscode-vfs://…`, which the editor could not open.
 

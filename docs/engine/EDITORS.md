@@ -35,6 +35,18 @@ Lives in **opentidehq/vscode-extension** (other repository, #17). MIT client, EU
 
 Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern (`opentide-config` is `**/.opentide/configurations/**/*.toml`). Its patterns match `file:` URIs only. On vscode.dev and github.dev, where documents are `vscode-vfs:` and other virtual URIs, use `WEB_DOCUMENT_SELECTOR`: the same filters with no scheme ([#197](https://github.com/opentidehq/language-server/issues/197)).
 
+Both are plain arrays, so they are vscode-languageclient's `documentSelector` as they are:
+
+```ts
+import { DOCUMENT_SELECTOR, WEB_DOCUMENT_SELECTOR } from "@opentide/lsp-client";
+import * as vscode from "vscode";
+import type { LanguageClientOptions } from "vscode-languageclient";
+
+const clientOptions: LanguageClientOptions = {
+  documentSelector: vscode.env.uiKind === vscode.UIKind.Web ? WEB_DOCUMENT_SELECTOR : DOCUMENT_SELECTOR,
+};
+```
+
 `esql` is also the id of Elastic's own ES|QL extension. The ids are the shared vocabulary, so the opentide extension registers `esql` too, never a second id for the same language. Its TextMate grammar uses the scope `source.opentide.esql`, not Elastic's `source.esql`, so the two grammars never collide. The server's semantic tokens are authoritative for colour either way. The other three Elastic ids (`eql`, `kuery`, `lucene`) have no prior VS Code owner.
 
 TextMate scopes ([#195](https://github.com/opentidehq/language-server/issues/195)): `highlights/generated/esql.tmLanguage.json` is `source.opentide.esql`. VS Code keeps one grammar per scope, so a second `source.esql` would replace Elastic's grammar or be replaced by it. The other grammars keep `source.<id>` (`source.kql`, `source.spl`, `source.eql`, `source.kuery`, `source.lucene`, `source.falco`) and Tide objects `source.opentide-yaml`. No published extension we know of contributes those scopes. Renaming them would break every editor that already includes them, for no collision. A grammar moves to `source.opentide.<id>` when one is found to collide, as ES|QL did, in the same change as its CHANGELOG entry. The scope is not a HighlightSpec capture: renaming it leaves `highlights/spec.toml` at its version, and every capture keeps its TextMate scope. `opentide_highlight::tm_scope_name` gives each grammar's scope.

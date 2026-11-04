@@ -116,6 +116,65 @@ test("document selector covers each language docs/EDITORS.md lists, opentide-con
   }
 });
 
+// `LanguageClientOptions.documentSelector` in vscode-languageclient is
+// vscode-languageserver-protocol 3.17's `DocumentSelector`, a mutable array: a
+// readonly selector does not compile there (TS2322).
+test("the selectors type-check as vscode-languageclient's documentSelector, a mutable array", (t) => {
+  const pkg = fileURLToPath(new URL("../", import.meta.url));
+  const tsc = join(pkg, "node_modules/typescript/bin/tsc");
+  if (!existsSync(tsc)) {
+    t.skip("run npm ci in packages/lsp-client for tsc");
+    return;
+  }
+  const dir = mkdtempSync(join(tmpdir(), "opentide-selector-"));
+  try {
+    const index = join(pkg, "src/index.ts").replaceAll("\\", "/");
+    const fixture = join(dir, "selector.mts");
+    writeFileSync(
+      fixture,
+      `import { DOCUMENT_SELECTOR, WEB_DOCUMENT_SELECTOR } from ${JSON.stringify(index)};
+type TextDocumentFilter =
+  | { language: string; scheme?: string; pattern?: string }
+  | { language?: string; scheme: string; pattern?: string }
+  | { language?: string; scheme?: string; pattern: string };
+type DocumentSelector = (string | TextDocumentFilter)[];
+interface LanguageClientOptions {
+  documentSelector?: DocumentSelector | string[];
+}
+export const desktop: LanguageClientOptions = { documentSelector: DOCUMENT_SELECTOR };
+export const web: LanguageClientOptions = { documentSelector: WEB_DOCUMENT_SELECTOR };
+`,
+    );
+    const run = spawnSync(
+      process.execPath,
+      [
+        tsc,
+        "--noEmit",
+        "--strict",
+        "--skipLibCheck",
+        "--target",
+        "ES2022",
+        "--module",
+        "nodenext",
+        "--moduleResolution",
+        "nodenext",
+        "--allowImportingTsExtensions",
+        "--lib",
+        "ES2022,DOM,WebWorker",
+        "--typeRoots",
+        join(pkg, "node_modules/@types"),
+        "--types",
+        "node",
+        fixture,
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 /** A glob as VS Code's document filters read one: `**` crosses folders, `*` does not. */
 function globRegExp(glob: string): RegExp {
   let out = "";
