@@ -229,8 +229,11 @@ def _load_error_row(entry: Mapping[str, Any], workspace: Path) -> dict[str, Any]
         f"Could not parse object YAML: {entry.get('error') or 'unknown error'}"
     )
     fields = _text_fields(text) if text else {}
+    # A duplicate's UUID is the kept object's row's: ``objects[].uuid`` stays unique, and
+    # the message names the UUID.
+    uuid = None if code == "duplicate_id" else fields.get("uuid")
     return {
-        "uuid": fields.get("uuid"),
+        "uuid": uuid,
         "type": str(entry.get("object_type") or "") or None,
         "schema": fields.get("schema"),
         "name": fields.get("name") or (Path(raw_path).stem if raw_path else ""),

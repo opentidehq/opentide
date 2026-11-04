@@ -372,7 +372,9 @@ class CatalogLoadError(ResultModel):
 class CatalogObject(ResultModel):
     """One threat, objective or rule, or a file that should have been one."""
 
-    uuid: str | None = Field(description="metadata.uuid; null when a file that failed has none")
+    uuid: str | None = Field(
+        description="metadata.uuid; null when a file that failed has none, and for duplicate_id"
+    )
     type: Literal["threat", "objective", "rule"] | None
     schema_: str | None = Field(alias="schema", description="metadata.schema, such as rule::1.0")
     name: str
