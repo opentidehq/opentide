@@ -18,7 +18,8 @@ What the copy holds:
 - a small ``.git`` with the real repository's ``HEAD``, configuration, refs and
   hooks, and its object store as an alternate, so ``git`` answers in the copy
   as it does in the repository (branches, ``core.hooksPath``); a linked
-  worktree's or a submodule's ``.git`` file keeps its layout (:func:`_copy_git`).
+  worktree's or a submodule's ``.git`` file keeps its layout, and its links are
+  copied as the work tree's are (:func:`_copy_git`).
 
 A step that would write outside the repository (a ``core.hooksPath`` shared
 with other repositories) writes nothing there in a plan either: it warns, as
@@ -193,10 +194,13 @@ def _copy_git(top: Path, shadow_top: Path, scratch: Path) -> list[tuple[Path, Pa
         source = common / name
         if source.is_file():
             shutil.copy2(source, shadow_common / name)
+    # Links as in the work tree: a hook linked to the repository's versioned one, or to a
+    # shared folder, must not be written through (``setup hooks`` follows the link).
+    copier = _Copier(top, [(top, shadow_top), (common, shadow_common)])
     for name in _GIT_DIRS:
         source = common / name
         if source.is_dir():
-            shutil.copytree(source, shadow_common / name, symlinks=True, dirs_exist_ok=True)
+            copier.copy_dir(source, shadow_common / name, home=common)
     objects = shadow_common / "objects"
     (objects / "info").mkdir(parents=True, exist_ok=True)
     (objects / "pack").mkdir(exist_ok=True)
@@ -243,35 +247,55 @@ def _pin_hooks_path(top: Path, shadow_top: Path, config: Path) -> None:
         _git("config", "--file", str(config), "core.hooksPath", value)
 
 
-def _copy_tree(top: Path, shadow_top: Path) -> None:
-    """Copy *top* to *shadow_top* so that nothing a step writes there lands outside it.
+class _Copier:
+    """Copies folders into the plan's copy so that nothing a step writes there lands outside it.
 
-    - A symbolic link that resolves inside *top* stays a link, to the same place
-      in the copy: a relative one as it is, an absolute one rewritten.
-    - One that resolves outside *top* (a dotfile manager's ``.mcp.json``, a
-      shared ``.vscode``) becomes a copy of what it points at, so a write
-      through it changes the copy, and the plan lists it. A dangling one is
-      left out: a step then creates the file, as it would through the link.
+    *maps* pairs each real folder the copy mirrors (the work tree's top, a git
+    directory) with its place in the copy.
+
+    - A symbolic link that resolves inside one of them stays a link, to the same
+      place in the copy: a relative one inside the folder it is copied with as it
+      is, any other rewritten to an absolute link into the copy.
+    - One that resolves outside them (a dotfile manager's ``.mcp.json``, a shared
+      ``.vscode``, a shared hook) becomes a copy of what it points at, so a write
+      through it changes the copy, and the plan lists it. A dangling one is left
+      out: a step then creates the file, as it would through the link.
     - Sockets, FIFOs and device nodes are left out: nothing setup reads is one,
       and copying one fails.
     """
-    real_top = top.resolve()
-    #: Folders outside the tree copied through a link.
-    outside: set[Path] = set()
-    copied = [0, 0]
 
-    def count(path: Path) -> None:
-        copied[0] += 1
-        copied[1] += path.stat().st_size
-        if copied[0] > MAX_COPY_FILES or copied[1] > MAX_COPY_BYTES:
+    def __init__(self, top: Path, maps: Iterable[tuple[Path, Path]]) -> None:
+        self.top = top
+        # Longest first: a git directory inside the work tree is its own mapping.
+        self.maps = sorted(
+            ((real.resolve(), shadow) for real, shadow in maps),
+            key=lambda pair: len(pair[0].parts),
+            reverse=True,
+        )
+        #: Folders outside the mapped ones, copied through a link.
+        self.outside: set[Path] = set()
+        self.files = 0
+        self.bytes = 0
+
+    def count(self, path: Path) -> None:
+        self.files += 1
+        self.bytes += path.stat().st_size
+        if self.files > MAX_COPY_FILES or self.bytes > MAX_COPY_BYTES:
             raise PlanRefused(
                 f"--plan copies the work tree around the target into a temporary folder, "
-                f"and {top} holds more than {MAX_COPY_FILES:,} files or "
+                f"and {self.top} holds more than {MAX_COPY_FILES:,} files or "
                 f"{MAX_COPY_BYTES // (1024 * 1024)} MB outside the folders it skips. "
                 "Plan a smaller tree with --path, or run setup without --plan."
             )
 
-    def copy_link(source: Path, dest: Path) -> None:
+    def _mapped(self, resolved: Path) -> tuple[Path, Path] | None:
+        for real, shadow in self.maps:
+            if resolved.is_relative_to(real):
+                return real, shadow
+        return None
+
+    def copy_link(self, source: Path, dest: Path, home: Path) -> None:
+        """Copy the link *source*, found while copying the real folder *home*, to *dest*."""
         try:
             resolved = source.resolve(strict=True)
         except (OSError, RuntimeError):
@@ -280,50 +304,68 @@ def _copy_tree(top: Path, shadow_top: Path) -> None:
         if resolved is None:
             # Dangling: keep a relative link that stays inside the copy.
             lexical = Path(os.path.normpath(source.parent / raw))
-            if not Path(raw).is_absolute() and lexical.is_relative_to(top):
+            if not Path(raw).is_absolute() and lexical.is_relative_to(home):
                 os.symlink(raw, dest)
             return
-        if resolved.is_relative_to(real_top):
-            if Path(raw).is_absolute():
-                os.symlink(shadow_top / resolved.relative_to(real_top), dest)
-            else:
+        mapped = self._mapped(resolved)
+        if mapped is not None:
+            real, shadow = mapped
+            if not Path(raw).is_absolute() and real == home.resolve():
                 os.symlink(raw, dest)
+            else:
+                os.symlink(shadow / resolved.relative_to(real), dest)
             return
         if resolved.is_dir():
-            # A folder above the tree, or one copied already, would never end.
-            if real_top.is_relative_to(resolved) or resolved in outside:
+            # A folder above a mapped one, or one copied already, would never end.
+            if any(real.is_relative_to(resolved) for real, _ in self.maps):
                 return
-            outside.add(resolved)
-            copy_dir(resolved, dest)
+            if resolved in self.outside:
+                return
+            self.outside.add(resolved)
+            self.copy_dir(resolved, dest, home=resolved)
         elif resolved.is_file():
-            count(resolved)
+            self.count(resolved)
             shutil.copy2(resolved, dest)
 
-    def copy_dir(source: Path, dest: Path) -> None:
+    def copy_dir(
+        self,
+        source: Path,
+        dest: Path,
+        *,
+        home: Path,
+        skipped: frozenset[str] = frozenset(),
+        keep: frozenset[Path] = frozenset(),
+    ) -> None:
+        """Copy *source* to *dest*, leaving out folders named in *skipped* unless in *keep*."""
         dest.mkdir(parents=True, exist_ok=True)
         try:
             entries = sorted(os.scandir(source), key=lambda entry: entry.name)
         except OSError:
             return
         for entry in entries:
-            if entry.name in SKIPPED_DIRS or entry.name == ".git":
-                continue
             path = Path(entry.path)
+            if entry.name in skipped and path not in keep:
+                continue
             target = dest / entry.name
             try:
                 if entry.is_symlink():
-                    copy_link(path, target)
+                    self.copy_link(path, target, home)
                 elif entry.is_dir(follow_symlinks=False):
-                    copy_dir(path, target)
+                    self.copy_dir(path, target, home=home, skipped=skipped, keep=keep)
                 elif entry.is_file(follow_symlinks=False):
-                    count(path)
+                    self.count(path)
                     shutil.copy2(path, target, follow_symlinks=False)
                 # Anything else (socket, FIFO, device) is not copied.
             except OSError:
                 # Unreadable: a step cannot read it in the repository either.
                 continue
 
-    copy_dir(top, shadow_top)
+
+def _copy_tree(top: Path, shadow_top: Path) -> None:
+    """Copy the work tree *top* to *shadow_top*, less ``.git`` and the folders no step reads."""
+    _Copier(top, [(top, shadow_top)]).copy_dir(
+        top, shadow_top, home=top, skipped=SKIPPED_DIRS | {".git"}
+    )
 
 
 def stamps(root: Path, *git_dirs: Path) -> dict[str, Stamp]:

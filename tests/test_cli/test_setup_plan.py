@@ -490,3 +490,28 @@ def test_a_submodule_plans_the_hook_the_run_writes(git_repo: Path, tmp_path: Pat
     assert applied.get("installed") is not False
     assert hook in _planned(plan)
     assert not any("Not a Git repository" in w for w in plan.get("warnings", []))
+
+
+def test_the_plan_never_writes_through_a_link_in_git_hooks(git_repo: Path, tmp_path: Path) -> None:
+    """``.git/hooks`` was copied with its links as they are: an absolute link to the
+    repository's versioned hook (``ln -s "$PWD/.opentide/hooks/pre-commit"``) or to a
+    shared hooks folder made the plan write the real file."""
+    result, _ = _invoke("hooks", "--yes", "--path", str(git_repo))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    versioned = git_repo / ".opentide" / "hooks" / "pre-commit"
+    versioned.write_text(versioned.read_text(encoding="utf-8") + "# local tweak\n", "utf-8")
+    hooks = git_repo / ".git" / "hooks"
+    (hooks / "pre-commit").unlink()
+    (hooks / "pre-commit").symlink_to(versioned)
+    shared = tmp_path / "shared-hooks"
+    shared.mkdir()
+    (shared / "pre-push").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (hooks / "pre-push").unlink(missing_ok=True)
+    (hooks / "pre-push").symlink_to(shared / "pre-push")
+    before = {**_tree(git_repo), **_tree(shared)}
+    result, plan = _invoke("hooks", "--plan", "--path", str(git_repo))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert {**_tree(git_repo), **_tree(shared)} == before, "the plan wrote through a link"
+    result, applied = _invoke("hooks", "--yes", "--path", str(git_repo))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert set(applied["files"]) <= _planned(plan, actions=("create", "merge", "skip"))
