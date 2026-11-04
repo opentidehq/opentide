@@ -84,7 +84,7 @@ error: Metadata deployment is not implemented for splunk
 
 `tests/test_docs/test_docs_commands_golden.py` runs every paired command against a repository scaffolded as in the [tutorial](./usage/tutorial.md), with vendor APIs stubbed. It fails when:
 
-- the command is not in a shell fence on the same page, or is not one the harness runs (`validate`, `lint`, `info`, `generate`, `deploy`);
+- the command is not in a shell fence on the same page, or is not one the harness runs (`validate`, `lint`, `info`, `generate`, `explain`, `commands`, `deploy`, `tui`);
 - the command returns a code other than `exit=` (`0` when absent), or a non-zero `exit=` sits in a section that never says it exits `` `N` ``;
 - a `text` line is not printed whole and in order, reading stdout and stderr interleaved as a terminal shows them. Write the `--no-color` view; a colour run must carry the same lines, with its rules read back as `== Title ==`. A duration (`1.2s`, `2m05s`) matches any duration, because it changes on every run;
 - a `json` value differs from the document returned. Objects may return keys the sample leaves out, and `"..."` stands for any value.
@@ -108,6 +108,8 @@ warning: …
 Prefer a `state=` over `illustrative`: an illustrative sample is never compared with anything, so it can drift. MCP pages are exempt, because no `opentide` command prints an MCP tool call or response.
 
 None of these attributes renders: Fumadocs reads only `title`, `tab`, `noCopy` and `lineNumbers` from fence meta, and GitHub reads only the language.
+
+Keep samples plain text: never paste ANSI escape codes. The website colours each `text` fence that reads as CLI output the way the terminal does (`lib/mdx/cli-output.mjs` in [opentidehq/website](https://github.com/opentidehq/website) mirrors the CLI's styles: red errors, yellow warnings, blue code-frame gutters, green `✓`, dim separators), so a sample written as the `--no-color` view still shows in colour there. A fence of file paths, a query or a command stays plain.
 
 ## Agent maintenance
 

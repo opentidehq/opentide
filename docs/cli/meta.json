@@ -24,6 +24,9 @@
     "tui",
     "new",
     "doctor",
+    "explain",
+    "commands",
+    "mcp",
     "lsp",
     "serve"
   ]

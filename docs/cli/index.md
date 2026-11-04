@@ -31,9 +31,9 @@ Run `opentide --help` for the live command tree.
 | [`tui`](./tui.md) | Terminal UI: catalogue tree, YAML and diagnostics, ATT&CK coverage, validate / generate / deploy dry run |
 | [`new`](./new.md) | Scaffold a threat, objective or rule from the generated template |
 | [`doctor`](./doctor.md) | Check the installation, the workspace and its integrations |
-| [`explain`](./diagnostics.md) | What a diagnostic code means, an example, and how to fix it |
-| [`commands`](#command-tree-for-agents) | Every command with its options, defaults and an example; `--json` for the tree |
-| [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
+| [`explain`](./explain.md) | What a diagnostic code means, an example, and how to fix it ([every code](./diagnostics.md)) |
+| [`commands`](./commands.md) | Every command with its options, defaults and an example; `--json` for the tree |
+| [`mcp`](./mcp.md) | Stdio MCP server (`mcp start`); the editor owns the process. Tools and resources: [MCP](../mcp/index.md) |
 | [`lsp`](./lsp.md) | Language server for editors (`lsp start`) |
 | [`serve`](./serve.md) | CLI commands in one warm process, for editors: JSON-RPC on stdio |
 
@@ -90,84 +90,7 @@ The loop: search what exists (`opentide --json info coverage --technique T1059`)
 
 ### Command tree for agents
 
-`opentide --json commands` prints every visible command, read from the CLI itself, so it never drifts from what the CLI accepts:
-
-```bash
-opentide --json commands
-```
-
-```json illustrative
-{
-  "program": "opentide",
-  "version": "0.18.0",
-  "global_options": [
-    {
-      "name": "repo",
-      "flags": ["--repo"],
-      "secondary_flags": [],
-      "type": "string",
-      "choices": null,
-      "default": null,
-      "required": false,
-      "multiple": false,
-      "is_flag": false,
-      "envvars": ["OPENTIDE_REPO_ROOT"],
-      "help": "Repository root"
-    }
-  ],
-  "commands": [
-    {
-      "path": "validate query",
-      "name": "query",
-      "summary": "Check rule queries on the platform's tenants (needs --live).",
-      "help": "Check rule queries on the platform's tenants (needs --live). …",
-      "group": false,
-      "runs_alone": true,
-      "subcommands": [],
-      "deprecated": false,
-      "arguments": [],
-      "options": [
-        {
-          "name": "platform",
-          "flags": ["--platform"],
-          "type": "choice",
-          "choices": ["sentinel", "splunk", "crowdstrike", "…"],
-          "required": true,
-          "…": "…"
-        }
-      ],
-      "example": "opentide validate query --platform sentinel --live",
-      "output_schema": {
-        "anyOf": [
-          { "$ref": "#/$defs/QueryValidationResult" },
-          { "$ref": "#/$defs/CommandError" }
-        ]
-      }
-    }
-  ],
-  "$defs": { "QueryValidationResult": { "…": "…" }, "CommandError": { "…": "…" } },
-  "ok": true,
-  "status": "completed",
-  "message": "58 commands",
-  "summary": { "commands": 58, "groups": 15 },
-  "…": "envelope keys"
-}
-```
-
-| Key | Meaning |
-|-----|---------|
-| `version` | The installed opentide version: key a cached copy of the tree on it. |
-| `global_options` | The root options (`--repo`, `--json`, …). `--json`, `--no-color`, `--debug` and `--quiet` may also follow the command. |
-| `environment` | `[{name, meaning}]`: every `OPENTIDE_*` variable opentide reads, those behind `--repo`, `--data` and `--proxy` included, plus `NO_COLOR` and the agent-detection variables (`AI_AGENT`, `CLAUDECODE`, …). [Global options](./global-options.md#environment-variables) lists them. |
-| `commands` | Flat and depth-first, in `--help` order. `path` is the words to type; a group's `subcommands` are the entries whose path extends it. Hidden commands and options are left out. |
-| `runs_alone` | `false` for a group that only prints its help (`opentide mcp`): run one of its subcommands. |
-| `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … A `string` the command checks itself lists its values in `choices` too: `validate --type`, `deploy --strategy`, `info`'s section. `share --target` takes the configured targets, so it has none. |
-| `options[].envvars` | Environment variables that set the option. |
-| `example` | The first example in the command's `--help`. A command whose help has none yet gets a placeholder: the command with its required arguments and options filled in. A placeholder names the command but may not run as it is (`opentide deploy` still needs `--strategy`). |
-| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error, such as an unknown subcommand, so its schema is `CommandError`. `null` for `mcp start`, `lsp start` and `serve`, which print JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
-| `$defs` | The schemas each `output_schema` refers to. |
-
-Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 58 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
+`opentide --json commands` prints every visible command with its arguments, options, types, choices, defaults, environment variables, an example and the JSON Schema of its `--json` document, read from the CLI itself so it never drifts. See [`opentide commands`](./commands.md).
 
 ## Choosing between CLI, SDK, and MCP
 

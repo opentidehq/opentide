@@ -24,7 +24,7 @@ Start manually:
 opentide mcp start
 ```
 
-`opentide mcp` with no subcommand prints help and exits. The process blocks until the host closes stdin. Stop is that close. Reload is the host spawning `opentide mcp start` again.
+`opentide mcp` with no subcommand names `start` and exits `2` ([`opentide mcp`](../cli/mcp.md)). The process blocks until the host closes stdin. Stop is that close. Reload is the host spawning `opentide mcp start` again.
 
 Transport: **stdio** (standard MCP over stdin/stdout).
 

@@ -97,7 +97,7 @@ uv run pytest tests/test_docs/test_docs_commands_golden.py -q
 | Gate | What fails |
 |------|------------|
 | Resolution | A documented subcommand, flag, or positional count the live Typer tree does not have |
-| Execution | A read-only sample (`validate`, `lint`, `info`, `generate`) that raises or does not emit one JSON envelope |
+| Execution | A read-only sample (`validate`, `lint`, `info`, `generate`, `explain`, `commands`) that raises or does not emit one JSON envelope |
 | Output samples | A `text`/`json` fence tagged `output-of="opentide …"` whose lines the command no longer prints, or whose `exit=N` the command or its section contradicts |
 | Unchecked samples | A `text`/`json`/unlabelled fence under `docs/cli/` or `docs/usage/` that reads like CLI output (`"ok"`/`"status"` keys, or a line starting `OK `, `SKIPPED `, `WARNING `, `DEPRECATED `, `FATAL`, `== … ==`) with neither `output-of=` nor `illustrative` |
 
@@ -113,6 +113,8 @@ The command must also appear in a shell fence on the page; see
 A failure the finished tutorial cannot produce names the repository edit it
 needs, e.g. `state=dangling-reference`; the edits are `REPO_STATES` in the
 golden test — add one there rather than leave the sample unchecked.
+
+Write samples as plain text, the `--no-color` view: the website colours CLI output fences itself (`lib/mdx/cli-output.mjs` in opentidehq/website), so never paste ANSI codes. When the CLI's styles change (`src/opentide/cli/ui/`), update that file too.
 
 Tagging is not optional for CLI output: an untagged fence that reads like CLI
 output fails the unchecked-samples gate. Mark a fence `illustrative` only when

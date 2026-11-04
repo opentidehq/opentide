@@ -155,7 +155,7 @@ $ opentide --install-completion
 | `--technique` (`info`) | ATT&CK ids, with their titles | The bundled ATT&CK vocabulary (`--data` or `OPENTIDE_DATA_ROOT` when set) |
 | `--platform` | The platforms enabled in the workspace first, marked `enabled`, then the others | `.opentide/configurations/platforms/*.toml` |
 | `--strategy` (`deploy`, `validate query`) | `PREVIEW`, `RELEASE` | — |
-| `explain <code>` | Diagnostic codes, with what each one means; applies once `opentide explain` ([#620](https://github.com/opentidehq/opentide/issues/620)) is available | The pages bundled with `opentide explain` |
+| `explain <code>` | Diagnostic codes, with what each one means | The pages bundled with [`opentide explain`](./explain.md) |
 
 `validate query` completes rules only, and a `--type` already on the command line narrows `--uuid` and `--file`. The workspace is the one the command would use: `--repo`, then `OPENTIDE_REPO_ROOT`, then the nearest one up from the current directory. Object folders follow `[paths.objects]` in `.opentide/configurations/paths.toml` when it sets them.
 

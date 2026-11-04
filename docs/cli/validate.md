@@ -400,8 +400,9 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `splunk` | SPL |
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
+| `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike, HarfangLab and Sysdig are never validated by `validate query` (see [Supported platforms](#supported-platforms)).
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike and HarfangLab are never validated by `validate query`, and Sysdig only offline: `--platform sysdig --live` reports `supported: false`, because Sysdig Secure has no rule preview (see [Supported platforms](#supported-platforms)).
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -577,7 +578,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on five of them:
+Live query validation works on **six platforms**; the offline engine on six too, five of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -587,6 +588,8 @@ Live query validation works on **six platforms**; the offline engine on five of 
 | `splunk` (SPL) | ✅ | ✅ |
 | `sentinel_one` (S1QL) | ✅ | ❌ |
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
+| `sysdig` (Falco) | ❌ `supported: false` | ✅ |
+| `crowdstrike`, `harfanglab` | ❌ `supported: false` | ❌ |
 
 ### Elastic live validation and deploy
 
