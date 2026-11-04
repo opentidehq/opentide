@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-04
+
+The workspace index for editors' catalogue, graph and search views: `opentide/catalog` serves every object with its references, and `opentide/catalogChanged` says when a root's objects change, so an editor's relation views follow unsaved edits, on the desktop and in the browser build (the opentide VS Code extension's Relations view reads it when the runtime has no `info catalog`). Placeholder queries `opentide new` leaves are no longer reported as parse errors, folders moved under `objects/` are re-read, each GitHub Release carries `SHA256SUMS` and build provenance attestations, and the ES|QL grammar's scope no longer collides with Elastic's extension.
+
 ### Added
 
 - `opentide/catalog {root?}` and the notification `opentide/catalogChanged {root}` ([#198](https://github.com/opentidehq/language-server/issues/198)): the workspace index for catalogue, graph and search views, served from the engine's index so it follows unsaved edits and works in the browser build. Each object comes with its `uuid`, `object_type`, `schema`, `name`, `uri`, the name's `range`, and `refs`: each value its reference fields hold (`detection_model`, `objective.threats`, a signal's `uuid` and `parent`, `threat.chaining.<i>.vector`), with its `field_path` and `range`, so a dangling `detection_model` is a ref no object carries, as is one that is not a UUID (a typo, `TODO`), which `invalid_ref` reports too. The notification follows a change of a root's objects, names or references once the client has asked for that root. `docs/EDITORS.md` (Custom RPCs) has the shapes.
@@ -370,6 +374,7 @@ The first working server: KQL, SPL, and Tide YAML over stdio and WASM, with the 
 - A frozen HighlightSpec with generated editor maps, and semantic tokens on the standard LSP legend.
 - Stdio and WASM hosts, and Zed, Helix, and Neovim samples.
 
+[0.10.0]: https://github.com/opentidehq/language-server/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/opentidehq/language-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/opentidehq/language-server/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/opentidehq/language-server/compare/v0.7.1...v0.8.0
