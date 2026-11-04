@@ -31,10 +31,14 @@ fn main() {
         );
     }
 
+    // Watch each grammar's whole `src/`: cargo checks every file under a directory, so
+    // parser.c, the tree_sitter/ headers, and a scanner.c are covered whether or not
+    // one exists yet. Naming a scanner.c that does not exist would leave this script
+    // permanently stale, so every cargo invocation would recompile the parsers and
+    // every crate above them.
     for lang in ["kql", "spl", "esql", "eql", "kuery", "lucene", "falco"] {
         let src = root.join(format!("grammars/tree-sitter-opentide-{lang}/src"));
-        println!("cargo:rerun-if-changed={}", src.join("parser.c").display());
-        println!("cargo:rerun-if-changed={}", src.join("scanner.c").display());
+        println!("cargo:rerun-if-changed={}", src.display());
     }
 }
 

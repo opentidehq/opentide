@@ -67,3 +67,13 @@ js-sys = "0.3"
 lto = true
 codegen-units = 1
 strip = "symbols"
+
+# Dependencies optimised in dev and test builds; workspace crates stay at
+# opt-level 0 with full debuginfo. The tests spend most of their time in toml,
+# serde, regex and tree-sitter: opt-level 1 cuts the suite from ~100s to ~26s of
+# test time on 4 cores, as fast as 2 for less compile time. Line tables keep
+# file:line in a dependency's backtrace frames at a third less target/ than full
+# debuginfo. CI caches the dependencies (Swatinem/rust-cache).
+[profile.dev.package."*"]
+opt-level = 1
+debug = "line-tables-only"
