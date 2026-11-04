@@ -792,7 +792,8 @@ def _read_json(path: Path) -> Any:
     from opentide.cli.services.setup.vscode import _strip_jsonc
 
     try:
-        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8")))
+        # utf-8-sig, as setup reads them: VS Code's "UTF-8 with BOM" is common on Windows.
+        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8-sig")))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 

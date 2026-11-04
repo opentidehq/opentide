@@ -580,6 +580,27 @@ def test_vscode_settings_and_snippets(workspace: Path) -> None:
     assert "extensions.json is not valid JSON" in broken["vscode_settings"].message
 
 
+def test_vscode_and_mcp_checks_read_files_saved_with_a_bom(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """VS Code's "UTF-8 with BOM" (common on Windows) is JSON that setup reads: doctor
+    reported each such file as not valid JSON."""
+    vscode = workspace / ".vscode"
+    vscode.mkdir()
+    bom = b"\xef\xbb\xbf"
+    (vscode / "settings.json").write_bytes(bom + b'{"editor.tabSize": 2}')
+    (vscode / "extensions.json").write_bytes(bom + b'{"recommendations": ["opentidehq.opentide"]}')
+    checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert checks["vscode_settings"].status == "pass", checks["vscode_settings"]
+
+    (vscode / "extensions.json").unlink()
+    server = {"command": "opentide", "args": ["mcp", "start"]}
+    (vscode / "mcp.json").write_bytes(bom + json.dumps({"servers": {"opentide": server}}).encode())
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    mcp = _only(doctor.check_mcp(_ctx(workspace)))
+    assert (mcp.status, mcp.message) == ("pass", "MCP configured for VS Code")
+
+
 def test_mcp_config_says_the_extension_provides_the_server(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
