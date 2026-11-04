@@ -72,13 +72,24 @@ def test_schema_run_after_a_test_left_a_partial_configuration_bound(workspace: P
     assert (workspace / CATALOG_DIR / "fields.json").is_file()
 
 
-def _snapshot(folder: Path) -> dict[str, bytes]:
-    """Every file under *folder*, by relative path; empty when it does not exist."""
+def _snapshot(folder: Path) -> dict[str, tuple[int, int, bytes]]:
+    """Every file under *folder*, by relative path; empty when it does not exist.
+
+    Inode and mtime as well as bytes: a checkout where an earlier run already wrote the same
+    bytes there would otherwise not see a rewrite (writes replace the file atomically).
+    """
     if not folder.is_dir():
         return {}
-    return {
-        p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()
-    }
+    snapshot: dict[str, tuple[int, int, bytes]] = {}
+    for path in folder.rglob("*"):
+        if path.is_file():
+            stat = path.stat()
+            snapshot[path.relative_to(folder).as_posix()] = (
+                stat.st_ino,
+                stat.st_mtime_ns,
+                path.read_bytes(),
+            )
+    return snapshot
 
 
 def test_schema_run_writes_nothing_in_the_repository(workspace: Path) -> None:
