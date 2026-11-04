@@ -217,6 +217,60 @@ fn a_file_deleted_on_disk_is_announced_to_a_client_that_asked_for_the_catalog() 
     assert!(object(&catalog, MODEL).is_none(), "{catalog}");
 }
 
+/// A client reports a deleted folder as one event for the folder, not one
+/// per file in it (VS Code coalesces them), and a folder moved in as one
+/// created event.
+#[test]
+fn a_folder_deleted_or_created_under_objects_is_announced_with_its_objects() {
+    let scratch = workspace("catalog-watch-folder");
+    let root = &scratch.0;
+    let rule_uuid = "00000000-0000-4000-8003-000000000001";
+    let mut lsp = start(json!({
+        "capabilities": { "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } },
+        "rootUri": file_uri(root),
+    }));
+    let register = lsp.read();
+    assert_eq!(register["method"], "client/registerCapability");
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert!(object(&catalog, rule_uuid).is_some(), "{catalog}");
+
+    let rules = root.join("objects/rules");
+    std::fs::remove_dir_all(&rules).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&rules), "type": 3 }] }),
+    );
+    let seen = settle(&mut lsp);
+    let changes = catalog_changes(&seen);
+    assert_eq!(changes.len(), 1, "{seen:?}");
+    assert_eq!(changes[0]["params"]["root"], file_uri(root).as_str());
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert!(object(&catalog, rule_uuid).is_none(), "{catalog}");
+
+    let moved = root.join("objects/moved");
+    std::fs::create_dir_all(&moved).unwrap();
+    std::fs::write(moved.join("rule-1.0.yaml"), rule(MODEL)).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&moved), "type": 1 }] }),
+    );
+    let seen = settle(&mut lsp);
+    assert_eq!(catalog_changes(&seen).len(), 1, "{seen:?}");
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    assert!(object(&catalog, rule_uuid).is_some(), "{catalog}");
+
+    // A file that is no object, deleted or created, changes nothing.
+    let notes = root.join("objects/notes.md");
+    std::fs::write(&notes, "# notes\n").unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": file_uri(&notes), "type": 1 }] }),
+    );
+    let seen = settle(&mut lsp);
+    assert!(catalog_changes(&seen).is_empty(), "{seen:?}");
+}
+
 fn roots_of(catalog: &Value) -> Vec<Value> {
     catalog["roots"]
         .as_array()

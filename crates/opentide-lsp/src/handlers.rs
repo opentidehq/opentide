@@ -473,15 +473,17 @@ fn initialize(
     }
 }
 
-/// Ask to watch what the analysis reads from disk: object YAML, the
-/// configuration TOML (with `visibility.toml`), and the generated catalogs
-/// (P2.2).
+/// Ask to watch what the analysis reads from disk: `objects/` and what is in
+/// it (object YAML, and the folders, since a client reports a deleted folder
+/// as one event for it), the configuration TOML (with `visibility.toml`),
+/// and the generated catalogs (P2.2).
 fn initialized(session: &mut Session) {
     if !session.caps.watch_files {
         return;
     }
     let watchers = [
-        "**/*.{yaml,yml}".to_string(),
+        "**/objects".to_string(),
+        "**/objects/**".to_string(),
         "**/.opentide/configurations/**/*.toml".to_string(),
         format!("**/{}/*", crate::server::WORKSPACE_CATALOGS),
     ]
@@ -670,8 +672,9 @@ fn apply_content_changes(text: &str, changes: &[lsp::TextDocumentContentChangeEv
 }
 
 /// Read again the files a watcher reports: an object file re-indexes its
-/// root; `visibility.toml` (unless open), a configuration file or a catalog
-/// re-checks every open document.
+/// root, and so does a folder under `objects/` that is or was one of
+/// objects; `visibility.toml` (unless open), a configuration file or a
+/// catalog re-checks every open document.
 fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFilesParams) {
     let mut everything = false;
     for change in &params.changes {
@@ -681,6 +684,11 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
         if let Some(root) = session.object_root(&path) {
             if !session.docs.contains_key(uri) {
                 session.roots[root].refresh_object(&path);
+                session.touch();
+                everything = true;
+            }
+        } else if let Some(root) = session.folder_root(&path) {
+            if session.roots[root].refresh_folder(&path) {
                 session.touch();
                 everything = true;
             }

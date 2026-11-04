@@ -104,6 +104,37 @@ impl Root {
             )
     }
 
+    /// Whether `path` is the root's `objects/` or under it without being an
+    /// object file: a folder whose files a watcher does not report one by
+    /// one.
+    pub(crate) fn holds_folder(&self, path: &str) -> bool {
+        Path::new(path).starts_with(self.path.join("objects")) && !self.holds_object(path)
+    }
+
+    /// A watcher reported `path`, under `objects/` but no object file: a
+    /// folder created, deleted or moved, which a client reports as one event
+    /// for the folder (VS Code drops the events of the files in a deleted
+    /// folder). When it is a folder now, or held object files, the root's
+    /// objects are read again. Whether they changed.
+    pub(crate) fn refresh_folder(&self, path: &str) -> bool {
+        let mut disk = self.disk.borrow_mut();
+        // Not read yet: the next request reads every file.
+        if !disk.loaded {
+            return false;
+        }
+        let prefix = format!("{}/", path_key(path).trim_end_matches('/'));
+        let held = disk.files.keys().any(|k| k.starts_with(&prefix));
+        if !held && !Path::new(path).is_dir() {
+            return false;
+        }
+        let changed = disk.refresh(&self.path);
+        drop(disk);
+        if changed {
+            self.drop_index();
+        }
+        changed
+    }
+
     /// Read one object file again (a watcher event, or the editor closed
     /// it), or forget it when it is gone.
     pub(crate) fn refresh_object(&self, path: &str) {
@@ -736,6 +767,11 @@ impl Session {
     /// The root holding an object file, by its path.
     pub(crate) fn object_root(&self, path: &str) -> Option<usize> {
         self.roots.iter().position(|r| r.holds_object(path))
+    }
+
+    /// The root whose `objects/` holds the folder at `path` ([`Root::holds_folder`]).
+    pub(crate) fn folder_root(&self, path: &str) -> Option<usize> {
+        self.roots.iter().position(|r| r.holds_folder(path))
     }
 
     /// `.opentide/configurations/platforms/elastic.toml` of a root, from the
