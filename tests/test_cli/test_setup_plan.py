@@ -398,6 +398,28 @@ def test_a_target_below_a_folder_named_like_build_output_is_planned(
     assert not (box.shadow_target / "build").exists()
 
 
+def test_warnings_name_the_repository_when_the_temporary_folder_is_a_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """macOS's $TMPDIR is under /var, a link to /private/var: a step that resolves its
+    path reported the copy's real path, which the plan did not map back."""
+    import tempfile
+
+    real = tmp_path / "private-tmp"
+    real.mkdir()
+    (tmp_path / "tmp").symlink_to(real)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "tmp"))
+    repo = tmp_path / "repo"
+    (repo / "det").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    result, plan = _invoke("hooks", "--plan", "--path", str(repo / "det"))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert plan["warnings"], plan
+    joined = " ".join(plan["warnings"])
+    assert "opentide-setup-plan-" not in joined, joined
+    assert str(repo.resolve()) in joined
+
+
 def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
     import signal
 

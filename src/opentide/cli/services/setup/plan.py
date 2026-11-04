@@ -570,7 +570,9 @@ def sandbox(target: Path) -> Generator[Sandbox, None, None]:
         _exit_on_termination(),
         tempfile.TemporaryDirectory(prefix="opentide-setup-plan-") as scratch,
     ):
-        box = Sandbox(target, Path(scratch))
+        # Resolved: a step that resolves its own path (``$TMPDIR`` under macOS's /var,
+        # a link to /private/var) must report a path that maps back to the repository.
+        box = Sandbox(target, Path(scratch).resolve())
         for name in _GIT_VARIABLES:
             os.environ.pop(name, None)
         for name in _WORKSPACE_VARIABLES:
