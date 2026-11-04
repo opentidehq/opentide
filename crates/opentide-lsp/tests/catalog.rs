@@ -12,8 +12,13 @@ const OBJECTIVE: &str = "testdata/objects/objective-1.0.yaml";
 const MODEL: &str = "00000000-0000-4000-8002-000000000001";
 const DANGLING: &str = "00000000-0000-4000-8002-0000000000ff";
 
+/// A repository file with LF line endings: Git on Windows checks the
+/// fixtures out with CRLF (`core.autocrlf`), and the tests edit them by
+/// their `\n`-terminated lines.
 fn fixture(path: &str) -> String {
-    std::fs::read_to_string(repo_root().join(path)).unwrap()
+    std::fs::read_to_string(repo_root().join(path))
+        .unwrap()
+        .replace("\r\n", "\n")
 }
 
 /// The fixture rule, whose `detection_model` names `model`.
