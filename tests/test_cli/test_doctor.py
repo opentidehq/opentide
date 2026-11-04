@@ -400,6 +400,24 @@ def test_credentials_report_presence_never_values(
     assert "literal-name" not in rendered
 
 
+def test_credentials_name_a_braced_reference_as_info_does(workspace: Path) -> None:
+    from opentide.platforms.config import setup_variables
+
+    path = workspace / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    path.write_text(
+        SENTINEL_TOML.replace('"$DOCTOR_TEST_CLIENT_ID"', '"${DOCTOR_TEST_CLIENT_ID}"'),
+        encoding="utf-8",
+    )
+    clear_runtime_caches()
+    env = {"DOCTOR_TEST_CLIENT_ID": SECRET}
+    checks = {check.subject: check for check in doctor.check_credentials(_ctx(workspace, env=env))}
+    assert checks["sentinel/prod"].message == (
+        "sentinel/prod: 1 of 2 variables unset: DOCTOR_TEST_CLIENT_SECRET"
+    )
+    setup = {"azure_client_id": "${DOCTOR_TEST_CLIENT_ID}", "secret": "$DOCTOR_TEST_CLIENT_SECRET"}
+    assert setup_variables(setup) == ["DOCTOR_TEST_CLIENT_ID", "DOCTOR_TEST_CLIENT_SECRET"]
+
+
 def test_credentials_skip_a_platform_without_tenants(workspace: Path) -> None:
     path = workspace / ".opentide" / "configurations" / "platforms" / "splunk.toml"
     path.write_text("[platform]\nenabled = true\n", encoding="utf-8")

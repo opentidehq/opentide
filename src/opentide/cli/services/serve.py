@@ -205,11 +205,14 @@ class CommandRunner:
         *,
         cwd: str | None = None,
         env: Mapping[str, str] | None = None,
+        on_done: Callable[[], None] | None = None,
     ) -> RunOutcome:
         """Run *argv* as ``opentide --json <argv>``; never raises for the command's sake.
 
         A ``KeyboardInterrupt`` (a cancel) while the command runs is answered
-        with exit 130, as at a terminal.
+        with exit 130, as at a terminal. *on_done* is called as soon as the
+        command has returned, before the cleanup and the parsing of what it
+        printed: from then on a cancel must leave its answer alone.
         """
         from opentide.cli.ui.mode import PROTOCOL_COMMANDS
         from opentide.core.index_manager import IndexManager
@@ -225,7 +228,8 @@ class CommandRunner:
         buffer = io.BytesIO()
         capture = io.TextIOWrapper(buffer, encoding="utf-8", newline="\n", write_through=True)
         directory = Path(cwd) if cwd else self.cwd
-        code = 1
+        #: The command's exit code, once it has returned.
+        code: int | None = None
         try:
             with self._environment(env, cwd_given=bool(cwd)):
                 os.chdir(directory)
@@ -234,14 +238,19 @@ class CommandRunner:
                 sys.stdout = capture
                 try:
                     code = self._invoke(["--json", *argv])
+                    if on_done is not None:
+                        on_done()
                 finally:
                     sys.stdout = saved_stdout
                     IndexManager._retained = None
                     IndexManager._cache = None
         except KeyboardInterrupt:
-            # A cancel that came between the command's end and the cleanup above:
-            # it is raised once, so putting everything back here is enough.
-            code = CANCELLED_EXIT_CODE
+            # A cancel before the command returned, or one that came between its
+            # end and the cleanup above: it is raised once, so putting
+            # everything back here is enough. A command that had returned keeps
+            # its own exit code.
+            if code is None:
+                code = CANCELLED_EXIT_CODE
             sys.stdout = saved_stdout
             IndexManager._retained = None
             IndexManager._cache = None
@@ -254,9 +263,9 @@ class CommandRunner:
         finally:
             with contextlib.suppress(OSError):
                 os.chdir(self.cwd)
-        if not keep:
-            # It may have written any workspace (--repo names one), so keep none.
-            self.snapshots.clear()
+            if not keep:
+                # It may have written any workspace (--repo names one), so keep none.
+                self.snapshots.clear()
         capture.flush()
         text = buffer.getvalue().decode("utf-8", errors="replace")
         return RunOutcome(self._document(argv, text, code), code)
@@ -412,13 +421,27 @@ class Server:
         self._cancelled: set[Any] = set()
         self._state_lock = threading.Lock()
         self._shut_down = False
+        #: Set by ``exit`` or the end of input: queued runs answer 130 unrun.
+        self._closing = False
+        #: Set when a write to the client fails: nothing more is written.
+        self._output_closed = False
         self._digest: str | None = None
 
     # --- output ---------------------------------------------------------------------
 
     def send(self, message: Message) -> None:
+        """Write *message*; once a write fails, the client has gone and the session ends."""
         with self._write_lock:
-            self._write({"jsonrpc": "2.0", **message})
+            if self._output_closed:
+                return
+            try:
+                self._write({"jsonrpc": "2.0", **message})
+                return
+            except (OSError, ValueError):
+                # A closed pipe (BrokenPipeError), or a write to a closed file.
+                self._output_closed = True
+        logger.debug("serve_output_closed")
+        self._close()
 
     def _respond(self, request_id: Any, result: Any) -> None:
         self.send({"id": request_id, "result": result})
@@ -457,14 +480,23 @@ class Server:
                 self.cancel(params["id"])
             return
         if message["method"] == "exit":
-            # Stop the running command now, then leave once it has answered.
-            self._cancel_active()
-            self._queue.put(None)
+            self._close()
             return
         self._queue.put(message)
 
     def close_input(self) -> None:
         """The client closed stdin: as ``exit``."""
+        self._close()
+
+    def _close(self) -> None:
+        """Stop the running command now and run no queued one, then leave.
+
+        The client has gone, or is going: a queued ``deploy`` or ``generate``
+        must not run with nobody to answer. Each queued ``run`` is answered
+        ``130`` instead, as a cancelled one is.
+        """
+        with self._state_lock:
+            self._closing = True
         self._cancel_active()
         self._queue.put(None)
 
@@ -505,7 +537,8 @@ class Server:
             except Exception:  # pragma: no cover - the loop must outlive any one message
                 logger.exception("serve_message_failed", method=message.get("method"))
                 if "id" in message:
-                    self._error(message.get("id"), -32603, "Internal error")
+                    with contextlib.suppress(Exception):
+                        self._error(message.get("id"), -32603, "Internal error")
 
     def _handle(self, message: Message) -> None:
         method = message["method"]
@@ -556,7 +589,7 @@ class Server:
         self, request_id: Any, argv: list[str], cwd: str | None, env: dict[str, str] | None
     ) -> RunOutcome:
         with self._state_lock:
-            if _id_key(request_id) in self._cancelled:
+            if self._closing or _id_key(request_id) in self._cancelled:
                 self._cancelled.discard(_id_key(request_id))
                 return RunOutcome(
                     self.runner._failure_document(argv, "Interrupted", CANCELLED_EXIT_CODE),
@@ -573,12 +606,32 @@ class Server:
         try:
             # Installed from this thread, which a cancel never interrupts.
             with progress_events.sink(forward):
-                return self._on_thread(lambda: self.runner.run(argv, cwd=cwd, env=env), job=job)
+                return self._on_thread(
+                    lambda: self.runner.run(
+                        argv, cwd=cwd, env=env, on_done=lambda: self._finished(job)
+                    ),
+                    job=job,
+                    argv=argv,
+                )
         finally:
             with self._state_lock:
                 self._active = None
 
-    def _on_thread(self, work: Callable[[], RunOutcome], *, job: _Job | None = None) -> RunOutcome:
+    @staticmethod
+    def _finished(job: _Job) -> None:
+        """The command of *job* has returned: a cancel from now on changes nothing."""
+        with job.lock:
+            job.finished = True
+            # A cancel that came as the command ended must not surface later.
+            _raise_in_thread(threading.get_ident(), None)
+
+    def _on_thread(
+        self,
+        work: Callable[[], RunOutcome],
+        *,
+        job: _Job | None = None,
+        argv: Sequence[str] = (),
+    ) -> RunOutcome:
         """Run *work* on a thread of its own and wait for it."""
         box: list[RunOutcome] = []
         problem: list[BaseException] = []
@@ -596,11 +649,7 @@ class Server:
                     if outcome is None:
                         outcome = work()
                     if job is not None:
-                        with job.lock:
-                            job.finished = True
-                            # A cancel that came as the command ended must not
-                            # surface later in this thread.
-                            _raise_in_thread(threading.get_ident(), None)
+                        self._finished(job)
                     break
                 except KeyboardInterrupt:
                     if outcome is None:
@@ -618,7 +667,6 @@ class Server:
             raise problem[0]
         outcome = box[0]
         if not outcome.document:
-            argv: list[str] = []
             outcome = RunOutcome(
                 self.runner._failure_document(argv, "Interrupted", outcome.exit_code),
                 outcome.exit_code,
@@ -647,8 +695,11 @@ def _run_params(params: Any) -> tuple[list[str], str | None, dict[str, str] | No
         or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
     ):
         raise ProtocolError(INVALID_PARAMS, "env must map names to strings")
-    # --json is implied; a copy in argv would be the same flag twice.
-    argv = [token for token in argv if token != "--json"]
+    # --json is implied. A leading copy is dropped; any other is left where it
+    # is, since it may be an option's value (``--query --json``) or follow ``--``,
+    # and Click accepts the root flag twice.
+    while argv and argv[0] == "--json":
+        argv = argv[1:]
     if not argv:
         raise ProtocolError(INVALID_PARAMS, "run needs argv: a command to run")
     return argv, cwd, env

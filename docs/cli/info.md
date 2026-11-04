@@ -97,7 +97,7 @@ Each `platforms[]` entry lists the platform's `[[tenants]]` from `.opentide/conf
 | `name`, `description` | From the tenant's table |
 | `strategies` | The run strategies the tenant accepts (`PREVIEW`, `RELEASE`); both when the file omits `strategies` |
 | `manual` | `true` when only rules whose block names the tenant reach it |
-| `variables` | `{name, set}` for each `$VAR` (or `${VAR}`) the tenant's `[tenants.setup]` references, in order: whether the process environment sets it to a non-empty value |
+| `variables` | `{name, set}` for each `$VAR` (or `${VAR}`) the tenant's `[tenants.setup]` references, in order: whether the process environment sets it to a non-empty value. A reference is a top-level setup value that is `$NAME` or `${NAME}` as a whole, the values opentide resolves; a value that only starts with `$` is a literal |
 
 A variable's value is never printed, in either output. A tenant's setup values that are not variable references are not printed either. `opentide doctor`'s `credentials` check reports the same variables as a pass or a warning.
 
@@ -147,12 +147,12 @@ The document holds the `info` keys, plus `objects`, `edges`, `signals` and `atta
 | `tlp`, `author`, `created`, `modified`, `reviewed` | From `metadata`; `null` when unset |
 | `platforms` | A rule's platform blocks: `{id, enabled, status, strategy}`, the strategy being the one `deployment.toml` maps the status to |
 | `deployment` | A rule's tenant bindings in `.opentide/states/deployment/`: `{platform, tenant, deployed, rule_id}`. Only Defender, SentinelOne, CrowdStrike and Sysdig keep one |
-| `techniques` | `own`: the ATT&CK ids the object lists. `inherited`: those its objective or threats give it that it does not list |
+| `techniques` | `own`: the ATT&CK ids the object lists. `inherited`: those its objective or threats give it that it does not list. An objective that lists no techniques inherits those of each threat it covers that exists; a rule, its objective's (through a signal's objective) |
 | `tactics` | The tactic shortnames of all those techniques, in matrix order |
 | `actors` | The actors of the threat, of the threats an objective covers, or of the threats of a rule's objective, as written (`att&ck::G0006`) |
 | `load_error` | `null`, or `{code, message, line}` for a file that did not load |
 
-A file that did not load still has a row, so an editor can show it: its `load_error` says why (`yaml_parse` with the line of the problem, `missing_uuid`), and `uuid`, `name` and `schema` are read from the text where they can be (`uuid` is `null` otherwise). It also counts in `summary.load_errors`, and sets `status` to `issues` as in every view.
+A file that did not load still has a row, so an editor can show it: its `load_error` says why (`yaml_parse` with the line of the problem, `missing_uuid`, or `duplicate_id` for a file whose UUID a later file also uses: the index keeps that file's object, and the message names it), and `uuid`, `name` and `schema` are read from the text where they can be (`uuid` is `null` otherwise). It also counts in `summary.load_errors`, and sets `status` to `issues` as in every view.
 
 **`edges`**: one per reference, `{from, to, kind, field_path, relation, missing}`. `field_path` is the dotted path of the field holding the reference; a signal's starts at its entry in the objective (`objective.signals.1.parent`).
 

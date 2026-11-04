@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import dataclasses
-import re
+from collections.abc import Mapping
 from types import SimpleNamespace
 from typing import Any
 
+from opentide.core.environment import ENV_REFERENCE, env_reference
 from opentide.core.index_manager import IndexManager
 from opentide.models.configuration.base import SSL_FALSE_WORDS, SSL_TRUE_WORDS
 from opentide.models.configuration.platforms import PlatformConfigurationBase
@@ -108,31 +109,24 @@ def _tenant_ssl(value: Any, *, where: str) -> bool | str:
 
 
 # platform::elastic::1.0: a tenant api_key MUST be `$VAR` or `${VAR}`.
-_ENV_REFERENCE = re.compile(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})")
+_ENV_REFERENCE = ENV_REFERENCE
 
 
 def setup_variables(value: Any) -> list[str]:
     """The environment variables a tenant's ``setup`` table names, in order, each once.
 
-    A value is a reference when it is ``$NAME`` or ``${NAME}`` as a whole, as
-    :meth:`DebugHelpers.fetch_config_envvar` resolves it. Values are never returned.
+    A value is a reference when it is ``$NAME`` or ``${NAME}`` as a whole, and
+    only a top-level value is one, as :meth:`DebugHelpers.fetch_config_envvar`
+    resolves it (:func:`opentide.core.environment.env_reference`). Values are
+    never returned, a ``$``-prefixed literal included.
     """
     names: list[str] = []
-
-    def walk(item: Any) -> None:
-        if isinstance(item, str) and item.startswith("$") and len(item) > 1:
-            reference = _ENV_REFERENCE.fullmatch(item)
-            name = (reference.group(1) or reference.group(2)) if reference else item[1:]
-            if name not in names:
-                names.append(name)
-        elif isinstance(item, dict):
-            for nested in item.values():
-                walk(nested)
-        elif isinstance(item, (list, tuple)):
-            for nested in item:
-                walk(nested)
-
-    walk(value)
+    if not isinstance(value, Mapping):
+        return names
+    for item in value.values():
+        name = env_reference(item)
+        if name is not None and name not in names:
+            names.append(name)
     return names
 
 

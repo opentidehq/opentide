@@ -23,3 +23,5 @@ class IndexSnapshot(TypedDict, total=False):
     file_paths: dict[str, str]
     paths: dict[str, Any]
     parse_errors: list[dict[str, str]]
+    #: Files whose object another file with the same UUID replaced in the index.
+    duplicate_files: list[dict[str, str]]

@@ -9,8 +9,9 @@ answer "what surrounds this object" with a scan of the catalogue each, which
 over every object is quadratic; this module reads the same fields and uses the
 same edge names (``covers``, ``implements``) instead.
 
-Inherited techniques come from :func:`opentide.generation.framework.techniques_resolver`,
-chains from the registry's memoised chaining index (:mod:`opentide.core.chaining`).
+Inherited techniques follow :func:`opentide.generation.framework.techniques_resolver`
+(:func:`_inherited_techniques`), chains come from the registry's memoised chaining
+index (:mod:`opentide.core.chaining`).
 """
 
 from __future__ import annotations
@@ -36,9 +37,10 @@ EDGE_KINDS = ("covers", "implements", "parent", "chains", "technique", "logsourc
 _NON_ENTERPRISE = ("Mobile : ", "Industrial : ")
 
 _NAME_LINE = re.compile(r"^name[ \t]*:", re.MULTILINE)
-_UUID_LINE = re.compile(r"^[ \t]+uuid[ \t]*:[ \t]*['\"]?([0-9A-Fa-f-]{32,36})", re.MULTILINE)
-_SCHEMA_LINE = re.compile(r"^[ \t]+schema[ \t]*:[ \t]*['\"]?([\w:.]+)", re.MULTILINE)
-_NAME_VALUE = re.compile(r"^name[ \t]*:[ \t]*['\"]?([^'\"\r\n#]+)", re.MULTILINE)
+#: A ``key: value`` line, its indentation, key and the rest of the line.
+_KEY_LINE = re.compile(r"^([ \t]*)([A-Za-z_][\w-]*)[ \t]*:(?:[ \t]+(.*?))?[ \t]*$")
+_UUID_VALUE = re.compile(r"[0-9A-Fa-f-]{32,36}")
+_SCHEMA_VALUE = re.compile(r"[\w:.]+")
 
 
 def collect_catalog(workspace: Path, parse_errors: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
@@ -94,7 +96,11 @@ def collect_catalog(workspace: Path, parse_errors: Iterable[Mapping[str, Any]]) 
                 continue
             own = object_role_values(body, FieldRole.TECHNIQUES)
             own_ids = [technique for _, technique in own]
-            inherited = [t for t in _inherited_techniques(uuid, family) if t not in own_ids]
+            inherited = [
+                t
+                for t in _inherited_techniques(family, body, threats, objectives, signals)
+                if t not in own_ids
+            ]
             tactics = sorted(
                 {tactic for t in (*own_ids, *inherited) for tactic in stage_of.get(t, ())},
                 key=lambda name: tactic_order.get(name, len(tactic_order)),
@@ -153,9 +159,10 @@ def collect_catalog(workspace: Path, parse_errors: Iterable[Mapping[str, Any]]) 
     signal_rows = [
         {
             "uuid": str(uuid),
-            "name": str(body.get("name") or ""),
-            "objective": body.get("owner"),
-            "parent": body.get("parent") or None,
+            "name": _string(body.get("name")) or "",
+            "objective": _string(body.get("owner")),
+            # Only a string names a signal; _objective_edges skips anything else too.
+            "parent": _string(body.get("parent")),
         }
         for uuid, body in signals.items()
         if isinstance(body, Mapping)
@@ -221,16 +228,12 @@ def _load_error_row(entry: Mapping[str, Any], workspace: Path) -> dict[str, Any]
     message = entry.get("message") or (
         f"Could not parse object YAML: {entry.get('error') or 'unknown error'}"
     )
-
-    def found(pattern: re.Pattern[str]) -> str | None:
-        match = pattern.search(text) if text else None
-        return match.group(1).strip() if match else None
-
+    fields = _text_fields(text) if text else {}
     return {
-        "uuid": found(_UUID_LINE),
+        "uuid": fields.get("uuid"),
         "type": str(entry.get("object_type") or "") or None,
-        "schema": found(_SCHEMA_LINE),
-        "name": found(_NAME_VALUE) or (Path(raw_path).stem if raw_path else ""),
+        "schema": fields.get("schema"),
+        "name": fields.get("name") or (Path(raw_path).stem if raw_path else ""),
         "path": path,
         "file_path": absolute,
         "line": _line_of(text, _NAME_LINE) if text else 1,
@@ -246,6 +249,75 @@ def _load_error_row(entry: Mapping[str, Any], workspace: Path) -> dict[str, Any]
         "actors": [],
         "load_error": {"code": code, "message": str(message), "line": line},
     }
+
+
+def _scalar(raw: str | None) -> str | None:
+    """A plain or quoted YAML scalar written on one line, without its comment."""
+    if not raw:
+        return None
+    if raw[0] in "'\"":
+        quote, value, index = raw[0], [], 1
+        while index < len(raw):
+            char = raw[index]
+            if quote == "'" and raw.startswith("''", index):
+                value.append("'")
+                index += 2
+                continue
+            if char == quote:
+                break
+            if quote == '"' and char == "\\" and index + 1 < len(raw):
+                index += 1
+                char = raw[index]
+            value.append(char)
+            index += 1
+        return "".join(value).strip() or None
+    value = re.split(r"[ \t]#", raw, maxsplit=1)[0].strip()
+    return value or None
+
+
+def _text_fields(text: str) -> dict[str, str]:
+    """``name``, ``uuid`` and ``schema`` read from the text of a file that did not load.
+
+    ``name`` is the root key. ``uuid`` is the root key, else ``metadata.uuid``,
+    and ``schema`` is ``metadata.schema``, else the root key: a ``uuid`` under
+    ``signals:`` or another block is a different object's.
+    """
+    root: dict[str, str] = {}
+    metadata: dict[str, str] = {}
+    in_metadata = False
+    child_indent: str | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = _KEY_LINE.match(line)
+        indent = match.group(1) if match else line[: len(line) - len(line.lstrip())]
+        if not indent:
+            in_metadata = bool(match and match.group(2) == "metadata" and not match.group(3))
+            child_indent = None
+            if match and match.group(3) is not None:
+                root.setdefault(match.group(2), match.group(3))
+            continue
+        if not in_metadata or match is None:
+            continue
+        if child_indent is None:
+            child_indent = indent
+        if indent == child_indent and match.group(3) is not None:
+            metadata.setdefault(match.group(2), match.group(3))
+    fields: dict[str, str] = {}
+    name = _scalar(root.get("name"))
+    if name:
+        fields["name"] = name
+    for key, pattern, sources in (
+        ("uuid", _UUID_VALUE, (root, metadata)),
+        ("schema", _SCHEMA_VALUE, (metadata, root)),
+    ):
+        for source in sources:
+            value = _scalar(source.get(key))
+            if value and pattern.fullmatch(value):
+                fields[key] = value
+                break
+    return fields
 
 
 def _paths(file_path: str | None, workspace: Path) -> tuple[str | None, str | None]:
@@ -300,6 +372,11 @@ def _text(value: Any) -> str | None:
     return str(value)
 
 
+def _string(value: Any) -> str | None:
+    """*value* when it is a non-blank string, else ``None``: never a list's repr."""
+    return value if isinstance(value, str) and value.strip() else None
+
+
 def _canonical(uuid: str) -> str:
     return str(uuid).strip().lower()
 
@@ -317,7 +394,7 @@ def _objective_edges(
     """``covers`` to each threat, and each of its signals' ``parent`` and ``logsource``."""
     section = body.get("objective")
     section = section if isinstance(section, Mapping) else {}
-    for threat in section.get("threats") or ():
+    for threat in _as_list(section.get("threats")):
         if isinstance(threat, str) and threat:
             edge(uuid, threat, "covers", "objective.threats", missing=threat not in threats)
     for position, signal in enumerate(section.get("signals") or ()):
@@ -340,7 +417,7 @@ def _objective_edges(
             )
         data = signal.get("data")
         logsources = data.get("logsources") if isinstance(data, Mapping) else None
-        for name in logsources or ():
+        for name in _as_list(logsources):
             if isinstance(name, str) and name:
                 edge(str(signal_uuid), name, "logsource", f"{prefix}.data.logsources")
 
@@ -367,21 +444,69 @@ def _parent_threats(
         body = objective
     section = body.get("objective")
     threats = section.get("threats") if isinstance(section, Mapping) else None
-    return [threat for threat in threats or () if isinstance(threat, str)]
+    return [threat for threat in _as_list(threats) if isinstance(threat, str)]
 
 
-def _inherited_techniques(uuid: str, family: str) -> list[str]:
-    """What ``techniques_resolver`` gives *uuid* from its parents; nothing for a threat."""
-    if family == "threat":
+def _as_list(value: Any) -> list[Any]:
+    """A field that holds a list, read as one: ``[value]`` for a lone string.
+
+    An author who writes ``threats: <uuid>`` or ``logsources: Windows`` means one
+    item; iterating the string would make one per character.
+    """
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return []
+
+
+def _techniques(body: Any) -> list[str]:
+    return [technique for _, technique in object_role_values(body, FieldRole.TECHNIQUES)]
+
+
+def _objective_techniques(body: Any, threats: Mapping[str, Any]) -> list[str]:
+    """An objective's techniques: its own, else those of each threat it covers that exists."""
+    own = _techniques(body)
+    if own:
+        return own
+    section = body.get("objective") if isinstance(body, Mapping) else None
+    covered = _as_list(section.get("threats")) if isinstance(section, Mapping) else []
+    found: list[str] = []
+    for threat in covered:
+        parent = threats.get(threat) if isinstance(threat, str) else None
+        # A dangling threat: its covers edge says so (missing: true); the others still count.
+        if isinstance(parent, Mapping):
+            found.extend(_techniques(parent))
+    return list(dict.fromkeys(found))
+
+
+def _inherited_techniques(
+    family: str,
+    body: Mapping[str, Any],
+    threats: Mapping[str, Any],
+    objectives: Mapping[str, Any],
+    signals: Mapping[str, Any],
+) -> list[str]:
+    """What an object gets from its parents, as ``techniques_resolver`` resolves it.
+
+    A rule takes its objective's (through a signal's owner), an objective its
+    threats'; a threat has no parent. Resolved here rather than by
+    ``techniques_resolver``, which gives up on the first missing parent and
+    iterates a lone string per character.
+    """
+    if family == "objective":
+        return _objective_techniques(body, threats)
+    if family != "rule":
         return []
-    from opentide.generation.framework import techniques_resolver
-
-    try:
-        resolved = techniques_resolver(uuid)
-    except Exception:
-        # A dangling detection_model or threat: the edge says so (missing: true).
+    target = body.get("detection_model")
+    if not isinstance(target, str):
         return []
-    return [str(technique) for technique in resolved or () if isinstance(technique, str)]
+    signal = signals.get(target)
+    owner = signal.get("owner") if isinstance(signal, Mapping) else target
+    objective = objectives.get(owner) if isinstance(owner, str) else None
+    if not isinstance(objective, Mapping):
+        return []
+    return _objective_techniques(objective, threats)
 
 
 def _platform_blocks(

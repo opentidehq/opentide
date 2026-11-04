@@ -83,11 +83,13 @@ def dump(payload: dict[str, Any]) -> str:
 
 def write_catalog_to(directory: Path) -> list[Path]:
     """Write both catalogs into *directory*; return their paths."""
+    from opentide.core.io import write_text_atomically
+
     directory.mkdir(parents=True, exist_ok=True)
     written = []
     for name, text in catalog_texts().items():
         path = directory / name
-        path.write_text(text, encoding="utf-8")
+        write_text_atomically(path, text)
         written.append(path)
     return written
 

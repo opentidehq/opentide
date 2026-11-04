@@ -274,3 +274,130 @@ def test_info_catalog_is_listed_as_a_section(invoke_cli) -> None:
     info = next(command for command in document["commands"] if command["path"] == "info")
     section = next(argument for argument in info["arguments"] if argument["name"] == "section")
     assert "catalog" in section["choices"]
+
+
+TWO_THREATS = "00000000-0000-4000-8002-000000000752"
+SCALAR_OBJECTIVE = "00000000-0000-4000-8002-000000000753"
+SCALAR_THREAT = "00000000-0000-4000-8001-000000000753"
+TWO_THREATS_RULE = "00000000-0000-4000-8003-000000000752"
+SCALAR_RULE = "00000000-0000-4000-8003-000000000753"
+SCALAR_SIGNAL = "00000000-0000-4000-8099-000000000753"
+
+
+def _objective_text(uuid: str, name: str, threats: str, signal: str) -> str:
+    source = TIDE_CORPUS_ROOT / OBJECTIVE_DIR / "objective-0001-credential-access.yaml"
+    return (
+        source.read_text(encoding="utf-8")
+        .replace(CORPUS_OBJECTIVE_UUID, uuid)
+        .replace("name: Credential Access Objective", f"name: {name}")
+        .replace(f"  threats:\n    - {CORPUS_THREAT_UUID}\n", threats)
+        .replace("00000000-0000-4000-8099-000000000001", signal)
+    )
+
+
+def _add_inheritance_objects(repo: Path) -> None:
+    """An objective over one live and one dangling threat, and one written with scalars."""
+    threat = (repo / THREAT_DIR / "threat-0001-simulated-actor.yaml").read_text(encoding="utf-8")
+    scalar_threat = (
+        threat.replace(CORPUS_THREAT_UUID, SCALAR_THREAT)
+        .replace("name: Simulated Actor", "name: Scalar Actor")
+        .replace("  mitre_attack:\n    - T1059\n", "  mitre_attack: T1003\n")
+    )
+    (repo / THREAT_DIR / "threat-0753-scalar.yaml").write_text(scalar_threat, encoding="utf-8")
+    objectives = repo / OBJECTIVE_DIR
+    (objectives / "objective-0752-two-threats.yaml").write_text(
+        _objective_text(
+            TWO_THREATS,
+            "Two threats",
+            f"  threats:\n    - {CORPUS_THREAT_UUID}\n    - {MISSING_THREAT}\n"
+            f"    - {SCALAR_THREAT}\n",
+            "00000000-0000-4000-8099-000000000752",
+        ),
+        encoding="utf-8",
+    )
+    scalar = _objective_text(
+        SCALAR_OBJECTIVE, "Scalar objective", f"  threats: {SCALAR_THREAT}\n", SCALAR_SIGNAL
+    ).replace(
+        "        requirements: Security event logs\n",
+        "        requirements: Security event logs\n        logsources: Windows\n",
+    )
+    (objectives / "objective-0753-scalar.yaml").write_text(scalar, encoding="utf-8")
+    rules = repo / RULE_DIR
+    (rules / "rule-0752-two-threats.yaml").write_text(
+        _rule_text(TWO_THREATS_RULE, "Two threats rule", TWO_THREATS), encoding="utf-8"
+    )
+    (rules / "rule-0753-scalar.yaml").write_text(
+        _rule_text(SCALAR_RULE, "Scalar rule", SCALAR_SIGNAL), encoding="utf-8"
+    )
+
+
+def test_a_dangling_threat_keeps_the_other_threats_techniques(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    _add_inheritance_objects(tide_corpus_repo)
+    catalog = assert_json_ok(invoke_cli("info", "catalog"))
+    objective = _object(catalog, TWO_THREATS)
+    assert objective["techniques"] == {"own": [], "inherited": ["T1059", "T1003"]}
+    assert set(objective["tactics"]) >= {"execution", "credential-access"}
+    rule = _object(catalog, TWO_THREATS_RULE)
+    assert rule["techniques"]["inherited"] == ["T1059", "T1003"]
+    covers = {(edge["to"], edge["missing"]) for edge in _edges(catalog, "covers")}
+    assert (MISSING_THREAT, True) in covers
+
+
+def test_a_scalar_where_a_list_belongs_is_one_item(invoke_cli, tide_corpus_repo: Path) -> None:
+    _add_inheritance_objects(tide_corpus_repo)
+    catalog = assert_json_ok(invoke_cli("info", "catalog"))
+    covers = [edge for edge in _edges(catalog, "covers") if edge["from"] == SCALAR_OBJECTIVE]
+    assert [(edge["to"], edge["missing"]) for edge in covers] == [(SCALAR_THREAT, False)]
+    logsources = [edge for edge in _edges(catalog, "logsource") if edge["from"] == SCALAR_SIGNAL]
+    assert [edge["to"] for edge in logsources] == ["Windows"]
+    assert _object(catalog, SCALAR_OBJECTIVE)["techniques"]["inherited"] == ["T1003"]
+    assert _object(catalog, SCALAR_RULE)["techniques"]["inherited"] == ["T1003"]
+    assert _object(catalog, SCALAR_THREAT)["techniques"]["own"] == ["T1003"]
+
+
+def test_a_file_whose_uuid_another_uses_keeps_a_row(invoke_cli, tide_corpus_repo: Path) -> None:
+    rules = tide_corpus_repo / RULE_DIR
+    original = rules / "rule-0002-defender-kql.yaml"
+    copy = rules / "rule-zz-copy.yaml"
+    copy.write_text(
+        original.read_text(encoding="utf-8").replace("name: ", "name: Copied ", 1),
+        encoding="utf-8",
+    )
+    result = invoke_cli("info", "catalog")
+    catalog = parse_cli_json(result)
+    paths = {row["path"] for row in catalog["objects"]}
+    assert f"{RULE_DIR}/rule-0002-defender-kql.yaml" in paths
+    assert f"{RULE_DIR}/rule-zz-copy.yaml" in paths
+    [duplicate] = [
+        row for row in catalog["objects"] if row["load_error"] and row["uuid"] == DEFENDER_RULE
+    ]
+    assert duplicate["load_error"]["code"] == "duplicate_id"
+    assert "rule-zz-copy.yaml" in duplicate["load_error"]["message"]
+    assert catalog["summary"]["load_errors"] == 1
+    assert catalog["status"] == "issues"
+
+
+def test_a_signal_parent_that_is_not_a_string_is_null_and_the_document_valid(
+    invoke_cli, tide_corpus_repo: Path
+) -> None:
+    import jsonschema
+
+    objective_path = tide_corpus_repo / OBJECTIVE_DIR / "objective-0001-credential-access.yaml"
+    text = objective_path.read_text(encoding="utf-8")
+    objective_path.write_text(
+        text.replace(
+            "      methodology: Statistical\n",
+            "      methodology: Statistical\n"
+            "      parent:\n        - 00000000-0000-4000-8099-000000000009\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    catalog = parse_cli_json(invoke_cli("info", "catalog"))
+    [signal] = catalog["signals"]
+    assert signal["parent"] is None
+    commands = parse_cli_json(invoke_cli("commands"))
+    entry = next(command for command in commands["commands"] if command["path"] == "info")
+    jsonschema.validate(catalog, {**entry["output_schema"], "$defs": commands["$defs"]})

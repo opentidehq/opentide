@@ -11,7 +11,7 @@ description: Run CLI commands in one warm process, for editors, over newline-del
 opentide serve
 ```
 
-The editor starts the process and owns it: it ends on `exit`, or when the editor closes stdin. Like [`opentide mcp start`](../mcp/index.md) and [`opentide lsp start`](./lsp.md), it runs in the `mcp` [output mode](./json-output.md#output-modes): stdout carries the protocol and nothing else, logs go to stderr. Root options given to `serve` (`--repo`, `--data`, `--proxy`, `--debug`) are the defaults of every run.
+The editor starts the process and owns it: it ends on `exit`, or when the editor closes stdin. Either cancels the running command, and no queued one runs. Like [`opentide mcp start`](../mcp/index.md) and [`opentide lsp start`](./lsp.md), it runs in the `mcp` [output mode](./json-output.md#output-modes): stdout carries the protocol and nothing else, logs go to stderr. Root options given to `serve` (`--repo`, `--data`, `--proxy`, `--debug`) are the defaults of every run.
 
 ## The protocol
 
@@ -25,7 +25,7 @@ JSON-RPC 2.0, one JSON message per line, on stdin and stdout, as MCP's stdio tra
 | `progress` | notification, server to client | `{id: <run request id>, event: <progress event>}` | — |
 | `$/cancelRequest` | notification | `{id}` | the cancelled `run` answers with exit code `130` |
 | `shutdown` | request | — | `null` |
-| `exit` | notification | — | the process exits `0` |
+| `exit` | notification | — | the running `run` is cancelled, each queued one answers `130` without running, and the process exits `0` |
 
 `version` is the opentide version. `commands_digest` is the sha256 of the document `opentide --json commands` prints, without `duration_ms`, with sorted keys and no spaces: a client that keeps a copy of the command tree reads it again only when the digest changes.
 
@@ -64,7 +64,7 @@ Requests are handled one at a time, in the order they arrive. `$/cancelRequest` 
 
 The server keeps its imports and the command modules it has loaded. For the commands that only read the workspace (`validate`, `lint`, `info`, `explain` and `commands`, without `--fix`) it also keeps the registry it built, per workspace and environment, so a repeat `validate --file` does not parse every object file again. Any other command (`new`, `generate`, `deploy`, `setup`, a `--fix`) builds its own, and drops every registry kept, since it may have written any workspace.
 
-The server does not watch files. After the client edits, creates or deletes a file, it sends `invalidate` with the file's absolute path: the next run reads the workspace again. A path inside a workspace, its `.opentide/` or the bundled data drops what was kept for that workspace; a path inside no workspace drops everything.
+Before reusing a kept registry, a run compares the object folders, `.opentide/schemas/`, `.opentide/templates/` and the configuration folders with what they held when it was built (each file's path, modification time and size): a file edited, created or deleted there since makes the run build it again, whether or not an `invalidate` has arrived. `invalidate` is for what that check does not see, such as a file a configuration points at elsewhere: after the client edits, creates or deletes a file, it sends `invalidate` with the file's absolute path, and the next run reads the workspace again. A path inside a workspace, its `.opentide/` or the bundled data drops what was kept for that workspace; a path inside no workspace drops everything.
 
 At 500 rules on 4 CPUs, a repeat `validate --file` answers in about 0.3 s, against 1.6 s for `opentide --json validate --file` started afresh. The first run in a workspace, and the first after an `invalidate`, builds the registry, about 1 s.
 

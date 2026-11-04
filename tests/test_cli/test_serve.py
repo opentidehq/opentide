@@ -168,6 +168,23 @@ def test_protocol_problems_are_json_rpc_errors(client: Client) -> None:
     assert client.run("explain", "vocab_unknown")["exit_code"] == 0
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["validate", "--", "--json"],
+        ["query", "--platform", "sentinel", "--query", "--json"],
+    ],
+)
+def test_run_keeps_a_json_token_that_is_a_value(argv: list[str]) -> None:
+    assert serve_mod._run_params({"argv": argv})[0] == argv
+    assert serve_mod._run_params({"argv": ["--json", *argv]})[0] == argv
+
+
+def test_a_json_flag_after_the_command_still_runs(client: Client) -> None:
+    result = client.run("explain", "vocab_unknown", "--json")
+    assert result["exit_code"] == 0, result["document"]
+
+
 def test_shutdown_then_exit_ends_the_loop_with_zero(client: Client) -> None:
     assert client.call("shutdown")["result"] is None
     assert client.call("run", {"argv": ["info"]})["error"]["code"] == -32600
@@ -296,6 +313,43 @@ def test_a_repeat_run_keeps_the_registry_and_invalidate_drops_it(
     assert _stable(edited["document"]) == _stable(expected)
 
 
+def test_an_edit_on_disk_is_read_without_an_invalidate(
+    client: Client, tide_corpus_repo: Path, builds: list[float]
+) -> None:
+    # The editor's invalidate for a save can reach the server after the run
+    # that the save started: the kept registry must not answer for the old file.
+    rule = tide_corpus_repo / RULE_FILE
+    assert client.run("validate", "--file", RULE_FILE)["exit_code"] == 0
+    text = rule.read_text(encoding="utf-8")
+    rule.write_text(text.replace("name: Sentinel KQL Rule", "name: [1, 2]"), encoding="utf-8")
+    edited = client.run("validate", "--file", RULE_FILE)
+    assert len(builds) == 2
+    expected, code = spawned_document(["validate", "--file", RULE_FILE])
+    assert code == 1
+    assert edited["exit_code"] == 1, edited["document"]["report"]
+    assert _stable(edited["document"]) == _stable(expected)
+
+
+def test_a_file_created_after_a_run_is_seen_without_an_invalidate(
+    client: Client, tide_corpus_repo: Path, builds: list[float]
+) -> None:
+    before = client.run("info")["document"]["counts"]
+    rule = tide_corpus_repo / RULE_FILE
+    copy = rule.with_name("rule-served-copy.yaml")
+    text = rule.read_text(encoding="utf-8")
+    copy.write_text(
+        text.replace(CORPUS_RULE_UUIDS["sentinel"], "00000000-0000-4000-8003-0000000000ee"),
+        encoding="utf-8",
+    )
+    after = client.run("info")["document"]["counts"]
+    # Unchanged files: the next run reuses what the last one built.
+    client.run("info")
+    assert len(builds) == 2
+    expected, _ = spawned_document(["info"])
+    assert after == expected["counts"]
+    assert after != before
+
+
 def test_invalidate_outside_every_workspace_drops_everything(
     client: Client, tmp_path: Path, builds: list[float]
 ) -> None:
@@ -383,6 +437,99 @@ def test_cancelling_a_queued_run_answers_130_without_running_it(
     assert client.answer(first)["result"]["exit_code"] == 0
     assert client.answer(second)["result"]["exit_code"] == 130
     assert calls == ["run"]
+
+
+def test_a_cancel_after_the_command_returned_keeps_its_answer(
+    client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The cancel lands while the run parses what the command printed: the
+    # command has finished, so its own document and exit code come back.
+    parsing = threading.Event()
+    release = threading.Event()
+    real = CommandRunner._document
+
+    def slow_document(self: CommandRunner, *args: Any) -> Any:
+        parsing.set()
+        while not release.is_set():
+            time.sleep(0.01)
+        return real(self, *args)
+
+    monkeypatch.setattr(CommandRunner, "_document", slow_document)
+    request_id = client.request("run", {"argv": ["explain", "vocab_unknown"]})
+    assert parsing.wait(TIMEOUT)
+    client.send({"method": "$/cancelRequest", "params": {"id": request_id}})
+    release.set()
+    result = client.answer(request_id)["result"]
+    assert result["exit_code"] == 0, result
+    assert result["document"]["command"] == "explain"
+    assert "failure" not in result["document"] or not result["document"]["failure"]
+
+
+def test_a_cancelled_run_names_its_command(client: Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Cancelled before the run thread started: the fallback document still
+    # carries the command.
+    def cancelled_work(self: Server, work: Any, *, job: Any = None, argv: Any = ()) -> Any:
+        assert job is not None
+        job.cancelled = True
+        return real(self, work, job=job, argv=argv)
+
+    real = Server._on_thread
+    monkeypatch.setattr(Server, "_on_thread", cancelled_work)
+    result = client.run("explain", "vocab_unknown")
+    assert result["exit_code"] == 130
+    assert result["document"]["command"] == "explain"
+
+
+class RecordingRunner(CommandRunner):
+    """A runner that records each run instead of running it."""
+
+    def __init__(self) -> None:
+        super().__init__(base_env={}, cwd=Path.cwd())
+        self.calls: list[list[str]] = []
+
+    def run(self, argv: Any, *, cwd: str | None = None, env: Any = None, **_: Any) -> Any:
+        self.calls.append(list(argv))
+        return serve_mod.RunOutcome({"ok": True}, 0)
+
+
+@pytest.mark.parametrize("ending", ["close_input", "exit"])
+def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(ending: str) -> None:
+    written: list[dict[str, Any]] = []
+    runner = RecordingRunner()
+    server = Server(written.append, runner=runner)
+    for request_id in (1, 2, 3):
+        message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
+        message["params"] = {"argv": ["deploy", "--strategy", "PRODUCTION"]}
+        server.receive(json.dumps(message))
+    if ending == "exit":
+        server.receive(json.dumps({"jsonrpc": "2.0", "method": "exit"}))
+    else:
+        server.close_input()
+    assert server.serve() == 0
+    assert runner.calls == []
+    answers = {message["id"]: message["result"]["exit_code"] for message in written}
+    assert answers == {1: 130, 2: 130, 3: 130}
+
+
+def test_a_client_that_disconnects_ends_the_session_with_zero() -> None:
+    writes: list[dict[str, Any]] = []
+
+    def write(message: dict[str, Any]) -> None:
+        if writes:
+            raise BrokenPipeError(32, "Broken pipe")
+        writes.append(message)
+
+    runner = RecordingRunner()
+    server = Server(write, runner=runner)
+    for request_id in (1, 2, 3):
+        message = {"jsonrpc": "2.0", "id": request_id, "method": "run"}
+        message["params"] = {"argv": ["validate"]}
+        server.receive(json.dumps(message))
+    # No exit and no end of input: the failed write alone ends the session.
+    assert server.serve() == 0
+    assert [message["id"] for message in writes] == [1]
+    # The run whose answer could not be written was the last one to run.
+    assert runner.calls == [["validate"], ["validate"]]
 
 
 def test_a_cancel_for_a_finished_run_changes_nothing(client: Client) -> None:
