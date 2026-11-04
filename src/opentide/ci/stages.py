@@ -110,51 +110,38 @@ def platform_credential_names_for(platform: str) -> list[str]:
     return sorted(set(_ENV_REF.findall(path.read_text(encoding="utf-8"))))
 
 
-def _toml_without_comments(text: str) -> str:
-    """Drop TOML comments so a remark cannot invent a credential reference."""
-    out: list[str] = []
-    i = 0
-    length = len(text)
-    while i < length:
-        char = text[i]
-        if char in "\"'":
-            quote = char
-            if text.startswith(quote * 3, i):
-                end = text.find(quote * 3, i + 3)
-                if end == -1:
-                    out.append(text[i:])
-                    break
-                out.append(text[i : end + 3])
-                i = end + 3
-                continue
-            end = i + 1
-            while end < length:
-                if text[end] == "\\":
-                    end += 2
-                    continue
-                if text[end] == quote:
-                    end += 1
-                    break
-                end += 1
-            out.append(text[i:end])
-            i = end
-            continue
-        if char == "#":
-            while i < length and text[i] != "\n":
-                i += 1
-            continue
-        out.append(char)
-        i += 1
-    return "".join(out)
-
-
 def workspace_credential_names(repo: Path, platform: str) -> list[str]:
-    """``$VAR`` names in the enabled platform file, ignoring comments and literals."""
+    """The variables the enabled platform file's tenants reference, as opentide resolves them.
+
+    Each tenant's ``setup`` values that are ``$NAME`` or ``${NAME}`` as a whole
+    (:func:`opentide.platforms.config.setup_variables`): a comment, a literal
+    that starts with ``$`` and a nested value name nothing. A file that does
+    not parse names nothing, and the live check reports it.
+    """
+    import sys
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+
+    from opentide.platforms.config import setup_variables
+
     path = platforms_config_dir(repo) / f"{platform}.toml"
     if not path.is_file():
         return []
-    text = _toml_without_comments(path.read_text(encoding="utf-8"))
-    return sorted(set(_ENV_REF.findall(text)))
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return []
+    tenants = data.get("tenants")
+    if isinstance(tenants, dict):
+        tenants = [tenants]
+    names: set[str] = set()
+    for tenant in tenants if isinstance(tenants, list) else []:
+        if isinstance(tenant, dict):
+            names.update(setup_variables(tenant.get("setup")))
+    return sorted(names)
 
 
 def query_validation_command(platform: str, *, repo: Path | None = None) -> str:

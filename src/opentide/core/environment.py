@@ -32,6 +32,8 @@ def env_reference(value: object) -> str | None:
 # load calls that helper once per object, and the same unset variable must not
 # be printed again for every rule.
 _reported_missing_envvars: set[str] = set()
+# Names of variables read the 0.21.0 way (``$AZ-SECRET``), warned about once each.
+_reported_legacy_envvars: set[str] = set()
 
 # Set while a run that sends nothing (a dry-run deploy) loads its configuration:
 # unset names are collected here for the run to report, not logged as errors.
@@ -121,6 +123,30 @@ class DebugHelpers:
                 continue
             value = config_secrets[sec]
             env_name = env_reference(value)
+            if (
+                env_name is None
+                and isinstance(value, str)
+                and len(value) > 1
+                and value[0] == "$"
+                and value[1:] in os.environ
+            ):
+                # 0.21.0 and earlier read any `$text` from the variable `text`: keep a
+                # set one working, and say how to write it.
+                config_secrets[sec] = os.environ[value[1:]]
+                if value[1:] in _reported_legacy_envvars:
+                    continue
+                _reported_legacy_envvars.add(value[1:])
+                renamed = re.sub(r"[^A-Za-z0-9_]", "_", value[1:])
+                logger.warning(
+                    "environment_variable_name_deprecated",
+                    detail=(
+                        f"{sec} reads the variable {value[1:]!r}, which is not a variable "
+                        "name opentide resolves (letters, digits and underscores): a later "
+                        "release reads the value as written"
+                    ),
+                    advice=f"Rename the variable, for example to {renamed}, and write ${renamed}",
+                )
+                continue
             if env_name is not None:
                 if env_name in os.environ:
                     config_secrets[sec] = os.environ.get(env_name, "")

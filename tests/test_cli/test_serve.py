@@ -7,6 +7,7 @@ last ones spawn the console script and speak the protocol over its stdio.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import queue
@@ -511,6 +512,71 @@ def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(ending: str) -> N
     assert answers == {1: 130, 2: 130, 3: 130}
 
 
+class PlanningRunner(CommandRunner):
+    """A run that holds a ``setup --plan`` copy of *target* until it is interrupted."""
+
+    def __init__(self, target: Path) -> None:
+        super().__init__(base_env={}, cwd=Path.cwd())
+        self.target = target
+        self.started = threading.Event()
+        self.copies: list[Path] = []
+
+    def run(self, argv: Any, *, cwd: str | None = None, env: Any = None, **_: Any) -> Any:
+        from opentide.cli.services.setup.plan import sandbox
+
+        with sandbox(self.target) as box:
+            self.copies.append(box.shadow_top)
+            self.started.set()
+            while True:
+                time.sleep(0.01)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is not delivered on Windows")
+def test_sigterm_stops_the_run_so_its_plan_copy_is_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run executes on a worker thread, where the plan cannot install its handler: SIGTERM
+    ended `opentide serve` and left the repository's copy in the temporary folder."""
+    import signal
+    import tempfile
+
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    target = tmp_path / "repo"
+    target.mkdir()
+    (target / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    runner = PlanningRunner(target)
+    request = {"jsonrpc": "2.0", "id": 1, "method": "run", "params": {"argv": ["setup"]}}
+    hold = threading.Event()
+
+    def requests() -> Iterator[bytes]:
+        yield json.dumps(request).encode()
+        hold.wait(TIMEOUT)
+
+    def terminate() -> None:
+        assert runner.started.wait(TIMEOUT)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    def unhandled(signum: int, frame: object) -> None:
+        raise AssertionError("opentide serve did not handle SIGTERM")
+
+    previous = signal.signal(signal.SIGTERM, unhandled)
+    output = io.BytesIO()
+    try:
+        threading.Thread(target=terminate, daemon=True).start()
+        code = serve_mod.serve_stdio(requests(), output, runner=runner)
+        assert signal.getsignal(signal.SIGTERM) is unhandled
+    finally:
+        hold.set()
+        signal.signal(signal.SIGTERM, previous)
+    assert code == 128 + signal.SIGTERM
+    assert runner.copies and not runner.copies[0].exists()
+    assert list(scratch.iterdir()) == []
+    [answer] = [json.loads(line) for line in output.getvalue().splitlines()]
+    assert answer["id"] == 1 and answer["result"]["exit_code"] == 130
+
+
 def test_a_client_that_disconnects_ends_the_session_with_zero() -> None:
     writes: list[dict[str, Any]] = []
 
@@ -537,6 +603,14 @@ def test_a_cancel_for_a_finished_run_changes_nothing(client: Client) -> None:
     assert client.answer(request_id)["result"]["exit_code"] == 0
     client.send({"method": "$/cancelRequest", "params": {"id": request_id}})
     assert client.run("explain", "vocab_unknown")["exit_code"] == 0
+    # Nor does it for a later request that reuses the id: it was answered 130 unrun.
+    client.send(
+        {"id": request_id, "method": "run", "params": {"argv": ["explain", "vocab_unknown"]}}
+    )
+    assert client.answer(request_id)["result"]["exit_code"] == 0
+    # A cancel for an id never sent is not kept either.
+    client.send({"method": "$/cancelRequest", "params": {"id": "never-sent"}})
+    assert client.server._cancelled == set()
 
 
 def test_a_crash_answers_internal_and_the_server_keeps_serving(
@@ -704,6 +778,34 @@ def test_over_stdio_closing_stdin_ends_the_server(
     assert client.process.stdin is not None
     client.process.stdin.close()
     assert client.process.wait(TIMEOUT) == 0
+
+
+@pytest.mark.cli_smoke
+def test_over_stdio_a_run_that_reads_stdin_reads_nothing_of_the_protocol(
+    tide_corpus_repo: Path, stdio_env: dict[str, str]
+) -> None:
+    """`query -` read the server's stdin, the protocol stream: it took the next requests as
+    its query and the server answered nothing until the client closed stdin."""
+    client = StdioClient(tide_corpus_repo, stdio_env)
+    try:
+        client.send(
+            {"id": 1, "method": "run", "params": {"argv": ["query", "-", "--platform", "sentinel"]}}
+        )
+        client.send({"id": 2, "method": "run", "params": {"argv": ["explain", "vocab_unknown"]}})
+        answers: dict[int, dict[str, Any]] = {}
+        while len(answers) < 2:
+            message = json.loads(client.lines.get(timeout=30))
+            if "id" in message:
+                answers[message["id"]] = message["result"]
+        # An empty stdin: no query given.
+        assert answers[1]["exit_code"] == 2
+        assert answers[1]["document"]["failure"]["argument"] == "QUERY"
+        assert answers[2]["exit_code"] == 0
+        client.send({"method": "exit"})
+        assert client.process.wait(TIMEOUT) == 0
+    finally:
+        if client.process.poll() is None:
+            client.process.kill()
 
 
 def test_serve_is_listed_with_no_document(cli_runner: CliRunner) -> None:

@@ -38,6 +38,7 @@ import os
 import queue
 import sys
 import threading
+from collections import Counter
 from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -418,7 +419,10 @@ class Server:
         self.runner = runner or CommandRunner()
         self._queue: queue.Queue[Message | None] = queue.Queue()
         self._active: _Job | None = None
-        self._cancelled: set[Any] = set()
+        #: Ids of queued runs a cancel named: each is answered 130 when it is reached.
+        self._cancelled: set[str] = set()
+        #: Ids of the runs queued and not yet reached, each as many times as it is queued.
+        self._queued: Counter[str] = Counter()
         self._state_lock = threading.Lock()
         self._shut_down = False
         #: Set by ``exit`` or the end of input: queued runs answer 130 unrun.
@@ -482,6 +486,9 @@ class Server:
         if message["method"] == "exit":
             self._close()
             return
+        if message["method"] == "run" and "id" in message:
+            with self._state_lock:
+                self._queued[_id_key(message["id"])] += 1
         self._queue.put(message)
 
     def close_input(self) -> None:
@@ -501,11 +508,16 @@ class Server:
         self._queue.put(None)
 
     def cancel(self, request_id: Any) -> None:
-        """Cancel the ``run`` *request_id*: the running one now, a queued one when it is reached."""
+        """Cancel the ``run`` *request_id*: the running one now, a queued one when it is reached.
+
+        A cancel for a run that has answered, or was never sent, changes nothing:
+        a later request that reuses the id runs.
+        """
         with self._state_lock:
             job = self._active
             if job is None or job.request_id != request_id:
-                self._cancelled.add(_id_key(request_id))
+                if self._queued[_id_key(request_id)] > 0:
+                    self._cancelled.add(_id_key(request_id))
                 return
         self._interrupt(job)
 
@@ -555,6 +567,17 @@ class Server:
             return
         if not is_request:
             return  # An unknown notification is ignored, as JSON-RPC asks.
+        if method == "run":
+            with self._state_lock:
+                key = _id_key(request_id)
+                self._queued[key] -= 1
+                if self._queued[key] <= 0:
+                    del self._queued[key]
+                # Reached: from here on a cancel acts on the running job, or not at all.
+                cancelled = key in self._cancelled
+                self._cancelled.discard(key)
+        else:
+            cancelled = False
         if self._shut_down:
             self._error(request_id, INVALID_REQUEST, "The server is shut down; send exit")
             return
@@ -566,7 +589,9 @@ class Server:
             except ProtocolError as exc:
                 self._error(request_id, exc.code, exc.message)
                 return
-            self._respond(request_id, self._run(request_id, argv, cwd, env).to_dict())
+            self._respond(
+                request_id, self._run(request_id, argv, cwd, env, cancelled=cancelled).to_dict()
+            )
         elif method == "shutdown":
             self._shut_down = True
             self._respond(request_id, None)
@@ -586,11 +611,16 @@ class Server:
         }
 
     def _run(
-        self, request_id: Any, argv: list[str], cwd: str | None, env: dict[str, str] | None
+        self,
+        request_id: Any,
+        argv: list[str],
+        cwd: str | None,
+        env: dict[str, str] | None,
+        *,
+        cancelled: bool = False,
     ) -> RunOutcome:
         with self._state_lock:
-            if self._closing or _id_key(request_id) in self._cancelled:
-                self._cancelled.discard(_id_key(request_id))
+            if self._closing or cancelled:
                 return RunOutcome(
                     self.runner._failure_document(argv, "Interrupted", CANCELLED_EXIT_CODE),
                     CANCELLED_EXIT_CODE,
@@ -729,7 +759,9 @@ def serve_stdio(
 
     The protocol keeps a duplicate of descriptor 1; descriptor 1 itself then
     points at stderr, so nothing a command or a child process writes to
-    stdout can reach the client.
+    stdout can reach the client. In the same way it reads a duplicate of
+    descriptor 0, which then reads the null device: a run that reads stdin
+    (``query -``) or a child process reads nothing, not the client's requests.
     """
     if stdout is None:
         sys.stdout.flush()
@@ -738,9 +770,17 @@ def serve_stdio(
         sys.stdout = sys.stderr
     else:
         protocol = stdout
-    # The raw descriptor, not sys.stdin: a daemon thread blocked in a buffered
-    # read holds its lock, and the interpreter aborts on it at exit.
-    source: Iterable[bytes] = stdin if stdin is not None else _lines(0)
+    if stdin is None:
+        requests = os.dup(0)
+        null = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(null, 0)
+        os.close(null)
+        sys.stdin = open(os.devnull, encoding="utf-8")  # noqa: SIM115 -- stdin for the process life
+        # The raw descriptor, not a file object: a daemon thread blocked in a
+        # buffered read holds its lock, and the interpreter aborts on it at exit.
+        source: Iterable[bytes] = _lines(requests)
+    else:
+        source = stdin
 
     def write(message: Message) -> None:
         data = json.dumps(message, ensure_ascii=False, separators=(",", ":"), default=str)
@@ -762,4 +802,44 @@ def serve_stdio(
         server.close_input()
 
     threading.Thread(target=read, name="opentide-serve-stdin", daemon=True).start()
-    return server.serve()
+    with _stop_on_termination(server) as signalled:
+        code = server.serve()
+    return 128 + signalled[0] if signalled else code
+
+
+@contextlib.contextmanager
+def _stop_on_termination(server: Server) -> Generator[list[int]]:
+    """Turn SIGTERM and SIGHUP into the end of input while *server* serves.
+
+    A run executes on a worker thread, where nothing (``setup --plan``'s
+    handler included) can catch a signal: Python's default ended the process
+    there, without the run's cleanup, and a plan left the repository's copy in
+    the temporary folder. The run is cancelled instead, as by ``exit``, and its
+    ``finally`` blocks run. A second signal ends the process at once. An
+    ignored signal stays ignored. Yields the signals received.
+    """
+    import signal
+
+    received: list[int] = []
+    if threading.current_thread() is not threading.main_thread():
+        yield received
+        return
+
+    def stop(signum: int, _frame: object) -> None:
+        received.append(signum)
+        signal.signal(signum, signal.SIG_DFL)
+        # Not here: the handler may run while this thread holds the server's lock.
+        threading.Thread(target=server.close_input, name="opentide-serve-stop").start()
+
+    previous: dict[int, Any] = {}
+    for name in ("SIGTERM", "SIGHUP"):
+        number = getattr(signal, name, None)
+        if number is None or signal.getsignal(number) is signal.SIG_IGN:
+            continue
+        previous[number] = signal.signal(number, stop)
+    try:
+        yield received
+    finally:
+        for number, handler in previous.items():
+            # None: a handler installed outside Python, which cannot be put back.
+            signal.signal(number, signal.SIG_DFL if handler is None else handler)

@@ -792,7 +792,8 @@ def _read_json(path: Path) -> Any:
     from opentide.cli.services.setup.vscode import _strip_jsonc
 
     try:
-        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8")))
+        # utf-8-sig, as setup reads them: VS Code's "UTF-8 with BOM" is common on Windows.
+        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8-sig")))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 
@@ -815,13 +816,14 @@ def check_vscode(ctx: DoctorContext) -> list[Check]:
         sorted(
             str(schema)
             for schema, globs in schemas.items()
-            if is_opentide_schema_mapping(str(schema), globs)
+            if is_opentide_schema_mapping(str(schema), globs, workspace=ctx.workspace)
         )
         if isinstance(schemas, dict)
         else []
     )
     recommended = _read_json(extensions) if extensions.is_file() else None
     recommendations = recommended.get("recommendations") if isinstance(recommended, dict) else None
+    unwanted = recommended.get("unwantedRecommendations") if isinstance(recommended, dict) else None
     if data is None:
         checks.append(
             Check(
@@ -864,6 +866,15 @@ def check_vscode(ctx: DoctorContext) -> list[Check]:
     elif isinstance(recommendations, list) and EXTENSION_ID in recommendations:
         checks.append(
             Check("vscode_settings", "pass", f".vscode/extensions.json recommends {EXTENSION_ID}")
+        )
+    elif isinstance(unwanted, list) and EXTENSION_ID in unwanted:
+        # setup vscode leaves it out on purpose: offering it as the fix would change nothing.
+        checks.append(
+            Check(
+                "vscode_settings",
+                "skip",
+                f".vscode/extensions.json lists {EXTENSION_ID} under unwantedRecommendations",
+            )
         )
     else:
         checks.append(

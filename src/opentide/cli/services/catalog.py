@@ -229,8 +229,11 @@ def _load_error_row(entry: Mapping[str, Any], workspace: Path) -> dict[str, Any]
         f"Could not parse object YAML: {entry.get('error') or 'unknown error'}"
     )
     fields = _text_fields(text) if text else {}
+    # A duplicate's UUID is the kept object's row's: ``objects[].uuid`` stays unique, and
+    # the message names the UUID.
+    uuid = None if code == "duplicate_id" else fields.get("uuid")
     return {
-        "uuid": fields.get("uuid"),
+        "uuid": uuid,
         "type": str(entry.get("object_type") or "") or None,
         "schema": fields.get("schema"),
         "name": fields.get("name") or (Path(raw_path).stem if raw_path else ""),
@@ -253,7 +256,8 @@ def _load_error_row(entry: Mapping[str, Any], workspace: Path) -> dict[str, Any]
 
 def _scalar(raw: str | None) -> str | None:
     """A plain or quoted YAML scalar written on one line, without its comment."""
-    if not raw:
+    if not raw or raw.startswith("#"):
+        # ``key:  # comment``: no value.
         return None
     if raw[0] in "'\"":
         quote, value, index = raw[0], [], 1
@@ -293,7 +297,9 @@ def _text_fields(text: str) -> dict[str, str]:
         match = _KEY_LINE.match(line)
         indent = match.group(1) if match else line[: len(line) - len(line.lstrip())]
         if not indent:
-            in_metadata = bool(match and match.group(2) == "metadata" and not match.group(3))
+            in_metadata = bool(
+                match and match.group(2) == "metadata" and _scalar(match.group(3)) is None
+            )
             child_indent = None
             if match and match.group(3) is not None:
                 root.setdefault(match.group(2), match.group(3))

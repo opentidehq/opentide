@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from tests.corpus_support import CORPUS_RULE_UUIDS
 from tests.test_cli.conftest import assert_json_ok
+from tests.test_cli.e2e.helpers import uncomment_tenants
 
 pytestmark = pytest.mark.cli_e2e
 
@@ -99,3 +101,48 @@ def test_a_selection_that_matches_nothing_fails(
     assert missing in payload["message"]
     assert "plan" not in payload
     assert refuse_deployment_engines == []
+
+
+def test_a_bad_strategy_is_a_usage_error_before_the_selection_is_checked(
+    invoke_cli, refuse_deployment_engines: list[str]
+) -> None:
+    """A mistyped --strategy is the usage error (exit 2), even with a --uuid that selects
+    nothing: the run failed with exit 1 and the unmatched value instead."""
+    missing = "00000000-0000-4000-8003-0000000dead3"
+    result = invoke_cli("deploy", "--dry-run", "--strategy", "PREVEIW", "--uuid", missing)
+    assert result.exit_code == 2, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["failure"]["code"] == "usage_invalid_choice"
+    assert payload["failure"]["argument"] == "--strategy"
+    assert "unmatched" not in payload
+    assert refuse_deployment_engines == []
+
+
+def test_a_real_release_with_uuid_sends_only_that_rule_and_promotes_nothing(
+    invoke_cli, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not a dry run: the selected rule is the only one sent, and RELEASE does not run the
+    status promotion over the git diff, which a selection replaces."""
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
+    deployer = _mock_engines(monkeypatch)
+    promoted = MagicMock()
+    monkeypatch.setattr("opentide.mutation.promotion.PromoteMDR.promote", promoted)
+    result = invoke_cli(
+        "deploy",
+        "--strategy",
+        "PREVIEW",
+        "--strategy",
+        "RELEASE",
+        "--uuid",
+        SENTINEL,
+        extra_env={"OPENTIDE_PROGRESS": "json"},
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)["scope"] == "selected"
+    promoted.assert_not_called()
+    sent = [call.kwargs["mdr_deployment"] for call in deployer.deploy.call_args_list]
+    assert sent == [[SENTINEL]]
+    events = [
+        json.loads(line) for line in result.stderr.splitlines() if line.startswith('{"event"')
+    ]
+    assert events == [{"event": "progress", "step": "sentinel", "done": 1, "total": 1}]

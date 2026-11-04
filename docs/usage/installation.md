@@ -96,7 +96,7 @@ Get-Command opentide -All
 where.exe opentide
 ```
 
-On Windows on Arm, install with `pip install --only-binary cryptography opentide`, on any supported CPython (3.10 and later). The newest cryptography releases publish no Windows on Arm wheel, so without the flag pip compiles cryptography, which needs OpenSSL and a Rust toolchain; with it, pip takes the newest cryptography that has one: 46.0.3, whose `cp38-abi3` and `cp311-abi3` Windows on Arm wheels install on CPython 3.10 and later.
+On Windows on Arm, use CPython 3.11 or later and install with `pip install --only-binary cryptography opentide`. The newest cryptography releases publish no Windows on Arm wheel, so without the flag pip compiles cryptography, which needs OpenSSL and a Rust toolchain; with it, pip takes the newest cryptography that has one: 46.0.3, whose `cp38-abi3` and `cp311-abi3` Windows on Arm wheels install on CPython 3.10 and later. On CPython 3.10, pydantic-core, orjson, rpds-py and cffi publish no Windows on Arm wheel (theirs start at 3.11), so pip compiles them, which needs a Rust toolchain and the MSVC build tools.
 
 opentide does not ship or generate `opentide.bat`. Inspect any bat wrapper reported by these commands before using it; it may have been created by local tooling or an agent.
 

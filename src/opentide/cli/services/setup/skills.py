@@ -248,20 +248,52 @@ def unavailable_skills(options: SkillsSetupOptions) -> list[str]:
     ]
 
 
-def _copy_skill(src: Path, dest: Path, where: str, warnings: list[str]) -> None:
+def _copy_skill(src: Path, dest: Path, where: str, warnings: list[str], *, target: Path) -> None:
     """Copy the skill *src* over *dest*, keeping the files in *dest* it does not ship.
 
     The folder used to be deleted first, and with it whatever the user had
     put there (team notes, local edits to a file the skill does not ship).
+
+    Nothing is written through a link: a link at a path the skill ships (a file
+    or a folder) is replaced by the skill's own, with a warning, and a *dest*
+    that resolves outside *target* (a skills folder shared between repositories)
+    is left as it is, with a warning.
     """
     if dest.exists() and dest.resolve() == src.resolve():
         # ``.claude/skills`` links to ``.agents/skills`` (or this skill's folder
         # does): the skill is already there, and copying it onto itself would
         # delete it.
         return
-    shipped = [path.relative_to(src).as_posix() for path in src.rglob("*") if path.is_file()]
+    if not dest.resolve().is_relative_to(target.resolve()):
+        warnings.append(
+            f"Left {where} as it is: it links outside this repository, to "
+            f"{dest.resolve()}. Copy the skill there by hand if that folder should have it."
+        )
+        return
+    shipped = sorted(path.relative_to(src).as_posix() for path in src.rglob("*") if path.is_file())
     kept = _extra_files(dest, shipped)
-    shutil.copytree(src, dest, dirs_exist_ok=True)
+    replaced: list[str] = []
+    # Resolved: a dangling link to a folder inside the repository gets that folder.
+    dest.resolve().mkdir(parents=True, exist_ok=True)
+    for rel in shipped:
+        out = dest
+        parts = rel.split("/")
+        for depth, part in enumerate(parts):
+            out = out / part
+            if out.is_symlink():
+                out.unlink()
+                replaced.append("/".join(parts[: depth + 1]))
+            if depth < len(parts) - 1:
+                out.mkdir(exist_ok=True)
+        shutil.copy2(src / rel, out)
+    if replaced:
+        shown = ", ".join(replaced[:5]) + (
+            f" and {len(replaced) - 5} more" if len(replaced) > 5 else ""
+        )
+        warnings.append(
+            f"Replaced {len(replaced)} link(s) in {where} with the skill's own files "
+            f"({shown}), rather than write through them."
+        )
     if kept:
         warnings.append(_kept_warning(where, kept))
 
@@ -272,7 +304,7 @@ def _install_cursor(target: Path, slugs: list[str], warnings: list[str]) -> list
         src = target / ".agents" / "skills" / slug
         dest = target / ".cursor" / "skills" / slug
         if src.is_dir():
-            _copy_skill(src, dest, f".cursor/skills/{slug}", warnings)
+            _copy_skill(src, dest, f".cursor/skills/{slug}", warnings, target=target)
             written.append(f".cursor/skills/{slug}/SKILL.md")
     return written
 
@@ -315,7 +347,7 @@ def _install_claude_code(
         src = target / ".agents" / "skills" / slug
         dest = target / ".claude" / "skills" / slug
         if src.is_dir():
-            _copy_skill(src, dest, f".claude/skills/{slug}", entrypoints.warnings)
+            _copy_skill(src, dest, f".claude/skills/{slug}", entrypoints.warnings, target=target)
             written.append(f".claude/skills/{slug}/SKILL.md")
     return written
 

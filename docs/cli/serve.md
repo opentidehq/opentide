@@ -45,7 +45,8 @@ JSON-RPC 2.0, one JSON message per line, on stdin and stdout, as MCP's stdio tra
 - **A failed command is a result.** A run that fails answers its document and its non-zero exit code, as the command would. JSON-RPC errors are only for protocol problems: a line that is not JSON (`-32700`), a message with no `method` (`-32600`), an unknown method (`-32601`), and a `run` without `argv` or with `cwd` or `env` of the wrong type (`-32602`).
 - **Prompts.** A command that would prompt exits `2` with [`usage_needs_input`](./json-output.md#failure-codes), as under `--json`.
 - **A crash.** An exception no command handles answers `failure.code` [`internal`](./diagnostics.md#internal), with `failure.crash_log` naming the redacted crash log, and the server keeps serving.
-- **Not here.** `serve`, `mcp start` and `lsp start` would read the server's own stdin, and `tui` needs a terminal: a run of one exits `2` with `usage_error`.
+- **Stdin.** A run, and any process it starts, reads an empty stdin: the server reads the requests from its own copy of the stream. `query -` exits `2` (`usage_invalid_value`, no query given); pass the query in `argv` or with `--query-file`.
+- **Not here.** `serve`, `mcp start` and `lsp start` would serve a protocol on stdin, and `tui` needs a terminal: a run of one exits `2` with `usage_error`.
 
 ### The workspace
 
@@ -70,7 +71,9 @@ At 500 rules on 4 CPUs, a repeat `validate --file` answers in about 0.3 s, again
 
 ### Cancel
 
-`$/cancelRequest {id}` stops the run *id* as Ctrl-C would: `KeyboardInterrupt` is raised in the thread that runs it, so its cleanup runs (a CrowdStrike search is stopped), and it answers `exit_code` `130` with a document whose `failure.code` is [`interrupted`](./diagnostics.md#interrupted). A run blocked in one call (waiting on a tenant's answer) stops when that call returns. A cancel for a queued run answers it with `130` without running it; a cancel for a run that has answered changes nothing.
+`$/cancelRequest {id}` stops the run *id* as Ctrl-C would: `KeyboardInterrupt` is raised in the thread that runs it, so its cleanup runs (a CrowdStrike search is stopped), and it answers `exit_code` `130` with a document whose `failure.code` is [`interrupted`](./diagnostics.md#interrupted). A run blocked in one call (waiting on a tenant's answer) stops when that call returns. A cancel for a queued run answers it with `130` without running it; a cancel for a run that has answered, or for an id no request carries, changes nothing, also for a later request that reuses the id.
+
+SIGTERM and SIGHUP stop the server as the end of input does: the running command is cancelled, its cleanup runs (a `setup --plan` removes its copy of the repository), it answers `130`, queued runs answer `130` unrun, and the server exits `128` plus the signal's number (`143` for SIGTERM). A second signal ends it at once. A signal the server was started ignoring stays ignored.
 
 ### Progress
 

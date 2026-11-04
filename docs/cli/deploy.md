@@ -74,7 +74,7 @@ Its `plan` and `payloads` hold only that rule, and the document carries `"scope"
 ```
 
 - With `--all`, either flag is a usage error: exit `2`, `failure.code` `usage_error`. `--all` reads every file; a selection reads some.
-- A value that selects no rule fails the run with exit `1` before anything is planned, and `unmatched` lists each one. Candidates are the files directly in the rules folder, as for `--all`.
+- A value that selects no rule fails the run with exit `1` before anything is planned, and `unmatched` lists each one. A usage error, such as an unknown `--strategy`, is reported first (exit `2`). Candidates are the files directly in the rules folder, as for `--all`.
 
 `--plan` and `DEPLOYMENT_PLAN` were removed in 0.17.0. Either now fails with exit `2` and names the `--strategy` to pass: `STAGING` became `--strategy PREVIEW`, `PRODUCTION` became `--strategy RELEASE`, and `FULL` became `--strategy PREVIEW --strategy RELEASE --all`. A platform file whose tenant still sets `deployment` fails to load and names the `strategies` or `manual` line that replaces it ([migration table](../usage/concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier)).
 

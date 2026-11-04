@@ -368,6 +368,58 @@ def test_the_plan_does_not_copy_build_output(tmp_path: Path) -> None:
     assert copied == {"objects", "objects/x.bin"}
 
 
+@pytest.mark.parametrize("folder", ["build", "target", "dist"])
+def test_a_target_below_a_folder_named_like_build_output_is_planned(
+    tmp_path: Path, folder: str
+) -> None:
+    """The copy left out every folder named like build output, the target's own
+    ancestors included: the plan listed nothing, and the run then wrote."""
+    repo = tmp_path / "mono"
+    target = repo / folder / "detections"
+    target.mkdir(parents=True)
+    (repo / folder / "x.bin").write_bytes(b"x")
+    (target / "build").mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    before = _tree(repo)
+    result, plan = _invoke("--plan", "--env", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert ".env.example" in _planned(plan), plan["message"]
+    result, _ = _invoke("--yes", "--env", "--path", str(target))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    written = _changed(before, _tree(repo))
+    assert _relative(written, repo, target) == _planned(plan)
+
+    from opentide.cli.services.setup.plan import Sandbox
+
+    box = Sandbox(target, tmp_path / "scratch")
+    assert box.shadow_target.is_dir()
+    assert (box.shadow_top / folder / "x.bin").is_file()
+    # Build output below the target is still left out.
+    assert not (box.shadow_target / "build").exists()
+
+
+def test_warnings_name_the_repository_when_the_temporary_folder_is_a_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """macOS's $TMPDIR is under /var, a link to /private/var: a step that resolves its
+    path reported the copy's real path, which the plan did not map back."""
+    import tempfile
+
+    real = tmp_path / "private-tmp"
+    real.mkdir()
+    (tmp_path / "tmp").symlink_to(real)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "tmp"))
+    repo = tmp_path / "repo"
+    (repo / "det").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    result, plan = _invoke("hooks", "--plan", "--path", str(repo / "det"))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert plan["warnings"], plan
+    joined = " ".join(plan["warnings"])
+    assert "opentide-setup-plan-" not in joined, joined
+    assert str(repo.resolve()) in joined
+
+
 def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
     import signal
 
@@ -384,6 +436,26 @@ def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
     assert stopped.value.code == 128 + signal.SIGTERM
     assert not copies[0].exists()
     assert signal.getsignal(signal.SIGTERM) is not None
+
+
+@pytest.mark.skipif(not hasattr(__import__("signal"), "SIGHUP"), reason="no SIGHUP here")
+def test_an_ignored_hangup_stays_ignored_during_a_plan(tmp_path: Path) -> None:
+    """Under ``nohup`` SIGHUP is ignored: the plan's handler turned a hangup into an exit."""
+    import signal
+
+    from opentide.cli.services.setup.plan import sandbox
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    previous = signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    try:
+        with sandbox(target):
+            assert signal.getsignal(signal.SIGHUP) is signal.SIG_IGN
+            os.kill(os.getpid(), signal.SIGHUP)  # ignored: the plan carries on
+            assert signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL
+        assert signal.getsignal(signal.SIGHUP) is signal.SIG_IGN
+    finally:
+        signal.signal(signal.SIGHUP, previous)
 
 
 def test_the_plan_carries_the_runs_own_warnings(tmp_path: Path) -> None:
@@ -490,3 +562,28 @@ def test_a_submodule_plans_the_hook_the_run_writes(git_repo: Path, tmp_path: Pat
     assert applied.get("installed") is not False
     assert hook in _planned(plan)
     assert not any("Not a Git repository" in w for w in plan.get("warnings", []))
+
+
+def test_the_plan_never_writes_through_a_link_in_git_hooks(git_repo: Path, tmp_path: Path) -> None:
+    """``.git/hooks`` was copied with its links as they are: an absolute link to the
+    repository's versioned hook (``ln -s "$PWD/.opentide/hooks/pre-commit"``) or to a
+    shared hooks folder made the plan write the real file."""
+    result, _ = _invoke("hooks", "--yes", "--path", str(git_repo))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    versioned = git_repo / ".opentide" / "hooks" / "pre-commit"
+    versioned.write_text(versioned.read_text(encoding="utf-8") + "# local tweak\n", "utf-8")
+    hooks = git_repo / ".git" / "hooks"
+    (hooks / "pre-commit").unlink()
+    (hooks / "pre-commit").symlink_to(versioned)
+    shared = tmp_path / "shared-hooks"
+    shared.mkdir()
+    (shared / "pre-push").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (hooks / "pre-push").unlink(missing_ok=True)
+    (hooks / "pre-push").symlink_to(shared / "pre-push")
+    before = {**_tree(git_repo), **_tree(shared)}
+    result, plan = _invoke("hooks", "--plan", "--path", str(git_repo))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert {**_tree(git_repo), **_tree(shared)} == before, "the plan wrote through a link"
+    result, applied = _invoke("hooks", "--yes", "--path", str(git_repo))
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert set(applied["files"]) <= _planned(plan, actions=("create", "merge", "skip"))

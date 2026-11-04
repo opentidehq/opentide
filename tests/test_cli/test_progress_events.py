@@ -100,6 +100,26 @@ def test_a_closed_stderr_is_not_a_crash(monkeypatch: pytest.MonkeyPatch) -> None
     progress_events.progress("schemas", 1, 1)
 
 
+def test_an_event_stays_json_on_a_stderr_that_cannot_encode_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows' cp1252 stderr writes an unencodable character as a Python escape
+    (backslashreplace), which is not JSON: the line must be ASCII."""
+    monkeypatch.setenv("OPENTIDE_PROGRESS", "json")
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="cp1252", errors="backslashreplace")
+    monkeypatch.setattr("sys.stderr", stream)
+    progress_events.progress("r\u00e8gle \U0001f680", 1, 1)
+    stream.flush()
+    line = raw.getvalue().decode("cp1252")
+    assert json.loads(line) == {
+        "event": "progress",
+        "step": "r\u00e8gle \U0001f680",
+        "done": 1,
+        "total": 1,
+    }
+
+
 def test_a_ticker_reports_in_batches_and_always_the_last_unit() -> None:
     received: list[dict[str, Any]] = []
     with progress_events.sink(received.append):
@@ -141,6 +161,17 @@ def test_validate_reports_objects_on_stderr_and_one_document_on_stdout(
     assert objects[-1]["done"] == total
     assert [event["done"] for event in objects] == sorted(event["done"] for event in objects)
     assert any(event["step"] == "queries" for event in events)
+
+
+def test_validate_query_offline_reports_its_queries(invoke_cli: Callable[..., Result]) -> None:
+    """The offline check sent no event, though the documentation lists `validate query`."""
+    result = invoke_cli("validate", "query", extra_env=PROGRESS)
+    document = _one_document(result)
+    queries = document["summary"]["queries"]
+    assert queries
+    assert _events(result.stderr) == [
+        {"event": "progress", "step": "queries", "done": queries, "total": queries}
+    ]
 
 
 def test_without_the_variable_validate_writes_no_event(invoke_cli: Callable[..., Result]) -> None:

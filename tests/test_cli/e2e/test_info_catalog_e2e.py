@@ -371,10 +371,17 @@ def test_a_file_whose_uuid_another_uses_keeps_a_row(invoke_cli, tide_corpus_repo
     assert f"{RULE_DIR}/rule-0002-defender-kql.yaml" in paths
     assert f"{RULE_DIR}/rule-zz-copy.yaml" in paths
     [duplicate] = [
-        row for row in catalog["objects"] if row["load_error"] and row["uuid"] == DEFENDER_RULE
+        row
+        for row in catalog["objects"]
+        if row["load_error"] and row["load_error"]["code"] == "duplicate_id"
     ]
-    assert duplicate["load_error"]["code"] == "duplicate_id"
     assert "rule-zz-copy.yaml" in duplicate["load_error"]["message"]
+    # The UUID is the kept object's: on the load-error row too, a reader keying rows by
+    # uuid lost one of them. The message names it.
+    assert duplicate["uuid"] is None
+    assert DEFENDER_RULE in duplicate["load_error"]["message"]
+    uuids = [row["uuid"] for row in catalog["objects"] if row["uuid"] is not None]
+    assert len(uuids) == len(set(uuids))
     assert catalog["summary"]["load_errors"] == 1
     assert catalog["status"] == "issues"
 

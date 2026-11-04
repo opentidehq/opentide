@@ -1064,6 +1064,10 @@ def validate_query_offline(
     lines: dict[Path, list[str]] = {}
     checks = [check for check in run.checks if not is_placeholder_query(check, lines)]
     checks += [item for item in from_files if isinstance(item, QueryCheck)]
+    from opentide.core import progress_events
+
+    # The engine checks every query in one call: one event once it answered.
+    progress_events.progress("queries", len(checks), len(checks))
     unreadable = [
         Diagnostic(
             code="yaml_parse",

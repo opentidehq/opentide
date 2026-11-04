@@ -249,12 +249,14 @@ class RegistryBuilder:
                 json_index[identifier] = parse_json(schema_path.read_bytes())
             except (OSError, ValueError) as exc:
                 # A truncated or hand-broken artifact: every command would fail
-                # on it until regenerated. Skip it, and say which file it is.
-                logger.error(
+                # on it until regenerated. Skip it, and say which file it is. A
+                # warning: nothing but the MCP schema resource reads it, and an
+                # error would fail `generate`, the command that rewrites it.
+                logger.warning(
                     "could_not_read_schema_artifact",
                     path=_shown_path(str(schema_path)),
                     error=str(exc),
-                    advice="Run `opentide generate schemas` to rewrite it.",
+                    advice="Run `opentide generate schemas` or `opentide generate` to rewrite it.",
                 )
 
         return framework_paths, json_index
