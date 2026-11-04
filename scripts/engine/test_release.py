@@ -289,6 +289,15 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("--clobber", attach)
         self.assertNotIn("delete-asset", attach)
 
+    def test_verify_assets_may_read_the_attestations_and_write_nothing(self) -> None:
+        verify_assets = workflow_jobs()["verify-assets"]
+        permissions = re.search(r"^    permissions:\n((?:      .*\n)+)", verify_assets + "\n", re.M)
+        assert permissions is not None, "verify-assets states its permissions"
+        self.assertEqual(
+            sorted(permissions.group(1).split()),
+            sorted(["contents:", "read", "attestations:", "read"]),
+        )
+
     def test_the_published_assets_are_checked_against_every_line_of_the_sums(self) -> None:
         verify_assets = workflow_jobs()["verify-assets"]
         self.assertIn("python3 scripts/release.py verify-sums published", verify_assets)

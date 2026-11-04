@@ -305,8 +305,11 @@ jobs:
     needs: [verify, release]
     if: ${{ always() && needs.verify.result == 'success' && (needs.release.result == 'success' || (inputs.publish_only && needs.release.result == 'skipped')) }}
     runs-on: ubuntu-latest
+    # `gh attestation verify` reads the repository's attestations with this
+    # job's token.
     permissions:
       contents: read
+      attestations: read
     env:
       TAG: ${{ needs.verify.outputs.tag }}
     steps:
