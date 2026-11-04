@@ -99,3 +99,18 @@ def test_a_selection_that_matches_nothing_fails(
     assert missing in payload["message"]
     assert "plan" not in payload
     assert refuse_deployment_engines == []
+
+
+def test_a_bad_strategy_is_a_usage_error_before_the_selection_is_checked(
+    invoke_cli, refuse_deployment_engines: list[str]
+) -> None:
+    """A mistyped --strategy is the usage error (exit 2), even with a --uuid that selects
+    nothing: the run failed with exit 1 and the unmatched value instead."""
+    missing = "00000000-0000-4000-8003-0000000dead3"
+    result = invoke_cli("deploy", "--dry-run", "--strategy", "PREVEIW", "--uuid", missing)
+    assert result.exit_code == 2, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["failure"]["code"] == "usage_invalid_choice"
+    assert payload["failure"]["argument"] == "--strategy"
+    assert "unmatched" not in payload
+    assert refuse_deployment_engines == []

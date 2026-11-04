@@ -450,6 +450,18 @@ def _deploy(
     from opentide.platforms.plugins import EnabledPlatforms
 
     Opentide.reload()
+    # A usage error (exit 2) comes before a selection that matches nothing (exit 1).
+    try:
+        run = resolve_run_strategies(strategies)
+    except ValueError as exc:
+        return {
+            "status": "failed",
+            "message": str(exc),
+            "_exit_code": 2,
+            "_failure_code": USAGE_INVALID_CHOICE,
+            "_failure_argument": "--strategy",
+            "_failure_suggestion": strategy_suggestion(strategies),
+        }
     scope: RuleScope | None = None
     if uuids or files:
         from opentide.cli.services.validation import _selected_rule_scope
@@ -468,17 +480,6 @@ def _deploy(
                 "dry_run": dry_run,
                 "_exit_code": 1,
             }
-    try:
-        run = resolve_run_strategies(strategies)
-    except ValueError as exc:
-        return {
-            "status": "failed",
-            "message": str(exc),
-            "_exit_code": 2,
-            "_failure_code": USAGE_INVALID_CHOICE,
-            "_failure_argument": "--strategy",
-            "_failure_suggestion": strategy_suggestion(strategies),
-        }
     try:
         environment = CIEnvironment().environment
         local_debug = environment is CIEnvironment.CIPlatforms.LocalDebug
