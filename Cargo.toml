@@ -67,3 +67,10 @@ js-sys = "0.3"
 lto = true
 codegen-units = 1
 strip = "symbols"
+
+# Dependencies optimised in dev and test builds; workspace crates stay at
+# opt-level 0 so they compile fast and debug well. The tests spend most of their
+# time in toml, serde, regex and tree-sitter: this halves `cargo test`. The cost
+# is a slower cold build, which CI caches (Swatinem/rust-cache).
+[profile.dev.package."*"]
+opt-level = 2

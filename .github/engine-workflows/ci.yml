@@ -17,6 +17,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # Dependencies only: rust-cache drops the workspace crates before saving.
+      # Pushes to main and development save; pull requests restore theirs.
+      # `clients` and `elastic-sweep` build a subset of this debug tree and read
+      # the same cache, so the repository keeps one copy of it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dev
+          save-if: ${{ github.event_name == 'push' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.148
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -32,8 +43,12 @@ jobs:
         run: bash scripts/check-names.sh
       - name: skills
         run: bash scripts/validate-skills.sh
+      # nextest runs each test in its own process, across binaries at once
+      # (.config/nextest.toml); it does not run doctests.
       - name: test
-        run: cargo test --workspace
+        run: cargo nextest run --workspace --profile ci
+      - name: doctests
+        run: cargo test --workspace --doc
       - name: generate-highlights --check
         run: cargo run -p opentide-lsp -- generate-highlights --check
       - uses: actions/setup-node@v4
@@ -48,7 +63,7 @@ jobs:
         run: |
           for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
           node scripts/check-npm-packs.mjs
-      # The TypeScript client against the debug server `cargo test` built.
+      # The TypeScript client against the debug server the test step built.
       - name: lsp-client (stdio)
         env:
           OPENTIDE_LSP_BIN: target/debug/opentide-lsp
@@ -62,8 +77,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name == 'push' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.148
       - name: test (opentide-lsp, opentide-core)
-        run: cargo test -p opentide-lsp -p opentide-core
+        run: cargo nextest run -p opentide-lsp -p opentide-core --profile ci
 
   # Real clients against the server (#185 P2.8): pytest-lsp replays the
   # capabilities VS Code, Neovim and Emacs send and checks each response
@@ -75,6 +96,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dev
+          save-if: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -98,6 +123,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name == 'push' }}
       - name: cargo bench (opentide-analysis)
         run: |
           cargo bench -p opentide-analysis --bench analyze | tee bench.txt
@@ -110,6 +138,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name == 'push' }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -141,10 +172,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown, wasm32-wasip1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name == 'push' }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: cargo install --locked wasm-bindgen-cli --version 0.2.128
+      # The prebuilt release, not a 1-minute `cargo install`. The version must
+      # match the wasm-bindgen crate in Cargo.lock.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.128
       - run: bash scripts/build-wasm.sh
       # The TypeScript client's worker and wasi transports on what was just
       # built, compared with the native CLI.
@@ -176,6 +214,10 @@ jobs:
             rules_building_block
             hunting
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dev
+          save-if: false
       - name: detection-rules sweep
         env:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules

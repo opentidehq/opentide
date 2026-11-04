@@ -48,6 +48,10 @@ jobs:
           # setuptools-scm names the version from the tags.
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      # The nightly run saves; pull requests restore it.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

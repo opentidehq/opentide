@@ -1,0 +1,15 @@
+# cargo-nextest (https://nexte.st). CI runs `cargo nextest run --profile ci`;
+# locally `cargo test --workspace` stays the default and needs no install.
+# nextest does not run doctests: CI runs `cargo test --workspace --doc` beside it.
+
+[profile.default]
+# A test past 60s is reported as slow. The LSP stdio tests drive a child server,
+# and one that hangs would otherwise hold the run until the job times out.
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+[profile.ci]
+# Report every failing test, not just the first binary's.
+fail-fast = false
+# No retries: a flaky test is a bug to fix, not to hide.
+retries = 0
+failure-output = "immediate-final"
