@@ -520,10 +520,10 @@ def test_unparseable_proxy_fails_without_echoing_it(
 
 
 def test_vscode_settings_and_snippets(workspace: Path) -> None:
-    from opentide.cli.services.setup.vscode import build_yaml_schema_mappings
-
+    """#752: the check wants the extension recommended, and no yaml.schemas of opentide's."""
     checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
     assert checks["vscode_settings"].status == "skip"
+    assert "opentidehq.opentide" in checks["vscode_settings"].message
     assert checks["vscode_snippets"].status == "skip"
 
     vscode = workspace / ".vscode"
@@ -532,22 +532,56 @@ def test_vscode_settings_and_snippets(workspace: Path) -> None:
     settings.write_text("{not json", encoding="utf-8")
     invalid = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
     assert invalid["vscode_settings"].status == "warn"
-    assert "not valid JSON" in invalid["vscode_settings"].message
+    assert "settings.json is not valid JSON" in invalid["vscode_settings"].message
 
+    extensions = vscode / "extensions.json"
     settings.write_text('{"yaml.schemas": {"other.json": "x/**"}}', encoding="utf-8")
-    unmapped = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
-    assert unmapped["vscode_settings"].status == "warn"
+    extensions.write_text('{"recommendations": ["redhat.vscode-yaml"]}', encoding="utf-8")
+    other = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert other["vscode_settings"].status == "warn"
+    assert "does not recommend opentidehq.opentide" in other["vscode_settings"].message
 
-    settings.write_text('{"editor.tabSize": 2}', encoding="utf-8")
-    none = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
-    assert "maps no yaml.schemas" in none["vscode_settings"].message
-
-    mapped = {"yaml.schemas": build_yaml_schema_mappings(workspace=workspace)}
-    settings.write_text(json.dumps(mapped) + "\n// comment\n", encoding="utf-8")
+    extensions.write_text('{"recommendations": ["opentidehq.opentide"]}\n// c\n', "utf-8")
     (vscode / "model-templates.code-snippets").write_text("{}", encoding="utf-8")
     good = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
     assert good["vscode_settings"].status == "pass"
     assert good["vscode_snippets"].status == "pass"
+
+    # What earlier releases wrote: a YAML extension would report objects twice.
+    router = ".opentide/schemas/opentide.schema.json"
+    settings.write_text(json.dumps({"yaml.schemas": {router: "objects/**/*.yaml"}}), "utf-8")
+    mapped = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert mapped["vscode_settings"].status == "warn"
+    assert router in mapped["vscode_settings"].message
+    assert mapped["vscode_settings"].fix == "opentide setup vscode"
+
+    settings.write_text("{}", encoding="utf-8")
+    extensions.write_text("[oops", encoding="utf-8")
+    broken = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert broken["vscode_settings"].status == "warn"
+    assert "extensions.json is not valid JSON" in broken["vscode_settings"].message
+
+
+def test_mcp_config_says_the_extension_provides_the_server(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#752: with the extension recommended, VS Code agents get opentide without mcp.json."""
+    vscode = workspace / ".vscode"
+    vscode.mkdir()
+    (vscode / "extensions.json").write_text(
+        '{"recommendations": ["opentidehq.opentide"]}', encoding="utf-8"
+    )
+    alone = _only(doctor.check_mcp(_ctx(workspace)))
+    assert alone.status == "pass"
+    assert "opentidehq.opentide" in alone.message
+    assert "provides the opentide MCP server" in alone.message
+
+    _mcp(vscode / "mcp.json")
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    both = _only(doctor.check_mcp(_ctx(workspace)))
+    assert both.status == "pass"
+    assert both.message.startswith("MCP configured for VS Code")
+    assert "also provides the server to VS Code" in both.message
 
 
 def _mcp(path: Path, command: str = "opentide", args: list[str] | None = None) -> None:
@@ -715,11 +749,13 @@ def test_a_check_that_raises_reports_its_documented_codes(
 
     monkeypatch.setattr(doctor, "_configurations", boom)
     monkeypatch.setattr(
-        "opentide.cli.services.setup.vscode.build_yaml_schema_mappings",
-        lambda **kwargs: boom(None),  # ty: ignore[invalid-argument-type]
+        "opentide.cli.services.setup.vscode.is_opentide_schema_mapping",
+        lambda *args: boom(None),  # ty: ignore[invalid-argument-type]
     )
     (workspace / ".vscode").mkdir()
-    (workspace / ".vscode" / "settings.json").write_text("{}", encoding="utf-8")
+    (workspace / ".vscode" / "settings.json").write_text(
+        '{"yaml.schemas": {"a.json": "a/*.yaml"}}', encoding="utf-8"
+    )
     checks = doctor._guarded(doctor.check_vscode, _ctx(workspace))
     assert [(check.code, check.status) for check in checks] == [
         ("vscode_settings", "fail"),
@@ -856,27 +892,25 @@ def test_doctor_real_checks_offline_never_print_secrets(
 
 
 @pytest.mark.parametrize(
-    ("value", "status"),
-    [
-        ("objects/**/*.yaml", "pass"),
-        (["objects/**/*.yaml"], "pass"),
-        (["hunts/**/*.yaml", "./objects/**/*.yaml"], "pass"),
-        (["objects/rules/**/*.yaml"], "warn"),
-        ([], "warn"),
-        (3, "warn"),
-    ],
+    "value",
+    ["objects/**/*.yaml", ["objects/**/*.yaml"], ["hunts/**/*.yaml", "./objects/**/*.yaml"], []],
 )
-def test_vscode_settings_accepts_the_glob_as_a_string_or_in_a_list(
-    workspace: Path, value: object, status: str
+def test_vscode_settings_warns_on_the_router_mapping_as_a_string_or_in_a_list(
+    workspace: Path, value: object
 ) -> None:
-    """``["objects/**/*.yaml"]``, which the YAML extension accepts, warned (0.20.1 migration)."""
+    """The YAML extension takes the glob as a string or in a list: either form of the
+    router mapping makes it report what the opentide extension does (#752)."""
     from opentide.cli.services.setup.vscode import build_yaml_schema_mappings
 
     [schema] = build_yaml_schema_mappings(workspace=workspace)
     settings = workspace / ".vscode" / "settings.json"
     settings.parent.mkdir()
     settings.write_text(json.dumps({"yaml.schemas": {schema: value}}), encoding="utf-8")
+    (workspace / ".vscode" / "extensions.json").write_text(
+        json.dumps({"recommendations": ["opentidehq.opentide"]}), encoding="utf-8"
+    )
 
     checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
 
-    assert checks["vscode_settings"].status == status
+    assert checks["vscode_settings"].status == "warn"
+    assert schema in checks["vscode_settings"].message

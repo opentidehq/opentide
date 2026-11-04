@@ -233,7 +233,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`usage_unknown_option`](#usage_unknown_option) | The command line passes an option the command does not take. |
 | [`usage_watch_needs_tty`](#usage_watch_needs_tty) | `validate --watch` ran where nobody can watch it. |
 | [`vocab_unknown`](#vocab_unknown) | A value is not in the vocabulary its field uses. |
-| [`vscode_settings`](#vscode_settings) | `.vscode/settings.json` maps the object folders to the generated schemas. |
+| [`vscode_settings`](#vscode_settings) | The workspace recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and `.vscode/settings.json` maps no object files to opentide's JSON schemas in `yaml.schemas`. |
 | [`vscode_snippets`](#vscode_snippets) | The editor snippet file `opentide generate snippets` writes exists. |
 | [`workspace`](#workspace) | Where the workspace is, and how it was found. |
 | [`workspace_not_found`](#workspace_not_found) | `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one. |
@@ -2541,7 +2541,7 @@ Use a value of the TLP vocabulary: `clear`, `green`, `amber`, `amber+strict` or 
 
 An MCP configuration from `opentide setup mcp` runs `opentide mcp start`.
 
-Reported by `opentide doctor`. Warns when no configuration has such a server, or its command is not on `PATH`; skipped when there is no configuration.
+Reported by `opentide doctor`. Warns when no configuration has such a server, or its command is not on `PATH`; skipped when there is no configuration. Passes without one when `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), which provides the opentide MCP server to VS Code; with both, the message says so, since `.vscode/mcp.json` then serves teammates without the extension.
 
 ### Example
 
@@ -3172,7 +3172,7 @@ severity: 3          # must be one of the severity names
 
 ### How to fix
 
-The message is the schema's own (a missing required field, a wrong type, an unknown key). The location points at the field, or at the mapping it belongs in when the field is missing. Compare the object with the template under `.opentide/templates/`, or let your editor validate it against the generated JSON schema (`opentide setup vscode`). A `metadata.schema` that names no registered revision, or another object type, is reported with this code as well.
+The message is the schema's own (a missing required field, a wrong type, an unknown key). The location points at the field, or at the mapping it belongs in when the field is missing. Compare the object with the template under `.opentide/templates/`, or let the opentide VS Code extension check it as you type (`opentide setup vscode` recommends it). A `metadata.schema` that names no registered revision, or another object type, is reported with this code as well.
 
 ## schemas_fresh
 
@@ -3943,24 +3943,26 @@ metadata:
 
 ### How to fix
 
-Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` only when the two spell the same word (they differ in case, spaces, `-` or `_`) and hold no digit, so an ATT&CK id is never replaced unreviewed. Your editor completes vocabulary values from the generated schemas (`opentide setup vscode`).
+Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` only when the two spell the same word (they differ in case, spaces, `-` or `_`) and hold no digit, so an ATT&CK id is never replaced unreviewed. The opentide VS Code extension completes vocabulary values (`opentide setup vscode` recommends it).
 
 ## vscode_settings
 
-`.vscode/settings.json` maps the object folders to the generated schemas.
+The workspace recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and `.vscode/settings.json` maps no object files to opentide's JSON schemas in `yaml.schemas`.
 
-Reported by `opentide doctor`. The object glob may be a string (`"objects/**/*.yaml"`) or a list that holds it, among other globs (`["objects/**/*.yaml", "hunts/**/*.yaml"]`), as the YAML extension accepts both. Warns when it maps something else or is not valid JSON; skipped when the file does not exist.
+The extension's language server checks object files. A `yaml.schemas` mapping to `.opentide/schemas/opentide.schema.json`, which earlier releases wrote, makes a YAML extension report the same problems a second time.
+
+Reported by `opentide doctor`. Warns when `settings.json` maps objects to opentide's schemas (the globs written as a string or as a list, as the YAML extension accepts both), when `extensions.json` does not recommend the extension, or when either file is not valid JSON; skipped when there is no `.vscode/extensions.json`.
 
 ### Example
 
 ```text illustrative
-○ No .vscode/settings.json: editors get no schema completion · vscode_settings
+! .vscode/settings.json maps objects to .opentide/schemas/opentide.schema.json in yaml.schemas: a YAML extension would report what the opentide extension already does · vscode_settings
   → opentide setup vscode
 ```
 
 ### How to fix
 
-Run `opentide setup vscode`.
+Run `opentide setup vscode`. It recommends the extension and removes opentide's `yaml.schemas` entries, keeping your other settings.
 
 ## vscode_snippets
 

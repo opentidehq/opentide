@@ -161,7 +161,7 @@ def test_setup_scripted_full_flags(tmp_path: Path, mock_skill_download) -> None:
     )
     assert result.exit_code == 0
     assert (tmp_path / ".github" / "workflows" / "opentide.yml").is_file()
-    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / ".vscode" / "extensions.json").is_file()
 
     mcp_result = runner.invoke(
         app,
@@ -347,7 +347,8 @@ def test_setup_vscode_flags(tmp_path: Path) -> None:
         ["--json", "setup", "vscode", str(tmp_path), "--settings", "--no-merge"],
     )
     assert result.exit_code == 0
-    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / ".vscode" / "extensions.json").is_file()
+    assert not (tmp_path / ".vscode" / "settings.json").exists()
 
 
 def test_setup_vscode_snippets_success_message(tmp_path: Path, monkeypatch) -> None:

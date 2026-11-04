@@ -9,10 +9,12 @@ entry it came from by :func:`annotate`, which adds keys and never changes one. S
 Positions are 1-based. Columns count Unicode code points, as Python
 indexes a ``str``: ``🔥`` is one column. A SARIF or LSP consumer that wants
 UTF-16 code units converts (SARIF ``columnKind: "unicodeCodePoints"`` says
-it as is). ``end_column`` is the column just after the last character, so
-``end_column - column`` is the length of a one-line span, and an edit
-replaces the text from (``line``, ``column``) up to (``end_line``,
-``end_column``).
+it as is). A span runs from (``line``, ``column``) up to (``end_line``,
+``end_column``): ``end_line`` is the line of its last character, equal to
+``line`` for a one-line span, and ``end_column`` the column just after that
+character, on ``end_line``. So ``end_column - column`` is the length of a
+one-line span, and an edit replaces the text from (``line``, ``column``) up
+to (``end_line``, ``end_column``).
 
 ``line`` is where the frame points, which is not always ``yaml_line + 1``:
 for a block value (a mapping or a list) it is the line of its key, while
@@ -39,7 +41,16 @@ if TYPE_CHECKING:
 Severity = Literal["error", "warning", "note"]
 
 #: Keys :func:`annotate` adds to a JSON finding. Keys the finding has keep their value.
-DIAGNOSTIC_FIELDS = ("path", "line", "column", "end_column", "help", "fix", "explain")
+DIAGNOSTIC_FIELDS = (
+    "path",
+    "line",
+    "column",
+    "end_line",
+    "end_column",
+    "help",
+    "fix",
+    "explain",
+)
 
 #: Codes whose ``suggestion`` is a replacement value for the one at fault.
 VALUE_SUGGESTION_CODES = frozenset(
@@ -144,8 +155,9 @@ class Fix:
 class Diagnostic:
     """One finding, in the shape every renderer reads.
 
-    ``line``, ``column`` and ``end_column`` follow the module docstring: 1-based,
-    code points, ``end_column`` exclusive, a block value at its key.
+    ``line``, ``column``, ``end_line`` and ``end_column`` follow the module
+    docstring: 1-based, code points, ``end_column`` exclusive and on
+    ``end_line``, a block value at its key.
     """
 
     code: str
@@ -158,6 +170,8 @@ class Diagnostic:
     line: int | None = None
     column: int | None = None
     end_column: int | None = None
+    #: The line ``end_column`` is on; ``None`` for a span on ``line`` alone.
+    end_line: int | None = None
     field_path: tuple[str, ...] = ()
     help: str | None = None
     fix: Fix | None = None
@@ -172,12 +186,30 @@ class Diagnostic:
     def explain(self) -> str:
         return explain_command(self.code)
 
+    @property
+    def last_line(self) -> int | None:
+        """The line the span ends on: ``end_line``, or ``line`` for a one-line span."""
+        return self.line if self.end_line is None else self.end_line
+
+    @property
+    def multiline(self) -> bool:
+        return self.line is not None and self.last_line != self.line
+
+    @property
+    def single_line_end(self) -> int | None:
+        """``end_column`` on ``line``: a frame underlines one line, so a longer span is its
+        first character there."""
+        if not self.multiline:
+            return self.end_column
+        return None if self.column is None else self.column + 1
+
     def fields(self) -> dict[str, Any]:
         """The values of :data:`DIAGNOSTIC_FIELDS`."""
         return {
             "path": self.path,
             "line": self.line,
             "column": self.column,
+            "end_line": self.last_line,
             "end_column": self.end_column,
             "help": self.help,
             "fix": None if self.fix is None else self.fix.to_dict(),
@@ -785,6 +817,7 @@ def diagnostic_from_lint_finding(
     line: int | None = finding.get("line")
     column: int | None = finding.get("column")
     end_column: int | None = finding.get("end_column")
+    end_line: int | None = finding.get("end_line")
     if column is not None and end_column is None:
         end_column = column + 1
     yaml_line = finding.get("yaml_line")
@@ -799,6 +832,7 @@ def diagnostic_from_lint_finding(
     if code == LINT_CODES["parse"] and (frame := _yaml_parse_frame(file_path, sources)):
         message, span, parse_notes = frame
         line, column, end_column = span.line, span.column, span.end_column
+        end_line = None
         notes.extend(parse_notes)
     help_text: str | None = None
     expected = finding.get("expected")
@@ -824,6 +858,7 @@ def diagnostic_from_lint_finding(
         line=line,
         column=column,
         end_column=end_column,
+        end_line=None if end_line == line else end_line,
         field_path=field_path,
         help=help_text,
         notes=tuple(notes),
@@ -871,10 +906,11 @@ def diagnostic_from_engine(
 ) -> Diagnostic:
     """An engine finding (a query or editor diagnostic) as a diagnostic.
 
-    The engine gives positions already. A finding that spans lines is framed
-    on its first line. Its ``suggestion`` becomes the help line: ``did you
-    mean …?`` for an unknown or deprecated name, the step to take otherwise;
-    without one, the language reference or the code's ``opentide explain``.
+    The engine gives positions already, kept whole: a finding that spans
+    lines has its ``end_line``, and is framed on its first line. Its
+    ``suggestion`` becomes the help line: ``did you mean …?`` for an unknown
+    or deprecated name, the step to take otherwise; without one, the
+    language reference or the code's ``opentide explain``.
     """
     from opentide.analysis import DECLARED_DATASET_CODES
 
@@ -899,7 +935,8 @@ def diagnostic_from_engine(
         file_path=file_path,
         line=finding.line,
         column=finding.column,
-        end_column=finding.single_line_end,
+        end_column=finding.end_column,
+        end_line=None if finding.end_line == finding.line else finding.end_line,
         field_path=finding.field_path,
         help=help_text,
     )

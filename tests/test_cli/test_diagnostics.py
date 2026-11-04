@@ -519,6 +519,7 @@ def test_to_dict_is_the_whole_diagnostic() -> None:
         "path": None,
         "line": None,
         "column": None,
+        "end_line": None,
         "end_column": None,
         "help": None,
         "fix": None,

@@ -233,7 +233,7 @@ def language_server_report() -> LanguageServerReport:
                     path=path,
                     line=item.line,
                     column=item.column,
-                    end_column=item.end_column,
+                    end_column=item.single_line_end,
                     field_path=tuple(item.field_path),
                     help=item.help,
                     source=LANGUAGE_SERVER,

@@ -286,7 +286,17 @@ def test_lint_cli_strict(tmp_path: Path) -> None:
 
 
 #: Keys every finding gains for the diagnostic contract.
-DIAGNOSTIC_KEYS = ("code", "field_path", "line", "column", "end_column", "help", "fix", "explain")
+DIAGNOSTIC_KEYS = (
+    "code",
+    "field_path",
+    "line",
+    "column",
+    "end_line",
+    "end_column",
+    "help",
+    "fix",
+    "explain",
+)
 
 _NO_METADATA = """\
 name: Simulated Actor
@@ -311,6 +321,7 @@ def test_lint_metadata_finding_carries_uuid_severity_and_line(tmp_path: Path) ->
         "field_path": ["metadata"],
         "line": 3,
         "column": 1,
+        "end_line": 3,
         "end_column": 9,
         "help": "add the missing keys under metadata",
         "fix": None,
@@ -340,6 +351,7 @@ def test_lint_filename_finding_carries_uuid_and_severity(tmp_path: Path) -> None
         "field_path": [],
         "line": None,
         "column": None,
+        "end_line": None,
         "end_column": None,
         "help": "rename it to objects/threats/simulated-actor.yaml",
         "fix": None,
@@ -407,6 +419,7 @@ name: {name}
         "field_path": ["name"],
         "line": 3,
         "column": 1,
+        "end_line": 3,
         "end_column": 5,
         "help": "add a name: the file name is derived from it",
         "fix": None,
@@ -437,6 +450,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "field_path": ["metadata"],
                 "line": 2,
                 "column": 1,
+                "end_line": 2,
                 "end_column": 9,
                 "help": "add the missing keys under metadata",
                 "fix": None,
@@ -456,6 +470,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "field_path": [],
                 "line": None,
                 "column": None,
+                "end_line": None,
                 "end_column": None,
                 "help": "rename it to objects/threats/simulated-actor.yaml",
                 "fix": None,
@@ -472,6 +487,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "field_path": ["name"],
                 "line": None,
                 "column": None,
+                "end_line": None,
                 "end_column": None,
                 "help": "add a name: the file name is derived from it",
                 "fix": None,
@@ -492,6 +508,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 # The frame points at where the document starts.
                 "line": 1,
                 "column": 1,
+                "end_line": 1,
                 "end_column": 16,
                 "help": None,
                 "fix": None,

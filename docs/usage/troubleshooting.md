@@ -302,7 +302,7 @@ Run [`generate`](../cli/generate.md) after cloning a repo, after upgrading the o
 
 ### Editor stopped validating YAML / "Matches multiple schemas"
 
-Routers generated up to `0.14.2` combined their branches with `oneOf` and no `else`, so every valid object matched several branches and the Red Hat YAML extension reported **Matches multiple schemas**. Those releases mapped each object folder to one revision schema instead, which flags valid `rule::1.1` rules because `objects/rules/**/*.yaml` pointed at `rule.1.0.schema.json`. Current releases generate a router that applies exactly one revision schema per object, and `opentide setup vscode` maps `objects/**/*.yaml` to it and removes the old per-folder mappings.
+Routers generated up to `0.14.2` combined their branches with `oneOf` and no `else`, so every valid object matched several branches and the Red Hat YAML extension reported **Matches multiple schemas**. Those releases mapped each object folder to one revision schema instead, which flags valid `rule::1.1` rules because `objects/rules/**/*.yaml` pointed at `rule.1.0.schema.json`. Current releases generate a router that applies exactly one revision schema per object. `opentide setup vscode` no longer maps any schema for the YAML extension: it removes the router and per-folder mappings earlier releases wrote, and recommends the opentide VS Code extension (`opentidehq.opentide`), whose language server checks objects.
 
 ```bash
 pip install --upgrade opentide
@@ -310,7 +310,7 @@ opentide generate schemas
 opentide setup vscode --settings --no-generate
 ```
 
-Then reload the YAML language server. If schemas are stale or missing:
+Then install the recommended opentide extension and reload the window. If schemas are stale or missing:
 
 ```bash
 opentide generate schemas

@@ -64,10 +64,3 @@ def render_agent_entrypoint(template_name: str, context: dict[str, str]) -> str:
     for key, value in values.items():
         text = text.replace("{" + key + "}", value)
     return text
-
-
-def load_yaml_schema_fragment() -> dict[str, object]:
-    path = setup_data_root() / "vscode" / "settings.fragment.json"
-    if not path.is_file():
-        raise SetupTemplateError("VS Code settings fragment missing")
-    return json.loads(path.read_text(encoding="utf-8"))

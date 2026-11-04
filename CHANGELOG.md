@@ -9,10 +9,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Added
 
 - **A wheel for Windows on Arm** (`cp310-abi3-win_arm64`, [#748](https://github.com/opentidehq/opentide/issues/748)). `pip install opentide` on Windows on Arm compiled opentide from its sdist, which needs Rust; it now installs a wheel with the engine compiled in, and a release is refused without one. cryptography, which the Azure SDK needs, publishes no Windows on Arm wheel after 46.0.3, so install with `pip install --only-binary cryptography opentide` on CPython 3.11 or later. See [Installation](docs/usage/installation.md#windows-and-powershell).
+- **Every `validate`, `validate query` and `lint` finding carries `end_line`** ([#755](https://github.com/opentidehq/opentide/issues/755)), the one-based line its span ends on: `line` for a span on one line, the real end of a query finding over several lines of a block scalar (a KQL bracket left open, an unterminated ES|QL string). `end_column` is on `end_line`. SARIF regions carry `endLine`, and a GitHub annotation of such a finding has `endLine` and no `endColumn`. `opentide --json commands` names the key in each output schema.
 
 ### Changed
 
 - **`pip install opentide` no longer installs pandas or numpy** ([#747](https://github.com/opentidehq/opentide/issues/747)). They were most of the size of every install, for one code path: deploy and `deploy --dry-run` flattened a platform's tenant modifiers with `pandas.json_normalize`. They now use opentide's own function, which gives the keys pandas gave, so every deployed configuration is unchanged; a `[[modifiers]]` entry with an empty `modifications` table, which failed with `IndexError`, now changes nothing. `boto3` stays: the Carbon Black SDK imports it when it loads.
+- **`opentide setup vscode` sets up the opentide VS Code extension** ([#752](https://github.com/opentidehq/opentide/issues/752)). The extension (`opentidehq.opentide`) gives object files the language `opentide-yaml`, and its language server checks them.
+  - **Snippets** have `scope: "yaml,opentide-yaml"`, so `tide-rule`, `tide-sentinel` and the others complete in the extension's object files as well as in plain YAML. Run `opentide generate snippets` to rewrite them.
+  - **`setup vscode`** recommends `opentidehq.opentide` in `.vscode/extensions.json` instead of `redhat.vscode-yaml`, and writes no `yaml.schemas`: a YAML extension mapped to opentide's schemas reported every problem a second time. It removes the router mapping and the per-folder revision mappings earlier releases wrote to `.vscode/settings.json`, keeping every other setting and `yaml.schemas` entry, and no longer creates that file. An existing `redhat.vscode-yaml` recommendation is kept.
+  - **`doctor`'s `vscode_settings`** passes when `.vscode/extensions.json` recommends the extension, and warns when `settings.json` still maps objects to opentide's schemas.
+  - **MCP.** The extension provides the opentide MCP server to VS Code. When the extension is recommended, `setup mcp --vscode` and `setup vscode --mcp` say so (`"extension_mcp": true` and a `detail` note), since `.vscode/mcp.json` then serves teammates without it, and `doctor`'s `mcp_config` passes without that file.
+
+  **Upgrade:** run `opentide setup vscode --settings --no-generate` to drop the old `yaml.schemas` entry, and install the recommended extension.
+- **A query finding over several lines now ends where it ends** ([#755](https://github.com/opentidehq/opentide/issues/755)). Its `end_column` was one past its first character, on its first line, so a reader could not tell the span spanned lines; it is now the column after its last character, on the new `end_line`. A one-line finding is unchanged. The code frame still underlines the first line.
 
 ## [0.21.0] — 2026-11-03
 

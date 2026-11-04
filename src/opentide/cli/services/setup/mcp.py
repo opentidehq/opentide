@@ -117,6 +117,13 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
     }
     if skipped:
         result["skipped"] = skipped
+    if McpHost.vscode in options.hosts:
+        from opentide.cli.services.setup.vscode import EXTENSION_MCP_NOTE, recommends_extension
+
+        if recommends_extension(target):
+            # Not a warning: the file serves teammates without the extension.
+            result["extension_mcp"] = True
+            result["detail"] = EXTENSION_MCP_NOTE
     if McpHost.generic in options.hosts:
         result["advice"] = (
             "Copy opentide.mcp.json into your editor MCP settings or run "

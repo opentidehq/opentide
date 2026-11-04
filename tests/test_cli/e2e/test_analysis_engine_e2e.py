@@ -133,6 +133,82 @@ def test_a_broken_query_fails_with_a_frame_at_its_place(invoke_cli, tutorial: Pa
     assert "✗ 1 error in 1 file · 1 query checked" in human.output
 
 
+#: A parse error the engine spans from the open bracket to the next line (#755).
+UNCLOSED = "SecurityEvent\n| where (EventID == 4688\n| take 1"
+
+
+def test_a_finding_over_several_lines_carries_its_end_line(invoke_cli, tutorial: Path) -> None:
+    """#755: a finding had only line, column and end_column, so an editor could not
+    show a span over several lines of a block-scalar query."""
+    _set_query(tutorial / RULE, UNCLOSED)
+    lines = (tutorial / RULE).read_text(encoding="utf-8").splitlines()
+    for argv in (("validate",), ("validate", "query")):
+        payload = parse_cli_json(invoke_cli(*argv, repo=tutorial))
+        found = (
+            [*payload["report"]["issues"], *payload["report"]["warnings"]]
+            if argv == ("validate",)
+            else payload["diagnostics"]
+        )
+        (span,) = [item for item in found if item["code"] == "kql_parse_error"]
+        assert span["end_line"] == span["line"] + 1, span
+        assert lines[span["line"] - 1].rstrip().endswith("(EventID == 4688")
+        # end_column is on end_line: just inside the next line of the query.
+        assert 1 <= span["end_column"] <= len(lines[span["end_line"] - 1]) + 1
+        for item in found:
+            assert "end_line" in item, item
+            if item is not span and item["line"] is not None:
+                assert item["end_line"] >= item["line"], item
+
+    human = invoke_cli("validate", "query", repo=tutorial, json_output=False)
+    # The frame still underlines the first line only.
+    assert "error[kql_parse_error]" in human.output
+
+
+def test_every_lint_finding_carries_end_line(invoke_cli, tutorial: Path) -> None:
+    (tutorial / RULE).write_text(
+        (tutorial / RULE).read_text(encoding="utf-8") + "\n", encoding="utf-8"
+    )
+    _set_query(tutorial / RULE, SLOW_QUERY)
+    payload = parse_cli_json(invoke_cli("lint", repo=tutorial))
+    assert payload["findings"]
+    for item in payload["findings"]:
+        assert item["end_line"] == item["line"], item
+
+
+def test_lint_file_reports_only_that_files_findings(invoke_cli, tutorial: Path) -> None:
+    """An editor lints the file it saved: that file's findings, as a full run has them."""
+    _set_query(tutorial / RULE, SLOW_QUERY)
+    # A copy wants the original's file name, so its expected name has a UUID suffix.
+    copy = RULE.with_name("copied.yaml")
+    (tutorial / copy).write_text((tutorial / RULE).read_text(encoding="utf-8"), "utf-8")
+    whole = parse_cli_json(invoke_cli("lint", repo=tutorial))
+    paths = {item["path"] for item in whole["findings"]}
+    assert paths == {RULE.as_posix(), copy.as_posix()}, paths
+    assert "scope" not in whole
+
+    def only(path: Path) -> list[dict]:
+        return [item for item in whole["findings"] if item["path"] == path.as_posix()]
+
+    one = parse_cli_json(invoke_cli("lint", "--file", RULE.as_posix(), repo=tutorial))
+    assert one["findings"] == only(RULE)
+    assert one["scope"] == "selected"
+    assert not one.get("unmatched")
+    assert one["summary"]["files"] == 1
+
+    by_name = parse_cli_json(invoke_cli("lint", "--file", RULE.name, repo=tutorial))
+    assert by_name["findings"] == one["findings"]
+    absolute = invoke_cli("lint", "--file", str(tutorial / copy), repo=tutorial)
+    assert parse_cli_json(absolute)["findings"] == only(copy)
+    (renamed,) = [item for item in only(copy) if item["code"] == "filename_mismatch"]
+    assert renamed["expected"].startswith("objects/rules/sentinel-kql-rule-")
+
+    both = invoke_cli("lint", "--file", RULE.name, "--file", copy.name, repo=tutorial)
+    assert parse_cli_json(both)["findings"] == whole["findings"]
+
+
+SLOW_QUERY = "SecurityEvent\n| summarize count() by Account\n| where Account != ''"
+
+
 SLOW = "SecurityEvent\n| summarize count() by Account\n| where Account != ''"
 BROKEN = "SecurityEvent\n| wher EventID == 4688"
 

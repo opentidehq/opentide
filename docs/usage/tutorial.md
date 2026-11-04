@@ -48,7 +48,7 @@ opentide generate
 
 This is the output with `--no-color`, in a pipe or in CI: one line per finished phase, with the files it wrote, how long it took and where they went, then the outcome line. At a terminal the phases draw as a live checklist with a spinner on the running one. Phase lines go to stderr and the outcome line to stdout, so `opentide generate > log.txt` keeps the phases on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
 
-Your editor can now validate YAML under `objects/` because `opentide setup vscode` maps `objects/**/*.yaml` to the router, which applies the schema revision each object names in `metadata.schema`.
+`opentide setup vscode` recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`. With it, VS Code checks the YAML under `objects/` as you type, against the schema revision each object names in `metadata.schema`.
 
 ## 3. Author the threat
 
