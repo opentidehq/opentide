@@ -13,6 +13,7 @@ import logging
 from pathlib import Path
 
 import pytest
+from tests.corpus_support import clear_runtime_caches
 from tests.test_cli.e2e.helpers import write_tutorial_objects
 from typer.testing import CliRunner, Result
 
@@ -224,3 +225,21 @@ def test_a_model_that_does_not_validate_is_one_readable_line() -> None:
     )
     assert "pydantic.dev" not in text
     assert "DetectionRule_v1_1" not in text
+
+
+@pytest.mark.parametrize("command", [("generate", "schemas"), ("generate",)])
+def test_the_command_the_advice_names_repairs_a_broken_schema_artifact(
+    tmp_path: Path, command: tuple[str, ...]
+) -> None:
+    """An interrupted run leaves a schema that does not parse. `generate schemas`, which the
+    error names as the fix, rewrote it and still exited 1; `generate` failed at docs and
+    never reached schemas."""
+    repo = _tutorial(tmp_path)
+    assert _invoke(repo, "generate", "schemas").exit_code == 0
+    # The file paths.toml names: the registry reads it, and reports it when it is broken.
+    artifact = repo / ".opentide" / "schemas" / "rule.1.0.schema.json"
+    artifact.write_bytes(b"")
+    clear_runtime_caches()  # a new process reads the broken file
+    result = _invoke(repo, *command)
+    assert result.exit_code == 0, result.stdout + result.stderr
+    json.loads(artifact.read_text(encoding="utf-8"))
