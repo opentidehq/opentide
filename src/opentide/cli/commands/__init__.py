@@ -46,6 +46,13 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         rich_help_panel=AUTHOR,
     ),
     CommandSpec(
+        "query",
+        "opentide.cli.commands.query",
+        "query_cmd",
+        "Run a read-only query on platform tenants and show rows",
+        rich_help_panel=AUTHOR,
+    ),
+    CommandSpec(
         "lint",
         "opentide.cli.commands.lint",
         "lint_cmd",
@@ -112,7 +119,7 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "migrate",
         "opentide.cli.commands.migrate",
         "migrate_app",
-        "Migrate legacy repository layouts",
+        "Rewrite objects for a newer opentide model",
         rich_help_panel=WORKSPACE,
     ),
     CommandSpec(
@@ -153,6 +160,20 @@ ROOT_COMMANDS: tuple[CommandSpec, ...] = (
         "opentide.cli.mcp_app",
         "mcp_app",
         "Run the opentide MCP server for editors and agents",
+        rich_help_panel=AGENTS,
+    ),
+    CommandSpec(
+        "lsp",
+        "opentide.cli.lsp_app",
+        "lsp_app",
+        "Serve the language server for editors",
+        rich_help_panel=AGENTS,
+    ),
+    CommandSpec(
+        "serve",
+        "opentide.cli.commands.serve",
+        "serve_cmd",
+        "Run CLI commands in one warm process, for editors",
         rich_help_panel=AGENTS,
     ),
     CommandSpec(

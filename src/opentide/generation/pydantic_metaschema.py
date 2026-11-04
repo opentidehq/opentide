@@ -31,14 +31,9 @@ _CORE_ROOT_EXTRAS_BASE: dict[str, dict[str, Any]] = {
         "title": "Detection Rule Schema",
         "description": "A detection rule defines how a detection opportunity is implemented.",
         "additionalProperties": False,
-        "required": ["name", "response", "description", "configurations"],
-        "anyOf": [{"required": ["metadata"]}, {"required": ["meta"]}],
+        "required": ["name", "metadata", "response", "description", "configurations"],
         "property_extras": {
             "metadata": {"tide.meta.definition": True},
-            "meta": {
-                "tide.meta.deprecation": "Use metadata keyword instead",
-                "tide.meta.definition": "metadata",
-            },
             "detection_model": {"tide.vocab": OBJECTIVE},
             "references": {"tide.meta.definition": True},
             "configurations": {
@@ -93,7 +88,7 @@ def resolve_definition_model(field: str, definition: object) -> type[TideModel]:
     """Model behind a ``tide.meta.definition`` value on property *field*.
 
     ``True`` means the shared model for *field* (``metadata`` → ``ObjectMetadata``).
-    A ``DEFINITION_MODELS`` key aliases another field's model (legacy ``meta``).
+    A ``DEFINITION_MODELS`` key names another field's model.
     ``module:QualName`` names a revision-specific model, such as ``RuleMetadata``
     for ``rule::1.1``.
     """

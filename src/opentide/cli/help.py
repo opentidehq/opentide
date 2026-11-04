@@ -18,7 +18,9 @@ MAX_SUMMARY = 60
 SUMMARIES: dict[str, str] = {
     "mcp": "Run the opentide MCP server for editors and agents",
     "mcp start": "Serve MCP on stdio until the host closes stdin",
-    "validate query": "Check rule queries on the platforms' tenants (needs --live)",
+    "lsp start": "Serve LSP on stdio until the editor closes stdin",
+    "serve": "Run CLI commands in one warm process, for editors",
+    "validate query": "Check rule queries offline, or on the tenants (--live)",
     "new threat": "Scaffold a threat",
     "new objective": "Scaffold a detection objective",
     "new rule": "Scaffold a detection rule",
@@ -51,7 +53,6 @@ SUMMARIES: dict[str, str] = {
     "generate extract elastic": "Import Elastic Security detection rules",
     "generate inflight prune": "Remove inflight shards already on the default branch",
     "deploy migrate-state": "Move vendor ids from rules into deployment state",
-    "migrate objects": "Move a legacy layout into objects/ and .opentide/",
     "migrate vocab-scope": "Re-prefix stage-scoped vocabulary values",
 }
 
@@ -60,6 +61,12 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "": ("opentide setup", "opentide validate", "opentide --json validate"),
     "lint": ("opentide lint", "opentide lint --fix"),
     "info": ("opentide info", "opentide info --platform sentinel"),
+    "query": (
+        "opentide query --platform sentinel 'SecurityEvent | take 10'",
+        "opentide query --platform splunk --rule <rule-uuid> --tenant all --since 7d",
+        "opentide query --platform elastic --language eql --index 'logs-*' --format jsonl "
+        "'process where process.name == \"cmd.exe\"'",
+    ),
     "new": ('opentide new threat --name "Credential Dumping"',),
     "explorer": ("opentide explorer serve", "opentide explorer build --base-path /detections"),
     "explorer build": (
@@ -82,9 +89,13 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "commands": ("opentide commands", "opentide --json commands"),
     "mcp": ("opentide mcp start",),
     "mcp start": ("opentide mcp start",),
+    "lsp": ("opentide lsp start",),
+    "lsp start": ("opentide lsp start",),
+    "serve": ("opentide serve",),
     "setup": (
         "opentide setup",
         'opentide setup --yes --name "Detections" --platform sentinel --ci github',
+        "opentide setup --plan --platform sentinel --mcp vscode --hooks --env",
     ),
     "setup repo": ('opentide setup repo --yes --name "Detections" --platform sentinel',),
     "setup platforms": ("opentide setup platforms --sentinel --splunk --yes",),
@@ -121,15 +132,23 @@ EXAMPLES: dict[str, tuple[str, ...]] = {
     "generate extract elastic": ("opentide generate extract elastic --space default",),
     "generate inflight": ("opentide generate inflight",),
     "generate inflight prune": ("opentide generate inflight prune",),
-    "validate": ("opentide validate", "opentide validate --strict --type rule"),
-    "validate query": ("opentide validate query --platform sentinel --live",),
+    "validate": (
+        "opentide validate",
+        "opentide validate --strict --type rule",
+        "opentide validate --queries warn",
+    ),
+    "validate query": (
+        "opentide validate query",
+        "opentide validate query --platform splunk --changed",
+        "opentide validate query --file hunting/lsass.kql",
+        "opentide validate query --platform sentinel --live",
+    ),
     "deploy": (
         "opentide deploy --strategy PREVIEW --all --dry-run",
         "opentide deploy --strategy RELEASE",
     ),
     "deploy migrate-state": ("opentide deploy migrate-state",),
-    "migrate": ("opentide migrate objects", "opentide migrate objects --apply"),
-    "migrate objects": ("opentide migrate objects", "opentide migrate objects --apply"),
+    "migrate": ("opentide migrate vocab-scope", "opentide migrate vocab-scope --apply"),
     "migrate vocab-scope": ("opentide migrate vocab-scope", "opentide migrate vocab-scope --apply"),
 }
 

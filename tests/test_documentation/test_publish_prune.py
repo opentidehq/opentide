@@ -56,7 +56,9 @@ def test_prune_keeps_a_live_page_under_another_spelling(tmp_path: Path) -> None:
     rules.mkdir()
     live = rules / "live-rule.md"
     live.write_text(PAGE.format(name="Live rule", uuid="u1"), encoding="utf-8")
-    os.link(live, rules / "Live-Rule.md")
+    alias = rules / "Live-Rule.md"
+    if not alias.exists():  # a case-sensitive file system: give the page a second spelling
+        os.link(live, alias)
 
     assert prune_stale_pages(_ctx(tmp_path), _catalog(("u1", "Live rule"))) == []
     assert (rules / "Live-Rule.md").exists()

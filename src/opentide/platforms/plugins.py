@@ -13,7 +13,7 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import structlog
 
@@ -22,6 +22,9 @@ from opentide.models.rule import DetectionRule
 
 # CrowdStrike and HarfangLab ship no validator module: `can_validate is False`.
 from opentide.validation.query_platforms import QUERY_VALIDATION_PLATFORMS
+
+if TYPE_CHECKING:
+    from opentide.query.check import LiveCheckReport
 
 logger = structlog.get_logger("opentide.platforms.plugins")
 
@@ -54,8 +57,16 @@ class QueryValidator(ValidationEngine, ABC):
         self,
         mdr_deployment: Sequence[DetectionRule] | Sequence[str],
         strategies: RunStrategies | None = None,
-    ) -> None:
-        """Validate that queries can be executed on the target platform."""
+        *,
+        timeout: float | None = None,
+    ) -> LiveCheckReport:
+        """Check on the platform's tenants that each rule's queries run there.
+
+        Returns one verdict per rule, query and tenant; a refused query, or
+        one with no answer within *timeout* seconds (default:
+        :func:`~opentide.query.check.check_timeout`), is a failed check in the
+        report, not an exception.
+        """
 
 
 def resolve_rules(rules: Sequence[DetectionRule] | Sequence[str]) -> list[DetectionRule]:
@@ -242,15 +253,8 @@ def _class_name(system_key: str) -> str:
     return "".join(part.capitalize() for part in system_key.split("_"))
 
 
-PluginTide = PlatformEngineBase
-DeployEngine = PlatformEngine
-DeployMDR = RuleDeployer
-ValidateQuery = QueryValidator
-PluginEnginesLoader = PlatformLoader
-
-
-class DeployTide:
-    """Deprecated — use Opentide.Platforms."""
+class EnabledPlatforms:
+    """Deployers and query validators of the platforms the workspace enables."""
 
     @staticmethod
     def _enabled_keys() -> set[str]:
@@ -285,7 +289,6 @@ class DeployTide:
         return cast(dict[str, QueryValidator], PlatformLoader().query_validators(only=[platform]))
 
 
-PlatformsRegistry = DeployTide
 _PLATFORM_PKG: dict[str, str] = {
     "carbon_black_cloud": "carbon_black",
     "defender_for_endpoint": "defender_for_endpoint",
@@ -295,6 +298,7 @@ _PLATFORM_PKG: dict[str, str] = {
     "sentinel": "sentinel",
     "splunk": "splunk",
     "elastic": "elastic",
+    "sysdig": "sysdig",
 }
 
 

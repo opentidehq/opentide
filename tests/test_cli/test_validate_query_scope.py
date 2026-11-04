@@ -108,7 +108,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_home: Path) -> Pat
     shutil.copytree(real_rules_folder(corpus), repo / "objects" / "rules")
     for family in ("objectives", "threats"):
         shutil.copytree(corpus / "objects" / family, repo / "objects" / family)
-    config = repo / ".opentide/configurations/systems/sentinel.toml"
+    config = repo / ".opentide/configurations/platforms/sentinel.toml"
     config.write_text(
         config.read_text(encoding="utf-8")
         + _tenant("Preview", "PREVIEW", PREVIEW_WORKSPACE)
@@ -136,6 +136,8 @@ def azure_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     identity.CredentialUnavailableError = type("CredentialUnavailableError", (Exception,), {})  # type: ignore[attr-defined]
     query = types.ModuleType("azure.monitor.query")
     query.LogsQueryClient = MagicMock(name="LogsQueryClient", return_value=client)  # type: ignore[attr-defined]
+    query.LogsQueryStatus = types.SimpleNamespace(SUCCESS="Success", PARTIAL="PartialError")  # type: ignore[attr-defined]
+    client.query_workspace.return_value = types.SimpleNamespace(status="Success", tables=[])
     exceptions = types.ModuleType("azure.core.exceptions")
     for name in ("ClientAuthenticationError", "HttpResponseError", "ServiceRequestError"):
         setattr(exceptions, name, type(name, (Exception,), {}))

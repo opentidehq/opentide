@@ -6,56 +6,29 @@ from pathlib import Path
 from typing import Any
 
 from opentide.core.root import get_data_root
-from opentide.package.paths import recomposition_platforms_root
+from opentide.package.paths import platform_templates_root
 from opentide.registry.discovery import client_configurations_dir, discover_workspace, opentide_dir
 
 
 def workspace_config(configs: dict[str, Any]) -> dict[str, Any]:
-    """Return paths config (``paths.toml``), falling back to legacy ``global.toml``."""
+    """Return the merged ``paths.toml`` document."""
     if "paths" in configs:
         return configs["paths"]
-    if "global" in configs:
-        return configs["global"]
-    raise KeyError("Bundled paths.toml or global.toml missing from configurations")
+    raise KeyError("Bundled paths.toml missing from configurations")
 
 
 def validate_paths_configuration(configs: dict[str, Any]) -> None:
-    """Validate the paths document `workspace_config` reads against `PathsConfiguration`.
-
-    That is merged `paths.toml`, which always ships; legacy `global.toml` only
-    when there is no `paths.toml`. A migrated CoreTIDE `global.toml` carries
-    keys no current code reads, and validating it would fail every command.
-    """
+    """Validate merged ``paths.toml`` against `PathsConfiguration`."""
     from opentide.models.configuration.loading import validate_configuration
     from opentide.models.configuration.paths import PathsConfiguration
 
-    key = "paths" if "paths" in configs else "global"
-    document = configs.get(key)
+    document = configs.get("paths")
     if isinstance(document, dict):
-        validate_configuration(PathsConfiguration, document, file_key=f"{key}.toml")
+        validate_configuration(PathsConfiguration, document, file_key="paths.toml")
 
 
 def _rel(base: Path, value: str) -> Path:
     return (base / value).resolve()
-
-
-def _schema_templates_rel(
-    paths_section: dict[str, Any],
-    *,
-    tide_legacy: dict[str, Any],
-    framework_legacy: dict[str, Any],
-    opentide_section: dict[str, Any],
-    key: str,
-    default: str,
-) -> str:
-    if opentide_section.get(key):
-        return str(opentide_section[key])
-    if framework_legacy.get(key):
-        return str(framework_legacy[key])
-    if tide_legacy.get("json_schemas" if key == "schemas" else "templates"):
-        legacy_key = "json_schemas" if key == "schemas" else "templates"
-        return str(tide_legacy[legacy_key])
-    return default
 
 
 def resolve_workspace_paths(
@@ -76,16 +49,10 @@ def resolve_workspace_paths(
     ot = opentide_dir(base)
 
     paths_section = cfg.get("paths", {})
-    objects = paths_section.get("objects") or paths_section.get("tide", {})
+    objects = paths_section.get("objects", {})
     opentide_paths = paths_section.get("opentide", {})
-    framework_legacy = paths_section.get("framework", {})
     exports = paths_section.get("exports", {})
     docs = paths_section.get("docs", {})
-    core_legacy = paths_section.get("core", {})
-    tide_legacy = paths_section.get("tide", {})
-
-    if not objects and tide_legacy:
-        objects = tide_legacy
 
     resolved: dict[str, Any] = {"_workspace_root": base, "opentide": ot}
 
@@ -94,47 +61,21 @@ def resolve_workspace_paths(
         if rel:
             resolved[key] = _rel(base, rel)
 
-    default_schemas = ".opentide/schemas/"
-    default_templates = ".opentide/templates/"
-    schemas_rel = _schema_templates_rel(
-        paths_section,
-        tide_legacy=tide_legacy,
-        framework_legacy=framework_legacy,
-        opentide_section=opentide_paths,
-        key="schemas",
-        default=default_schemas,
-    )
-    templates_rel = _schema_templates_rel(
-        paths_section,
-        tide_legacy=tide_legacy,
-        framework_legacy=framework_legacy,
-        opentide_section=opentide_paths,
-        key="templates",
-        default=default_templates,
-    )
-    exports_rel = exports.get("root") or tide_legacy.get("exports", ".opentide/exports/")
+    exports_rel = exports.get("root") or ".opentide/exports/"
     if not str(exports_rel).endswith("/"):
         exports_rel = f"{exports_rel}/"
 
-    resolved["json_schemas"] = _rel(base, schemas_rel)
-    resolved["templates"] = _rel(base, templates_rel)
+    resolved["json_schemas"] = _rel(base, opentide_paths.get("schemas") or ".opentide/schemas/")
+    resolved["templates"] = _rel(base, opentide_paths.get("templates") or ".opentide/templates/")
     resolved["exports"] = _rel(base, exports_rel)
     resolved["inflight"] = ot / "inflight"
 
-    resolved["docs_folder"] = _rel(base, docs.get("root", core_legacy.get("docs_folder", "docs/")))
-    resolved["rules_docs_folder"] = _rel(
-        base, docs.get("rules", core_legacy.get("rules_docs_folder", "docs/rules/"))
-    )
-    resolved["objectives_docs_folder"] = _rel(
-        base, docs.get("objectives", core_legacy.get("objectives_docs_folder", "docs/objectives/"))
-    )
-    resolved["threats_docs_folder"] = _rel(
-        base, docs.get("threats", core_legacy.get("threats_docs_folder", "docs/threats/"))
-    )
+    resolved["docs_folder"] = _rel(base, docs.get("root", "docs/"))
+    resolved["rules_docs_folder"] = _rel(base, docs.get("rules", "docs/rules/"))
+    resolved["objectives_docs_folder"] = _rel(base, docs.get("objectives", "docs/objectives/"))
+    resolved["threats_docs_folder"] = _rel(base, docs.get("threats", "docs/threats/"))
 
-    snippet = objects.get("snippet_file") or tide_legacy.get(
-        "snippet_file", ".vscode/model-templates.code-snippets"
-    )
+    snippet = objects.get("snippet_file") or ".vscode/model-templates.code-snippets"
     resolved["snippet_file"] = _rel(base, snippet)
     resolved["custom_configurations"] = client_configurations_dir(base)
 
@@ -142,21 +83,21 @@ def resolve_workspace_paths(
     resolved["resources"] = data_root / "external"
     resolved["log_sources"] = data_root / "log_sources"
     resolved["platform_configs"] = data_root / "configurations" / "platforms"
-    resolved["platform_templates"] = recomposition_platforms_root()
+    resolved["platform_templates"] = platform_templates_root()
     resolved["configurations"] = data_root / "configurations"
 
     artifacts = cfg.get("artifacts", {})
     resolved["_artifacts"] = {
-        "schemas": artifacts.get("schemas") or cfg.get("json_schemas", {}),
-        "templates": artifacts.get("templates") or cfg.get("templates", {}),
-        "exports": artifacts.get("exports") or cfg.get("exports", {}),
+        "schemas": artifacts.get("schemas", {}),
+        "templates": artifacts.get("templates", {}),
+        "exports": artifacts.get("exports", {}),
     }
 
     return resolved
 
 
 def legacy_path_aliases(paths: dict[str, Any]) -> dict[str, Any]:
-    """Nested path dict expected by legacy registry accessors."""
+    """Nested path dict the registry accessors read (``Paths.Tide``, ``Paths.Core``)."""
     tide_keys = (
         "threat",
         "objective",
@@ -177,8 +118,6 @@ def legacy_path_aliases(paths: dict[str, Any]) -> dict[str, Any]:
         "log_sources": paths["log_sources"],
         "platform_configs": paths["platform_configs"],
         "platform_templates": paths["platform_templates"],
-        # Legacy CoreTide name still referenced by snippet generation.
-        "subschemas": paths["platform_templates"],
         "docs_folder": paths["docs_folder"],
         "rules_docs_folder": paths["rules_docs_folder"],
         "objectives_docs_folder": paths["objectives_docs_folder"],

@@ -22,7 +22,7 @@ def test_mdr_configuration_resolver_returns_splunk_config(metadata: dict) -> Non
             "description": "desc",
             "configurations": {
                 "splunk": {
-                    "schema": "splunk::3.0",
+                    "schema": "platform::splunk::1.0",
                     "status": "STAGING",
                     "query": "index=main",
                 }
@@ -43,7 +43,7 @@ def test_mdr_configuration_resolver_returns_cbc_config(metadata: dict) -> None:
             "description": "desc",
             "configurations": {
                 "carbon_black_cloud": {
-                    "schema": "carbon_black_cloud::3.0",
+                    "schema": "platform::carbon_black_cloud::1.0",
                     "status": "STAGING",
                     "query": "process_name:cmd.exe",
                 }
@@ -72,7 +72,7 @@ def test_modifiers_resolver_skips_flat_savedsearches_keys(metadata: dict) -> Non
             "description": "desc",
             "configurations": {
                 "splunk": {
-                    "schema": "splunk::3.0",
+                    "schema": "platform::splunk::1.0",
                     "status": "STAGING",
                     "query": "index=main",
                     "scheduling": {
@@ -117,7 +117,11 @@ def test_tenants_resolver_names_the_platform_when_it_has_no_tenants(metadata: di
             "metadata": metadata,
             "description": "desc",
             "configurations": {
-                "splunk": {"schema": "splunk::3.0", "status": "STAGING", "query": "index=main"}
+                "splunk": {
+                    "schema": "platform::splunk::1.0",
+                    "status": "STAGING",
+                    "query": "index=main",
+                }
             },
         }
     )

@@ -1,4 +1,4 @@
-"""Pydantic-driven JSON Schema generation for core Tide models."""
+"""Pydantic-driven JSON Schema generation for the threat, objective and rule models."""
 
 from __future__ import annotations
 
@@ -76,10 +76,11 @@ def generate_model_schema(model: type[TideModel], *, enrich: bool = True) -> dic
 def export_schema_for_identifier(schema_id: str, output_path: Path) -> None:
     """Write JSON Schema for a registered identifier to disk."""
     schema = generate_schema_for_identifier(schema_id)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(schema, indent=4, sort_keys=False, default=str) + "\n",
-        encoding="utf-8",
+    from opentide.core.io import write_text_atomically
+
+    # Atomic: a truncated schema breaks every registry build until regenerated.
+    write_text_atomically(
+        output_path, json.dumps(schema, indent=4, sort_keys=False, default=str) + "\n"
     )
 
 

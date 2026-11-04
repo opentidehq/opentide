@@ -93,7 +93,7 @@ def test_registry_deployment_accessors_read_the_model() -> None:
         {"configurations": {"deployment": {"statuses": [_STATUS], "debug": {}}}}  # ty: ignore[invalid-argument-type]  # a plain dict stands in for the index snapshot
     )
     assert [status.name for status in accessor.statuses] == ["LIVE"]
-    assert accessor.debug == {"mdr_test_uuids": [], "ssl_enabled": True, "proxy_enabled": False}
+    assert accessor.debug == {"mdr_test_uuids": [], "ssl_enabled": True}
     assert accessor.model.promotion.enabled is True
 
 
@@ -152,19 +152,38 @@ def test_platform_error_never_repeats_a_secret() -> None:
     assert secret not in str(raised.value)
 
 
-def test_splunk_legacy_tables_are_accepted() -> None:
+@pytest.mark.parametrize(
+    ("platform", "document", "key"),
+    [
+        ("splunk", {"tide": {"identifier": "splunk"}}, "tide"),
+        ("splunk", {"setup": {"url": "u"}}, "setup"),
+        ("splunk", {"secrets": {"token": "$T"}}, "secrets"),
+        ("splunk", {"defaults": {"cron_schedule": "0 * * * *"}}, "defaults"),
+        ("splunk", {"modifiers": {}}, "modifiers"),
+        ("carbon_black_cloud", {"setup": {"url": "u"}}, "setup"),
+        ("carbon_black_cloud", {"secrets": {"org": {"token": "$T"}}}, "secrets"),
+        ("carbon_black_cloud", {"validation": {"organization": "o"}}, "validation"),
+        ("sentinel", {"platform": {"identifier": "sentinel"}}, "platform.identifier"),
+        ("sentinel", {"platform": {"subschema": "Microsoft Sentinel"}}, "platform.subschema"),
+        ("sentinel", {"platform": {"flags": [""]}}, "platform.flags"),
+    ],
+)
+def test_a_platform_file_without_tenants_tables_is_refused(
+    platform: str, document: dict, key: str
+) -> None:
+    """The tenant-less platform layouts are unknown keys, named in the error."""
     from opentide.platforms.config import validate_platform_config
 
-    validate_platform_config(
-        "splunk",
-        {
-            "tide": {"identifier": "splunk"},
-            "setup": {"url": "u"},
-            "secrets": {"token": "$T"},
-            "defaults": {"cron_schedule": "0 * * * *"},
-            "modifiers": {},
-        },
-    )
+    with pytest.raises(ConfigurationError, match=re.escape(key)):
+        validate_platform_config(platform, document)
+
+
+def test_a_tide_table_is_an_unknown_key() -> None:
+    """CoreTIDE's `[tide]` identity table is not a platform table (#736)."""
+    from opentide.platforms.config import validate_platform_config
+
+    with pytest.raises(ConfigurationError, match=re.escape("tide: unknown key")):
+        validate_platform_config("splunk", {"tide": {"identifier": "splunk"}})
 
 
 # --- paths.toml, documentation.toml, visibility.toml -----------------------------------
@@ -181,9 +200,7 @@ def test_workspace_paths_reject_an_unknown_key(tmp_path) -> None:
 def test_bundled_paths_resolve(tmp_path) -> None:
     from opentide.registry.paths import resolve_workspace_paths
 
-    paths = resolve_workspace_paths(
-        {"paths": _bundled("paths.toml"), "global": _bundled("global.toml")}, workspace=tmp_path
-    )
+    paths = resolve_workspace_paths({"paths": _bundled("paths.toml")}, workspace=tmp_path)
     assert paths["rule"] == (tmp_path / "objects" / "rules").resolve()
 
 

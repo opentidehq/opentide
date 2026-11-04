@@ -187,7 +187,7 @@ def test_download_skill_uses_manifest_ref(monkeypatch: pytest.MonkeyPatch, tmp_p
 def test_authoring_skills_install_from_the_package_when_github_is_down(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The skills repository still describes CoreTide. These four must not.
+    """The bundled authoring skills describe the current layout only.
 
     #405: installing the remote text taught agents ``mdr::2.1`` and
     ``Schemas/Templates``.
@@ -217,11 +217,12 @@ def test_authoring_skills_install_from_the_package_when_github_is_down(
     )
     assert "rule::1.1" in engineering
     assert "objects/rules/" in rule
-    # The retired schema may appear only as a prohibition, not as the layout to author.
-    assert "schema: mdr::" not in engineering
-    assert "Do not create" in engineering
-    assert "`mdr::2.1`" in engineering
-    assert "Schemas/Templates" not in rule
+    assert "opentide new" in engineering
+    assert "platform::<platform>::1.0" in rule
+    for text in (engineering, rule):
+        assert "mdr::" not in text
+        assert "Schemas/" not in text
+        assert "Configurations/systems" not in text
 
 
 def test_unavailable_skills_keeps_bundled_starters_when_github_is_down(
@@ -440,28 +441,36 @@ def test_bundled_reinstall_drops_stale_reference_files(tmp_path: Path) -> None:
     assert not (tmp_path / ".opentide-detection-rule.previous").exists()
 
 
-def test_install_cursor_replaces_existing_destination(tmp_path: Path) -> None:
+def test_install_cursor_keeps_a_file_the_user_added(tmp_path: Path) -> None:
     options = SkillsSetupOptions(path=tmp_path, targets=[SkillTarget.cursor], yes=True)
     run_skills_setup(options)
     dest = tmp_path / ".cursor" / "skills" / "opentide-detection-rule"
-    stale = dest / "stale.txt"
-    stale.write_text("old", encoding="utf-8")
-    run_skills_setup(options)
-    assert dest.is_dir()
-    assert not stale.exists()
+    notes = dest / "TEAM-NOTES.md"
+    notes.write_text("ours", encoding="utf-8")
+    (dest / "SKILL.md").write_text("edited", encoding="utf-8")
+    result = run_skills_setup(options)
+    assert notes.read_text(encoding="utf-8") == "ours"
+    # The files the skill ships are refreshed.
+    assert (dest / "SKILL.md").read_text(encoding="utf-8") != "edited"
+    warnings = result.get("warnings") or []
+    assert any("TEAM-NOTES.md" in str(w) and ".cursor/skills" in str(w) for w in warnings)
 
 
-def test_install_claude_replaces_existing_destination(tmp_path: Path) -> None:
+def test_install_claude_keeps_a_file_the_user_added(tmp_path: Path) -> None:
     options = SkillsSetupOptions(
         path=tmp_path, targets=[SkillTarget.claude_code], name="SOC", yes=True
     )
     run_skills_setup(options)
     dest = tmp_path / ".claude" / "skills" / "opentide-detection-rule"
-    stale = dest / "stale.txt"
-    stale.write_text("old", encoding="utf-8")
-    run_skills_setup(options)
-    assert dest.is_dir()
-    assert not stale.exists()
+    notes = dest / "TEAM-NOTES.md"
+    notes.write_text("ours", encoding="utf-8")
+    result = run_skills_setup(options)
+    assert notes.read_text(encoding="utf-8") == "ours"
+    assert (dest / "SKILL.md").is_file()
+    warnings = [str(w) for w in result.get("warnings") or []]
+    assert any(
+        "TEAM-NOTES.md" in w and ".claude/skills/opentide-detection-rule" in w for w in warnings
+    )
 
 
 def test_install_generic_renders_the_package_agents_template(
@@ -543,3 +552,70 @@ def test_setup_skills_rerun_skips_its_own_entrypoints_quietly(tmp_path: Path) ->
 
     assert again["skipped"] == ["CLAUDE.md"]
     assert "warnings" not in again
+
+
+@pytest.mark.parametrize("plan", [False, True])
+def test_skills_linked_to_agents_skills_stay_in_place(tmp_path: Path, plan: bool) -> None:
+    from typer.testing import CliRunner
+
+    from opentide.cli import app
+
+    (tmp_path / ".agents" / "skills").mkdir(parents=True)
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "skills").symlink_to(Path("..") / ".agents" / "skills")
+    flag = "--plan" if plan else "--yes"
+    result = CliRunner().invoke(
+        app, ["--json", "setup", "skills", "--claude-code", flag, "--path", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    skill = tmp_path / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md"
+    assert skill.is_file() is not plan
+    assert (tmp_path / ".claude" / "skills").is_symlink()
+
+
+@pytest.mark.parametrize("harness", [SkillTarget.cursor, SkillTarget.claude_code])
+def test_a_linked_file_in_a_skill_folder_is_replaced_not_written_through(
+    tmp_path: Path, harness: SkillTarget
+) -> None:
+    """The copy followed a link at a shipped path: it overwrote the file outside the
+    repository it pointed at, or failed (``shutil.Error``, same file) when it pointed at
+    ``.agents/skills``' own copy."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    options = SkillsSetupOptions(path=repo, targets=[harness], name="SOC", yes=True)
+    run_skills_setup(options)
+    folder = ".cursor" if harness is SkillTarget.cursor else ".claude"
+    dest = repo / folder / "skills" / "opentide-detection-rule"
+    outside = tmp_path / "mine.md"
+    outside.write_text("MY OWN VERSION\n", encoding="utf-8")
+    (dest / "SKILL.md").unlink()
+    (dest / "SKILL.md").symlink_to(outside)
+    result = run_skills_setup(options)
+    assert outside.read_text(encoding="utf-8") == "MY OWN VERSION\n"
+    assert not (dest / "SKILL.md").is_symlink()
+    shipped = repo / ".agents" / "skills" / "opentide-detection-rule" / "SKILL.md"
+    assert (dest / "SKILL.md").read_bytes() == shipped.read_bytes()
+    assert any("SKILL.md" in str(w) and "link" in str(w) for w in result.get("warnings") or [])
+
+    (dest / "SKILL.md").unlink()
+    (dest / "SKILL.md").symlink_to(
+        Path("../../..") / ".agents/skills/opentide-detection-rule/SKILL.md"
+    )
+    run_skills_setup(options)  # was shutil.Error: the same file
+    assert not (dest / "SKILL.md").is_symlink()
+    assert (dest / "SKILL.md").read_bytes() == shipped.read_bytes()
+
+
+def test_a_skill_folder_linked_out_of_the_repository_is_left_as_it_is(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    (repo / ".cursor" / "skills").mkdir(parents=True)
+    shared = tmp_path / "shared-skill"
+    shared.mkdir()
+    (shared / "SKILL.md").write_text("shared\n", encoding="utf-8")
+    (repo / ".cursor" / "skills" / "opentide-detection-rule").symlink_to(shared)
+    options = SkillsSetupOptions(path=repo, targets=[SkillTarget.cursor], yes=True)
+    result = run_skills_setup(options)
+    assert (shared / "SKILL.md").read_text(encoding="utf-8") == "shared\n"
+    assert sorted(path.name for path in shared.iterdir()) == ["SKILL.md"]
+    warnings = [str(w) for w in result.get("warnings") or []]
+    assert any(".cursor/skills/opentide-detection-rule" in w and "outside" in w for w in warnings)

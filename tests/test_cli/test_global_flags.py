@@ -122,7 +122,14 @@ def test_quiet_prints_only_the_outcome(tmp_path: Path) -> None:
             "sentinel",
             "validate query",
         ),
-        (("validate", "query"), "usage_missing_option", "--platform", None, "validate query"),
+        # The tenant check is one platform's: --live needs --platform (offline does not).
+        (
+            ("validate", "query", "--live"),
+            "usage_missing_option",
+            "--platform",
+            None,
+            "validate query",
+        ),
         (("info", "rulez"), "usage_invalid_choice", "section", "rules", "info"),
         (("validate", "--type", "rul"), "usage_invalid_choice", "--type", "rule", "validate"),
         (("generate", "schemaz"), "usage_invalid_choice", "phase", "schemas", "generate"),
@@ -139,8 +146,9 @@ def test_quiet_prints_only_the_outcome(tmp_path: Path) -> None:
             "deploy",
         ),
         (("deploy", "--dry-run", "--all"), "usage_missing_option", "--strategy", None, "deploy"),
+        # S1QL has no offline engine: the check is the tenant's.
         (
-            ("validate", "query", "--platform", "sentinel"),
+            ("validate", "query", "--platform", "sentinel_one"),
             "usage_missing_option",
             "--live",
             None,
@@ -197,11 +205,11 @@ def test_a_json_document_ends_with_exactly_one_newline(
 
 def test_missing_choice_option_is_one_line(tmp_path: Path) -> None:
     """Typer lists the choices one per line under ``Choose from:``; the contract folds them."""
-    result = _invoke("--repo", str(tmp_path), "--json", "validate", "query")
+    result = _invoke("--repo", str(tmp_path), "--json", "deploy", "metadata")
     message = _document(result)["message"]
     assert message.startswith("Missing option '--platform': choose from sentinel, splunk, ")
     assert "\n" not in message and "Choose from:" not in message
-    human = _invoke("--repo", str(tmp_path), "validate", "query")
+    human = _invoke("--repo", str(tmp_path), "deploy", "metadata")
     assert human.stderr.splitlines()[0] == f"error: {message}"
 
 

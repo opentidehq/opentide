@@ -11,6 +11,7 @@ Deploy the rules a run changed whose status maps to the run's `--strategy`, to t
 opentide deploy --strategy PREVIEW --dry-run          # pull or merge request job
 opentide deploy --strategy RELEASE --platform splunk  # default-branch job
 opentide deploy --strategy PREVIEW --strategy RELEASE --all --dry-run   # every rule file
+opentide --json deploy --dry-run --strategy PREVIEW --uuid <uuid>   # one rule
 ```
 
 Three things decide what is sent:
@@ -44,6 +45,8 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 |------|---------|
 | `--strategy` | Required, repeatable. `PREVIEW`: rules whose status maps to `PREVIEW` or `UNIVERSAL`. `RELEASE`: rules whose status maps to `RELEASE` or `UNIVERSAL`; also disables `DISABLEMENT` rules and deletes `DELETION` rules. Each rule goes to the tenants whose `strategies` accept the run's strategy. A status name such as `STAGING` is refused, and the message names the strategy it maps to |
 | `--all` | Read every rule file. Without it, deploy reads the rule files the run changed: the pull or merge request (from its merge base), the push, or outside CI the last commit |
+| `--uuid` | Read the rule with this `metadata.uuid` instead of the changed rules (repeatable, case-insensitive). See [Selecting rules](#selecting-rules) |
+| `--file` | Read this rule file instead of the changed rules (repeatable), matched as [`validate --file`](./validate.md) matches: a file name, or a path relative to the current directory or the workspace |
 | `--platform` | Target platform (see [platforms](../usage/concepts/platforms.md)) |
 | `--wide` | Deploy the rule files read whatever their status strategy, `INERT` included, to the tenants accepting the run's strategies. `DISABLEMENT` and `DELETION` still follow `--keep-deprecated` |
 | `--dry-run` | Simulate deployment without writes. `--json` lists the tenants each rule would reach |
@@ -51,6 +54,27 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--skip-promotion` | Skip the promotion step of a `RELEASE` run on a push |
 | `--skip-unconfigured` | Exit 0 when every platform with rules to deploy has no `[[tenants]]` block |
 | `--persist-state-externally` | In CI, allow a run other than `--strategy RELEASE` on a push to create Defender for Endpoint, SentinelOne and CrowdStrike rules. Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
+
+### Selecting rules
+
+`--uuid` and `--file` name the rules a run reads, in place of the rules the run changed: no git checkout or diff is read, and a `RELEASE` run skips status promotion, which applies to the diff. Both are repeatable and add up: `--uuid A --file b.yaml` reads both rules. The rest of the run is unchanged: each selected rule is planned on the platform blocks whose status a run strategy deploys (pass `--wide` to ignore the status), and goes to the tenants that accept the strategy. An editor's "preview deploy" of one rule is, for the [tutorial](../usage/tutorial.md)'s rule:
+
+```bash
+opentide --json deploy --dry-run --strategy PREVIEW --uuid 00000000-0000-4000-8003-000000000001
+```
+
+Its `plan` and `payloads` hold only that rule, and the document carries `"scope": "selected"`:
+
+```json output-of="opentide --json deploy --dry-run --strategy PREVIEW --uuid 00000000-0000-4000-8003-000000000001"
+{
+  "scope": "selected",
+  "dry_run": true,
+  "plan": { "sentinel": ["00000000-0000-4000-8003-000000000001"] }
+}
+```
+
+- With `--all`, either flag is a usage error: exit `2`, `failure.code` `usage_error`. `--all` reads every file; a selection reads some.
+- A value that selects no rule fails the run with exit `1` before anything is planned, and `unmatched` lists each one. A usage error, such as an unknown `--strategy`, is reported first (exit `2`). Candidates are the files directly in the rules folder, as for `--all`.
 
 `--plan` and `DEPLOYMENT_PLAN` were removed in 0.17.0. Either now fails with exit `2` and names the `--strategy` to pass: `STAGING` became `--strategy PREVIEW`, `PRODUCTION` became `--strategy RELEASE`, and `FULL` became `--strategy PREVIEW --strategy RELEASE --all`. A platform file whose tenant still sets `deployment` fails to load and names the `strategies` or `manual` line that replaces it ([migration table](../usage/concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier)).
 
@@ -71,9 +95,10 @@ sentinel · 0 tenants
 warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+dry run, nothing sent
 ```
 
-Defender for Endpoint, SentinelOne and CrowdStrike keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A real run ends with a counted outcome line, `✓ Deployed 3 rules to 2 tenants · 1 created, 2 updated · 12.4s`. Those counts are the plan: they are predicted from `.opentide/states/deployment/` and each rule's status before anything is sent, not reported back by the vendor. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
+Defender for Endpoint, SentinelOne and CrowdStrike keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule by its UUID whether it exists or not, and opentide does not claim either: their rows say `create or update`. A dry run ends with `dry run, nothing sent` after the tally and any next steps. A real run reports each rule as it is sent and ends with a counted outcome line; see [A real run](#a-real-run). Which rules were created and which updated is the plan: it is predicted from `.opentide/states/deployment/` and each rule's status before anything is sent, not reported back by the vendor. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
 
 ```bash
 opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -106,7 +131,7 @@ opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
 }
 ```
 
-`plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, a missing `grouping` or `grouping.alert`, or an empty `response` block with no `alert.severity`) is listed with `"status": "failed"`, a `code`, an `error` naming the cause, a `help`, and a null `api_request`. `diagnostics` holds one entry per such rule (`code`, `severity`, `message`, `help`, a workspace-relative `path`, `platform`, `uuid`, `name`), and the dry-run reports `failed` and exits `1`. The plan prints each one as a [code frame](./validate.md), like `validate` and `lint`, above its tally, which keeps no glyph:
+`plan` lists the rule UUIDs selected for each platform, and `strategies` the run's strategies. On a dry-run, `tenants` maps each platform to the tenants a real deploy would reach and the rules each would receive. `payloads` is present on dry-runs only; each rule's `api_request` (elided here) is the request body the deployer would send: the ARM alert-rule body for Sentinel, the Kibana rule body for Elastic, the `/api/secure/rules` body for Sysdig, and the rule's platform configuration block for the other platforms. A Sentinel rule that would fail to deploy (an unparseable duration, a missing `grouping` or `grouping.alert`, or an empty `response` block with no `alert.severity`) is listed with `"status": "failed"`, a `code`, an `error` naming the cause, a `help`, and a null `api_request`. `diagnostics` holds one entry per such rule (`code`, `severity`, `message`, `help`, a workspace-relative `path`, `platform`, `uuid`, `name`), and the dry-run reports `failed` and exits `1`. The plan prints each one as a [code frame](./validate.md), like `validate` and `lint`, above its tally, which keeps no glyph:
 
 ```text
 error[compile_empty_block]: 'response' is empty, so Sentinel cannot read 'alert_severity'
@@ -114,13 +139,100 @@ error[compile_empty_block]: 'response' is empty, so Sentinel cannot read 'alert_
   ╰─ help: set response.alert_severity, or configurations.sentinel.alert.severity
 
 Plan: 0 to create, 0 to update, 0 to disable, 0 to delete, 1 would fail
+dry run, nothing sent
 ```
 
 The rule's row in the plan reads `✗ would fail` instead of its action, and the tally counts it apart (`N would fail`, `summary.fail`; each such entry of `changes` has `"fails": true`), since a rule that cannot compile is created or updated nowhere.
 
 The codes are `compile_missing_field`, `compile_empty_block`, `compile_invalid_value`, `compile_invalid_rule` and `compile_failed`. A dry run sends nothing, so an unset `$VARIABLE` in a tenant's setup is a warning there (`a real deploy would need $AZURE_CLIENT_SECRET, which is unset`), not an error. The [tutorial](../usage/tutorial.md) scaffold leaves `[[tenants]]` commented out, so this dry-run previews the payload, leaves `deployed` empty, and warns that a real deploy would stop. After you uncomment a tenant, `deployed` lists the platform and the warning is gone. A real deploy returns the same envelope with `"dry_run": false` and no `payloads`. Non-zero [exit codes](./exit-codes.md) signal deployment errors.
 
+In a Sentinel body, `techniques` holds parent technique ids and `subTechniques` the sub-technique ids: an objective mapped to `T1556.009` is sent as `"techniques": ["T1556"]` and `"subTechniques": ["T1556.009"]`, because ARM rejects a sub-technique in `techniques`. The ids come from the rule's objective (its `mitre_attack`, otherwise its threats'), and when any resolve they replace `configurations.sentinel.alert.techniques` and `alert.tactics`; a sub-technique listed in `alert.techniques` is split the same way. A resolved sub-technique newer than ATT&CK v18 (`T1027.018`) is left out of `subTechniques` with a `dropping_sub_technique_newer_than_sentinel_attack` warning; its v18 parent is still sent. `alert.techniques` takes ATT&CK v18 ids only, the version Sentinel is aligned to ([A technique fails only under the Sentinel block](../usage/troubleshooting.md#a-technique-fails-only-under-configurationssentinelalerttechniques)). The rule's own `techniques` field is not sent. `opentide generate extract sentinel` lists each imported sub-technique in `alert.techniques` in place of its parent, so the rule redeploys with the same ids.
+
 When no rule the run read has a status mapping to its strategies, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
+
+## A real run
+
+A real run prints the plan's header and tally, then one line for each rule as the platform answers, so a CI log shows progress while a platform is slow, and the last line says which rule it is waiting on. The lines are append-only: no spinner and no carriage return unless stdout is a terminal, where the running rule is also shown on a live row that its result line replaces. The samples below are illustrative, not captured output: a real run needs a live tenant.
+
+```text illustrative
+Deploy plan · strategy PREVIEW · 1 platform, 1 tenant
+Plan: 0 to create, 0 to update, 14 to create or update, 0 to disable, 0 to delete
+
+Deploying to sentinel / contoso · 14 rules
+  [ 1/14] ✓ deployed  Sentinel KQL Rule                           0.4s
+  [ 2/14] ✓ deployed  Staging Promote Rule                        0.4s
+  [ 3/14] ✗ failed    Password spray from a single source IP      HTTP 400: Failed to parse query: syntax error near '|'
+  [ 4/14] · skipped   New service installed on domain controller  not attempted after a failure
+  ...
+✗ sentinel · 2 deployed, 1 failed, 11 not attempted · 1.2s
+✗ Deployment failed · 2 created or updated, 1 failed, 11 not attempted · 1.2s
+```
+
+| Line | Meaning |
+|------|---------|
+| `✓ created`, `✓ updated`, `✓ disabled`, `✓ deleted` | The platform accepted the rule. The word is the planned action. A platform that writes a rule by its UUID says `deployed`, since opentide cannot tell a create from an update |
+| `✗ failed` | The platform, or planning, refused the rule. The line carries the platform's own message and its HTTP status when it has one, so the cause is readable without a traceback. A long message continues on the lines below it on a terminal and stays on one line in a log |
+| `· skipped` | The rule was not sent, with the reason: an `INERT` status, a Sigma rule on a YARA tenant, a retirement of a rule that never reached the tenant (`external_id_missing`) |
+| `· skipped … not attempted after a failure` | An earlier rule failed and the run stopped before this one. Every rule and platform the run never reached is listed |
+
+When a deployer stops at the first rejected rule (Sentinel, Splunk, Carbon Black, Defender for Endpoint, SentinelOne, CrowdStrike and HarfangLab all do), the rules before it are deployed, it is `failed` and the rules after it are `not attempted`. Elastic and Sysdig fail a rule and carry on with the next, except for an authentication error, which fails the tenant. The run exits `1` after any failed rule, with `failure.code` `issues_found`. An error before any rule is sent, such as a tenant's credentials, has no rule to blame: every rule is `not attempted`, and the outcome line is the error.
+
+Every run ends with the platform's counts and one outcome line, passed or failed. The outcome line always counts `failed` and `not attempted` and ends with the elapsed time; it counts an action only when some rule had it:
+
+```text illustrative
+✓ Deployed 91 rules to 1 tenant · 91 created or updated · 0 failed, 0 not attempted · 1m56s
+```
+
+`--quiet` hides the lines of rules that were deployed or skipped, never a failure. With `--json`, stdout is still one document and nothing is printed for each rule: the document carries `results`, one entry for each rule and tenant of the plan, in the order they were sent, with the rules a failure never reached last, so a pipeline can post a job summary or retry only what failed:
+
+```bash
+opentide --json deploy --strategy PREVIEW --platform sentinel
+```
+
+```json illustrative
+{
+  "status": "failed",
+  "message": "Deployment failed · 2 created or updated, 1 failed, 11 not attempted · 1.2s",
+  "error": "Deployment to sentinel failed on Password spray from a single source IP: HTTP 400: Failed to parse query: syntax error near '|'",
+  "results": [
+    {
+      "id": "00000000-0000-4000-8003-000000000001",
+      "name": "Sentinel KQL Rule",
+      "platform": "sentinel",
+      "tenant": "contoso",
+      "action": "upsert",
+      "status": "deployed",
+      "seconds": 0.412,
+      "error": null,
+      "reason": null
+    },
+    {
+      "id": "00000000-0000-4000-8003-000000000402",
+      "name": "Password spray from a single source IP",
+      "platform": "sentinel",
+      "tenant": "contoso",
+      "action": "upsert",
+      "status": "failed",
+      "seconds": 0.353,
+      "error": "HTTP 400: Failed to parse query: syntax error near '|'",
+      "reason": null
+    },
+    {
+      "id": "00000000-0000-4000-8003-000000000403",
+      "name": "New service installed on domain controller",
+      "platform": "sentinel",
+      "tenant": "contoso",
+      "action": "upsert",
+      "status": "not_attempted",
+      "seconds": 0,
+      "error": null,
+      "reason": "not attempted after a failure"
+    }
+  ]
+}
+```
+
+`status` is `deployed`, `failed`, `skipped` or `not_attempted`; `action` is the plan's (`create`, `update`, `upsert`, `disable`, `delete`). `seconds` is how long the rule took, `0` when nothing was sent, and `null` for a platform whose engine does not report its rules one at a time (the rules count as deployed). The envelope's `summary` holds every count, present even when it is `0`: `create`, `update`, `upsert`, `disable`, `delete` (rules sent with that action), `failed`, `skipped`, `not_attempted`, `seconds`, `platforms` and `tenants`. `results` is absent on a dry run.
 
 ## Subcommands
 
@@ -183,6 +295,7 @@ error: Metadata deployment is not implemented for splunk
 - **`the tenant key 'deployment' was removed in 0.17.0`** — replace the tenant's `deployment` line as the message says: `STAGING` becomes `strategies = ["PREVIEW"]`, `PRODUCTION` becomes `strategies = ["RELEASE"]`, `ALWAYS` is dropped, `MANUAL` becomes `manual = true`.
 - **`--plan was removed` / `DEPLOYMENT_PLAN was removed`** — use `--strategy`, and unset `DEPLOYMENT_PLAN` in your CI variables. Regenerate the pipeline with `opentide setup ci <github|gitlab|azure>`.
 - **`deploy reads the rule files the last commit, push or pull request changed, which needs a git checkout`** — run inside the repository, or pass `--all`.
+- **`HEAD names no commit yet (a new repository or an orphan branch), so no file has changed`** — a repository fresh from `git init`, or a branch made with `git checkout --orphan`, has no last commit to read, so deploy reads no rule: it reports `skipped` with exit `0` and this warning, and contacts no platform. Commit the rules, or pass `--all` (or `--uuid`, `--file`). In CI the run's commit must be in the checkout, so there the run still fails with exit `1` (on a push whose diff base is read from `HEAD`: `The git repository at <path> has no commits yet`). Through 0.21.0 both failed with `b'HEAD'`.
 - **`warning: … rule file(s) in subfolders of objects/rules are not deployed`** — a rule file has to sit directly in `objects/rules/`. A file in a subdirectory is outside the rule catalogue and is not deployed. Move it up into `objects/rules/` to deploy it. In CI, the warning names only the subdirectory files the change touched.
 - **Platform not found**, or **`system_disabled_for_deploy`** in the log — the platform is not enabled in your workspace config. A disabled platform is never selected and its engine never loads, for every `--strategy` and with `--wide`, even when the rule's own block says `enabled: true`. The log names the command that enables it, such as `opentide setup platforms --defender-for-endpoint`. `opentide validate` reports such a block as a `platform_not_enabled` warning.
 - **`external_id_in_rule`** — the rule still carries `rule_id`, `rule_id_bundle` or `rule_id::<tenant>` on some platform block. Deploy leaves it out for every platform, `--dry-run` included, before any HTTP call, and the run exits `1`; other rules still deploy. Run [`deploy migrate-state`](#deploy-migrate-state) and commit the result.
@@ -208,7 +321,7 @@ result = rule.deploy("sentinel", dry_run=True)                       # as its st
 result = rule.deploy("sentinel", dry_run=True, strategies=["PREVIEW"])
 ```
 
-Without `strategies`, the rule is deployed by the run strategies that deploy the strategy its `sentinel` status maps to, to the tenants that accept them. MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run) deploys the same way.
+Without `strategies`, the rule is deployed by the run strategies that deploy the strategy its `sentinel` status maps to, to the tenants that accept them. MCP: `deploy_rule(uuid, platform, dry_run=True)` (defaults to dry-run) deploys the same way. On the command line, `deploy --uuid` does the same for one rule or several, with the dry run's rendered `payloads` ([Selecting rules](#selecting-rules)).
 
 ## Source
 

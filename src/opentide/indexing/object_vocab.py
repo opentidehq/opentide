@@ -164,7 +164,7 @@ def run() -> dict[str, Any]:
     """Build object vocabularies from the current in-memory index (no disk write)."""
     index = IndexManager.load()
     config = index["configurations"]
-    global_config = config["global"]
+    global_config = config["paths"]
     doc_config = config.get("documentation", {})
     icons = doc_config.get("icons", {})
     object_names = doc_config.get("object_names", {})

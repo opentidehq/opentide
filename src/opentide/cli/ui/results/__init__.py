@@ -28,13 +28,14 @@ from opentide.cli.ui.results.catalogue import (
     ExplainResult,
     InfoResult,
     LintResult,
+    QueryCommandResult,
     QueryValidationResult,
     UnreviewedResult,
     ValidateResult,
 )
 from opentide.cli.ui.results.deploy import DeployResult, MigrateStateResult
 from opentide.cli.ui.results.generate import DocsResult, ExportResult, ExtractResult, GenerateResult
-from opentide.cli.ui.results.migrate import MigrateObjectsResult, MigrateVocabScopeResult
+from opentide.cli.ui.results.migrate import MigrateVocabScopeResult
 from opentide.cli.ui.results.setup import (
     SetupCiResult,
     SetupEnvResult,
@@ -70,6 +71,7 @@ _IMPORTERS = (" sentinel", " defender", " elastic")
 RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "validate": ValidateResult,
     "validate query": QueryValidationResult,
+    "query": QueryCommandResult,
     "lint": LintResult,
     "info": InfoResult,
     "explain": ExplainResult,
@@ -113,11 +115,10 @@ RESULT_MODELS: dict[str, type[CommandDocument]] = {
     "explorer serve": ExplorerResult,
     # Refuses outside an interactive terminal, so --json only ever prints a usage error.
     "tui": CommandError,
-    "migrate objects": MigrateObjectsResult,
     "migrate vocab-scope": MigrateVocabScopeResult,
     # Deprecated spellings of generate subcommands.
     **{f"document{scope}": DocsResult for scope in _DOCS},
-    **{f"export{target}": ExportResult for target in (*_EXPORTS, " playbook-map")},
+    **{f"export{target}": ExportResult for target in _EXPORTS},
     **{f"extract{target}": ExtractResult for target in _IMPORTERS[:2]},
 }
 
@@ -133,7 +134,7 @@ PENDING_MODELS: dict[str, str] = {}
 
 #: Commands that never print a JSON document, not even for a usage error:
 #: stdout is JSON-RPC.
-NO_DOCUMENT = frozenset({"mcp start"})
+NO_DOCUMENT = frozenset({"mcp start", "lsp start", "serve"})
 
 
 def result_model(path: str) -> type[CommandDocument] | None:

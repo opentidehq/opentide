@@ -24,9 +24,33 @@ def ensure_initialised() -> None:
     Opentide.initialise()
 
 
+def block_statuses(body: dict[str, Any]) -> list[str]:
+    """The ``status`` of each platform block of a rule body: what deploy and promotion read.
+
+    A rule-level ``status`` is read by no command and drifts at the first
+    promotion, so it is never a rule's status here.
+    """
+    configurations = body.get("configurations")
+    if not isinstance(configurations, dict):
+        return []
+    return sorted(
+        {
+            block["status"]
+            for block in configurations.values()
+            if isinstance(block, dict) and isinstance(block.get("status"), str) and block["status"]
+        }
+    )
+
+
 def object_summary(uuid: str, object_type: str, body: dict[str, Any]) -> dict[str, Any]:
-    title = body.get("title") or body.get("name") or uuid
-    return {"uuid": uuid, "type": object_type, "title": title, "status": body.get("status")}
+    title = body.get("name") or uuid
+    statuses = block_statuses(body) if object_type == "rule" else []
+    return {
+        "uuid": uuid,
+        "type": object_type,
+        "title": title,
+        "status": ", ".join(statuses) or None,
+    }
 
 
 def get_object(uuid: str) -> dict[str, Any] | None:
@@ -66,7 +90,7 @@ def search_catalog(
     def wanted(bucket_type: str, body: dict[str, Any]) -> bool:
         return (
             (not object_type or object_type == bucket_type)
-            and (not status or body.get("status") == status)
+            and (not status or status in block_statuses(body))
             and matches_technique(body, technique)
             and matches_actor(body, actor)
             and matches_platform(body, platform)
@@ -93,10 +117,7 @@ def search_catalog(
             body = as_body(entry)
             if not wanted(bucket_type, body):
                 continue
-            haystack = (
-                f"{uuid} {body.get('title', '')} {body.get('name', '')} "
-                f"{body.get('description', '')}"
-            ).lower()
+            haystack = (f"{uuid} {body.get('name', '')} {body.get('description', '')}").lower()
             if query_lower in haystack:
                 results.append(object_summary(uuid, bucket_type, body))
     return results

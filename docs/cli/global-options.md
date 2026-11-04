@@ -102,7 +102,9 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_LOG_JSON` | `1` for one JSON object per log line on stderr |
 | `OPENTIDE_VALIDATE_WORKERS` | Most threads `validate` uses: a number, or `auto` |
 | `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
-| `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar) |
+| `OPENTIDE_QUERY_CHECK_TIMEOUT` | Seconds each `validate query --live` check may wait for a tenant's answer, like `--check-timeout` (default 120); see [Slow queries](./validate.md#slow-queries-and-timeouts) |
+| `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar). `json` writes progress events on stderr instead, in every mode; see [Progress events](./json-output.md#progress-events) |
+| `OPENTIDE_CACHE_DIR` | Where opentide caches what it generates for the language server (`lsp-catalogs/`); default: the user cache directory |
 | `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
 
 ## Environment propagation
@@ -132,6 +134,7 @@ It is sent only in `human` mode, without `--quiet`, when standard error is itsel
 | unset | Sent to the terminals above |
 | `0`, `false`, `no`, `off` | Never sent |
 | `1`, `true`, `yes`, `on` | Sent to any terminal in `human` mode, for one that reads OSC 9;4 but is not recognised (Ghostty inside tmux, or a version opentide cannot read) |
+| `json` | Sent to the terminals above, and [progress events](./json-output.md#progress-events) go to stderr |
 
 ## Shell completion
 

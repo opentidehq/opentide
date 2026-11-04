@@ -8,6 +8,7 @@ warning must not fail ``--strict``, which the commit hook and generated CI run.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,16 +19,17 @@ pytestmark = pytest.mark.cli_e2e
 
 SPLUNK_RULE = "objects/rules/rule-0003-splunk-spl.yaml"
 SPLUNK_RULE_UUID = "00000000-0000-4000-8003-000000000003"
-SPLUNK_CONFIG = ".opentide/configurations/systems/splunk.toml"
+SPLUNK_CONFIG = ".opentide/configurations/platforms/splunk.toml"
 
 
 @pytest.fixture
 def splunk_disabled(tide_corpus_repo: Path) -> Path:
     config = tide_corpus_repo / SPLUNK_CONFIG
     text = config.read_text(encoding="utf-8")
-    assert "[tide]\nenabled = true\n" in text
+    assert "[platform]\nenabled = true\n" in text
     config.write_text(
-        text.replace("[tide]\nenabled = true\n", "[tide]\nenabled = false\n"), encoding="utf-8"
+        text.replace("[platform]\nenabled = true\n", "[platform]\nenabled = false\n"),
+        encoding="utf-8",
     )
     return tide_corpus_repo
 
@@ -80,7 +82,7 @@ def test_human_output_names_the_disabled_platform(invoke_cli) -> None:
     assert "warning[platform_not_enabled]: this block will not deploy while splunk" in output
     assert "rule-0003-splunk-spl.yaml:23:3" in output
     assert "opentide setup platforms --splunk" in output
-    assert " valid · 1 warning · " in output
+    assert re.search(r" valid · \d+ quer(y|ies) · 1 warning · ", output), output
     # The frame is the warning; it is not printed a second time as a warning line.
     assert "warning: " not in output
 
@@ -89,7 +91,7 @@ def test_human_output_names_the_disabled_platform(invoke_cli) -> None:
     ("old", "new", "expected"),
     [
         pytest.param(
-            "    search: index=main | head 1\n",
+            "    query: index=main | head 1\n",
             '    query: ""\n',
             "query must not be empty",
             id="empty-query",
@@ -129,6 +131,11 @@ _SENTINEL_BLOCK = """\
       lookback: PT2H
     alert:
       title: Splunk SPL Rule
+      suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false
 """
 
 
@@ -167,7 +174,7 @@ def test_live_query_validation_of_a_disabled_platform_names_a_working_flag(
     invoke_cli, tide_corpus_repo: Path
 ) -> None:
     """#414: live validation stays gated; its advice named ``--defender_for_endpoint``."""
-    config = tide_corpus_repo / ".opentide/configurations/systems/defender_for_endpoint.toml"
+    config = tide_corpus_repo / ".opentide/configurations/platforms/defender_for_endpoint.toml"
     text = config.read_text(encoding="utf-8")
     assert "[platform]\nenabled = true\n" in text
     config.write_text(text.replace("enabled = true", "enabled = false", 1), encoding="utf-8")
@@ -185,16 +192,22 @@ def test_a_misspelled_enabled_key_is_named_instead_of_setup_platforms(
     invoke_cli, tide_corpus_repo: Path, typo: str
 ) -> None:
     """``enabeld = true`` left splunk disabled, and the warning sent the author to
-    ``opentide setup platforms --splunk`` (post-merge end-to-end run)."""
+    ``opentide setup platforms --splunk`` (post-merge end-to-end run). ``[platform]``
+    takes no other key, so the misspelling is also an ``unknown_key`` error."""
     config = tide_corpus_repo / SPLUNK_CONFIG
     text = config.read_text(encoding="utf-8")
     config.write_text(
-        text.replace("[tide]\nenabled = true\n", f"[tide]\n{typo} = true\n"), encoding="utf-8"
+        text.replace("[platform]\nenabled = true\n", f"[platform]\n{typo} = true\n"),
+        encoding="utf-8",
     )
-    payload = assert_json_ok(invoke_cli("validate"))
+    result = invoke_cli("validate")
+    assert result.exit_code == 1, result.output
+    payload = parse_cli_json(result)
+    errors = [(i["code"], i["field_path"]) for i in payload["report"]["issues"]]
+    assert errors == [("unknown_key", ["platform", typo])]
     (warning,) = _platform_warnings(payload)
     assert warning["context"] == {"platform": "splunk", "key": typo}
     assert warning["message"] == (
-        f"this block will not deploy: {SPLUNK_CONFIG} sets '{typo}' in [tide], not "
+        f"this block will not deploy: {SPLUNK_CONFIG} sets '{typo}' in [platform], not "
         "'enabled', so splunk is disabled; rename the key to 'enabled'"
     )

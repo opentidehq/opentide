@@ -19,7 +19,7 @@ import shutil
 import socket
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -59,6 +59,7 @@ PLATFORM_SDKS: dict[str, tuple[str, ...]] = {
     "harfanglab": ("requests",),
     "carbon_black_cloud": ("cbc_sdk",),
     "elastic": ("requests",),
+    "sysdig": ("requests",),
 }
 
 #: How the checklist names each host ``opentide setup mcp`` writes for; the
@@ -212,12 +213,9 @@ def _enabled_platforms(configs: Mapping[str, Any]) -> list[str]:
     systems = configs.get("systems") or {}
     enabled: list[str] = []
     for system in SYSTEM_KEYS:
-        config = systems.get(system) or {}
-        for block in ("platform", "tide"):
-            section = config.get(block)
-            if isinstance(section, Mapping) and section.get("enabled") is True:
-                enabled.append(system)
-                break
+        section = (systems.get(system) or {}).get("platform")
+        if isinstance(section, Mapping) and section.get("enabled") is True:
+            enabled.append(system)
     return enabled
 
 
@@ -457,13 +455,29 @@ def check_configuration(ctx: DoctorContext) -> list[Check]:
 
 
 def check_templates(ctx: DoctorContext) -> list[Check]:
+    from opentide.core.lint_config import LintConfigError, parse_lint_config
     from opentide.generation.pydantic_skeleton import render_model_template
     from opentide.models.object_types import CORE_OBJECT_TYPES
     from opentide.models.schema_registry import identifiers_for_families, resolve_model
     from opentide.registry.artifacts import template_artifact_name
     from opentide.registry.paths import resolve_workspace_paths
 
-    paths = resolve_workspace_paths(_configurations(ctx), workspace=ctx.workspace)
+    configs = _configurations(ctx)
+    # ``generate templates`` renders the metadata keys ``lint.toml`` requires as live
+    # keys, so the comparison must render them the same way: a workspace that sets
+    # ``[metadata].required`` would otherwise differ from its own fresh templates.
+    try:
+        required_metadata = parse_lint_config(configs.get("lint")).required_metadata
+    except LintConfigError as exc:
+        return [
+            Check(
+                "templates_fresh",
+                "warn",
+                f"Templates not compared: {exc}",
+                "fix the key lint.toml names, then run opentide doctor again",
+            )
+        ]
+    paths = resolve_workspace_paths(configs, workspace=ctx.workspace)
     folder = Path(paths["templates"])
     missing: list[str] = []
     stale: list[str] = []
@@ -472,7 +486,9 @@ def check_templates(ctx: DoctorContext) -> list[Check]:
         if not target.is_file():
             missing.append(target.name)
             continue
-        expected = render_model_template(resolve_model(schema_id), schema_id=schema_id)
+        expected = render_model_template(
+            resolve_model(schema_id), schema_id=schema_id, required_metadata=required_metadata
+        )
         if target.read_text(encoding="utf-8") != expected:
             stale.append(target.name)
     fix = "opentide generate templates schemas snippets"
@@ -530,6 +546,82 @@ def check_schemas(ctx: DoctorContext) -> list[Check]:
     ]
 
 
+def check_analysis_engine(ctx: DoctorContext) -> list[Check]:
+    """The compiled engine behind validate's queries check, validate query, lint and lsp imports."""
+    del ctx
+    from opentide.analysis import EngineUnavailableError, engine_versions
+
+    try:
+        versions = engine_versions()
+    except EngineUnavailableError as exc:
+        return [Check("analysis_engine", "fail", str(exc), REINSTALL_COMMAND)]
+    return [
+        Check(
+            "analysis_engine",
+            "pass",
+            f"The analysis engine (language server {versions['engine']}) loads",
+        )
+    ]
+
+
+def check_lsp_catalog(ctx: DoctorContext) -> list[Check]:
+    """opentide generates the language-server catalog; a committed copy is current.
+
+    ``lsp start`` and the TUI check objects with the catalog
+    this opentide generates for the workspace. The committed
+    ``.opentide/lsp/catalogs/`` is read only by editors that run the
+    ``opentide-lsp`` binary on its own, and when generation fails.
+    """
+    from opentide import __version__
+    from opentide.core.root import OPENTIDE_DIR
+    from opentide.generation.lsp_catalog import CATALOG_DIR, FIELDS_FILE
+
+    if not (ctx.workspace / OPENTIDE_DIR).is_dir():
+        return [Check("lsp_catalog", "skip", "Not checked: no workspace")]
+    try:
+        from opentide.analysis import own_catalog
+
+        own_catalog(ctx.workspace)
+    except Exception as exc:  # reported, as the commands fall back
+        return [
+            Check(
+                "lsp_catalog",
+                "warn",
+                f"opentide cannot generate the language-server catalog ({type(exc).__name__}: "
+                f"{exc}): objects are checked with the committed or bundled one",
+                "opentide doctor --debug",
+            )
+        ]
+    path = ctx.workspace / CATALOG_DIR / FIELDS_FILE
+    shown = shown_path(path.parent, ctx.workspace)
+    fix = "opentide generate schemas"
+    if path.is_file():
+        try:
+            generated = str(json.loads(path.read_text(encoding="utf-8")).get("opentide") or "")
+        except (OSError, UnicodeDecodeError, ValueError, AttributeError) as exc:
+            return [
+                Check("lsp_catalog", "warn", f"{shown}/{FIELDS_FILE} does not parse: {exc}", fix)
+            ]
+        if generated != __version__:
+            return [
+                Check(
+                    "lsp_catalog",
+                    "warn",
+                    f"The language-server catalog committed in {shown} is from opentide "
+                    f"{generated or '?'}, not {__version__}: editors that run opentide-lsp on "
+                    "their own use it",
+                    fix,
+                )
+            ]
+    return [
+        Check(
+            "lsp_catalog",
+            "pass",
+            f"Language-server catalog generated by opentide {__version__} for this workspace",
+        )
+    ]
+
+
 def check_platforms(ctx: DoctorContext) -> list[Check]:
     enabled = _enabled_platforms(_configurations(ctx))
     if not enabled:
@@ -582,20 +674,9 @@ def check_platform_sdks(ctx: DoctorContext) -> list[Check]:
     return checks
 
 
-def _placeholders(value: Any) -> Iterable[str]:
-    """``$NAME`` references anywhere in a tenant's setup."""
-    if isinstance(value, str) and value.startswith("$") and len(value) > 1:
-        yield value[1:]
-    elif isinstance(value, Mapping):
-        for item in value.values():
-            yield from _placeholders(item)
-    elif isinstance(value, (list, tuple)):
-        for item in value:
-            yield from _placeholders(item)
-
-
 def check_credentials(ctx: DoctorContext) -> list[Check]:
     """Per configured tenant: are the variables its setup names set? Never their values."""
+    from opentide.platforms.config import setup_variables
     from opentide.platforms.enabled import platform_config_path
 
     configs = _configurations(ctx)
@@ -619,7 +700,8 @@ def check_credentials(ctx: DoctorContext) -> list[Check]:
         for index, tenant in enumerate(tenants, start=1):
             name = str(tenant.get("name") or f"tenant {index}")
             subject = f"{platform}/{name}"
-            variables = list(dict.fromkeys(_placeholders(tenant.get("setup") or {})))
+            # The names `info` reports and the tenant loader resolves.
+            variables = setup_variables(tenant.get("setup") or {})
             unset = [variable for variable in variables if not environ.get(variable)]
             if unset:
                 checks.append(
@@ -710,53 +792,99 @@ def _read_json(path: Path) -> Any:
     from opentide.cli.services.setup.vscode import _strip_jsonc
 
     try:
-        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8")))
+        # utf-8-sig, as setup reads them: VS Code's "UTF-8 with BOM" is common on Windows.
+        return json.loads(_strip_jsonc(path.read_text(encoding="utf-8-sig")))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 
 
 def check_vscode(ctx: DoctorContext) -> list[Check]:
-    from opentide.cli.services.setup.vscode import build_yaml_schema_mappings, snippet_file_rel
+    """``vscode_settings``: the workspace recommends the opentide extension, and maps no
+    object files to opentide's schemas for a YAML extension (#752)."""
+    from opentide.cli.services.setup.vscode import (
+        EXTENSION_ID,
+        is_opentide_schema_mapping,
+        snippet_file_rel,
+    )
 
     checks: list[Check] = []
     settings = ctx.workspace / ".vscode" / "settings.json"
-    if not settings.is_file():
+    extensions = ctx.workspace / ".vscode" / "extensions.json"
+    data = _read_json(settings) if settings.is_file() else {}
+    schemas = data.get("yaml.schemas") if isinstance(data, dict) else None
+    mapped = (
+        sorted(
+            str(schema)
+            for schema, globs in schemas.items()
+            if is_opentide_schema_mapping(str(schema), globs, workspace=ctx.workspace)
+        )
+        if isinstance(schemas, dict)
+        else []
+    )
+    recommended = _read_json(extensions) if extensions.is_file() else None
+    recommendations = recommended.get("recommendations") if isinstance(recommended, dict) else None
+    unwanted = recommended.get("unwantedRecommendations") if isinstance(recommended, dict) else None
+    if data is None:
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                ".vscode/settings.json is not valid JSON",
+                "fix the file, then opentide setup vscode",
+            )
+        )
+    elif mapped:
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                ".vscode/settings.json maps objects to "
+                + ", ".join(mapped)
+                + " in yaml.schemas: a YAML extension would report what the opentide "
+                "extension already does",
+                "opentide setup vscode",
+            )
+        )
+    elif not extensions.is_file():
         checks.append(
             Check(
                 "vscode_settings",
                 "skip",
-                "No .vscode/settings.json: editors get no schema completion",
+                f"No .vscode/extensions.json: VS Code does not suggest {EXTENSION_ID}",
                 "opentide setup vscode",
             )
         )
+    elif recommended is None:
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                ".vscode/extensions.json is not valid JSON",
+                "fix the file, then opentide setup vscode",
+            )
+        )
+    elif isinstance(recommendations, list) and EXTENSION_ID in recommendations:
+        checks.append(
+            Check("vscode_settings", "pass", f".vscode/extensions.json recommends {EXTENSION_ID}")
+        )
+    elif isinstance(unwanted, list) and EXTENSION_ID in unwanted:
+        # setup vscode leaves it out on purpose: offering it as the fix would change nothing.
+        checks.append(
+            Check(
+                "vscode_settings",
+                "skip",
+                f".vscode/extensions.json lists {EXTENSION_ID} under unwantedRecommendations",
+            )
+        )
     else:
-        data = _read_json(settings)
-        schemas = data.get("yaml.schemas") if isinstance(data, dict) else None
-        expected = build_yaml_schema_mappings(workspace=ctx.workspace)
-        if not isinstance(schemas, dict):
-            checks.append(
-                Check(
-                    "vscode_settings",
-                    "warn",
-                    ".vscode/settings.json maps no yaml.schemas"
-                    if data is not None
-                    else ".vscode/settings.json is not valid JSON",
-                    "opentide setup vscode",
-                )
+        checks.append(
+            Check(
+                "vscode_settings",
+                "warn",
+                f".vscode/extensions.json does not recommend {EXTENSION_ID}",
+                "opentide setup vscode",
             )
-        elif all(schemas.get(key) == value for key, value in expected.items()):
-            checks.append(
-                Check("vscode_settings", "pass", ".vscode/settings.json maps the object schemas")
-            )
-        else:
-            checks.append(
-                Check(
-                    "vscode_settings",
-                    "warn",
-                    ".vscode/settings.json does not map objects to " + ", ".join(sorted(expected)),
-                    "opentide setup vscode",
-                )
-            )
+        )
     snippets = snippet_file_rel(workspace=ctx.workspace)
     if (ctx.workspace / snippets).is_file():
         checks.append(Check("vscode_snippets", "pass", f"Snippets in {snippets}"))
@@ -804,6 +932,19 @@ def check_mcp(ctx: DoctorContext) -> list[Check]:
         hosts.append(MCP_HOST_LABELS[host])
         commands.add(str(server.get("command") or ""))
     setup = "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)"
+    from opentide.cli.services.setup.vscode import EXTENSION_ID, recommends_extension
+
+    # The extension serves the opentide MCP server to VS Code agents itself (#752).
+    extension = recommends_extension(ctx.workspace)
+    if not hosts and extension:
+        return [
+            Check(
+                "mcp_config",
+                "pass",
+                f"VS Code: the opentide extension ({EXTENSION_ID}), which "
+                ".vscode/extensions.json recommends, provides the opentide MCP server",
+            )
+        ]
     if not hosts:
         if without:
             return [
@@ -825,6 +966,10 @@ def check_mcp(ctx: DoctorContext) -> list[Check]:
     configured = f"MCP configured for {', '.join(hosts)}"
     if without:
         configured += f" ({', '.join(without)} has no opentide server)"
+    if extension:
+        configured += (
+            f"; the opentide extension ({EXTENSION_ID}) also provides the server to VS Code"
+        )
     unresolved = sorted(
         command for command in commands if command and shutil.which(command) is None
     )
@@ -850,8 +995,10 @@ CHECKS: tuple[Callable[[DoctorContext], list[Check]], ...] = (
     check_configuration,
     check_templates,
     check_schemas,
+    check_lsp_catalog,
     check_platforms,
     check_platform_sdks,
+    check_analysis_engine,
     check_credentials,
     check_proxy,
     check_vscode,
@@ -870,6 +1017,8 @@ CHECK_CODES: dict[Callable[[DoctorContext], list[Check]], tuple[str, ...]] = {
     check_schemas: ("schemas_fresh",),
     check_platforms: ("platforms_enabled",),
     check_platform_sdks: ("platform_sdk",),
+    check_analysis_engine: ("analysis_engine",),
+    check_lsp_catalog: ("lsp_catalog",),
     check_credentials: ("credentials",),
     check_proxy: ("proxy",),
     check_vscode: ("vscode_settings", "vscode_snippets"),

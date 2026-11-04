@@ -48,8 +48,8 @@ UNKNOWN_KEY = "unknown_key"
 SCHEMA_VALIDATION = "schema_validation"
 PROMOTION_TARGET_UNKNOWN = "promotion_target_unknown"
 ASSET_UNKNOWN = "asset_unknown"
-IDENTIFIER_MISMATCH = "identifier_mismatch"
 NOT_A_CONFIGURATION_FILE = "not_a_configuration_file"
+RETIRED_CONFIGURATION_FILE = "retired_configuration_file"
 CONFIG_PARSE = "config_parse"
 SHARING_DIRECTORY = "sharing_directory"
 
@@ -133,27 +133,6 @@ def visibility_cross_issues(
             context={"entry": entries[table], "name": name, "asset": asset},
         )
         for table, index, name, position, asset in config.unknown_assets()
-    ]
-
-
-def platform_identifier_issues(
-    document: Mapping[str, Any], *, file_stem: str, file_path: Path | None = None
-) -> list[ValidationIssue]:
-    """`[platform] identifier` matches the file name stem when both are set."""
-    platform = document.get("platform")
-    identifier = platform.get("identifier") if isinstance(platform, Mapping) else None
-    if not isinstance(identifier, str) or not identifier or not file_stem:
-        return []
-    if identifier == file_stem:
-        return []
-    return [
-        _issue(
-            code=IDENTIFIER_MISMATCH,
-            field_path=("platform", "identifier"),
-            message=f"identifier {identifier!r} does not match the file name {file_stem}.toml.",
-            file_path=file_path,
-            context={"value": identifier, "file_stem": file_stem},
-        )
     ]
 
 
@@ -316,17 +295,22 @@ def _posix(path: str | Path) -> PurePosixPath:
     return PurePosixPath(str(path).replace("\\", "/"))
 
 
-def _platform_key(document: Mapping[str, Any], stem: str) -> str:
-    """Router key the loader would file a platform document under.
+def _retired_entry(path: PurePosixPath) -> tuple[str, str] | None:
+    """The retired entry *path* is, or sits in, with what replaces it; `None` otherwise."""
+    from opentide.core.files import RETIRED_CONFIGURATIONS
 
-    `resolve_configurations` keys a platform file by `platform.identifier`,
-    then `tide.identifier`, then the file name stem.
-    """
-    for table in ("platform", "tide"):
-        section = document.get(table)
-        identifier = section.get("identifier") if isinstance(section, Mapping) else None
-        if isinstance(identifier, str) and identifier:
-            return configuration_file_key(f"platforms/{identifier}.toml") or GENERIC_PLATFORM_FILE
+    parts = path.parts
+    if parts and parts[-1] in RETIRED_CONFIGURATIONS:
+        return parts[-1], RETIRED_CONFIGURATIONS[parts[-1]]
+    if len(parts) >= 2 and parts[-2] in RETIRED_CONFIGURATIONS and parts[-1].endswith(".toml"):
+        folder = parts[-2]
+        if len(parts) == 2 or parts[-3] == "configurations":
+            return f"{folder}/", RETIRED_CONFIGURATIONS[folder]
+    return None
+
+
+def _platform_key(stem: str) -> str:
+    """Router key the loader files a platform document under: its file name stem."""
     return configuration_file_key(f"platforms/{stem}.toml") or GENERIC_PLATFORM_FILE
 
 
@@ -408,9 +392,20 @@ def _file_issues(
     parts = posix.parts
     if len(parts) >= 3 and parts[-2] == "sharing" and parts[-3] == "configurations":
         return [_sharing_directory(file_path)]
+    retired = _retired_entry(posix)
+    if retired is not None:
+        name, replacement = retired
+        return [
+            _issue(
+                code=RETIRED_CONFIGURATION_FILE,
+                field_path=(),
+                message=f"{name} is not read by opentide: {replacement}.",
+                file_path=file_path,
+            )
+        ]
     file_key = configuration_file_key(posix)
     if file_key is not None and file_key.startswith("platforms/"):
-        file_key = _platform_key(document, posix.stem)
+        file_key = _platform_key(posix.stem)
     if file_key is None:
         known = posix.name in _UNMODELLED_FILES
         return [
@@ -453,10 +448,6 @@ def _file_issues(
         issues.extend(deployment_cross_issues(model, file_path=file_path))
     elif isinstance(model, VisibilityConfig):
         issues.extend(visibility_cross_issues(model, file_path=file_path))
-    if file_key.startswith("platforms/") or file_key == GENERIC_PLATFORM_FILE:
-        issues.extend(
-            platform_identifier_issues(document, file_stem=posix.stem, file_path=file_path)
-        )
     return issues
 
 
@@ -511,6 +502,90 @@ def configuration_text_issues(
     )
 
 
+def configuration_buffer_issues(
+    path: str | Path,
+    text: str,
+    open_buffers: Sequence[tuple[str, str]] = (),
+) -> list[ValidationIssue]:
+    """`configuration_text_issues` for an editor buffer, with the layers an editor has.
+
+    What the language server shows for a file under `.opentide/configurations/`
+    (`opentide lsp start`): the buffer merged onto the bundled file, then the
+    parent instance's file of the same name, as `resolve_configurations`
+    merges them. For `sharing.toml`, the statuses `rule_statuses` may name
+    come from an open `deployment.toml` buffer of the same workspace when
+    there is one (merged onto the bundled file), else from the file on disk;
+    and `sharing_directory` is reported when `configurations/sharing/`
+    exists. A file with no model gets nothing (`not_a_configuration_file` is
+    for the command line).
+    """
+    native = Path(path)
+    configurations = _configurations_directory(native)
+    later_layers: list[Mapping[str, Any]] = []
+    status_names: frozenset[str] | None = None
+    sharing_directory = False
+    if configurations is not None:
+        relative = native.relative_to(configurations)
+        parent = _parent_layer(configurations, relative)
+        if parent is not None:
+            later_layers.append(parent)
+        if relative.as_posix() == "sharing.toml":
+            status_names = _open_status_names(configurations, open_buffers)
+            sharing_directory = (configurations / "sharing").is_dir()
+    issues = configuration_text_issues(
+        path,
+        text,
+        later_layers=later_layers,
+        status_names=status_names,
+        sharing_directory=sharing_directory,
+    )
+    return [issue for issue in issues if issue.code != NOT_A_CONFIGURATION_FILE]
+
+
+def _configurations_directory(path: Path) -> Path | None:
+    """The `.opentide/configurations` directory an absolute *path* sits in."""
+    parts = path.parts
+    if not path.is_absolute():
+        return None
+    for index in range(len(parts) - 2, 0, -1):
+        if parts[index] == ".opentide" and parts[index + 1] == "configurations":
+            return Path(*parts[: index + 2])
+    return None
+
+
+def _parent_layer(configurations: Path, relative: Path) -> dict[str, Any] | None:
+    """The parent instance's file of the same name, as `resolve_configurations` reads it."""
+    workspace = configurations.parent.parent
+    parent = workspace.parent / ".opentide" / "configurations"
+    if parent == configurations or not parent.is_dir():
+        return None
+    candidate = parent / relative
+    try:
+        if candidate.is_file():
+            return tomllib.loads(candidate.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError):
+        # `opentide validate` reports the parent's own problems.
+        return None
+    return None
+
+
+def _open_status_names(
+    configurations: Path, open_buffers: Sequence[tuple[str, str]]
+) -> frozenset[str] | None:
+    """Statuses of an open `deployment.toml` buffer in *configurations*, if any parses."""
+    deployment = configurations / "deployment.toml"
+    for buffer_path, buffer_text in open_buffers:
+        if Path(buffer_path) != deployment:
+            continue
+        try:
+            layer = tomllib.loads(buffer_text)
+        except (ValueError, RecursionError):
+            return None
+        # As `_workspace_status_names`: no statuses at all is not a list to check against.
+        return _status_names(merge_layers([bundled_layer("deployment.toml"), layer])) or None
+    return None
+
+
 # --- Every merged file of a workspace (validate --check configuration) -----------------
 
 
@@ -531,17 +606,15 @@ def workspace_configuration_issues(
     if configs is None:
         configs = resolve_configurations()
     documents: list[tuple[str, type[BaseModel], Any]] = []
-    paths_key = "paths" if "paths" in configs else "global"
     for key, file_key in (
-        (paths_key, f"{paths_key}.toml"),
+        ("paths", "paths.toml"),
         ("deployment", "deployment.toml"),
-        ("schema", "schema.toml"),
         ("visibility", "visibility.toml"),
         ("documentation", "documentation.toml"),
     ):
         if key in configs:
             documents.append((file_key, configuration_files()[file_key], configs[key]))
-    platforms = configs.get("platforms") or configs.get("systems") or {}
+    platforms = configs.get("platforms") or {}
     if isinstance(platforms, Mapping):
         for identifier, document in sorted(platforms.items()):
             model = PLATFORM_CONFIGURATION_MODELS.get(str(identifier))
@@ -603,12 +676,12 @@ def _named(issue: ValidationIssue, file_key: str) -> ValidationIssue:
 __all__ = [
     "CONFIGURATION_OBJECT_TYPE",
     "bundled_layer",
+    "configuration_buffer_issues",
     "configuration_file_issues",
     "configuration_text_issues",
     "deployment_cross_issues",
     "issues_from_configuration_error",
     "merge_layers",
-    "platform_identifier_issues",
     "sharing_issues",
     "visibility_cross_issues",
     "workspace_configuration_issues",

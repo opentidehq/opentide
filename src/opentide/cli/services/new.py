@@ -31,10 +31,17 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 import yaml
 from pydantic import BaseModel
 
-from opentide.cli.ui.contract import NextAction
+from opentide.cli.ui.contract import COMMAND_FAILED, NextAction
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.io import parse_yaml
+from opentide.core.lint_config import (
+    FilenameStyle,
+    LintConfigError,
+    expected_stem,
+    load_lint_config,
+)
 from opentide.documentation.markdown.links import slugify
+from opentide.registry.catalogue import OBJECT_SUFFIXES, object_stem, split_object_name
 
 #: The object families ``new`` scaffolds, in catalogue order.
 FAMILIES = ("threat", "objective", "rule")
@@ -63,8 +70,8 @@ PLACEHOLDER_MARKER = "# opentide:placeholder"
 #: detection logic and deploys: Elastic's validator wants a ``query`` for
 #: ``type: query``, the Defender loader reads ``scope`` unconditionally, a
 #: SentinelOne ``Single Event`` condition needs its query, HarfangLab needs a
-#: sigma (or yara) detection, and Sentinel's compile needs grouping and, unless
-#: ``nrt`` is true, a schedule.
+#: sigma (or yara) detection, Sysdig needs a Falco ``condition``, and Sentinel's
+#: compile needs grouping and, unless ``nrt`` is true, a schedule.
 PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     "defender_for_endpoint": (("scope",), ("scope", "selection")),
     "elastic": (("query",),),
@@ -76,6 +83,7 @@ PLATFORM_EXTRA_KEYS: dict[str, tuple[tuple[str, ...], ...]] = {
     ),
     "sentinel_one": (("condition", "single_event"), ("condition", "single_event", "query")),
     "harfanglab": (("sigma",),),
+    "sysdig": (("condition",),),
 }
 
 #: Values for those keys that compile, as ``(value, is_placeholder)``. A
@@ -199,7 +207,7 @@ def _object_files(root: Path) -> list[Path]:
 
 def _load(path: Path) -> dict[str, Any]:
     try:
-        data = parse_yaml(path.read_text(encoding="utf-8"))
+        data = parse_yaml(path.read_text(encoding="utf-8-sig"))
     except (yaml.YAMLError, UnicodeDecodeError, OSError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -259,11 +267,19 @@ def catalogue_uuids(folder: Path) -> set[str]:
     return uuids
 
 
-def target_path(objects: Path, name: str, object_uuid: str, path: Path | None) -> Path:
+def target_path(
+    objects: Path,
+    name: str,
+    object_uuid: str,
+    path: Path | None,
+    style: FilenameStyle = "slug",
+) -> Path:
     """Where the new object goes, named the way ``opentide lint`` expects.
 
-    ``slugify(name)``; when that stem is taken in the folder, ``-{uuid[:8]}`` is
-    appended, as ``lint --fix`` does on a collision.
+    ``slugify(name)``, or the name itself under ``style="name"``; when that stem
+    is taken in the folder, ``-{uuid[:8]}`` is appended, as ``lint --fix`` does
+    on a collision. ``style="none"`` compares no stem, so it keeps the slug, and
+    so does a name with nothing left to name a file after.
     """
     folder = objects
     if path is not None:
@@ -274,11 +290,30 @@ def target_path(objects: Path, name: str, object_uuid: str, path: Path | None) -
         else:
             # The loader reads only .yaml and .yml files.
             return path.with_name(f"{path.name}.yaml")
-    stem = slugify(name)
-    taken = any((folder / f"{stem}{suffix}").exists() for suffix in (".yaml", ".yml"))
+    stem = expected_stem(name, style) if style == "name" else None
+    if stem is None:
+        stem = slugify(name)
+    if style == "name":
+        # Names keep their case, and ``Rule`` is ``rule`` on macOS and Windows.
+        taken = _stem_taken(folder, stem)
+    else:
+        taken = any((folder / f"{stem}{suffix}").exists() for suffix in (".yaml", ".yml"))
     if taken:
         stem = f"{stem}-{object_uuid[:8]}"
     return folder / f"{stem}.yaml"
+
+
+def _stem_taken(folder: Path, stem: str) -> bool:
+    """Whether *folder* holds ``stem.yaml`` or ``stem.yml``, whatever the case of the stem."""
+    if not folder.is_dir():
+        return False
+    wanted = stem.casefold()
+    for entry in folder.iterdir():
+        # ``stem.debug.yaml`` is a fixture: its stem is ``stem``, but it is another file.
+        entry_stem, suffix = split_object_name(entry.name)
+        if suffix in OBJECT_SUFFIXES and entry_stem.casefold() == wanted:
+            return True
+    return False
 
 
 # --------------------------------------------------------------------------- model walk
@@ -728,7 +763,7 @@ def fill_template(
 def keep_platform_blocks(text: str, platforms: Iterable[str], pointer: str) -> str:
     """Drop the commented ``configurations`` blocks of every platform not in *platforms*.
 
-    The template lists all eight platforms, about 400 commented lines; a new
+    The template lists all nine platforms, about 400 commented lines; a new
     rule keeps its own blocks and one comment that points at *pointer*, the
     template, for the others.
     """
@@ -838,8 +873,15 @@ def scaffold_object(
     schema_id = template_schema_id(template, family)
     model = resolve_model(schema_id)
 
+    try:
+        filenames = load_lint_config(workspace).filenames.for_kind(f"{family}s")
+    except LintConfigError as exc:
+        raise NewError(str(exc), code=COMMAND_FAILED, exit_code=2) from exc
+
     object_uuid = str(uuid_lib.uuid4())
-    destination = target_path(artifacts.objects, options.name, object_uuid, options.path)
+    destination = target_path(
+        artifacts.objects, options.name, object_uuid, options.path, filenames.style
+    )
     if destination.exists():
         raise NewError(
             f"{_relative(destination, workspace)} already exists; new never overwrites a file",
@@ -943,11 +985,19 @@ def scaffold_object(
         # The reason stays short: the path can be long, and the line should fit.
         "_next_actions": [NextAction(f"opentide validate --file {shown}", "check it")],
     }
+    warnings: list[str] = []
     if family == "rule" and options.platforms and status is None:
-        payload["warnings"] = [
+        warnings.append(
             "No deployment status has strategy INERT, so the new platform blocks are "
             "disabled (enabled: false) and their status is a placeholder"
-        ]
+        )
+    if filenames.pattern is not None and not filenames.pattern.fullmatch(object_stem(destination)):
+        warnings.append(
+            f"{destination.name} does not match lint.toml {filenames.pattern_key} "
+            f"{filenames.pattern.pattern}; rename it before opentide lint runs"
+        )
+    if warnings:
+        payload["warnings"] = warnings
     if count:
         # Printed as a note under the outcome line in human output. The keys
         # are in ``placeholders``; listing them here wrapped the line.

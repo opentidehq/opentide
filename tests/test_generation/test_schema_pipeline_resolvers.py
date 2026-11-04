@@ -7,67 +7,71 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from opentide.generation import schema_pipeline as sp
+from opentide.models.visibility import VisibilityConfig
 
 
-def test_logsources_resolver_with_tenants() -> None:
-    logsource = MagicMock()
-    logsource.name = "Windows Events"
-    logsource.system = "sentinel"
-    logsource.description = "Endpoint logs"
-    logsource.assets = []
-    logsource.tenants = ["tenant-a"]
-    visibility = MagicMock()
-    visibility.logsources = [logsource]
+def _visibility(*logsources: dict, assets: list | None = None) -> VisibilityConfig:
+    return VisibilityConfig.model_validate({"logsources": list(logsources), "assets": assets})
+
+
+def _resolve(visibility: VisibilityConfig) -> tuple[list[str], list[str]]:
     with patch.object(sp.VocabularyResolver, "_visibility", return_value=visibility):
         result = sp.VocabularyResolver.Logsources().resolve()
     assert result is not None
-    enums, _descriptions = result
-    assert "sentinel::tenant-a::Windows Events" in enums
+    return result
 
 
-def test_logsources_resolver_names_are_unqualified() -> None:
-    logsource = MagicMock()
-    logsource.name = "Windows Events"
-    logsource.system = "sentinel"
-    logsource.description = "Endpoint logs"
-    logsource.assets = []
-    logsource.tenants = ["tenant-a", "tenant-b"]
-    duplicate = MagicMock()
-    duplicate.name = "Windows Events"
-    duplicate.system = "splunk"
-    duplicate.description = "Same name"
-    duplicate.assets = []
-    duplicate.tenants = []
-    visibility = MagicMock()
-    visibility.logsources = [logsource, duplicate]
-    with patch.object(sp.VocabularyResolver, "_visibility", return_value=visibility):
-        result = sp.VocabularyResolver.Logsources().resolve(qualified=False)
-    assert result is not None
-    enums, _descriptions = result
-    assert enums == ["Windows Events"]
+def test_logsources_resolver_offers_every_form_a_signal_takes() -> None:
+    """``<name>``, ``<system>::<name>`` and ``<system>::<tenant>::<name>`` (#718)."""
+    enums, descriptions = _resolve(
+        _visibility(
+            {
+                "name": "SecurityEvent",
+                "system": "sentinel",
+                "description": "Endpoint logs",
+                "tenants": ["tenant-a"],
+            }
+        )
+    )
+    assert enums == [
+        "SecurityEvent",
+        "sentinel::SecurityEvent",
+        "sentinel::tenant-a::SecurityEvent",
+    ]
+    assert "**Tenants**: tenant-a" in descriptions[0]
 
 
-def test_logsources_resolver_without_tenants() -> None:
-    logsource = MagicMock()
-    logsource.name = "Sysmon"
-    logsource.system = "sentinel"
-    logsource.description = "Sysmon events"
-    logsource.assets = ["Server"]
-    logsource.tenants = []
-    asset = MagicMock()
-    asset.name = "Server"
-    asset.criticality = "high"
-    asset.description = "Prod"
-    asset.custom_details = {}
-    visibility = MagicMock()
-    visibility.logsources = [logsource]
-    visibility.assets = [asset]
-    with patch.object(sp.VocabularyResolver, "_visibility", return_value=visibility):
-        result = sp.VocabularyResolver.Logsources().resolve()
-    assert result is not None
-    enums, descriptions = result
-    assert enums == ["sentinel::Sysmon"]
+def test_a_name_two_systems_declare_describes_both() -> None:
+    """No first-wins: the bare name refers to both, and each qualified form to one."""
+    enums, descriptions = _resolve(
+        _visibility(
+            {"name": "DeviceEvents", "system": "sentinel", "description": "Sentinel copy"},
+            {"name": "DeviceEvents", "system": "defender_for_endpoint", "description": "XDR"},
+        )
+    )
+    assert enums == [
+        "DeviceEvents",
+        "sentinel::DeviceEvents",
+        "defender_for_endpoint::DeviceEvents",
+    ]
+    assert "Sentinel copy" in descriptions[0] and "XDR" in descriptions[0]
+    assert "XDR" not in descriptions[1]
+
+
+def test_logsources_resolver_describes_assets() -> None:
+    enums, descriptions = _resolve(
+        _visibility(
+            {"name": "Sysmon", "system": "sentinel", "description": "Sysmon", "assets": ["Server"]},
+            assets=[{"name": "Server", "criticality": "high", "description": "Prod"}],
+        )
+    )
+    assert enums == ["Sysmon", "sentinel::Sysmon"]
     assert "Server" in descriptions[0]
+
+
+def test_no_log_source_is_no_enum() -> None:
+    with patch.object(sp.VocabularyResolver, "_visibility", return_value=_visibility()):
+        assert sp.VocabularyResolver.Logsources().resolve() is None
 
 
 def test_detectors_resolver() -> None:

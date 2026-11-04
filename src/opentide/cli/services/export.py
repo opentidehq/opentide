@@ -36,13 +36,6 @@ def run_export_target(target: ExportTarget) -> None:
     raise ValueError(f"Unknown export target: {target}")
 
 
-def run_playbook_map_export() -> None:
-    """Run legacy playbook-map export (deprecated)."""
-    from opentide.export.playbook_map import run as export_playbook_map
-
-    export_playbook_map()
-
-
 def run_export(ctx: CliContext, *, target: ExportTarget) -> dict[str, object]:
     """Entry point for export command."""
     from opentide.cli.ui.progress import Checklist

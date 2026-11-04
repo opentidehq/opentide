@@ -38,6 +38,22 @@ def deploy_cmd(
             "request, the push, or outside CI the last commit)"
         ),
     ),
+    uuids: list[str] | None = typer.Option(
+        None,
+        "--uuid",
+        help=(
+            "Read this rule (metadata.uuid) instead of the changed ones (repeatable). "
+            "Cannot be combined with --all"
+        ),
+    ),
+    files: list[str] | None = typer.Option(
+        None,
+        "--file",
+        help=(
+            "Read this rule file, matched as by 'opentide validate --file', instead of the "
+            "changed ones (repeatable). Cannot be combined with --all"
+        ),
+    ),
     plan: str | None = typer.Option(None, "--plan", hidden=True, help=REMOVED_PLAN_HELP),
     wide: bool = typer.Option(
         False,
@@ -74,6 +90,8 @@ def deploy_cmd(
 ) -> None:
     """Deploy the changed rules whose status maps to --strategy.
 
+    --uuid and --file name the rules to read instead of the changed ones.
+
     A status (DEVELOPMENT, STAGING, PRODUCTION, ... in the default
     configuration) maps to a strategy in deployment.toml. A run deploys the
     rule files it changed whose status maps to its --strategy, to the tenants
@@ -87,10 +105,23 @@ def deploy_cmd(
         return
     cli = get_context(ctx)
     refuse_removed_plan(cli, plan)
+    if all_files and (uuids or files):
+        from opentide.cli.output import emit_usage_error
+        from opentide.cli.ui.contract import USAGE_ERROR
+
+        emit_usage_error(
+            cli,
+            "--all reads every rule file; --uuid and --file select rules instead. Pass one or "
+            "the other",
+            argument="--uuid" if uuids else "--file",
+            code=USAGE_ERROR,
+        )
     result = run_deploy(
         cli,
         strategies=strategy or (),
         all_files=all_files,
+        uuids=uuids or (),
+        files=files or (),
         platform=platform,
         dry_run=dry_run,
         skip_promotion=skip_promotion,
@@ -112,7 +143,15 @@ def deploy_cmd(
     from opentide.cli.ui.summary import deploy_summary
 
     publish_summary(cli, deploy_summary(result, dry_run=dry_run), command="deploy", payload=result)
-    emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
+    try:
+        emit_result(cli, CommandResult.from_payload(result, default_message="Deployment completed"))
+    finally:
+        # Last, after the tally and any next steps, also when the plan has failures.
+        if dry_run and not cli.json_output and not cli.quiet:
+            from opentide.cli.ui.plan import render_dry_run_note
+            from opentide.core.logging.config import get_stdout_console
+
+            render_dry_run_note(get_stdout_console())
 
 
 @deploy_app.command("migrate-state")

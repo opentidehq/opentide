@@ -45,11 +45,10 @@ class SystemConfig:
     @dataclass
     class Platform:
         enabled: bool
+        #: The platform file's name stem (``splunk``).
         identifier: str
         name: str
-        subschema: str
         description: str
-        flags: list[str]
 
     @dataclass
     class Modifiers:
@@ -247,6 +246,21 @@ class ConfigurationModels:
 
             tenants: Sequence[Tenant] | None = None
 
+        @dataclass
+        class Sysdig(SystemConfig):
+            @dataclass
+            class Tenant(SystemConfig.Tenant):
+                @dataclass
+                class Setup(SystemConfig.Tenant.Setup):
+                    url: str = ""
+                    api_token: str = ""
+                    policies: Sequence[str] | None = None
+                    tags: Sequence[str] | None = None
+
+                setup: Setup
+
+            tenants: Sequence[Tenant] | None = None
+
 
 @dataclass
 class DeploymentBatch:
@@ -301,3 +315,7 @@ class TenantDeployment:
     @dataclass
     class Elastic(DeploymentBatch):
         tenant: ConfigurationModels.Systems.Elastic.Tenant
+
+    @dataclass
+    class Sysdig(DeploymentBatch):
+        tenant: ConfigurationModels.Systems.Sysdig.Tenant

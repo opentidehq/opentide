@@ -14,3 +14,6 @@ class ValidateCheck(str, Enum):
     cve = "cve"
     sharing_config = "sharing-config"
     configuration = "configuration"
+    #: Every query an object carries, checked offline by the analysis engine:
+    #: a default check (``validate --queries`` sets how it reports).
+    queries = "queries"

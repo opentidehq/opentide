@@ -68,10 +68,10 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 : The run strategies a tenant accepts, in its platform file; both when omitted. `manual = true` keeps a tenant to the rules that list it. They replaced the tenant `deployment` key.
 
 **Visibility**
-: Configuration controlling which objects are exposed/deployed in a given context. Validated by a generated `visibility` schema.
+: `visibility.toml`: what a workspace can see, as the assets that produce logs, the log sources that hold them, and the external detectors that already cover parts of the environment. Validated by a generated `visibility` schema. See [the datasets a log source fills](../configuration.md#the-datasets-a-log-source-fills).
 
-**Playbook-map**
-: A mapping that associates detections with response playbooks. Produced by the legacy `opentide export playbook-map` command (not by the default `opentide generate` pipeline).
+**Log source**
+: One `[[logsources]]` entry of `visibility.toml`: one dataset, whose `name` is the KQL table, Splunk sourcetype or Elastic index pattern, with its optional columns. Signals name it in `data.logsources`; the query checks know the dataset and its columns.
 
 **TLP (Traffic Light Protocol)**
 : The sharing-sensitivity classification on `metadata.tlp` (e.g. `clear`, `green`, `amber`, `red`).
@@ -93,5 +93,3 @@ The terms and acronyms you will meet across the opentide docs, defined once. Whe
 **SDK**
 : The Python API (`from opentide import Opentide`) for embedding the engine in your own code. See [SDK](../../sdk/index.md).
 
-**CoreTide**
-: The predecessor to opentide, distributed via git submodules. Migrating from it? See the [migration guide](../migration/index.md).

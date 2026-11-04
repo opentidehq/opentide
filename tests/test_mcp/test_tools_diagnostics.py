@@ -254,19 +254,35 @@ def test_explain_unknown_code_suggests_the_closest() -> None:
 
 
 def test_validate_query_refusal_points_at_the_live_check() -> None:
-    payload = tools.tool_validate_query("SecurityEvent", "sentinel")
+    payload = tools.tool_validate_query("EventType = 'Process Creation'", "sentinel_one")
     assert payload["valid"] is None
     assert payload["next_actions"] == [
         {
             "tool": "validate_query",
-            "arguments": {"query": "SecurityEvent", "platform": "sentinel", "live": True},
-            "command": "opentide --json validate query --platform sentinel --live",
+            "arguments": {
+                "query": "EventType = 'Process Creation'",
+                "platform": "sentinel_one",
+                "live": True,
+            },
+            "command": "opentide --json validate query --platform sentinel_one --live",
             "reason": (
-                "check the catalogue's sentinel rules: this contacts the sentinel tenant "
+                "check the catalogue's sentinel_one rules: this contacts the sentinel_one tenant "
                 "with the configured credentials, so ask a person first"
             ),
         }
     ]
+
+
+def test_an_offline_finding_points_at_its_page_then_the_live_check() -> None:
+    payload = tools.tool_validate_query("SecurityEvent | wher x", "sentinel")
+    explain, live = payload["next_actions"]
+    assert explain == {
+        "tool": "explain",
+        "arguments": {"code": "kql_unknown_operator"},
+        "command": "opentide explain kql_unknown_operator",
+        "reason": "how to fix it",
+    }
+    assert live["tool"] == "validate_query" and live["arguments"]["live"] is True
 
 
 def test_server_instructions_carry_the_tagline_and_workflow() -> None:

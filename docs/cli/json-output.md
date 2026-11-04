@@ -53,12 +53,13 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `usage_unknown_option` | 2 | No such option for that command |
 | `usage_invalid_choice` | 2 | A value outside the accepted ones: `--platform`, `--type`, `--target`, an `info` section, a `generate` phase, a `--strategy` |
 | `usage_invalid_value` | 2 | A value that cannot be used, such as the removed `--plan` or a `rules unreviewed --older-than` that is not a window |
-| `usage_missing_option` | 2 | A required option or argument is missing (`--platform`, `--strategy`, `--technique`, `validate query` without `--live`) |
+| `usage_missing_option` | 2 | A required option or argument is missing (`--platform`, `--strategy`, `--technique`; `validate query --live` without `--platform`; `validate query --platform sentinel_one` without `--live`) |
 | `usage_needs_input` | 2 | The command would prompt, but nobody can answer: `--json`, no terminal, or a coding agent. The message names the flags that answer the prompt |
 | `usage_tui_needs_tty` | 2 | `opentide tui` ran outside the `human` mode or without a terminal on stdin and stdout |
 | `usage_error` | 2 | Another usage error, such as options that cannot be combined, or a command group named without its subcommand (`opentide --json mcp`) |
 | `usage_watch_needs_tty` | 2 | `validate --watch` under `--json`, a coding agent or `OPENTIDE_OUTPUT=agent`: it redraws a terminal until Ctrl-C, and nobody would see it |
 | `no_tenant_reached` | 2 | `validate query --live` sent no query because no configured tenant takes the rules |
+| `query_check_timeout` | 1 | `validate query --live`: every failed check got no answer within `--check-timeout`. `timed_out` lists them |
 | `needs_human_decision` | 2 | `migrate vocab-scope` left values only a person can place |
 | `not_implemented` | 2 | A reserved command, such as `deploy metadata` |
 | `share_unreachable` | 2 | `share`: every failure was authentication or connectivity |
@@ -70,12 +71,14 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `path_not_writable` | 1 | `new`: the folder or the file it would write cannot be written (read-only checkout, permissions) |
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
 | `doctor_checks_failed` | 1 | `doctor`: at least one check failed. Read `checks` for which |
-| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
+| `issues_found` | 1 | The command failed on what it found: `validate` errors (or warnings under `--strict`), `validate query` errors (or warnings under `--strict`), `lint --strict` findings, `info --strict` load errors. The findings are in the document |
+| `engine_unavailable` | 1 | The analysis engine compiled into opentide does not load: `validate query` offline, `lint` (its `queries` check). In `validate`, an `engine_unavailable` issue instead. `advice` names the reinstall command |
 | `config_parse` | 1 | A configuration TOML file does not parse. `diagnostics` holds the file, line and column |
 | `yaml_parse` | 1 | `deploy` read a rule file whose YAML is not one mapping. `diagnostics` holds the file and line |
 | `not_run` | non-zero | The command was skipped and says why in `message` |
 | `command_failed` | 1 | Any other failure |
 | `internal` | 1 | An unexpected error: a bug in opentide. See [An unexpected error](#an-unexpected-error) |
+| `interrupted` | 130 | [`opentide serve`](./serve.md#cancel): the client cancelled the run |
 
 Exit codes are in [Exit codes](./exit-codes.md). `opentide explain <code>` prints the page for each failure code, as it does for findings ([Diagnostic codes](./diagnostics.md)).
 
@@ -90,10 +93,10 @@ opentide info rulez
 
 ```json output-of="opentide --json info rulez" exit=2
 {
-  "error": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.",
+  "error": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.",
   "ok": false,
   "status": "failed",
-  "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.",
+  "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.",
   "schema_version": 1,
   "command": "info",
   "duration_ms": "...",
@@ -102,7 +105,7 @@ opentide info rulez
   "next_actions": [],
   "failure": {
     "code": "usage_invalid_choice",
-    "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.",
+    "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.",
     "argument": "section",
     "suggestion": "rules",
     "crash_log": null
@@ -113,7 +116,7 @@ opentide info rulez
 Without `--json` the same error is one line on stderr, with the suggestion under it:
 
 ```text output-of="opentide info rulez" exit=2
-error: Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab.
+error: Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.
   help: did you mean 'rules'?
 ```
 
@@ -141,13 +144,33 @@ An exception no command handles is a bug in opentide. The run exits `1` and, und
 
 Where the log goes, what it holds and how to report the bug: [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
 
+## Progress events
+
+A document arrives when the command ends. To show progress while a long command runs, set `OPENTIDE_PROGRESS=json`: the command also writes one JSON object per line on stderr as it goes. Stdout is unchanged, still exactly one document, so the redirect below keeps both apart.
+
+```bash
+OPENTIDE_PROGRESS=json opentide --json generate 2> events.ndjson
+```
+
+```json illustrative
+{"event":"progress","step":"schemas","done":3,"total":6}
+{"event":"tenant","platform":"sentinel","tenant":"prod","status":"ok","rows":120,"elapsed_ms":1800}
+```
+
+| Event | Keys | Sent by |
+|-------|------|---------|
+| `progress` | `step`, `done`, `total` (`null` when unknown) | `generate` and its subcommands: one per finished phase (`schemas`, `templates`, …). `validate`: `objects` as objects are checked, in batches (about 20 per run, and always the last one, where `done` equals `total`), then `queries` once the query check ran. `validate query`: `queries` once the engine checked them offline (`done` and `total` are the number of queries); with `--live`, one step named after the platform (`Microsoft Sentinel queries`) once its tenants answered. `deploy --dry-run`: one per platform, `step` being the platform. `deploy` and the other commands with steps: one per finished step |
+| `tenant` | `platform`, `tenant`, `status` (`ok` or `failed`), `rows`, `elapsed_ms`; `label` when the rule holds several queries | `query`: one per tenant and query, as each answers |
+
+Each event is one line of compact JSON, written whole, in ASCII: a character outside it is a `\u` escape, so the line is JSON whatever stderr's encoding. Log lines share stderr (`OPENTIDE_LOG_JSON=1` makes them JSON too), so a reader keeps the lines whose `event` is `progress` or `tenant`. Under [`opentide serve`](./serve.md) the same events arrive as `progress` notifications instead of on stderr.
+
 ## Output modes
 
 opentide decides once per command who is reading. The first rule that matches wins:
 
 | Order | Rule | Mode |
 |------:|------|------|
-| 1 | `opentide mcp start` | `mcp`: stdout carries nothing but JSON-RPC |
+| 1 | `opentide mcp start`, `opentide lsp start` or `opentide serve` | `mcp`: stdout carries nothing but JSON-RPC |
 | 2 | `--json` | `json`: one document on stdout |
 | 3 | `OPENTIDE_OUTPUT` is `json`, `agent`, `plain` or `human` | that mode |
 | 4 | A coding agent is detected | `agent` |
@@ -170,6 +193,8 @@ warning: Query validation reported warnings for sentinel
 ```
 
 `validate` and `lint` print each finding as a code frame before the outcome line, and their outcome line counts them (`✗ 2 errors in 1 file · 3 objects checked · 0.9s`). See [Diagnostic codes](./diagnostics.md).
+
+In JSON, every `validate`, `validate query` and `lint` finding carries `path`, `line`, `column`, `end_line` and `end_column`: one-based, columns in Unicode code points, the span from (`line`, `column`) up to (`end_line`, `end_column`), `end_column` exclusive and on `end_line`. `end_line` equals `line` for a span on one line. An editor maps them to a range as they are ([validate](./validate.md#diagnostic-fields), [lint](./lint.md#json-findings)).
 
 | Line | Meaning |
 |------|---------|

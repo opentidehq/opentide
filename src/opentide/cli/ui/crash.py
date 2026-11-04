@@ -35,7 +35,7 @@ from typing import Any, TextIO
 from urllib.parse import urlencode, urlsplit
 
 from opentide.cli.ui.contract import INTERNAL, INTERRUPTED_EXIT_CODE, SCHEMA_VERSION, Failure
-from opentide.cli.ui.mode import OutputMode, elapsed_ms, get_mode, json_indent
+from opentide.cli.ui.mode import PROTOCOL_COMMANDS, OutputMode, elapsed_ms, get_mode, json_indent
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -318,9 +318,9 @@ def workspace_redactor(
 
     Secrets are the values of environment variables named like a secret and
     the passwords of proxy URLs. Each workspace's
-    ``.opentide/configurations/platforms/*.toml`` (and the older ``systems/``)
-    adds its secret values and, for every ``[[tenants]]`` entry, its name and
-    the values of its address and id keys, ``$VARIABLE`` references resolved.
+    ``.opentide/configurations/platforms/*.toml`` adds its secret values and,
+    for every ``[[tenants]]`` entry, its name and the values of its address and id
+    keys, ``$VARIABLE`` references resolved.
     ``.opentide/configurations/sharing.toml`` does the same for every sharing
     destination (a MISP block's name, URL and API key).
     """
@@ -337,13 +337,10 @@ def workspace_redactor(
         configurations = workspace / ".opentide" / "configurations"
         # (file, whether every block in it is a destination like a tenant)
         files: list[tuple[Path, bool]] = [(configurations / "sharing.toml", True)]
-        for folder in ("platforms", "systems"):
-            try:
-                files += [
-                    (path, False) for path in sorted((configurations / folder).glob("*.toml"))
-                ]
-            except OSError:
-                continue
+        with contextlib.suppress(OSError):
+            files += [
+                (path, False) for path in sorted((configurations / "platforms").glob("*.toml"))
+            ]
         for path, destinations in files:
             try:
                 resolved = path.resolve()
@@ -503,7 +500,7 @@ def _crash_mode(options: Sequence[str], words: Sequence[str]) -> OutputMode:
     has run; a crash before that (importing the root app) must still leave
     the JSON-RPC stdout alone, whatever ``--json`` or ``OPENTIDE_OUTPUT`` say.
     """
-    if tuple(words[:2]) == ("mcp", "start"):
+    if tuple(words[:2]) in PROTOCOL_COMMANDS:
         return OutputMode.MCP
     mode = get_mode()
     if "--json" in options and mode is not OutputMode.MCP:

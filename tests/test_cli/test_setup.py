@@ -173,10 +173,10 @@ def test_run_setup_vscode_deprecated(tmp_path: Path) -> None:
     steps = result["steps"]
     assert isinstance(steps, list)
     assert steps[0]["step"] == "vscode"
-    assert (target / ".vscode" / "settings.json").is_file()
+    assert not (target / ".vscode" / "settings.json").exists()
     vscode_files = steps[0]["files"]
     assert isinstance(vscode_files, list)
-    assert ".vscode/settings.json" in vscode_files
+    assert ".vscode/settings.json" not in vscode_files
     assert ".vscode/extensions.json" in vscode_files
     assert ".vscode/model-templates.code-snippets" in vscode_files
     assert ".vscode/mcp.json" not in vscode_files

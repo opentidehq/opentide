@@ -431,7 +431,10 @@ def test_setup_vscode_mcp_flag_writes_mcp_json(tmp_path) -> None:
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     assert (tmp_path / ".vscode" / "mcp.json").is_file()
-    assert (tmp_path / ".vscode" / "settings.json").is_file()
+    assert (tmp_path / ".vscode" / "extensions.json").is_file()
+    payload = json.loads(result.stdout)
+    # The same run recommended the extension, which provides the MCP server too (#752).
+    assert payload["extension_mcp"] is True
 
 
 def test_setup_vscode_mcp_flag_leaves_an_unreadable_mcp_json(tmp_path) -> None:
@@ -626,7 +629,6 @@ def test_validate_scope_flags_do_not_raise_type_error(monkeypatch) -> None:
         "opentide.cli.services.validation.run_validate_all",
         lambda: {"schema": {"status": "passed"}},
     )
-    monkeypatch.setattr("opentide.cli.exit_codes.exit_on_validation_errors", lambda: None)
     result = runner.invoke(app, ["--json", "validate", "--file", "Objects/foo.yaml"])
     assert "TypeError" not in (result.stdout + result.stderr)
     assert '"checks"' in result.stdout

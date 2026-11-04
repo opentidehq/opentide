@@ -1,0 +1,311 @@
+"""``opentide lsp start`` speaks the language server protocol on stdio (#332).
+
+Spawns the published console script, as an editor does, and exchanges
+``Content-Length`` framed JSON-RPC with it: stdout must carry nothing else.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import IO, Any
+
+import pytest
+
+pytestmark = pytest.mark.cli_smoke
+
+RULE = """\
+name: Suspicious Process
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+configurations:
+  sentinel:
+    query: |
+      SecurityEvent
+      | wher EventID == 4688
+"""
+
+
+def _server(*args: str) -> list[str]:
+    candidate = Path(sys.executable).with_name("opentide")
+    resolved = str(candidate) if candidate.exists() else shutil.which("opentide")
+    if resolved is None:
+        pytest.skip("opentide console script is not installed")
+    return [resolved, "lsp", "start", *args]
+
+
+def _send(stream: IO[bytes], message: dict[str, Any]) -> None:
+    body = json.dumps(message).encode()
+    stream.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+    stream.flush()
+
+
+def _read(stream: IO[bytes]) -> dict[str, Any]:
+    length = None
+    while True:
+        line = stream.readline()
+        assert line, "the server closed stdout"
+        if line in (b"\r\n", b"\n"):
+            break
+        name, _, value = line.decode("ascii").partition(":")
+        assert name.lower() == "content-length", f"not a protocol header: {line!r}"
+        length = int(value)
+    assert length is not None
+    return json.loads(stream.read(length))
+
+
+@pytest.mark.parametrize("flags", [(), ("--stdio",)], ids=["bare", "stdio-flag"])
+def test_an_editor_session_from_initialize_to_exit(tmp_path: Path, flags: tuple[str, ...]) -> None:
+    rule = tmp_path / "objects" / "rules" / "suspicious-process.yaml"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(RULE, encoding="utf-8")
+    process = subprocess.Popen(
+        _server(*flags),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=tmp_path,
+    )
+    assert process.stdin is not None and process.stdout is not None
+    try:
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"capabilities": {}, "rootUri": tmp_path.as_uri()},
+            },
+        )
+        init = _read(process.stdout)
+        assert init["id"] == 1
+        assert init["result"]["serverInfo"]["name"] == "opentide-lsp"
+        assert init["result"]["capabilities"]["hoverProvider"] is True
+        # The client can tell `opentide lsp start` from the bare binary.
+        host = init["result"]["capabilities"]["experimental"]["opentide"]
+        assert host["host"]["name"] == "opentide"
+        assert host["catalog"] == "host"
+        assert host["configurationChecks"] is True
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "initialized", "params": {}})
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": rule.as_uri(),
+                        "languageId": "opentide-yaml",
+                        "version": 1,
+                        "text": RULE,
+                    }
+                },
+            },
+        )
+        published = _read(process.stdout)
+        assert published["method"] == "textDocument/publishDiagnostics"
+        codes = {item["code"] for item in published["params"]["diagnostics"]}
+        assert "kql_unknown_operator" in codes
+        _send(process.stdin, {"jsonrpc": "2.0", "id": 2, "method": "shutdown"})
+        assert _read(process.stdout)["id"] == 2
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "exit"})
+        process.stdin.close()
+        assert process.wait(timeout=30) == 0
+        assert process.stdout.read() == b"", "stdout carries the protocol and nothing else"
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+def test_closing_stdin_ends_the_server() -> None:
+    """Without `shutdown` first, LSP has the server exit with 1."""
+    process = subprocess.run(_server(), input=b"", capture_output=True, timeout=30)
+    assert process.returncode == 1
+    assert process.stdout == b""
+
+
+def test_the_server_checks_with_opentides_catalog_not_a_committed_copy(tmp_path: Path) -> None:
+    """#677: a catalog committed by an older opentide (here, one whose TLP
+    vocabulary is only `house`) does not replace the one this opentide
+    generates for the workspace."""
+    rule = tmp_path / "objects" / "rules" / "suspicious-process.yaml"
+    rule.parent.mkdir(parents=True)
+    rule.write_text(RULE, encoding="utf-8")
+    committed = tmp_path / ".opentide" / "lsp" / "catalogs" / "generated"
+    committed.mkdir(parents=True)
+    stale = {
+        "opentide": "0.0.1",
+        "fields": [
+            {"schema": "rule", "path": "metadata", "name": "metadata", "type": "object"},
+            {"schema": "rule", "path": "metadata.tlp", "name": "tlp", "enum": ["house"]},
+        ],
+    }
+    (committed / "fields.json").write_text(json.dumps(stale), encoding="utf-8")
+    process = subprocess.Popen(
+        _server(),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=tmp_path,
+    )
+    assert process.stdin is not None and process.stdout is not None
+    try:
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"capabilities": {}, "rootUri": tmp_path.as_uri()},
+            },
+        )
+        _read(process.stdout)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "initialized", "params": {}})
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": rule.as_uri(),
+                        "languageId": "opentide-yaml",
+                        "version": 1,
+                        "text": RULE,
+                    }
+                },
+            },
+        )
+        published = _read(process.stdout)
+        messages = [item["message"] for item in published["params"]["diagnostics"]]
+        assert not [message for message in messages if "tlp" in message], messages
+        _send(process.stdin, {"jsonrpc": "2.0", "id": 2, "method": "shutdown"})
+        _read(process.stdout)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "exit"})
+        process.stdin.close()
+        assert process.wait(timeout=60) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+SHARING = """\
+[[misp]]
+name = "misp-internal"
+url = "https://misp.example"
+api_key = "${MISP_KEY}"
+max_tlp = "amber"
+distribution = "this-community"
+"""
+
+
+def _until_diagnostics(stream: IO[bytes], uri: str) -> list[dict[str, Any]]:
+    while True:
+        message = _read(stream)
+        if (
+            message.get("method") == "textDocument/publishDiagnostics"
+            and message["params"]["uri"] == uri
+        ):
+            return message["params"]["diagnostics"]
+
+
+def _until_reply(stream: IO[bytes], request_id: int) -> dict[str, Any]:
+    while True:
+        message = _read(stream)
+        if message.get("id") == request_id:
+            return message
+
+
+def test_configuration_toml_is_checked_with_opentides_models(tmp_path: Path) -> None:
+    """#730: a configuration buffer gets what `configuration_text_issues`
+    finds, on the key it names, and completion from the exported schema."""
+    configurations = tmp_path / ".opentide" / "configurations"
+    configurations.mkdir(parents=True)
+    sharing = configurations / "sharing.toml"
+    lab = tmp_path / "lab" / ".opentide" / "configurations" / "sharing.toml"
+    lab.parent.mkdir(parents=True)
+    # The parent instance holds misp-internal: an override in a nested
+    # workspace may restate only `name` and what it changes.
+    sharing.write_text(SHARING.replace('distribution = "this-community"\n', ""), encoding="utf-8")
+    process = subprocess.Popen(
+        _server(),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=tmp_path,
+    )
+    assert process.stdin is not None and process.stdout is not None
+    try:
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"capabilities": {}, "rootUri": tmp_path.as_uri()},
+            },
+        )
+        _read(process.stdout)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "initialized", "params": {}})
+
+        def open_document(path: Path, text: str) -> None:
+            assert process.stdin is not None
+            _send(
+                process.stdin,
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": path.as_uri(),
+                            "languageId": "toml",
+                            "version": 1,
+                            "text": text,
+                        }
+                    },
+                },
+            )
+
+        open_document(sharing, SHARING)
+        diagnostics = _until_diagnostics(process.stdout, sharing.as_uri())
+        assert [(item["code"], item["range"]["start"]["line"]) for item in diagnostics] == [
+            ("unknown_key", 5)
+        ], diagnostics
+
+        open_document(lab, '[[misp]]\nname = "misp-internal"\nmax_tlp = "red"\n')
+        assert _until_diagnostics(process.stdout, lab.as_uri()) == []
+
+        _send(
+            process.stdin,
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "textDocument/completion",
+                "params": {
+                    "textDocument": {"uri": sharing.as_uri()},
+                    "position": {"line": 4, "character": len("max_tlp = ")},
+                },
+            },
+        )
+        labels = [item["label"] for item in _until_reply(process.stdout, 2)["result"]]
+        assert labels == ['"clear"', '"green"', '"amber"', '"amber+strict"', '"red"']
+
+        _send(process.stdin, {"jsonrpc": "2.0", "id": 3, "method": "shutdown"})
+        _until_reply(process.stdout, 3)
+        _send(process.stdin, {"jsonrpc": "2.0", "method": "exit"})
+        process.stdin.close()
+        assert process.wait(timeout=60) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()

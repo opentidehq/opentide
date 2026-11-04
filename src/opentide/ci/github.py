@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import shlex
 import textwrap
 
-from opentide.ci.gates import github_premerge_if
+from opentide.ci.gates import github_not_skipped, github_premerge_if
 from opentide.ci.inflight import github_inflight_job, github_inflight_prune_job
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
+    DOCS_ARTIFACT,
     GATE_COMMANDS,
     REPORTS_DIR,
     SHARE_COMMAND,
@@ -16,6 +18,7 @@ from opentide.ci.stages import (
     github_deploy_env,
     header_comment,
     object_validate_commands,
+    opentide_version_entry,
     pip_install,
     production_deploy_steps,
     query_platforms,
@@ -48,7 +51,7 @@ def _setup_steps(options: CiRenderOptions, *, full_history: bool = False) -> str
         "- uses: actions/setup-python@v5\n"
         "  with:\n"
         f'    python-version: "{options.python_version}"\n'
-        f"- run: {pip_install(options)}"
+        f"- run: {pip_install()}"
     )
 
 
@@ -82,6 +85,19 @@ def _report_artifact_step() -> str:
     )
 
 
+def _docs_artifact_step(options: CiRenderOptions) -> str:
+    """Keep the rendered pages; the job used to render them and throw them away."""
+    if not document_steps(options):
+        return ""
+    return (
+        "- name: Upload documentation\n"
+        "  uses: actions/upload-artifact@v4\n"
+        "  with:\n"
+        f"    name: {DOCS_ARTIFACT}\n"
+        f"    path: {json.dumps(options.docs_output + '/')}"
+    )
+
+
 def _code_scanning_steps() -> str:
     """Download the validate job's reports and send each SARIF file to code scanning."""
     steps = [
@@ -105,7 +121,9 @@ def _code_scanning_steps() -> str:
     return "\n".join(steps)
 
 
-def _reviewed_tenants_step(name: str, default_branch: str, commands: list[str]) -> str:
+def _reviewed_tenants_step(
+    name: str, default_branch: str, commands: list[str], *, if_cond: str | None = None
+) -> str:
     """Run ``commands`` against the default branch's configuration.
 
     One step, not one per command: the restore exits early when the default
@@ -116,7 +134,8 @@ def _reviewed_tenants_step(name: str, default_branch: str, commands: list[str]) 
         return ""
     restore = trusted_platform_config_commands(shlex.quote(default_branch))
     script = "\n".join([*restore, *commands])
-    return f"- name: {name}\n  run: |\n" + indent(script, 4)
+    condition = f"  if: ${{{{ {if_cond} }}}}\n" if if_cond else ""
+    return f"- name: {name}\n{condition}  run: |\n" + indent(script, 4)
 
 
 def _github_job(
@@ -223,13 +242,13 @@ def _share_job(options: CiRenderOptions, prod_if: str) -> str:
         "- uses: actions/setup-python@v5\n"
         "  with:\n"
         f'    python-version: "{options.python_version}"\n'
-        f"- run: {pip_install(options)}"
+        f"- run: {pip_install()}"
     )
     return _github_job(
         "share",
         name="Share",
         needs="[generate, deploy_production]",
-        if_cond="${{ " + SHARE_IF_PREFIX + prod_if + " }}",
+        if_cond="${{ " + SHARE_IF_PREFIX + prod_if + " && " + github_not_skipped() + " }}",
         steps=join_blocks(
             setup,
             "\n".join([_SHARE_STEPS_NOTE, _run_steps([SHARE_COMMAND])]),
@@ -344,9 +363,12 @@ def render_github(options: CiRenderOptions) -> str:
     validate_steps = join_blocks(
         # ``--changed`` diffs from the pull request's merge base, or from the
         # pushed commit's parent: neither is in a one-commit checkout.
-        _setup_steps(options, full_history=bool(queries)),
-        _run_steps(object_validate_commands("sarif")),
-        _reviewed_tenants_step("Validate queries on reviewed tenants", branch, queries),
+        _setup_steps(options, full_history=bool(queries) or options.lint_changed),
+        _run_steps(object_validate_commands("sarif", lint_changed=options.lint_changed)),
+        # ``--changed`` live checks follow the deploys: off for a skipped change.
+        _reviewed_tenants_step(
+            "Validate queries on reviewed tenants", branch, queries, if_cond=github_not_skipped()
+        ),
         _report_artifact_step(),
     )
     deploy_env = github_deploy_env()
@@ -373,7 +395,7 @@ def render_github(options: CiRenderOptions) -> str:
                 "deploy_staging",
                 name="Deploy Staging",
                 needs="generate",
-                if_cond=github_premerge_if(branch),
+                if_cond=f"${{{{ {github_premerge_if(branch)} && {github_not_skipped()} }}}}",
                 env=deploy_env,
                 steps=join_blocks(
                     _setup_steps(options, full_history=True),
@@ -388,14 +410,12 @@ def render_github(options: CiRenderOptions) -> str:
         jobs.append(
             github_inflight_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
         jobs.append(
             github_inflight_prune_job(
                 python_version=options.python_version,
-                opentide_version=options.opentide_version,
                 default_branch=branch,
             )
         )
@@ -407,7 +427,7 @@ def render_github(options: CiRenderOptions) -> str:
             "deploy_production",
             name="Deploy Production",
             needs="generate",
-            if_cond=prod_if,
+            if_cond=f"${{{{ {prod_if} && {github_not_skipped()} }}}}",
             env=deploy_env,
             # The write-back step pushes to the default branch.
             permissions="contents: write",
@@ -428,7 +448,9 @@ def render_github(options: CiRenderOptions) -> str:
             name="Document",
             needs="generate",
             if_cond=prod_if,
-            steps=join_blocks(setup, _run_steps(document_steps(options))),
+            steps=join_blocks(
+                setup, _run_steps(document_steps(options)), _docs_artifact_step(options)
+            ),
         )
     )
 
@@ -460,6 +482,7 @@ def render_github(options: CiRenderOptions) -> str:
         "\n"
         "env:\n"
         "  OPENTIDE_REPO_ROOT: ${{ github.workspace }}\n"
+        f"  {opentide_version_entry(options)}\n"
         "\n"
         f"{permissions}jobs:\n"
     )

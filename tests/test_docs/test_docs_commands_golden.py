@@ -777,7 +777,7 @@ def _json_mismatches(documented: Any, live: Any, path: str = "$") -> list[str]:
 def stub_deployers(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
     """Stand in for the vendor boundary so a sample can never reach a platform API.
 
-    Only `DeployTide` is replaced: the plan, the payload preview, and what the
+    Only `EnabledPlatforms` is replaced: the plan, the payload preview, and what the
     command prints are the real ones.
     """
     deployers: dict[str, MagicMock] = {}
@@ -786,7 +786,7 @@ def stub_deployers(monkeypatch: pytest.MonkeyPatch) -> dict[str, MagicMock]:
         def mdr_for(self, platforms: Any) -> dict[str, MagicMock]:
             return {name: deployers.setdefault(name, MagicMock()) for name in platforms}
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _StubDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _StubDeployTide)
     return deployers
 
 

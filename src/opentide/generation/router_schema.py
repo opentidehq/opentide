@@ -97,4 +97,6 @@ def export_opentide_router(output_path: Path, identifiers: list[str] | None = No
     """Write router schema to disk."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     router = build_opentide_router(identifiers)
-    output_path.write_text(json.dumps(router, indent=4) + "\n", encoding="utf-8")
+    from opentide.core.io import write_text_atomically
+
+    write_text_atomically(output_path, json.dumps(router, indent=4) + "\n")

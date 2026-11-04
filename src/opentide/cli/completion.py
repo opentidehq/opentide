@@ -59,6 +59,7 @@ PLATFORMS = (
     "carbon_black_cloud",
     "harfanglab",
     "elastic",
+    "sysdig",
 )
 
 #: ``--strategy`` values and what each deploys, as
@@ -78,8 +79,10 @@ _OBJECT_OPTIONS = frozenset({"--uuid", "--type", "--file"})
 INDEXED_OPTIONS: dict[tuple[str, ...], frozenset[str]] = {
     ("validate",): _OBJECT_OPTIONS,
     ("validate", "query"): frozenset({"--uuid", "--file", "--platform", "--strategy"}),
+    ("query",): frozenset({"--platform", "--file"}),
+    ("lint",): frozenset({"--file"}),
     ("info",): frozenset({"--platform", "--technique"}),
-    ("deploy",): frozenset({"--platform", "--strategy"}),
+    ("deploy",): frozenset({"--uuid", "--file", "--platform", "--strategy"}),
     ("deploy", "metadata"): frozenset({"--platform"}),
     ("setup",): frozenset({"--platform"}),
     ("setup", "repo"): frozenset({"--platform"}),

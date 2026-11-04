@@ -24,7 +24,6 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 .opentide/configurations/
 ├── paths.toml              # workspace directory layout
 ├── deployment.toml         # statuses + promotion
-├── schema.toml             # template defaults
 ├── visibility.toml         # what is exposed/deployed
 ├── documentation.toml      # `opentide generate docs` settings
 ├── lint.toml               # `opentide lint` checks and required metadata
@@ -34,7 +33,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 ```
 
 <Callout type="warn">
-Do not put vocabulary files here, and do not try to extend a vocabulary locally. Vocabularies are canonical in the [specifications](/docs/specifications/specs/vocabularies/format/) and are **not** locally extensible: a missing entry is added upstream, never injected from your repository. The CoreTIDE-era `[vocabulary]` block in `schema.toml` was removed in 0.13.0 — if you carried one, it was silently ignored by validation and is now simply dropped.
+Do not put vocabulary files here, and do not try to extend a vocabulary locally. Vocabularies are canonical in the [specifications](/docs/specifications/specs/vocabularies/format/) and are **not** locally extensible: a missing entry is added upstream, never injected from your repository.
 
 `threat.surface` is covered by that rule like every other vocabulary. Earlier releases harvested an extra surface value from a `visibility.toml` asset that named a technology, so an instance could effectively invent one; that no longer happens, and it was never a supported mechanism. A technology the catalogue does not yet name is [proposed upstream](https://github.com/opentidehq/specifications) — which is what makes a surface value mean the same thing in every opentide instance. Where a local system needs naming, the asset itself is the place for it.
 
@@ -83,6 +82,8 @@ azure_subscription_id = "$AZURE_SUBSCRIPTION_ID"
 azure_client_id = "$AZURE_CLIENT_ID"
 azure_client_secret = "$AZURE_CLIENT_SECRET"
 ```
+
+A `setup` value that is `$NAME` or `${NAME}` as a whole, `NAME` being letters, digits and underscores, is read from that environment variable. Any other value is used as written, one that starts with `$` (a secret such as `$uP3r-S3cret!`) included. Releases through 0.21.0 read any value that starts with `$` from the variable named by the rest; when a variable of exactly that name is set (`$AZ-SECRET` and a variable `AZ-SECRET`), it is still read, with a warning to rename it: a later release will use the value as written.
 
 <Callout type="info">
 Exact connection keys differ per platform. Use `opentide info --platform <name>` to see what a platform expects, and never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
@@ -182,12 +183,109 @@ Each file is checked against its model when a command reads it, after your file 
 
 ## Visibility and documentation
 
-- `visibility.toml` controls which objects are exposed/deployed in a given context; it is validated by a generated `visibility` schema.
+- `visibility.toml` declares the assets, log sources and external detectors of your environment; a rule's signals name its log sources. It is validated by a generated `visibility` schema.
 - `documentation.toml` tunes `opentide generate docs` output (which folders, which sections). CVE links and optional API enrichment use [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu); see [`generate docs`](../cli/generate.md).
+
+### The datasets a log source fills
+
+A log source is **one dataset**, and its `name` is that dataset: the KQL table (or workspace function) for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern or data stream for `elastic`. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know that name, so a custom table is not reported as unknown, and a log source can list the dataset's columns so the checks know them too.
+
+| `system` | `name` declares | What it matches in a query |
+|----------|-----------------|----------------------------|
+| `sentinel`, `defender_for_endpoint` | a KQL table or workspace function | The names a KQL query reads: a pipeline's first source, a `union` leg, a `join` or `lookup` right side |
+| `splunk` | a sourcetype | `sourcetype=` |
+| `elastic` | an index pattern or data stream | A rule's `index`, a threat match's `index`, ES\|QL `FROM` |
+| any other | nothing | — |
+
+```toml
+# .opentide/configurations/visibility.toml
+[[logsources]]
+name = "Contoso_Audit_CL"
+description = "Administrative audit events from the Contoso connector."
+system = "sentinel"
+tenants = ["Production"]
+
+[logsources.columns]
+TimeGenerated = { type = "datetime" }
+Actor_s = { type = "string", description = "UPN of the account that made the change" }
+
+[[logsources]]
+name = "*_CL"
+description = "Every custom table."
+system = "sentinel"
+
+[[logsources]]
+name = "WinEventLog:Security"          # splunk: the sourcetype
+description = "Security event log of the domain controllers."
+system = "splunk"
+
+[[logsources]]
+name = "logs-endpoint.events.*"        # elastic: the index pattern
+description = "Elastic Defend endpoint data."
+system = "elastic"
+
+[logsources.columns]
+"process.name" = { type = "keyword" }
+```
+
+- **Keys.** A log source takes `name`, `description` and `system` (required), and `tenants`, `assets`, `references` and `columns`. Any other key fails validation. `name` cannot be empty and is unique per `system`; the same name may appear under two systems (`DeviceEvents` under `sentinel` and `defender_for_endpoint`).
+- **Signals** name a log source in `data.logsources` as `<name>`, `<system>::<name>` or `<system>::<tenant>::<name>`; a bare name two systems declare refers to both.
+- **Patterns.** `*` matches any run of characters (`*_CL`, `logs-azure.*`). KQL and Elastic names match case-sensitively, Splunk names regardless of case. Splunk indexes and macros and Elastic data views are not declarable.
+- **Opt-in per system.** A system with at least one log source is checked against its names; a system with none is checked as if nothing were declared. The bundled `visibility.toml` declares no log source.
+- **Nothing is generated:** the analysis engine reads `.opentide/configurations/visibility.toml` itself. The language server (`opentide lsp start`, or `opentide-lsp` on its own) reads it again whenever it changes, in the editor before you save or on disk, and checks the open documents again; each CLI run reads it afresh. A quick fix on an undeclared name appends a new log source with that `name`, the system and an empty `description` for you to fill; it never edits another log source.
+
+How a KQL source name is reported:
+
+| The name is | Opted in | Report |
+|---|---|---|
+| declared | yes | nothing |
+| known to the engine's catalog, not declared | yes | [`kql_table_not_declared`](../cli/diagnostics.md#kql_table_not_declared), warning |
+| known to the engine's catalog | no | nothing |
+| unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `defender_for_endpoint` |
+
+Under opt-in a name is checked whatever its case; without, a name that starts with a lowercase letter is checked only when it ends in `_CL`, as it may be a workspace function. Under opt-in, a Splunk sourcetype that is not declared is [`spl_dataset_not_declared`](../cli/diagnostics.md#spl_dataset_not_declared), and an Elastic index pattern that is not declared is [`elastic_dataset_not_declared`](../cli/diagnostics.md#elastic_dataset_not_declared), both warnings; neither has an unknown-dataset error.
+
+#### Columns
+
+`columns` is a table keyed by column name, as the platform spells it (quote a name with a dot: `"process.name"`). Each value takes a `type` from the system's type set and an optional `description`; any other key fails validation, and so does `columns` on a system with no type set. Columns on a name with `*` apply to every dataset the name matches.
+
+| `system` | Types |
+|----------|-------|
+| `sentinel`, `defender_for_endpoint` | KQL scalar types: `bool`, `datetime`, `decimal`, `dynamic`, `guid`, `int`, `long`, `real`, `string`, `timespan` |
+| `splunk` | `string`, `number`, `boolean` |
+| `elastic` | Elasticsearch field types: `binary`, `boolean`, `byte`, `constant_keyword`, `date`, `date_nanos`, `double`, `flattened`, `float`, `geo_point`, `half_float`, `integer`, `ip`, `keyword`, `long`, `match_only_text`, `nested`, `object`, `scaled_float`, `short`, `text`, `unsigned_long`, `version`, `wildcard` |
+
+- KQL: a declared table with `columns` is checked like a documented table: a near miss of a declared column is `kql_unknown_column`, an operator the declared type does not support is `kql_type_mismatch`, and hover and completion show the declared columns. On a table the engine's catalog also knows, the declared columns extend the catalog's, and a declared column with a catalog column's name replaces its type and description. A table declared without `columns` is known by name only.
+- Elastic: declared columns are fields the index pattern maps, so `ecs_unknown_field` is not reported for them and `ecs_type_mismatch` uses their declared type.
+- Splunk: declared columns are offered in hover and completion where the engine has them, and are not checked.
+
+#### Upgrading from 0.20.0
+
+opentide 0.20.0 let one log source list datasets under `tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views` and `ecs`. `visibility::1.0` is corrected in place, and those keys now fail validation, each with a message that says what to do instead. Rewrite `visibility.toml` with one `[[logsources]]` per table, sourcetype or index pattern, named after it (copy the entry's `description`, `system`, `tenants`, `assets` and `references`), remove `indexes`, `macros`, `data_views` and `ecs`, and update the signals' `data.logsources` that named the old entry to the new names:
+
+```toml
+# 0.20.0
+[[logsources]]
+name = "Custom tables"
+description = "Custom connector tables"
+system = "sentinel"
+tables = ["Contoso_Audit_CL", "Fabrikam_Proxy_CL"]
+
+# 0.20.1
+[[logsources]]
+name = "Contoso_Audit_CL"
+description = "Custom connector tables"
+system = "sentinel"
+
+[[logsources]]
+name = "Fabrikam_Proxy_CL"
+description = "Custom connector tables"
+system = "sentinel"
+```
 
 ## Lint
 
-`lint.toml` tunes [`opentide lint`](../cli/lint.md#configuration): switch a check off, change the severity of its findings, or choose which `metadata` keys every object must fill. Generated templates leave those keys uncommented, so a new object and the lint check agree.
+`lint.toml` tunes [`opentide lint`](../cli/lint.md#configuration): switch a check off, change the severity of its findings, choose which `metadata` keys every object must fill, or keep your own [file naming convention](../cli/lint.md#filename-convention). Generated templates leave those keys uncommented, so a new object and the lint check agree.
 
 ```toml
 # .opentide/configurations/lint.toml
@@ -197,7 +295,14 @@ severity = "warning"
 
 [filenames]
 enabled = false         # `opentide lint --check filenames` still runs it
+style = "slug"          # the file stem is slugify(name) (default); "name" or "none"
+
+[filenames.rules]       # rules only; also [filenames.threats] and [filenames.objectives]
+style = "name"          # the file stem is the rule's name
+pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem must match this regular expression
 ```
+
+A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
 
 ## Paths
 

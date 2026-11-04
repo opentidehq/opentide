@@ -1,37 +1,10 @@
-"""Results of ``opentide migrate objects`` and ``migrate vocab-scope``."""
+"""Results of ``opentide migrate vocab-scope``."""
 
 from __future__ import annotations
 
 from pydantic import Field
 
 from opentide.cli.ui.results.base import CommandDocument, ResultModel
-
-
-class LayoutOperation(ResultModel):
-    from_: str = Field(alias="from")
-    to: str
-    action: str = Field(description="move, copy or skip")
-    reason: str | None = Field(None, description="Why the path is skipped")
-
-
-class FolderRename(ResultModel):
-    from_: str = Field(alias="from")
-    to: str
-
-
-class MigrateObjectsResult(CommandDocument):
-    """``opentide migrate objects``: legacy layout paths moved into the current layout."""
-
-    path: str | None = None
-    dry_run: bool | None = None
-    copy_: bool | None = Field(None, alias="copy", description="Whether files are copied")
-    operations: list[LayoutOperation] = Field(default_factory=list)
-    planned: int | None = None
-    skipped: int | None = None
-    applied: bool | None = None
-    case_renamed: list[FolderRename] | None = None
-    removed_empty: list[str] | None = None
-    advice: str | None = None
 
 
 class ScopedFieldReport(ResultModel):

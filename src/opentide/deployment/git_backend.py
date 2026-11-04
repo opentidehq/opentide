@@ -15,6 +15,38 @@ from dulwich.repo import Repo
 from dulwich.walk import Walker
 
 
+class GitLookupError(KeyError):
+    """A ref or object the checkout does not hold, said in a sentence.
+
+    Dulwich raises a bare ``KeyError(b"HEAD")``, whose ``str()`` is the key's
+    repr, and a caller reporting ``str(exc)`` printed ``b'HEAD'``. It is still
+    a :class:`KeyError`, so ``except KeyError`` keeps catching it.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        return self.message
+
+
+class NoCommitsError(GitLookupError):
+    """``HEAD`` names a branch that has no commit yet, as right after ``git init``."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        super().__init__(f"The git repository at {path} has no commits yet")
+
+
+def key_text(exc: KeyError) -> str:
+    """The ref or object id a Dulwich ``KeyError`` names, as text."""
+    key = exc.args[0] if exc.args else ""
+    if isinstance(key, bytes):
+        return key.decode("utf-8", errors="replace")
+    return str(key)
+
+
 def rust_extensions_available() -> bool:
     """Return True when Dulwich Rust acceleration modules are importable."""
     try:
@@ -169,8 +201,13 @@ class _RemoteCollection:
 
 
 def tree_diff(store: Repo, base: CommitInfo, head: CommitInfo) -> DiffIndex:
+    try:
+        changes = list(tree_changes(store.object_store, base._tree, head._tree))
+    except KeyError as exc:
+        # A tree or blob a shallow or partial clone does not hold.
+        raise GitLookupError(f"Could not find git object {key_text(exc)}") from None
     entries: list[DiffEntry] = []
-    for change in tree_changes(store.object_store, base._tree, head._tree):
+    for change in changes:
         if change.type not in (CHANGE_ADD, CHANGE_MODIFY, CHANGE_RENAME):
             continue
         path = None
@@ -195,9 +232,25 @@ class DulwichRepo:
     def working_dir(self) -> str:
         return str(self.path)
 
+    def _head_sha(self) -> ObjectID:
+        """The commit ``HEAD`` names; :class:`NoCommitsError` when there is none yet."""
+        try:
+            return self._repo.head()
+        except KeyError:
+            raise NoCommitsError(self.path) from None
+
+    @property
+    def has_commits(self) -> bool:
+        """Whether ``HEAD`` names a commit. ``False`` right after ``git init``."""
+        try:
+            self._head_sha()
+        except NoCommitsError:
+            return False
+        return True
+
     @property
     def head(self) -> CommitInfo:
-        return self.commit(_object_hex(self._repo.head()))
+        return self.commit(_object_hex(self._head_sha()))
 
     def commit(self, sha: str | CommitInfo) -> CommitInfo:
         if isinstance(sha, CommitInfo):
@@ -213,7 +266,7 @@ class DulwichRepo:
     def _resolve_sha(self, ref: str) -> ObjectID:
         ref_bytes = _normalize_ref(ref)
         if ref_bytes == b"HEAD":
-            return self._repo.head()
+            return self._head_sha()
         candidates = [ref_bytes]
         raw = ref.encode("utf-8")
         if raw != ref_bytes:
@@ -223,12 +276,12 @@ class DulwichRepo:
                 return self._repo.refs[Ref(candidate)]
             except KeyError:
                 continue
-        raise KeyError(ref)
+        raise GitLookupError(f"Could not find git ref {ref}")
 
     def iter_commits(
         self, ref: str | None = None, max_count: int | None = None
     ) -> Iterator[CommitInfo]:
-        start = [self._resolve_sha(ref)] if ref is not None else [self._repo.head()]
+        start = [self._resolve_sha(ref)] if ref is not None else [self._head_sha()]
         walker = Walker(self._repo.object_store, start, max_entries=max_count)
         try:
             for entry in walker:
@@ -239,7 +292,10 @@ class DulwichRepo:
                 raise
 
     def merge_base(self, *refs: str) -> list[CommitInfo]:
-        shas = porcelain.merge_base(self._repo, list(refs))
+        try:
+            shas = porcelain.merge_base(self._repo, list(refs))
+        except KeyError as exc:
+            raise GitLookupError(f"Could not find git commit {key_text(exc)}") from None
         return [self.commit(_object_hex(sha)) for sha in shas]
 
     def remote(self) -> _RemoteCollection:

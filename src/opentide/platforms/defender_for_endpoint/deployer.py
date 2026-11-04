@@ -2,6 +2,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.logging import get_logger
 from opentide.core.registry import DetectionPlatforms
@@ -288,7 +289,8 @@ class DefenderForEndpointDeploy(RuleDeployer):
                 continue
             service = DefenderForEndpointService(tenant_config)
             for mdr, action in planned:
-                self.deploy_mdr(data=mdr, service=service, tenant=tenant, action=action)
+                with deploy_events.deploying(PLATFORM, tenant, mdr.metadata.uuid, mdr.name):
+                    self.deploy_mdr(data=mdr, service=service, tenant=tenant, action=action)
 
 
 def declare():

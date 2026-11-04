@@ -8,31 +8,13 @@ from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 from opentide.platforms.config import _build_cbc_config, _build_splunk_config
 
 
-def test_build_splunk_config_legacy_format() -> None:
-    config = _build_splunk_config(
-        {
-            "tide": {"enabled": False, "identifier": "splunk"},
-            "setup": {"url": "$SPLUNK_URL", "port": "8089", "app": "search", "ssl": False},
-            "secrets": {"token": "$SPLUNK_TOKEN"},
-            "defaults": {"cron_schedule": "0 * * * *"},
-            "modifiers": {},
-        }
-    )
-    assert config.setup["url"] == "$SPLUNK_URL"
-    assert config.secrets["token"] == "$SPLUNK_TOKEN"
-    assert config.tenants is None
-
-
 def test_build_splunk_config_v4_format() -> None:
     config = _build_splunk_config(
         {
             "platform": {
                 "enabled": True,
-                "identifier": "splunk",
                 "name": "Splunk",
-                "subschema": "Splunk Sub Schema",
                 "description": "desc",
-                "flags": [],
             },
             "tenants": [
                 {
@@ -68,11 +50,8 @@ def test_build_splunk_config_array_of_modifier_tables() -> None:
         {
             "platform": {
                 "enabled": True,
-                "identifier": "splunk",
                 "name": "Splunk",
-                "subschema": "Splunk Sub Schema",
                 "description": "desc",
-                "flags": [],
             },
             "tenants": [
                 {
@@ -116,11 +95,8 @@ def test_build_cbc_config_v4_format() -> None:
         {
             "platform": {
                 "enabled": True,
-                "identifier": "carbon_black_cloud",
                 "name": "CBC",
-                "subschema": "CBC EDR Sub Schema",
                 "description": "desc",
-                "flags": [],
             },
             "tenants": [
                 {
@@ -154,11 +130,8 @@ def test_build_system_config_uses_tenant_identity_not_rule_schema() -> None:
         {
             "platform": {
                 "enabled": True,
-                "identifier": "crowdstrike",
                 "name": "Crowdstrike Falcon Correlation Rules",
-                "subschema": "Crowdstrike",
                 "description": "desc",
-                "flags": [""],
             }
         },
     )

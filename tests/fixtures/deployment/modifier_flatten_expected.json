@@ -1,0 +1,2779 @@
+{
+ "_comment": "Captured from pandas.json_normalize(...).to_dict(orient='records')[0] and TideDeployment.modifiers_resolver with pandas 3.0.6, before pandas was removed (#747).",
+ "flatten": [
+  {
+   "id": "empty",
+   "input": {},
+   "error": "IndexError"
+  },
+  {
+   "id": "flat",
+   "input": {
+    "a": "x",
+    "b": 1,
+    "c": 1.5,
+    "d": true,
+    "e": null,
+    "f": [
+     1,
+     "two"
+    ]
+   },
+   "expected": [
+    [
+     "a",
+     "x"
+    ],
+    [
+     "b",
+     1
+    ],
+    [
+     "c",
+     1.5
+    ],
+    [
+     "d",
+     true
+    ],
+    [
+     "e",
+     null
+    ],
+    [
+     "f",
+     [
+      1,
+      "two"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "dotted-keys",
+   "input": {
+    "alert.title": "prefix::Lab ",
+    "dispatch.latest_time": "-5m@m"
+   },
+   "expected": [
+    [
+     "alert.title",
+     "prefix::Lab "
+    ],
+    [
+     "dispatch.latest_time",
+     "-5m@m"
+    ]
+   ]
+  },
+  {
+   "id": "nested",
+   "input": {
+    "a": {
+     "b": {
+      "c": "deep"
+     },
+     "d": 2
+    },
+    "e": "top"
+   },
+   "expected": [
+    [
+     "e",
+     "top"
+    ],
+    [
+     "a.b.c",
+     "deep"
+    ],
+    [
+     "a.d",
+     2
+    ]
+   ]
+  },
+  {
+   "id": "nested-first",
+   "input": {
+    "x": {
+     "y": 1
+    },
+    "z": 3
+   },
+   "expected": [
+    [
+     "z",
+     3
+    ],
+    [
+     "x.y",
+     1
+    ]
+   ]
+  },
+  {
+   "id": "empty-nested",
+   "input": {
+    "a": {},
+    "b": 1
+   },
+   "expected": [
+    [
+     "b",
+     1
+    ]
+   ]
+  },
+  {
+   "id": "only-empty-nested",
+   "input": {
+    "a": {}
+   },
+   "error": "IndexError"
+  },
+  {
+   "id": "list-of-dicts",
+   "input": {
+    "a": [
+     {
+      "b": 1
+     }
+    ],
+    "c": {
+     "d": [
+      {
+       "e": 2
+      }
+     ]
+    }
+   },
+   "expected": [
+    [
+     "a",
+     [
+      {
+       "b": 1
+      }
+     ]
+    ],
+    [
+     "c.d",
+     [
+      {
+       "e": 2
+      }
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "collision",
+   "input": {
+    "a.b": 1,
+    "a": {
+     "b": 2
+    },
+    "c": 3
+   },
+   "expected": [
+    [
+     "a.b",
+     2
+    ],
+    [
+     "c",
+     3
+    ]
+   ]
+  },
+  {
+   "id": "none-nested",
+   "input": {
+    "a": {
+     "b": null
+    },
+    "c": {
+     "d": []
+    }
+   },
+   "expected": [
+    [
+     "a.b",
+     null
+    ],
+    [
+     "c.d",
+     []
+    ]
+   ]
+  },
+  {
+   "id": "int-key",
+   "input": {
+    "1": "one",
+    "n": {
+     "2": "two"
+    }
+   },
+   "expected": [
+    [
+     1,
+     "one"
+    ],
+    [
+     "n.2",
+     "two"
+    ]
+   ]
+  },
+  {
+   "id": "corpus-sentinel",
+   "input": {
+    "enabled": true,
+    "name": "Sentinel KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+    "scheduling": {
+     "nrt": null,
+     "frequency": "PT1H",
+     "lookback": "PT2H"
+    },
+    "alert": {
+     "title": "Sentinel KQL Rule",
+     "description": null,
+     "severity": null,
+     "suppression": false,
+     "create_incident": true,
+     "tactics": null,
+     "techniques": null,
+     "custom_details": null,
+     "dynamic_properties": null
+    },
+    "exclusions": null,
+    "template": null,
+    "trigger": null,
+    "grouping": {
+     "event": "SingleAlert",
+     "alert": {
+      "enabled": false,
+      "reopen_closed_incidents": null,
+      "grouping_lookback": null,
+      "matching": null,
+      "group_by_entities": null,
+      "group_by_alert_details": null,
+      "group_by_custom_details": null
+     }
+    },
+    "entities": null
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     "Sentinel KQL Rule"
+    ],
+    [
+     "schema",
+     null
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "query",
+     "SecurityEvent\n| where EventID == 4688\n| take 1\n"
+    ],
+    [
+     "exclusions",
+     null
+    ],
+    [
+     "template",
+     null
+    ],
+    [
+     "trigger",
+     null
+    ],
+    [
+     "entities",
+     null
+    ],
+    [
+     "scheduling.nrt",
+     null
+    ],
+    [
+     "scheduling.frequency",
+     "PT1H"
+    ],
+    [
+     "scheduling.lookback",
+     "PT2H"
+    ],
+    [
+     "alert.title",
+     "Sentinel KQL Rule"
+    ],
+    [
+     "alert.description",
+     null
+    ],
+    [
+     "alert.severity",
+     null
+    ],
+    [
+     "alert.suppression",
+     false
+    ],
+    [
+     "alert.create_incident",
+     true
+    ],
+    [
+     "alert.tactics",
+     null
+    ],
+    [
+     "alert.techniques",
+     null
+    ],
+    [
+     "alert.custom_details",
+     null
+    ],
+    [
+     "alert.dynamic_properties",
+     null
+    ],
+    [
+     "grouping.event",
+     "SingleAlert"
+    ],
+    [
+     "grouping.alert.enabled",
+     false
+    ],
+    [
+     "grouping.alert.reopen_closed_incidents",
+     null
+    ],
+    [
+     "grouping.alert.grouping_lookback",
+     null
+    ],
+    [
+     "grouping.alert.matching",
+     null
+    ],
+    [
+     "grouping.alert.group_by_entities",
+     null
+    ],
+    [
+     "grouping.alert.group_by_alert_details",
+     null
+    ],
+    [
+     "grouping.alert.group_by_custom_details",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType",
+    "bool",
+    "bool",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "bool",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType"
+   ]
+  },
+  {
+   "id": "corpus-defender_for_endpoint",
+   "input": {
+    "enabled": true,
+    "name": "Defender KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "DeviceProcessEvents\n| take 1\n",
+    "alert": {
+     "category": "Execution",
+     "title": null,
+     "description": null,
+     "severity": null,
+     "recommendation": null,
+     "techniques": null
+    },
+    "impacted_entities": {
+     "device": "device_id",
+     "mailbox": null,
+     "user": null
+    },
+    "scheduling": "1H",
+    "actions": null,
+    "scope": {
+     "selection": "All",
+     "device_groups": null
+    },
+    "exclusions": null
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     "Defender KQL Rule"
+    ],
+    [
+     "schema",
+     null
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "query",
+     "DeviceProcessEvents\n| take 1\n"
+    ],
+    [
+     "scheduling",
+     "1H"
+    ],
+    [
+     "actions",
+     null
+    ],
+    [
+     "exclusions",
+     null
+    ],
+    [
+     "alert.category",
+     "Execution"
+    ],
+    [
+     "alert.title",
+     null
+    ],
+    [
+     "alert.description",
+     null
+    ],
+    [
+     "alert.severity",
+     null
+    ],
+    [
+     "alert.recommendation",
+     null
+    ],
+    [
+     "alert.techniques",
+     null
+    ],
+    [
+     "impacted_entities.device",
+     "device_id"
+    ],
+    [
+     "impacted_entities.mailbox",
+     null
+    ],
+    [
+     "impacted_entities.user",
+     null
+    ],
+    [
+     "scope.selection",
+     "All"
+    ],
+    [
+     "scope.device_groups",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType"
+   ]
+  },
+  {
+   "id": "corpus-splunk",
+   "input": {
+    "enabled": true,
+    "name": "Splunk SPL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "index=main | head 1",
+    "scheduling": {
+     "type": null,
+     "expires": null,
+     "schedule": {
+      "frequency": null,
+      "cron": "0 * * * *",
+      "custom_time": null
+     },
+     "timerange": null
+    },
+    "trigger": null,
+    "actions": null,
+    "correlation_search": null,
+    "advanced": null,
+    "search": "index=main | head 1",
+    "cron_schedule": "0 * * * *"
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     "Splunk SPL Rule"
+    ],
+    [
+     "schema",
+     null
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "query",
+     "index=main | head 1"
+    ],
+    [
+     "trigger",
+     null
+    ],
+    [
+     "actions",
+     null
+    ],
+    [
+     "correlation_search",
+     null
+    ],
+    [
+     "advanced",
+     null
+    ],
+    [
+     "search",
+     "index=main | head 1"
+    ],
+    [
+     "cron_schedule",
+     "0 * * * *"
+    ],
+    [
+     "scheduling.type",
+     null
+    ],
+    [
+     "scheduling.expires",
+     null
+    ],
+    [
+     "scheduling.schedule.frequency",
+     null
+    ],
+    [
+     "scheduling.schedule.cron",
+     "0 * * * *"
+    ],
+    [
+     "scheduling.schedule.custom_time",
+     null
+    ],
+    [
+     "scheduling.timerange",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType"
+   ]
+  },
+  {
+   "id": "corpus-sentinel_one",
+   "input": {
+    "enabled": true,
+    "name": "SentinelOne S1QL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "condition": {
+     "type": "Correlation",
+     "single_event": null,
+     "correlation": {
+      "entity": "host",
+      "match_in_order": true,
+      "time_window": "1h",
+      "sub_queries": [
+       {
+        "query": "EventType = \"Process Create\"",
+        "matches_required": 1
+       }
+      ]
+     },
+     "cool_off": null
+    },
+    "response": {
+     "treat_as_threat": "Malicious",
+     "network_quarantine": false
+    },
+    "details": null
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     "SentinelOne S1QL Rule"
+    ],
+    [
+     "schema",
+     null
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "details",
+     null
+    ],
+    [
+     "condition.type",
+     "Correlation"
+    ],
+    [
+     "condition.single_event",
+     null
+    ],
+    [
+     "condition.correlation.entity",
+     "host"
+    ],
+    [
+     "condition.correlation.match_in_order",
+     true
+    ],
+    [
+     "condition.correlation.time_window",
+     "1h"
+    ],
+    [
+     "condition.correlation.sub_queries",
+     [
+      {
+       "query": "EventType = \"Process Create\"",
+       "matches_required": 1
+      }
+     ]
+    ],
+    [
+     "condition.cool_off",
+     null
+    ],
+    [
+     "response.treat_as_threat",
+     "Malicious"
+    ],
+    [
+     "response.network_quarantine",
+     false
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "str",
+    "bool",
+    "str",
+    "list",
+    "NoneType",
+    "str",
+    "bool"
+   ]
+  },
+  {
+   "id": "corpus-carbon_black_cloud",
+   "input": {
+    "enabled": true,
+    "name": "Carbon Black Lucene Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "process_name:cmd.exe",
+    "organizations": null,
+    "watchlist": null,
+    "report": null,
+    "tags": null
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     "Carbon Black Lucene Rule"
+    ],
+    [
+     "schema",
+     null
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "query",
+     "process_name:cmd.exe"
+    ],
+    [
+     "organizations",
+     null
+    ],
+    [
+     "watchlist",
+     null
+    ],
+    [
+     "report",
+     null
+    ],
+    [
+     "tags",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType"
+   ]
+  },
+  {
+   "id": "corpus-crowdstrike",
+   "input": {
+    "enabled": true,
+    "name": "CrowdStrike Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "details": {
+     "trigger": "event",
+     "outcome": "detection",
+     "name": null,
+     "description": null,
+     "severity": null,
+     "tactic": null,
+     "technique": null
+    },
+    "schedule": {
+     "frequency": "1h",
+     "lookback": "2h",
+     "start": null,
+     "end": null
+    },
+    "query": "index=main"
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     "CrowdStrike Deploy Rule"
+    ],
+    [
+     "schema",
+     null
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "query",
+     "index=main"
+    ],
+    [
+     "details.trigger",
+     "event"
+    ],
+    [
+     "details.outcome",
+     "detection"
+    ],
+    [
+     "details.name",
+     null
+    ],
+    [
+     "details.description",
+     null
+    ],
+    [
+     "details.severity",
+     null
+    ],
+    [
+     "details.tactic",
+     null
+    ],
+    [
+     "details.technique",
+     null
+    ],
+    [
+     "schedule.frequency",
+     "1h"
+    ],
+    [
+     "schedule.lookback",
+     "2h"
+    ],
+    [
+     "schedule.start",
+     null
+    ],
+    [
+     "schedule.end",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType"
+   ]
+  },
+  {
+   "id": "corpus-harfanglab",
+   "input": {
+    "enabled": true,
+    "name": "HarfangLab Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "maturity": "Experimental",
+    "confidence": "Moderate",
+    "action": "Alert",
+    "tags": null,
+    "sigma": {
+     "logsource": {
+      "category": "process_creation",
+      "product": "windows"
+     },
+     "selections": [
+      {
+       "name": "selection",
+       "field": "Image",
+       "value": "cmd.exe",
+       "modifiers": null
+      }
+     ],
+     "condition": "selection",
+     "false_positives": null
+    },
+    "yara": null
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     "HarfangLab Deploy Rule"
+    ],
+    [
+     "schema",
+     null
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "maturity",
+     "Experimental"
+    ],
+    [
+     "confidence",
+     "Moderate"
+    ],
+    [
+     "action",
+     "Alert"
+    ],
+    [
+     "tags",
+     null
+    ],
+    [
+     "yara",
+     null
+    ],
+    [
+     "sigma.logsource.category",
+     "process_creation"
+    ],
+    [
+     "sigma.logsource.product",
+     "windows"
+    ],
+    [
+     "sigma.selections",
+     [
+      {
+       "name": "selection",
+       "field": "Image",
+       "value": "cmd.exe",
+       "modifiers": null
+      }
+     ]
+    ],
+    [
+     "sigma.condition",
+     "selection"
+    ],
+    [
+     "sigma.false_positives",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "list",
+    "str",
+    "NoneType"
+   ]
+  },
+  {
+   "id": "corpus-elastic",
+   "input": {
+    "enabled": true,
+    "name": "",
+    "schema": "platform::elastic::1.0",
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "type": "query",
+    "query": "process.name: \"powershell.exe\"\n",
+    "language": "kuery",
+    "index": [
+     "logs-*"
+    ],
+    "data_view_id": null,
+    "filters": null,
+    "scheduling": {
+     "interval": "5m",
+     "lookback": "1m",
+     "max_alerts": null
+    },
+    "severity": null,
+    "risk": null,
+    "suppression": null,
+    "highlighted_fields": null,
+    "threshold": null,
+    "new_terms": null,
+    "eql": null,
+    "threat": null,
+    "machine_learning": null,
+    "integration": null,
+    "required_fields": null,
+    "guide": null,
+    "false_positives": null,
+    "tags": null,
+    "exceptions": null,
+    "building_block": false,
+    "overrides": null,
+    "actions": null
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     ""
+    ],
+    [
+     "schema",
+     "platform::elastic::1.0"
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "type",
+     "query"
+    ],
+    [
+     "query",
+     "process.name: \"powershell.exe\"\n"
+    ],
+    [
+     "language",
+     "kuery"
+    ],
+    [
+     "index",
+     [
+      "logs-*"
+     ]
+    ],
+    [
+     "data_view_id",
+     null
+    ],
+    [
+     "filters",
+     null
+    ],
+    [
+     "severity",
+     null
+    ],
+    [
+     "risk",
+     null
+    ],
+    [
+     "suppression",
+     null
+    ],
+    [
+     "highlighted_fields",
+     null
+    ],
+    [
+     "threshold",
+     null
+    ],
+    [
+     "new_terms",
+     null
+    ],
+    [
+     "eql",
+     null
+    ],
+    [
+     "threat",
+     null
+    ],
+    [
+     "machine_learning",
+     null
+    ],
+    [
+     "integration",
+     null
+    ],
+    [
+     "required_fields",
+     null
+    ],
+    [
+     "guide",
+     null
+    ],
+    [
+     "false_positives",
+     null
+    ],
+    [
+     "tags",
+     null
+    ],
+    [
+     "exceptions",
+     null
+    ],
+    [
+     "building_block",
+     false
+    ],
+    [
+     "overrides",
+     null
+    ],
+    [
+     "actions",
+     null
+    ],
+    [
+     "scheduling.interval",
+     "5m"
+    ],
+    [
+     "scheduling.lookback",
+     "1m"
+    ],
+    [
+     "scheduling.max_alerts",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "str",
+    "list",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "bool",
+    "NoneType",
+    "NoneType",
+    "str",
+    "str",
+    "NoneType"
+   ]
+  },
+  {
+   "id": "corpus-sysdig",
+   "input": {
+    "enabled": true,
+    "name": "",
+    "schema": "platform::sysdig::1.0",
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "condition": "spawned_process and container and proc.name in (corpus_shells)\n",
+    "append_to_rule": null,
+    "source": null,
+    "output": null,
+    "priority": null,
+    "tags": [
+     "container",
+     "shell"
+    ],
+    "exceptions": null,
+    "macros": null,
+    "lists": [
+     {
+      "name": "corpus_shells",
+      "items": [
+       "bash",
+       "sh",
+       "zsh"
+      ]
+     }
+    ],
+    "policies": null,
+    "minimum_engine_version": null
+   },
+   "expected": [
+    [
+     "enabled",
+     true
+    ],
+    [
+     "name",
+     ""
+    ],
+    [
+     "schema",
+     "platform::sysdig::1.0"
+    ],
+    [
+     "status",
+     "STAGING"
+    ],
+    [
+     "flags",
+     null
+    ],
+    [
+     "tenants",
+     null
+    ],
+    [
+     "contributors",
+     null
+    ],
+    [
+     "condition",
+     "spawned_process and container and proc.name in (corpus_shells)\n"
+    ],
+    [
+     "append_to_rule",
+     null
+    ],
+    [
+     "source",
+     null
+    ],
+    [
+     "output",
+     null
+    ],
+    [
+     "priority",
+     null
+    ],
+    [
+     "tags",
+     [
+      "container",
+      "shell"
+     ]
+    ],
+    [
+     "exceptions",
+     null
+    ],
+    [
+     "macros",
+     null
+    ],
+    [
+     "lists",
+     [
+      {
+       "name": "corpus_shells",
+       "items": [
+        "bash",
+        "sh",
+        "zsh"
+       ]
+      }
+     ]
+    ],
+    [
+     "policies",
+     null
+    ],
+    [
+     "minimum_engine_version",
+     null
+    ]
+   ],
+   "types": [
+    "bool",
+    "str",
+    "str",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "str",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "NoneType",
+    "list",
+    "NoneType",
+    "NoneType",
+    "list",
+    "NoneType",
+    "NoneType"
+   ]
+  }
+ ],
+ "modifiers": [
+  {
+   "id": "sentinel-applies",
+   "file": "rule-0001-sentinel-kql.yaml",
+   "platform": "sentinel",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "alert.title": "suffix:: (lab)",
+    "alert.description": "prefix::Lab: ",
+    "scheduling.frequency": "2h",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] Sentinel KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+    "scheduling": {
+     "nrt": null,
+     "frequency": "2h",
+     "lookback": "PT2H"
+    },
+    "alert": {
+     "title": "Sentinel KQL Rule (lab)",
+     "description": "Lab: ",
+     "severity": null,
+     "suppression": false,
+     "create_incident": true,
+     "tactics": null,
+     "techniques": null,
+     "custom_details": null,
+     "dynamic_properties": null
+    },
+    "exclusions": null,
+    "template": null,
+    "trigger": null,
+    "grouping": {
+     "event": "SingleAlert",
+     "alert": {
+      "enabled": false,
+      "reopen_closed_incidents": null,
+      "grouping_lookback": null,
+      "matching": null,
+      "group_by_entities": null,
+      "group_by_alert_details": null,
+      "group_by_custom_details": null
+     }
+    },
+    "entities": null
+   },
+   "api_request": {
+    "kind": "Scheduled",
+    "properties": {
+     "enabled": true,
+     "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+     "suppressionEnabled": false,
+     "suppressionDuration": "PT01H00M00S",
+     "queryFrequency": "PT02H00M00S",
+     "queryPeriod": "PT02H00M00S",
+     "alertDetailsOverride": {
+      "alertDisplayNameFormat": "Sentinel KQL Rule (lab)",
+      "alertDescriptionFormat": "Lab: "
+     },
+     "eventGroupingSettings": {
+      "aggregationKind": "SingleAlert"
+     },
+     "incidentConfiguration": {
+      "createIncident": true,
+      "groupingConfiguration": {
+       "enabled": false,
+       "lookbackDuration": "PT01H00M00S",
+       "reopenClosedIncident": false,
+       "matchingMethod": "AllEntities"
+      }
+     },
+     "severity": "High",
+     "displayName": "Sentinel KQL Rule",
+     "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
+     "tactics": [
+      "Execution"
+     ],
+     "techniques": [
+      "T1059"
+     ]
+    }
+   }
+  },
+  {
+   "id": "sentinel-other-tenant",
+   "file": "rule-0001-sentinel-kql.yaml",
+   "platform": "sentinel",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "alert.title": "suffix:: (lab)",
+    "alert.description": "prefix::Lab: ",
+    "scheduling.frequency": "2h",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "Sentinel KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+    "scheduling": {
+     "nrt": null,
+     "frequency": "PT1H",
+     "lookback": "PT2H"
+    },
+    "alert": {
+     "title": "Sentinel KQL Rule",
+     "description": null,
+     "severity": null,
+     "suppression": false,
+     "create_incident": true,
+     "tactics": null,
+     "techniques": null,
+     "custom_details": null,
+     "dynamic_properties": null
+    },
+    "exclusions": null,
+    "template": null,
+    "trigger": null,
+    "grouping": {
+     "event": "SingleAlert",
+     "alert": {
+      "enabled": false,
+      "reopen_closed_incidents": null,
+      "grouping_lookback": null,
+      "matching": null,
+      "group_by_entities": null,
+      "group_by_alert_details": null,
+      "group_by_custom_details": null
+     }
+    },
+    "entities": null
+   },
+   "api_request": {
+    "kind": "Scheduled",
+    "properties": {
+     "enabled": true,
+     "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+     "suppressionEnabled": false,
+     "suppressionDuration": "PT01H00M00S",
+     "queryFrequency": "PT01H00M00S",
+     "queryPeriod": "PT02H00M00S",
+     "alertDetailsOverride": {
+      "alertDisplayNameFormat": "Sentinel KQL Rule"
+     },
+     "eventGroupingSettings": {
+      "aggregationKind": "SingleAlert"
+     },
+     "incidentConfiguration": {
+      "createIncident": true,
+      "groupingConfiguration": {
+       "enabled": false,
+       "lookbackDuration": "PT01H00M00S",
+       "reopenClosedIncident": false,
+       "matchingMethod": "AllEntities"
+      }
+     },
+     "severity": "High",
+     "displayName": "Sentinel KQL Rule",
+     "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
+     "tactics": [
+      "Execution"
+     ],
+     "techniques": [
+      "T1059"
+     ]
+    }
+   }
+  },
+  {
+   "id": "defender_for_endpoint-applies",
+   "file": "rule-0002-defender-kql.yaml",
+   "platform": "defender_for_endpoint",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "query": "suffix::\n| take 10",
+    "alert.title": "prefix::Lab ",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] Defender KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "DeviceProcessEvents\n| take 1\n\n| take 10",
+    "alert": {
+     "category": "Execution",
+     "title": "Lab ",
+     "description": null,
+     "severity": null,
+     "recommendation": null,
+     "techniques": null
+    },
+    "impacted_entities": {
+     "device": "device_id",
+     "mailbox": null,
+     "user": null
+    },
+    "scheduling": "1H",
+    "actions": null,
+    "scope": {
+     "selection": "All",
+     "device_groups": null
+    },
+    "exclusions": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "[LAB] Defender KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "DeviceProcessEvents\n| take 1\n\n| take 10",
+    "alert": {
+     "category": "Execution",
+     "title": "Lab ",
+     "description": null,
+     "severity": null,
+     "recommendation": null,
+     "techniques": null
+    },
+    "impacted_entities": {
+     "device": "device_id",
+     "mailbox": null,
+     "user": null
+    },
+    "scheduling": "1H",
+    "actions": null,
+    "scope": {
+     "selection": "All",
+     "device_groups": null
+    },
+    "exclusions": null
+   }
+  },
+  {
+   "id": "defender_for_endpoint-other-tenant",
+   "file": "rule-0002-defender-kql.yaml",
+   "platform": "defender_for_endpoint",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "query": "suffix::\n| take 10",
+    "alert.title": "prefix::Lab ",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "Defender KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "DeviceProcessEvents\n| take 1\n",
+    "alert": {
+     "category": "Execution",
+     "title": null,
+     "description": null,
+     "severity": null,
+     "recommendation": null,
+     "techniques": null
+    },
+    "impacted_entities": {
+     "device": "device_id",
+     "mailbox": null,
+     "user": null
+    },
+    "scheduling": "1H",
+    "actions": null,
+    "scope": {
+     "selection": "All",
+     "device_groups": null
+    },
+    "exclusions": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "Defender KQL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "DeviceProcessEvents\n| take 1\n",
+    "alert": {
+     "category": "Execution",
+     "title": null,
+     "description": null,
+     "severity": null,
+     "recommendation": null,
+     "techniques": null
+    },
+    "impacted_entities": {
+     "device": "device_id",
+     "mailbox": null,
+     "user": null
+    },
+    "scheduling": "1H",
+    "actions": null,
+    "scope": {
+     "selection": "All",
+     "device_groups": null
+    },
+    "exclusions": null
+   }
+  },
+  {
+   "id": "splunk-applies",
+   "file": "rule-0003-splunk-spl.yaml",
+   "platform": "splunk",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "scheduling.schedule.cron": "suffix:: (lab)",
+    "dispatch.latest_time": "-5m@m",
+    "correlation_search": true,
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] Splunk SPL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "index=main | head 1",
+    "scheduling": {
+     "type": null,
+     "expires": null,
+     "schedule": {
+      "frequency": null,
+      "cron": "0 * * * * (lab)",
+      "custom_time": null
+     },
+     "timerange": null
+    },
+    "trigger": null,
+    "actions": null,
+    "correlation_search": true
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "[LAB] Splunk SPL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "index=main | head 1",
+    "scheduling": {
+     "type": null,
+     "expires": null,
+     "schedule": {
+      "frequency": null,
+      "cron": "0 * * * * (lab)",
+      "custom_time": null
+     },
+     "timerange": null
+    },
+    "trigger": null,
+    "actions": null,
+    "correlation_search": true
+   }
+  },
+  {
+   "id": "splunk-other-tenant",
+   "file": "rule-0003-splunk-spl.yaml",
+   "platform": "splunk",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "scheduling.schedule.cron": "suffix:: (lab)",
+    "dispatch.latest_time": "-5m@m",
+    "correlation_search": true,
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "Splunk SPL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "index=main | head 1",
+    "scheduling": {
+     "type": null,
+     "expires": null,
+     "schedule": {
+      "frequency": null,
+      "cron": "0 * * * *",
+      "custom_time": null
+     },
+     "timerange": null
+    },
+    "trigger": null,
+    "actions": null,
+    "correlation_search": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "Splunk SPL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "index=main | head 1",
+    "scheduling": {
+     "type": null,
+     "expires": null,
+     "schedule": {
+      "frequency": null,
+      "cron": "0 * * * *",
+      "custom_time": null
+     },
+     "timerange": null
+    },
+    "trigger": null,
+    "actions": null,
+    "correlation_search": null
+   }
+  },
+  {
+   "id": "sentinel_one-applies",
+   "file": "rule-0004-sentinel-one-s1ql.yaml",
+   "platform": "sentinel_one",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "details": "prefix::Lab ",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "error": "ValidationError"
+  },
+  {
+   "id": "sentinel_one-other-tenant",
+   "file": "rule-0004-sentinel-one-s1ql.yaml",
+   "platform": "sentinel_one",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "details": "prefix::Lab ",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "SentinelOne S1QL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "condition": {
+     "type": "Correlation",
+     "single_event": null,
+     "correlation": {
+      "entity": "host",
+      "match_in_order": true,
+      "time_window": "1h",
+      "sub_queries": [
+       {
+        "query": "EventType = \"Process Create\"",
+        "matches_required": 1
+       }
+      ]
+     },
+     "cool_off": null
+    },
+    "response": {
+     "treat_as_threat": "Malicious",
+     "network_quarantine": false
+    },
+    "details": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "SentinelOne S1QL Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "condition": {
+     "type": "Correlation",
+     "single_event": null,
+     "correlation": {
+      "entity": "host",
+      "match_in_order": true,
+      "time_window": "1h",
+      "sub_queries": [
+       {
+        "query": "EventType = \"Process Create\"",
+        "matches_required": 1
+       }
+      ]
+     },
+     "cool_off": null
+    },
+    "response": {
+     "treat_as_threat": "Malicious",
+     "network_quarantine": false
+    },
+    "details": null
+   }
+  },
+  {
+   "id": "carbon_black_cloud-applies",
+   "file": "rule-0005-carbon-black-lucene.yaml",
+   "platform": "carbon_black_cloud",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "query": "suffix:: (lab)",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] Carbon Black Lucene Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "process_name:cmd.exe (lab)",
+    "organizations": null,
+    "watchlist": null,
+    "report": null,
+    "tags": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "[LAB] Carbon Black Lucene Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "process_name:cmd.exe (lab)",
+    "organizations": null,
+    "watchlist": null,
+    "report": null,
+    "tags": null
+   }
+  },
+  {
+   "id": "carbon_black_cloud-other-tenant",
+   "file": "rule-0005-carbon-black-lucene.yaml",
+   "platform": "carbon_black_cloud",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "query": "suffix:: (lab)",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "Carbon Black Lucene Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "process_name:cmd.exe",
+    "organizations": null,
+    "watchlist": null,
+    "report": null,
+    "tags": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "Carbon Black Lucene Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "query": "process_name:cmd.exe",
+    "organizations": null,
+    "watchlist": null,
+    "report": null,
+    "tags": null
+   }
+  },
+  {
+   "id": "crowdstrike-applies",
+   "file": "rule-0006-crowdstrike-deploy-only.yaml",
+   "platform": "crowdstrike",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "schedule.lookback": "suffix:: (lab)",
+    "details.description": "prefix::Lab ",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] CrowdStrike Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "details": {
+     "trigger": "event",
+     "outcome": "detection",
+     "name": null,
+     "description": "Lab ",
+     "severity": null,
+     "tactic": null,
+     "technique": null
+    },
+    "schedule": {
+     "frequency": "1h",
+     "lookback": "2h (lab)",
+     "start": null,
+     "end": null
+    },
+    "query": "index=main"
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "[LAB] CrowdStrike Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "details": {
+     "trigger": "event",
+     "outcome": "detection",
+     "name": null,
+     "description": "Lab ",
+     "severity": null,
+     "tactic": null,
+     "technique": null
+    },
+    "schedule": {
+     "frequency": "1h",
+     "lookback": "2h (lab)",
+     "start": null,
+     "end": null
+    },
+    "query": "index=main"
+   }
+  },
+  {
+   "id": "crowdstrike-other-tenant",
+   "file": "rule-0006-crowdstrike-deploy-only.yaml",
+   "platform": "crowdstrike",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "schedule.lookback": "suffix:: (lab)",
+    "details.description": "prefix::Lab ",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "CrowdStrike Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "details": {
+     "trigger": "event",
+     "outcome": "detection",
+     "name": null,
+     "description": null,
+     "severity": null,
+     "tactic": null,
+     "technique": null
+    },
+    "schedule": {
+     "frequency": "1h",
+     "lookback": "2h",
+     "start": null,
+     "end": null
+    },
+    "query": "index=main"
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "CrowdStrike Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "details": {
+     "trigger": "event",
+     "outcome": "detection",
+     "name": null,
+     "description": null,
+     "severity": null,
+     "tactic": null,
+     "technique": null
+    },
+    "schedule": {
+     "frequency": "1h",
+     "lookback": "2h",
+     "start": null,
+     "end": null
+    },
+    "query": "index=main"
+   }
+  },
+  {
+   "id": "harfanglab-applies",
+   "file": "rule-0007-harfanglab-deploy-only.yaml",
+   "platform": "harfanglab",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "sigma.condition": "suffix:: (lab)",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] HarfangLab Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "maturity": "Experimental",
+    "confidence": "Moderate",
+    "action": "Alert",
+    "tags": null,
+    "sigma": {
+     "logsource": {
+      "category": "process_creation",
+      "product": "windows"
+     },
+     "selections": [
+      {
+       "name": "selection",
+       "field": "Image",
+       "value": "cmd.exe",
+       "modifiers": null
+      }
+     ],
+     "condition": "selection (lab)",
+     "false_positives": null
+    },
+    "yara": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "[LAB] HarfangLab Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "maturity": "Experimental",
+    "confidence": "Moderate",
+    "action": "Alert",
+    "tags": null,
+    "sigma": {
+     "logsource": {
+      "category": "process_creation",
+      "product": "windows"
+     },
+     "selections": [
+      {
+       "name": "selection",
+       "field": "Image",
+       "value": "cmd.exe",
+       "modifiers": null
+      }
+     ],
+     "condition": "selection (lab)",
+     "false_positives": null
+    },
+    "yara": null
+   }
+  },
+  {
+   "id": "harfanglab-other-tenant",
+   "file": "rule-0007-harfanglab-deploy-only.yaml",
+   "platform": "harfanglab",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "sigma.condition": "suffix:: (lab)",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "HarfangLab Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "maturity": "Experimental",
+    "confidence": "Moderate",
+    "action": "Alert",
+    "tags": null,
+    "sigma": {
+     "logsource": {
+      "category": "process_creation",
+      "product": "windows"
+     },
+     "selections": [
+      {
+       "name": "selection",
+       "field": "Image",
+       "value": "cmd.exe",
+       "modifiers": null
+      }
+     ],
+     "condition": "selection",
+     "false_positives": null
+    },
+    "yara": null
+   },
+   "api_request": {
+    "enabled": true,
+    "name": "HarfangLab Deploy Rule",
+    "schema": null,
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "maturity": "Experimental",
+    "confidence": "Moderate",
+    "action": "Alert",
+    "tags": null,
+    "sigma": {
+     "logsource": {
+      "category": "process_creation",
+      "product": "windows"
+     },
+     "selections": [
+      {
+       "name": "selection",
+       "field": "Image",
+       "value": "cmd.exe",
+       "modifiers": null
+      }
+     ],
+     "condition": "selection",
+     "false_positives": null
+    },
+    "yara": null
+   }
+  },
+  {
+   "id": "elastic-applies",
+   "file": "rule-0009-elastic-kql.yaml",
+   "platform": "elastic",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "query": "suffix:: and not user.name:lab",
+    "scheduling.interval": "10m",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] ",
+    "schema": "platform::elastic::1.0",
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "type": "query",
+    "query": "process.name: \"powershell.exe\"\n and not user.name:lab",
+    "language": "kuery",
+    "index": [
+     "logs-*"
+    ],
+    "data_view_id": null,
+    "filters": null,
+    "scheduling": {
+     "interval": "10m",
+     "lookback": "1m",
+     "max_alerts": null
+    },
+    "severity": null,
+    "risk": null,
+    "suppression": null,
+    "highlighted_fields": null,
+    "threshold": null,
+    "new_terms": null,
+    "eql": null,
+    "threat": null,
+    "machine_learning": null,
+    "integration": null,
+    "required_fields": null,
+    "guide": null,
+    "false_positives": null,
+    "tags": null,
+    "exceptions": null,
+    "building_block": false,
+    "overrides": null,
+    "actions": null
+   },
+   "api_request": {
+    "rule_id": "00000000-0000-4000-8003-000000000009",
+    "type": "query",
+    "name": "[LAB] ",
+    "description": "Simulated Elastic rule for CLI E2E corpus.",
+    "enabled": true,
+    "severity": "high",
+    "risk_score": 73,
+    "interval": "10m",
+    "from": "now-11m",
+    "to": "now",
+    "language": "kuery",
+    "query": "process.name: \"powershell.exe\"\n and not user.name:lab",
+    "index": [
+     "logs-*"
+    ],
+    "tags": [
+     "OpenTide"
+    ],
+    "threat": [
+     {
+      "framework": "MITRE ATT&CK",
+      "tactic": {
+       "id": "TA0002",
+       "name": "Execution",
+       "reference": "https://attack.mitre.org/tactics/TA0002/"
+      },
+      "technique": [
+       {
+        "id": "T1059",
+        "name": "Command and Scripting Interpreter",
+        "reference": "https://attack.mitre.org/techniques/T1059"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "elastic-other-tenant",
+   "file": "rule-0009-elastic-kql.yaml",
+   "platform": "elastic",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "query": "suffix:: and not user.name:lab",
+    "scheduling.interval": "10m",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "",
+    "schema": "platform::elastic::1.0",
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "type": "query",
+    "query": "process.name: \"powershell.exe\"\n",
+    "language": "kuery",
+    "index": [
+     "logs-*"
+    ],
+    "data_view_id": null,
+    "filters": null,
+    "scheduling": {
+     "interval": "5m",
+     "lookback": "1m",
+     "max_alerts": null
+    },
+    "severity": null,
+    "risk": null,
+    "suppression": null,
+    "highlighted_fields": null,
+    "threshold": null,
+    "new_terms": null,
+    "eql": null,
+    "threat": null,
+    "machine_learning": null,
+    "integration": null,
+    "required_fields": null,
+    "guide": null,
+    "false_positives": null,
+    "tags": null,
+    "exceptions": null,
+    "building_block": false,
+    "overrides": null,
+    "actions": null
+   },
+   "api_request": {
+    "rule_id": "00000000-0000-4000-8003-000000000009",
+    "type": "query",
+    "name": "Elastic KQL Rule",
+    "description": "Simulated Elastic rule for CLI E2E corpus.",
+    "enabled": true,
+    "severity": "high",
+    "risk_score": 73,
+    "interval": "5m",
+    "from": "now-6m",
+    "to": "now",
+    "language": "kuery",
+    "query": "process.name: \"powershell.exe\"",
+    "index": [
+     "logs-*"
+    ],
+    "tags": [
+     "OpenTide"
+    ],
+    "threat": [
+     {
+      "framework": "MITRE ATT&CK",
+      "tactic": {
+       "id": "TA0002",
+       "name": "Execution",
+       "reference": "https://attack.mitre.org/tactics/TA0002/"
+      },
+      "technique": [
+       {
+        "id": "T1059",
+        "name": "Command and Scripting Interpreter",
+        "reference": "https://attack.mitre.org/techniques/T1059"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "sysdig-applies",
+   "file": "rule-0013-sysdig-falco.yaml",
+   "platform": "sysdig",
+   "tenants": [
+    "Lab"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "condition": "suffix:: and not proc.name=lab",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "[LAB] ",
+    "schema": "platform::sysdig::1.0",
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "condition": "spawned_process and container and proc.name in (corpus_shells)\n and not proc.name=lab",
+    "append_to_rule": null,
+    "source": null,
+    "output": null,
+    "priority": null,
+    "tags": [
+     "container",
+     "shell"
+    ],
+    "exceptions": null,
+    "macros": null,
+    "lists": [
+     {
+      "name": "corpus_shells",
+      "items": [
+       "bash",
+       "sh",
+       "zsh"
+      ]
+     }
+    ],
+    "policies": null,
+    "minimum_engine_version": null
+   },
+   "api_request": {
+    "name": "[LAB] ",
+    "description": "Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.",
+    "tags": [
+     "container",
+     "shell",
+     "T1059.004",
+     "T1059",
+     "mitre_execution",
+     "maturity_incubating"
+    ],
+    "details": {
+     "ruleType": "FALCO",
+     "append": false,
+     "source": "syscall",
+     "condition": {
+      "condition": "spawned_process and container and proc.name in ( bash, sh, zsh ) and not proc.name=lab",
+      "components": []
+     },
+     "output": "[LAB]  | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository",
+     "priority": "warning"
+    }
+   }
+  },
+  {
+   "id": "sysdig-other-tenant",
+   "file": "rule-0013-sysdig-falco.yaml",
+   "platform": "sysdig",
+   "tenants": [
+    "Prod"
+   ],
+   "modifications": {
+    "name": "prefix::[LAB] ",
+    "condition": "suffix:: and not proc.name=lab",
+    "not_a_field.child": "prefix::skipped",
+    "flags": "NONE"
+   },
+   "config": {
+    "enabled": true,
+    "name": "",
+    "schema": "platform::sysdig::1.0",
+    "status": "STAGING",
+    "flags": null,
+    "tenants": null,
+    "contributors": null,
+    "condition": "spawned_process and container and proc.name in (corpus_shells)\n",
+    "append_to_rule": null,
+    "source": null,
+    "output": null,
+    "priority": null,
+    "tags": [
+     "container",
+     "shell"
+    ],
+    "exceptions": null,
+    "macros": null,
+    "lists": [
+     {
+      "name": "corpus_shells",
+      "items": [
+       "bash",
+       "sh",
+       "zsh"
+      ]
+     }
+    ],
+    "policies": null,
+    "minimum_engine_version": null
+   },
+   "api_request": {
+    "name": "Sysdig Falco Rule",
+    "description": "Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.",
+    "tags": [
+     "container",
+     "shell",
+     "T1059.004",
+     "T1059",
+     "mitre_execution",
+     "maturity_incubating"
+    ],
+    "details": {
+     "ruleType": "FALCO",
+     "append": false,
+     "source": "syscall",
+     "condition": {
+      "condition": "spawned_process and container and proc.name in ( bash, sh, zsh )",
+      "components": []
+     },
+     "output": "Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository",
+     "priority": "warning"
+    }
+   }
+  }
+ ]
+}

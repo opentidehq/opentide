@@ -45,7 +45,7 @@ def info_cmd(
     )
 
     cli = get_context(ctx)
-    sections = ("rules", "threats", "objectives", "coverage", "vocab")
+    sections = ("rules", "threats", "objectives", "coverage", "vocab", "catalog")
     if section is not None and section not in sections:
         emit_usage_error(
             cli,
@@ -77,6 +77,8 @@ def info_cmd(
     except InvalidVocabularyLifecycleError as exc:
         emit_error(cli, str(exc))
     summary = info_summary(result)
+    if section == "catalog":
+        summary.update(result.pop("catalog_summary"))
     result["_summary"] = summary
     result["_outcome"] = info_outcome(summary)
     if summary["load_errors"]:

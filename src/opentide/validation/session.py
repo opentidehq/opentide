@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -12,6 +11,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
+from opentide.core import progress_events
 from opentide.core.files import resolve_configurations, resolve_paths
 from opentide.core.registry import Opentide
 from opentide.models.object_types import CORE_OBJECT_TYPES
@@ -26,10 +26,7 @@ from opentide.validation.checks.cross_object import (
     check_references_for_object,
 )
 from opentide.validation.checks.kinds import ValidateCheck
-from opentide.validation.disabled_platforms import (
-    STRICT_EXEMPT_WARNINGS,
-    platform_not_enabled_warnings,
-)
+from opentide.validation.disabled_platforms import platform_not_enabled_warnings
 from opentide.validation.errors import (
     attach_yaml_lines,
     is_vocab_shape_duplicate,
@@ -43,12 +40,14 @@ from opentide.validation.parallel import resolve_worker_count, sort_issues
 from opentide.validation.preflight import PreflightGraph
 from opentide.validation.scope import ValidationScope
 
-_DEFAULT_CHECKS = frozenset(
+#: The checks a run performs when none are named: ``opentide validate``'s defaults.
+DEFAULT_CHECKS = frozenset(
     {
         ValidateCheck.id_uniqueness,
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
         ValidateCheck.configuration,
+        ValidateCheck.queries,
     }
 )
 
@@ -95,11 +94,16 @@ def run_validation(
     *,
     index: Mapping[str, Any] | None = None,
     workers: int | None = None,
+    queries_as_warnings: bool = False,
 ) -> ValidationReport:
-    """Run validation checks and return a structured report."""
+    """Run validation checks and return a structured report.
+
+    *queries_as_warnings* reports the queries check's errors as warnings
+    (``validate --queries warn``): the run passes unless strict.
+    """
     started = time.perf_counter()
     scope = scope or ValidationScope.full()
-    checks = checks or _DEFAULT_CHECKS
+    checks = checks or DEFAULT_CHECKS
 
     Opentide.initialise()
     if index is None:
@@ -128,7 +132,9 @@ def run_validation(
     parse_errors = index.get("parse_errors", [])
     # yaml_parse belongs to schema. A named check such as cve must not fail
     # because an unrelated object file failed to parse.
-    parse_issues = _yaml_parse_issues(parse_errors, scope) if ValidateCheck.schema in checks else []
+    # So does the queries check: a file it cannot parse has no query it could check.
+    reads_files = bool(checks & {ValidateCheck.schema, ValidateCheck.queries})
+    parse_issues = _yaml_parse_issues(parse_errors, scope) if reads_files else []
     issues.extend(parse_issues)
     indexed_parse_failures = frozenset(
         _resolved_str(entry["path"]) for entry in parse_errors if entry.get("path")
@@ -138,9 +144,11 @@ def run_validation(
         ValidateCheck.uuid_format,
         ValidateCheck.schema,
     }
-    if _scope_has_narrow_filter(scope) and object_checks and not work_items and not parse_issues:
+    # Checks that read the selected objects: a target that selects none checked nothing.
+    scoped_checks = object_checks | (checks & {ValidateCheck.queries})
+    if _scope_has_narrow_filter(scope) and scoped_checks and not work_items and not parse_issues:
         issues.append(_scope_no_match_issue(scope))
-    elif object_checks and scope.file_targets:
+    elif scoped_checks and scope.file_targets:
         # One matching target must not let another, unmatched one pass: the
         # production write-back validates exactly the files it is about to
         # commit, and a target that matches nothing validated nothing.
@@ -187,6 +195,8 @@ def run_validation(
 
     if object_checks:
         enabled_platforms = _enabled_platforms(work_items, object_checks)
+        # OPENTIDE_PROGRESS=json: objects checked so far, in batches.
+        ticker = progress_events.Ticker("objects", len(work_items))
         if object_workers > 0:
             from concurrent.futures import ThreadPoolExecutor
 
@@ -206,6 +216,7 @@ def run_validation(
                 for item_issues, item_warnings in pool.map(_worker, work_items):
                     issues.extend(item_issues)
                     warnings.extend(item_warnings)
+                    ticker.advance()
         else:
             for item in work_items:
                 item_issues, item_warnings = _validate_work_item(
@@ -218,7 +229,36 @@ def run_validation(
                 )
                 issues.extend(item_issues)
                 warnings.extend(item_warnings)
+                ticker.advance()
         stats["objects_checked"] = len(work_items)
+        if enabled_platforms and not issues:
+            issues.extend(_compile_issues(work_items, graph, enabled_platforms))
+
+    if ValidateCheck.queries in checks:
+        from opentide.registry.discovery import discover_workspace
+        from opentide.validation.queries import QueryObject, query_issues
+
+        found = query_issues(
+            (
+                QueryObject(item.file_path, item.uuid, item.object_type)
+                for item in work_items
+                if item.file_path is not None
+            ),
+            root=discover_workspace(),
+            as_warnings=queries_as_warnings,
+        )
+        # A query the schema check rejects (an empty one) is its finding, once.
+        rejected = {
+            _query_place(issue)
+            for issue in issues
+            if issue.field_path and issue.field_path[-1] == "query"
+        }
+        issues.extend(_not_in(found.errors, rejected))
+        warnings.extend(_not_in(found.warnings, rejected))
+        stats["queries_checked"] = found.queries
+        progress_events.progress("queries", found.queries, found.queries)
+        if not object_checks:
+            stats["objects_checked"] = len(work_items)
 
     if ValidateCheck.schema in checks and scope.mode == "full":
         # Shards outlive their rules: an orphan is still the only handle on a
@@ -231,13 +271,48 @@ def run_validation(
     issues = sort_issues(issues)
     stats["wall_ms"] = round((time.perf_counter() - started) * 1000, 2)
 
-    if issues:
-        os.environ["VALIDATION_ERROR_RAISED"] = "1"
-    # The flag fails --strict. A disabled platform's block is reported, not failed.
-    if any(warning.code not in STRICT_EXEMPT_WARNINGS for warning in warnings):
-        os.environ["VALIDATION_WARNING_RAISED"] = "1"
-
     return ValidationReport(ok=not issues, issues=issues, warnings=warnings, stats=stats)
+
+
+def _query_place(issue: ValidationIssue) -> tuple[Path | None, tuple[str, ...]]:
+    """Which query *issue* is about: a platform block (whose query a legacy key such as
+    splunk's ``search`` may hold), or the query's own path elsewhere (a hunt)."""
+    path = tuple(issue.field_path)
+    if len(path) == 3 and path[0] == "configurations":
+        path = path[:2]
+    return issue.file_path, path
+
+
+def _not_in(
+    found: list[ValidationIssue], rejected: set[tuple[Path | None, tuple[str, ...]]]
+) -> list[ValidationIssue]:
+    """*found*, without the issues on a query another check already rejected."""
+    return [item for item in found if _query_place(item) not in rejected]
+
+
+def _compile_issues(
+    work_items: list[ObjectWorkItem], graph: PreflightGraph, enabled: frozenset[str]
+) -> list[ValidationIssue]:
+    """What a deploy would compile must compile (#660).
+
+    Run only once every object passed the schema check: a rule that is
+    malformed, or that names an object which failed to load, would fail to
+    compile for the same cause, reported again as a worse message.
+    """
+    from opentide.loading.object_loader import load_object_for_validation
+    from opentide.validation.compile_check import compile_issues
+
+    issues: list[ValidationIssue] = []
+    for item in work_items:
+        if item.object_type != "rule":
+            continue
+        ref = graph.resolve(item.uuid)
+        file_path = ref.file_path if ref else None
+        rule = load_object_for_validation(item.body, item.object_type, file=file_path)
+        issues.extend(
+            compile_issues(rule, item.body, enabled, object_uuid=item.uuid, file_path=file_path)
+        )
+    return issues
 
 
 def _enabled_platforms(
@@ -643,7 +718,7 @@ def _id_scan_parse_issues(
 
 def _id_scan_paths() -> list[tuple[Path, str]]:
     """Collect all YAML model paths (ID uniqueness scans the full registry)."""
-    core_config = resolve_configurations()["global"]
+    core_config = resolve_configurations()["paths"]
     metaschemas = core_config["metaschemas"]
     skips = {"logsources", "ram", "mdrv2"}
     paths = resolve_paths()

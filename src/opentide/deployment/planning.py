@@ -73,11 +73,31 @@ def modifier_applies(
     return conditions.default is True
 
 
-def _json_normalize(data: Any) -> Any:
-    """Import pandas on first use: it is slow to import and most commands never need it."""
-    import pandas as pd
+def flatten_mapping(data: Mapping[Any, Any]) -> dict[Any, Any]:
+    """*data* with each nested mapping spread into dotted keys.
 
-    return pd.json_normalize(data)
+    ``{"a": {"b": 1}, "c": 2}`` becomes ``{"c": 2, "a.b": 1}``.
+
+    The keys and their order are those ``pandas.json_normalize(data)`` gave
+    (#747): the top-level keys whose value is not a mapping first, as they
+    are, then the nested values in order, each under its dotted path. An
+    empty mapping adds no key. Lists are values, never descended into.
+    """
+    flat: dict[Any, Any] = {
+        key: value for key, value in data.items() if not isinstance(value, dict)
+    }
+
+    def spread(value: Any, path: str) -> None:
+        if not isinstance(value, dict):
+            flat[path] = value
+            return
+        for key, child in value.items():
+            spread(child, f"{path}.{key}" if path else str(key))
+
+    for key, value in data.items():
+        if isinstance(value, dict):
+            spread(value, str(key))
+    return flat
 
 
 def _typed_platform_config_roots(system_identifier: str) -> set[str]:
@@ -142,6 +162,8 @@ class TideDeployment:
                 return registry.Opentide.Configurations.Systems.HarfangLab
             case DetectionPlatforms.ELASTIC:
                 return registry.Opentide.Configurations.Systems.Elastic
+            case DetectionPlatforms.SYSDIG:
+                return registry.Opentide.Configurations.Systems.Sysdig
         raise NotImplementedError(f"System {system} is not implemented by TideDeployment")
 
     def mdr_configuration_resolver(
@@ -167,6 +189,8 @@ class TideDeployment:
                     mdr_config = configurations.carbon_black_cloud
                 case DetectionPlatforms.ELASTIC:
                     mdr_config = configurations.elastic
+                case DetectionPlatforms.SYSDIG:
+                    mdr_config = configurations.sysdig
                 case _:
                     logger.critical(
                         "could_not_resolve_rule_configuration_for_system", detail=str(system)
@@ -308,9 +332,7 @@ class TideDeployment:
                         detail=str(str(mod.name or "")) + " | " + str(str(mod.description or "")),
                     )
                     typed_roots = _typed_platform_config_roots(system_identifier)
-                    flatten_modifications = _json_normalize(mod.modifications).to_dict(
-                        orient="records"
-                    )[0]
+                    flatten_modifications = flatten_mapping(mod.modifications)
                     for modification in flatten_modifications:
                         new_value = flatten_modifications[modification]
                         new_value = None if new_value in ["NONE", "NULL"] else new_value
@@ -318,9 +340,7 @@ class TideDeployment:
                             if type(new_value) is not str:
                                 pass
                             elif "::" in new_value:
-                                raw_mdr_config_flatten = _json_normalize(raw_mdr_config).to_dict(
-                                    orient="records"
-                                )[0]
+                                raw_mdr_config_flatten = flatten_mapping(raw_mdr_config)
                                 operator = new_value.split("::")[0]
                                 value = new_value.split("::")[1]
                                 logger.debug("found_mod")

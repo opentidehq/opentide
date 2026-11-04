@@ -37,10 +37,7 @@ def _setup_opentide_index(monkeypatch) -> None:
             },
         },
         "configurations": {
-            "global": {
-                "exports": {"attack_layer": "attack-layer.json"},
-                "paths": {"tide": {"exports": "/tmp/exports"}},
-            }
+            "paths": {"artifacts": {"exports": {"attack_layer": "attack-layer.json"}}}
         },
         "paths": {"tide": {"exports": "/tmp/exports"}},
     }
@@ -138,7 +135,7 @@ def _export_layer_text(tmp_path: Path, objects: dict[str, dict], name: str) -> s
             }
             for model_type in ("threat", "rule")
         },
-        "configurations": {"global": {"exports": {"attack_layer": name}}},
+        "configurations": {"paths": {"artifacts": {"exports": {"attack_layer": name}}}},
     }
     Opentide._initialised = True
     layer = AttackNavigatorLayer()

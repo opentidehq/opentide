@@ -8,6 +8,7 @@ like any other configuration file. Template generation reads the same
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,16 +20,29 @@ Severity = Literal["error", "warning", "info"]
 SEVERITIES: tuple[Severity, ...] = ("error", "warning", "info")
 
 #: Check names, in the order ``opentide lint`` runs them by default.
-CHECK_NAMES: tuple[str, ...] = ("filenames", "metadata", "placeholders")
+CHECK_NAMES: tuple[str, ...] = ("filenames", "metadata", "placeholders", "queries")
+
+#: How ``[filenames]`` derives the file stem an object should have from its ``name``.
+FilenameStyle = Literal["slug", "name", "none"]
+
+FILENAME_STYLES: tuple[FilenameStyle, ...] = ("slug", "name", "none")
+
+#: The object kinds a ``[filenames.<kind>]`` table configures, named as their folders under
+#: ``objects/``.
+FILENAME_KINDS: tuple[str, ...] = ("threats", "objectives", "rules")
+
+#: The keys a ``[filenames.<kind>]`` table takes; an unset one falls back to ``[filenames]``.
+_FILENAME_KIND_KEYS = frozenset({"style", "pattern"})
 
 #: ``metadata.required`` when nothing configures it (the behaviour before #489).
 DEFAULT_REQUIRED_METADATA: tuple[str, ...] = ("author", "organisation")
 
 _COMMON_KEYS = frozenset({"enabled", "severity"})
 _CHECK_KEYS: dict[str, frozenset[str]] = {
-    "filenames": _COMMON_KEYS,
+    "filenames": _COMMON_KEYS | {"style", "pattern"} | set(FILENAME_KINDS),
     "metadata": _COMMON_KEYS | {"required"},
     "placeholders": _COMMON_KEYS,
+    "queries": _COMMON_KEYS,
 }
 
 _SOURCE = "lint.toml"
@@ -47,17 +61,79 @@ class CheckConfig:
 
 
 @dataclass(frozen=True)
+class FilenameConfig:
+    """The ``[filenames]`` convention: how a stem derives from ``name``, and what it must match.
+
+    The defaults are the convention before it was configurable: the stem is
+    ``slugify(name)`` and nothing else is demanded of it.
+    """
+
+    style: FilenameStyle = "slug"
+    #: Compiled from ``pattern``; the whole stem must match it (``re.fullmatch``).
+    pattern: re.Pattern[str] | None = None
+    #: The convention of each kind with a ``[filenames.<kind>]`` table, its unset keys
+    #: already taken from ``[filenames]``. A kind without a table follows this one.
+    kinds: Mapping[str, FilenameConfig] = field(default_factory=dict, hash=False)
+    #: The ``lint.toml`` key ``pattern`` came from, for messages.
+    pattern_key: str = field(default="[filenames].pattern", compare=False)
+
+    def stem_for(self, name: str) -> str | None:
+        """The stem an object called *name* should have, or ``None`` when none is expected."""
+        return expected_stem(name, self.style)
+
+    def for_kind(self, kind: str | None) -> FilenameConfig:
+        """The convention for objects of *kind* (``threats``, ``objectives``, ``rules``)."""
+        if kind is None:
+            return self
+        return self.kinds.get(kind, self)
+
+
+@dataclass(frozen=True)
 class LintConfig:
     """Resolved lint settings. The defaults reproduce lint before it was configurable."""
 
     checks: Mapping[str, CheckConfig] = field(default_factory=dict)
     required_metadata: tuple[str, ...] = DEFAULT_REQUIRED_METADATA
+    filenames: FilenameConfig = field(default_factory=FilenameConfig)
 
     def check(self, name: str) -> CheckConfig:
         return self.checks.get(name, CheckConfig())
 
     def enabled_checks(self) -> list[str]:
         return [name for name in CHECK_NAMES if self.check(name).enabled]
+
+
+#: Control characters, which no file system takes in a name (Windows rejects them outright).
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+#: What makes a stem a debug fixture's (``B`` + ``.debug`` + ``.yaml``): see
+#: ``opentide.registry.catalogue.DEBUG_SUFFIXES``.
+_DEBUG_INFIX = ".debug"
+
+
+def expected_stem(name: str, style: FilenameStyle) -> str | None:
+    """The file stem ``style`` asks for an object called *name*.
+
+    ``"slug"`` is ``slugify(name)``. ``"name"`` is the name itself less what a
+    file name cannot hold (:func:`opentide.core.files.safe_file_name`), control
+    characters, and the spaces and dots around it: Windows silently drops a
+    trailing space or dot, and a leading dot hides the file on Unix, so the
+    stem would not be the one written. A trailing ``.debug`` goes too: the stem
+    ``B.debug`` would rename ``x.yaml`` to the debug fixture ``B.debug.yaml``,
+    and a rename never decides whether a file is in the catalogue. ``None`` when ``"none"``
+    compares no stem, or when nothing of the name is left to name a file after.
+    """
+    if style == "none":
+        return None
+    if style == "slug":
+        from opentide.documentation.markdown.links import slugify
+
+        return slugify(name)
+    from opentide.core.files import safe_file_name
+
+    stem = _CONTROL_CHARACTERS.sub("", safe_file_name(name)).strip(" .")
+    while stem.endswith(_DEBUG_INFIX):
+        stem = stem.removesuffix(_DEBUG_INFIX).strip(" .")
+    return stem or None
 
 
 def metadata_keys() -> tuple[str, ...]:
@@ -92,6 +168,7 @@ def parse_lint_config(raw: object, *, source: str = _SOURCE) -> LintConfig:
         )
     checks: dict[str, CheckConfig] = {}
     required = DEFAULT_REQUIRED_METADATA
+    filenames = FilenameConfig()
     for name in CHECK_NAMES:
         table = raw.get(name)
         if table is None:
@@ -100,6 +177,8 @@ def parse_lint_config(raw: object, *, source: str = _SOURCE) -> LintConfig:
         if not isinstance(table, Mapping):
             raise LintConfigError(f"{where} must be a table")
         unknown_keys = sorted(str(key) for key in table if key not in _CHECK_KEYS[name])
+        if name == "filenames":
+            _reject_unknown_kinds(table, unknown_keys, source=source)
         if unknown_keys:
             raise LintConfigError(
                 f"{where}: unknown key(s) {_quoted(unknown_keys)}. "
@@ -116,7 +195,70 @@ def parse_lint_config(raw: object, *, source: str = _SOURCE) -> LintConfig:
         checks[name] = CheckConfig(enabled=enabled, severity=cast("Severity | None", severity))
         if name == "metadata" and "required" in table:
             required = _required_metadata(table["required"], where=where)
-    return LintConfig(checks=checks, required_metadata=required)
+        if name == "filenames":
+            filenames = _filename_config(table, source=source)
+    return LintConfig(checks=checks, required_metadata=required, filenames=filenames)
+
+
+def _reject_unknown_kinds(table: Mapping[str, object], unknown: list[str], *, source: str) -> None:
+    """Name a ``[filenames.<kind>]`` table whose kind lint does not know."""
+    tables = [key for key in unknown if isinstance(table[key], Mapping)]
+    if tables:
+        raise LintConfigError(
+            f"{source} [filenames.{tables[0]}]: unknown object kind(s) {_quoted(tables)}. "
+            f"Known kinds: {', '.join(FILENAME_KINDS)}"
+        )
+
+
+def _filename_config(
+    table: Mapping[str, object],
+    *,
+    source: str,
+    key: str = "filenames",
+    base: FilenameConfig | None = None,
+) -> FilenameConfig:
+    """``[filenames]``, or with *base* the ``[filenames.<kind>]`` table *key* over it."""
+    where = f"{source} [{key}]"
+    style = table.get("style", "slug" if base is None else base.style)
+    if style not in FILENAME_STYLES:
+        raise LintConfigError(
+            f"{where}.style must be one of {', '.join(FILENAME_STYLES)}, got {style!r}"
+        )
+    pattern = None if base is None else base.pattern
+    pattern_key = f"[{key}].pattern" if base is None else base.pattern_key
+    if "pattern" in table:
+        raw = table["pattern"]
+        if not isinstance(raw, str):
+            raise LintConfigError(f"{where}.pattern must be a string, got {raw!r}")
+        if not raw:
+            raise LintConfigError(f"{where}.pattern must not be empty")
+        try:
+            pattern = re.compile(raw)
+        except re.error as exc:
+            raise LintConfigError(
+                f"{where}.pattern: invalid regular expression '{raw}': {exc}"
+            ) from exc
+        pattern_key = f"[{key}].pattern"
+    if base is not None:
+        return FilenameConfig(
+            style=cast("FilenameStyle", style), pattern=pattern, pattern_key=pattern_key
+        )
+    base = FilenameConfig(style=cast("FilenameStyle", style), pattern=pattern)
+    kinds: dict[str, FilenameConfig] = {}
+    for kind in FILENAME_KINDS:
+        if kind not in table:
+            continue
+        own = table[kind]
+        if not isinstance(own, Mapping):
+            raise LintConfigError(f"{where}.{kind} must be a table, got {own!r}")
+        unknown = sorted(str(name) for name in own if name not in _FILENAME_KIND_KEYS)
+        if unknown:
+            raise LintConfigError(
+                f"{source} [{key}.{kind}]: unknown key(s) {_quoted(unknown)}. "
+                f"Known keys: {', '.join(sorted(_FILENAME_KIND_KEYS))}"
+            )
+        kinds[kind] = _filename_config(own, source=source, key=f"{key}.{kind}", base=base)
+    return FilenameConfig(style=base.style, pattern=base.pattern, kinds=kinds)
 
 
 def _required_metadata(value: object, *, where: str) -> tuple[str, ...]:

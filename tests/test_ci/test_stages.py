@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+import yaml
+
 from opentide.ci.models import CiRenderOptions
 from opentide.ci.stages import (
     core_cli_steps,
@@ -16,9 +19,31 @@ from opentide.ci.stages import (
 )
 
 
-def test_pip_install_includes_version() -> None:
-    options = CiRenderOptions(ci="github", opentide_version="1.2.3")
-    assert pip_install(options) == 'pip install "opentide==1.2.3"'
+def test_pip_install_reads_the_pinned_version_from_one_variable() -> None:
+    assert pip_install() == 'pip install "opentide==$OPENTIDE_VERSION"'
+
+
+def _pipeline_variables(ci: str, parsed: dict) -> dict:
+    return {"github": parsed.get("env"), "gitlab": parsed.get("variables")}.get(
+        ci, parsed.get("variables")
+    )
+
+
+@pytest.mark.parametrize("ci", ["github", "gitlab", "azure"])
+@pytest.mark.parametrize("version", ["1.2.3", "1.0", "0.21.0.dev3"])
+def test_the_version_pin_is_set_once(ci: str, version: str) -> None:
+    """Every job repeated the literal pin; it is now one pipeline variable."""
+    from opentide.ci.render import render_ci
+
+    options = CiRenderOptions(
+        ci=ci, platforms=["sentinel"], opentide_version=version, inflight=True, sharing=True
+    )
+    text = next(iter(render_ci(options).values()))
+    parsed = yaml.safe_load(text)
+    # A string, never the float 1.0.
+    assert _pipeline_variables(ci, parsed)["OPENTIDE_VERSION"] == version
+    assert f"opentide=={version}" not in text
+    assert text.count(pip_install()) >= 3
 
 
 def test_query_platforms_filters_supported() -> None:
@@ -99,6 +124,50 @@ def test_query_validation_command_guards_workspace_references(tmp_path: Path) ->
     assert command in azure
     assert "validate_query_harfanglab" not in gitlab
     assert "validate_query_harfanglab" not in azure
+
+
+def test_the_guard_names_the_variables_a_tenant_references_as_opentide_resolves_them(
+    tmp_path: Path,
+) -> None:
+    """The guard scanned the TOML text for ``$NAME``: it missed ``${NAME}``, and read a
+    literal secret that starts with ``$`` (``$ABC-123x``) as a reference to ``ABC``."""
+    from opentide.ci.stages import query_validation_command, workspace_credential_names
+
+    platform_dir = tmp_path / ".opentide" / "configurations" / "platforms"
+    platform_dir.mkdir(parents=True)
+    (platform_dir / "elastic.toml").write_text(
+        "\n".join(
+            [
+                "[platform]",
+                "enabled = true",
+                "[[tenants]]",
+                'name = "prod"',
+                "[tenants.setup]",
+                'url = "${ELASTIC_URL}"',
+                'api_key = "$ELASTIC_API_KEY"',
+                'password = "$ABC-123x"',
+                'nested = { secret = "$NESTED" }',
+                "[[tenants]]",
+                'name = "lab"',
+                "[tenants.setup]",
+                'url = "$LAB_URL"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assert workspace_credential_names(tmp_path, "elastic") == [
+        "ELASTIC_API_KEY",
+        "ELASTIC_URL",
+        "LAB_URL",
+    ]
+    command = query_validation_command("elastic", repo=tmp_path)
+    assert '[ -z "$ELASTIC_URL" ]' in command
+    assert "ABC" not in command
+    assert "NESTED" not in command
+
+    (platform_dir / "elastic.toml").write_text("[platform\n", encoding="utf-8")
+    assert workspace_credential_names(tmp_path, "elastic") == []
 
 
 def test_platform_credentials_are_the_variables_bundled_platform_files_reference() -> None:

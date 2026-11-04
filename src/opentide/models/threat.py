@@ -29,7 +29,7 @@ VocabName = Annotated[str, AfterValidator(_single_vocab_name)]
 
 
 class ThreatActor(TideModel):
-    """One attributed actor on a threat vector (CoreTide ``actors`` definition)."""
+    """One attributed actor on a threat vector (the ``actors`` vocabulary)."""
 
     name: str = VocabField("actors", scoped=True)
     """Scoped `actors::1.0` value: `att&ck::<id>` or `misp::<id>`."""

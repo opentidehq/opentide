@@ -20,7 +20,7 @@ def splunk_rule_payload(metadata: dict) -> dict:
         "response": {"alert_severity": "High"},
         "configurations": {
             "splunk": {
-                "schema": "splunk::3.0",
+                "schema": "platform::splunk::1.0",
                 "status": "STAGING",
                 "query": "index=main | stats count by host",
                 "scheduling": {
@@ -99,7 +99,7 @@ def test_should_enable_correlation_search_prefers_mdr_override(splunk_rule_paylo
     assert rule.configurations.splunk is not None
 
     splunk_config = SplunkConfig(
-        schema="splunk::3.0",
+        schema="platform::splunk::1.0",
         status="STAGING",
         query="index=main | head 1",
         correlation_search=True,
@@ -254,25 +254,6 @@ def test_a_schedule_without_a_type_is_still_scheduled(
     splunk_rule_payload["configurations"]["splunk"]["scheduling"] = scheduling
     config = _deployer().config_mdr(load_rule_from_dict(splunk_rule_payload), _tenant().setup)
     assert config["cron_schedule"] == "0 * * * *"
-    assert config["is_scheduled"] == 1
-
-
-@patch("opentide.platforms.splunk.deployer.techniques_resolver", return_value=[])
-def test_a_splunk_2x_rule_deploys_its_search_on_its_schedule(
-    _mock_techniques: object, splunk_rule_payload: dict
-) -> None:
-    splunk = splunk_rule_payload["configurations"]["splunk"]
-    for key in ("query", "scheduling"):
-        splunk.pop(key)
-    splunk.update(
-        {
-            "schema": "splunk::2.0",
-            "search": "index=legacy | head 1",
-            "cron_schedule": "*/15 * * * *",
-        }
-    )
-    config = _deployer().config_mdr(load_rule_from_dict(splunk_rule_payload), _tenant().setup)
-    assert config["cron_schedule"] == "*/15 * * * *"
     assert config["is_scheduled"] == 1
 
 
@@ -434,3 +415,35 @@ def test_the_first_tenant_warns_once_across_setup_and_deploy(
     assert [seen[name][2] for name in ("First", "Second")] == ["current", "random"]
     warnings = [call.args[0] for call in captured.calls if call.method_name == "warning"]
     assert warnings == ["frequency_scheduling_is_not_valid"]
+
+
+def test_each_tenant_reports_the_rule_it_sends(
+    monkeypatch: pytest.MonkeyPatch, splunk_rule_payload: dict
+) -> None:
+    """One result per rule and tenant, so a pipeline can tell which tenant failed (#675)."""
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+
+    staging = _configured_tenant("Staging", actions=[], frequency="current", allow_skew=None)
+    prod = _configured_tenant("Prod", actions=[], frequency="current", allow_skew=None)
+    recorder = Recorder()
+    with deploy_events.listen(recorder):
+        _deploy_to_tenants(monkeypatch, splunk_rule_payload, staging, prod)
+    assert [(r.platform, r.tenant, r.status) for r in recorder.results] == [
+        ("splunk", "Staging", "deployed"),
+        ("splunk", "Prod", "deployed"),
+    ]
+
+
+def test_a_rule_without_a_splunk_block_names_the_block() -> None:
+    """The message reaches the deploy output: it names the key, not "MDR" (#617)."""
+    from opentide.platforms.splunk.client import create_query
+
+    rule = MagicMock()
+    rule.platform_configs.return_value.splunk = None
+
+    with pytest.raises(ValueError, match=r"^The rule has no configurations\.splunk block$"):
+        _deployer().config_mdr(rule, _tenant().setup)
+    with pytest.raises(ValueError, match=r"^The rule has no configurations\.splunk\.query$"):
+        create_query(rule)

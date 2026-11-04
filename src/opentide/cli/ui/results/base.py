@@ -105,7 +105,10 @@ class DiagnosticFields(ResultModel):
     path: str | None = Field(None, description="Workspace-relative path")
     line: int | None = Field(None, description="1-based")
     column: int | None = Field(None, description="1-based, Unicode code points")
-    end_column: int | None = Field(None, description="Exclusive")
+    end_line: int | None = Field(
+        None, description="1-based line the span ends on; equal to line for a one-line span"
+    )
+    end_column: int | None = Field(None, description="Exclusive, on end_line")
     field_path: list[str] = Field(default_factory=list, description="YAML path")
     help: str | None = None
     fix: FixModel | None = None
@@ -122,6 +125,19 @@ class ValidationIssueModel(DiagnosticFields):
     yaml_line: int | None = Field(description="0-based")
     suggestion: str | None = None
     context: dict[str, Any] = Field(default_factory=dict)
+
+
+class EngineDiagnosticModel(DiagnosticFields):
+    """A finding of the analysis engine: a query or editor diagnostic."""
+
+    severity: Literal["error", "warning", "note"]
+    object_uuid: str | None = Field(None, description="The object the finding is about, if known")
+
+
+class EngineVersions(ResultModel):
+    """The analysis engine that ran."""
+
+    engine: str = Field(description="Version of the language-server crates compiled into opentide")
 
 
 class ValidationReportModel(ResultModel):

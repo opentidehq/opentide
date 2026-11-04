@@ -17,6 +17,7 @@ from tests.corpus_support import (
     SUBFOLDER_RULE_UUIDS,
     add_unplanned_rules,
     classify_deploy_scope,
+    drop_legacy_objects,
     real_rules_folder,
     write_rule_variant,
 )
@@ -42,7 +43,7 @@ def _mock_deployer(monkeypatch: pytest.MonkeyPatch, platform: str) -> MagicMock:
         def mdr_for(self, platforms: Iterable[str]) -> dict[str, MagicMock]:
             return {platform: deployer} if platform in set(platforms) else {}
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _MockDeployTide)
     return deployer
 
 
@@ -288,7 +289,7 @@ def test_deploy_dry_run_fails_when_a_sentinel_rule_does_not_compile(
 def test_deploy_loads_only_the_requested_engine(
     invoke_cli, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No DeployTide mock: the real loader must not build every platform's engine.
+    """No EnabledPlatforms mock: the real loader must not build every platform's engine.
 
     Loading all eight deployers (and all six validators) meant one engine that
     failed to declare blocked a deploy to any other platform.
@@ -325,11 +326,12 @@ def test_deploy_loads_only_the_requested_engine(
 
 
 def _disable_splunk(repo: Path) -> None:
-    config = repo / ".opentide/configurations/systems/splunk.toml"
+    config = repo / ".opentide/configurations/platforms/splunk.toml"
     text = config.read_text(encoding="utf-8")
-    assert "[tide]\nenabled = true\n" in text
+    assert "[platform]\nenabled = true\n" in text
     config.write_text(
-        text.replace("[tide]\nenabled = true\n", "[tide]\nenabled = false\n"), encoding="utf-8"
+        text.replace("[platform]\nenabled = true\n", "[platform]\nenabled = false\n"),
+        encoding="utf-8",
     )
 
 
@@ -460,7 +462,7 @@ def test_deploy_dry_run_warns_about_rule_files_in_subfolders(
     write_rule_variant(rules, "team-a/rule-0101-subfolder.yaml", nested_uuid)
     # The corpus ships #[[tenants]] commented out. A tenantless platform adds its
     # own warning (#314); this test is about the nested-rule warning alone.
-    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
     deployer = _mock_deployer(monkeypatch, "sentinel")
     result = invoke_cli(
         "deploy",
@@ -526,14 +528,14 @@ def test_deploy_dry_run_with_rules_only_in_subfolders_is_skipped_with_the_warnin
     result = invoke_cli("deploy", *argv, "--dry-run", *EVERY_RULE, json_output=json_output)
     assert result.exit_code == 0, result.stdout + result.stderr
     assert refuse_deployment_engines == []
-    warning = f"9 {SUBFOLDER_RULES_LEAD}" + ", ".join(
+    warning = f"10 {SUBFOLDER_RULES_LEAD}" + ", ".join(
         [
             "objects/rules/team-a/rule-0001-sentinel-kql.yaml",
             "objects/rules/team-a/rule-0002-defender-kql.yaml",
             "objects/rules/team-a/rule-0003-splunk-spl.yaml",
             "objects/rules/team-a/rule-0004-sentinel-one-s1ql.yaml",
             "objects/rules/team-a/rule-0005-carbon-black-lucene.yaml",
-            "+4 more",
+            "+5 more",
         ]
     )
     if not json_output:
@@ -590,7 +592,7 @@ def test_full_dry_run_accounts_for_every_indexed_rule(
 
 def _sentinel_tenants(repo: Path, *tenants: tuple[str, str]) -> None:
     """Replace the corpus Sentinel tenant example with *tenants* ``(name, keys)``."""
-    config = repo / ".opentide/configurations/systems/sentinel.toml"
+    config = repo / ".opentide/configurations/platforms/sentinel.toml"
     template, example = config.read_text(encoding="utf-8").split("#[[tenants]]")
     setup = example[example.index("#[tenants.setup]") :].replace("#", "")
     blocks = [f'[[tenants]]\nname = "{name}"\n{keys}\n{setup}' for name, keys in tenants]
@@ -711,8 +713,8 @@ def test_local_deploy_reads_the_files_the_last_commit_changed(
     """Outside CI and without ``--all``, a deploy reads ``HEAD^1..HEAD`` of the checkout."""
     for name in LOCAL_SHELL_UNSET:
         monkeypatch.delenv(name, raising=False)
-    rules = real_rules_folder(tide_corpus_repo)
-    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/systems/sentinel.toml")
+    rules = drop_legacy_objects(tide_corpus_repo) / "rules"
+    uncomment_tenants(tide_corpus_repo / ".opentide/configurations/platforms/sentinel.toml")
     _git(tide_corpus_repo, "init", "-q", "-b", "main")
     _git(tide_corpus_repo, "add", "-A")
     _git(tide_corpus_repo, "commit", "-q", "-m", "corpus")

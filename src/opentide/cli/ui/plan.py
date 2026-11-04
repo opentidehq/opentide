@@ -137,6 +137,15 @@ def render_plan(console: Console, payload: Mapping[str, Any]) -> None:
             console.print(part, soft_wrap=True)
 
 
+#: The last line of a dry run: the plan above it is all that happened.
+DRY_RUN_NOTE = "dry run, nothing sent"
+
+
+def render_dry_run_note(console: Console) -> None:
+    """Say, after the tally, that a dry run sent nothing."""
+    console.print(Text(DRY_RUN_NOTE, style="dim"), soft_wrap=True)
+
+
 def _quoted(text: str) -> str:
     """Markdown code spans (`response`) as every other frame quotes a name ('response')."""
     import re

@@ -9,7 +9,13 @@ from typing import Any
 from opentide.core import registry
 from opentide.core.logging import get_logger
 from opentide.deployment.ci import CIEnvironment
-from opentide.deployment.git_backend import CommitInfo, DulwichRepo, open_repo
+from opentide.deployment.git_backend import (
+    CommitInfo,
+    DulwichRepo,
+    GitLookupError,
+    key_text,
+    open_repo,
+)
 from opentide.models.deployment_enums import StatusStrategy
 from opentide.registry.discovery import discover_workspace
 
@@ -213,6 +219,28 @@ def changed_rule_scope() -> tuple[RuleScope, DiffSource]:
     return modified_rule_scope(source), source
 
 
+def changed_files_under(root: Path) -> tuple[list[Path], DiffSource]:
+    """The files under *root* this run changed, and where the diff came from.
+
+    The diff :func:`changed_rule_scope` reads for ``deploy`` and ``validate
+    query --changed`` (:func:`diff_calculation`), for every file rather than
+    the rules folder's alone: added, renamed and modified files, deleted ones
+    left out. Diff paths are relative to the checkout holding *root*.
+    Raises :class:`MissingGitCheckout` when there is none.
+    """
+    workspace = root.resolve()
+    worktree = _git_worktree(workspace)
+    if worktree is None:
+        raise MissingGitCheckout(workspace)
+    source = run_diff_source()
+    files = {
+        path
+        for entry in diff_calculation(source)
+        if (path := worktree / entry).is_relative_to(workspace)
+    }
+    return sorted(files), source
+
+
 def _local_repository() -> DulwichRepo:
     """The checkout holding the workspace, for a run outside CI."""
     searched = discover_workspace().resolve()
@@ -220,6 +248,46 @@ def _local_repository() -> DulwichRepo:
     if worktree is None:
         raise MissingGitCheckout(searched)
     return open_repo(worktree)
+
+
+def no_commits_warning(advice: str) -> str | None:
+    """Why the run's changed files are none: the checkout has no commit yet.
+
+    Outside CI the diff is the last commit's (:attr:`DiffSource.LAST_COMMIT`).
+    Right after ``git init`` there is no commit, so nothing has changed and
+    :func:`diff_calculation` returns no path; every file is uncommitted, and
+    uncommitted edits are never in the diff. *advice* says what to do instead.
+    ``None`` in CI, outside a checkout, and once ``HEAD`` names a commit.
+    """
+    if CIEnvironment().environment is not CIEnvironment.CIPlatforms.LocalDebug:
+        return None
+    try:
+        repo = _local_repository()
+    except MissingGitCheckout:
+        return None
+    if repo.has_commits:
+        return None
+    return (
+        "HEAD names no commit yet (a new repository or an orphan branch), "
+        f"so no file has changed: {advice}"
+    )
+
+
+def diff_error_message(exc: Exception, doing: str) -> str:
+    """The sentence a failed git diff reports, never a key repr such as ``b'HEAD'``.
+
+    Dulwich raises a bare ``KeyError`` naming the missing ref or object as
+    bytes, and ``str()`` of it is that repr. *doing* names the step
+    (``computing the changed rules``) for an exception with no text.
+    """
+    if (
+        isinstance(exc, KeyError)
+        and not isinstance(exc, GitLookupError)
+        and exc.args
+        and isinstance(exc.args[0], bytes)
+    ):
+        return f"Could not find git ref or object {key_text(exc)} while {doing}"
+    return str(exc).strip() or f"{type(exc).__name__} while {doing}"
 
 
 def _production_base(repo: DulwichRepo) -> str | None:
@@ -372,12 +440,16 @@ def diff_calculation(source: DiffSource) -> list[str]:
         if source is DiffSource.CHANGE_REQUEST:
             raise Exception("A pull or merge request diff needs a CI run")
         repo = _local_repository()
+        if not repo.has_commits:
+            # Right after ``git init``: there is no last commit, so it changed nothing.
+            logger.info("git_repository_has_no_commits", path=str(repo.path))
+            return []
         base = _production_base(repo)
         if base is None:
             return []
         return _changed_paths(repo, repo.commit(base), repo.head)
 
-    repo = TideRepo().repository
+    repo = GitRepository().repository
     if repo is None:
         # Only a local run has no repository, and it returned above.
         raise MissingGitCheckout(discover_workspace())
@@ -678,7 +750,7 @@ def changed_through_head(since: str | None = None) -> list[str]:
             raise Exception("Outside CI, --since must name the commit to diff from")
         repo = _local_repository()
     else:
-        repo = TideRepo().repository
+        repo = GitRepository().repository
         if repo is None:
             # Only a local run has no repository, and it took the branch above.
             raise MissingGitCheckout(discover_workspace())
@@ -713,10 +785,6 @@ def _changed_paths(
     logger.info("computed_diff_scope", detail=", ".join(scope))
 
     return scope
-
-
-# Legacy alias
-TideRepo = GitRepository
 
 
 def __dir__() -> list[str]:

@@ -119,7 +119,7 @@ See [Agentic setup](./workflows/agentic-setup.md) for details.
 
 ## VS Code settings (deprecated)
 
-`opentide setup vscode` generates templates and JSON schemas, then maps `objects/**/*.yaml` to the `.opentide/schemas/opentide.schema.json` router in `yaml.schemas` (see [Schema revision](concepts/schema-revision.md)), writes `.vscode/extensions.json`, and writes snippets — interim scaffolding until the opentide VS Code extension ships. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
+`opentide setup vscode` generates templates and JSON schemas, recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and writes snippets. It writes no `yaml.schemas`, and removes the router mapping earlier releases wrote to `.vscode/settings.json`: the extension's language server checks object files. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
 
 ## CLI reference
 

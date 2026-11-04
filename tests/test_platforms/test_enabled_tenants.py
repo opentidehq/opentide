@@ -42,9 +42,8 @@ def test_bundled_platform_configs_ship_without_tenants(workspace: Path) -> None:
     assert systems_without_tenants(SYSTEM_KEYS) == list(SYSTEM_KEYS)
 
 
-@pytest.mark.parametrize("folder", ["platforms", "systems"])
-def test_a_client_tenant_clears_only_its_platform(workspace: Path, folder: str) -> None:
-    _write_config(workspace, folder, "splunk", "[platform]\nenabled = true\n" + TENANT)
+def test_a_client_tenant_clears_only_its_platform(workspace: Path) -> None:
+    _write_config(workspace, "platforms", "splunk", "[platform]\nenabled = true\n" + TENANT)
     assert systems_without_tenants(["splunk", "sentinel"]) == ["sentinel"]
 
 
@@ -66,25 +65,23 @@ def test_an_unknown_system_has_no_tenants(workspace: Path) -> None:
     assert systems_without_tenants(["not_a_platform"]) == ["not_a_platform"]
 
 
-def test_config_path_prefers_platforms_then_legacy_systems(workspace: Path) -> None:
+def test_config_path_is_the_platforms_file(workspace: Path) -> None:
     assert platform_config_path("splunk") == ".opentide/configurations/platforms/splunk.toml"
-    _write_config(workspace, "systems", "splunk", "")
-    assert platform_config_path("splunk") == ".opentide/configurations/systems/splunk.toml"
     _write_config(workspace, "platforms", "splunk", "")
     assert platform_config_path("splunk") == ".opentide/configurations/platforms/splunk.toml"
 
 
 def test_missing_tenants_error_names_the_platform_and_its_file(workspace: Path) -> None:
-    _write_config(workspace, "systems", "sentinel", "")
+    _write_config(workspace, "platforms", "sentinel", "")
     error = MissingTenantsError("sentinel")
     assert isinstance(error, ValueError)
     assert error.system == "sentinel"
-    assert error.config_path == ".opentide/configurations/systems/sentinel.toml"
+    assert error.config_path == ".opentide/configurations/platforms/sentinel.toml"
     assert str(error) == (
-        "sentinel has no tenants configured in .opentide/configurations/systems/sentinel.toml"
+        "sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml"
     )
     assert error.advice == (
-        "add (or uncomment) a [[tenants]] entry in .opentide/configurations/systems/sentinel.toml"
+        "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml"
     )
 
 

@@ -69,9 +69,10 @@ def test_documented_retry_uses_the_workflow_dispatch_event(path: Path) -> None:
 
 @pytest.mark.parametrize("path", RUNBOOKS, ids=lambda path: path.name)
 def test_documented_retry_payload_keys_reach_the_checkout(path: Path) -> None:
+    # The build jobs check out the tag; the publish job uploads their artifacts.
     checkout_ref = next(
         step["with"]["ref"]
-        for step in _workflow()["jobs"]["publish"]["steps"]
+        for step in _workflow()["jobs"]["guard"]["steps"]
         if str(step.get("uses", "")).startswith("actions/checkout@")
     )
     for fields in _dispatch_fields(path):

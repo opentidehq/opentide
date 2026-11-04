@@ -62,7 +62,10 @@ def _merge_servers(dest: Path, template: dict[str, object]) -> dict[str, object]
         current = existing.get(key)
         if current is None:
             existing[key] = servers
-        elif isinstance(current, dict) and isinstance(servers, dict):
+        elif not isinstance(servers, dict):
+            # A scalar such as the Agent Plugins `$schema`: the user's value stays.
+            continue
+        elif isinstance(current, dict):
             existing[key] = {**current, **servers}
         else:
             raise McpConfigError(f"has a {key!r} that is not a JSON object")
@@ -114,6 +117,13 @@ def run_mcp_setup(options: McpSetupOptions) -> dict[str, object]:
     }
     if skipped:
         result["skipped"] = skipped
+    if McpHost.vscode in options.hosts:
+        from opentide.cli.services.setup.vscode import EXTENSION_MCP_NOTE, recommends_extension
+
+        if recommends_extension(target):
+            # Not a warning: the file serves teammates without the extension.
+            result["extension_mcp"] = True
+            result["detail"] = EXTENSION_MCP_NOTE
     if McpHost.generic in options.hosts:
         result["advice"] = (
             "Copy opentide.mcp.json into your editor MCP settings or run "

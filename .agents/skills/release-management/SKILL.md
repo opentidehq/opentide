@@ -31,12 +31,22 @@ Never tag a feature branch. Trunk is `development`.
 |------|--------|
 | Package | `opentide` on PyPI |
 | Tag | `v0.x.y` (leading `v`) |
-| GitHub Release | `release: published` → [`.github/workflows/publish-pypi.yml`](../../../.github/workflows/publish-pypi.yml) |
+| Release | **Run workflow** on `development` (no `checkout_ref`) → [`.github/workflows/publish-pypi.yml`](../../../.github/workflows/publish-pypi.yml) creates the tag + GitHub Release and publishes. A Release published by hand (`release: published`) still publishes |
+| Version before the tag | Newest dated `CHANGELOG.md` heading: `uv run python scripts/build/release.py version` |
 | Auth | OIDC trusted publishing. Environment `pypi`. **No API token.** |
 | Workflow filename on PyPI | `publish-pypi.yml` (filename only) |
 | Failed release | Release **without** that tag on the checked-out commit publishes `0.1.dev…` |
 
 A GitHub Release whose `--target` is not the tagged commit is a failed release. Do not retag; fix the target and publish from the correct tag.
+
+## The engine is part of the wheels
+
+opentide compiles its analysis engine (`analysis/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm) and an sdist that carries `analysis/`, and refuses to publish when a platform's wheel is missing.
+
+| Before tagging | Check |
+|----------------|-------|
+| `analysis/Cargo.toml` takes `opentide-analysis` / `opentide-lsp` (the language-server crates) from git | Release the language server to crates.io first, then pin both to `"=<version>"`. `uv run python scripts/build/check_engine_pin.py --release` must pass, or the publish fails before building |
+| The engine's bundled catalog | `scripts/build/check_engine_catalog.py` passes (CI) |
 
 ## Patch vs minor
 
@@ -59,7 +69,7 @@ State the rationale in the CHANGELOG upgrade cue.
 
 - **Step 1** — notes PR, merge to `development`.
 - **Step 1b** — CI green on that PR.
-- **Step 2** — `gh release create` on the merge commit (this publishes).
+- **Step 2** — Run **Publish to PyPI** on `development` (this tags, creates the GitHub Release and publishes). Works from a cloud session.
 - **Step 3** — prove PyPI.
 - **Step 4** — group the shipped issues under the release tracking issue and close it.
 
@@ -145,6 +155,7 @@ Leave older historical sections in `CHANGELOG.md` / `docs/usage/releases.md` / o
 ```bash
 scripts/ci-local.sh --quick
 scripts/validate-docs.sh   # if docs changed
+uv run python scripts/build/release.py check v0.x.y   # what the release guard checks
 ```
 
 ---
@@ -174,22 +185,39 @@ CodeQL Analyze (actions) dying at "Uploading results" with no query findings is 
 
 ---
 
-### Step 2 — GitHub Release (this publishes to PyPI)
+### Step 2 — Release from `development` (this publishes to PyPI)
 
-**ONLY** after the notes PR is **merged to `development`**.
+**ONLY** after the notes PR is **merged to `development`** and `development` CI is green.
 
-Confirm the merge commit contains the notes:
+Run **Publish to PyPI** on `development` with `checkout_ref` **empty**, as language-server releases from `main`:
+
+| Where | How |
+|-------|-----|
+| Cloud session (no `gh`) | GitHub MCP `actions_run_trigger`: `method: run_workflow`, `workflow_id: publish-pypi.yml`, `ref: development`, no inputs |
+| Browser | Actions → Publish to PyPI → Run workflow → branch `development`, leave `checkout_ref` empty |
+| Local | `gh workflow run publish-pypi.yml --repo opentidehq/opentide --ref development` |
+
+The run:
+
+1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading and runs `scripts/build/release.py check v0.x.y` (changelog section and links, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin), then `check_engine_pin.py --release`. It refuses a tag or Release that already exists and a run from another branch.
+2. **Wheels** and **Sdist** build that commit with the changelog's version.
+3. **GitHub Release** creates tag `v0.x.y` on the built commit (`--target $GITHUB_SHA`) with the notes file as body. Latest by default.
+4. **Publish to PyPI** uploads and refuses files of any version other than the guard's.
+
+The Release comes from `GITHUB_TOKEN`, which starts no `release: published` run: one publish per version.
+
+Find the run (REST; `gh run list` uses GraphQL, which cloud sessions cannot reach):
+
+```bash
+gh api "repos/opentidehq/opentide/actions/workflows/publish-pypi.yml/runs?per_page=1" \
+  --jq '.workflow_runs[0] | "\(.id) \(.status) \(.conclusion) \(.head_sha)"'
+```
+
+**Local alternative: publish a Release by hand.** Still supported; the guard then requires the Release's tag on the checkout. Confirm the merge commit contains the notes first:
 
 ```bash
 git fetch origin development
-git log -1 --oneline origin/development
-# CHANGELOG.md on that commit must contain ## [0.x.y]
 git show origin/development:CHANGELOG.md | head -n 20
-```
-
-Then:
-
-```bash
 gh release create v0.x.y \
   --repo opentidehq/opentide \
   --target development \
@@ -205,6 +233,7 @@ This bit 0.4.0. It was cut with `--latest=false` because 0.5.0 was about to foll
 
 ```bash
 gh release list --repo opentidehq/opentide --limit 3   # new tag must show Latest
+gh api repos/opentidehq/opentide/releases/latest --jq .tag_name   # REST, works in cloud sessions
 ```
 
 Watch [publish-pypi.yml](https://github.com/opentidehq/opentide/actions/workflows/publish-pypi.yml). If the `pypi` environment has required reviewers, someone must approve. The job ends with **Verify PyPI lists every built file**, which fails unless PyPI lists both the wheel and the sdist.
@@ -252,10 +281,14 @@ Copied from [`docs/internal/pypi-trusted-publishing.md`](../../../docs/internal/
 
 | Symptom | Cause / fix |
 |--------|-------------|
+| Guard: `v0.x.y is already tagged` | That version is out. Merge the next version's notes PR; to re-publish the existing tag, run with `checkout_ref=v0.x.y` |
+| Guard: `CHANGELOG.md's newest version is …` / `… is missing` | The notes PR has not merged, or misses a piece (`release.py check` names it). Fix it on `development` and run again |
+| Guard: `Run the release from development` | Run workflow was started on another branch. Pick `development` |
+| Publish failed after the **GitHub Release** job created the tag | Run workflow again with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag |
 | `0.1.dev…` | Tag not on the checked-out commit. Wrong `--target`. Do not retag; retarget. |
 | 403 `invalid-publisher` | OIDC fields: owner `opentidehq` (lowercase), workflow `publish-pypi.yml`, env `pypi`. Re-run; do not retag. |
 | `No module named 'hatch'` in Build package | `hatch build` isolated env (hatch 1.18.1 / hatchling 1.32.1). Publish uses `uv build`. A tag cut before that still runs the old YAML on `release: published`. From `development`: `gh api repos/opentidehq/opentide/dispatches -f event_type=publish-pypi -f client_payload[checkout_ref]=v0.x.y`. Do not retag. |
-| `502` / 5xx on upload, job failed, some files already on PyPI (0.4.0) | From `development`: `gh api repos/opentidehq/opentide/dispatches -f event_type=publish-pypi -f client_payload[checkout_ref]=v0.x.y`. The upload sets `skip-existing: true`, so the retry uploads only the missing files. `gh run rerun` and `workflow_dispatch` return 403 for the GitHub App token (no `actions:write`), so dispatch is the agent path. Do not retag. |
+| `502` / 5xx on upload, job failed, some files already on PyPI (0.4.0) | From `development`: `gh api repos/opentidehq/opentide/dispatches -f event_type=publish-pypi -f client_payload[checkout_ref]=v0.x.y`. The upload sets `skip-existing: true`, so the retry uploads only the missing files. From a cloud session, Run workflow with `checkout_ref=v0.x.y` (`actions_run_trigger`) is the same retry. The Cursor GitHub App token got 403 on `workflow_dispatch` (no `actions:write`); for it, dispatch is the path. Do not retag. |
 | Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then use the same dispatch retry. The step log prints the exact command. |
 | New tag not shown as Latest | It was created with `--latest=false`. `gh release edit v0.x.y --repo opentidehq/opentide --latest`. |
 | Release exists but Publish to PyPI never starts | Workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag. |

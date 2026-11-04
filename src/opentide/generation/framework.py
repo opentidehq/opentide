@@ -289,7 +289,7 @@ def model_value(id, key):
 
 def parents(id: str) -> list:
     """
-    Returns the list of parents for any given CoreTIDE Object.
+    Returns the list of parents for any given object.
     If the Object does not have possible parent relationships,
     or in other word is a top-level Object, returns an empty string.
     """
@@ -504,8 +504,7 @@ def keep_active_rules(rule_list: list[str]) -> list[str]:
             logger.error("could_not_retrieve_uuid_in_rule_index", detail=mdr)
             continue
         deprecated = False
-        for system in mdr_data["configurations"]:
-            system_data = mdr_data["configurations"][system]
+        for system_data in (mdr_data.get("configurations") or {}).values():
             if check_status(system_data["status"]) in DEPRECATED_STATUSES:
                 logger.info("skipping_rule_as_is_in_a_deprecated_status", detail=mdr)
                 deprecated = True
@@ -531,7 +530,7 @@ def techniques_resolver(model_id: str, recursive=True) -> list:
         return []
     model_body = MODELS_INDEX[model_type][model_id]
     if model_type == "rule":
-        parent_id = model_body.get("detection_model") or model_body.get("tags", {}).get("coretide")
+        parent_id = model_body.get("detection_model")
         if not parent_id:
             return []
         elif recursive:

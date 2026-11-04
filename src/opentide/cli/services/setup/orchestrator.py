@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -78,6 +79,7 @@ class SetupOptions:
     python_version: str = "3.12"
     explorer_pages: bool = False
     sharing: bool = False
+    lint_changed: bool = False
     #: ``None`` detects it from the target repository.
     default_branch: str | None = None
     vscode_setup: bool = False
@@ -89,6 +91,12 @@ class SetupOptions:
     mcp_hosts: list[McpHost] = field(default_factory=list)
     run_skills: bool = False
     skill_targets: list[SkillTarget] = field(default_factory=list)
+    #: ``--plugin``: register the opentidehq/skills Agent Plugin for Claude Code.
+    plugin: bool = False
+    #: ``--hooks``: the validate-on-commit hooks of ``setup hooks``.
+    run_hooks: bool = False
+    #: ``--env``: the ``.env.example`` of ``setup env``.
+    run_env: bool = False
     warnings: list[str] = field(default_factory=list)
 
 
@@ -115,12 +123,19 @@ def _ci_options(options: SetupOptions) -> CiSetupOptions:
         python_version=options.python_version,
         explorer_pages=options.explorer_pages,
         sharing=options.sharing,
+        lint_changed=options.lint_changed,
         default_branch=options.default_branch,
         yes=options.yes,
     )
 
 
-def run_setup(options: SetupOptions) -> dict[str, object]:
+#: Called after each step with its name and result (``setup --plan`` compares files there).
+StepObserver = Callable[[str, Mapping[str, object]], None]
+
+
+def run_setup(
+    options: SetupOptions, *, after_step: StepObserver | None = None
+) -> dict[str, object]:
     """Run configured setup steps and aggregate results."""
     steps: list[dict[str, object]] = []
     warnings: list[str] = list(options.warnings)
@@ -133,6 +148,8 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
     def record(step: str, result: dict[str, object]) -> None:
         # Human output prints only the top-level warnings, never steps[].warnings.
         steps.append({"step": step, **result})
+        if after_step is not None:
+            after_step(step, result)
         step_warnings = result.get("warnings")
         if isinstance(step_warnings, list):
             for warning in map(str, step_warnings):
@@ -185,13 +202,23 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
         ci_result = run_ci_setup(_ci_options(options))
         record("ci", ci_result)
 
+    if options.run_env:
+        from opentide.cli.services.setup.env import EnvSetupOptions, run_env_setup
+
+        record("env", run_env_setup(EnvSetupOptions(path=options.path, yes=options.yes)))
+
+    if options.run_hooks:
+        from opentide.cli.services.setup.hooks import HooksSetupOptions, run_hooks_setup
+
+        record("hooks", run_hooks_setup(HooksSetupOptions(path=options.path, yes=options.yes)))
+
     if options.run_mcp and options.mcp_hosts:
         mcp_result = run_mcp_setup(
             McpSetupOptions(path=options.path, hosts=options.mcp_hosts, yes=options.yes)
         )
         record("mcp", mcp_result)
 
-    if options.run_skills and options.skill_targets:
+    if options.run_skills and (options.skill_targets or options.plugin):
         try:
             skills_result = run_skills_setup(
                 SkillsSetupOptions(
@@ -200,12 +227,18 @@ def run_setup(options: SetupOptions) -> dict[str, object]:
                     name=options.name,
                     org=options.org,
                     description=options.description,
+                    plugin=options.plugin,
                     yes=options.yes,
                 )
             )
             record("skills", skills_result)
         except (typer.BadParameter, SkillsDownloadError, SkillsManifestError) as exc:
-            warnings.append(f"Agent skills skipped: {exc}")
+            skipped = f"Agent skills skipped: {exc}"
+            warnings.append(skipped)
+            # Not a step of the run, but a plan credits whatever it wrote before
+            # failing to it, and shows the warning there.
+            if after_step is not None:
+                after_step("skills", {"status": "skipped", "warnings": [skipped]})
 
     if options.vscode_setup:
         target = options.path.resolve()

@@ -102,7 +102,7 @@ def test_run_deploy_dry_run_collects_payloads() -> None:
         ) as targets,
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=preview),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
@@ -128,7 +128,7 @@ def test_run_deploy_invokes_deployer() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -148,7 +148,7 @@ def test_run_deploy_reports_an_engine_that_fails_to_load() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
     ):
         mock_tide.return_value.mdr_for.side_effect = Exception(
@@ -178,7 +178,7 @@ def test_run_deploy_reports_a_platform_that_fails_and_what_was_deployed() -> Non
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.services.deploy._tenant_targets", return_value={}),
     ):
@@ -201,7 +201,7 @@ def test_run_deploy_warning_marks_result_with_warnings() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
     ):
@@ -218,7 +218,7 @@ def test_run_deploy_error_marks_result_failed() -> None:
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=errored),
     ):
@@ -347,7 +347,7 @@ def test_run_deploy_selects_rules_with_the_run_strategies(
         patch(
             "opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}
         ) as mock_plan,
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -401,7 +401,7 @@ def test_run_deploy_dry_run_skips_release_promotion(monkeypatch: pytest.MonkeyPa
         patch("opentide.deployment.modified_mdr_files") as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
@@ -427,7 +427,7 @@ def test_run_deploy_local_debug_skips_release_promotion(
         patch("opentide.deployment.modified_mdr_files") as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -473,7 +473,7 @@ def test_run_deploy_promotes_only_on_a_release_push(
         patch("opentide.deployment.modified_mdr_files", return_value=["r.yaml"]) as mock_modified,
         patch("opentide.mutation.promotion.PromoteMDR") as mock_promote,
         patch("opentide.deployment.make_deploy_plan", return_value={"sentinel": ["u1"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
     ):
@@ -500,7 +500,7 @@ def test_run_deploy_without_tenants_fails_before_loading_engines(tenantless: Mag
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload") as mock_reload,
         patch("opentide.platforms.enabled.platform_config_path", return_value=SPLUNK_TOML),
     ):
@@ -529,7 +529,7 @@ def test_run_deploy_dry_run_does_not_claim_a_platform_without_tenants(
             "opentide.deployment.make_deploy_plan",
             return_value={"sentinel": ["u1"], "splunk": ["u2"]},
         ),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=CLEAN_OUTCOME),
@@ -559,7 +559,7 @@ def test_run_deploy_dry_run_keeps_rule_warnings_next_to_tenant_warnings(
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", return_value={"splunk": ["u2"]}),
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.deployment.preview.preview_platform_deployment", return_value=[]),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
@@ -640,7 +640,7 @@ def test_run_deploy_reports_selection_warnings_in_every_result(
     with (
         patch("opentide.core.registry.Opentide.reload"),
         patch("opentide.deployment.make_deploy_plan", side_effect=_plan) as mock_plan,
-        patch("opentide.platforms.plugins.DeployTide") as mock_tide,
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
         patch("opentide.core.index_manager.IndexManager.reload"),
         patch("opentide.cli.exit_codes.deployment_outcome", return_value=warned),
     ):
@@ -699,3 +699,131 @@ def test_an_empty_plan_counts_the_rules_a_status_kept_out() -> None:
     )
     assert result["_summary"] == {"skipped": 3}
     assert [entry["uuid"] for entry in result["skipped"]] == ["u1", "u2", "u3"]
+
+
+def _deploy_with(deployers: dict[str, MagicMock], plan: dict[str, list[str]]) -> dict[str, object]:
+    ctx = CliContext(json_output=True)
+    with (
+        patch("opentide.core.registry.Opentide.reload"),
+        patch("opentide.deployment.make_deploy_plan", return_value=plan),
+        patch("opentide.platforms.plugins.EnabledPlatforms") as mock_tide,
+        patch("opentide.core.index_manager.IndexManager.reload"),
+        patch("opentide.cli.services.deploy._tenant_targets", return_value={}),
+    ):
+        mock_tide.return_value.mdr_for.return_value = deployers
+        return deploy_service.run_deploy(ctx, strategies=PREVIEW)
+
+
+def test_an_engine_that_reports_no_rules_is_counted_as_deployed_with_no_timing() -> None:
+    """A third-party engine predates rule events: its planned rules are taken as sent (#675)."""
+    result = _deploy_with({"sentinel": MagicMock()}, {"sentinel": ["u1", "u2"]})
+    assert result["status"] == "completed"
+    results = result["results"]
+    assert [(row["id"], row["status"], row["seconds"]) for row in results] == [
+        ("u1", "deployed", None),
+        ("u2", "deployed", None),
+    ]
+    assert result["_summary"]["upsert"] == 2
+    assert result["message"].startswith("Deployed 2 rules to 0 tenants")
+
+
+def test_a_failure_before_any_rule_leaves_every_rule_not_attempted_and_keeps_the_message() -> None:
+    """The tenant's credentials fail on connect, before the first rule is sent."""
+    sentinel = MagicMock()
+    sentinel.deploy.side_effect = RuntimeError("AADSTS7000215: invalid client secret")
+    result = _deploy_with({"sentinel": sentinel}, {"sentinel": ["u1", "u2"]})
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert result["message"] == (
+        "Deployment to sentinel failed: RuntimeError: AADSTS7000215: invalid client secret"
+    )
+    assert [(row["id"], row["status"]) for row in result["results"]] == [
+        ("u1", "not_attempted"),
+        ("u2", "not_attempted"),
+    ]
+    assert "_failure_code" not in result  # no rule failed: the message is the error
+    assert result["_summary"]["not_attempted"] == 2
+
+
+def test_the_platforms_after_a_failed_one_are_not_attempted_and_say_so() -> None:
+    from opentide.core import deploy_events
+
+    def fail_the_rule(**kwargs: object) -> None:
+        with deploy_events.deploying("sentinel", "contoso", "u1", "Rule one"):
+            raise RuntimeError("boom")
+
+    sentinel, splunk = MagicMock(), MagicMock()
+    sentinel.deploy.side_effect = fail_the_rule
+    result = _deploy_with(
+        {"sentinel": sentinel, "splunk": splunk}, {"sentinel": ["u1", "u2"], "splunk": ["u3"]}
+    )
+    splunk.deploy.assert_not_called()
+    assert result["deployed"] == []
+    assert [(row["id"], row["status"]) for row in result["results"]] == [
+        ("u1", "failed"),
+        ("u2", "not_attempted"),
+        ("u3", "not_attempted"),
+    ]
+    assert result["_failure_code"] == "issues_found"
+    assert result["message"].startswith("Deployment failed · 1 failed, 2 not attempted")
+    assert "Rule one" in str(result["error"])
+
+
+def test_a_rule_failure_recorded_in_the_environment_fails_the_run_with_its_counts() -> None:
+    """Elastic and the state platforms report a failed rule, then carry on."""
+    from opentide.core import deploy_events
+
+    def one_fails(**kwargs: object) -> None:
+        import os
+
+        with deploy_events.deploying("sentinel", "t", "u1", "One"):
+            pass
+        with deploy_events.deploying("sentinel", "t", "u2", "Two"):
+            os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+            deploy_events.note_failure("HTTP 409: conflict")
+
+    sentinel = MagicMock()
+    sentinel.deploy.side_effect = one_fails
+    try:
+        result = _deploy_with({"sentinel": sentinel}, {"sentinel": ["u1", "u2"]})
+    finally:
+        import os
+
+        os.environ.pop("DEPLOYMENT_ERROR_RAISED", None)
+    assert result["status"] == "failed"
+    assert result["_exit_code"] == 1
+    assert [(row["id"], row["status"]) for row in result["results"]] == [
+        ("u1", "deployed"),
+        ("u2", "failed"),
+    ]
+    assert result["message"].startswith("Deployment failed · 1 created or updated, 1 failed, 0 not")
+    assert result["_failure_code"] == "issues_found"
+
+
+def test_a_platform_that_raises_is_not_blamed_for_a_rule_another_platform_failed() -> None:
+    """Platform one fails a rule and returns; platform two then raises before any of its rules."""
+    import os
+
+    from opentide.core import deploy_events
+
+    def one_rule_fails(**kwargs: object) -> None:
+        with deploy_events.deploying("sentinel", "t", "u1", "Sentinel rule"):
+            os.environ["DEPLOYMENT_ERROR_RAISED"] = "1"
+            deploy_events.note_failure("HTTP 409: conflict")
+
+    sentinel, splunk = MagicMock(), MagicMock()
+    sentinel.deploy.side_effect = one_rule_fails
+    splunk.deploy.side_effect = RuntimeError("splunk token expired")
+    try:
+        result = _deploy_with(
+            {"sentinel": sentinel, "splunk": splunk}, {"sentinel": ["u1"], "splunk": ["u2"]}
+        )
+    finally:
+        os.environ.pop("DEPLOYMENT_ERROR_RAISED", None)
+    assert result["message"] == "Deployment to splunk failed: RuntimeError: splunk token expired"
+    assert "Sentinel rule" not in str(result.get("error", ""))
+    assert "_failure_code" not in result
+    assert [(row["id"], row["status"]) for row in result["results"]] == [
+        ("u1", "failed"),
+        ("u2", "not_attempted"),
+    ]

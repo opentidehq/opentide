@@ -51,9 +51,9 @@ def _setup_opentide_for_table(monkeypatch) -> None:
             "objective": {},
         },
         "configurations": {
-            "global": {
+            "paths": {
                 "objects": ["threat", "rule"],
-                "exports": {"objects": "objects.export.json"},
+                "artifacts": {"exports": {"objects": "objects.export.json"}},
             },
             "documentation": {
                 "object_names": {"threat": "Threat Vector", "rule": "Detection Rule"},

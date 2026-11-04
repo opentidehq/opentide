@@ -18,12 +18,6 @@
           "description": "Whether TLS certificates are verified in debug mode.",
           "title": "Ssl Enabled",
           "type": "boolean"
-        },
-        "proxy_enabled": {
-          "default": false,
-          "description": "Ignored. Pass the proxy URL with `opentide --proxy` instead.",
-          "title": "Proxy Enabled",
-          "type": "boolean"
         }
       },
       "title": "DebugSettings",

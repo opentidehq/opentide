@@ -103,7 +103,7 @@ def _parse_yaml_file(path_str: str) -> tuple[str, dict[str, Any] | None, str | N
     """
     path = Path(path_str)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except OSError as exc:
         return path_str, None, str(exc), "oserror"
     except UnicodeDecodeError as exc:
@@ -134,16 +134,18 @@ class RegistryBuilder:
         # YAML files in subfolders of an object folder: not object instances
         # (workspace 1.3, #584), so they are listed here instead of indexed.
         self.nested_object_files: list[dict[str, str]] = []
+        # Files whose object a later file with the same UUID replaced: the index
+        # keeps one object per UUID, so these are listed instead (``duplicate_id``).
+        self.duplicate_files: list[dict[str, str]] = []
 
     def build(self) -> dict[str, Any]:
         configs = resolve_configurations()
-        paths_cfg = configs.get("paths") or configs["global"]
+        paths_cfg = configs["paths"]
         paths = resolve_workspace_paths(configs)
         metaschemas = paths_cfg.get("metaschemas", {})
         artifacts: dict[str, Any] = paths["_artifacts"]
         json_map: dict[str, str] = artifacts.get("schemas", {})
         template_map: dict[str, str] = artifacts.get("templates", {})
-        recomposition = paths_cfg.get("recomposition", {})
 
         index: dict[str, Any] = {
             "paths": legacy_path_aliases(paths),
@@ -159,12 +161,13 @@ class RegistryBuilder:
         index["metaschemas"] = self._load_metaschemas(metaschemas)
         index["definitions"] = self._load_definitions()
         index["templates"] = self._load_templates(paths["templates"], template_map)
-        index["subschemas"], index["templates"] = self._load_recomposition(
-            index["templates"], paths, configs, recomposition
+        index["subschemas"], index["templates"] = self._load_platform_templates(
+            index["templates"], paths, configs
         )
 
         objects_index, files_index = self._load_objects(paths, metaschemas)
         index["parse_errors"] = self.parse_errors
+        index["duplicate_files"] = self.duplicate_files
         index[NESTED_INDEX_KEY] = self.nested_object_files
         from opentide.indexing.inflight import apply_inflight_overlay, inflight_preview_enabled
 
@@ -240,8 +243,21 @@ class RegistryBuilder:
                 identifier = parse_schema_artifact_name(filename)
             except ValueError:
                 identifier = meta_name
-            if identifier not in json_index:
+            if identifier in json_index:
+                continue
+            try:
                 json_index[identifier] = parse_json(schema_path.read_bytes())
+            except (OSError, ValueError) as exc:
+                # A truncated or hand-broken artifact: every command would fail
+                # on it until regenerated. Skip it, and say which file it is. A
+                # warning: nothing but the MCP schema resource reads it, and an
+                # error would fail `generate`, the command that rewrites it.
+                logger.warning(
+                    "could_not_read_schema_artifact",
+                    path=_shown_path(str(schema_path)),
+                    error=str(exc),
+                    advice="Run `opentide generate schemas` or `opentide generate` to rewrite it.",
+                )
 
         return framework_paths, json_index
 
@@ -275,38 +291,38 @@ class RegistryBuilder:
                 template_index[cat] = template_path.read_text(encoding="utf-8")
         return template_index
 
-    def _load_recomposition(
+    def _load_platform_templates(
         self,
         template_index: dict[str, Any],
         paths: dict[str, Path],
         configs: dict[str, Any],
-        recomposition: dict[str, str],
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        from opentide.generation.pydantic_metaschema import build_platform_schema_source
-        from opentide.models.platform_schema import platform_model_for_key
+        """Index each configured platform's block schema source and bundled template.
 
-        subschemas_index: dict[str, Any] = {}
-        sub_path = paths["platform_templates"]
-        for recomp, folder in recomposition.items():
-            template_index.setdefault(recomp, {})
-            subschemas_index[recomp] = {}
-            recomp_data = configs.get(recomp, configs.get("systems", {}))
-            sub_templates_path = sub_path / folder / "Templates"
-            for data, entry in recomp_data.items():
-                if not isinstance(entry, dict):
-                    continue
-                platform_section = entry.get("platform") or entry.get("tide") or {}
-                sub_name = (
-                    platform_section.get("name") or platform_section.get("subschema") or str(data)
-                )
-                if not platform_section:
-                    continue
-                platform_model = platform_model_for_key(data)
-                subschemas_index[recomp][data] = build_platform_schema_source(platform_model)
-                template_file = sub_templates_path / f"{sub_name} Template.yaml"
-                if template_file.is_file():
-                    template_index[recomp][data] = template_file.read_text(encoding="utf-8")
-        return subschemas_index, template_index
+        Both are filed under ``"systems"``, the key the platform block
+        resolvers read.
+        """
+        from opentide.generation.pydantic_metaschema import build_platform_schema_source
+        from opentide.models.platform import PLATFORM_CONFIG_MODELS
+        from opentide.models.platform_schema import platform_model_for_key
+        from opentide.package.paths import platform_template_name
+
+        schemas: dict[str, Any] = {}
+        templates: dict[str, Any] = template_index.setdefault("systems", {})
+        bundled = paths["platform_templates"]
+        platforms = configs.get("platforms", {})
+        for platform, document in platforms.items():
+            if not isinstance(document, dict) or not isinstance(document.get("platform"), dict):
+                continue
+            # No rule block exists for a platform without a model (a plugin's
+            # `platforms/<id>.toml`): nothing to index (#736).
+            if platform not in PLATFORM_CONFIG_MODELS:
+                continue
+            schemas[platform] = build_platform_schema_source(platform_model_for_key(platform))
+            template_file = bundled / platform_template_name(platform)
+            if template_file.is_file():
+                templates[platform] = template_file.read_text(encoding="utf-8")
+        return {"systems": schemas}, template_index
 
     def _load_objects(
         self,
@@ -391,6 +407,18 @@ class RegistryBuilder:
             )
             return
         model_cat = objects_index[meta_name]
+        displaced = self.file_paths.get(identifier) if identifier in model_cat else None
+        if displaced is not None and displaced != str(model_path):
+            message = f"UUID {identifier} is also used by {_shown_path(str(model_path))}"
+            self.duplicate_files.append(
+                {
+                    "path": displaced,
+                    "object_type": meta_name,
+                    "code": "duplicate_id",
+                    "error": message,
+                    "message": message,
+                }
+            )
         model_cat[identifier] = body
         files_index[identifier] = model_path.name
         self.file_paths[identifier] = str(model_path)

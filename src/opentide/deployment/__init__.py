@@ -18,20 +18,16 @@ from opentide.models.deployment_enums import DetectionPlatforms, StatusStrategy
 if TYPE_CHECKING:
     from opentide.deployment.planning import TideDeployment
 
-TideRepo = GitRepository
-DetectionSystems = DetectionPlatforms
 
 __all__ = [
     "DEPRECATED_STATUSES",
     "SYSTEMS_CONFIGS_INDEX",
     "CIEnvironment",
     "DetectionPlatforms",
-    "DetectionSystems",
     "GitRepository",
     "Proxy",
     "StatusStrategy",
     "TideDeployment",
-    "TideRepo",
     "check_status",
     "diff_calculation",
     "enabled_systems",
@@ -41,7 +37,7 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    """Load pandas-dependent and registry-backed exports only when requested."""
+    """Load the planning and registry-backed exports only when requested."""
     if name == "TideDeployment":
         from opentide.deployment.planning import TideDeployment
 

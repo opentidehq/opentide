@@ -6,6 +6,19 @@
 enabled = true
 # Replace every finding's severity: "error", "warning" or "info".
 # severity = "warning"
+# How the file stem derives from the object's name:
+#   "slug" (default)  the stem is slugify(name), e.g. "simulated-actor"
+#   "name"            the stem is the name with characters a file name cannot hold removed
+#   "none"            the stem is not compared with the name
+style = "slug"
+# A regular expression the whole stem (no extension) must match, applied with `style`.
+# A stem that does not match is a non-fixable `filename_pattern` finding.
+# pattern = '^\[(SEN|XDR)\]\[[^\]]+\].+$'
+# A kind of object can have its own `style` and `pattern`; a key it leaves unset
+# comes from [filenames]. Kinds: threats, objectives, rules.
+# [filenames.rules]
+# style = "name"
+# pattern = '^\[(SEN|XDR)\]\[.+'
 
 [metadata]
 enabled = true
@@ -15,5 +28,12 @@ required = ["author", "organisation"]
 # severity = "info"
 
 [placeholders]
+enabled = true
+# severity = "warning"
+
+[queries]
+# The analysis engine's warnings and notes on rule queries (slow shapes,
+# deprecated commands) and Elastic block settings. A query the platform would
+# reject is opentide validate's error, not lint's.
 enabled = true
 # severity = "warning"

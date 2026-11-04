@@ -19,7 +19,7 @@ def resolve_metaschema(
     rather than the family's newest revision (versioning 1.1); the schema
     check reports it.
     """
-    metadata = payload.get("metadata") or payload.get("meta") or {}
+    metadata = payload.get("metadata") or {}
     schema_id = metadata.get("schema") if isinstance(metadata, dict) else None
     if isinstance(schema_id, str) and schema_id in metaschemas:
         if "::" in schema_id and SchemaVersion.parse(schema_id).family != object_type:

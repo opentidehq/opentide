@@ -654,3 +654,108 @@ def test_harfanglab_legacy_bundle_is_refused_before_the_client(
     service_class.return_value.create_or_update_sigma_rule.assert_not_called()
     assert _failed()
     assert _shard(tide_corpus_repo, HARFANGLAB) is None
+
+
+# --- Per-rule events (#675) --------------------------------------------------
+
+
+def _recorded(run: Callable[[], Any]) -> Any:
+    """Run a deploy with a listener, and return what it reported."""
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+
+    recorder = Recorder()
+    with deploy_events.listen(recorder):
+        run()
+    return recorder
+
+
+@pytest.mark.parametrize(
+    ("fixture", "uuid", "tenant"),
+    [
+        ("defender", DEFENDER, "contoso"),
+        ("sentinel_one", SENTINEL_ONE, " s1-prod "),
+        ("crowdstrike", CROWDSTRIKE, None),
+    ],
+)
+def test_a_deployed_rule_is_reported_with_its_tenant(
+    request: pytest.FixtureRequest, fixture: str, uuid: str, tenant: str | None
+) -> None:
+    run = request.getfixturevalue(fixture)
+    recorder = _recorded(run)
+    assert recorder.outcomes() == [(uuid, "deployed")]
+    assert recorder.results[0].tenant is not None
+    if tenant is not None:
+        assert recorder.results[0].tenant == tenant.strip() or recorder.results[0].tenant == tenant
+
+
+def test_a_vendor_error_is_the_rules_failure_and_stops_the_run(
+    defender: Callable[[], MagicMock], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.platforms.defender_for_endpoint import deployer as module
+
+    service_class = module.DefenderForEndpointService
+    service_class.return_value.create_detection_rule.side_effect = RuntimeError("rate limited")
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+
+    recorder = Recorder()
+    with deploy_events.listen(recorder), pytest.raises(RuntimeError, match="rate limited"):
+        defender()
+    assert recorder.outcomes() == [(DEFENDER, "failed")]
+    assert recorder.results[0].error == "RuntimeError: rate limited"
+
+
+def test_a_retired_rule_that_never_reached_the_tenant_is_skipped_with_the_reason(
+    tide_corpus_repo: Path, defender: Callable[[], MagicMock]
+) -> None:
+    _edit_block(tide_corpus_repo, DEFENDER, "defender_for_endpoint", status="DISABLED")
+    recorder = _recorded(defender)
+    assert recorder.outcomes() == [(DEFENDER, "skipped")]
+    assert "nothing is known to exist on that tenant" in (recorder.results[0].reason or "")
+
+
+def test_a_rule_planning_refuses_is_a_failed_rule_with_no_http(
+    tide_corpus_repo: Path, defender: Callable[[], MagicMock]
+) -> None:
+    _edit_block(
+        tide_corpus_repo,
+        DEFENDER,
+        "defender_for_endpoint",
+        status=None,
+        extra="rule_id::contoso: 7590",
+    )
+    record_external_id(DEFENDER, "defender_for_endpoint", "contoso", 7590, tide_corpus_repo)
+    recorder = _recorded(defender)
+    assert recorder.outcomes() == [(DEFENDER, "failed")]
+    assert recorder.results[0].error
+    assert recorder.started == []  # nothing was sent, so no rule was ever "running"
+
+
+def test_harfanglab_reports_a_rule_of_the_wrong_type_as_skipped_and_the_right_one_as_sent(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from opentide.platforms.harfanglab import deployer as module
+
+    _route(
+        module,
+        monkeypatch,
+        _tenant(ConfigurationModels.Systems.HarfangLab.Tenant, "hl-yara", type="YARA"),
+    )
+    _service(module, monkeypatch, "HarfangLabService")
+    recorder = _recorded(lambda: module.HarfangLabDeploy().deploy([HARFANGLAB], BOTH))
+    assert recorder.outcomes() == [(HARFANGLAB, "skipped")]
+    assert recorder.results[0].reason == "Sigma rule, YARA tenant"
+
+    # The loop is under test, not the Sigma compile.
+    monkeypatch.setattr(module.HarfangLabDeploy, "deploy_mdr", lambda self, **kwargs: None)
+    _route(
+        module,
+        monkeypatch,
+        _tenant(ConfigurationModels.Systems.HarfangLab.Tenant, "hl-sigma", type="Sigma"),
+    )
+    recorder = _recorded(lambda: module.HarfangLabDeploy().deploy([HARFANGLAB], BOTH))
+    assert recorder.outcomes() == [(HARFANGLAB, "deployed")]
+    assert recorder.results[0].tenant == "hl-sigma"

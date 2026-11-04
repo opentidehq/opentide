@@ -67,7 +67,6 @@ CASES: list[tuple[str, tuple[str, ...]]] = [
     ("deploy migrate-state", ("deploy", "migrate-state")),
     ("generate exports navigator", ("generate", "exports", "navigator")),
     ("generate", ("generate", "bogus")),
-    ("migrate objects", ("migrate", "objects")),
     ("migrate vocab-scope", ("migrate", "vocab-scope")),
     ("share targets", ("share", "targets")),
     ("share preview", ("share", "preview")),

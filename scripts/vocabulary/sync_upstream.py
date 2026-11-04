@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch latest ATT&CK STIX and MISP actors, regenerate vocabs, bump pins."""
+"""Fetch latest ATT&CK STIX and MISP actors and regenerate vocabs; schema pins never move."""
 
 from __future__ import annotations
 

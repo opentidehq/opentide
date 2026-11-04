@@ -24,7 +24,6 @@ SECRET = "s3cr3t-Value-never-printed"
 SENTINEL_TOML = """\
 [platform]
 enabled = true
-identifier = "sentinel"
 
 [[tenants]]
 name = "prod"
@@ -279,6 +278,73 @@ def test_templates_stale_and_missing(
     assert "rule.1.0.schema.json" in schemas.message
 
 
+def _generate_templates(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run ``generate templates`` in *root* the way a user does, then point the runtime at it."""
+    env = {"OPENTIDE_REPO_ROOT": str(root), "OPENTIDE_TIDE_WORKSPACE": str(root)}
+    clear_runtime_caches()
+    result = CliRunner().invoke(
+        app, ["--json", "--repo", str(root), "generate", "templates"], env=env
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(root))
+    monkeypatch.delenv("OPENTIDE_TIDE_WORKSPACE", raising=False)
+    clear_runtime_caches()
+
+
+def _lint_workspace(tmp_path: Path, lint_toml: str) -> Path:
+    root = tmp_path / "detections"
+    configurations = root / ".opentide" / "configurations"
+    configurations.mkdir(parents=True)
+    (root / "objects").mkdir()
+    (configurations / "lint.toml").write_text(lint_toml, encoding="utf-8")
+    return root
+
+
+def test_templates_fresh_when_lint_toml_changes_the_required_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``generate templates`` renders ``[metadata].required`` live; doctor must compare alike."""
+    root = _lint_workspace(tmp_path, '[metadata]\nrequired = ["author"]\n')
+    _generate_templates(root, monkeypatch)
+    check = _only(doctor.check_templates(_ctx(root)))
+    assert (check.status, check.message) == ("pass", "Templates match the installed version")
+    clear_runtime_caches()
+
+
+def test_templates_not_compared_when_lint_toml_cannot_be_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _lint_workspace(tmp_path, '[metadata]\nrequired = ["author"]\n')
+    _generate_templates(root, monkeypatch)
+    (root / ".opentide" / "configurations" / "lint.toml").write_text(
+        '[metadata]\nrequired = ["not-a-metadata-key"]\n', encoding="utf-8"
+    )
+    clear_runtime_caches()
+    check = _only(doctor.check_templates(_ctx(root)))
+    assert check.status == "warn"
+    assert "not-a-metadata-key" in check.message
+    assert check.fix and "lint.toml" in check.fix
+    clear_runtime_caches()
+
+
+def test_a_rejected_lint_toml_value_is_reported_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The file parses, so ``configuration`` passes and only ``templates_fresh`` warns."""
+    root = _lint_workspace(tmp_path, '[metadata]\nrequired = ["author"]\n')
+    _generate_templates(root, monkeypatch)
+    (root / ".opentide" / "configurations" / "lint.toml").write_text(
+        '[metadata]\nrequired = ["not-a-metadata-key"]\n', encoding="utf-8"
+    )
+    clear_runtime_caches()
+    payload = doctor.run_doctor(_ctx(root, offline=True, env={}))
+    statuses = {check["code"]: check["status"] for check in payload["checks"]}
+    assert statuses["configuration"] == "pass"
+    assert statuses["templates_fresh"] == "warn"
+    assert [check["code"] for check in payload["checks"]].count("templates_fresh") == 1
+    clear_runtime_caches()
+
+
 # --------------------------------------------------------------------------- platforms
 
 
@@ -334,9 +400,27 @@ def test_credentials_report_presence_never_values(
     assert "literal-name" not in rendered
 
 
+def test_credentials_name_a_braced_reference_as_info_does(workspace: Path) -> None:
+    from opentide.platforms.config import setup_variables
+
+    path = workspace / ".opentide" / "configurations" / "platforms" / "sentinel.toml"
+    path.write_text(
+        SENTINEL_TOML.replace('"$DOCTOR_TEST_CLIENT_ID"', '"${DOCTOR_TEST_CLIENT_ID}"'),
+        encoding="utf-8",
+    )
+    clear_runtime_caches()
+    env = {"DOCTOR_TEST_CLIENT_ID": SECRET}
+    checks = {check.subject: check for check in doctor.check_credentials(_ctx(workspace, env=env))}
+    assert checks["sentinel/prod"].message == (
+        "sentinel/prod: 1 of 2 variables unset: DOCTOR_TEST_CLIENT_SECRET"
+    )
+    setup = {"azure_client_id": "${DOCTOR_TEST_CLIENT_ID}", "secret": "$DOCTOR_TEST_CLIENT_SECRET"}
+    assert setup_variables(setup) == ["DOCTOR_TEST_CLIENT_ID", "DOCTOR_TEST_CLIENT_SECRET"]
+
+
 def test_credentials_skip_a_platform_without_tenants(workspace: Path) -> None:
     path = workspace / ".opentide" / "configurations" / "platforms" / "splunk.toml"
-    path.write_text('[platform]\nenabled = true\nidentifier = "splunk"\n', encoding="utf-8")
+    path.write_text("[platform]\nenabled = true\n", encoding="utf-8")
     clear_runtime_caches()
     check = _only(doctor.check_credentials(_ctx(workspace)))
     assert (check.status, check.subject) == ("skip", "splunk")
@@ -454,10 +538,10 @@ def test_unparseable_proxy_fails_without_echoing_it(
 
 
 def test_vscode_settings_and_snippets(workspace: Path) -> None:
-    from opentide.cli.services.setup.vscode import build_yaml_schema_mappings
-
+    """#752: the check wants the extension recommended, and no yaml.schemas of opentide's."""
     checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
     assert checks["vscode_settings"].status == "skip"
+    assert "opentidehq.opentide" in checks["vscode_settings"].message
     assert checks["vscode_snippets"].status == "skip"
 
     vscode = workspace / ".vscode"
@@ -466,22 +550,95 @@ def test_vscode_settings_and_snippets(workspace: Path) -> None:
     settings.write_text("{not json", encoding="utf-8")
     invalid = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
     assert invalid["vscode_settings"].status == "warn"
-    assert "not valid JSON" in invalid["vscode_settings"].message
+    assert "settings.json is not valid JSON" in invalid["vscode_settings"].message
 
+    extensions = vscode / "extensions.json"
     settings.write_text('{"yaml.schemas": {"other.json": "x/**"}}', encoding="utf-8")
-    unmapped = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
-    assert unmapped["vscode_settings"].status == "warn"
+    extensions.write_text('{"recommendations": ["redhat.vscode-yaml"]}', encoding="utf-8")
+    other = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert other["vscode_settings"].status == "warn"
+    assert "does not recommend opentidehq.opentide" in other["vscode_settings"].message
 
-    settings.write_text('{"editor.tabSize": 2}', encoding="utf-8")
-    none = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
-    assert "maps no yaml.schemas" in none["vscode_settings"].message
-
-    mapped = {"yaml.schemas": build_yaml_schema_mappings(workspace=workspace)}
-    settings.write_text(json.dumps(mapped) + "\n// comment\n", encoding="utf-8")
+    extensions.write_text('{"recommendations": ["opentidehq.opentide"]}\n// c\n', "utf-8")
     (vscode / "model-templates.code-snippets").write_text("{}", encoding="utf-8")
     good = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
     assert good["vscode_settings"].status == "pass"
     assert good["vscode_snippets"].status == "pass"
+
+    # What earlier releases wrote: a YAML extension would report objects twice.
+    router = ".opentide/schemas/opentide.schema.json"
+    settings.write_text(json.dumps({"yaml.schemas": {router: "objects/**/*.yaml"}}), "utf-8")
+    mapped = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert mapped["vscode_settings"].status == "warn"
+    assert router in mapped["vscode_settings"].message
+    assert mapped["vscode_settings"].fix == "opentide setup vscode"
+
+    settings.write_text("{}", encoding="utf-8")
+    extensions.write_text("[oops", encoding="utf-8")
+    broken = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert broken["vscode_settings"].status == "warn"
+    assert "extensions.json is not valid JSON" in broken["vscode_settings"].message
+
+
+def test_vscode_settings_skips_an_extension_the_workspace_lists_as_unwanted(
+    workspace: Path,
+) -> None:
+    """setup vscode leaves an unwanted extension out on purpose, so doctor must not warn
+    and offer setup vscode, which would change nothing."""
+    vscode = workspace / ".vscode"
+    vscode.mkdir()
+    (vscode / "extensions.json").write_text(
+        '{"recommendations": [], "unwantedRecommendations": ["opentidehq.opentide"]}',
+        encoding="utf-8",
+    )
+    checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    check = checks["vscode_settings"]
+    assert check.status == "skip", check
+    assert "unwantedRecommendations" in check.message
+    assert check.fix is None
+
+
+def test_vscode_and_mcp_checks_read_files_saved_with_a_bom(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """VS Code's "UTF-8 with BOM" (common on Windows) is JSON that setup reads: doctor
+    reported each such file as not valid JSON."""
+    vscode = workspace / ".vscode"
+    vscode.mkdir()
+    bom = b"\xef\xbb\xbf"
+    (vscode / "settings.json").write_bytes(bom + b'{"editor.tabSize": 2}')
+    (vscode / "extensions.json").write_bytes(bom + b'{"recommendations": ["opentidehq.opentide"]}')
+    checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+    assert checks["vscode_settings"].status == "pass", checks["vscode_settings"]
+
+    (vscode / "extensions.json").unlink()
+    server = {"command": "opentide", "args": ["mcp", "start"]}
+    (vscode / "mcp.json").write_bytes(bom + json.dumps({"servers": {"opentide": server}}).encode())
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    mcp = _only(doctor.check_mcp(_ctx(workspace)))
+    assert (mcp.status, mcp.message) == ("pass", "MCP configured for VS Code")
+
+
+def test_mcp_config_says_the_extension_provides_the_server(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#752: with the extension recommended, VS Code agents get opentide without mcp.json."""
+    vscode = workspace / ".vscode"
+    vscode.mkdir()
+    (vscode / "extensions.json").write_text(
+        '{"recommendations": ["opentidehq.opentide"]}', encoding="utf-8"
+    )
+    alone = _only(doctor.check_mcp(_ctx(workspace)))
+    assert alone.status == "pass"
+    assert "opentidehq.opentide" in alone.message
+    assert "provides the opentide MCP server" in alone.message
+
+    _mcp(vscode / "mcp.json")
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    both = _only(doctor.check_mcp(_ctx(workspace)))
+    assert both.status == "pass"
+    assert both.message.startswith("MCP configured for VS Code")
+    assert "also provides the server to VS Code" in both.message
 
 
 def _mcp(path: Path, command: str = "opentide", args: list[str] | None = None) -> None:
@@ -649,11 +806,13 @@ def test_a_check_that_raises_reports_its_documented_codes(
 
     monkeypatch.setattr(doctor, "_configurations", boom)
     monkeypatch.setattr(
-        "opentide.cli.services.setup.vscode.build_yaml_schema_mappings",
-        lambda **kwargs: boom(None),  # ty: ignore[invalid-argument-type]
+        "opentide.cli.services.setup.vscode.is_opentide_schema_mapping",
+        lambda *args: boom(None),  # ty: ignore[invalid-argument-type]
     )
     (workspace / ".vscode").mkdir()
-    (workspace / ".vscode" / "settings.json").write_text("{}", encoding="utf-8")
+    (workspace / ".vscode" / "settings.json").write_text(
+        '{"yaml.schemas": {"a.json": "a/*.yaml"}}', encoding="utf-8"
+    )
     checks = doctor._guarded(doctor.check_vscode, _ctx(workspace))
     assert [(check.code, check.status) for check in checks] == [
         ("vscode_settings", "fail"),
@@ -787,3 +946,28 @@ def test_doctor_real_checks_offline_never_print_secrets(
     human = CliRunner().invoke(app, ["--no-color", "--repo", str(workspace), "doctor", "--offline"])
     assert SECRET not in human.stdout + human.stderr
     assert "sentinel/prod: all 2 variables set · credentials" in _SGR.sub("", human.stdout)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["objects/**/*.yaml", ["objects/**/*.yaml"], ["hunts/**/*.yaml", "./objects/**/*.yaml"], []],
+)
+def test_vscode_settings_warns_on_the_router_mapping_as_a_string_or_in_a_list(
+    workspace: Path, value: object
+) -> None:
+    """The YAML extension takes the glob as a string or in a list: either form of the
+    router mapping makes it report what the opentide extension does (#752)."""
+    from opentide.cli.services.setup.vscode import build_yaml_schema_mappings
+
+    [schema] = build_yaml_schema_mappings(workspace=workspace)
+    settings = workspace / ".vscode" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text(json.dumps({"yaml.schemas": {schema: value}}), encoding="utf-8")
+    (workspace / ".vscode" / "extensions.json").write_text(
+        json.dumps({"recommendations": ["opentidehq.opentide"]}), encoding="utf-8"
+    )
+
+    checks = {check.code: check for check in doctor.check_vscode(_ctx(workspace))}
+
+    assert checks["vscode_settings"].status == "warn"
+    assert schema in checks["vscode_settings"].message

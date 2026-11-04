@@ -17,7 +17,7 @@ opentide setup mcp --vscode --generic --yes
 | `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
 | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
-| `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
+| `--generic` | `opentide.mcp.json` | omitted (cwd discovery); an [Agent Plugins](#agent-plugins) `mcp.json` |
 
 ## Minimal config
 
@@ -26,6 +26,8 @@ VS Code workspace MCP (`.vscode/mcp.json`) uses a top-level `servers` object. Cu
 Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. The generic file is copied into arbitrary hosts, so it does not set `OPENTIDE_REPO_ROOT` — the server walks up from cwd to the nearest detection workspace (`get_repo_root`). Set an absolute path when cwd is not inside the detection workspace.
 
 ### VS Code
+
+The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP server to VS Code agents itself, with no `.vscode/mcp.json`. Write the file for teammates without the extension. When `.vscode/extensions.json` recommends the extension, `opentide setup mcp --vscode` says so (`extension_mcp`), and `opentide doctor`'s `mcp_config` passes without the file.
 
 ```json
 {
@@ -77,8 +79,10 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 
 ```json
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "opentide": {
+      "type": "stdio",
       "command": "opentide",
       "args": ["mcp", "start"]
     }
@@ -86,7 +90,7 @@ Repo-root placeholders are **host-specific**. VS Code and Cursor expand `${works
 }
 ```
 
-When the generic file is imported into a host that does expand placeholders, add that host's variable (or a real path) yourself.
+The generic file validates against the [Agent Plugins 1.0.0](https://agent-plugins.org/specification) `mcp.json` schema, which requires `$schema` and `type` and allows no other top-level key, so a plugin can ship it as it is; hosts that read `mcpServers` accept the two extra keys. When the generic file is imported into a host that does expand placeholders, add that host's variable (or a real path) yourself. Merging into an existing `opentide.mcp.json` keeps its `$schema` and every other server.
 
 Bundled templates: `src/opentide/data/setup/mcp/`.
 
@@ -118,13 +122,43 @@ If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks up from cwd to the nea
 }
 ```
 
+## Agent Plugins
+
+The [opentidehq/skills](https://github.com/opentidehq/skills) repository is an [Agent Plugins 1.0](https://agent-plugins.org/specification) package: its root `plugin.json` names it, `skills/` holds the detection skills, and its `mcp.json` starts this server, so one install gives an agent both:
+
+```json
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "opentide": { "type": "stdio", "command": "opentide", "args": ["mcp", "start"] }
+  }
+}
+```
+
+Install it from the host, with `opentide` on the host's `PATH` (`pip install opentide`):
+
+| Host | Install |
+|------|---------|
+| Claude Code | `/plugin marketplace add opentidehq/skills`, then `/plugin install opentide@opentide`; or, for everyone who opens the project, [`opentide setup skills --plugin`](../cli/setup.md#the-agent-plugin) |
+| VS Code (GitHub Copilot) | **Chat: Install Plugin from Source**, then `https://github.com/opentidehq/skills` |
+| Cursor | **Customize** → Plugins, install from the Git repository |
+| GitHub Copilot CLI | Install from the Git repository URL |
+
+An Agent Plugins client starts the server in the plugin's own directory, which is the skills package, not your detection repository. The server never serves the plugin as a catalogue. It serves, in order:
+
+1. `OPENTIDE_REPO_ROOT` or `OPENTIDE_TIDE_WORKSPACE`, when it names a detection workspace;
+2. the plugin directory, when it is itself a detection workspace;
+3. the host's project directory: `CLAUDE_PROJECT_DIR`, else `PWD` (the directory the host was started in), when it lies in a detection workspace.
+
+Otherwise the catalogue tools and resources (`search`, `validation_report`, `opentide://rules`, ...) fail with `workspace_not_found`, naming the plugin directory; `explain` and offline `validate_query` still work. Set `OPENTIDE_REPO_ROOT` in the host's settings for the server, or add the server to the detection repository itself with [`opentide setup mcp`](#automated-setup), whose files name the project directory.
+
 ## Multi-repo workspaces
 
 When the editor workspace is the **opentide package repo** but content lives elsewhere, always set `OPENTIDE_REPO_ROOT` to the detection content root (an absolute path, not an editor placeholder the host will not expand).
 
 ## Query validation policy
 
-Agents must treat `validate_query` responses with `supported: false` as **not validated** for CrowdStrike and HarfangLab. Never infer a pass.
+Agents must treat `validate_query` responses with `supported: false` as **not validated** for CrowdStrike, HarfangLab and Sysdig. Never infer a pass.
 
 ## Deploy safety
 

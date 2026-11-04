@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
-from pydantic import StrictInt, model_validator
+from pydantic import StrictInt
 
 from opentide.models.base import FieldRole, TideField, TideModel, VocabField
 from opentide.models.metadata import ObjectMetadata, ObjectReferences
@@ -120,15 +120,6 @@ class DetectionObjective(TideModel):
     """Detection objective body."""
     references: ObjectReferences | None = None
     """External and internal references."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def _accept_root_composition(cls, data: Any) -> Any:
-        """Ignore a root composition block. The required block is objective.composition."""
-        if isinstance(data, dict) and "composition" in data:
-            data = dict(data)
-            data.pop("composition")
-        return data
 
     @classmethod
     def from_yaml_dict(

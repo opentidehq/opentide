@@ -1,0 +1,3 @@
+[[logsources]]
+name = "Contoso_Audit_CL"
+system = "sentinel"

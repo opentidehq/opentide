@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 import structlog
 
+from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.errors import Errors
 from opentide.core.registry import DetectionPlatforms, Opentide
@@ -240,9 +241,12 @@ class CrowdstrikeDeploy(RuleDeployer):
             service = CrowdstrikeService(tenant_config)
             for mdr, action in planned:
                 logger.info("processing_rule", detail=mdr.name, advice=mdr.metadata.uuid)
-                self.deploy_mdr(
-                    data=mdr, service=service, tenant_config=tenant_config, action=action
-                )
+                with deploy_events.deploying(
+                    PLATFORM, tenant_config.name, mdr.metadata.uuid, mdr.name
+                ):
+                    self.deploy_mdr(
+                        data=mdr, service=service, tenant_config=tenant_config, action=action
+                    )
 
 
 def declare():

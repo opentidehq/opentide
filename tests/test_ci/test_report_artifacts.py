@@ -98,17 +98,19 @@ def _gitlab(**options: Any) -> dict[str, Any]:
 def test_gitlab_validate_job_keeps_code_quality_reports() -> None:
     validate = _gitlab()["validate"]
     assert validate["script"] == object_validate_commands("codequality")
+    # One file: GitLab Runner 18.9 failed the job on two ("only one file can
+    # be sent as raw"), after both commands had passed.
     assert validate["artifacts"] == {
         "when": "always",
         "expose_as": "opentide reports",
         "paths": ["opentide-reports/"],
-        "reports": {
-            "codequality": [
-                "opentide-reports/validate.codequality.json",
-                "opentide-reports/lint.codequality.json",
-            ]
-        },
+        "reports": {"codequality": "opentide-reports/codequality.json"},
     }
+    # Merged in after_script, which also runs when a gate command failed.
+    assert validate["after_script"] == [
+        "python -m opentide.ci.codequality --output opentide-reports/codequality.json"
+        " opentide-reports/validate.codequality.json opentide-reports/lint.codequality.json"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -130,7 +132,41 @@ def test_gitlab_jobs_keep_their_summary(job: str, expose_as: str | None) -> None
 def test_gitlab_jobs_without_opentide_output_keep_no_artifact() -> None:
     pipeline = _gitlab()
     assert "artifacts" not in pipeline["generate"]
-    assert "artifacts" not in pipeline["document"]
+
+
+def test_every_document_job_keeps_the_pages_it_renders() -> None:
+    """The document job rendered the docs (minutes per default-branch run) and dropped them."""
+    gitlab = _gitlab()["document"]
+    assert gitlab["script"] == ["opentide generate docs --output docs"]
+    assert gitlab["artifacts"] == {"name": "opentide-docs", "paths": ["docs/"]}
+
+    github = _github()["document"]["steps"]
+    runs = [step.get("run") for step in github]
+    upload = _step(github, "Upload documentation")
+    assert runs.index("opentide generate docs --output docs") < github.index(upload)
+    assert upload["uses"] == "actions/upload-artifact@v4"
+    assert upload["with"] == {"name": "opentide-docs", "path": "docs/"}
+
+    parsed = yaml.safe_load(render_azure(CiRenderOptions(ci="azure", platforms=["sentinel"])))
+    document = next(stage for stage in parsed["stages"] if stage["stage"] == "Document")
+    steps = document["jobs"][0]["steps"]
+    assert "opentide generate docs --output docs" in steps[-2]["script"]
+    assert steps[-1] == {
+        "task": "PublishBuildArtifacts@1",
+        "displayName": "Publish documentation",
+        "inputs": {
+            "PathtoPublish": "$(Build.SourcesDirectory)/docs",
+            "ArtifactName": "opentide-docs",
+        },
+    }
+
+
+@pytest.mark.parametrize("ci", ["github", "gitlab", "azure"])
+def test_no_docs_artifact_without_docs(ci: str) -> None:
+    from opentide.ci.render import render_ci
+
+    options = CiRenderOptions(ci=ci, platforms=["sentinel"], docs_enabled=False)
+    assert "opentide-docs" not in next(iter(render_ci(options).values()))
 
 
 def test_gitlab_expose_as_names_are_valid() -> None:
@@ -170,8 +206,10 @@ def test_azure_validate_job_publishes_sarif() -> None:
 
 
 def test_setup_ignores_the_reports_folder(tmp_path: Path) -> None:
-    from opentide.cli.services.setup.repo import _write_gitignore
+    from opentide.cli.services.setup.repo import OPENTIDE_IGNORES, _ensure_gitignore
 
-    _write_gitignore(tmp_path)
+    _ensure_gitignore(tmp_path)
     lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert f"{REPORTS_DIR}/" in lines
+    # An existing .gitignore gains it too: it is one of the lines always added.
+    assert f"{REPORTS_DIR}/" in OPENTIDE_IGNORES

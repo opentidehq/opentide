@@ -7,6 +7,170 @@ description: Public package versions of opentide on PyPI.
 
 The engine is the [`opentide`](https://pypi.org/project/opentide/) package. Pin a version in CI. Source of truth for notes is [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) in the repository; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.21.0 — 3 November 2026
+
+Minor release. Sysdig Secure and Falco become the ninth platform. Migrating CoreTIDE content is not a supported path, and the files, keys and commands that suggested otherwise are removed. Run `opentide validate --strict` after upgrading: it names each retired file and key and what replaces it. Then re-run `opentide setup ci <provider> --yes` to pick up the pipeline fixes.
+
+**Install**
+
+```bash
+pip install opentide==0.21.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **Sysdig Secure and Falco, the ninth platform** ([#143](https://github.com/opentidehq/opentide/issues/143)). A `configurations.sysdig` block is a Falco rule, or a tuning of an existing one. Deploy goes through the Sysdig Secure runtime API, and Falco conditions are checked offline by `validate`, `lint`, the editor and MCP. `opentide setup --sysdig` enables it.
+- **CoreTIDE layouts are retired.**
+  - `global.toml`, `schema.toml` and `systems/` under `.opentide/configurations/` fail every command (`retired_configuration_file`).
+  - A platform file is identified by its file name.
+  - The splunk::2.x keys, a rule's `meta:` and an objective's root `composition` are unknown keys.
+  - A platform block's `schema` must be `platform::<platform>::1.0`.
+  - `migrate objects` and `export playbook-map` are removed.
+- **Rule pages, the index and MCP show each platform block's own status and severity**, not `STAGING`/`Informational` defaults. Promotion rewrites only `configurations.<platform>.status` and keeps line endings.
+- **One slow query no longer marks a tenant unreachable** in `validate query --live`. `--check-timeout` bounds each check.
+- **Generated pipelines.**
+  - `lint --changed`, and `setup ci --lint-changed` to gate lint on the files each run changes.
+  - `[skip deploy]` and the `skip-deploy` label.
+  - GitLab write-backs over SSH or `OPENTIDE_PUSH_URL`.
+  - One GitLab Code Quality report, and no failure on GitLab Runner 18.9.
+  - The rendered docs are kept as an artifact.
+  - One `OPENTIDE_VERSION` pin.
+- **The deploy loaders refuse every key `validate` refuses.**
+- **The engine is [language-server 0.9.1](https://github.com/opentidehq/language-server/releases/tag/v0.9.1)**, from crates.io: the rebuilt server host, configuration files checked in the editor, Carbon Black field checks and the Falco language.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0210--2026-11-03) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.21.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.21.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
+## 0.20.1 — 3 November 2026
+
+Patch release. A `visibility.toml` log source is one dataset, named by its `name`, and can declare its columns; the query checks ([language-server 0.7.1](https://github.com/opentidehq/language-server/releases/tag/v0.7.1)) read them. A patch by maintainer decision: the 0.20.0 dataset lists were a defect of `visibility::1.0`, shipped the same day, and are corrected in place. If your `visibility.toml` uses the 0.20.0 lists (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), rewrite it with one `[[logsources]]` per table, sourcetype or index pattern, named after it, and update the signals' `data.logsources` references ([Upgrading from 0.20.0](./configuration.md#upgrading-from-0200)). Everything else needs nothing.
+
+**Install**
+
+```bash
+pip install opentide==0.20.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **One log source per dataset, with its columns** ([#718](https://github.com/opentidehq/opentide/issues/718)). A log source's `name` is its KQL table, Splunk sourcetype or Elastic index pattern, and `columns` declares the dataset's columns (`{ type, description }`). The 0.20.0 keys fail validation and say what to do instead; there is no migration command.
+- **The query checks know the declared columns** (language-server 0.7.1): a near miss of a declared column, or an operator its type does not support, is reported, and hover and completion show them. Once tables are declared, an unknown table keeps its profile's severity again, so a Defender typo fails `validate`; lower-case table names are checked; column patterns in `project-reorder`, `project-away` and `project-keep` parse.
+- **`lint` checks a file that starts with a UTF-8 byte-order mark** ([#719](https://github.com/opentidehq/opentide/issues/719)); before, none of its queries was analysed.
+- **MCP `validate_query` reads `visibility.toml`** ([#720](https://github.com/opentidehq/opentide/issues/720)), so it reports what `opentide validate query` reports.
+- **`lint.toml` sets the filename convention per object kind** ([#721](https://github.com/opentidehq/opentide/issues/721)): `[filenames.threats]`, `[filenames.objectives]` and `[filenames.rules]` take `style` and `pattern`.
+- **ATT&CK 20.0 group labels** in generated docs and editor schemas (`[Enterprise] APT28`); the accepted values are unchanged.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0201--2026-11-03) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.20.1/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.20.1)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
+## 0.20.0 — 2 November 2026
+
+Minor release. `validate` compiles every rule a deploy would compile, the query checks know the documented tables and their columns, a workspace's `visibility.toml` declares its own tables, indexes and index patterns, and `lint.toml` sets the filename convention. Run `opentide validate` after upgrading: a rule the platform compiler cannot build, or a query with a near miss of a documented column, now fails it.
+
+**Install**
+
+```bash
+pip install opentide==0.20.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**What changes**
+
+- **`validate` compiles each rule** a deploy would compile, with the dry run's offline compiler, and reports the key at fault (`compile_missing_field`, ...), so a rule that validates deploys.
+- **The query checks know tables and columns** ([language-server 0.7.0](https://github.com/opentidehq/language-server/releases/tag/v0.7.0)): `kql_unknown_column`, `kql_type_mismatch`, `spl_unknown_datamodel_field` and `ecs_type_mismatch` are errors; under Sentinel an unknown table is a warning. The Azure Monitor Logs, Defender XDR and ASIM tables are known, and KQL hover shows column descriptions.
+- **`visibility.toml` declares a log source's datasets** (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`), read by `validate`, `lint`, `tui` and the language server.
+- **`lint.toml` sets the filename convention**: `[filenames] style` (`slug`, `name`, `none`) and `pattern`.
+- **Agent Plugins**: `opentide setup skills --plugin` enables the opentidehq/skills plugin for a project's Claude Code users, the MCP server finds the workspace when a plugin starts it, and `setup mcp --generic` writes an Agent Plugins 1.0.0 `mcp.json`.
+- **`validate query --live` runs on the `opentide query` runners**; the `VALIDATION_ERROR_RAISED` / `VALIDATION_WARNING_RAISED` environment flags are gone. Read the exit code instead.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0200--2026-11-02) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.20.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.20.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
+## 0.19.0 — 29 October 2026
+
+Minor release. The language server and its query engine are compiled into opentide, so `validate` checks every rule query offline, `lint` checks query style, `opentide lsp start` serves editors, and `opentide query` runs a query on a tenant. Run `opentide validate` after upgrading: a rule whose query the platform would reject now fails it.
+
+**Install**
+
+```bash
+pip install opentide==0.19.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+opentide generate schemas
+```
+
+**What changes**
+
+- **`validate` checks queries.** A query the platform would reject fails `validate` (exit `1`). `--queries warn` reports it as a warning while you fix it; `--queries off` skips queries.
+- **`validate query` works offline.** Without `--live` it checks every rule query instead of exiting `2`; `--strategy` and `--wide` now need `--live`.
+- **Editors.** `opentide lsp start` serves the language server protocol: diagnostics, hover, completion and highlighting for Tide objects and the queries in them, and for `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` and `.lucene` files. Run `opentide generate schemas` first.
+- **`opentide query`** runs a read-only query on a platform's tenants and returns the rows.
+- **`opentide deploy` reports each rule as it is sent**, and counts failed and not-attempted rules on every run.
+- **Elastic advisories use the specification's codes** (`lookback_long`, `risk_band`, ...).
+- **Wheels are per platform.** Linux, macOS and Windows x64 get a prebuilt wheel; elsewhere, including free-threaded Python, pip builds from the sdist and needs a Rust toolchain.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0190--2026-10-29) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.19.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.19.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
+## 0.18.0 — 27 October 2026
+
+Minor release. Configuration files are validated, rule `severity` uses the alert labels, and the CLI gains commands for authoring and for agents. Run `opentide validate` after upgrading: a file that loaded under 0.17.2 can fail now, and the error names the file and the key. Then regenerate your CI pipeline and run `opentide generate`.
+
+**Install**
+
+```bash
+pip install opentide==0.18.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+opentide setup ci <github|gitlab|azure> --yes
+opentide generate
+```
+
+**What changes**
+
+- **Configuration files are checked.** An unknown or misspelt key, or a wrong type, in `.opentide/configurations/` fails the command that reads the file: `deployment.toml is invalid: promotion.enabeld: unknown key`. `opentide validate` runs the same check. A Splunk `schedule_offset = "5"` must be `5`, and a `documentation.toml` carried over from CoreTIDE must drop `skip_vocabularies`, `model_cover_pages` and `[titles]`.
+- **Rule `severity` uses the alert labels**, `Informational` to `Critical`, like `response.alert_severity`. Replace an incident-scale value (`Substantial incident` → `High`).
+- **New commands.** `opentide new` scaffolds a threat, objective or rule; `opentide doctor` checks the installation and the workspace; `opentide validate --fix` applies safe fixes and `--watch` re-validates on save; `opentide explain <code>` explains any diagnostic; `opentide tui` browses the catalogue; `opentide info vocab` reports a vocabulary's revisions; `opentide commands` lists the command tree for agents.
+- **Findings carry a location and a fix.** `validate` and `lint` print code frames; `--json` and the MCP tools add `path`, `line`, `column`, `help`, `fix` and `explain`. In CI they become annotations and a job summary, and `--format sarif|codequality` writes reports that regenerated pipelines keep.
+- **`lint.toml`** sets the metadata keys lint requires and each check's severity.
+- **Elastic tenants declare their stack version** with `[tenants.setup] version` (`"8.19"`, `"9.5"` or `"serverless"`, as a string).
+- **The MCP server needs `mcp` 2.x.** Move a pin of `mcp<2` to `mcp>=2.3,<3`.
+- **Deploy no longer stops on a rule without platform blocks,** the shape `opentide new rule` writes without `--platform`.
+- **Nested object files are ignored everywhere**, as deploy already did, and a rule promoted by the production deploy is shared on the same run.
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0180--2026-10-27) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.18.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.18.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.17.2 — 22 October 2026
 
 Patch release. Nothing to regenerate. `uv` installs resolve a current boto3 again, and a Splunk tenant behind a proxy that answers with an HTML page now fails with a message naming the proxy and the `NO_PROXY` entry to add. Delete any `verify=not ssl_enabled` patch of the Splunk client and set `NO_PROXY` instead.
@@ -1050,7 +1214,7 @@ Python **3.10–3.14**. One wheel: CLI, MCP (`opentide-mcp`), SDK, seven platfor
 
 **What it is not**
 
-- A hard cut for existing instances. Pinned CoreTide checkouts keep resolving. Migrate when you next touch CI — [migration guide](./migration/index.md).
+- A hard cut for existing instances. Pinned CoreTide checkouts keep resolving. Migrate when you next touch CI.
 - A freeze forever. For **four weeks** after 0.1.0 the maintainers treat this as a support window: deployer bugs, docs, agent setup, migration questions. File issues on [opentidehq/opentide](https://github.com/opentidehq/opentide/issues).
 
 **Links**

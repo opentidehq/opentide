@@ -116,8 +116,9 @@ class SentinelOneService:
                     "fatal_error",
                     detail=str(response.text),
                     advice=(
-                        "Go to SentinelOne Console and check if your rule still exists. If not, "
-                        "remove the rule id entry from the MDR file"
+                        "Check in the SentinelOne console whether the rule still exists. If "
+                        "not, remove its sentinel_one entry from the rule's deployment state "
+                        "in .opentide/states/deployment/"
                     ),
                 )
                 raise error

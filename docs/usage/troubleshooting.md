@@ -66,7 +66,7 @@ opentide --repo /path/to/detections validate --strict
 The CLI ships with the package. Install it:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 ```
 
 Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent hosts, point the host at that environment's `opentide` binary with args `mcp` and `start` — see [MCP configuration](../mcp/configuration.md).
@@ -78,7 +78,7 @@ Inside a virtualenv, confirm it is on `PATH` (`which opentide`). For MCP/agent h
 Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 ```
 
 `0.1.1` skips hidden/dunder directories and loads nested `*.toml` only.
@@ -88,7 +88,7 @@ pip install 'opentide==0.17.2'
 `0.1.0` bound a positional `PATH` on the skills group, so Click treated `discover` and `show` as a path. The install wizard then ran and tried to download from GitHub.
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup skills discover
 opentide setup skills --generic --yes
 ```
@@ -115,7 +115,7 @@ ValueError: validate must be callable
 `0.1.5` passed `validate=None` into Questionary for optional checkboxes. **0.1.6** omits the argument when a selection is optional. Non-interactive `opentide setup --ci github` was already fine. Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup
 ```
 
@@ -124,7 +124,7 @@ opentide setup
 Generate-first `opentide setup vscode` `chdir`s into the target before writing files. **0.1.6** raised `FileNotFoundError` when that path did not exist yet. **0.1.7** creates the directory first (same as other setup commands). Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup vscode
 ```
 
@@ -133,7 +133,7 @@ opentide setup vscode
 `0.1.6` wrote `.vscode/settings.json` even when templates (and therefore snippets) were missing. **0.1.7** generates templates and schemas first, then fails (`status: failed`) if snippets were requested but could not be written. Re-run:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup vscode
 ```
 
@@ -144,7 +144,7 @@ Pass `--no-generate` only when `.opentide/templates` already exist. A missing ta
 `0.1.7` logged missing `objects/{threats,objectives,rules}` at **error** during generate-first `setup vscode` or `generate` on a brand-new scaffold. Those folders are empty until you author YAML. **0.1.8** logs absence at **debug** (once per path). A path that exists but is not a directory still logs at error. Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide generate
 ```
 
@@ -153,7 +153,7 @@ opentide generate
 `0.1.7` accepted `--platform sentinel` on `opentide setup repo` but did not write `.opentide/configurations/platforms/sentinel.toml`. The parent `opentide setup --platform` path already did. **0.1.8** runs platform setup from `setup repo --platform` as well, so `generate` emits `#sentinel:` configuration stubs. Upgrade and re-run:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup repo --yes --name SOC --platform sentinel
 opentide generate
 ```
@@ -163,7 +163,7 @@ opentide generate
 `0.1.7` dumped `default: None` as YAML `null`, and commented `#organisation:` without commenting nested `uuid` / `name`, so those keys parsed as children of `metadata.tlp`. **0.1.8** patched the legacy JSON Schema walker. **0.2.0** replaces that walker: templates come from Pydantic `FieldInfo`, optional sections are commented as whole blocks with `#` hugging each key (nested optionals are not commented again), and there are no `null` tokens. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide generate templates
 ```
 
@@ -194,6 +194,10 @@ Through `0.3.0` the GitLab inflight jobs wrote the push URL with GitHub Actions 
 ```bash
 opentide setup ci gitlab --yes
 ```
+
+### GitLab write-back push is refused, or fails on the certificate
+
+The production and inflight jobs push with `CI_JOB_TOKEN` over HTTPS unless told otherwise. `remote: You are not allowed to upload code` means the job token may not push: allow it under **Settings > CI/CD > Job token permissions**, or push with a deploy key instead by setting `OPENTIDE_PUSH_URL` to the project's SSH URL and the File variables `OPENTIDE_PUSH_SSH_KEY` and `OPENTIDE_PUSH_SSH_KNOWN_HOSTS`. `SSL certificate problem: unable to get local issuer certificate` means the job image does not trust the instance's CA: set `GIT_SSL_CAINFO: $CI_SERVER_TLS_CA_FILE`, or push over SSH. A `url.….insteadOf` rewrite of `origin` has no effect, because the runner rewrites that prefix itself. See [GitLab write-back credentials](./workflows/ci-cd.md#gitlab-write-back-credentials).
 
 ### Azure inflight job says nothing changed and never commits
 
@@ -251,7 +255,7 @@ The editor schemas describe each objective with its `priority`, and through 0.16
 Unquoted `metadata.created` / `modified` values (`created: 2026-09-11`) are valid Tide YAML. PyYAML loads them as `datetime.date`, and `0.1.5` crashed when writing `.opentide/exports/objects.export.json`. **0.1.6** stringifies those timestamps at YAML load. Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide generate
 ```
 
@@ -262,16 +266,16 @@ Quoted dates (`created: "2026-09-11"`) already worked; you do not need to quote 
 `0.1.6` expanded `$ref` / `$defs` in templates but nested objects still inherited a shallow parent `required` list, so required fields under array items were commented out. **0.1.7** uses each nested object's own required list. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide generate
 ```
 
 ### `opentide generate` crashes with `'str' object has no attribute 'get'`
 
-`0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the CoreTide object form (`name`, optional `sighting` / `references`). Upgrade:
+`0.1.3` leaked `threat.actors` as `list[str]` while table export still called `.get("name")`. **0.1.4** restores the object form (`name`, optional `sighting` / `references`). Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 ```
 
 Write actors as objects, not bare IDs:
@@ -298,7 +302,7 @@ Run [`generate`](../cli/generate.md) after cloning a repo, after upgrading the o
 
 ### Editor stopped validating YAML / "Matches multiple schemas"
 
-Routers generated up to `0.14.2` combined their branches with `oneOf` and no `else`, so every valid object matched several branches and the Red Hat YAML extension reported **Matches multiple schemas**. Those releases mapped each object folder to one revision schema instead, which flags valid `rule::1.1` rules because `objects/rules/**/*.yaml` pointed at `rule.1.0.schema.json`. Current releases generate a router that applies exactly one revision schema per object, and `opentide setup vscode` maps `objects/**/*.yaml` to it and removes the old per-folder mappings.
+Routers generated up to `0.14.2` combined their branches with `oneOf` and no `else`, so every valid object matched several branches and the Red Hat YAML extension reported **Matches multiple schemas**. Those releases mapped each object folder to one revision schema instead, which flags valid `rule::1.1` rules because `objects/rules/**/*.yaml` pointed at `rule.1.0.schema.json`. Current releases generate a router that applies exactly one revision schema per object. `opentide setup vscode` no longer maps any schema for the YAML extension: it removes the router and per-folder mappings earlier releases wrote, and recommends the opentide VS Code extension (`opentidehq.opentide`), whose language server checks objects.
 
 ```bash
 pip install --upgrade opentide
@@ -306,7 +310,7 @@ opentide generate schemas
 opentide setup vscode --settings --no-generate
 ```
 
-Then reload the YAML language server. If schemas are stale or missing:
+Then install the recommended opentide extension and reload the window. If schemas are stale or missing:
 
 ```bash
 opentide generate schemas
@@ -319,7 +323,7 @@ opentide generate schemas
 `0.2.0` and earlier scraped NVD through `mitrecve`. **0.2.1** looks up `threat.cve` on [CIRCL Vulnerability-Lookup](https://vulnerability.circl.lu). Generated threat pages link to `https://vulnerability.circl.lu/vuln/{id}` and can enrich published date, severity, and aliases. Upgrade, regenerate docs, and (optionally) run the opt-in check:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide generate docs
 opentide validate --check cve
 ```
@@ -331,7 +335,7 @@ Default `opentide validate` does not call the network. Empty JSON from CIRCL mea
 `0.1.7` applied GitLab `uuid_permalinks` to every flavour and built index links from the UUID while page files used slugify. GitHub pages were therefore `simulated-actor.md` while indexes linked to `{uuid}.md`, and folders used Title Case (`docs/Threats`). **0.1.8** scopes UUID permalinks to GitLab and writes lowercase `docs/{rules,objectives,threats}/<slug>.md`. Upgrade and regenerate:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide generate docs
 ```
 
@@ -340,7 +344,7 @@ opentide generate docs
 Objective `priority` is an unconstrained alert-style string (High / Critical), not an incident `criticality::1.0` token. **0.1.7** looked it up in that vocab. **0.1.8** renders the author value as-is. Threat `criticality` and impact vocab spelling (including `Impairement`) are unchanged. Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide generate docs
 ```
 
@@ -351,7 +355,7 @@ opentide generate docs
 `0.1.6` attributed `invalid_ref` to the nested object that contained the UUID. **0.1.7** reports the leaf field (`detection_model`, `objective.threats`, …). Vocabulary names also skip YAML list indices (`[0]`). Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide validate --strict
 ```
 
@@ -360,7 +364,7 @@ opentide validate --strict
 `--json` used a single repo-wide `valid`/`invalid` for every check name. A vocab failure then looked like a failing `uuid` or `metadata` check. **0.1.7** emits per-check `status`. Upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide --json validate
 ```
 
@@ -385,7 +389,7 @@ threat:
 If your CI patches the installed `opentide` model to accept lists, drop that step once you upgrade:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide validate --strict
 ```
 
@@ -415,28 +419,78 @@ opentide validate --strict
 
 See [Exit codes](../cli/exit-codes.md).
 
+### `<file>.toml is invalid: …: unknown key` after upgrading
+
+From **0.18.0** every file under `.opentide/configurations/` is checked against its model. An unknown or misspelt key, or a value of the wrong type, fails each command that reads the file, naming the file and the key: `deployment.toml is invalid: promotion.enabeld: unknown key`. Through 0.17.2 such a key was ignored. Run `opentide validate` to list them all (check `configuration`), then fix or remove each one. `opentide explain unknown_key` describes the finding.
+
+Seen while preparing 0.18.0:
+
+- A Splunk tenant's `schedule_offset = "5"` (a string): write `schedule_offset = 5`.
+- A `documentation.toml` with `skip_vocabularies`, `model_cover_pages` or a `[titles]` table: delete them, opentide never read them.
+
+```bash
+pip install 'opentide==0.21.0'
+opentide validate
+```
+
+### `deploy` fails with `'NoneType' object is not iterable`
+
+A rule whose `configurations` holds no platform block stopped the whole deploy with this message. `opentide new rule` writes that shape when no `--platform` is given. **0.18.0** skips the rule. Add a platform block from `.opentide/templates/rule.1.1.template.yaml` to deploy it.
+
+```bash
+pip install 'opentide==0.21.0'
+```
+
+### `validate` fails with `compile_missing_field` after upgrading
+
+From **0.20.0** `validate` compiles each rule a deploy would compile, with the same offline compiler as `deploy --dry-run`, so a rule that used to pass `validate` and fail only at deploy now fails `validate` (exit `1`): a Sentinel rule without `grouping.alert`, or without `scheduling.frequency` and not NRT, for example. The finding names the key at fault and the help says what to add. A rule in `DESIGN` or `REMOVED`, or for a platform the workspace does not enable, is not compiled. See [What a platform compiler needs](../cli/validate.md#what-a-platform-compiler-needs).
+
+### `visibility.toml is invalid: … tables was removed in 0.20.1` after upgrading
+
+From **0.20.1** a `visibility.toml` log source is one dataset: its `name` is the KQL table, Splunk sourcetype or Elastic index pattern, and `columns` may declare the dataset's columns. The 0.20.0 dataset lists fail validation (`schema_validation` on the key), each with a message that says what to do: `tables`, `sourcetypes` and `indices` become one `[[logsources]]` per name, named after it, and `indexes`, `macros`, `data_views` and `ecs` are removed. Update the signals' `data.logsources` that named the old entry to the new names. There is no migration command; see [Upgrading from 0.20.0](./configuration.md#upgrading-from-0200).
+
+```bash
+pip install 'opentide==0.21.0'
+opentide validate
+```
+
 ## Query validation
 
 ### `supported: false` for a platform
 
-CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and opentide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
+CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and opentide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, Elastic, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
 
 ### MCP `validate_query` refuses
 
-The default does not scan the query string. Pass `live: true` to check the
-catalogue rules against the tenant. A missing plan fails that check. `run_query` is not implemented and returns `stub: true` with `rows: null`.
+The default checks the `query` string offline. It refuses, without scanning, an empty query and a SentinelOne query: S1QL has no offline engine, so pass `live: true` to check the catalogue rules against the tenant. A missing plan fails that check. `run_query` refuses until `live: true`, then returns rows.
 See [Agentic setup](./workflows/agentic-setup.md).
 
-### `opentide validate query` fails before it reaches the tenant
+### `opentide validate query` fails with `engine_unavailable`
 
-A bare `validate query` exits `1` and tells you to re-run with `--live`. That
-flag needs tenant credentials; the vendor SDKs ship with `pip install opentide`.
+The offline check, `validate` (its `queries` check), `lint` (its `queries` check) and `opentide lsp` run the analysis engine, which is compiled into the opentide package. When it does not import, they fail rather than skip, and say so:
+
+```text illustrative
+error: The opentide analysis engine does not load: No module named 'opentide._native'
+  help: reinstall opentide: pip install --force-reinstall opentide
+```
+
+Reinstall opentide. `opentide doctor` reports the engine (`analysis_engine`). pip downloads opentide's wheel for Linux (x86_64 and arm64, glibc and musl), macOS and Windows x64, engine included; elsewhere it builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)). See `opentide explain engine_unavailable`.
+
+### `opentide validate query --live` fails before it reaches the tenant
+
+`--live` needs tenant credentials; the vendor SDKs ship with `pip install opentide`.
 
 Through 0.15.0 the SDKs were extras, so a pipeline that installed only
 `opentide==<version>` failed `--live` with `needs a vendor SDK: No module named
 'azure'`. Upgrade to 0.16.0 or later; there is no extra to add. If a current
 release still reports that an SDK will not import, the environment is damaged:
 run `pip install --force-reinstall opentide`.
+
+### `kql_unknown_column`, `kql_type_mismatch` or `spl_unknown_datamodel_field` after upgrading
+
+**0.20.0** ships language-server 0.7.0, whose query checks know the documented tables and their columns: a near miss of a column (`DstPortNumbr`), an operator Kusto does not define for a column's type (`EventID has "46"`), or a near miss of a CIM field is now an error, and `opentide explain <code>` describes each. The finding suggests the documented name. Under the `sentinel` profile an unknown table is now a warning, as a workspace holds tables no catalog lists; to make your own tables, sourcetypes and index patterns known, declare each as a log source in `visibility.toml` ([the datasets a log source fills](./configuration.md#the-datasets-a-log-source-fills)). While you fix the queries, `opentide validate --queries warn` reports them as warnings.
+
+**0.20.1** (language-server 0.7.1) checks a declared table's `columns` the same way, and once a workspace declares tables, an unknown table is `kql_unknown_table` at its profile's severity again, so a Defender table typo fails `validate` where 0.20.0 only warned.
 
 ### Live query validation in CI takes most of an hour
 
@@ -461,12 +515,14 @@ Verify with `opentide info --platform sentinel`. See [Configuration → enabling
 python-dateutil 3.0.0 (21 October 2026) led `uv`'s resolver to install boto3 `0.0.3` with opentide **0.17.1** and earlier; its botocore cannot import on current Python. **0.17.2** requires `boto3>=1.35`. Upgrade; to stay on an older version, add `'boto3>=1.35'` to the same install command.
 
 ```bash
-uv pip install 'opentide==0.17.2'
+uv pip install 'opentide==0.21.0'
 ```
 
 ### Splunk answers with HTML instead of XML behind a proxy
 
-Through **0.17.1** this failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which reads like a TLS fault but is not one. **0.17.2** names it: `Splunk at https://<host>:8089 answered with an HTML page, not its REST API … The request went through the proxy http://<proxy>:<port> …`, with the `NO_PROXY` value to set. Each connection also logs `splunk_tenant_route` with `via` set to the proxy or `direct`.
+Through **0.17.1** this failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which reads like a TLS fault but is not one. **0.17.2** names it: `Splunk at https://<host>:8089 answered with an HTML page (HTTP 403), not its REST API … The request went through the proxy http://<proxy>:<port> …`, with the `NO_PROXY` value to set (the HTTP status is in the message since the release after 0.20.1). Each connection also logs `splunk_tenant_route` with `via` set to the proxy or `direct`.
+
+When the status is 502, 503 or 504, or the page came after a request of 30 seconds or more, the message says a gateway or proxy in front of Splunk timed out instead, and `validate query --live` fails only that query: see [Slow queries and timeouts](../cli/validate.md#slow-queries-and-timeouts). The url and port are not at fault when other requests to the same address succeed.
 
 The request went through the proxy, and the proxy answered with its own error page. An internal tenant must not be reached through the corporate proxy: add its host to `NO_PROXY` and `no_proxy` (`NO_PROXY=splunk.internal.example`). opentide's platform clients honour it, so the same run still reaches a cloud tenant such as Sentinel through the proxy, and the deploy does not have to be split per platform. See [CI/CD → Behind a proxy or a private CA](./workflows/ci-cd.md#behind-a-proxy-or-a-private-ca).
 
@@ -477,7 +533,7 @@ Do not replace opentide's Splunk handler with splunklib's own (`verify=not ssl_e
 Through **0.17.0** the Splunk client ignored a tenant's `ssl = false` and verified the certificate anyway, so a self-signed Splunk failed every `deploy` and `validate query --live` with `CERTIFICATE_VERIFY_FAILED`. **0.17.1** honours each tenant's `ssl`. Upgrade, and delete any pipeline step that patches the installed `opentide/platforms/splunk/client.py`:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 ```
 
 An `xml.etree.ElementTree.ParseError: mismatched tag` is not a certificate failure: the answer was an HTML page, usually a proxy's. See [Splunk answers with HTML instead of XML behind a proxy](#splunk-answers-with-html-instead-of-xml-behind-a-proxy).
@@ -605,7 +661,7 @@ Through **0.6.3** a target of `.` was printed without quotes, so the trailing pe
 Through **0.6.3** the generated production job needed `deploy_staging`, and staging runs only on a pull request, so a push to the default branch skipped production. **0.6.4** needs `generate` and still runs only on a push to the default branch ([#348](https://github.com/opentidehq/opentide/issues/348)). Deploy jobs also fetch full history, so a depth-1 checkout no longer exits `1` with a bare parent SHA. Regenerate:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup ci github --yes
 ```
 
@@ -640,7 +696,7 @@ Through **0.7.0** a GitHub or Azure pull-request checkout (detached `HEAD`) died
 Through **0.7.0** the generated prune job ran `git add .opentide/inflight/` and exited 128 when that directory was absent. **0.8.0** creates the directory first ([#403](https://github.com/opentidehq/opentide/issues/403)). Regenerate:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup ci github --yes
 ```
 
@@ -654,9 +710,9 @@ Through **0.7.0** generated validate did not pass `--strict`, and lint was not a
 
 Through **0.7.0** `opentide setup ci azure` wrote no `pool`, so Azure Repos refused the file. `pr:` is ignored on Azure Repos Git, so a pull request never set `Build.Reason` ([#398](https://github.com/opentidehq/opentide/issues/398)). **0.8.0** sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. Add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason. The pipeline file cannot create the policy. Regenerate with `opentide setup ci azure --yes`.
 
-### `setup skills` installs a short tree or CoreTide authoring instructions
+### `setup skills` installs a short tree or outdated authoring instructions
 
-Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described CoreTide schemas ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
+Through **0.7.0** a skill install copied the skills-repository `AGENTS.md`, dropped files under `references/`, and the four authoring skills still described retired schemas and folders ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)). **0.8.0** downloads every file under `skills/<slug>/`, renders `AGENTS.md` from the package, and installs `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` from the package. Those skills describe `rule::1.0`, `objective::1.0`, and `threat::1.0`. Re-run `opentide setup skills`.
 
 ### `setup repo` hardcodes Sentinel or ignores `--name`
 
@@ -676,14 +732,14 @@ Through **0.7.0** human `lint` printed `OK` when findings existed, and the exit 
 
 ### Installation pages name 0.6.1 as the latest release
 
-Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/opentidehq/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.17.2`.
+Through **0.7.0** the docs home and installation page said the latest release was 0.6.1 while the install block pinned 0.7.0 ([#406](https://github.com/opentidehq/opentide/issues/406)). **0.8.0** names 0.8.0 in both places. **0.8.1** names 0.8.1. **0.8.2** names 0.8.2. **0.9.0** names 0.9.0. **0.10.0** names 0.10.0. **0.11.0** names 0.11.0. **0.12.0** names 0.12.0. **0.12.1** names 0.12.1. **0.13.0** shipped the regression instead: four pages still named 0.12.1, which is what the 0.14.0 preparation found beside those pages' own 0.14.0 install block. **0.14.0** restored the claim and added a test checking every claim, pin and PyPI link against the newest `CHANGELOG.md` entry, so the sentence can no longer drift unnoticed. **0.14.1** names 0.14.1. **0.14.2** names 0.14.2. Pin `opentide==0.21.0`.
 
 ### GitLab deploy runs after `validate query` fails
 
 Through **0.8.0** a generated GitLab pipeline started `generate` as soon as the object `validate` job finished. Query checks are separate jobs in the same stage, and GitLab starts a job when its `needs` finish, so a failed `opentide validate query` did not stop deploy ([#429](https://github.com/opentidehq/opentide/issues/429)). **0.8.1** lists every query-validation job in `generate`'s `needs`. GitHub and Azure already gated generate this way. Regenerate:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 opentide setup ci gitlab --yes
 ```
 
@@ -718,6 +774,16 @@ Through **0.8.2** no schema accepted `metadata.reviewed`. **0.9.0** accepts an I
 Techniques that MITRE has revoked since then, such as T1562.001 (now T1685) and T1070.001, stay valid under every `att&ck::1.x` pin. They are marked `removed = "2.0"`. T1574.002 is not in any bundled catalogue: MITRE merged it into T1574.001, so use that ID.
 
 ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairment (TA0112) out of it. Elastic rules carry TA0005 Stealth and TA0112 Defense Impairment. The Sentinel tactic list has no such tactics, so Sentinel rules carry `DefenseEvasion` for Stealth, Defense Impairment and the ICS Evasion tactic.
+
+### A technique fails only under `configurations.sentinel.alert.techniques`
+
+Microsoft Sentinel is aligned to ATT&CK v18, while the `att&ck` vocabulary that threats, objectives and a rule's own `techniques` use follows ATT&CK 20.0. `configurations.sentinel.alert.techniques` therefore takes its own list: every technique and sub-technique of the ATT&CK 18.1 Enterprise, Mobile and ICS matrices that is not revoked or deprecated (18.0 has the same ids). An id outside it fails validation (`sentinel_attack_technique`), and the message says what to use instead:
+
+```text
+'T1685' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; T1685 (Disable or Modify Tools) is newer than ATT&CK v18: use T1562 or T1562.001 or T1562.006, which it replaced
+```
+
+An id ATT&CK added after v18 with no predecessor, such as T1696, says it has no v18 equivalent; leave it out of the Sentinel block. An id ATT&CK retired before v18, which an imported or older rule may carry, names the v18 id that replaced it (`T1086`: use `T1059.001`), or says it has no replacement (`T1064`). Editors offer the v18 ids after `opentide generate schemas`. The list applies to this field only: the techniques deploy resolves from the rule's objective still come from the `att&ck` vocabulary.
 
 ## Still stuck?
 

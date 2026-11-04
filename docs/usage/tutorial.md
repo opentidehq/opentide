@@ -40,15 +40,15 @@ opentide generate
 ✓ docs · 7 files · 1.2s · docs/
 ✓ exports · 3 files · 0.0s · .opentide/exports/
 ✓ vocabularies · 0 files · 0.0s
-✓ templates · 4 files · 1.9s · .opentide/templates/
-✓ schemas · 6 files · 2.6s · .opentide/schemas/
+✓ templates · 5 files · 1.9s · .opentide/templates/
+✓ schemas · 8 files · 2.6s · .opentide/
 ✓ snippets · 1 file · 0.0s · .vscode/
-✓ Generated 21 files in 5.8s · 6 phases
+✓ Generated 24 files in 5.8s · 6 phases
 ```
 
 This is the output with `--no-color`, in a pipe or in CI: one line per finished phase, with the files it wrote, how long it took and where they went, then the outcome line. At a terminal the phases draw as a live checklist with a spinner on the running one. Phase lines go to stderr and the outcome line to stdout, so `opentide generate > log.txt` keeps the phases on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
 
-Your editor can now validate YAML under `objects/` because `opentide setup vscode` maps `objects/**/*.yaml` to the router, which applies the schema revision each object names in `metadata.schema`.
+`opentide setup vscode` recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`. With it, VS Code checks the YAML under `objects/` as you type, against the schema revision each object names in `metadata.schema`.
 
 ## 3. Author the threat
 
@@ -110,9 +110,6 @@ metadata:
   organisation:
     uuid: 00000000-0000-4000-8000-000000000099
     name: Example Corp
-composition:
-  strategy: Combined
-  description: Compose signals for credential access detection
 objective:
   priority: High
   type: Threat
@@ -269,14 +266,14 @@ Coverage counts rules only; the objective and threat your rule links to are not 
 
 ## 9. Validate the query and dry-run the deploy
 
-Sentinel supports query validation. A bare `validate query` does not scan the KQL. It exits `2` and names `--live`:
+Sentinel supports query validation. A bare `validate query` checks the KQL offline, with the analysis engine that ships with opentide: no tenant, no credentials. A typo such as `wher` would print a code frame at the query line and exit `1`:
 
 ```bash
 opentide validate query --platform sentinel
 ```
 
-```text output-of="opentide validate query --platform sentinel" exit=2
-error: Query validation checks the tenant. Re-run with --live.
+```text output-of="opentide validate query --platform sentinel"
+✓ 1 query valid
 ```
 
 `--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Azure SDK ships with opentide. Then dry-run the deploy. The rule's status is `STAGING`, one of the default statuses, which maps to the `PREVIEW` strategy, so a `PREVIEW` run deploys it. `--all` reads every rule file instead of only the ones the last commit changed:
@@ -294,6 +291,7 @@ sentinel · 0 tenants
 warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+dry run, nothing sent
 ```
 
 `--dry-run` selects the rules without touching the platform. In CI, the pull request job runs `--strategy PREVIEW` and the default-branch job `--strategy RELEASE`; see [Statuses, strategies and tenants](./concepts/statuses-and-strategies.md). This scaffold still has `[[tenants]]` commented out, so the dry-run warns that a real deploy would stop and leaves Sentinel out of `deployed` until you uncomment a tenant. The plan lists each rule with what a deploy would do to it: Sentinel writes a rule by its UUID, so opentide cannot tell a create from an update without asking Sentinel and says `create or update`. `opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all` returns the selected rules, the tenants each would reach, and a payload preview for each rule (see [`deploy` output](../cli/deploy.md#output)). A real deploy needs [credentials](./configuration.md#credentials); remove `--dry-run` when you are ready.

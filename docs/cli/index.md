@@ -9,7 +9,7 @@ icon: Terminal
 The `opentide` command is a [Typer](https://typer.tiangolo.com/) application included in the core package:
 
 ```bash
-pip install 'opentide==0.17.2'
+pip install 'opentide==0.21.0'
 ```
 
 Run `opentide --help` for the live command tree.
@@ -19,9 +19,10 @@ Run `opentide --help` for the live command tree.
 | Command | Purpose |
 |---------|---------|
 | [`setup`](./setup.md) | Onboard detection repositories (repo, platforms, CI, MCP, skills) |
-| [`migrate`](./migrate.md) | Move legacy `Configurations/` and `Objects/` into the greenfield layout |
+| [`migrate`](./migrate.md) | Rewrite objects authored for an earlier opentide model |
 | [`generate`](./generate.md) | Documentation, exports, framework artifacts, optional platform import |
-| [`validate`](./validate.md) | Validate objects and queries |
+| [`validate`](./validate.md) | Validate objects and queries: offline with the analysis engine, or on the tenants (`--live`) |
+| [`query`](./query.md) | Run a read-only query on platform tenants and show the rows |
 | [`lint`](./lint.md) | Catalogue hygiene (filename slugs, recommended metadata) |
 | [`rules`](./rules.md) | Review staleness for detection rules |
 | [`deploy`](./deploy.md) | Platform rule deployment |
@@ -34,10 +35,12 @@ Run `opentide --help` for the live command tree.
 | [`explain`](./diagnostics.md) | What a diagnostic code means, an example, and how to fix it |
 | [`commands`](#command-tree-for-agents) | Every command with its options, defaults and an example; `--json` for the tree |
 | [`mcp`](../mcp/index.md) | Stdio MCP server (`mcp start`); the editor owns the process |
+| [`lsp`](./lsp.md) | Language server for editors (`lsp start`) |
+| [`serve`](./serve.md) | CLI commands in one warm process, for editors: JSON-RPC on stdio |
 
 <Callout type="info">
 
-Top-level `document`, `export`, and `extract` remain as **hidden deprecation shims** for one release. They log a warning and delegate to `opentide generate docs`, `generate exports`, and `generate extract`. `mutate` was removed — use `opentide deploy` for promotion. Layout-only `opentide migrate objects` moves `Configurations/` and `Objects/` into the greenfield tree; CoreTide submodule replacement still uses the [migration prompt](../usage/migration/prompt.md).
+Top-level `document`, `export`, and `extract` remain as **hidden deprecation shims** for one release. They log a warning and delegate to `opentide generate docs`, `generate exports`, and `generate extract`. `mutate` was removed — use `opentide deploy` for promotion.
 
 </Callout>
 
@@ -97,7 +100,7 @@ opentide --json commands
 ```json illustrative
 {
   "program": "opentide",
-  "version": "0.17.2",
+  "version": "0.18.0",
   "global_options": [
     {
       "name": "repo",
@@ -146,8 +149,8 @@ opentide --json commands
   "$defs": { "QueryValidationResult": { "…": "…" }, "CommandError": { "…": "…" } },
   "ok": true,
   "status": "completed",
-  "message": "58 commands",
-  "summary": { "commands": 58, "groups": 15 },
+  "message": "61 commands",
+  "summary": { "commands": 61, "groups": 16 },
   "…": "envelope keys"
 }
 ```
@@ -162,10 +165,10 @@ opentide --json commands
 | `options[].type` | `string`, `integer`, `number`, `boolean`, `choice` (with `choices`), `path`, … A `string` the command checks itself lists its values in `choices` too: `validate --type`, `deploy --strategy`, `info`'s section. `share --target` takes the configured targets, so it has none. |
 | `options[].envvars` | Environment variables that set the option. |
 | `example` | The first example in the command's `--help`. A command whose help has none yet gets a placeholder: the command with its required arguments and options filled in. A placeholder names the command but may not run as it is (`opentide deploy` still needs `--strategy`). |
-| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error, such as an unknown subcommand, so its schema is `CommandError`. `null` for `mcp start`, which prints JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
+| `output_schema` | The JSON Schema of the document the command prints with `--json`: its own result, or `CommandError` for a usage error. A group that only prints its help prints a document only for a usage error, such as an unknown subcommand, so its schema is `CommandError`. `null` for `mcp start`, `lsp start` and `serve`, which print JSON-RPC. See [JSON output](./json-output.md#output-schemas). |
 | `$defs` | The schemas each `output_schema` refers to. |
 
-Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 58 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
+Without `--json`, `opentide commands` prints the tree, one command per line with its summary, and ends with `✓ 61 commands`. Listing the tree imports every command's module once; it never loads the detection registry.
 
 ## Choosing between CLI, SDK, and MCP
 

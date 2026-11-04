@@ -16,7 +16,7 @@ from typer.testing import CliRunner
 from opentide.cli import app
 from opentide.cli.commands import ROOT_COMMANDS
 from opentide.cli.services.introspect import example
-from opentide.cli.ui.results import CommandError, result_model
+from opentide.cli.ui.results import NO_DOCUMENT, CommandError, result_model
 
 runner = CliRunner()
 
@@ -114,7 +114,8 @@ def test_each_command_that_runs_names_its_output_schema(tree: dict) -> None:
     """A $ref into the document's $defs; CommandError alone for a group that only prints help."""
     for entry in tree["commands"]:
         schema = entry["output_schema"]
-        if entry["path"] == "mcp start":
+        if entry["path"] in NO_DOCUMENT:
+            # stdout is JSON-RPC (mcp start, lsp start).
             assert schema is None
             continue
         if not entry["runs_alone"] or result_model(entry["path"]) is CommandError:
@@ -305,6 +306,12 @@ _UNDOCUMENTED_ENV = {
     "OPENTIDE_PERSIST_STATE_EXTERNALLY",
     # An Azure pipeline variable the generated pipeline sets and reads.
     "OPENTIDE_DEPLOY_STARTED",
+    # Variables of the generated pipelines, read by their shell steps
+    # (docs/usage/workflows/ci-cd.md), never by a command.
+    "OPENTIDE_VERSION",
+    "OPENTIDE_PUSH_URL",
+    "OPENTIDE_PUSH_SSH_KEY",
+    "OPENTIDE_PUSH_SSH_KNOWN_HOSTS",
     # Read by the maintainer scripts in scripts/vocabulary/, not by a command.
     "OPENTIDE_ATTACK_STIX_DIR",
     "OPENTIDE_SPECIFICATIONS_ROOT",

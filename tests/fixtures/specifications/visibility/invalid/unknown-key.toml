@@ -1,0 +1,5 @@
+[[logsources]]
+name = "Contoso audit log"
+description = "Administrative audit events"
+system = "sentinel"
+table = "Contoso_Audit_CL"

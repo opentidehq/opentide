@@ -4,24 +4,29 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
 from opentide.cli.enums import DetectionPlatform
 from opentide.cli.ui.contract import (
+    ISSUES_FOUND,
     USAGE_INVALID_CHOICE,
     USAGE_INVALID_VALUE,
     USAGE_MISSING_OPTION,
     did_you_mean,
 )
+from opentide.cli.ui.glyphs import glyph
+from opentide.core import progress_events
 from opentide.core.errors import UserFileError
 from opentide.core.index_manager import IndexManager
 
 logger = structlog.get_logger("opentide.cli.services.deploy")
 if TYPE_CHECKING:
     from opentide.cli.context import CliContext
+    from opentide.cli.ui.progress import Checklist
+    from opentide.deployment.git_repo import RuleScope
     from opentide.models.deployment_enums import RunStrategies
 
 
@@ -196,6 +201,8 @@ def run_deploy(
     *,
     strategies: list[str] | tuple[str, ...] = (),
     all_files: bool = False,
+    uuids: Sequence[str] = (),
+    files: Sequence[str] = (),
     platform: DetectionPlatform | None = None,
     dry_run: bool = False,
     skip_promotion: bool = False,
@@ -209,7 +216,9 @@ def run_deploy(
     *strategies* are ``--strategy`` values (``PREVIEW``, ``RELEASE``). The
     rule files are those the run's diff changed (the pull or merge request,
     the push, or outside CI the last commit), or every rule file with
-    *all_files*. Each rule reaches the tenants that accept a run strategy that
+    *all_files*, or those *uuids* and *files* select (as ``validate query --uuid``
+    and ``--file`` do), which also skips status promotion. Each rule reaches the
+    tenants that accept a run strategy that
     deploys it. *keep_deprecated* ``None`` keeps ``DISABLEMENT`` and
     ``DELETION`` rules unless *all_files*; see :func:`keeps_deprecated`.
     *persist_state_externally* lets a CI run other than a ``RELEASE`` push
@@ -248,6 +257,8 @@ def run_deploy(
                 plan_skipped,
                 strategies=strategies,
                 all_files=all_files,
+                uuids=uuids,
+                files=files,
                 platform=platform,
                 dry_run=dry_run,
                 skip_promotion=skip_promotion,
@@ -259,6 +270,8 @@ def run_deploy(
             for path, problem in _unread_object_files(unreadable, exclude=error.path):
                 logger.error("malformed_object_yaml", path=path, error=problem)
             raise
+    if uuids or files:
+        result.setdefault("scope", "selected")
     unread = _unread_object_files(unreadable)
     if unread:
         plan_warnings.append(_unread_warning(unread))
@@ -373,6 +386,23 @@ STRATEGY_REQUIRED = (
 )
 
 
+def _announce_plan(checklist: Checklist, *, strategies: list[str], scope: str, tally: str) -> None:
+    """The header and tally a real run prints before it sends anything.
+
+    A dry run prints the whole plan; a real run lists each rule as it is sent,
+    so this is only the header and the tally the run is about to make true.
+    """
+    from rich.text import Text
+
+    separator = f" {glyph('separator', encoding=checklist.console.encoding or 'utf-8')} "
+    header = Text("Deploy plan", style="bold")
+    header.append(separator + "strategy ", style="dim")
+    header.append(" ".join(strategies), style="bold")
+    header.append(separator + scope, style="dim")
+    checklist.line(header)
+    checklist.line(Text(tally, style="dim"))
+
+
 def _deploy(
     ctx: CliContext,
     plan_warnings: list[str],
@@ -381,6 +411,8 @@ def _deploy(
     strategies: list[str] | tuple[str, ...],
     all_files: bool,
     platform: DetectionPlatform | None,
+    uuids: Sequence[str] = (),
+    files: Sequence[str] = (),
     dry_run: bool,
     skip_promotion: bool,
     keep_deprecated: bool | None,
@@ -412,12 +444,17 @@ def _deploy(
     from opentide.core.registry import Opentide
     from opentide.deployment import CIEnvironment, make_deploy_plan, modified_mdr_files
     from opentide.deployment.ci import is_change_request
-    from opentide.deployment.git_repo import MissingGitCheckout, missing_checkout_message
+    from opentide.deployment.git_repo import (
+        MissingGitCheckout,
+        diff_error_message,
+        missing_checkout_message,
+    )
     from opentide.models.deployment_enums import StatusStrategy
     from opentide.mutation.promotion import PromoteMDR
-    from opentide.platforms.plugins import DeployTide
+    from opentide.platforms.plugins import EnabledPlatforms
 
     Opentide.reload()
+    # A usage error (exit 2) comes before a selection that matches nothing (exit 1).
     try:
         run = resolve_run_strategies(strategies)
     except ValueError as exc:
@@ -429,12 +466,31 @@ def _deploy(
             "_failure_argument": "--strategy",
             "_failure_suggestion": strategy_suggestion(strategies),
         }
+    scope: RuleScope | None = None
+    if uuids or files:
+        from opentide.cli.services.validation import _selected_rule_scope
+        from opentide.deployment.git_repo import rules_folder_in_repo
+
+        scope, unmatched = _selected_rule_scope(files, uuids)
+        if unmatched:
+            return {
+                "status": "failed",
+                "message": (
+                    f"No rule file directly in {rules_folder_in_repo()} matched: "
+                    f"{', '.join(unmatched)}"
+                ),
+                "scope": "selected",
+                "unmatched": unmatched,
+                "dry_run": dry_run,
+                "_exit_code": 1,
+            }
     try:
         environment = CIEnvironment().environment
         local_debug = environment is CIEnvironment.CIPlatforms.LocalDebug
         if (
             StatusStrategy.RELEASE in run
             and not all_files
+            and scope is None
             and not skip_promotion
             and not dry_run
             and not local_debug
@@ -454,6 +510,7 @@ def _deploy(
             wide_scope=wide,
             keep_deprecated=keeps_deprecated(all_files, keep_deprecated),
             warnings=plan_warnings,
+            scope=scope,
             all_files=all_files,
             skipped=plan_skipped,
         )
@@ -466,7 +523,7 @@ def _deploy(
     except UserFileError:
         raise  # the CLI points at the file
     except Exception as exc:
-        message = str(exc).strip() or (f"{type(exc).__name__} while selecting the rules to deploy")
+        message = diff_error_message(exc, "selecting the rules to deploy")
         return {"status": "failed", "message": message, "_exit_code": 1}
     if platform is not None:
         platform_key = platform.value
@@ -526,7 +583,7 @@ def _deploy(
         }
     IndexManager.reload()
     try:
-        mdr_deployers = cast(dict[str, Any], DeployTide().mdr_for(deployment_list))
+        mdr_deployers = cast(dict[str, Any], EnabledPlatforms().mdr_for(deployment_list))
     except Exception as exc:
         message = str(exc).strip() or f"{type(exc).__name__} while loading deployment engines"
         return {"status": "failed", "message": message, "deployed": deployed, "_exit_code": 1}
@@ -553,17 +610,22 @@ def _deploy(
         except Exception as exc:
             logger.warning("tenant_targets_failed", system=system, detail=str(exc))
     from opentide.cli.services.deploy_plan import (
-        deployed_message,
         mark_failures,
+        outcome_message,
         plan_changes,
         plan_message,
+        plan_scope,
         plan_summary,
+        run_summary,
     )
+    from opentide.cli.ui.deploy_log import NOT_ATTEMPTED, DeployLog, counts_text
     from opentide.cli.ui.progress import Checklist, plural
+    from opentide.core import deploy_events
 
     # Planned before anything is sent: a create records an id, which would
     # make the same rule read as an update afterwards.
     changes = plan_changes(deployment_list, targets)
+    tenant_count = sum(len(tenants) for tenants in targets.values())
     started = time.perf_counter()
     for system in deployment_list:
         if system not in mdr_deployers:
@@ -573,10 +635,20 @@ def _deploy(
                 "deployed": deployed,
                 "_exit_code": 1,
             }
+    run_log: DeployLog | None = None
+    failure: tuple[str, Exception] | None = None
     with Checklist(total=len(deployment_list)) as checklist:
-        for system, uuids in deployment_list.items():
+        if not dry_run:
+            run_log = DeployLog(checklist, changes)
+            _announce_plan(
+                checklist,
+                strategies=[strategy.name for strategy in run],
+                scope=plan_scope(len(deployment_list), tenant_count),
+                tally=plan_message(changes),
+            )
+        for position, (system, uuids) in enumerate(deployment_list.items(), start=1):
             deployer = cast(Any, mdr_deployers[system])
-            if dry_run:
+            if run_log is None:  # a dry run: nothing is sent, so nothing reports
                 logger.info(
                     "event", detail=f"Dry-run: would deploy {len(uuids)} rule(s) to {system}"
                 )
@@ -585,6 +657,8 @@ def _deploy(
                 payloads[system] = preview_platform_deployment(system, uuids)
                 if system not in missing_tenants:
                     deployed.append(system)
+                # A dry run has no checklist step to report it (OPENTIDE_PROGRESS=json).
+                progress_events.progress(system, position, len(deployment_list))
                 continue
             with checklist.step(system, unit="rule") as step:
                 step.done(len(uuids))
@@ -592,38 +666,77 @@ def _deploy(
                 # an exception; the step must not read as done.
                 failed_before = os.environ.get("DEPLOYMENT_ERROR_RAISED")
                 try:
-                    if wide:
-                        from opentide.deployment.planning import wide_scope
+                    with deploy_events.listen(run_log):
+                        if wide:
+                            from opentide.deployment.planning import wide_scope
 
-                        with wide_scope():
+                            with wide_scope():
+                                deployer.deploy(mdr_deployment=uuids, strategies=run)
+                        else:
                             deployer.deploy(mdr_deployment=uuids, strategies=run)
-                    else:
-                        deployer.deploy(mdr_deployment=uuids, strategies=run)
                 except Exception as exc:
                     # A TypeError used to be retried as the pre-strategy signature
                     # `deploy(deployment=...)`, which no engine has: its own TypeError
                     # replaced the real one. Any other error escaped as a traceback,
                     # with no result and no record of the platforms already deployed.
-                    detail = str(exc).strip()
-                    error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
-                    logger.error("platform_deployment_failed", system=system, detail=error)
+                    failure = (system, exc)
                     step.status = "failed"
-                    return {
-                        "status": "failed",
-                        "message": f"Deployment to {system} failed: {error}",
-                        "deployed": deployed,
-                        "dry_run": dry_run,
-                        "plan": plan_payload,
-                        "strategies": [strategy.name for strategy in run],
-                        "_exit_code": 1,
-                    }
-                if os.environ.get("DEPLOYMENT_ERROR_RAISED") and not failed_before:
-                    step.status = "failed"
+                    # Every rule the run never reached, on this platform and the next.
+                    run_log.unreached()
+                    step.done(outcome=counts_text(run_log.platform_results(system)))
+                else:
+                    run_log.settle(system)
+                    mine = run_log.platform_results(system)
+                    step.done(outcome=counts_text(mine))
+                    if any(result.status == "failed" for result in mine) or (
+                        os.environ.get("DEPLOYMENT_ERROR_RAISED") and not failed_before
+                    ):
+                        step.status = "failed"
+            if failure is not None:
+                break
             deployed.append(system)
+        if failure is not None:
+            for rest in list(deployment_list)[list(deployment_list).index(failure[0]) + 1 :]:
+                with checklist.step(rest, unit="rule") as step:
+                    step.skip(NOT_ATTEMPTED)
+    results = run_log.results if run_log is not None else []
+    seconds = time.perf_counter() - started
+    if failure is not None and run_log is not None:
+        system, exc = failure
+        # An error on a rule is on that rule's line already; an error before any
+        # rule of this platform (the tenant's credentials, say) has no line, so it is
+        # logged. A rule another platform failed without raising is not this one's.
+        culprit = next(
+            (result for result in run_log.platform_results(system) if result.status == "failed"),
+            None,
+        )
+        detail = str(exc).strip()
+        error = f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+        failed_result: dict[str, object] = {
+            "status": "failed",
+            "message": f"Deployment to {system} failed: {error}",
+            "deployed": deployed,
+            "dry_run": dry_run,
+            "plan": plan_payload,
+            "strategies": [strategy.name for strategy in run],
+            "changes": [change.to_dict() for change in changes],
+            "results": [result.to_dict() for result in results],
+            "_summary": run_summary(results, list(deployment_list), tenant_count, seconds),
+            "_exit_code": 1,
+        }
+        if culprit is not None:
+            logger.debug("platform_deployment_failed", system=system, detail=error)
+            failed_result["message"] = outcome_message(results, seconds, failed=True)
+            failed_result["error"] = (
+                f"Deployment to {system} failed on {culprit.name}: {culprit.error}"
+            )
+            failed_result["_failure_code"] = ISSUES_FOUND
+        else:
+            logger.error("platform_deployment_failed", system=system, detail=error)
+        return failed_result
     from opentide.cli.exit_codes import deployment_outcome
 
     outcome = deployment_outcome()
-    tenant_count = sum(len(tenants) for tenants in targets.values())
     diagnostics = compile_diagnostics(payloads) if dry_run else []
     if diagnostics:
         # A rule that would fail is not a "create or update" (post-merge run).
@@ -631,11 +744,10 @@ def _deploy(
         changes = mark_failures(changes, failing)
     if dry_run:
         message = plan_message(changes)
-    elif outcome.failed:
+    elif outcome.failed and not any(result.status == "failed" for result in results):
         message = "Deployment finished with errors"
     else:
-        reached = [change for change in changes if change.platform in deployed]
-        message = deployed_message(reached, time.perf_counter() - started)
+        message = outcome_message(results, seconds, failed=outcome.failed)
     result: dict[str, object] = {
         "message": message,
         "status": "failed" if outcome.failed else "completed",
@@ -643,9 +755,17 @@ def _deploy(
         "dry_run": dry_run,
         "plan": plan_payload,
         "changes": [change.to_dict() for change in changes],
-        "_summary": plan_summary(changes, list(deployment_list), tenant_count),
+        "_summary": (
+            plan_summary(changes, list(deployment_list), tenant_count)
+            if dry_run
+            else run_summary(results, list(deployment_list), tenant_count, seconds)
+        ),
         "_exit_code": outcome.exit_code,
     }
+    if not dry_run:
+        result["results"] = [item.to_dict() for item in results]
+        if outcome.failed and any(item.status == "failed" for item in results):
+            result["_failure_code"] = ISSUES_FOUND
     if dry_run:
         # The tally is a plan even when a rule would fail: the diagnostics say
         # so above it, and the exit code carries the failure.

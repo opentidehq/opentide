@@ -140,14 +140,3 @@ def test_render_agent_entrypoint_missing_file(monkeypatch) -> None:
     )
     with pytest.raises(SetupTemplateError, match="Entrypoint template missing"):
         _ = render_agent_entrypoint("AGENTS.md.template", {})
-
-
-def test_load_yaml_schema_fragment_missing(monkeypatch) -> None:
-    from opentide.cli.services.setup.templates import load_yaml_schema_fragment
-
-    monkeypatch.setattr(
-        "opentide.cli.services.setup.templates.setup_data_root",
-        lambda: Path("/nonexistent/setup"),
-    )
-    with pytest.raises(SetupTemplateError, match="VS Code settings fragment missing"):
-        _ = load_yaml_schema_fragment()

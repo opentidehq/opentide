@@ -12,9 +12,11 @@ reports any other drift.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from typing import Annotated, Any, ClassVar, Literal, cast
 
-from pydantic import AfterValidator, model_validator
+from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from opentide.models.base import TideField, TideModel
 from opentide.models.platform_configs import (
@@ -56,8 +58,10 @@ from opentide.models.platform_configs import (
     SplunkActions,
     SplunkScheduling,
     SplunkTrigger,
+    SysdigException,
+    SysdigList,
+    SysdigMacro,
 )
-from opentide.models.splunk_legacy import normalize_splunk_v2
 from opentide.platforms.elastic.durations import duration_seconds
 
 
@@ -103,6 +107,21 @@ class PlatformConfigBase(TideModel):
     def schema(self) -> str | None:
         """The identifier under its YAML key, which would otherwise be ``BaseModel.schema``."""
         return self.platform_schema
+
+    @field_validator("platform_schema")
+    @classmethod
+    def _registered_platform_schema(cls, value: str | None) -> str | None:
+        """``schema`` names this block's registered revision, or is left out.
+
+        Nothing reads the identifier at deploy, so an unregistered one
+        (``splunk::2.1``, another platform's) validated and said nothing true
+        about the block. Each concrete block accepts only the identifier its
+        model registers.
+        """
+        expected = getattr(cls, "__schema_identifier__", None)
+        if value is None or expected is None or value == expected:
+            return value
+        raise ValueError(f"unknown platform schema {value!r}: this block's schema is {expected!r}")
 
 
 class SentinelConfig(PlatformConfigBase):
@@ -152,12 +171,11 @@ class SplunkConfig(PlatformConfigBase):
     # Required, like every other platform's query and like the JSON Schema
     # extras already said. Optional here meant the FieldInfo template renderer
     # emitted `#query: |` commented out for Splunk alone, and the deployer
-    # silently skipped rules whose query never loaded (#233). A splunk::2.x
-    # `search` is copied here by `_accept_legacy_v2_spellings` below.
+    # silently skipped rules whose query never loaded (#233).
     query: QueryText = TideField(
         schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
-    """SPL. Multiline. Legacy `search` fills this when `query` is empty."""
+    """SPL. Multiline."""
     scheduling: SplunkScheduling | None = None
     """Cron or frequency, and the search time range."""
     trigger: SplunkTrigger | None = None
@@ -167,29 +185,6 @@ class SplunkConfig(PlatformConfigBase):
     correlation_search: bool | None = None
     """Force the Enterprise Security correlation-search action on or off. `null` follows the
     tenant."""
-    advanced: dict[str, Any] | None = TideField(None, schema_extra={"tide.template.hide": True})
-    """Extra `savedsearches.conf` keys, stringified at deploy. Hidden from templates. Generated
-    schema marks the field deprecated in favour of the nested blocks."""
-    # Legacy flat v2.x fields retained for backward-compatible loading
-    search: str | None = TideField(None, schema_extra={"tide.template.hide": True})
-    """Legacy v2 search string. Hidden from templates. Kept after it is copied to `query`."""
-    cron_schedule: str | None = TideField(None, schema_extra={"tide.template.hide": True})
-    """Legacy v2 cron. Hidden from templates. Kept after it is copied into
-    `scheduling.schedule.cron`."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def _accept_legacy_v2_spellings(cls, data: Any) -> Any:
-        """Map the splunk::2.x layout onto v3 before field validation.
-
-        Schema validation calls ``model_validate`` on the raw YAML and never
-        goes through ``load_splunk_config``, so the mapping has to live here as
-        well as in the loader — and be the same function, or the two paths
-        accept different rules (#233).
-        """
-        if not isinstance(data, dict):
-            return data
-        return normalize_splunk_v2(data)
 
 
 class SentinelOneConfig(PlatformConfigBase):
@@ -237,7 +232,7 @@ class CarbonBlackConfig(PlatformConfigBase):
     )
     """Lucene query. Multiline in YAML. Deploy joins lines with spaces."""
     organizations: list[str] | None = None
-    """Accepted, including the loader alias `organization`. The current deployer targets the tenant
+    """Accepted. The current deployer targets the tenant
     the run selects and does not filter on this list."""
     watchlist: str | None = None
     """Watchlist name. Deploy uses the tenant watchlist when omitted. The watchlist must already
@@ -323,6 +318,8 @@ def _valid_response(action: dict[str, Any]) -> bool:
 
 class ElasticConfig(PlatformConfigBase):
     __schema_identifier__: ClassVar[str] = "platform::elastic::1.0"
+    # Its before-validator reports bad type blocks; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
 
     type: Literal[
         "query", "eql", "esql", "threshold", "new_terms", "threat_match", "machine_learning"
@@ -565,6 +562,222 @@ class ElasticConfig(PlatformConfigBase):
         return raw
 
 
+_FALCO_PRIORITIES = frozenset(
+    {
+        "emergency",
+        "alert",
+        "critical",
+        "error",
+        "warning",
+        "notice",
+        "informational",
+        "info",
+        "debug",
+    }
+)
+_FALCO_SOURCE = re.compile(r"[a-z][a-z0-9_]*")
+_MULTI_VALUE_COMPS = frozenset({"in", "pmatch", "intersects"})
+#: Keys a tuning inherits from the rule it tunes (``sysdig_tuning_keys``).
+_TUNING_FORBIDDEN = ("output", "priority", "policies", "source", "name")
+
+
+def _non_blank(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _sysdig_scalar(value: Any) -> bool:
+    return not isinstance(value, (list, dict))
+
+
+def _sysdig_exception_ok(entry: Any) -> bool:
+    """One exception, by the checks of Falco's ``validate_exception_info`` and
+    ``build_rule_exception_infos``."""
+    from opentide.platforms.sysdig.expansion import (
+        is_exception_operator,
+        is_modified_operator,
+        normalize_comp,
+    )
+
+    if not isinstance(entry, dict) or not _non_blank(entry.get("name")):
+        return False
+    fields = entry.get("fields")
+    comps = entry.get("comps")
+    values = entry.get("values")
+    if values is not None and not isinstance(values, list):
+        return False
+    if isinstance(fields, str):
+        if not fields.strip():
+            return False
+        if comps is not None:
+            if not isinstance(comps, str):
+                return False  # "Fields and comps must both be strings"
+            comp = normalize_comp(comps)
+            if comp not in _MULTI_VALUE_COMPS and not is_modified_operator(comp):
+                return False
+        return all(_sysdig_scalar(value) for value in values or [])
+    if not isinstance(fields, list) or not fields or not all(_non_blank(f) for f in fields):
+        return False
+    if comps is not None:
+        if not isinstance(comps, list) or len(comps) != len(fields):
+            return False  # "Fields and comps lists must have equal length"
+        if not all(isinstance(c, str) and is_exception_operator(normalize_comp(c)) for c in comps):
+            return False
+    for row in values or []:
+        if not isinstance(row, list) or len(row) != len(fields):
+            return False  # "Fields and values lists must have equal length"
+        for item in row:
+            if isinstance(item, dict):
+                return False
+            if isinstance(item, list) and not all(_sysdig_scalar(v) for v in item):
+                return False
+    return True
+
+
+def _sysdig_exception_codes(exceptions: Any) -> set[str]:
+    """``sysdig_exception_shape`` when an entry of ``exceptions`` is malformed."""
+    if exceptions is None:
+        return set()
+    if not isinstance(exceptions, list) or not all(map(_sysdig_exception_ok, exceptions)):
+        return {"sysdig_exception_shape"}
+    return set()
+
+
+def _sysdig_definitions(
+    raw: dict[str, Any], codes: set[str]
+) -> tuple[dict[str, str], dict[str, list[Any]]]:
+    """The block's macros and lists by name; ``sysdig_definition_*`` codes into *codes*."""
+    from opentide.platforms.sysdig.expansion import DEFINITION_NAME, RESERVED_WORDS
+
+    macros: dict[str, str] = {}
+    lists: dict[str, list[Any]] = {}
+    seen: set[str] = set()
+    for key, target in (("macros", macros), ("lists", lists)):
+        entries = raw.get(key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue  # the field type reports it
+            name = entry.get("name")
+            if not isinstance(name, str):
+                continue
+            if not DEFINITION_NAME.fullmatch(name) or name in RESERVED_WORDS:
+                codes.add("sysdig_definition_name")
+            if name in seen:
+                codes.add("sysdig_definition_duplicate")
+            seen.add(name)
+            body = entry.get("condition") if key == "macros" else entry.get("items")
+            wanted = str if key == "macros" else list
+            if isinstance(body, wanted):
+                target[name] = body
+    return macros, lists
+
+
+class SysdigConfig(PlatformConfigBase):
+    __schema_identifier__: ClassVar[str] = "platform::sysdig::1.0"
+    # Its before-validator reports the constraint codes; it accepts no extra key.
+    __legacy_keys__: ClassVar[Mapping[str, str | None]] = {}
+
+    condition: str | None = TideField(
+        None,
+        schema_extra={
+            "tide.template.multiline": True,
+            "tide.template.spacer": True,
+            "tide.template.required": True,
+        },
+    )
+    """Falco condition. Required for a new rule. With `append_to_rule`, the text appended to the
+    tuned rule's condition, usually starting with `and not`. Multiline; deploy joins lines with
+    single spaces."""
+    append_to_rule: str | None = None
+    """Name of an existing Falco or Sysdig rule this block tunes."""
+    source: str | None = None
+    """Falco event source: `syscall` (the default), `k8s_audit`, `aws_cloudtrail`,
+    `gcp_auditlog`, `azure_platformlogs`, `okta`, `github`, or another plugin's source."""
+    output: str | None = None
+    """Falco output template, with `%field` references. Derived from the event source when
+    omitted."""
+    priority: str | None = None
+    """Falco priority: `EMERGENCY`, `ALERT`, `CRITICAL`, `ERROR`, `WARNING`, `NOTICE`,
+    `INFORMATIONAL`, or `DEBUG`. Derived from `response.alert_severity` when omitted."""
+    tags: list[str] | None = None
+    """Extra Falco tags. Deploy adds the derived ATT&CK, maturity, and tenant tags."""
+    exceptions: list[SysdigException] | None = None
+    """Falco exceptions."""
+    macros: list[SysdigMacro] | None = None
+    """Macros only this rule uses, expanded into the condition at deploy."""
+    lists: list[SysdigList] | None = None
+    """Lists only this rule uses, expanded into the condition at deploy."""
+    policies: list[str] | None = None
+    """Names of Sysdig runtime policies the rule joins. Default: the tenant
+    `policies`."""
+    minimum_engine_version: Annotated[int, Field(ge=0, strict=True)] | None = None
+    """Minimum Falco engine version the rule needs, as Sysdig's integer
+    `minimumEngineVersion`. Omitted when unset."""
+
+    @property
+    def is_tuning(self) -> bool:
+        """Whether the block tunes an existing rule (`append_to_rule`)."""
+        return bool(self.append_to_rule)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_raw_sysdig_block(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "status" not in raw or raw["status"] is None:
+            return raw
+        codes: set[str] = set()
+        tuning = raw.get("append_to_rule")
+        condition = raw.get("condition")
+        if tuning is None:
+            if not _non_blank(condition):
+                codes.add("sysdig_rule_shape")
+        else:
+            has_condition = _non_blank(condition)
+            exceptions = raw.get("exceptions")
+            if (
+                not _non_blank(tuning)
+                or (condition is not None and not has_condition)
+                or not (has_condition or (isinstance(exceptions, list) and exceptions))
+            ):
+                codes.add("sysdig_rule_shape")
+            if any(raw.get(key) not in (None, "") for key in _TUNING_FORBIDDEN):
+                codes.add("sysdig_tuning_keys")
+        priority = raw.get("priority")
+        if priority is not None and (
+            not isinstance(priority, str) or priority.strip().lower() not in _FALCO_PRIORITIES
+        ):
+            codes.add("sysdig_priority")
+        source = raw.get("source")
+        if source is not None and (
+            not isinstance(source, str) or not _FALCO_SOURCE.fullmatch(source)
+        ):
+            codes.add("sysdig_source")
+        codes |= _sysdig_exception_codes(raw.get("exceptions"))
+        macros, lists = _sysdig_definitions(raw, codes)
+        if not codes & {"sysdig_definition_duplicate", "sysdig_definition_name"}:
+            from opentide.platforms.sysdig.expansion import ExpansionError, check_definitions
+
+            exceptions = raw.get("exceptions")
+            shaped = "sysdig_exception_shape" not in codes and isinstance(exceptions, list)
+            try:
+                check_definitions(
+                    macros,
+                    lists,
+                    [condition] if isinstance(condition, str) else [],
+                    exceptions if shaped else [],
+                )
+            except ExpansionError as exc:
+                codes.add(exc.code)
+        if codes:
+            raise ValueError(
+                f"SysdigConfig validation failed with code(s): {', '.join(sorted(codes))}"
+            )
+        return raw
+
+
 PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "sentinel": SentinelConfig,
     "defender_for_endpoint": DefenderConfig,
@@ -574,6 +787,7 @@ PLATFORM_CONFIG_MODELS: dict[str, type[PlatformConfigBase]] = {
     "harfanglab": HarfangLabConfig,
     "carbon_black_cloud": CarbonBlackConfig,
     "elastic": ElasticConfig,
+    "sysdig": SysdigConfig,
 }
 
 
@@ -603,6 +817,8 @@ class RuleConfigurations(TideModel):
     """Carbon Black Cloud watchlist report (`platform::carbon_black_cloud::1.0`)."""
     elastic: ElasticConfig | None = None
     """Elastic Security detection rule (`platform::elastic::1.0`)."""
+    sysdig: SysdigConfig | None = None
+    """Sysdig Secure or Falco rule (`platform::sysdig::1.0`)."""
 
     @classmethod
     def from_platforms_dict(cls, platforms: dict[str, dict[str, Any]]) -> RuleConfigurations:

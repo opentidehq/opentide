@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 
@@ -54,6 +55,8 @@ class SkillsSetupOptions:
     name: str | None = None
     org: str | None = None
     description: str | None = None
+    #: Register the opentidehq/skills Agent Plugin for Claude Code (#431).
+    plugin: bool = False
     yes: bool = False
 
 
@@ -78,12 +81,34 @@ def _skill_reachable(slug: str, *, source: str, ref: str) -> bool:
     return fetch_github_bytes(f"skills/{slug}/SKILL.md", source=source, ref=ref) is not None
 
 
+def _extra_files(dest: Path, shipped: Iterable[str]) -> list[str]:
+    """Files under *dest*, relative to it, that are not in *shipped*: the user's own."""
+    if dest.is_symlink() or not dest.is_dir():
+        return []
+    names = set(shipped)
+    return sorted(
+        rel
+        for path in dest.rglob("*")
+        if path.is_file() and (rel := path.relative_to(dest).as_posix()) not in names
+    )
+
+
+def _kept_warning(where: str, kept: list[str]) -> str:
+    shown = ", ".join(kept[:5]) + (f" and {len(kept) - 5} more" if len(kept) > 5 else "")
+    return (
+        f"Kept {len(kept)} file(s) in {where} that the skill does not ship ({shown}); "
+        "delete them by hand if they are left over from an older version."
+    )
+
+
 def _replace_tree(dest: Path, files: dict[str, bytes]) -> list[str]:
     """Swap *dest* for *files* only after every byte is on disk.
 
     A failed download must not delete the previous tree or leave a partial one
     beside it. The incoming directory is renamed into place, which replaces the
-    old tree in one step on the same filesystem.
+    old tree in one step on the same filesystem. ``.agents/skills/<slug>`` is
+    opentide's copy of the skill, so a file an older version shipped goes; the
+    harness copies made from it keep the user's files (:func:`_copy_skill`).
     """
     parent = dest.parent
     parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +173,12 @@ def _install_bundled_skill(slug: str, dest: Path) -> list[str]:
 
 
 def _download_skill(
-    slug: str, dest: Path, *, source: str, ref: str, tree: GithubTree | None = None
+    slug: str,
+    dest: Path,
+    *,
+    source: str,
+    ref: str,
+    tree: GithubTree | None = None,
 ) -> list[str]:
     """Install one skill tree.
 
@@ -218,15 +248,63 @@ def unavailable_skills(options: SkillsSetupOptions) -> list[str]:
     ]
 
 
-def _install_cursor(target: Path, slugs: list[str]) -> list[str]:
+def _copy_skill(src: Path, dest: Path, where: str, warnings: list[str], *, target: Path) -> None:
+    """Copy the skill *src* over *dest*, keeping the files in *dest* it does not ship.
+
+    The folder used to be deleted first, and with it whatever the user had
+    put there (team notes, local edits to a file the skill does not ship).
+
+    Nothing is written through a link: a link at a path the skill ships (a file
+    or a folder) is replaced by the skill's own, with a warning, and a *dest*
+    that resolves outside *target* (a skills folder shared between repositories)
+    is left as it is, with a warning.
+    """
+    if dest.exists() and dest.resolve() == src.resolve():
+        # ``.claude/skills`` links to ``.agents/skills`` (or this skill's folder
+        # does): the skill is already there, and copying it onto itself would
+        # delete it.
+        return
+    if not dest.resolve().is_relative_to(target.resolve()):
+        warnings.append(
+            f"Left {where} as it is: it links outside this repository, to "
+            f"{dest.resolve()}. Copy the skill there by hand if that folder should have it."
+        )
+        return
+    shipped = sorted(path.relative_to(src).as_posix() for path in src.rglob("*") if path.is_file())
+    kept = _extra_files(dest, shipped)
+    replaced: list[str] = []
+    # Resolved: a dangling link to a folder inside the repository gets that folder.
+    dest.resolve().mkdir(parents=True, exist_ok=True)
+    for rel in shipped:
+        out = dest
+        parts = rel.split("/")
+        for depth, part in enumerate(parts):
+            out = out / part
+            if out.is_symlink():
+                out.unlink()
+                replaced.append("/".join(parts[: depth + 1]))
+            if depth < len(parts) - 1:
+                out.mkdir(exist_ok=True)
+        shutil.copy2(src / rel, out)
+    if replaced:
+        shown = ", ".join(replaced[:5]) + (
+            f" and {len(replaced) - 5} more" if len(replaced) > 5 else ""
+        )
+        warnings.append(
+            f"Replaced {len(replaced)} link(s) in {where} with the skill's own files "
+            f"({shown}), rather than write through them."
+        )
+    if kept:
+        warnings.append(_kept_warning(where, kept))
+
+
+def _install_cursor(target: Path, slugs: list[str], warnings: list[str]) -> list[str]:
     written: list[str] = []
     for slug in slugs:
         src = target / ".agents" / "skills" / slug
         dest = target / ".cursor" / "skills" / slug
         if src.is_dir():
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(src, dest)
+            _copy_skill(src, dest, f".cursor/skills/{slug}", warnings, target=target)
             written.append(f".cursor/skills/{slug}/SKILL.md")
     return written
 
@@ -262,15 +340,14 @@ class _Entrypoints:
 def _install_claude_code(
     target: Path, slugs: list[str], context: dict[str, str], entrypoints: _Entrypoints
 ) -> list[str]:
+    """CLAUDE.md, and the skills under ``.claude/skills/`` unless *slugs* is empty."""
     claude_md = render_agent_entrypoint("CLAUDE.md.template", context)
     written = entrypoints.write(target, "CLAUDE.md", claude_md)
     for slug in slugs:
         src = target / ".agents" / "skills" / slug
         dest = target / ".claude" / "skills" / slug
         if src.is_dir():
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(src, dest)
+            _copy_skill(src, dest, f".claude/skills/{slug}", entrypoints.warnings, target=target)
             written.append(f".claude/skills/{slug}/SKILL.md")
     return written
 
@@ -289,22 +366,43 @@ def _install_github_copilot(
 
 def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
     """Install agent skills and entrypoints for selected harnesses."""
-    if not options.targets:
+    if not options.targets and not options.plugin:
         raise typer.BadParameter(
             "Choose at least one skills target "
-            "(--cursor, --claude-code, --generic, --github-copilot)"
+            "(--cursor, --claude-code, --generic, --github-copilot, --plugin)"
         )
     target = options.path.resolve()
-    slugs = _resolve_skill_slugs(options)
+    written: list[str] = []
+    plugin_warnings: list[str] = []
+    if options.plugin:
+        from opentide.cli.services.setup.plugin import (
+            CLAUDE_SETTINGS,
+            PluginConfigError,
+            register_claude_code_plugin,
+        )
+
+        try:
+            written.append(register_claude_code_plugin(target))
+        except PluginConfigError as exc:
+            plugin_warnings.append(
+                f"{CLAUDE_SETTINGS} {exc}; left unchanged. Install the plugin in Claude "
+                "Code with /plugin marketplace add opentidehq/skills."
+            )
+    # With the plugin, Claude Code takes the skills from it: copying them into
+    # .claude/skills/ as well would load every skill twice.
+    copies = [t for t in options.targets if not (options.plugin and t is SkillTarget.claude_code)]
+    slugs = _resolve_skill_slugs(options) if copies else []
     context = _entrypoint_context(options, target)
-    written = _install_skill_trees(target, slugs)
     entrypoints = _Entrypoints()
+    if slugs:
+        written.extend(_install_skill_trees(target, slugs))
     also_applied: list[str] = []
     for skill_target in options.targets:
         if skill_target is SkillTarget.cursor:
-            written.extend(_install_cursor(target, slugs))
+            written.extend(_install_cursor(target, slugs, entrypoints.warnings))
         elif skill_target is SkillTarget.claude_code:
-            written.extend(_install_claude_code(target, slugs, context, entrypoints))
+            own = [] if options.plugin else slugs
+            written.extend(_install_claude_code(target, own, context, entrypoints))
         elif skill_target is SkillTarget.generic:
             written.extend(_install_generic(target, context, entrypoints))
         elif skill_target is SkillTarget.github_copilot:
@@ -323,8 +421,19 @@ def run_skills_setup(options: SkillsSetupOptions) -> dict[str, object]:
         result["also_applied"] = also_applied
     if entrypoints.skipped:
         result["skipped"] = entrypoints.skipped
-    if entrypoints.warnings:
-        result["warnings"] = entrypoints.warnings
+    if options.plugin:
+        from opentide.cli.services.setup.plugin import OTHER_HOSTS, PLUGIN_ID
+
+        result["plugin"] = PLUGIN_ID
+        result["advice"] = (
+            "Claude Code offers the opentide plugin to whoever opens this project. "
+            "The plugin starts opentide mcp start itself: other agents install it with "
+            + "; ".join(f"{host}: {how}" for host, how in OTHER_HOSTS.items())
+            + "."
+        )
+    warnings = plugin_warnings + entrypoints.warnings
+    if warnings:
+        result["warnings"] = warnings
     return result
 
 

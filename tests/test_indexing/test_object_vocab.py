@@ -90,7 +90,7 @@ def test_build_object_vocabularies_adds_empty_objective_when_missing() -> None:
 def test_run_builds_from_index_manager() -> None:
     index = {
         "configurations": {
-            "global": {"objects": ["rule"]},
+            "paths": {"objects": ["rule"]},
             "documentation": {"icons": {"rule": "r"}, "object_names": {"rule": "Rules"}},
         },
         "objects": {

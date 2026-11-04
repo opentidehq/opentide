@@ -33,7 +33,7 @@ The schema identifier maps predictably to files and specs:
 | Template artifact | `.opentide/templates/{family}.{major}.{minor}.template.yaml` | `rule.1.0.template.yaml` |
 | IDE router | `.opentide/schemas/opentide.schema.json` | `objects/**/*.yaml`, routed by `metadata.schema` |
 
-The router `opentide.schema.json` is the editor entry point. `opentide setup vscode` maps `objects/**/*.yaml` to it, and the router applies the revision schema named in each object's `metadata.schema`:
+The router `opentide.schema.json` is the entry point for a JSON Schema tool (an editor's YAML extension, a CI linter) that you map `objects/**/*.yaml` to: the router applies the revision schema named in each object's `metadata.schema`. `opentide setup vscode` no longer maps it, because the opentide VS Code extension checks objects with the language server. The router:
 
 - `metadata.schema` completes to the registered object identifiers (`objective::1.0`, `rule::1.0`, `rule::1.1`, `threat::1.0`). An unknown identifier is reported on that field with the valid values.
 - Each identifier has one `if`/`then` branch, combined with `allOf`. Only the branch whose identifier matches applies, so a `rule::1.1` object is checked against `rule.1.1.schema.json` and nothing else.
@@ -49,7 +49,7 @@ Schema revisions are additive. When a new revision such as `rule::1.1` ships, bo
 2. The IDE router adds a branch and a `metadata.schema` value for each identifier, and routes objects by their declared `metadata.schema`.
 3. Objects opt in individually by setting `metadata.schema: rule::1.1`. Objects that still declare `rule::1.0` keep validating against `1.0` until you migrate them.
 
-This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace. For CoreTide-era repos, see the [migration guide](../migration/index.md).
+This means a schema upgrade never forces a big-bang migration — you move objects over at your own pace.
 
 `rule::1.1` is that kind of revision. It adds optional `metadata.reviewed` and changes nothing else. `rule::1.0` stays valid and rejects the field. `opentide generate schemas` writes both `rule.1.0.schema.json` and `rule.1.1.schema.json`. `opentide generate templates` writes both templates and leaves `reviewed` commented out, so a new file does not invent a review date. List stale rules with [`opentide rules unreviewed`](../../cli/rules.md).
 

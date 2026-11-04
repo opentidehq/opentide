@@ -1,0 +1,30 @@
+# Tunes the Falco default rule "Terminal shell in container": appends a
+# condition and an exception. The block's list is expanded at deploy.
+name: Terminal shell in container, CI runners excluded
+metadata:
+  uuid: 9c4e2a71-0b3d-4f86-a5e1-7d2b6c8f0a14
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+description: |
+  CI runners open shells in build containers on every job.
+response:
+  alert_severity: Low
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    append_to_rule: Terminal shell in container
+    condition: and not proc.pname in (ci_runners)
+    exceptions:
+    - name: build_namespaces
+      fields: k8s.ns.name
+      comps: in
+      values: [ci, builds]
+    lists:
+    - name: ci_runners
+      items: [gitlab-runner, buildkite-agent]

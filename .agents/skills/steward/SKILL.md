@@ -16,7 +16,7 @@ merges cleanly into its base, and no review thread waits on you.
 | **Test (3.10 … 3.14)** | unit suite, `-n 4`; coverage gate on 3.14 only | `scripts/ci-local.sh` (`--full` adds the gate) |
 | **E2E (3.14, shard N/4)** | `cli_e2e` + `cli_smoke`, split by `.test_durations_e2e` | `uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov -n 4 --splits 4 --group N --durations-path .test_durations_e2e` |
 | **GitLab CI lint** | glint + gitlab-ci-verify on rendered pipelines | `scripts/ci-local.sh --full` (installs the linters) |
-| **CLI Windows smoke** | console launcher + case-insensitive `migrate objects` | no local equivalent; reason about it (below) |
+| **CLI Windows smoke** | console launcher + promotion keeping CRLF on NTFS | no local equivalent; reason about it (below) |
 | **CodeQL** | Python + Actions, `security-extended` | [`codeql`](../codeql/SKILL.md) |
 
 Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.
@@ -29,7 +29,7 @@ Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.
   names (`Objects` vs `objects`), console encoding.
 - **Only in one E2E shard** — run that shard; then `PYTEST_WORKERS=0` on the single test. A
   test that passes serially and fails under xdist leaks global state (registry caches,
-  `os.environ` flags such as `VALIDATION_ERROR_RAISED`, cwd) — fix the leak, don't pin order.
+  `os.environ` flags such as `DEPLOYMENT_ERROR_RAISED`, cwd) — fix the leak, don't pin order.
 - **Coverage gate** — the gate reads the 3.14 cell. Cover the new lines; do not add
   `pragma: no cover` to code that can be tested or widen `[tool.coverage.run].omit`.
 - **Snapshot (syrupy) failures** — update with `--snapshot-update` only when the output

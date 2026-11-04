@@ -16,6 +16,7 @@ SYSTEM_KEYS = (
     "harfanglab",
     "carbon_black_cloud",
     "elastic",
+    "sysdig",
 )
 
 
@@ -27,9 +28,8 @@ def enabled_systems() -> list[str]:
         config = systems.get(system)
         if not config:
             continue
-        tide_block = config.get("tide", {})
         platform_block = config.get("platform", {})
-        if tide_block.get("enabled") is True or platform_block.get("enabled") is True:
+        if isinstance(platform_block, dict) and platform_block.get("enabled") is True:
             enabled.append(system)
     return enabled
 
@@ -44,18 +44,16 @@ def misspelled_enabled_key(system: str) -> tuple[str, str] | None:
     import difflib
 
     config = resolve_configurations().get("systems", {}).get(system) or {}
-    # `[tide]` is the older spelling of the table `enabled_systems` also reads.
-    for table in ("platform", "tide"):
-        block = config.get(table)
-        if not isinstance(block, dict):
-            continue
-        for key in block:
-            lowered = str(key).lower()
-            if key != "enabled" and (
-                lowered == "enabled"
-                or difflib.SequenceMatcher(None, lowered, "enabled").ratio() >= 0.75
-            ):
-                return table, str(key)
+    block = config.get("platform")
+    if not isinstance(block, dict):
+        return None
+    for key in block:
+        lowered = str(key).lower()
+        if key != "enabled" and (
+            lowered == "enabled"
+            or difflib.SequenceMatcher(None, lowered, "enabled").ratio() >= 0.75
+        ):
+            return "platform", str(key)
     return None
 
 
@@ -83,10 +81,9 @@ def platform_config_path(system: str) -> str:
     """Workspace-relative TOML that configures *system* (where setup writes it if absent)."""
     workspace = discover_workspace()
     configs = client_configurations_dir(workspace)
-    for folder in ("platforms", "systems"):
-        candidate = configs / folder / f"{system}.toml"
-        if candidate.is_file():
-            return candidate.relative_to(workspace).as_posix()
+    candidate = configs / "platforms" / f"{system}.toml"
+    if candidate.is_file():
+        return candidate.relative_to(workspace).as_posix()
     return f"{OPENTIDE_DIR}/configurations/platforms/{system}.toml"
 
 

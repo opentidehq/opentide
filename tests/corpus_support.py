@@ -30,6 +30,7 @@ CORPUS_RULE_UUIDS = {
     "crowdstrike": "00000000-0000-4000-8003-000000000006",
     "harfanglab": "00000000-0000-4000-8003-000000000007",
     "elastic": "00000000-0000-4000-8003-000000000009",
+    "sysdig": "00000000-0000-4000-8003-0000005d1a90",
 }
 #: Rules deploy skips because they sit in subfolders (#312). One shares a
 #: top-level file name, which a lookup by file name would resolve wrongly.
@@ -116,6 +117,26 @@ def real_rules_folder(repo: Path) -> Path:
         link.unlink()
         target.rename(link)
     return link
+
+
+def drop_legacy_objects(repo: Path) -> Path:
+    """Leave only the current ``objects/`` folders, as real folders; return ``objects/``.
+
+    The corpus keeps its legacy ``Objects/`` tree. A case-insensitive file
+    system (macOS, Windows) makes it the same folder as ``objects/``, so git
+    records the rules under ``Objects/`` and no diff path matches a configured
+    object folder. Commit the corpus only after this.
+    """
+    staged = repo / ".objects-current"
+    staged.mkdir()
+    for family in ("threats", "objectives", "rules"):
+        (repo / "objects" / family).resolve().rename(staged / family)
+    # On a case-insensitive file system this also removes ``objects/``.
+    shutil.rmtree(repo / "Objects")
+    if (repo / "objects").exists():
+        shutil.rmtree(repo / "objects")
+    staged.rename(repo / "objects")
+    return repo / "objects"
 
 
 def write_rule_variant(rules: Path, relative: str, uuid: str, *, status: str = "STAGING") -> Path:

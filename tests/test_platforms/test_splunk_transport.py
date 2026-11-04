@@ -35,6 +35,7 @@ from opentide.platforms.splunk.client import (
     connect_splunk,
     splunk_route,
 )
+from opentide.query.models import LiveCheck, QueryRefused, QueryRequest
 
 pytest.importorskip("cryptography")
 
@@ -159,45 +160,110 @@ def test_a_redirect_urllib_does_not_follow_fails_a_deploying_connection(
         deploying.parse("| makeresults |unreachable", output_mode="json")
 
 
-def test_query_validator_reports_an_invalid_query(
+def _splunk_tenant(splunk: SplunkStandIn) -> ConfigurationModels.Systems.Splunk.Tenant:
+    setup = ConfigurationModels.Systems.Splunk.Tenant.Setup(
+        url="localhost", port=splunk.port, token="token", app="search", ssl=False
+    )
+    return ConfigurationModels.Systems.Splunk.Tenant(name="local", description="", setup=setup)
+
+
+def _check(
+    text: str, tenant: ConfigurationModels.Systems.Splunk.Tenant, *, timeout: float = 120.0
+) -> LiveCheck:
+    from opentide.platforms.splunk.runner import SplunkQueryRunner
+    from opentide.query.check import check_window
+
+    request = QueryRequest(
+        platform="splunk", text=text, window=check_window(), limit=1, timeout=timeout
+    )
+    return SplunkQueryRunner().check(request, tenant)
+
+
+def test_live_check_waits_the_check_timeout_and_no_longer(splunk: SplunkStandIn) -> None:
+    """The handler used the transport's 120s whatever the request's timeout said."""
+    from opentide.platforms.transport import read_timeout
+
+    splunk.slow_seconds = 1.0
+    with pytest.raises(TimeoutError) as caught:
+        _check("| makeresults |slow", _splunk_tenant(splunk), timeout=0.2)
+    assert read_timeout(caught.value) is caught.value
+    # A timeout long enough lets the same slow parse through.
+    assert _check("| makeresults |slow", _splunk_tenant(splunk), timeout=5) == LiveCheck()
+
+
+def test_a_gateway_page_answering_the_parser_is_a_gateway_timeout(splunk: SplunkStandIn) -> None:
+    """The 0.20.1 report blamed the url and port for a gateway's page on one slow parse."""
+    from opentide.platforms.transport import GatewayTimeoutError, read_timeout
+
+    with pytest.raises(GatewayTimeoutError) as caught:
+        _check("| makeresults |gateway", _splunk_tenant(splunk))
+
+    message = str(caught.value)
+    assert f"Splunk at https://localhost:{splunk.port} answered with an HTML page (HTTP 504)" in (
+        message
+    )
+    assert "'504 Gateway Time-out'" in message
+    assert "HTTP 504 Gateway Timeout is what a gateway or proxy in front of the tenant" in message
+    assert "url and port are not at fault" in message
+    assert "management port" not in message
+    assert caught.value.status == 504
+    # One query's failure, not an unreachable tenant.
+    assert not isinstance(caught.value, ConnectionError)
+    assert read_timeout(caught.value) is caught.value
+
+
+def test_a_gateway_status_without_a_page_answering_the_parser_is_a_gateway_timeout(
     splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from opentide.platforms.splunk.validator import SplunkQueryValidator
+    """A gateway's plain-text 504 used to read as Splunk refusing the query."""
+    from io import BytesIO
 
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
-    service = _connect(splunk, ssl_enabled=False, allow_http_errors=True)
+    from opentide.platforms.splunk.runner import SplunkQueryRunner
+    from opentide.platforms.transport import GatewayTimeoutError
 
-    validator._validate_spl_query("| makeresults", "good", "uuid-1", service)
-    assert "VALIDATION_ERROR_RAISED" not in os.environ
+    class Service:
+        def parse(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            return {
+                "status": HTTP_ERROR_STATUS,
+                "http_status": 504,
+                "reason": "Gateway Timeout",
+                "body": BytesIO(b"upstream request timeout"),
+            }
 
-    validator._validate_spl_query("| makeresults |badcommand", "bad", "uuid-2", service)
-    assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
+    monkeypatch.setattr(SplunkQueryRunner, "_service", lambda *_a, **_k: Service())
+
+    with pytest.raises(GatewayTimeoutError, match="HTTP 504 with a body that is not JSON"):
+        _check("| makeresults", _splunk_tenant(splunk))
 
 
-def test_query_validator_assumes_valid_on_a_network_error_redirect(
-    splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_live_check_reports_an_invalid_query(splunk: SplunkStandIn) -> None:
+    tenant = _splunk_tenant(splunk)
+
+    assert _check("| makeresults", tenant) == LiveCheck()
+    with pytest.raises(QueryRefused) as refused:
+        _check("| makeresults |badcommand", tenant)
+    assert refused.value.message == "Splunk refused the query on local"
+    assert not any("/search/jobs" in path for _, path, _ in splunk.requests)
+
+
+def test_live_check_assumes_valid_on_a_network_error_redirect(splunk: SplunkStandIn) -> None:
     """urllib raises on a 307 answering a POST; it is a validation response, not a failure."""
-    from opentide.platforms.splunk.validator import SplunkQueryValidator
+    from opentide.platforms.splunk.runner import PARSER_TIMEOUT_WARNING
 
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
-    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
-    service = _connect(splunk, ssl_enabled=False, allow_http_errors=True)
+    found = _check("| makeresults |unreachable", _splunk_tenant(splunk))
 
-    validator._validate_spl_query("| makeresults |unreachable", "slow", "uuid-3", service)
-    assert os.environ.get("VALIDATION_WARNING_RAISED") == "True"
-    assert "VALIDATION_ERROR_RAISED" not in os.environ
+    assert found == LiveCheck(warnings=(PARSER_TIMEOUT_WARNING,))
 
 
-def test_query_validator_reads_a_redirected_refusal_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_live_check_reads_a_redirected_refusal_once(
+    splunk: SplunkStandIn, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A redirect that is not a network error is still a refusal, reported from its body.
 
     The body is a stream; reading it once for the network-error check left
     ``json.loads`` an empty one, and the check crashed instead of reporting.
     """
-    from opentide.platforms.splunk.validator import SplunkQueryValidator
+    from opentide.platforms.splunk.runner import SplunkQueryRunner
 
     class Body:
         def __init__(self, data: bytes) -> None:
@@ -215,11 +281,11 @@ def test_query_validator_reads_a_redirected_refusal_once(monkeypatch: pytest.Mon
                 "body": Body(b'{"messages": [{"type": "FATAL", "text": "Unknown command"}]}'),
             }
 
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
-    validator = SplunkQueryValidator.__new__(SplunkQueryValidator)
+    monkeypatch.setattr(SplunkQueryRunner, "_service", lambda *_a, **_k: Service())
 
-    validator._validate_spl_query("| makeresults |badcommand", "bad", "uuid-4", Service())  # type: ignore[arg-type]
-    assert os.environ.get("VALIDATION_ERROR_RAISED") == "True"
+    with pytest.raises(QueryRefused) as refused:
+        _check("| makeresults |badcommand", _splunk_tenant(splunk))
+    assert refused.value.detail == "Unknown command"
 
 
 # --- a proxy's HTML page is named, not parsed as XML ---------------------------
@@ -300,8 +366,28 @@ def test_an_html_answer_without_a_proxy_points_at_the_port(
         service = connect_splunk(
             host="localhost", port=port, token="token", app="search", ssl_enabled=False
         )
-        with pytest.raises(SplunkAnsweredHtmlError, match="management port"):
+        with pytest.raises(SplunkAnsweredHtmlError, match="management port") as caught:
             service.saved_searches["Rule"]
+    assert "answered with an HTML page (HTTP 200), not its REST API" in str(caught.value)
+
+
+def test_an_html_page_after_a_slow_request_is_a_gateway_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page that took as long as a gateway's timeout is the gateway's, whatever its status."""
+    from opentide.platforms import transport
+    from opentide.platforms.transport import GatewayTimeoutError
+
+    for name in _PROXY_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(transport, "SLOW_ANSWER_SECONDS", 0.0)
+    with serve_block_page(tmp_path) as port:
+        service = connect_splunk(
+            host="localhost", port=port, token="token", app="search", ssl_enabled=False
+        )
+        with pytest.raises(GatewayTimeoutError, match=r"HTTP 200\), not its REST API") as caught:
+            service.saved_searches["Rule"]
+    assert "as from a gateway or proxy in front of the tenant" in str(caught.value)
 
 
 @pytest.mark.parametrize(
@@ -367,7 +453,7 @@ def trigger_rule(metadata: dict):
             "response": {"alert_severity": "High"},
             "configurations": {
                 "splunk": {
-                    "schema": "splunk::3.0",
+                    "schema": "platform::splunk::1.0",
                     "status": "STAGING",
                     "query": "index=main | stats count by host",
                     "scheduling": {"schedule": {"frequency": "1h"}},

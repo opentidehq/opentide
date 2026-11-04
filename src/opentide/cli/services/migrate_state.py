@@ -34,7 +34,7 @@ from opentide.core.logging import get_logger
 from opentide.states.deployment import (
     LEGACY_MAP_KEYS,
     LEGACY_TENANT_PREFIX,
-    STATE_PLATFORMS,
+    MIGRATED_PLATFORMS,
     DeploymentState,
     DeploymentStateError,
     deployment_state_ignore,
@@ -236,7 +236,7 @@ def _plan_rule(path: Path) -> tuple[RuleIds, str | None]:
     metadata = _mapping_get(root, "metadata")
     uuid_node = _mapping_get(metadata, "uuid") if metadata is not None else None
     raw_uuid = _construct(uuid_node) if isinstance(uuid_node, yaml.ScalarNode) else None
-    if any(binding.platform in STATE_PLATFORMS for binding in rule.bindings):
+    if any(binding.platform in MIGRATED_PLATFORMS for binding in rule.bindings):
         try:
             rule.object_uuid = shard_path(raw_uuid).stem
         except DeploymentStateError:
@@ -270,7 +270,7 @@ def _plan_rule(path: Path) -> tuple[RuleIds, str | None]:
 
 def _check_shard(rule: RuleIds, workspace: Path) -> DeploymentState | None:
     """Load the shard and refuse ids that disagree with it."""
-    shard_bindings = [b for b in rule.bindings if b.platform in STATE_PLATFORMS]
+    shard_bindings = [b for b in rule.bindings if b.platform in MIGRATED_PLATFORMS]
     if not shard_bindings or rule.object_uuid is None:
         return None
     try:
@@ -327,7 +327,7 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
             continue
 
         for binding in rule.bindings:
-            if binding.platform in STATE_PLATFORMS:
+            if binding.platform in MIGRATED_PLATFORMS:
                 continue
             logger.warning(
                 "external_id_unused",
@@ -338,7 +338,7 @@ def run_migrate_state(workspace: Path, rules_dir: Path) -> dict[str, object]:
             )
             unused.append({"file": relative, "uuid": rule.object_uuid, **binding.as_dict()})
 
-        shard_bindings = [b for b in rule.bindings if b.platform in STATE_PLATFORMS]
+        shard_bindings = [b for b in rule.bindings if b.platform in MIGRATED_PLATFORMS]
         shard_file: str | None = None
         try:
             if state is not None and shard_bindings:

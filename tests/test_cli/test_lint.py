@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -11,6 +13,8 @@ from typer.testing import CliRunner
 from opentide.cli import app
 from opentide.cli.enums import LintCheck
 from opentide.cli.services.lint import _top_level_key_lines, run_lint
+from opentide.core.lint_config import FilenameConfig, FilenameStyle, LintConfig
+from opentide.registry.catalogue import DEBUG_SUFFIXES, OBJECT_SUFFIXES, is_debug_file_name
 
 runner = CliRunner()
 
@@ -282,7 +286,17 @@ def test_lint_cli_strict(tmp_path: Path) -> None:
 
 
 #: Keys every finding gains for the diagnostic contract.
-DIAGNOSTIC_KEYS = ("code", "field_path", "line", "column", "end_column", "help", "fix", "explain")
+DIAGNOSTIC_KEYS = (
+    "code",
+    "field_path",
+    "line",
+    "column",
+    "end_line",
+    "end_column",
+    "help",
+    "fix",
+    "explain",
+)
 
 _NO_METADATA = """\
 name: Simulated Actor
@@ -307,6 +321,7 @@ def test_lint_metadata_finding_carries_uuid_severity_and_line(tmp_path: Path) ->
         "field_path": ["metadata"],
         "line": 3,
         "column": 1,
+        "end_line": 3,
         "end_column": 9,
         "help": "add the missing keys under metadata",
         "fix": None,
@@ -336,6 +351,7 @@ def test_lint_filename_finding_carries_uuid_and_severity(tmp_path: Path) -> None
         "field_path": [],
         "line": None,
         "column": None,
+        "end_line": None,
         "end_column": None,
         "help": "rename it to objects/threats/simulated-actor.yaml",
         "fix": None,
@@ -403,6 +419,7 @@ name: {name}
         "field_path": ["name"],
         "line": 3,
         "column": 1,
+        "end_line": 3,
         "end_column": 5,
         "help": "add a name: the file name is derived from it",
         "fix": None,
@@ -420,7 +437,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload == {
         "path": str(tmp_path.resolve()),
-        "checks": ["filenames", "metadata", "placeholders"],
+        "checks": ["filenames", "metadata", "placeholders", "queries"],
         "findings": [
             {
                 "check": "metadata",
@@ -433,6 +450,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "field_path": ["metadata"],
                 "line": 2,
                 "column": 1,
+                "end_line": 2,
                 "end_column": 9,
                 "help": "add the missing keys under metadata",
                 "fix": None,
@@ -452,6 +470,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "field_path": [],
                 "line": None,
                 "column": None,
+                "end_line": None,
                 "end_column": None,
                 "help": "rename it to objects/threats/simulated-actor.yaml",
                 "fix": None,
@@ -468,6 +487,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 "field_path": ["name"],
                 "line": None,
                 "column": None,
+                "end_line": None,
                 "end_column": None,
                 "help": "add a name: the file name is derived from it",
                 "fix": None,
@@ -488,6 +508,7 @@ def test_lint_cli_json_payload(tmp_path: Path) -> None:
                 # The frame points at where the document starts.
                 "line": 1,
                 "column": 1,
+                "end_line": 1,
                 "end_column": 16,
                 "help": None,
                 "fix": None,
@@ -679,3 +700,91 @@ def test_top_level_key_lines_reads_column_zero_keys_only() -> None:
         "tide.vocab": 4,
         "description": 5,
     }
+
+
+def test_lint_reports_the_engines_dataset_and_ecs_warnings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#695: a name visibility.toml does not declare, or an ECS field that does not exist,
+    is a query warning lint shows, like the language-reference codes."""
+    from opentide import analysis
+    from opentide.analysis import Finding
+
+    rule = _write_object(tmp_path, "rules", "simulated-rule.yaml", _THREAT)
+    codes = ("elastic_dataset_not_declared", "ecs_unknown_field", "not_a_query_code")
+
+    def check_file(space: object, path: Path, text: str, *, language: str | None = None) -> list:
+        return [Finding(code, "warning", code, 2, 1, 2, 5) for code in codes]
+
+    monkeypatch.setattr(analysis, "check_file", check_file)
+    result = run_lint(tmp_path, checks=[LintCheck.queries])
+    found = [(item.get("code"), item["path"]) for item in result["findings"]]
+    relative = rule.relative_to(tmp_path).as_posix()
+    assert found == [(code, relative) for code in codes[:2]]
+
+
+def _lint_names(
+    root: Path, *, style: FilenameStyle = "slug", pattern: str | None = None
+) -> dict[str, Any]:
+    filenames = FilenameConfig(style=style, pattern=re.compile(pattern) if pattern else None)
+    return run_lint(
+        root, checks=[LintCheck.filenames], fix=True, config=LintConfig(filenames=filenames)
+    )
+
+
+@pytest.mark.parametrize("suffix", DEBUG_SUFFIXES)
+def test_lint_fix_keeps_a_debug_fixture_out_of_the_catalogue(tmp_path: Path, suffix: str) -> None:
+    """``0005 - MDR Deployment Testing MDE.debug.yaml`` was renamed ``MDR TESTING - MDE 1000.yaml``:
+    the fixture joined the catalogue and the next push's deploy diff (0.20.1 migration)."""
+    body = _THREAT.replace("Simulated Actor", "MDR TESTING - MDE 1000")
+    src = _write_object(tmp_path, "threats", f"0005 - MDR Deployment Testing MDE{suffix}", body)
+
+    result = _lint_names(tmp_path, style="name")
+
+    assert result["fixed"] == 1
+    assert [entry.name for entry in src.parent.iterdir()] == [f"MDR TESTING - MDE 1000{suffix}"]
+    assert result["findings"][0]["expected"] == f"objects/threats/MDR TESTING - MDE 1000{suffix}"
+    # Named as its name asks, less the infix: nothing left to report.
+    assert _lint_names(tmp_path, style="name")["count"] == 0
+
+
+def test_lint_fix_gives_a_fixture_the_name_of_the_rule_it_copies(tmp_path: Path) -> None:
+    """A fixture and the object it copies are two files: the fixture takes the name too."""
+    _write_object(tmp_path, "threats", "simulated-actor.yaml", _THREAT)
+    copy = _THREAT.replace("8001-000000000001", "8001-000000000002")
+    _write_object(tmp_path, "threats", "scratch.debug.yaml", copy)
+    _write_object(tmp_path, "threats", "other.debug.yaml", copy.replace("0002", "0003"))
+
+    result = _lint_names(tmp_path)
+
+    assert result["fixed"] == 2
+    assert sorted(entry.name for entry in (tmp_path / "objects" / "threats").iterdir()) == [
+        "simulated-actor-00000000.debug.yaml",
+        "simulated-actor.debug.yaml",
+        "simulated-actor.yaml",
+    ]
+
+
+def test_lint_filename_pattern_matches_the_stem_without_the_debug_infix(tmp_path: Path) -> None:
+    _write_object(tmp_path, "threats", "simulated-actor.debug.yaml", _THREAT)
+    assert _lint_names(tmp_path, pattern="[a-z-]+")["count"] == 0
+    _write_object(tmp_path, "threats", "simulated-actor.debug.yaml", _THREAT)
+    assert _lint_names(tmp_path, pattern="[a-z-]+\\.debug")["count"] == 1
+
+
+@pytest.mark.parametrize("style", ["slug", "name"])
+@pytest.mark.parametrize("name", ["B", "B.debug", "B .debug.", "x.debug.debug", "Rule 1"])
+@pytest.mark.parametrize("suffix", [*DEBUG_SUFFIXES, *OBJECT_SUFFIXES])
+def test_lint_fix_never_changes_whether_a_file_is_debug(
+    tmp_path: Path, style: FilenameStyle, name: str, suffix: str
+) -> None:
+    src = _write_object(
+        tmp_path, "threats", f"old{suffix}", _THREAT.replace("Simulated Actor", repr(name))
+    )
+
+    _lint_names(tmp_path, style=style)
+
+    [renamed] = src.parent.iterdir()
+    assert renamed.name.endswith(suffix)
+    assert is_debug_file_name(renamed.name) is is_debug_file_name(src.name)
+    assert _lint_names(tmp_path, style=style)["count"] == 0

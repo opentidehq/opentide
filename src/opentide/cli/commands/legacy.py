@@ -101,20 +101,6 @@ def export_revisions(ctx: typer.Context) -> None:
     emit_success(cli, run_export(cli, target=ExportTarget.revisions))
 
 
-@export_legacy_app.command("playbook-map", hidden=True)
-def export_playbook_map_legacy(ctx: typer.Context) -> None:
-    _deprecate(
-        "opentide export playbook-map",
-        "removed from default generate — export module remains for one release",
-    )
-    cli = get_context(ctx)
-    cli.apply_environment()
-    from opentide.cli.services.export import run_playbook_map_export
-
-    run_playbook_map_export()
-    emit_success(cli, {"message": "Export playbook-map completed", "target": "playbook-map"})
-
-
 @extract_legacy_app.command("sentinel")
 def import_sentinel(ctx: typer.Context) -> None:
     from opentide.cli.services.extraction import run_extract

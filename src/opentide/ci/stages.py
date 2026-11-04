@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from pathlib import Path
@@ -13,13 +14,29 @@ from opentide.cli.ui.ci import REPORTS_DIR
 
 _ENV_REF = re.compile(r"\$([A-Z][A-Z0-9_]*)")
 _PLATFORMS_DIR = Path(__file__).resolve().parents[1] / "data" / "configurations" / "platforms"
-# Tenant URLs and ``$VAR`` references live anywhere under this directory
-# (``platforms/``, legacy ``systems/``, and a root ``platforms.toml``).
+# Tenant URLs and ``$VAR`` references can live in any file under this
+# directory (``platforms/<name>.toml``, a root ``platforms.toml``), so the
+# whole directory is restored from the default branch.
 _WORKSPACE_CONFIG_DIR = ".opentide/configurations"
 
 
-def pip_install(options: CiRenderOptions) -> str:
-    return f'pip install "opentide=={options.opentide_version}"'
+#: The pipeline-level variable that pins the opentide release every job
+#: installs: one place to change, where each job used to repeat the literal.
+OPENTIDE_VERSION_VARIABLE = "OPENTIDE_VERSION"
+
+
+def pip_install() -> str:
+    """Install the release :data:`OPENTIDE_VERSION_VARIABLE` names (every provider runs bash)."""
+    return f'pip install "opentide==${OPENTIDE_VERSION_VARIABLE}"'
+
+
+def opentide_version_entry(options: CiRenderOptions) -> str:
+    """``OPENTIDE_VERSION: "0.20.1"`` for the string-built GitHub and Azure files.
+
+    Double-quoted JSON is a YAML string, so a version such as ``1.0`` stays
+    one instead of becoming a float.
+    """
+    return f"{OPENTIDE_VERSION_VARIABLE}: {json.dumps(options.opentide_version)}"
 
 
 #: Printed when the default branch has no configuration to restore.
@@ -93,51 +110,38 @@ def platform_credential_names_for(platform: str) -> list[str]:
     return sorted(set(_ENV_REF.findall(path.read_text(encoding="utf-8"))))
 
 
-def _toml_without_comments(text: str) -> str:
-    """Drop TOML comments so a remark cannot invent a credential reference."""
-    out: list[str] = []
-    i = 0
-    length = len(text)
-    while i < length:
-        char = text[i]
-        if char in "\"'":
-            quote = char
-            if text.startswith(quote * 3, i):
-                end = text.find(quote * 3, i + 3)
-                if end == -1:
-                    out.append(text[i:])
-                    break
-                out.append(text[i : end + 3])
-                i = end + 3
-                continue
-            end = i + 1
-            while end < length:
-                if text[end] == "\\":
-                    end += 2
-                    continue
-                if text[end] == quote:
-                    end += 1
-                    break
-                end += 1
-            out.append(text[i:end])
-            i = end
-            continue
-        if char == "#":
-            while i < length and text[i] != "\n":
-                i += 1
-            continue
-        out.append(char)
-        i += 1
-    return "".join(out)
-
-
 def workspace_credential_names(repo: Path, platform: str) -> list[str]:
-    """``$VAR`` names in the enabled platform file, ignoring comments and literals."""
+    """The variables the enabled platform file's tenants reference, as opentide resolves them.
+
+    Each tenant's ``setup`` values that are ``$NAME`` or ``${NAME}`` as a whole
+    (:func:`opentide.platforms.config.setup_variables`): a comment, a literal
+    that starts with ``$`` and a nested value name nothing. A file that does
+    not parse names nothing, and the live check reports it.
+    """
+    import sys
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
+
+    from opentide.platforms.config import setup_variables
+
     path = platforms_config_dir(repo) / f"{platform}.toml"
     if not path.is_file():
         return []
-    text = _toml_without_comments(path.read_text(encoding="utf-8"))
-    return sorted(set(_ENV_REF.findall(text)))
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return []
+    tenants = data.get("tenants")
+    if isinstance(tenants, dict):
+        tenants = [tenants]
+    names: set[str] = set()
+    for tenant in tenants if isinstance(tenants, list) else []:
+        if isinstance(tenant, dict):
+            names.update(setup_variables(tenant.get("setup")))
+    return sorted(names)
 
 
 def query_validation_command(platform: str, *, repo: Path | None = None) -> str:
@@ -196,13 +200,37 @@ def report_path(command: str, report_format: str) -> str:
     return f"{REPORTS_DIR}/{command}{suffix}"
 
 
-def object_validate_commands(report_format: str | None = None) -> list[str]:
+#: The one Code Quality report the GitLab validate job declares: GitLab Runner
+#: uploads a ``raw`` report as a single file, and fails a job that lists more.
+CODEQUALITY_REPORT = f"{REPORTS_DIR}/codequality.json"
+
+
+def codequality_merge_command() -> str:
+    """Merge every gate command's Code Quality report into :data:`CODEQUALITY_REPORT`.
+
+    Runs in ``after_script``, after a failed command too; a report that is
+    missing or broken is skipped (see :mod:`opentide.ci.codequality`).
+    """
+    inputs = " ".join(report_path(command, "codequality") for command in GATE_COMMANDS)
+    return f"python -m opentide.ci.codequality --output {CODEQUALITY_REPORT} {inputs}"
+
+
+def object_validate_commands(
+    report_format: str | None = None, *, lint_changed: bool = False
+) -> list[str]:
     """The catalogue gate. Warnings fail, and a misnamed file fails too.
 
     With *report_format* (``sarif`` or ``codequality``) each command also
-    writes its findings to :func:`report_path`, and still prints them.
+    writes its findings to :func:`report_path`, and still prints them. With
+    *lint_changed*, ``lint`` checks only the object files the run changed (the
+    diff deploy reads), so an inherited catalogue can adopt the gate; the job
+    then needs the full history.
     """
-    commands = [f"opentide {command} --strict" for command in GATE_COMMANDS]
+    commands: list[str] = [
+        f"opentide {command} --strict"
+        + (" --changed" if lint_changed and command == "lint" else "")
+        for command in GATE_COMMANDS
+    ]
     if report_format is None:
         return commands
     return [
@@ -212,7 +240,7 @@ def object_validate_commands(report_format: str | None = None) -> list[str]:
 
 
 def validate_commands(options: CiRenderOptions) -> list[str]:
-    steps = object_validate_commands()
+    steps = object_validate_commands(lint_changed=options.lint_changed)
     for platform in query_platforms(options):
         steps.append(query_validation_command(platform, repo=options.repo))
     return steps
@@ -256,10 +284,14 @@ def github_deploy_env() -> str:
     return "\n".join(lines)
 
 
+#: The artifact every provider's document job keeps the rendered pages in.
+DOCS_ARTIFACT = "opentide-docs"
+
+
 def document_steps(options: CiRenderOptions) -> list[str]:
     if not options.docs_enabled:
         return []
-    return [f"opentide generate docs --output {options.docs_output}"]
+    return [f"opentide generate docs --output {shlex.quote(options.docs_output)}"]
 
 
 def inflight_generate_steps(options: CiRenderOptions | None = None) -> list[str]:

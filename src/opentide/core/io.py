@@ -246,7 +246,7 @@ def parse_yaml(text: str) -> Any:
 
 def load_yaml(path: Path) -> Any:
     """Load YAML from *path*."""
-    return parse_yaml(path.read_text(encoding="utf-8"))
+    return parse_yaml(path.read_text(encoding="utf-8-sig"))
 
 
 def not_utf8_problem(exc: UnicodeDecodeError) -> str:
@@ -356,6 +356,29 @@ def dump_yaml(
 
         dumper = IndentFullDumper
     write_text(path, yaml.dump(dict(data), Dumper=dumper, sort_keys=False))
+
+
+def write_text_atomically(path: Path, content: str) -> None:
+    """Replace *path* with UTF-8 *content* through a temporary file next to it.
+
+    An interrupted write (a cancel under ``opentide serve``, Ctrl-C) leaves the
+    previous file whole, never a truncated one. The temporary name ends in
+    ``.tmp``, so a leftover is never read as the artifact. Newlines are
+    written as :meth:`Path.write_text` writes them.
+    """
+    import contextlib
+    import os
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    try:
+        with open(temporary, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.replace(temporary, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temporary)
+        raise
 
 
 def write_text(path: Path, content: str) -> None:

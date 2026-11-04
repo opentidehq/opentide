@@ -11,8 +11,6 @@ from opentide.core import index_manager as index_mod
 from opentide.core import runtime
 from opentide.core.types import IndexSnapshot
 from opentide.models.configuration.deployment import DeploymentConfiguration
-from opentide.models.configuration.loading import validate_configuration
-from opentide.models.configuration.schema import SchemaConfiguration
 from opentide.models.objective import DetectionObjective
 from opentide.models.results import ValidationResult
 from opentide.models.rule import DetectionRule
@@ -240,12 +238,6 @@ class _ConfigurationAccessor:
         return dict(self._index["configurations"])
 
     @property
-    def Schema(self) -> dict[str, Any]:
-        document = dict(self._index["configurations"].get("schema", {}))
-        validate_configuration(SchemaConfiguration, document, file_key="schema.toml")
-        return document
-
-    @property
     def Sharing(self) -> dict[str, Any]:
         return dict(self._index["configurations"].get("sharing", {}))
 
@@ -422,7 +414,7 @@ class _GlobalConfig:
     @property
     def Index(self) -> dict[str, Any]:
         configs = self._index["configurations"]
-        return dict(configs.get("paths") or configs.get("global", {}))
+        return dict(configs.get("paths", {}))
 
     @property
     def _artifacts(self) -> dict[str, Any]:
@@ -438,15 +430,11 @@ class _GlobalConfig:
 
     @property
     def templates(self) -> dict[str, str]:
-        return dict(self._artifacts.get("templates") or self.Index.get("templates", {}))
+        return dict(self._artifacts.get("templates", {}))
 
     @property
     def objects(self) -> list[str]:
         return list(self.Index.get("objects", []))
-
-    @property
-    def indexes(self) -> Any:
-        return _paths_namespace(dict(self.Index.get("indexes", {})))
 
     @property
     def recomposition(self) -> dict[str, str]:
@@ -454,21 +442,11 @@ class _GlobalConfig:
 
     @property
     def json_schemas(self) -> dict[str, str]:
-        schemas = self._artifacts.get("schemas") or self.Index.get("json_schemas", {})
-        return dict(schemas)
-
-    @property
-    def config_metaschemas(self) -> dict[str, str]:
-        return dict(self.Index.get("config_metaschemas", {}))
-
-    @property
-    def config_json_schemas(self) -> dict[str, str]:
-        return dict(self.Index.get("config_json_schemas", {}))
+        return dict(self._artifacts.get("schemas", {}))
 
     @property
     def exports(self) -> Any:
-        export_map = self._artifacts.get("exports") or self.Index.get("exports", {})
-        return _paths_namespace(dict(export_map))
+        return _paths_namespace(dict(self._artifacts.get("exports", {})))
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):

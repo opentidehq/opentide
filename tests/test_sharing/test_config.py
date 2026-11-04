@@ -268,10 +268,10 @@ def test_parent_layer_merges_by_name(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 def test_fetch_configs_leaves_sharing_toml_to_the_sharing_loader(tmp_path: Path) -> None:
     (tmp_path / "sharing.toml").write_text('[[misp]]\nname = "a"\n', encoding="utf-8")
-    (tmp_path / "global.toml").write_text("[tide]\nidentifier = 'demo'\n", encoding="utf-8")
+    (tmp_path / "paths.toml").write_text("objects = ['rule']\n", encoding="utf-8")
     configs = _fetch_configs(tmp_path)
     assert "sharing" not in configs
-    assert configs["global"]["tide"]["identifier"] == "demo"
+    assert configs["paths"]["objects"] == ["rule"]
 
 
 def test_validate_sharing_config_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

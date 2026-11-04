@@ -30,6 +30,14 @@ def test_keep_active_rules_filters_deprecated() -> None:
     assert active == ["u2"]
 
 
+def test_keep_active_rules_keeps_a_rule_without_platform_blocks() -> None:
+    """``opentide new rule`` without ``--platform`` writes ``configurations:`` with no block."""
+    rules_index = {"none": {"configurations": None}, "missing": {}}
+    with patch("opentide.generation.framework.Opentide") as mock_ot:
+        mock_ot.Models.Index = {"rule": rules_index}
+        assert fw.keep_active_rules(["none", "missing"]) == ["none", "missing"]
+
+
 def test_relations_list_downstream_flat_mode() -> None:
     with (
         patch("opentide.generation.framework.get_type", return_value="threat"),

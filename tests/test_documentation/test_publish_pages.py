@@ -11,8 +11,8 @@ from tests.corpus_support import (
     CORPUS_RULE_UUIDS,
     TIDE_CORPUS_ROOT,
     clear_runtime_caches,
+    drop_legacy_objects,
     materialise_corpus,
-    real_rules_folder,
 )
 
 from opentide.documentation.cli import run
@@ -23,7 +23,7 @@ VARIANT_UUID = "00000000-0000-4000-8003-000000000201"
 @pytest.fixture
 def docs_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     repo = materialise_corpus(tmp_path / "corpus")
-    real_rules_folder(repo)
+    drop_legacy_objects(repo)
     monkeypatch.setenv("OPENTIDE_REPO_ROOT", str(repo))
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(repo))
     clear_runtime_caches()

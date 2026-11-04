@@ -1,4 +1,35 @@
-[[logsources]]
-name = "Placeholder Logsource"
-description = "Customize this field by adding logsources and assets entries under logsources.toml"
-system = "splunk"
+# The package default declares no log source, so no query is checked against
+# declared datasets until a workspace declares some.
+logsources = []
+
+# A log source is one dataset, and its `name` is that dataset: the KQL table
+# (or workspace function) for `sentinel` and `defender_for_endpoint`, the
+# sourcetype for `splunk`, the index pattern or data stream for `elastic`.
+# `*` matches any run of characters. Signals name a log source in
+# `data.logsources`, and names are unique per `system`.
+#
+# Declaring is opt-in per system: once a workspace declares a log source for
+# Sentinel, say, the query checks warn about a table a Sentinel query reads
+# that no Sentinel log source names. A log source may list its dataset's
+# columns, keyed by column name; the query checks then know them like the
+# columns of a table they ship. Copy the examples into your own
+# visibility.toml, without the `logsources = []` line:
+#
+# [[logsources]]
+# name = "Contoso_Audit_CL"
+# description = "Administrative audit events from the Contoso connector."
+# system = "sentinel"                  # or "defender_for_endpoint"
+#
+# [logsources.columns]
+# TimeGenerated = { type = "datetime" }
+# Actor_s = { type = "string", description = "UPN of the account that made the change." }
+#
+# [[logsources]]
+# name = "WinEventLog:Security"        # splunk: the sourcetype
+# description = "Security event log of the domain controllers."
+# system = "splunk"
+#
+# [[logsources]]
+# name = "logs-endpoint.events.*"      # elastic: the index pattern
+# description = "Elastic Defend endpoint data."
+# system = "elastic"

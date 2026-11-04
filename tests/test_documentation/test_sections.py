@@ -47,7 +47,6 @@ def _objective_payload(metadata: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": "Objective",
         "metadata": {**metadata, "schema": "objective::1.0"},
-        "composition": {"strategy": "synergetic", "description": "compose"},
         "objective": {
             "priority": "High",
             "type": "Threat",
@@ -210,7 +209,8 @@ def test_render_rule_sections_include_status_response_and_model_link(
     detection_model = render_detection_model_link(rule, formatter, catalog)
 
     assert "## Status" in status
-    assert "`STAGING`" in status
+    # The rule-level status is read by no command and is never shown as the rule's.
+    assert "`STAGING`" not in status
     assert "`High`" in status
     assert "## Response" in response
     assert "**Alert severity**:" in response

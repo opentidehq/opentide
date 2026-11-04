@@ -101,24 +101,54 @@ if Opentide.Platforms["sentinel"].can_validate:
     result = rule.validate_query("sentinel")
 ```
 
+The call checks the rule on every tenant a `PREVIEW` or `RELEASE` deploy sends it to, through the platform's [query runner](../cli/query.md). It writes nothing into the process environment, and reads only `OPENTIDE_QUERY_CHECK_TIMEOUT`, the seconds each query may take (default 120; a value that is not a positive number raises `ValueError`). For each query's verdict on each tenant, call the validator itself: `validate` returns a `LiveCheckReport` whose `checks` are `RuleCheck`s (`rule`, `tenant`, `errors`, `warnings`, and `code` `query_check_timeout` for a query that got no answer in time; `report.timed_out()` lists those). `validate(..., timeout=SECONDS)` sets the timeout for that call. A query with no answer fails only its own check; three in a row on one tenant raise `TenantUnreachableError`, as a connection, DNS or TLS failure does at once. See [Slow queries and timeouts](../cli/validate.md#slow-queries-and-timeouts).
+
+```python
+from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
+
+report = Opentide.Platforms["sentinel"].validator.validate([rule], DEPLOYABLE_STRATEGIES)
+for check in report.rejected():
+    print(check.tenant, check.errors)
+```
+
+### Offline, with the analysis engine
+
+`opentide.analysis` checks queries in-process, with the engine `pip install opentide` installs (no tenant, no SDK). It covers Sentinel and Defender KQL, Splunk SPL, Elastic (ES|QL, EQL, Kibana KQL, Lucene) and Carbon Black Lucene:
+
+```python
+from pathlib import Path
+from opentide.analysis import check_query, check_queries
+
+findings = check_query("SecurityEvent | wher EventID == 4688", language="kql", platform="sentinel")
+for finding in findings:
+    print(finding.code, finding.severity, finding.line, finding.column, finding.message)
+
+run = check_queries([Path("objects/rules/rule.yaml")], root=Path("."), platforms=None)
+for check in run.checks:
+    print(check.file_path, check.platform, check.language, check.errors, check.warnings)
+```
+
+Positions are 1-based lines and columns, in Unicode code points, `end_column` exclusive. A missing engine raises `EngineUnavailableError`, never a silent pass.
+
 ### The tenant check
 
-There is no in-process query scanner. A bare `opentide validate query` refuses and names `--live`. `--live` and `rule.validate_query(platform)` both call the tenant. A missing SDK or a missing plan fails that check.
+`rule.validate_query(platform)` and `opentide validate query --live` call the tenant. SentinelOne's S1QL is checked there only. A missing SDK or a missing plan fails that check.
 
 <Callout type="info">
-Three entry points, three behaviours — pick deliberately:
+Four entry points — pick deliberately:
 
 | Entry point | Behaviour |
 |---|---|
-| `rule.validate_query(platform)` | Live vendor call. Needs a configured tenant. |
-| `opentide validate query` | Refuses until you pass `--live`. |
-| MCP `validate_query` | Refuses until you pass `live: true`, which calls the tenant. |
+| `opentide.analysis.check_query` / `check_queries` | Offline, in-process, with the analysis engine |
+| `rule.validate_query(platform)` | Live vendor call. Needs a configured tenant |
+| `opentide validate query` | Offline by default; `--live` calls the tenant |
+| MCP `validate_query` | Offline by default; `live: true` calls the tenant |
 
-See [MCP tools](../mcp/tools.md).
+See [`opentide validate query`](../cli/validate.md) and [MCP tools](../mcp/tools.md).
 </Callout>
 
 A failed query validation may raise `Errors.TideQueryValidationError` for exceptional cases; expected pass/fail is returned in the `ValidationResult`. See [Models → errors](./models.md#errors).
 
 ## Source
 
-`src/opentide/validation/session.py`, `src/opentide/validation/scope.py`, `src/opentide/validation/issues.py`
+`src/opentide/validation/session.py`, `src/opentide/validation/scope.py`, `src/opentide/validation/issues.py`, `src/opentide/analysis.py`

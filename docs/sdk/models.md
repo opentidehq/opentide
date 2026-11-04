@@ -28,8 +28,8 @@ DetectionRule.__schema_identifier__  # "rule::1.0"
 | `name` | `str` | Display name |
 | `metadata` | `ObjectMetadata` | Identity (`uuid`), `schema_id`, `version`, `tlp` |
 | `description` | `str` | Rule narrative |
-| `status` | `str` | Deployment status (default `STAGING`) |
-| `severity` | `str` | Severity vocabulary (default `Informational`) |
+| `status` | `str \| None` | Read by no command; `None` when left out. A rule deploys, and promotion moves it, by each platform block's `status` (`platform_statuses`) |
+| `severity` | `str \| None` | Severity vocabulary, `None` when left out. Deploy sends `response.alert_severity`; `displayed_severity` is that, else this |
 | `techniques` | `list[str]` | ATT&CK technique IDs |
 | `configurations` | `RuleConfigurations` | Typed per-platform blocks (preferred) |
 | `platforms` | `dict` | Legacy flat platform dict |
@@ -62,6 +62,7 @@ rule.configurations.sentinel.query
 | `CrowdstrikeConfig` | `crowdstrike` | `platform::crowdstrike::1.0` | [crowdstrike-1.0](/docs/specifications/specs/platforms/crowdstrike-1.0/) |
 | `HarfangLabConfig` | `harfanglab` | `platform::harfanglab::1.0` | [harfanglab-1.0](/docs/specifications/specs/platforms/harfanglab-1.0/) |
 | `CarbonBlackConfig` | `carbon_black_cloud` | `platform::carbon_black_cloud::1.0` | [carbon-black-cloud-1.0](/docs/specifications/specs/platforms/carbon-black-cloud-1.0/) |
+| `SysdigConfig` | `sysdig` | `platform::sysdig::1.0` | [sysdig-1.0](/docs/specifications/specs/platforms/sysdig-1.0/) |
 
 ```python
 rule.configurations.sentinel.query
@@ -114,11 +115,14 @@ rule = Opentide.Rules[uuid]
 
 rule.validate() -> ValidationResult                      # schema + cross-object checks
 rule.validate_query(platform) -> ValidationResult        # query syntax (supported platforms)
+rule.run_query(platform, *, tenants=(), since=None, limit=100) -> QueryRun  # rows from the tenants
 rule.deploy(platform, dry_run=False, *, strategies=None) -> DeploymentResult
 rule.document() -> str                                   # or Opentide.render_rule(rule)
 ```
 
 `validate_query` runs the platform's query validator when one exists (Sentinel, Defender, Splunk, SentinelOne, Carbon Black); for CrowdStrike/HarfangLab it reports unsupported rather than faking a pass. See [Validation → query validation](./validation.md#query-validation).
+
+`run_query` sends the query this rule deploys to *platform* to the tenants `tenants` names (`["all"]` for every one; none for the only one) over the last `since` (default `24h`), and returns an `opentide.query.QueryRun`: `outcomes` holds one `TenantOutcome` per tenant, with `result.columns` and `result.rows` or an `error`. A call that cannot run raises `opentide.query.QueryUsageError`. It is [`opentide query --rule`](../cli/query.md) in Python; `opentide.query.run_query(platform, query=...)` runs a query that is not a rule's.
 
 <Callout type="warn">
 `Opentide.promote_rule()` raises `NotImplementedError` — change rule `status` in YAML and use `opentide deploy` (promotion runs inside deploy when configured).
@@ -150,7 +154,7 @@ if not result.ok:
 
 ## Errors
 
-Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catch the specific type you expect:
+Exceptions live under `opentide.core.errors.Errors`. Catch the specific type you expect:
 
 | Exception | Raised when |
 |-----------|-------------|
@@ -158,7 +162,7 @@ Exceptions live under `opentide.core.errors.Errors` (aliased `TideErrors`). Catc
 | `Errors.TideRuleDataModelErrors` | Invalid detection rule data structure. `Errors.TideMDRDataModelErrors` is the former name, kept as an alias |
 | `Errors.TideQueryValidationError` | A rule query fails validation |
 | `Errors.TideDeploymentErrors` | Any failure during deployment |
-| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host` |
+| `Errors.TenantConnectionError` | Cannot connect to the target tenant. Live query validation raises the subclass `TenantUnreachableError` (`opentide.platforms.transport`), which names the `tenant` and `host`, and counts in `timeouts` the queries in a row that got no answer when that is why |
 | `Errors.DetectionRuleCreationFailed` / `…UpdateFailed` / `…DeletionFailed` | Platform API operation failed |
 | `Errors.TideConfigurationErrors` | Invalid opentide configuration files |
 | `Errors.TenantNonExistingDeploymentPlan` | A tenant references a missing deployment plan |

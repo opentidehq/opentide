@@ -16,7 +16,7 @@ from opentide.generation import vscode_snippets
 def _mock_opentide_for_snippets(
     tmp_path: Path,
     *,
-    core: SimpleNamespace,
+    core: SimpleNamespace | None = None,
     systems: dict[str, object] | None = None,
     templates: dict[str, str] | None = None,
 ) -> SimpleNamespace:
@@ -30,7 +30,7 @@ def _mock_opentide_for_snippets(
             snippet_file=str(snippets_file),
             templates=str(templates_dir),
         ),
-        Core=core,
+        Core=core or SimpleNamespace(),
     )
     ot = SimpleNamespace(
         Configurations=SimpleNamespace(
@@ -38,10 +38,9 @@ def _mock_opentide_for_snippets(
                 Paths=paths,
                 metaschemas={"rule": "rule"},
                 templates=templates or {"rule": "rule.yaml"},
-                recomposition={"systems": "MDR Systems Deployment"},
             ),
             Documentation=SimpleNamespace(object_names={"rule": "Detection Rules"}),
-            Index={"systems": systems or {}},
+            Index={"platforms": systems or {}},
         )
     )
     return SimpleNamespace(ot=ot, snippets_file=snippets_file, templates_dir=templates_dir)
@@ -52,7 +51,7 @@ def test_vs_code_snippet_generator_reads_template(tmp_path: Path) -> None:
     template.write_text("name: Example\n", encoding="utf-8")
     snippet = vscode_snippets.vs_code_snippet_generator(template, "tide-rule")
     assert snippet["prefix"] == "tide-rule"
-    assert snippet["scope"] == "yaml"
+    assert snippet["scope"] == "yaml,opentide-yaml"
     assert snippet["description"] == "tide-rule"
     assert "name: Example" in snippet["body"]
 
@@ -119,49 +118,54 @@ def test_vs_code_snippet_generator_prepends_blank_lines(tmp_path: Path) -> None:
     assert "objective:" in snippet["body"][-1]
 
 
-def test_run_uses_legacy_subschemas_when_platform_templates_missing(tmp_path: Path) -> None:
-    mocked = _mock_opentide_for_snippets(
-        tmp_path,
-        core=SimpleNamespace(subschemas=str(tmp_path / "legacy-subschemas")),
-    )
+def test_run_writes_core_snippets(tmp_path: Path) -> None:
+    mocked = _mock_opentide_for_snippets(tmp_path)
     with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
         vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
-    assert "Detection Rules Template" in payload
     entry = payload["Detection Rules Template"]
+    assert entry["body"] == ["name: Example"]
     assert entry["prefix"] == "tide-rule"
-    assert entry["scope"] == "yaml"
+    assert entry["scope"] == "yaml,opentide-yaml"
     assert entry["description"] == (
         "Detection Rules: a new object from the generated template, "
         "with a tabstop on every field to fill."
     )
 
 
-def test_run_uses_platform_templates_when_subschemas_missing(tmp_path: Path) -> None:
+def test_a_workspace_without_platform_templates_uses_the_bundled_one(tmp_path: Path) -> None:
+    """Core templates from an earlier release, no ``platforms/`` folder yet."""
+    from opentide.package.paths import platform_templates_root
+
     mocked = _mock_opentide_for_snippets(
         tmp_path,
-        core=SimpleNamespace(platform_templates=str(tmp_path / "platform_templates")),
-    )
-    with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
-        vscode_snippets.run()
-    payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
-    assert "Detection Rules Template" in payload
-    assert payload["Detection Rules Template"]["body"] == ["name: Example"]
-    assert payload["Detection Rules Template"]["prefix"] == "tide-rule"
-
-
-def test_run_raises_when_enabled_platform_template_missing(tmp_path: Path) -> None:
-    mocked = _mock_opentide_for_snippets(
-        tmp_path,
-        core=SimpleNamespace(platform_templates=str(tmp_path / "missing-platforms")),
         systems={
             "sentinel": {
                 "platform": {"enabled": True, "name": "Microsoft Sentinel"},
             }
         },
     )
+    with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
+        vscode_snippets.run()
+    payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
+    snippet = payload["Platform configuration : Microsoft Sentinel Template"]
+    bundled = vscode_snippets.vs_code_snippet_generator(
+        platform_templates_root() / "sentinel.template.yaml", "tide-sentinel", blanks=1
+    )
+    assert snippet["body"] == bundled["body"]
+
+
+def test_run_raises_when_a_platform_has_no_template_anywhere(tmp_path: Path) -> None:
+    mocked = _mock_opentide_for_snippets(
+        tmp_path,
+        systems={"sentinel": {"platform": {"enabled": True, "name": "Microsoft Sentinel"}}},
+    )
     with (
         patch("opentide.generation.vscode_snippets.Opentide", mocked.ot),
+        patch(
+            "opentide.generation.vscode_snippets.platform_templates_root",
+            return_value=tmp_path / "missing",
+        ),
         pytest.raises(FileNotFoundError, match="platform sentinel"),
     ):
         vscode_snippets.run()
@@ -170,7 +174,6 @@ def test_run_raises_when_enabled_platform_template_missing(tmp_path: Path) -> No
 def test_run_raises_when_core_template_missing(tmp_path: Path) -> None:
     mocked = _mock_opentide_for_snippets(
         tmp_path,
-        core=SimpleNamespace(platform_templates=str(tmp_path / "platform_templates")),
         templates={"rule": "missing-rule.yaml"},
     )
     with (
@@ -181,37 +184,38 @@ def test_run_raises_when_core_template_missing(tmp_path: Path) -> None:
 
 
 def test_run_emits_enabled_platform_snippets(tmp_path: Path) -> None:
-    platform_root = tmp_path / "platform_templates" / "MDR Systems Deployment" / "Templates"
-    platform_root.mkdir(parents=True)
-    (platform_root / "Microsoft Sentinel Template.yaml").write_text("query: \n", encoding="utf-8")
     mocked = _mock_opentide_for_snippets(
         tmp_path,
-        core=SimpleNamespace(platform_templates=str(tmp_path / "platform_templates")),
         systems={
             "sentinel": {
                 "platform": {"enabled": True, "name": "Microsoft Sentinel"},
-            }
+            },
+            "splunk": {"platform": {"enabled": False, "name": "Splunk Enterprise"}},
         },
     )
+    # Read from the workspace, by the platform file's name, never by display name.
+    platforms = mocked.templates_dir / "platforms"
+    platforms.mkdir()
+    (platforms / "sentinel.template.yaml").write_text("query: \n", encoding="utf-8")
     with patch("opentide.generation.vscode_snippets.Opentide", mocked.ot):
         vscode_snippets.run()
     payload = json.loads(mocked.snippets_file.read_text(encoding="utf-8"))
     key = "Platform configuration : Microsoft Sentinel Template"
     assert key in payload
     assert payload[key]["prefix"] == "tide-sentinel"
-    assert payload[key]["scope"] == "yaml"
+    assert payload[key]["scope"] == "yaml,opentide-yaml"
     assert payload[key]["body"][0] == ""
     assert "query: ${1:query}" in payload[key]["body"]
     assert payload[key]["description"] == (
         "Microsoft Sentinel: the platform block for a detection rule's "
         "configurations, from the generated template."
     )
+    assert not any("Splunk" in title for title in payload)
 
 
 def test_run_honors_snippets_path_override(tmp_path: Path) -> None:
     mocked = _mock_opentide_for_snippets(
         tmp_path,
-        core=SimpleNamespace(platform_templates=str(tmp_path / "platform_templates")),
     )
     override = tmp_path / "custom" / "override.code-snippets"
     vscode_snippets.SNIPPETS_PATH = str(override)

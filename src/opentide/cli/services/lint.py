@@ -5,21 +5,23 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import structlog
 import yaml
 
 from opentide.cli.enums import LintCheck
-from opentide.cli.ui.contract import ISSUES_FOUND, NO_WORKSPACE_STEP, NextAction
+from opentide.cli.ui.contract import ISSUES_FOUND, NO_WORKSPACE_STEP, USAGE_ERROR, NextAction
 from opentide.cli.ui.diagnostics import (
     LINT_CODES,
+    Diagnostic,
     SourceFiles,
     annotate,
     diagnostic_from_lint_finding,
+    lint_severity,
 )
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.errors import UserFileError
@@ -29,9 +31,18 @@ from opentide.core.io import (
     parse_yaml,
     root_mapping_problem,
 )
-from opentide.core.lint_config import LintConfig, Severity, load_lint_config
-from opentide.documentation.markdown.links import slugify
-from opentide.registry.catalogue import NESTED_OBJECT_FILE, nested_file_message, scan_object_dir
+from opentide.core.lint_config import FilenameConfig, LintConfig, Severity, load_lint_config
+from opentide.registry.catalogue import (
+    NESTED_OBJECT_FILE,
+    is_debug_file_name,
+    nested_file_message,
+    object_stem,
+    scan_object_dir,
+    with_object_stem,
+)
+
+if TYPE_CHECKING:
+    from opentide.analysis import Finding
 
 logger = structlog.get_logger("opentide.cli.services.lint")
 
@@ -42,6 +53,9 @@ _OBJECT_FAMILIES = ("threats", "objectives", "rules")
 class _ObjectRecord:
     path: Path
     relative: str
+    #: The folder under ``objects/`` (``threats``, ``objectives``, ``rules``), which picks
+    #: its ``[filenames.<kind>]`` convention.
+    kind: str | None = None
     name: str | None = None
     uuid: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -52,6 +66,8 @@ class _ObjectRecord:
     key_lines: dict[str, int] = field(default_factory=dict)
     #: Each value ``opentide new`` marked as a placeholder.
     placeholder_lines: list[_Marked] = field(default_factory=list)
+    #: The file's text, for the queries check; ``None`` when it was not read.
+    text: str | None = None
 
 
 def _object_files(root: Path) -> tuple[list[Path], list[Path]]:
@@ -128,6 +144,7 @@ _MARKED_KEY = re.compile(r"^(?P<lead>\s*(?:-\s+)?)(?P<key>[A-Za-z_][\w.-]*)\s*:(
 _ITEM = re.compile(r"^(?P<lead>(?P<indent>\s*)-\s+)")
 
 PLACEHOLDER_CODE = LINT_CODES["placeholder"]
+PATTERN_CODE = LINT_CODES["filename_pattern"]
 PLACEHOLDER_HELP = "replace the value, then delete the '# opentide:placeholder' comment"
 
 
@@ -194,9 +211,11 @@ def _placeholder_lines(text: str) -> list[_Marked]:
 
 def _load_record(root: Path, path: Path) -> _ObjectRecord:
     relative = path.relative_to(root).as_posix()
-    record = _ObjectRecord(path=path, relative=relative)
+    parts = path.relative_to(root).parts
+    kind = parts[1] if len(parts) == 3 and parts[0] == "objects" else None
+    record = _ObjectRecord(path=path, relative=relative, kind=kind)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
         data: Any = parse_yaml(text)
     except yaml.YAMLError as exc:
         problem = describe_yaml_error(exc)
@@ -210,6 +229,7 @@ def _load_record(root: Path, path: Path) -> _ObjectRecord:
     except OSError as exc:
         record.parse_error = str(exc)
         return record
+    record.text = text
     record.key_lines = _top_level_key_lines(text)
     record.placeholder_lines = _placeholder_lines(text)
     if (problem := root_mapping_problem(data)) is not None:
@@ -302,42 +322,75 @@ def _finding(
     }
 
 
-def _assign_expected_stems(records: list[_ObjectRecord]) -> None:
+def _assign_expected_stems(records: list[_ObjectRecord], filenames: FilenameConfig) -> None:
+    """Give each named object the stem its file should have, unique within its folder.
+
+    A stem already in use claims itself first. Another object that wants it gets
+    ``-{uuid[:8]}`` appended. Stems are compared case-insensitively: ``Rule`` and
+    ``rule`` are one file on macOS and Windows (``slug`` stems are lower case, so
+    this never changes them). Nothing is assigned when the style compares no
+    stem, or leaves none to expect. Each folder follows its kind's convention.
+    """
     grouped: dict[Path, list[_ObjectRecord]] = defaultdict(list)
     for record in records:
         if record.parse_error:
             continue
         grouped[record.path.parent].append(record)
     for group in grouped.values():
-        taken: set[str] = set()
+        # A debug fixture and the rule it copies share a name but not a file
+        # (``B.debug.yaml``, ``B.yaml``): each kind of file claims its own stems.
+        taken: set[tuple[bool, str]] = set()
+        # One folder holds one kind of object.
+        config = filenames.for_kind(group[0].kind)
         for record in group:
-            if record.name and slugify(record.name) == record.path.stem:
-                record.expected_stem = record.path.stem
-                taken.add(record.path.stem)
+            stem = object_stem(record.path)
+            if record.name and config.stem_for(record.name) == stem:
+                record.expected_stem = stem
+                taken.add(_stem_key(record, stem))
         for record in group:
             if record.expected_stem or not record.name:
                 continue
-            stem = slugify(record.name)
-            if stem not in taken:
+            stem = config.stem_for(record.name)
+            if stem is None:
+                continue
+            if _stem_key(record, stem) not in taken:
                 record.expected_stem = stem
-                taken.add(stem)
+                taken.add(_stem_key(record, stem))
                 continue
             suffix = (record.uuid or "object")[:8]
             candidate = f"{stem}-{suffix}"
             index = 1
-            while candidate in taken:
+            while _stem_key(record, candidate) in taken:
                 candidate = f"{stem}-{suffix}-{index}"
                 index += 1
             record.expected_stem = candidate
-            taken.add(candidate)
+            taken.add(_stem_key(record, candidate))
+
+
+def _stem_key(record: _ObjectRecord, stem: str) -> tuple[bool, str]:
+    """What a stem claims in its folder: debug or not, and the stem whatever its case."""
+    return is_debug_file_name(record.path.name), stem.casefold()
 
 
 def _filename_findings(
-    root: Path, records: list[_ObjectRecord], *, fix: bool
+    root: Path,
+    records: list[_ObjectRecord],
+    *,
+    fix: bool,
+    filenames: FilenameConfig,
+    reported: frozenset[Path] | None = None,
 ) -> list[dict[str, object]]:
+    """Filename findings on *reported* (default every record).
+
+    Stems are assigned across all *records*, so a file outside *reported*
+    still claims its stem, and a narrowed run reports what a full run would.
+    """
     findings: list[dict[str, object]] = []
-    _assign_expected_stems(records)
+    _assign_expected_stems(records, filenames)
     for record in records:
+        if reported is not None and record.path not in reported:
+            continue
+        config = filenames.for_kind(record.kind)
         if record.parse_error:
             findings.append(
                 _finding(
@@ -350,44 +403,93 @@ def _filename_findings(
                 )
             )
             continue
+        current = record.path
         if not record.name:
+            what = " slug" if config.style == "slug" else ""
             findings.append(
                 _finding(
                     LintCheck.filenames,
                     "error",
                     record,
-                    "Object has no name; cannot check filename slug",
+                    f"Object has no name; cannot check filename{what}",
                     code=LINT_CODES["name"],
                     field="name",
                     yaml_line=_key_line(record, "name"),
                 )
             )
-            continue
-        expected = record.expected_stem
-        if expected is None or expected == record.path.stem:
-            continue
-        dest = record.path.with_name(f"{expected}{record.path.suffix}")
-        finding = _finding(
+        else:
+            current = _stem_finding(root, record, config, findings, fix=fix)
+        _pattern_finding(record, current, config, findings)
+    return findings
+
+
+def _stem_finding(
+    root: Path,
+    record: _ObjectRecord,
+    config: FilenameConfig,
+    findings: list[dict[str, object]],
+    *,
+    fix: bool,
+) -> Path:
+    """Report a stem that is not the one the style expects; return the file's path afterwards."""
+    expected = record.expected_stem
+    if expected is None or expected == object_stem(record.path):
+        return record.path
+    # The suffix stays whole: ``x.debug.yaml`` becomes ``B.debug.yaml``, never the live ``B.yaml``.
+    dest = with_object_stem(record.path, expected)
+    if config.style == "slug":
+        message = f"Filename {record.path.name!r} does not match slugify(name)={expected!r}"
+    else:
+        message = f"Filename {record.path.name!r} does not match name: expected {expected!r}"
+    finding = _finding(
+        LintCheck.filenames,
+        "warning",
+        record,
+        message,
+        code=LINT_CODES["filename"],
+        expected=dest.relative_to(root).as_posix(),
+    )
+    renamed = record.path
+    if fix:
+        if dest.exists() and not _case_only_rename(record.path, dest):
+            finding["fixed"] = False
+            finding["message"] = (
+                f"{finding['message']}; --fix skipped because {finding['expected']} exists"
+            )
+        else:
+            _rename(record.path, dest)
+            finding["fixed"] = True
+            finding["from"] = record.relative
+            finding["path"] = dest.relative_to(root).as_posix()
+            renamed = dest
+    findings.append(finding)
+    return renamed
+
+
+def _pattern_finding(
+    record: _ObjectRecord,
+    current: Path,
+    config: FilenameConfig,
+    findings: list[dict[str, object]],
+) -> None:
+    """Report a stem the configured pattern does not match, as the file is now named.
+
+    *current* is the file after ``--fix``: a rename to the expected stem is judged
+    by the stem it produced. It cannot be fixed, so the finding has no ``expected``.
+    """
+    pattern = config.pattern
+    if pattern is None or pattern.fullmatch(object_stem(current)):
+        return
+    findings.append(
+        _finding(
             LintCheck.filenames,
             "warning",
             record,
-            f"Filename {record.path.name!r} does not match slugify(name)={expected!r}",
-            code=LINT_CODES["filename"],
-            expected=dest.relative_to(root).as_posix(),
+            f"Filename {current.name!r} does not match the configured filename pattern",
+            code=PATTERN_CODE,
+            help=f"rename the file so its name matches the pattern {pattern.pattern}",
         )
-        if fix:
-            if dest.exists() and not _case_only_rename(record.path, dest):
-                finding["fixed"] = False
-                finding["message"] = (
-                    f"{finding['message']}; --fix skipped because {finding['expected']} exists"
-                )
-            else:
-                _rename(record.path, dest)
-                finding["fixed"] = True
-                finding["from"] = record.relative
-                finding["path"] = dest.relative_to(root).as_posix()
-        findings.append(finding)
-    return findings
+    )
 
 
 _CASE_RENAME_SUFFIX = ".opentide-case-rename"
@@ -468,6 +570,74 @@ def _placeholder_findings(records: list[_ObjectRecord]) -> list[dict[str, object
     ]
 
 
+def _query_findings(root: Path, records: list[_ObjectRecord]) -> list[dict[str, object]]:
+    """The engine's style findings on each object: query warnings and notes, platform advisories.
+
+    A query the engine rejects (an error) is ``opentide validate``'s finding,
+    and the engine's object checks are validate's and lint's other checks'.
+    A placeholder query is the ``placeholders`` check's.
+    Raises :class:`~opentide.analysis.EngineUnavailableError`.
+    """
+    from opentide.analysis import (
+        DECLARED_DATASET_CODES,
+        ELASTIC_ADVISORY_CODES,
+        SYSDIG_ADVISORY_CODES,
+        check_file,
+        install_workspace_visibility,
+        workspace,
+    )
+    from opentide.cli.ui.diagnostics import diagnostic_from_engine, engine_reference
+
+    # The datasets visibility.toml declares, as validate and the editor see them.
+    install_workspace_visibility(root)
+    space = workspace(root)
+    findings: list[dict[str, object]] = []
+    for record in records:
+        if record.parse_error or record.text is None:
+            continue
+        lines = record.text.splitlines()
+        marked = {marked.line + 1 for marked in record.placeholder_lines}
+        for finding in check_file(space, record.path, record.text):
+            if finding.severity == "error" or _in_placeholder(finding, lines, marked):
+                continue
+            if (
+                engine_reference(finding.code) is None
+                and finding.code not in ELASTIC_ADVISORY_CODES
+                and finding.code not in SYSDIG_ADVISORY_CODES
+                and finding.code not in DECLARED_DATASET_CODES
+            ):
+                continue
+            findings.append(
+                {
+                    "check": LintCheck.queries.value,
+                    "severity": "warning" if finding.severity == "warning" else "info",
+                    "path": record.relative,
+                    "yaml_line": finding.line - 1,
+                    "uuid": record.uuid,
+                    "message": finding.message,
+                    "_code": finding.code,
+                    "_field_path": list(finding.field_path),
+                    "_diagnostic": diagnostic_from_engine(
+                        finding, file_path=record.path, workspace=root
+                    ),
+                }
+            )
+    return findings
+
+
+def _in_placeholder(finding: Finding, lines: list[str], marked: set[int]) -> bool:
+    """Whether *finding* is in a ``...`` stand-in under a marked key (1-based *marked* lines)."""
+    from opentide.validation.queries import is_stand_in
+
+    line = finding.line
+    if not (line in marked or line - 1 in marked) or not 0 < line <= len(lines):
+        return False
+    text = lines[line - 1]
+    if line in marked:  # inline, `query: ...  # opentide:placeholder`: the value after the key
+        text = text.split(":", 1)[-1]
+    return is_stand_in(text.lstrip())
+
+
 def _rewrite_renamed_paths(findings: list[dict[str, object]]) -> None:
     """Point earlier findings at the path ``--fix`` just renamed the file to."""
     renamed = {
@@ -491,6 +661,93 @@ def _apply_severity(findings: list[dict[str, object]], config: LintConfig) -> No
             finding["severity"] = override
 
 
+@dataclass(frozen=True)
+class _Scope:
+    """The object files a narrowed run reports on (``--changed`` or ``--file``)."""
+
+    #: ``scope`` in the result: ``changed`` or ``selected``.
+    label: str
+    files: frozenset[Path]
+    #: The flags that chose them, for the ``lint --fix`` next step.
+    flags: tuple[str, ...]
+    #: Why ``--changed`` chose nothing, when the checkout has no commit yet.
+    warning: str | None = None
+
+
+_NO_COMMITS_ADVICE = "commit the files, or drop --changed to lint every object file"
+
+
+def _scope_refused(target: Path, message: str, *, exit_code: int) -> dict[str, object]:
+    result: dict[str, object] = {
+        "message": message,
+        "path": str(target),
+        "checks": [],
+        "findings": [],
+        "count": 0,
+        "fixed": 0,
+        "status": "failed",
+        "_exit_code": exit_code,
+    }
+    if exit_code == 2:
+        result["_failure_code"] = USAGE_ERROR
+    return result
+
+
+def _lint_scope(
+    target: Path, candidates: Sequence[Path], *, files: Sequence[str], changed: bool
+) -> _Scope | dict[str, object] | None:
+    """The files ``--changed`` or ``--file`` select, or the result refusing them.
+
+    ``None`` when neither is given: the whole catalogue. ``--file`` matches as
+    in ``opentide validate``; each target must select an object file directly
+    in its folder, or the run fails (exit ``1``) and names it under ``unmatched``.
+    ``--changed`` reads the diff ``deploy`` and ``validate query --changed`` read.
+    """
+    if changed and files:
+        return _scope_refused(target, "--changed cannot be combined with --file", exit_code=2)
+    if files:
+        from opentide.validation.scope import ValidationScope
+
+        roots = tuple(dict.fromkeys((target, Path.cwd().resolve())))
+        by_file = ValidationScope.narrow(files=frozenset(files), roots=roots)
+        objects = [path for path in candidates if path.parent.parent == target / "objects"]
+        unmatched = by_file.unmatched_file_targets([(path.name, path) for path in objects])
+        if unmatched:
+            folders = ", ".join(f"objects/{family}" for family in _OBJECT_FAMILIES)
+            result = _scope_refused(
+                target,
+                f"No object file directly in {folders} matched: {', '.join(unmatched)}",
+                exit_code=1,
+            )
+            result["unmatched"] = unmatched
+            return result
+        chosen = frozenset(path for path in candidates if by_file.matches_file(path.name, path))
+        flags = tuple(item for raw in files for item in ("--file", raw))
+        return _Scope("selected", chosen, flags)
+    if not changed:
+        return None
+    from opentide.deployment.git_repo import (
+        MissingGitCheckout,
+        changed_files_under,
+        diff_error_message,
+        no_commits_warning,
+    )
+
+    try:
+        diff, source = changed_files_under(target)
+    except MissingGitCheckout as exc:
+        message = f"--changed needs a git checkout; no .git was found from {exc.searched}"
+        return _scope_refused(target, message, exit_code=1)
+    except Exception as exc:  # the diff's own failures: a shallow clone, a missing commit
+        message = diff_error_message(exc, "computing the changed files")
+        return _scope_refused(target, message, exit_code=1)
+    logger.info("lint_scope_changed", diff=source.name, files=len(diff))
+    changed_files = set(diff)
+    chosen = frozenset(path for path in candidates if path in changed_files)
+    warning = None if diff else no_commits_warning(_NO_COMMITS_ADVICE)
+    return _Scope("changed", chosen, ("--changed",), warning)
+
+
 def run_lint(
     root: Path,
     *,
@@ -498,11 +755,16 @@ def run_lint(
     fix: bool = False,
     strict: bool = False,
     config: LintConfig | None = None,
+    files: Sequence[str] = (),
+    changed: bool = False,
 ) -> dict[str, object]:
     """Run catalogue hygiene checks without a full registry rebuild.
 
     *config* defaults to the workspace's resolved ``lint.toml``. *checks* (the
     CLI's ``--check``) wins over it: a named check runs even when disabled there.
+    *files* (``--file``) and *changed* (``--changed``) narrow every check to the
+    files they select. The filenames check still reads the whole folder, so a
+    stem another file holds is still a collision.
     """
     target = root.resolve()
     if config is None:
@@ -523,14 +785,44 @@ def run_lint(
             }
     selected = list(checks) if checks else [LintCheck(name) for name in config.enabled_checks()]
     object_files, nested = _object_files(target)
-    records = [_load_record(target, path) for path in object_files]
+    scope = _lint_scope(target, [*object_files, *nested], files=files, changed=changed)
+    if isinstance(scope, dict):
+        scope["checks"] = [item.value for item in selected]
+        return scope
+    reported = None if scope is None else scope.files
+    if reported is not None:
+        nested = [path for path in nested if path in reported]
+    # The filenames check compares stems across each folder; the others read
+    # only the files they report on.
+    every = reported is None or LintCheck.filenames in selected
+    records = [
+        _load_record(target, path)
+        for path in object_files
+        if every or (reported is not None and path in reported)
+    ]
+    shown = [record for record in records if reported is None or record.path in reported]
     findings: list[dict[str, object]] = []
     if LintCheck.metadata in selected:
-        findings.extend(_metadata_findings(records, config.required_metadata))
+        findings.extend(_metadata_findings(shown, config.required_metadata))
     if LintCheck.placeholders in selected:
-        findings.extend(_placeholder_findings(records))
+        findings.extend(_placeholder_findings(shown))
+    if LintCheck.queries in selected:
+        from opentide.analysis import EngineUnavailableError
+
+        try:
+            findings.extend(_query_findings(target, shown))
+        except EngineUnavailableError as exc:
+            from opentide.cli.services.engine import engine_unavailable_result
+
+            return engine_unavailable_result(
+                exc, path=str(target), checks=[item.value for item in selected], findings=[]
+            )
     if LintCheck.filenames in selected:
-        findings.extend(_filename_findings(target, records, fix=fix))
+        findings.extend(
+            _filename_findings(
+                target, records, fix=fix, filenames=config.filenames, reported=reported
+            )
+        )
         _rewrite_renamed_paths(findings)
         findings.extend(_nested_findings(target, nested))
     _apply_severity(findings, config)
@@ -553,7 +845,7 @@ def run_lint(
         1 for item in findings if item.get("expected") and item.get("fixed") is not True
     )
     _add_diagnostic_fields(target, findings)
-    files = len(records)
+    linted = len(shown)
     fixed = sum(1 for item in findings if item.get("fixed") is True)
     result: dict[str, Any] = {
         "message": ("Catalogue lint found issues" if findings else "Catalogue lint passed"),
@@ -565,30 +857,43 @@ def run_lint(
         "status": status,
         "_exit_code": 1 if status == "failed" else 0,
         "_summary": {
-            "files": files,
+            "files": linted,
             "findings": len(left),
             "errors": sum(1 for item in left if item.get("severity") == "error"),
             "warnings": sum(1 for item in left if item.get("severity") == "warning"),
             "notes": sum(1 for item in left if item.get("severity") == "info"),
             "fixed": fixed,
         },
-        "_outcome": _outcome_line(left, files=files, fixed=fixed, root=target),
+        "_outcome": _outcome_line(left, files=linted, fixed=fixed, root=target),
     }
+    if scope is not None:
+        result["scope"] = scope.label
+        if scope.warning is not None:
+            result["warnings"] = [scope.warning]
+        if not linted and not left:
+            result["_outcome"] = (
+                "No changed object file to lint"
+                if scope.label == "changed"
+                else "No object file to lint"
+            )
     if status == "failed":
         result["_failure_code"] = ISSUES_FOUND
     elif left and all(item.get("severity") == "info" for item in left):
         # Notes only: nothing to warn about, so the line takes ✓, not the ``!``
         # of a warning (post-merge end-to-end run). JSON status stays "issues".
         result["_outcome_kind"] = "ok"
-    if not files:
+    if not linted and scope is None:
         from opentide.core.root import is_workspace_root
 
         if not is_workspace_root(target):
             result["_next_actions"] = [NO_WORKSPACE_STEP]
     if renamable:
+        import shlex
+
+        narrowed = "" if scope is None else " " + shlex.join(scope.flags)
         result["_next_actions"] = [
             NextAction(
-                "opentide lint --fix",
+                f"opentide lint --fix{narrowed}",
                 f"rename {renamable} {'file' if renamable == 1 else 'files'} to match their names",
             )
         ]
@@ -604,6 +909,12 @@ def _add_diagnostic_fields(root: Path, findings: list[dict[str, object]]) -> Non
         position = finding.pop("_position", None)
         if isinstance(position, tuple):
             finding["line"], finding["column"] = position
+        engine = finding.pop("_diagnostic", None)
+        if isinstance(engine, Diagnostic):
+            # The engine framed it; the severity is lint's, after lint.toml.
+            severity = lint_severity(str(finding["severity"]))
+            annotate(finding, replace(engine, severity=severity))
+            continue
         annotate(finding, diagnostic_from_lint_finding(finding, root=root, sources=sources))
 
 

@@ -16,14 +16,16 @@ from opentide.generation.pydantic_templates import (
 )
 from opentide.models.platform_schema import platform_model_for_key
 from opentide.models.schema_registry import identifiers_for_families, is_registered, resolve_model
+from opentide.package.paths import platform_template_name, platform_templates_root
 from opentide.registry.artifacts import template_artifact_name
 
 logger = get_logger(__name__)
 
 CONFIG_INDEX: dict[str, Any] = {}
 PATHS: dict[str, Any] = {}
-PLATFORM_TEMPLATES_FOLDER: Path = Path(".")
-RECOMPOSITION: Any = {}
+
+#: Folder under the workspace templates directory that holds platform block templates.
+PLATFORM_TEMPLATES_DIR = "platforms"
 
 
 def _schema_id_from_template_filename(filename: str) -> str | None:
@@ -37,19 +39,55 @@ def _schema_id_from_template_filename(filename: str) -> str | None:
     return f"{parts[0]}::{int(parts[1])}.{int(parts[2])}"
 
 
-def _platform_section(entry: dict[str, Any]) -> dict[str, Any]:
-    section = entry.get("platform") or entry.get("tide")
-    return section if isinstance(section, dict) else {}
+def enabled_platforms(configurations: dict[str, Any]) -> list[str]:
+    """Platforms with a rule block whose merged ``[platform] enabled`` is true, in file order.
+
+    A plugin's ``platforms/<id>.toml`` has no rule-block model, so no
+    template or snippet (#736).
+    """
+    from opentide.models.platform import PLATFORM_CONFIG_MODELS
+
+    platforms = configurations.get("platforms")
+    if not isinstance(platforms, dict):
+        return []
+    enabled: list[str] = []
+    for identifier, document in platforms.items():
+        if identifier not in PLATFORM_CONFIG_MODELS:
+            continue
+        section = document.get("platform") if isinstance(document, dict) else None
+        if isinstance(section, dict) and section.get("enabled") is True:
+            enabled.append(str(identifier))
+    return enabled
+
+
+def platform_template_path(templates_dir: Path, platform: str) -> Path:
+    """Where ``generate templates`` writes *platform*'s block template."""
+    return templates_dir / PLATFORM_TEMPLATES_DIR / platform_template_name(platform)
+
+
+def write_bundled_platform_templates(directory: Path | None = None) -> list[Path]:
+    """Render every platform's block template into the package (or *directory*).
+
+    For maintainers: run after changing a platform model, so the bundled
+    templates the golden test compares stay in step.
+    """
+    from opentide.models.platform import PLATFORM_CONFIG_MODELS
+
+    target = directory or platform_templates_root()
+    written: list[Path] = []
+    for platform in sorted(PLATFORM_CONFIG_MODELS):
+        path = target / platform_template_name(platform)
+        write_model_template(path, platform_model_for_key(platform), indent=2)
+        written.append(path)
+    return written
 
 
 def _refresh_renderer_context() -> None:
     """Rebind renderer paths after env or index changes (tests, reload)."""
-    global CONFIG_INDEX, PATHS, PLATFORM_TEMPLATES_FOLDER, RECOMPOSITION
+    global CONFIG_INDEX, PATHS
 
     CONFIG_INDEX = Opentide.Configurations.Index
     PATHS = Opentide.Configurations.Global.Paths.Index
-    PLATFORM_TEMPLATES_FOLDER = Path(PATHS.get("platform_templates", PATHS.get("subschemas", ".")))
-    RECOMPOSITION = Opentide.Configurations.Global.recomposition
 
 
 def run() -> None:
@@ -91,31 +129,13 @@ def run() -> None:
         else:
             generate_core_template(meta, configured, required_metadata=required_metadata)
 
-    for recomp in RECOMPOSITION:
-        subschema_type_folder = RECOMPOSITION[recomp]
-        recomp_configs = CONFIG_INDEX.get(recomp, {})
-        if not isinstance(recomp_configs, dict):
-            recomp_configs = CONFIG_INDEX.get("platforms", {})
-        for entry, recomp_entry in recomp_configs.items():
-            if not isinstance(recomp_entry, dict):
-                continue
-            platform_section = _platform_section(recomp_entry)
-            if not platform_section or platform_section.get("enabled") is not True:
-                continue
-
-            subschema_name = (
-                platform_section.get("name") or platform_section.get("subschema") or entry
-            )
-
-            subschema_template_path = (
-                PLATFORM_TEMPLATES_FOLDER
-                / subschema_type_folder
-                / "Templates"
-                / f"{subschema_name} Template.yaml"
-            )
-            platform_model = platform_model_for_key(entry)
-            logger.info("generating_template", detail=subschema_name)
-            write_model_template(subschema_template_path, platform_model, indent=2)
+    for platform in enabled_platforms(CONFIG_INDEX):
+        logger.info("generating_template", detail=platform)
+        write_model_template(
+            platform_template_path(templates_dir, platform),
+            platform_model_for_key(platform),
+            indent=2,
+        )
 
     logger.info("all_templates_correctly_generated")
 

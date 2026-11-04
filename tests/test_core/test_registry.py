@@ -26,7 +26,7 @@ def test_opentide_initialise_and_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     sample_index = {
         "objects": {"rule": {}, "threat": {}, "objective": {}},
         "files": {},
-        "configurations": {"global": {"objects": []}, "systems": {}},
+        "configurations": {"paths": {"objects": []}, "systems": {}},
         "paths": {},
         "vocabs": {},
         "metaschemas": {},
@@ -51,12 +51,11 @@ def test_opentide_lookup_returns_none_for_missing() -> None:
     assert Opentide.lookup("missing-uuid") is None
 
 
-def test_opentide_configuration_schema_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_opentide_configuration_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
     Opentide._index = {
         "configurations": {
-            "schema": {"templates": {"rule::description": "Describe the rule."}},
             "sharing": {"enabled": True},
-            "global": {"objects": [], "metaschemas": {}, "templates": {}, "indexes": {}},
+            "paths": {"objects": [], "metaschemas": {}},
             "systems": {},
             "documentation": {},
             "deployment": {"statuses": {}},
@@ -65,8 +64,8 @@ def test_opentide_configuration_schema_sharing(monkeypatch: pytest.MonkeyPatch) 
         "objects": {"rule": {}, "threat": {}, "objective": {}},
     }
     Opentide._initialised = True
-    assert Opentide.Configuration.Schema["templates"] == {"rule::description": "Describe the rule."}
     assert Opentide.Configuration.Sharing["enabled"] is True
+    assert not hasattr(Opentide.Configuration, "Schema")
 
 
 def test_opentide_debug_ci_root_properties() -> None:
@@ -229,7 +228,7 @@ def test_opentide_reload_refreshes_index(monkeypatch: pytest.MonkeyPatch) -> Non
     sample_index = {
         "objects": {"rule": {}, "threat": {}, "objective": {}},
         "files": {},
-        "configurations": {"global": {"objects": []}, "systems": {}},
+        "configurations": {"paths": {"objects": []}, "systems": {}},
     }
     monkeypatch.setattr(index_mod.IndexManager, "reload", lambda: None)
     monkeypatch.setattr(index_mod.IndexManager, "load", lambda: sample_index)
@@ -298,9 +297,9 @@ def test_configuration_documentation_properties() -> None:
 def test_global_config_paths_and_exports() -> None:
     Opentide._index = {
         "configurations": {
-            "global": {
+            "paths": {
                 "objects": ["rule"],
-                "exports": {"table": "table.csv"},
+                "artifacts": {"exports": {"objects": "objects.json"}},
                 "metaschemas": {"rule": "rule.yaml"},
             }
         },
@@ -310,7 +309,7 @@ def test_global_config_paths_and_exports() -> None:
     Opentide._initialised = True
     global_cfg = Opentide.Configuration.Global
     assert global_cfg.objects == ["rule"]
-    assert global_cfg.exports.table == "table.csv"
+    assert global_cfg.exports.objects == "objects.json"
     assert global_cfg.metaschemas["rule"] == "rule.yaml"
 
 

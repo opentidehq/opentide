@@ -6,8 +6,8 @@ Author rules as `rule::1.1` YAML under `objects/rules/`.
 
 - `metadata.uuid` is required. `metadata.schema` is `rule::1.1`.
 - `detection_model` is the UUID of an objective in `objects/objectives/`.
-- Platform query text lives under `configurations.<platform>`, not a legacy `Schemas/` or `Configurations/systems` path.
-- Generate a starting file with `opentide generate` and edit the template it writes.
+- Platform query text lives under `configurations.<platform>`, and each block's `schema` is `platform::<platform>::1.0`.
+- Start a new rule with `opentide new rule`, which writes it from the current template.
 
 ## Check
 

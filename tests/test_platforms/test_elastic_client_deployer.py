@@ -530,3 +530,89 @@ def test_find_managed_raises_instead_of_returning_a_truncated_listing() -> None:
         ]
         with pytest.raises(requests.HTTPError):
             client.find_managed("OpenTide")
+
+
+@patch("opentide.platforms.elastic.deployer.run_elasticsearch_checks")
+def test_each_rule_is_reported_and_a_rejected_one_carries_kibanas_message(
+    mock_checks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A per-rule Kibana error is a failed rule on its line and the batch goes on (#675)."""
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+
+    _clear_deploy_flags(monkeypatch)
+    tenant = _make_tenant()
+    batch = MagicMock(rules=[_make_rule("r1"), _make_rule("r2")])
+    client = ElasticClient(url=tenant.setup.url, api_key=tenant.setup.api_key)
+    recorder = Recorder()
+    with (
+        deploy_events.listen(recorder),
+        patch.object(client.session, "get") as mock_get,
+        patch.object(client.session, "post") as mock_post,
+    ):
+        mock_get.return_value = _mock_response(404, {"message": "Not found"})
+        mock_post.side_effect = [
+            _mock_response(422, {"statusCode": 422, "message": "invalid query"}),
+            _mock_response(200, {"rule_id": "r2"}),
+        ]
+        ElasticDeploy().deploy_mdr(batch, client, tenant)
+
+    assert recorder.outcomes() == [("r1", "failed"), ("r2", "deployed")]
+    assert recorder.results[0].error == "HTTP 422: invalid query"
+    assert {result.tenant for result in recorder.results} == {"test-tenant"}
+    assert {result.platform for result in recorder.results} == {"elastic"}
+    assert os.environ.get("DEPLOYMENT_ERROR_RAISED") == "1"
+
+
+@patch("opentide.platforms.elastic.deployer.run_elasticsearch_checks")
+def test_a_tenant_auth_error_fails_the_rule_being_sent_and_stops_the_batch(
+    mock_checks, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+
+    _clear_deploy_flags(monkeypatch)
+    tenant = _make_tenant()
+    batch = MagicMock(rules=[_make_rule("r1"), _make_rule("r2")])
+    client = ElasticClient(url=tenant.setup.url, api_key=tenant.setup.api_key)
+    recorder = Recorder()
+    with (
+        deploy_events.listen(recorder),
+        patch.object(client.session, "get") as mock_get,
+        patch.object(client.session, "post") as mock_post,
+    ):
+        mock_get.return_value = _mock_response(404, {"message": "Not found"})
+        mock_post.return_value = _mock_response(403, {"message": "missing privileges"})
+        with pytest.raises(ElasticTenantError):
+            ElasticDeploy().deploy_mdr(batch, client, tenant)
+
+    assert recorder.outcomes() == [("r1", "failed")]
+    assert "HTTP 403" in (recorder.results[0].error or "")
+
+
+def test_a_rule_without_an_elastic_block_or_with_an_inert_status_is_skipped_not_sent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from tests.deploy_events_support import Recorder
+
+    from opentide.core import deploy_events
+
+    _clear_deploy_flags(monkeypatch)
+    tenant = _make_tenant()
+    inert = _make_rule("inert", status="DESIGN")
+    batch = MagicMock(rules=[inert])
+    client = ElasticClient(url=tenant.setup.url, api_key=tenant.setup.api_key)
+    recorder = Recorder()
+    with (
+        deploy_events.listen(recorder),
+        patch.object(client.session, "get") as mock_get,
+        patch.object(client.session, "post") as mock_post,
+    ):
+        ElasticDeploy().deploy_mdr(batch, client, tenant)
+        mock_get.assert_not_called()
+        mock_post.assert_not_called()
+
+    assert recorder.outcomes() == [("inert", "skipped")]
+    assert recorder.results[0].reason == "status DESIGN is inert"

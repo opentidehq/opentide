@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import dataclasses
-import re
-from dataclasses import dataclass
+from collections.abc import Mapping
 from types import SimpleNamespace
 from typing import Any
 
+from opentide.core.environment import ENV_REFERENCE, env_reference
 from opentide.core.index_manager import IndexManager
 from opentide.models.configuration.base import SSL_FALSE_WORDS, SSL_TRUE_WORDS
 from opentide.models.configuration.platforms import PlatformConfigurationBase
@@ -19,7 +19,7 @@ def systems_raw_index() -> dict[str, dict[str, Any]]:
 
 
 #: Every detection system has a typed tenant model. Splunk and Carbon Black get
-#: bespoke loaders below for their legacy key handling; the rest are built
+#: bespoke tenant loaders below; the rest are built
 #: generically. Before this mapping existed the generic branch handed callers
 #: raw dicts, so ``tenant.name`` and ``tenant.setup.*`` raised ``AttributeError``
 #: in both importers and in ``tenants_resolver`` (#242).
@@ -32,6 +32,7 @@ _SYSTEM_MODELS: dict[str, Any] = {
     "crowdstrike": ConfigurationModels.Systems.Crowdstrike,
     "harfanglab": ConfigurationModels.Systems.HarfangLab,
     "elastic": ConfigurationModels.Systems.Elastic,
+    "sysdig": ConfigurationModels.Systems.Sysdig,
 }
 
 #: ``SystemConfig.Tenant.Setup`` declares these without defaults, but every
@@ -108,7 +109,25 @@ def _tenant_ssl(value: Any, *, where: str) -> bool | str:
 
 
 # platform::elastic::1.0: a tenant api_key MUST be `$VAR` or `${VAR}`.
-_ENV_REFERENCE = re.compile(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})")
+_ENV_REFERENCE = ENV_REFERENCE
+
+
+def setup_variables(value: Any) -> list[str]:
+    """The environment variables a tenant's ``setup`` table names, in order, each once.
+
+    A value is a reference when it is ``$NAME`` or ``${NAME}`` as a whole, and
+    only a top-level value is one, as :meth:`DebugHelpers.fetch_config_envvar`
+    resolves it (:func:`opentide.core.environment.env_reference`). Values are
+    never returned, a ``$``-prefixed literal included.
+    """
+    names: list[str] = []
+    if not isinstance(value, Mapping):
+        return names
+    for item in value.values():
+        name = env_reference(item)
+        if name is not None and name not in names:
+            names.append(name)
+    return names
 
 
 _PROXY_RETIRED = (
@@ -136,6 +155,21 @@ def _build_section(cls: Any, payload: dict[str, Any], *, where: str) -> Any:
         raise ValueError(f"{where} is missing required key(s): {', '.join(sorted(missing))}")
     known = {item.name for item in dataclasses.fields(cls)}
     return cls(**{key: value for key, value in payload.items() if key in known})
+
+
+def _check_sysdig_setup(setup: dict[str, Any], *, where: str) -> None:
+    """sysdig-1.0 tenant setup: `url` and `api_token`, the token as `$VAR`."""
+    missing = [key for key in ("url", "api_token") if not setup.get(key)]
+    if missing:
+        raise ValueError(f"{where} setup is missing required key(s): {', '.join(missing)}")
+    token = setup["api_token"]
+    reference = _ENV_REFERENCE.fullmatch(token) if isinstance(token, str) else None
+    if reference is None:
+        raise ValueError(
+            f"{where} setup: api_token must be an environment variable reference "
+            "($VAR or ${VAR}, e.g. $SYSDIG_SECURE_API_TOKEN)"
+        )
+    setup["api_token"] = f"${reference.group(1) or reference.group(2)}"
 
 
 def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
@@ -169,6 +203,8 @@ def _load_tenants(system: str, tenants_config: Any) -> list[Any]:
                     )
                 # The resolver reads `$NAME`; hand it the braced form that way.
                 supplied_setup["api_key"] = f"${reference.group(1) or reference.group(2)}"
+        if system == "sysdig":
+            _check_sysdig_setup(supplied_setup, where=where)
         setup_raw = dict(_SETUP_DEFAULTS)
         setup_raw.update(DebugHelpers.fetch_config_envvar(supplied_setup))
         setup_raw["ssl"] = _tenant_ssl(setup_raw["ssl"], where=where)
@@ -302,50 +338,18 @@ def _load_cbc_tenants(
     return tenants
 
 
+def _identity_platform(system: str, payload: dict[str, Any]) -> SystemConfig.Platform:
+    """The ``[platform]`` table of a platform file; *system* is the file name stem."""
+    return SystemConfig.Platform(
+        enabled=bool(payload.get("enabled", False)),
+        identifier=system,
+        name=str(payload.get("name") or system),
+        description=str(payload.get("description", "")),
+    )
+
+
 def _build_splunk_config(raw: dict[str, Any]) -> Any:
-    @dataclass(frozen=True)
-    class SplunkLegacyAttrs:
-        Index: dict[str, Any]
-        tide: dict[str, Any]
-        setup: dict[str, Any]
-        secrets: dict[str, Any]
-        defaults: dict[str, Any]
-        modifiers: dict[str, Any]
-
-    # ``[[modifiers]]`` is an array of tables. ``dict()`` on that list raises
-    # before ``_load_modifiers`` runs. The legacy shim only needs a mapping;
-    # the typed path loads the list below.
-    raw_modifiers = raw.get("modifiers", {})
-    legacy_modifiers = {} if isinstance(raw_modifiers, list) else dict(raw_modifiers or {})
-    legacy = SplunkLegacyAttrs(
-        Index=raw,
-        tide=dict(raw.get("tide", {})),
-        setup=dict(raw.get("setup", {})),
-        secrets=dict(raw.get("secrets", {})),
-        defaults=dict(raw.get("defaults", {})),
-        modifiers=legacy_modifiers,
-    )
-
-    if "platform" not in raw:
-        return SimpleNamespace(
-            Index=legacy.Index,
-            tide=legacy.tide,
-            setup=legacy.setup,
-            secrets=legacy.secrets,
-            defaults=legacy.defaults,
-            modifiers=legacy.modifiers,
-            tenants=None,
-        )
-
-    platform_payload = dict(raw["platform"])
-    platform = SystemConfig.Platform(
-        enabled=platform_payload.get("enabled", False),
-        identifier=platform_payload.get("identifier", "splunk"),
-        name=platform_payload.get("name", "Splunk"),
-        subschema=platform_payload.get("subschema", "Splunk Sub Schema"),
-        description=platform_payload.get("description", ""),
-        flags=list(platform_payload.get("flags", [])),
-    )
+    platform = _identity_platform("splunk", dict(raw.get("platform") or {}))
     tenants = _load_splunk_tenants(raw.get("tenants"))
     modifiers = _load_modifiers(raw.get("modifiers"))
     typed = ConfigurationModels.Systems.Splunk(
@@ -357,50 +361,12 @@ def _build_splunk_config(raw: dict[str, Any]) -> Any:
         tenants=tenants or None,
         modifiers=modifiers or None,
         typed=typed,
-        tide=legacy.tide,
-        setup=legacy.setup,
-        secrets=legacy.secrets,
-        defaults=legacy.defaults,
-        Index=legacy.Index,
+        Index=raw,
     )
 
 
 def _build_cbc_config(raw: dict[str, Any]) -> Any:
-    @dataclass(frozen=True)
-    class CarbonBlackLegacyAttrs:
-        Index: dict[str, Any]
-        tide: dict[str, Any]
-        setup: dict[str, Any]
-        secrets: dict[str, Any]
-        validation: dict[str, Any]
-
-    legacy = CarbonBlackLegacyAttrs(
-        Index=raw,
-        tide=dict(raw.get("tide", {})),
-        setup=dict(raw.get("setup", {})),
-        secrets=dict(raw.get("secrets", {})),
-        validation=dict(raw.get("validation", {})),
-    )
-
-    if "platform" not in raw:
-        return SimpleNamespace(
-            Index=legacy.Index,
-            tide=legacy.tide,
-            setup=legacy.setup,
-            secrets=legacy.secrets,
-            validation=legacy.validation,
-            tenants=None,
-        )
-
-    platform_payload = dict(raw["platform"])
-    platform = SystemConfig.Platform(
-        enabled=platform_payload.get("enabled", False),
-        identifier=platform_payload.get("identifier", "carbon_black_cloud"),
-        name=platform_payload.get("name", "Carbon Black Cloud"),
-        subschema=platform_payload.get("subschema", "CBC EDR Sub Schema"),
-        description=platform_payload.get("description", ""),
-        flags=list(platform_payload.get("flags", [])),
-    )
+    platform = _identity_platform("carbon_black_cloud", dict(raw.get("platform") or {}))
     tenants = _load_cbc_tenants(raw.get("tenants"))
     modifiers = _load_modifiers(raw.get("modifiers"))
     typed = ConfigurationModels.Systems.CarbonBlackCloud(
@@ -412,25 +378,7 @@ def _build_cbc_config(raw: dict[str, Any]) -> Any:
         tenants=tenants or None,
         modifiers=modifiers or None,
         typed=typed,
-        tide=legacy.tide,
-        setup=legacy.setup,
-        secrets=legacy.secrets,
-        validation=legacy.validation,
-        Index=legacy.Index,
-    )
-
-
-def _identity_platform(system: str, payload: dict[str, Any]) -> SystemConfig.Platform:
-    """Tenant TOML ``[platform]`` identity — not a detection-rule platform config."""
-    flags_raw = payload.get("flags") or []
-    flags = [str(flag) for flag in flags_raw] if isinstance(flags_raw, list) else []
-    return SystemConfig.Platform(
-        enabled=bool(payload.get("enabled", False)),
-        identifier=str(payload.get("identifier") or system),
-        name=str(payload.get("name") or system),
-        subschema=str(payload.get("subschema", "")),
-        description=str(payload.get("description", "")),
-        flags=flags,
+        Index=raw,
     )
 
 

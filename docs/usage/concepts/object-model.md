@@ -81,14 +81,11 @@ metadata:
   created: 2026-01-01
   modified: 2026-01-02
   tlp: clear
-composition:
-  strategy: Combined
-  description: Compose signals for credential access detection
 objective:
   priority: High
   type: Threat
   description: Detect credential access techniques
-  composition:                 # mirrors the top-level composition
+  composition:
     strategy: Combined
     description: Compose signals for credential access detection
   threats:

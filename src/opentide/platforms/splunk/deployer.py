@@ -6,6 +6,7 @@ from typing import Any
 
 import structlog
 
+from opentide.core import deploy_events
 from opentide.core.debug import DebugEnvironment
 from opentide.core.registry import DetectionPlatforms, Opentide
 from opentide.core.responders import resolve_responders
@@ -62,7 +63,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         config: dict[str, Any] = {}
         splunk_config = data.platform_configs().splunk
         if not splunk_config:
-            raise ValueError("Missing Splunk configuration in MDR")
+            raise ValueError("The rule has no configurations.splunk block")
 
         name = data.name.strip()
         uuid = data.metadata.uuid
@@ -224,9 +225,6 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
                         config["action.email.include.trigger_time"] = 1 if inc.trigger_time else 0
 
         config["alert.managedBy"] = resolve_responders(data.response)
-        if splunk_config.advanced:
-            for key, value in splunk_config.advanced.items():
-                config[key] = str(value)
         config["description"] = data.description or ""
         return config
 
@@ -350,8 +348,7 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
         mdr_config: dict[str, Any],
         actions_config: dict[str, Any],
     ) -> bool | None:
-        deploy_config = (self.DEFAULT_CONFIG or {}).copy()
-        deploy_config.update(mdr_config)
+        deploy_config = dict(mdr_config)
         deploy_config.update(actions_config)
         deploy_config["search"] = query
         logger.info(
@@ -469,7 +466,8 @@ class SplunkDeploy(SplunkConnection, RuleDeployer):
             )
             for mdr in tenant_deployment.rules:
                 logger.info("processing_rule", mdr_name=mdr.name, uuid=mdr.metadata.uuid)
-                self.deploy_mdr(data=mdr, service=service, tenant_config=tenant)
+                with deploy_events.deploying("splunk", tenant.name, mdr.metadata.uuid, mdr.name):
+                    self.deploy_mdr(data=mdr, service=service, tenant_config=tenant)
 
 
 def declare():

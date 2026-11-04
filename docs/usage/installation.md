@@ -4,7 +4,7 @@ description: Install opentide from PyPI — one package, CLI, MCP, and all platf
 ---
 
 <Callout type="info">
-One install gets the CLI, the MCP server (`opentide mcp start`), all eight platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
+One install gets the CLI, the MCP server (`opentide mcp start`), all nine platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
@@ -41,7 +41,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.17.2** (22 October 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **0.21.0** (3 November 2026). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -50,7 +50,7 @@ The latest release is **0.17.2** (22 October 2026). The first public release was
 ```bash
 pip install opentide              # latest on PyPI
 # python -m pip install opentide  # in constrained environments
-pip install 'opentide==0.17.2'     # pin the current release
+pip install 'opentide==0.21.0'     # pin the current release
 ```
 
 </Tab>
@@ -59,14 +59,14 @@ pip install 'opentide==0.17.2'     # pin the current release
 
 ```bash
 uv pip install opentide              # latest on PyPI
-uv pip install 'opentide==0.17.2'    # pin the current release
+uv pip install 'opentide==0.21.0'    # pin the current release
 ```
 
 </Tab>
 
 </Tabs>
 
-That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, and all eight platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all nine platforms with every vendor SDK they call. `pip install opentide` is the only install — there are no extras. You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### MCP server
 
@@ -80,6 +80,12 @@ opentide mcp start        # mcp (>=2.3,<3) is a base dependency since 0.14.0
 
 An older command such as `pip install 'opentide[mcp]'` still installs opentide: pip and uv warn that the extra does not exist and install the package anyway. Drop the brackets when you next touch it. See [MCP installation](../mcp/installation.md).
 
+### The analysis engine and the language server
+
+The offline query checks (`opentide validate`, `opentide validate query`, `opentide lint`), the language server (`opentide lsp start`) and MCP `validate_query` run a compiled engine, which is part of the opentide package: `pip install opentide` installs it, with nothing else to install. There is no `opentide[lsp]` extra and no separate `opentide-lsp` to install.
+
+opentide has a wheel for CPython 3.10 and later on Linux (x86_64 and arm64, glibc and musl), macOS (Intel and Apple silicon) and Windows (x64 and Arm), with the engine compiled in. On any other platform, or on a free-threaded interpreter (`python3.14t`), pip builds opentide from its sdist, which compiles the engine and needs a Rust toolchain ([rustup.rs](https://rustup.rs)). `opentide doctor` reports it (`analysis_engine`); see [`opentide lsp`](../cli/lsp.md) to set up an editor.
+
 ### Windows and PowerShell
 
 `pip` and `uv` create the `opentide` console launcher in the active environment's `Scripts` directory. Ensure that directory is on `PATH`, then run the package directly:
@@ -90,6 +96,8 @@ An older command such as `pip install 'opentide[mcp]'` still installs opentide: 
 Get-Command opentide -All
 where.exe opentide
 ```
+
+On Windows on Arm, use CPython 3.11 or later and install with `pip install --only-binary cryptography opentide`. The newest cryptography releases publish no Windows on Arm wheel, so without the flag pip compiles cryptography, which needs OpenSSL and a Rust toolchain; with it, pip takes the newest cryptography that has one: 46.0.3, whose `cp38-abi3` and `cp311-abi3` Windows on Arm wheels install on CPython 3.10 and later. On CPython 3.10, pydantic-core, orjson, rpds-py and cffi publish no Windows on Arm wheel (theirs start at 3.11), so pip compiles them, which needs a Rust toolchain and the MSVC build tools.
 
 opentide does not ship or generate `opentide.bat`. Inspect any bat wrapper reported by these commands before using it; it may have been created by local tooling or an agent.
 
@@ -141,11 +149,13 @@ Every vendor SDK a platform calls ships with `pip install opentide`, so live dep
 | Platform | Packages |
 |----------|----------|
 | Microsoft Sentinel | `azure-identity` `azure-monitor-query`. Rules are deployed through the ARM `alertRules` REST API directly. |
-| Splunk | `splunk-sdk` `pandas` |
+| Splunk | `splunk-sdk` |
 | Carbon Black Cloud | `carbon-black-cloud-sdk` |
-| Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab | HTTP clients bundled with opentide |
+| Defender, Elastic, CrowdStrike, SentinelOne, HarfangLab, Sysdig | HTTP clients bundled with opentide |
 
-`deploy --dry-run` compiles each Sentinel rule into the exact request a live deploy sends. A bare `opentide validate query` refuses and names `--live`; `generate`, `validate`, and dry-run deploy need no credentials. If a live check reports that an SDK will not import, the environment is damaged: reinstall with `pip install --force-reinstall opentide`.
+`deploy --dry-run` compiles each Sentinel rule into the exact request a live deploy sends. A bare `opentide validate query` checks the queries offline with the analysis engine; `generate`, `validate`, offline query checks and dry-run deploy need no credentials. If a live check reports that an SDK will not import, the environment is damaged: reinstall with `pip install --force-reinstall opentide`.
+
+pandas and numpy are not dependencies: deploy planning flattens tenant modifiers itself. `boto3` stays, because the Carbon Black SDK imports it when it loads, though opentide never calls AWS.
 
 Releases up to 0.15.0 shipped the SDKs as extras (`opentide[sentinel]`, `opentide[splunk]`, `opentide[carbon-black]`). Those names are gone; an install command that still names one installs opentide with every SDK and a warning about the unknown extra.
 
@@ -163,6 +173,7 @@ These `--platform` values are built into the package:
 | `carbon_black_cloud` | Carbon Black Cloud |
 | `crowdstrike` | CrowdStrike Falcon |
 | `harfanglab` | HarfangLab |
+| `sysdig` | Sysdig Secure (Falco) |
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.
 

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, ClassVar, Protocol, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast
 
 from pydantic import PrivateAttr
 
@@ -15,11 +14,12 @@ from opentide.models.metadata import ObjectMetadata, ObjectReferences, RuleMetad
 from opentide.models.platform import RuleConfigurations
 from opentide.models.response import RuleResponse
 from opentide.models.results import DeploymentResult, ValidationResult
+from opentide.query.models import DEFAULT_LIMIT
 
-#: Environment flags a platform query validator raises on a failure or a warning.
-_ERROR_FLAG = "VALIDATION_ERROR_RAISED"
-_WARNING_FLAG = "VALIDATION_WARNING_RAISED"
-_QUERY_VALIDATION_FLAGS = (_ERROR_FLAG, _WARNING_FLAG)
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from opentide.query.service import QueryRun
 
 
 class TideRegistry(Protocol):
@@ -52,10 +52,12 @@ class DetectionRule(TideModel):
         schema_extra={"tide.template.multiline": True, "tide.template.spacer": True}
     )
     """Rule narrative (multiline YAML encouraged)."""
-    status: str = "STAGING"
-    """Deployment lifecycle status."""
-    severity: str = "Informational"
-    """`alert_severity::1.0`."""
+    status: str | None = None
+    """Read by no command: a rule deploys by each platform block's `status`
+    (`platform_statuses`), the value promotion moves. Left out, it stays unset."""
+    severity: str | None = None
+    """`alert_severity::1.0`. Deploy sends `response.alert_severity`
+    (`alert_severity`); this is shown only when the rule has no `response`."""
     techniques: list[str] = TideField(default_factory=list, role=FieldRole.TECHNIQUES)
     """MITRE ATT&CK technique ids (`att&ck::1.2`)."""
     platforms: dict[str, dict[str, Any]] = TideField(
@@ -89,6 +91,31 @@ class DetectionRule(TideModel):
         if self.configurations is None:
             raise ValueError(f"Rule {self.metadata.uuid} ({self.name}) has no configurations block")
         return self.configurations
+
+    @property
+    def platform_statuses(self) -> dict[str, str]:
+        """Each platform block's ``status``, keyed by platform: what deploy and promotion use."""
+        if self.configurations is None:
+            return {}
+        statuses: dict[str, str] = {}
+        for platform in type(self.configurations).model_fields:
+            block = getattr(self.configurations, platform)
+            if block is not None and block.status:
+                statuses[platform] = block.status
+        return statuses
+
+    @property
+    def displayed_severity(self) -> str | None:
+        """The severity a page shows: the one deploy sends, else an authored ``severity``.
+
+        With a ``response`` block deploy sends ``response.alert_severity``
+        (its default ``Informational`` when the block leaves it out), so that
+        is shown. Without one, an authored rule-level ``severity``, else
+        ``None``: no page presents a model default deploy does not send.
+        """
+        if self.response is not None:
+            return self.response.alert_severity
+        return self.severity
 
     @property
     def alert_severity(self) -> str:
@@ -162,33 +189,37 @@ class DetectionRule(TideModel):
             return ValidationResult(
                 ok=False, errors=[f"Platform {platform!r} does not support query validation"]
             )
-        # Platform validators log each refused query and report the verdict
-        # only through these process-wide flags, which the CLI grades after a
-        # run. Clear them for the call so an earlier failure does not fail
-        # this rule, then put back what was there so the caller's run keeps
-        # its own verdict.
-        saved = {flag: os.environ.get(flag) for flag in _QUERY_VALIDATION_FLAGS}
-        for flag in _QUERY_VALIDATION_FLAGS:
-            os.environ[flag] = ""
-        try:
-            # The CLI default: without strategies no tenant is targeted and
-            # nothing would be checked (and most validators required them).
-            # Pass the rule itself: by UUID the validator re-read the registry
-            # copy, not this (possibly edited, possibly unregistered) object.
-            validator.validate([self], DEPLOYABLE_STRATEGIES)
-            failed = bool(os.environ.get(_ERROR_FLAG))
-            warned = bool(os.environ.get(_WARNING_FLAG))
-        finally:
-            for flag, value in saved.items():
-                if value is None:
-                    os.environ.pop(flag, None)
-                else:
-                    os.environ[flag] = value
+        # The CLI default: without strategies no tenant is targeted and nothing
+        # would be checked. Pass the rule itself: by UUID the validator re-read
+        # the registry copy, not this (possibly edited, possibly unregistered)
+        # object.
+        report = validator.validate([self], DEPLOYABLE_STRATEGIES)
         return ValidationResult(
-            ok=not failed,
-            errors=[f"Query validation failed for {platform}"] if failed else [],
-            warnings=[f"Query validation reported warnings for {platform}"] if warned else [],
+            ok=not report.failed,
+            errors=[f"Query validation failed for {platform}"] if report.failed else [],
+            warnings=(
+                [f"Query validation reported warnings for {platform}"] if report.warned else []
+            ),
         )
+
+    def run_query(
+        self,
+        platform: str,
+        *,
+        tenants: Sequence[str] = (),
+        since: str | None = None,
+        limit: int = DEFAULT_LIMIT,
+    ) -> QueryRun:
+        """Run the query this rule deploys to *platform* on its tenants, read-only.
+
+        *tenants* names the tenants (``["all"]`` for every one); none runs on
+        the only tenant configured. Raises
+        :class:`~opentide.query.service.QueryUsageError` when the call cannot
+        run; a tenant that refuses the query is a failed outcome in the result.
+        """
+        from opentide.query.service import run_query
+
+        return run_query(platform, rule=self, tenants=tenants, since=since, limit=limit)
 
     def document(self) -> str:
         if self._registry is None:

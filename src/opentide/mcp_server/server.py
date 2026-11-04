@@ -16,6 +16,7 @@ from typing import TextIO
 from mcp.server.mcpserver import MCPServer
 
 import opentide
+from opentide.analysis import OFFLINE_QUERY_LANGUAGES
 from opentide.mcp_server import resources as res
 from opentide.mcp_server.constants import QUERY_VALIDATION_PLATFORMS
 from opentide.mcp_server.tools import (
@@ -29,6 +30,11 @@ from opentide.mcp_server.tools import (
     tool_validate_query,
     tool_validate_rule,
     tool_validation_report,
+)
+from opentide.mcp_server.workspace import (
+    apply_plugin_launch,
+    require_workspace,
+    resolve_plugin_launch,
 )
 
 #: What the product is, wherever it describes itself.
@@ -53,13 +59,14 @@ Each issue has code, severity, message, object_uuid, path, line and column (1-ba
 help, and fix ({{safe, edits}}: each edit replaces the text from (line, column) up \
 to (end_line, end_column) with replacement). Apply safe edits as they are: they \
 only respell the same word; check the others against help. explain(code) says what \
-a code means. Repeat until ok is true.
+a code means. Repeat until ok is true. While drafting a query, validate_query \
+checks it offline in its platform's language, with no tenant.
 4. Preview. deploy_rule with dry_run true shows the deployment; nothing is sent.
 
 People review and merge changes and run real deployments. Call deploy_rule with \
 dry_run false only when a person asks for it. validate_query with live true \
-contacts the tenant with the configured credentials: ask first. run_query is not \
-implemented and never returns rows.
+contacts the tenant with the configured credentials: ask first. run_query with live \
+true runs a read-only query on a tenant and returns its rows: ask first as well.
 
 Results may carry next_actions: [{{tool, arguments, command, reason}}], the next \
 call to make (command is the same step as an opentide command line). Read the \
@@ -88,11 +95,12 @@ def search(
     query: a UUID (exact, case-insensitive) or text matched against uuid, title,
     name and description; "" matches everything the filters allow.
     Filters: type (rule | threat | objective), platform (exact configuration key:
-    sentinel never matches sentinel_one), status (rule status, exact), technique
+    sentinel never matches sentinel_one), status (a rule platform block status, exact), technique
     (ATT&CK id, case-insensitive), actor (att&ck::G0006 or G0006).
     Returns a list of {uuid, type, title, status}; [] when nothing matches.
     Read opentide://rules/{uuid} (threats/, objectives/) for the full object.
     """
+    require_workspace()
     return tool_search(
         query, type=type, platform=platform, status=status, technique=technique, actor=actor
     )
@@ -107,6 +115,7 @@ def get_chaining(uuid: str) -> dict:
     threat with threat.chaining entries. An unknown UUID returns only {uuid,
     found: false, graph: {}}.
     """
+    require_workspace()
     return tool_get_chaining(uuid)
 
 
@@ -118,6 +127,7 @@ def coverage(technique: str = "", tactic: str = "") -> dict:
     technique also matches its sub-techniques. Empty: {technique_count, matrix:
     {technique: [rule uuids]}, tactic_filter}. tactic is echoed, never filtered on.
     """
+    require_workspace()
     return tool_coverage(technique=technique, tactic=tactic)
 
 
@@ -130,6 +140,7 @@ def validate_rule(uuid: str) -> dict:
     validation_report, which also takes a file path and returns warnings as
     structured entries.
     """
+    require_workspace()
     return tool_validate_rule(uuid)
 
 
@@ -138,12 +149,15 @@ def validation_report(
     file: str = "",
     uuid: str = "",
     object_type: str = "",
+    queries: str = "error",
 ) -> dict:
     """Validate objects and return every issue with its position and fix. Call after each edit.
 
     Narrow with file (repository-relative or absolute path; a bare file name
     matches every object file of that name), uuid, or object_type (rule |
-    threat | objective). No argument validates the whole catalogue.
+    threat | objective). No argument validates the whole catalogue. Every
+    rule query is checked offline: queries is error (a query the platform
+    would reject is an issue), warn (a warning) or off (not checked).
     Returns {ok, issues, warnings, stats, next_actions}. Each issue: code,
     severity, message, object_uuid, field_path, path, line, column, end_column
     (1-based Unicode code points; end_column exclusive), help, fix ({safe,
@@ -152,10 +166,12 @@ def validation_report(
     help. yaml_line is 0-based and file_path absolute, kept for older clients.
     Done when ok is true.
     """
+    require_workspace()
     return tool_validation_report(
         file=file or None,
         uuid=uuid or None,
         object_type=object_type or None,
+        queries=queries,
     )
 
 
@@ -172,29 +188,64 @@ def explain(code: str = "") -> dict:
 
 #: The platform list comes from the constant the tool checks, so the two cannot disagree.
 VALIDATE_QUERY_DESCRIPTION = f"""\
-Check the catalogue's rules for a platform against the tenant (live true only).
+Check one query offline with the analysis engine, or the catalogue's rules on the tenant.
 
-live false refuses without a check: {{valid: null, supported: true, status:
-"failed"}}. live true contacts the tenant with the configured credentials and
-validates the catalogue rules for platform, not query; ask a person first.
+live false (default) parses query in its platform's language, with the
+platform's profile (Defender tables for defender_for_endpoint, Carbon Black
+Lucene for carbon_black_cloud), and returns {{valid, status, language,
+errors, warnings, diagnostics}}; positions are in the query (1-based, code
+points). Elastic takes language: esql, eql, kuery (default) or lucene, and
+stack (such as "9.5") for ES|QL. Offline: {", ".join(sorted(OFFLINE_QUERY_LANGUAGES))}.
+live true contacts the tenant with the configured credentials and validates
+the catalogue rules for platform, not query; ask a person first.
 Platforms: {", ".join(sorted(QUERY_VALIDATION_PLATFORMS))}; others return
 supported false.\
 """
 
 
 @mcp.tool(description=VALIDATE_QUERY_DESCRIPTION)
-def validate_query(query: str, platform: str, live: bool = False) -> dict:
+def validate_query(
+    query: str, platform: str, live: bool = False, language: str = "", stack: str = ""
+) -> dict:
     """See :data:`VALIDATE_QUERY_DESCRIPTION`, the description agents read."""
-    return tool_validate_query(query, platform, live=live)
+    return tool_validate_query(query, platform, live=live, language=language, stack=stack)
 
 
 @mcp.tool()
-def run_query(query: str, platform: str, tenant: str = "") -> dict:
-    """Not implemented: returns stub true and rows null, and never contacts a tenant.
+def run_query(
+    query: str,
+    platform: str,
+    tenant: str = "",
+    live: bool = False,
+    rule: str = "",
+    since: str = "24h",
+    limit: int = 100,
+    language: str = "",
+    index: str = "",
+) -> dict:
+    """Run a read-only query on a platform's tenants and return the rows (live true only).
 
-    Use validate_query with live true for the tenant check.
+    live false refuses without contacting a tenant. live true sends query, or
+    the query of the rule whose UUID is rule, to the tenant named by tenant
+    (comma-separated names, "all", or empty for the only one) over the last
+    since (15m, 24h, 7d) and returns {status, results: [{tenant, status,
+    columns, rows, row_count, truncated, warnings, error}], row_count}, at
+    most limit rows per tenant. It uses the configured credentials: ask a
+    person first. language is Elastic's: esql, eql, lucene or kuery. index
+    names Elastic index patterns (comma-separated) or a CrowdStrike repository.
     """
-    return tool_run_query(query, platform, tenant=tenant)
+    require_workspace()
+    return tool_run_query(
+        query,
+        platform,
+        tenant=tenant,
+        live=live,
+        rule=rule,
+        since=since,
+        limit=limit,
+        language=language,
+        index=index,
+    )
 
 
 @mcp.tool()
@@ -206,6 +257,7 @@ def deploy_rule(uuid: str, platform: str, dry_run: bool = True) -> dict:
     not_found or unknown_platform. Keep dry_run true unless a person asks for a
     real deployment: people review, merge and deploy.
     """
+    require_workspace()
     return tool_deploy_rule(uuid, platform, dry_run=dry_run)
 
 
@@ -216,41 +268,49 @@ def deployment_status(uuid: str) -> dict:
     Returns {uuid, found, platforms: {name: {deployed, rule_id, external_ids,
     tenants}}}; state_error when the rule's deployment state cannot be read.
     """
+    require_workspace()
     return tool_deployment_status(uuid)
 
 
 @mcp.resource("opentide://index")
 def index_resource() -> str:
+    require_workspace()
     return res.resource_index()
 
 
 @mcp.resource("opentide://rules")
 def rules_resource() -> str:
+    require_workspace()
     return res.resource_rules()
 
 
 @mcp.resource("opentide://rules/{uuid}")
 def rule_resource(uuid: str) -> str:
+    require_workspace()
     return res.resource_rule(uuid)
 
 
 @mcp.resource("opentide://threats")
 def threats_resource() -> str:
+    require_workspace()
     return res.resource_threats()
 
 
 @mcp.resource("opentide://threats/{uuid}")
 def threat_resource(uuid: str) -> str:
+    require_workspace()
     return res.resource_threat(uuid)
 
 
 @mcp.resource("opentide://objectives")
 def objectives_resource() -> str:
+    require_workspace()
     return res.resource_objectives()
 
 
 @mcp.resource("opentide://objectives/{uuid}")
 def objective_resource(uuid: str) -> str:
+    require_workspace()
     return res.resource_objective(uuid)
 
 
@@ -279,6 +339,7 @@ def vocabulary_resource(name: str) -> str:
 
 @mcp.resource("opentide://platforms")
 def platforms_resource() -> str:
+    require_workspace()
     return res.resource_platforms()
 
 
@@ -326,6 +387,8 @@ def main() -> None:
     from opentide.core.logging import LoggingConfig, init_logging
 
     set_mode(OutputMode.MCP)
+    # Started by an Agent Plugin client, the cwd is the plugin, not the catalogue (#431).
+    apply_plugin_launch(resolve_plugin_launch())
     # The Typer root callback already called init_logging. Without force the
     # CLI path would keep Rich-on-stderr and skip the JSON logs hosts parse.
     init_logging(LoggingConfig(json_output=True, plain=True), force=True)

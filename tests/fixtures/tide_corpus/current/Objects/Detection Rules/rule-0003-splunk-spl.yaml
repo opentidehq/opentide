@@ -24,5 +24,7 @@ configurations:
     enabled: true
     name: Splunk SPL Rule
     status: STAGING
-    search: index=main | head 1
-    cron_schedule: "0 * * * *"
+    query: index=main | head 1
+    scheduling:
+      schedule:
+        cron: "0 * * * *"

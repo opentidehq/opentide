@@ -4,19 +4,27 @@ Live query validation reports it as the check's result for that tenant. It used
 to escape the validator as a ``URLError`` or ``requests`` traceback with nothing
 on stdout. Every other error still propagates, so a programming error is never
 read as a network one.
+
+A *read* timeout is not one on its own: the tenant took the request and one
+query outlived the timeout (:func:`read_timeout`). Live validation fails that
+query and goes on, and reports the tenant unreachable only after several in a
+row.
 """
 
 from __future__ import annotations
 
+import re
 import socket
 import ssl
 from collections.abc import Generator
 from contextlib import contextmanager
+from datetime import timedelta
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
 import requests
+import urllib3.exceptions
 
 from opentide.core.errors import Errors
 
@@ -25,12 +33,47 @@ _TRANSPORT_ERRORS: tuple[type[BaseException], ...] = (
     URLError,
     requests.exceptions.ConnectionError,
     requests.exceptions.Timeout,
+    urllib3.exceptions.ConnectTimeoutError,
+    urllib3.exceptions.ReadTimeoutError,
     ConnectionError,
     TimeoutError,
     socket.gaierror,
     socket.herror,
     ssl.SSLError,
 )
+
+#: Errors raised before the tenant took the request: the connection, DNS, TLS, a proxy.
+#: A ``URLError`` is one too: ``urlopen`` wraps only the failures of connecting and
+#: sending, and lets a timeout waiting for the answer through unwrapped.
+_CONNECT_ERRORS: tuple[type[BaseException], ...] = (
+    URLError,
+    requests.exceptions.ConnectTimeout,
+    requests.exceptions.ProxyError,
+    requests.exceptions.SSLError,
+    urllib3.exceptions.ConnectTimeoutError,
+    socket.gaierror,
+    ssl.SSLError,
+)
+
+#: Errors raised while waiting for the answer to a request the tenant took.
+#: ``TimeoutError`` is ``socket.timeout``: ``urlopen`` raises it, unwrapped, when
+#: the answer does not come in time ("The read operation timed out").
+_READ_TIMEOUTS: tuple[type[BaseException], ...] = (
+    requests.exceptions.ReadTimeout,
+    urllib3.exceptions.ReadTimeoutError,
+    TimeoutError,
+)
+
+#: HTTP statuses a gateway or proxy answers when the tenant behind it does not.
+GATEWAY_STATUSES: dict[int, str] = {
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+}
+
+#: Seconds after which an answer that is not the tenant's own is taken for a
+#: gateway's that stopped waiting (a gateway's own timeout is commonly 30 to 60s).
+SLOW_ANSWER_SECONDS = 30.0
 
 
 #: Seconds a tenant has to accept a connection, and then to send each part of
@@ -101,33 +144,172 @@ class TenantUnreachableError(Errors.TenantConnectionError):
     """A live check could not reach *host*, the address of *tenant* on *platform*.
 
     A :class:`Errors.TenantConnectionError`, so code that catches the documented
-    class around a validator catches this too.
+    class around a validator catches this too. *reason* replaces the error's
+    text in the message; *timeouts* counts the queries in a row that got no
+    answer, when that is why the tenant is reported unreachable.
     """
 
-    def __init__(self, platform: str, tenant: str, host: str, error: BaseException) -> None:
+    def __init__(
+        self,
+        platform: str,
+        tenant: str,
+        host: str,
+        error: BaseException,
+        *,
+        reason: str | None = None,
+        timeouts: int = 0,
+    ) -> None:
         self.platform = platform
         self.tenant = tenant
         self.host = host
         self.error = error
-        super().__init__(f"Cannot reach {platform} tenant '{tenant}' at {host}: {error}")
+        self.timeouts = timeouts
+        super().__init__(f"Cannot reach {platform} tenant '{tenant}' at {host}: {reason or error}")
+
+
+class GatewayTimeoutError(TimeoutError):
+    """A gateway or proxy in front of the tenant answered for it, instead of its API.
+
+    An HTTP 502, 503 or 504, or a page that is not the API's after a slow
+    request: the request reached the gateway, which gave up waiting for the
+    tenant. A ``TimeoutError``, so a live check fails that query
+    (:func:`read_timeout`) rather than the whole tenant.
+    """
+
+    def __init__(self, message: str, *, status: int, elapsed: float | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+        self.elapsed = elapsed
+
+
+def gateway_answer(status: int, elapsed: float | None = None) -> str | None:
+    """Why an answer that is not the tenant's API is a gateway's, or ``None`` when it is not.
+
+    *status* is the answer's HTTP status and *elapsed* the seconds the request
+    took, when they are known.
+    """
+    name = GATEWAY_STATUSES.get(status)
+    if name is not None:
+        return (
+            f"HTTP {status} {name} is what a gateway or proxy in front of the tenant answers "
+            "when the tenant does not answer it in time, so the url and port are not at fault "
+            "when other requests to the same address succeed"
+        )
+    if elapsed is not None and elapsed >= SLOW_ANSWER_SECONDS:
+        return (
+            f"it came after {elapsed:.0f}s, as from a gateway or proxy in front of the tenant "
+            "that stopped waiting for it"
+        )
+    return None
+
+
+_HTML_TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+
+def page_title(body: bytes) -> str | None:
+    """The ``<title>`` of an HTML page, or ``None``."""
+    found = _HTML_TITLE.search(body)
+    if found is None:
+        return None
+    return " ".join(found.group(1).decode(errors="replace").split()) or None
+
+
+def describe_answer(
+    status: int, body: bytes, *, content_type: str | None = None, elapsed: float | None = None
+) -> str:
+    """One line on an answer that is not the API's JSON: its status, its body, a gateway's reading.
+
+    *elapsed* is the seconds the request took; a slow answer that is not the
+    API's is read as a gateway's (:func:`gateway_answer`).
+    """
+    kind = (content_type or "").split(";")[0].strip().lower()
+    head = body.lstrip()[:15].lower()
+    if kind == "text/html" or head.startswith((b"<!doctype html", b"<html")):
+        title = page_title(body)
+        text = f"HTTP {status} with an HTML page" + (f" titled {title!r}" if title else "")
+    elif not body.strip():
+        text = f"HTTP {status} with an empty body"
+    else:
+        snippet = " ".join(body[:200].decode(errors="replace").split())
+        text = f"HTTP {status} with a body that is not JSON ({snippet!r})"
+    hint = gateway_answer(status, elapsed)
+    return f"{text}: {hint}" if hint else text
+
+
+def not_json_detail(response: Any) -> str | None:
+    """:func:`describe_answer` for a ``requests`` *response* that is not JSON, else ``None``."""
+    try:
+        response.json()
+    except ValueError:
+        pass
+    else:
+        return None
+    headers = getattr(response, "headers", None) or {}
+    elapsed = getattr(response, "elapsed", None)
+    body = getattr(response, "content", None)
+    if not isinstance(body, bytes):
+        body = str(getattr(response, "text", "") or "").encode()
+    return describe_answer(
+        int(response.status_code),
+        body,
+        content_type=str(headers.get("Content-Type") or "") or None,
+        elapsed=elapsed.total_seconds() if isinstance(elapsed, timedelta) else None,
+    )
+
+
+def _links(exc: BaseException) -> Generator[BaseException, None, None]:
+    """*exc* and the errors it wraps, outermost first.
+
+    A vendor SDK may wrap the failure: Carbon Black Cloud raises its own
+    ``ConnectionError`` with the ``requests`` error as ``original_exception``,
+    Azure its ``ServiceResponseError`` with it as ``inner_exception``. A
+    ``requests`` error carries urllib3's as its first argument, and urllib3's
+    ``MaxRetryError`` the last attempt's as its ``reason``: that is how a
+    read timeout the retries did not clear reaches a caller, as a
+    ``requests.ConnectionError``.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        yield current
+        seen.add(id(current))
+        inner: object = None
+        for attribute in ("original_exception", "inner_exception"):
+            inner = getattr(current, attribute, None)
+            if isinstance(inner, BaseException):
+                break
+        if not isinstance(inner, BaseException) and isinstance(
+            current, requests.exceptions.RequestException
+        ):
+            inner = current.args[0] if current.args else None
+        if isinstance(current, urllib3.exceptions.MaxRetryError):
+            inner = current.reason
+        current = inner if isinstance(inner, BaseException) else None
 
 
 def transport_error(exc: BaseException) -> BaseException | None:
     """The transport failure behind *exc*, or ``None`` when *exc* is anything else.
 
-    An HTTP error status is a response, so it is not one. A vendor SDK may wrap
-    the failure: Carbon Black Cloud raises its own ``ConnectionError`` with the
-    ``requests`` error as ``original_exception``.
+    An HTTP error status is a response, so it is not one.
     """
-    seen: set[int] = set()
-    current: BaseException | None = exc
-    while current is not None and id(current) not in seen:
-        if isinstance(current, _TRANSPORT_ERRORS) and not isinstance(current, HTTPError):
-            return current
-        seen.add(id(current))
-        inner = getattr(current, "original_exception", None)
-        current = inner if isinstance(inner, BaseException) else None
+    for link in _links(exc):
+        if isinstance(link, _TRANSPORT_ERRORS) and not isinstance(link, HTTPError):
+            return link
     return None
+
+
+def read_timeout(exc: BaseException) -> BaseException | None:
+    """The read timeout behind *exc*: the tenant took the request and sent no answer in time.
+
+    ``None`` for anything else, a connect timeout included: a tenant that
+    does not take the connection is unreachable, one that is slow to answer
+    one query is not. Every wrapped error is read first, so a wrapper named
+    for timeouts around a connect timeout is still a connect failure.
+    """
+    links = list(_links(exc))
+    if any(isinstance(link, _CONNECT_ERRORS) for link in links):
+        return None
+    return next((link for link in links if isinstance(link, _READ_TIMEOUTS)), None)
 
 
 def _origin(url: str) -> str:

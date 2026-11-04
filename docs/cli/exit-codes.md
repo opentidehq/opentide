@@ -31,12 +31,12 @@ There is no soft-failure exit code. Warnings are listed under `warnings` in JSON
 
 ## How warnings vs errors work
 
-`validate` and `deploy` record outcomes during the run:
+`validate` grades a run from what it found; `deploy` records its outcome during the run:
 
 | Signal | Set when | Affects |
 |--------|----------|---------|
-| `VALIDATION_ERROR_RAISED` | Any validation error | Exit `1`, `status: failed` |
-| `VALIDATION_WARNING_RAISED` | Any validation warning except [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) | Exit `1` with `--strict`; otherwise exit `0` with warnings |
+| A validation error | Any issue in the report, or a query a tenant rejected (`validate query --live`) | Exit `1`, `status: failed` |
+| A validation warning | Any warning except [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) | Exit `1` with `--strict`; otherwise exit `0` with warnings |
 | `DEPLOYMENT_ERROR_RAISED` | Any deployment error | Exit `1`, `status: failed` |
 | `DEPLOYMENT_WARNING_RAISED` | Any deployment warning | Exit `0` with warnings |
 

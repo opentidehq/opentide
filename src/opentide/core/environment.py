@@ -1,4 +1,5 @@
 import os
+import re
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -10,10 +11,29 @@ from opentide.core.runtime import is_debug as runtime_is_debug
 
 logger = get_logger(__name__)
 
+#: A whole value that names an environment variable: ``$NAME`` or ``${NAME}``.
+ENV_REFERENCE = re.compile(r"\$(?:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\})")
+
+
+def env_reference(value: object) -> str | None:
+    """The variable *value* names when it is ``$NAME`` or ``${NAME}`` as a whole, else ``None``.
+
+    The one parser for configuration placeholders: the resolver, ``info`` and
+    ``doctor`` all read a value with it. A value that merely starts with ``$``
+    (a secret such as ``$uP3r-S3cret!``) names nothing.
+    """
+    if not isinstance(value, str):
+        return None
+    match = ENV_REFERENCE.fullmatch(value)
+    return (match.group(1) or match.group(2)) if match else None
+
+
 # Names already reported by ``fetch_config_envvar`` in this process. Platform
 # load calls that helper once per object, and the same unset variable must not
 # be printed again for every rule.
 _reported_missing_envvars: set[str] = set()
+# Names of variables read the 0.21.0 way (``$AZ-SECRET``), warned about once each.
+_reported_legacy_envvars: set[str] = set()
 
 # Set while a run that sends nothing (a dry-run deploy) loads its configuration:
 # unset names are collected here for the run to report, not logged as errors.
@@ -63,7 +83,9 @@ class DebugHelpers:
 
         Returns:
             The same mapping (mutated in place) with placeholders replaced by
-            environment values where applicable.
+            environment values where applicable. A placeholder is a whole
+            ``$NAME`` or ``${NAME}`` (:func:`env_reference`); any other value,
+            one that starts with ``$`` included, is left as written.
 
         Notes:
             - If a referenced environment variable is missing and the runtime is
@@ -100,8 +122,32 @@ class DebugHelpers:
                 )
                 continue
             value = config_secrets[sec]
-            if isinstance(value, str) and value.startswith("$"):
-                env_name = value.removeprefix("$")
+            env_name = env_reference(value)
+            if (
+                env_name is None
+                and isinstance(value, str)
+                and len(value) > 1
+                and value[0] == "$"
+                and value[1:] in os.environ
+            ):
+                # 0.21.0 and earlier read any `$text` from the variable `text`: keep a
+                # set one working, and say how to write it.
+                config_secrets[sec] = os.environ[value[1:]]
+                if value[1:] in _reported_legacy_envvars:
+                    continue
+                _reported_legacy_envvars.add(value[1:])
+                renamed = re.sub(r"[^A-Za-z0-9_]", "_", value[1:])
+                logger.warning(
+                    "environment_variable_name_deprecated",
+                    detail=(
+                        f"{sec} reads the variable {value[1:]!r}, which is not a variable "
+                        "name opentide resolves (letters, digits and underscores): a later "
+                        "release reads the value as written"
+                    ),
+                    advice=f"Rename the variable, for example to {renamed}, and write ${renamed}",
+                )
+                continue
+            if env_name is not None:
                 if env_name in os.environ:
                     config_secrets[sec] = os.environ.get(env_name, "")
                     logger.info("fetched_environment_secret", env_name=env_name)
@@ -136,9 +182,10 @@ def reject_unsubstituted_placeholders(*values: object, client: str) -> None:
 
     ``fetch_config_envvar`` leaves a missing variable as the literal ``$NAME``
     because a disabled system may never need it. A live Azure or Splunk client
-    must not receive that literal.
+    must not receive that literal. A value that only starts with ``$`` is a
+    real value (a secret may), and is neither refused nor named.
     """
-    missing = [value for value in values if isinstance(value, str) and value.startswith("$")]
+    missing = [value for value in values if env_reference(value) is not None]
     if not missing:
         return
     joined = ", ".join(str(item) for item in missing)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from opentide.cli.enums import DetectionPlatform
 from opentide.cli.services.setup.repo import RepoSetupOptions, run_repo_setup
-from opentide.package.paths import recomposition_platforms_root
+from opentide.package.paths import platform_templates_root
 
 
 def test_template_renderer_run_writes_core_and_enabled_platform(
@@ -30,6 +30,7 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(target))
     monkeypatch.delenv("OPENTIDE_DATA_ROOT", raising=False)
     clear_runtime_caches()
+    bundled = {path: path.read_bytes() for path in platform_templates_root().iterdir()}
     Opentide.initialise()
     template_renderer_run()
     rule = (target / ".opentide" / "templates" / "rule.1.0.template.yaml").read_text(
@@ -42,15 +43,14 @@ def test_template_renderer_run_writes_core_and_enabled_platform(
     assert "configurations: {}" not in rule
     assert "#sentinel:" in rule
     assert "mitre_attack:" in threat
-    sentinel = (
-        recomposition_platforms_root()
-        / "MDR Systems Deployment"
-        / "Templates"
-        / "Microsoft Sentinel Template.yaml"
-    )
-    platform_text = sentinel.read_text(encoding="utf-8")
+    platforms = target / ".opentide" / "templates" / "platforms"
+    # Named by the platform file, written to the workspace: only the enabled one.
+    assert sorted(path.name for path in platforms.iterdir()) == ["sentinel.template.yaml"]
+    platform_text = (platforms / "sentinel.template.yaml").read_text(encoding="utf-8")
     assert "query: |" in platform_text
     assert "schema: platform::sentinel::1.0" in platform_text
+    # The installed package may be read-only: generation never writes into it.
+    assert {path: path.read_bytes() for path in platform_templates_root().iterdir()} == bundled
     clear_runtime_caches()
 
 

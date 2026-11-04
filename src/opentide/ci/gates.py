@@ -64,3 +64,73 @@ def azure_premerge_condition(default_branch: str) -> str:
         f"eq(variables['System.PullRequest.TargetBranch'], 'refs/heads/{default_branch}')"
         ")"
     )
+
+
+# --- Skipping deploys for a change that touches the whole catalogue -----------------------
+
+SKIP_DEPLOY_MARKER = "[skip deploy]"
+"""In a commit message (or a pull/merge request title): run no deploy, share or live check."""
+
+SKIP_DEPLOY_LABEL = "skip-deploy"
+"""A pull/merge request label with the same effect as :data:`SKIP_DEPLOY_MARKER`."""
+
+SKIP_DEPLOY_NOTE = (
+    f"{SKIP_DEPLOY_MARKER} or the {SKIP_DEPLOY_LABEL} label: no live query check, "
+    "deploy or share in this pipeline."
+)
+
+#: :data:`SKIP_DEPLOY_MARKER` as a GitLab (RE2) regex literal.
+_GITLAB_MARKER = r"/\[skip deploy\]/"
+
+
+def gitlab_skip_deploy_rules() -> list[dict[str, str]]:
+    """``rules:`` entries, listed first, that leave a job out of a skipped pipeline.
+
+    A migration, bulk rename or reformat changes every rule file: its merge
+    request would staging-deploy and live-check the whole catalogue, and its
+    merge promote and redeploy it. ``[skip deploy]`` in the commit message
+    (the merged commit on the default branch: GitLab's default merge and
+    squash commit messages include the merge request title), in the merge
+    request title, or the ``skip-deploy`` label skips those jobs. Every
+    ``needs`` on a job that has these rules is optional, so the pipeline
+    still starts.
+    """
+    label = rf"/(^|,){SKIP_DEPLOY_LABEL}(,|$)/"
+    return [
+        {"if": f"$CI_COMMIT_MESSAGE =~ {_GITLAB_MARKER}", "when": "never"},
+        {"if": f"$CI_MERGE_REQUEST_TITLE =~ {_GITLAB_MARKER}", "when": "never"},
+        {"if": f"$CI_MERGE_REQUEST_LABELS =~ {label}", "when": "never"},
+    ]
+
+
+def github_not_skipped() -> str:
+    """GitHub ``if:`` terms that are false when a deploy is skipped.
+
+    On a push, the pushed tip's message (a merge commit's holds the pull
+    request title); on a pull request, its title or labels. A property of
+    the other event is null there, and ``contains`` of null is false.
+    """
+    return (
+        f"!contains(github.event.head_commit.message, '{SKIP_DEPLOY_MARKER}') && "
+        f"!contains(github.event.pull_request.title, '{SKIP_DEPLOY_MARKER}') && "
+        f"!contains(github.event.pull_request.labels.*.name, '{SKIP_DEPLOY_LABEL}')"
+    )
+
+
+def azure_skip_guard() -> str:
+    """Shell that exits 0, before anything runs, when the build's commit asks to skip deploys.
+
+    Azure fills ``Build.SourceVersionMessage`` at step level only, so a job
+    or stage ``condition:`` that reads it sees an empty string and never
+    skips. The check runs first in the job's script instead: a pull request
+    build reads its source commit's message, any other build the commit it
+    built (``Merged PR <n>: <title>`` for an Azure Repos merge, the title for
+    a squash). Every job that calls it checks out full history. Azure exposes
+    no labels or pull request title to a pipeline.
+    """
+    return (
+        'commit="${SYSTEM_PULLREQUEST_SOURCECOMMITID:-${BUILD_SOURCEVERSION:-}}"; '
+        'if [ -n "$commit" ] && git log -1 --format=%B "$commit" 2>/dev/null '
+        f"| grep -qF '{SKIP_DEPLOY_MARKER}'; then "
+        f'echo "{SKIP_DEPLOY_NOTE}"; exit 0; fi'
+    )

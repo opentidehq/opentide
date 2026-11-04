@@ -41,7 +41,7 @@ def _app_choices() -> dict[tuple[str, str], tuple[str, ...]]:
     return {
         ("validate", "object_type"): ("rule", "threat", "objective"),
         ("deploy", "strategy"): tuple(strategy.name for strategy in DEPLOYABLE_STRATEGIES),
-        ("info", "section"): ("rules", "threats", "objectives", "coverage", "vocab"),
+        ("info", "section"): ("rules", "threats", "objectives", "coverage", "vocab", "catalog"),
     }
 
 
@@ -89,8 +89,19 @@ def environment() -> list[dict[str, str]]:
             "meaning": "npm spec opentide explorer runs instead of @opentide/explorer@<version>",
         },
         {
+            "name": "OPENTIDE_QUERY_CHECK_TIMEOUT",
+            "meaning": "Seconds each validate query --live check may take, like --check-timeout",
+        },
+        {
             "name": "OPENTIDE_PROGRESS",
-            "meaning": "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal",
+            "meaning": (
+                "0 turns terminal progress (OSC 9;4) off; 1 sends it to any terminal; "
+                "json writes progress events on stderr"
+            ),
+        },
+        {
+            "name": "OPENTIDE_CACHE_DIR",
+            "meaning": "Where opentide caches the language-server catalogs it generates",
         },
         *(
             {"name": name, "meaning": "Set by a coding agent: selects agent output mode"}

@@ -194,10 +194,10 @@ def refuse_deployment_engines(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     class _NoEngines:
         def __init__(self) -> None:
-            loaded.append("DeployTide")
+            loaded.append("EnabledPlatforms")
             raise AssertionError("a command with no rules loaded a platform engine")
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _NoEngines)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _NoEngines)
     return loaded
 
 
@@ -209,12 +209,17 @@ def mock_query_validators(monkeypatch: pytest.MonkeyPatch) -> None:
     covers ``--live`` only.
     """
 
+    from opentide.query.check import LiveCheckReport
+
     class _NoOpValidator:
-        def validate(self, **kwargs: object) -> None:
-            return None
+        def __init__(self, platform: str) -> None:
+            self.platform = platform
+
+        def validate(self, **kwargs: object) -> LiveCheckReport:
+            return LiveCheckReport(self.platform)
 
     validators = {
-        platform: _NoOpValidator()
+        platform: _NoOpValidator(platform)
         for platform in (
             "sentinel",
             "defender_for_endpoint",
@@ -232,7 +237,7 @@ def mock_query_validators(monkeypatch: pytest.MonkeyPatch) -> None:
         def query_validation_for(self, platform: str) -> dict[str, _NoOpValidator]:
             return {platform: validators[platform]} if platform in validators else {}
 
-    monkeypatch.setattr("opentide.platforms.plugins.DeployTide", _MockDeployTide)
+    monkeypatch.setattr("opentide.platforms.plugins.EnabledPlatforms", _MockDeployTide)
 
 
 @pytest.fixture

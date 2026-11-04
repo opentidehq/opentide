@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from opentide.core.files import resolve_paths
+from opentide.core.io import write_text_atomically
 from opentide.core.logging import get_logger, is_debug_enabled
 from opentide.core.progress import report_stage
 from opentide.core.registry import Opentide
@@ -135,9 +136,8 @@ class VocabularyResolver:
         ``enumDescriptions``.
 
         Vocabularies are canonical in the specifications repository and are
-        NOT locally extensible: the CoreTIDE-era ``[vocabulary]`` block in
-        ``schema.toml`` was never part of this package's contract and has
-        been removed. A missing entry is fixed upstream, not injected here.
+        not locally extensible. A missing entry is fixed upstream, not
+        injected here.
 
         Handles three patterns:
 
@@ -391,46 +391,47 @@ _Vocabulary_ : `{source_vocab}`
     # ==================================================================
 
     class Logsources:
-        """Resolve log source entries from visibility configuration."""
+        """Resolve log source entries from visibility configuration.
 
-        def resolve(self, *, qualified: bool = True) -> tuple[list[str], list[str]] | None:
+        A signal names a log source as ``<name>``, ``<system>::<name>`` or
+        ``<system>::<tenant>::<name>``. A name two systems declare
+        (`DeviceEvents` for `sentinel` and `defender_for_endpoint`) is one bare
+        value that refers to both, and its description covers both.
+        """
+
+        @staticmethod
+        def _describe(ls, asset_map: dict) -> str:
+            text = f"### {ls.name}\n**System**: {ls.system}\n**Description**: {ls.description}\n\n"
+            if ls.tenants:
+                text += "**Tenants**: " + ", ".join(ls.tenants) + "\n\n"
+            if ls.assets:
+                text += "### Associated Assets:\n"
+                for a in ls.assets:
+                    text += VocabularyResolver._format_asset(a, asset_map) + "\n"
+            return text
+
+        def resolve(self) -> tuple[list[str], list[str]] | None:
             visibility = VocabularyResolver._visibility()
             if not visibility or not visibility.logsources:
                 return None
             asset_map = VocabularyResolver._asset_map(visibility)
             enums: list[str] = []
             descriptions: list[str] = []
-
+            qualified: list[tuple[str, str]] = []
             for ls in visibility.logsources:
-                base = (
-                    f"### {ls.name}\n**System**: {ls.system}\n**Description**: {ls.description}\n\n"
-                )
-                if ls.assets:
-                    base += "### Associated Assets:\n"
-                    for a in ls.assets:
-                        base += VocabularyResolver._format_asset(a, asset_map) + "\n"
-
-                # Signal logsources are authored as the visibility ``name``.
-                # Qualified ``system::name`` values stay for the visibility schema.
-                if not qualified:
-                    if ls.name not in enums:
-                        enums.append(ls.name)
-                        descriptions.append(base)
-                    continue
-
-                if ls.tenants:
-                    for tenant in ls.tenants:
-                        enums.append(f"{ls.system}::{tenant}::{ls.name}")
-                        descriptions.append(
-                            base.replace(
-                                "**System**:",
-                                f"**System**: {ls.system}\n**Tenant**: {tenant}",
-                            )
-                        )
+                text = self._describe(ls, asset_map)
+                if ls.name in enums:
+                    descriptions[enums.index(ls.name)] += "---\n\n" + text
                 else:
-                    enums.append(f"{ls.system}::{ls.name}")
-                    descriptions.append(base)
-
+                    enums.append(ls.name)
+                    descriptions.append(text)
+                qualified.append((f"{ls.system}::{ls.name}", text))
+                for tenant in ls.tenants or []:
+                    qualified.append((f"{ls.system}::{tenant}::{ls.name}", text))
+            for value, text in qualified:
+                if value not in enums:
+                    enums.append(value)
+                    descriptions.append(text)
             return enums, descriptions
 
     # ==================================================================
@@ -616,6 +617,7 @@ def strip_framework_keywords(dictionary: dict) -> dict:
 
 def recomposition_handler(entry_point):
     from opentide.generation.pydantic_metaschema import build_platform_schema_source
+    from opentide.models.platform import PLATFORM_CONFIG_MODELS
     from opentide.models.platform_schema import platform_model_for_key
 
     _ensure_runtime_context()
@@ -624,20 +626,17 @@ def recomposition_handler(entry_point):
     for entry, data in recompositions.items():
         if not isinstance(data, dict):
             continue
-        if data.get("tide"):
-            config_keyword = "tide"
-        elif data.get("platform"):
-            config_keyword = "platform"
-        else:
+        platform_cfg = data.get("platform")
+        if not isinstance(platform_cfg, dict) or platform_cfg.get("enabled") is not True:
             continue
-
-        platform_cfg = data[config_keyword]
-        if platform_cfg.get("enabled") is not True:
+        # A platform file opentide has no rule block for (a plugin's
+        # `platforms/<id>.toml`) adds nothing to the rule schema (#736).
+        if entry not in PLATFORM_CONFIG_MODELS:
             continue
         recomp_identifier = entry
         recomposition[recomp_identifier] = dict()
-        recomposition[recomp_identifier]["title"] = platform_cfg["name"]
-        recomposition[recomp_identifier]["description"] = platform_cfg["description"]
+        recomposition[recomp_identifier]["title"] = platform_cfg.get("name") or entry
+        recomposition[recomp_identifier]["description"] = platform_cfg.get("description", "")
         recomposition[recomp_identifier]["type"] = "object"
         platform_model = platform_model_for_key(entry)
         recomp_data = build_platform_schema_source(platform_model)
@@ -780,19 +779,15 @@ def gen_json_schema(dictionary: dict[str, Any], *, schema_id: str | None = None)
                 ):
                     dictionary[field]["additionalProperties"] = False
 
-                # If within that dict a key is called coretide, the dict will receive
-                # fields generated from the libraries to allow multi or single
-                # field validation with JSON Schema
+                # A ``recomposition`` key names the platform configurations whose
+                # block schemas become this object's properties.
                 if "recomposition" in dict_foo[field]:
                     temp = recomposition_handler(dict_foo[field]["recomposition"])
                     dictionary[field]["properties"] = temp
 
                 # Handles retrieval of logsources
-                logsource_names = dict_foo[field].get("tide.config.visibility.logsource-names")
-                if dict_foo[field].get("tide.config.visibility.logsources") or logsource_names:
-                    logsources_result = VocabularyResolver.Logsources().resolve(
-                        qualified=not logsource_names
-                    )
+                if dict_foo[field].get("tide.config.visibility.logsource-names"):
+                    logsources_result = VocabularyResolver.Logsources().resolve()
                     if logsources_result:
                         enums, descriptions = logsources_result
                         dictionary[field]["items"] = {}
@@ -982,60 +977,17 @@ def run() -> None:
 
         logger.info("exporting_generated_schema_to_str_json_output", path=str(json_output))
         output = json.dumps(cleaned, indent=4, sort_keys=False, default=str) + "\n"
-        with open(json_output, "w", encoding="utf-8") as output_file:
-            output_file.write(output)
+        write_text_atomically(json_output, output)
         logger.info("correctly_exported", detail=artifact_name)
 
         if family in legacy_schema_map and schema_id == latest_identifier(family):
             legacy_name = legacy_schema_map[family]
             legacy_output = schema_folder / legacy_name
             if legacy_output != json_output and _legacy_alias_tracks_latest(legacy_name, schema_id):
-                with open(legacy_output, "w", encoding="utf-8") as legacy_file:
-                    legacy_file.write(output)
+                write_text_atomically(legacy_output, output)
                 logger.info("exported_legacy_schema_alias", path=str(legacy_output))
 
     logger.info("generated_all_json_schemas")
-
-    # Configuration Schemas from Pydantic models
-    config_json_schemas = GLOBAL_CONFIG.config_json_schemas
-
-    if config_json_schemas:
-        report_stage("configuration schema assembly")
-        logger.info(
-            "config_schema_assembler_started",
-            detail="Generates JSON Schemas from Pydantic configuration models.",
-        )
-
-        for meta in config_json_schemas:
-            json_output = schema_folder / config_json_schemas[meta]
-
-            if meta == "visibility":
-                from opentide.generation.pydantic_metaschema import build_model_schema_source
-                from opentide.models.visibility import VisibilityConfig
-
-                parsing = build_model_schema_source(VisibilityConfig)
-                placeholders: dict[str, str] = {}
-            else:
-                continue
-
-            logger.info("generating_config_schema_for")
-
-            from opentide.generation.schema_annotations import annotate_editor_schema
-
-            generated = gen_json_schema(parsing)
-            cleaned = annotate_editor_schema(strip_framework_keywords(generated))
-
-            logger.info("exporting_generated_schema_to_str_json_output")
-            output = json.dumps(cleaned, indent=4, sort_keys=False, default=str)
-            for placeholder in placeholders:
-                logger.info("replacing_all_occurence_of_placeholder")
-                output = output.replace(f"${placeholder}", placeholders[placeholder])
-
-            with open(json_output, "w", encoding="utf-8") as output_file:
-                output_file.write(output + "\n")
-            logger.info("correctly_exported")
-
-        logger.info("generated_all_configuration_schemas")
 
 
 if __name__ == "__main__":

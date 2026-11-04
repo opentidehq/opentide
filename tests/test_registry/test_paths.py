@@ -29,7 +29,7 @@ def _minimal_paths(tmp_path: Path) -> dict[str, Path]:
     }
 
 
-def test_legacy_core_paths_alias_subschemas_to_platform_templates(tmp_path: Path) -> None:
+def test_core_paths_name_the_platform_templates_once(tmp_path: Path) -> None:
     aliases = legacy_path_aliases(_minimal_paths(tmp_path))
-    assert aliases["core"]["subschemas"] == tmp_path / "platform_templates"
-    assert aliases["core"]["platform_templates"] == aliases["core"]["subschemas"]
+    assert aliases["core"]["platform_templates"] == tmp_path / "platform_templates"
+    assert "subschemas" not in aliases["core"]

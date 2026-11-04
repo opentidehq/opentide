@@ -9,18 +9,17 @@ Every file under `.opentide/configurations/` has one Pydantic model in `opentide
 
 | File | Model | Schema file |
 |------|-------|-------------|
-| `paths.toml`, legacy `global.toml` | `PathsConfiguration` | `paths.schema.json` |
+| `paths.toml` | `PathsConfiguration` | `paths.schema.json` |
 | `deployment.toml` | `DeploymentConfiguration` | `deployment.schema.json` |
-| `schema.toml` | `SchemaConfiguration` | `schema.schema.json` |
 | `visibility.toml` | `VisibilityConfig` (`visibility::1.0`) | `visibility.schema.json` |
 | `documentation.toml` | `DocumentationConfiguration` | `documentation.schema.json` |
 | `sharing.toml` | `SharingConfiguration`, items `MispIntegration` (`sharing::misp::1.0`) | `sharing.schema.json` |
 | `platforms/<id>.toml` | `SentinelConfiguration`, `SplunkConfiguration`, … | `platforms.<id>.schema.json` |
 | any other `platforms/*.toml` | `PlatformConfiguration` | `platforms.schema.json` |
 
-`resources.toml` and `lint.toml` have no model here: `lint.toml` is checked by `opentide lint`'s own loader.
+`resources.toml` and `lint.toml` have no model here: `lint.toml` is checked by `opentide lint`'s own loader. `global.toml`, `schema.toml` and a `systems/` folder are not read: every command refuses them with `retired_configuration_file`, naming what replaces each.
 
-Unknown keys are rejected everywhere except the retired `[vocabulary]` table of `schema.toml` and a top-level `sharing.toml` array that names a connector opentide does not know (`[[opencti]]`), which is skipped with an `unknown_connector` warning.
+Unknown keys are rejected everywhere except a top-level `sharing.toml` array that names a connector opentide does not know (`[[opencti]]`), which is skipped with an `unknown_connector` warning.
 
 A `$NAME` placeholder is a valid value for any tenant `setup` key; the models check the file as written, and the variable is read when the tenant loads. An error never repeats the offending value, since `setup` tables hold credentials.
 
@@ -30,6 +29,14 @@ from opentide.models.configuration import configuration_model_for
 model = configuration_model_for(".opentide/configurations/platforms/sentinel.toml")
 model.model_validate({"platform": {"enabled": True}})
 ```
+
+## Declared datasets
+
+A `visibility.toml` log source (`VisibilityLogSource`) is one dataset, and its `name` is that dataset: the KQL table for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern for `elastic` (`opentide.models.visibility.DATASET_KINDS`). It takes `name`, `description`, `system`, `tenants`, `assets`, `references` and `columns`, a mapping of column name to `VisibilityColumn` (`type` from `COLUMN_TYPES[system]`, optional `description`).
+
+Each violation is an issue on the key at fault: an empty `name` or a name declared twice for one `system` (`schema_validation`, `("logsources", "1", "name")`), a column type outside the system's set (`("logsources", "0", "columns", "Actor_s", "type")`), `columns` on a system with no type set, and an unknown key (`unknown_key`). The 0.20.0 keys (`LEGACY_DATASET_KEYS`: `tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`) fail as `schema_validation` on that key, with the message `LEGACY_DATASET_KEYS` maps the key to: what to do instead.
+
+The analysis engine reads the same keys from the file's text, so nothing is generated in between. `opentide.analysis.install_workspace_visibility(root)` hands it `root/.opentide/configurations/visibility.toml` for the query checks (`opentide validate`, `lint` and the TUI call it); `opentide._native.install_visibility(text)` takes the text directly, and `install_catalog(..., visibility=text)` installs it with the Tide catalogs. `*` in a name matches any run of characters.
 
 ## Exporting the JSON Schemas
 
@@ -73,11 +80,10 @@ issues = configuration_text_issues("sharing.toml", buffer_text, status_names={"P
 | `schema_validation` | error | A value of the wrong type or outside its enum |
 | `promotion_target_unknown` | error | `promotion.promotion_target` is not a `[[statuses]]` name |
 | `asset_unknown` | warning | A visibility log source or detector names an undeclared asset |
-| `identifier_mismatch` | error | `[platform] identifier` differs from the file name stem |
 | `config_parse` | error | The text is not valid TOML |
 | `not_a_configuration_file` | warning | The path is not a file opentide reads, or has no model (`resources.toml`, `lint.toml`) |
 
-A `[[responders]]` entry that does not match its model is a warning: the loader keeps an entry that has a name and skips one that has none. A platform file is checked with the model of the platform the loader files it under (`[platform] identifier`, then `[tide] identifier`, then the file name). A platform plugin's file is open: only `[platform]`, `[[modifiers]]` and the tenant `name`, `strategies`, `manual` and `ssl` are checked. A path under `configurations/sharing/` returns `sharing_directory`, and one under `.opentide/schemas/` is not a configuration file.
+A `[[responders]]` entry that does not match its model is a warning: the loader keeps an entry that has a name and skips one that has none. A platform file is checked with the model of the platform its file name names (`platforms/splunk.toml` is Splunk's). A platform plugin's file is open: only `[platform]`, `[[modifiers]]` and the tenant `name`, `strategies`, `manual` and `ssl` are checked. A path under `configurations/sharing/` returns `sharing_directory`, and one under `.opentide/schemas/` is not a configuration file.
 
 `sharing.toml` field paths point into the checked file: `("misp", "<index>", "<key>")`, with the block name in `context.block`. A finding on a block the file does not hold (it comes from an earlier layer) has an empty path, and `context.layer` / `context.index` say where it is. `sharing.toml` returns the `sharing-config` codes of the [sharing spec](/docs/specifications/specs/sharing/): `missing_field`, `duplicate_name`, `name_invalid`, `unknown_key`, `max_tlp_unknown`, `organisation_uuid_invalid`, `object_type_unknown`, `sharing_directory`, `rule_status_unknown` (errors), and `api_key_literal`, `unknown_connector` (warnings). `api_key` must be `${NAME}` with an uppercase name; a literal key is a warning, and the warning names the block, never the key.
 

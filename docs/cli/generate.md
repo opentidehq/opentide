@@ -27,13 +27,13 @@ When run without a subcommand, phases execute in this order:
 | 1 | docs | `generate docs` | Markdown documentation for rules, objectives, threats |
 | 2 | exports | `generate exports` | ATT&CK navigator layer, objects export, revisions export |
 | 3 | vocabs | `generate vocabs` | In-memory object vocabulary indexes |
-| 4 | templates | `generate templates` | `.opentide/templates/*.template.yaml` |
-| 5 | schemas | `generate schemas` | `.opentide/schemas/*.schema.json`, IDE router `opentide.schema.json` |
+| 4 | templates | `generate templates` | `.opentide/templates/*.template.yaml`, and `.opentide/templates/platforms/<platform>.template.yaml` for each enabled platform |
+| 5 | schemas | `generate schemas` | `.opentide/schemas/*.schema.json`, IDE router `opentide.schema.json`, and the language server's catalogs in `.opentide/lsp/catalogs/generated/` |
 | 6 | snippets | `generate snippets` | VS Code snippets from templates |
 
 `extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract sentinel`, `opentide generate extract defender` or `opentide generate extract elastic` explicitly when importing rules.
 
-A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: yaml` and tabstops on empty values.
+A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: "yaml,opentide-yaml"` (plain YAML files and the opentide VS Code extension's object files) and tabstops on empty values.
 
 ## When a phase fails
 
@@ -69,8 +69,11 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 - Vocabulary fields are empty scalars (no enum dump).
 - `DetectionRule.file` and other `Path` / hidden fields are omitted.
 - Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
+- Each enabled platform's block is written to `.opentide/templates/platforms/<platform>.template.yaml` (`sentinel.template.yaml`), named by the platform file, never by its display `name`. `generate snippets` reads it there. Nothing is written into the installed package.
 
 JSON Schema generation (`generate schemas`) stays a separate pipeline. It writes one schema per registered revision (`rule.1.0.schema.json`, `rule.1.1.schema.json`, …) and the router `opentide.schema.json`, which applies the revision named in each object's `metadata.schema`. Map the router in your editor; see [Schema revision](../usage/concepts/schema-revision.md). VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
+
+The `schemas` phase also writes the language server's catalogs, `.opentide/lsp/catalogs/generated/fields.json` (every field of every revision of each object family, with its type, whether it is required, enum values and their descriptions, and the objects that take no other key) and `deprecations.json`, from the same models. Editors that run the `opentide-lsp` binary on its own use them instead of the catalog compiled into the engine, so hover, completion and vocabulary checks follow this workspace's configuration. Commit them with the schemas; `opentide doctor` warns when they are missing or stale (`lsp_catalog`).
 
 Generated schemas are written for editor hovers and completions. Every field carries a `title` and a `description`, taken from the docstring under the model field; a description that uses Markdown also gets a `markdownDescription`. Vocabulary enums carry one description per value: the full entry in `markdownEnumDescriptions`, and its name and first sentence in `enumDescriptions` (VS Code) and `x-enumDescriptions` (the same list, for other editors). Configuration enums (statuses, log sources, detectors, tenants) carry their whole description as plain text in the same two keys. Each schema's `$comment` names opentide and its tagline. These are annotation keywords: they change what an editor shows, never what validates. Each snippet carries a description naming the object or platform block it inserts.
 

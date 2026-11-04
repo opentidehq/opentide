@@ -12,6 +12,7 @@ import pytest
 from opentide.models.deployment_enums import DEPLOYABLE_STRATEGIES
 from opentide.models.metadata import ObjectMetadata
 from opentide.models.rule import DetectionRule
+from opentide.query.check import LiveCheckReport, RuleCheck
 
 
 def test_detection_rule_from_yaml_and_delegation(metadata: dict[str, Any]) -> None:
@@ -71,8 +72,10 @@ def _sentinel_rule(metadata: dict[str, Any], status: str = "STAGING") -> Detecti
 
 def _bound(rule: DetectionRule) -> tuple[DetectionRule, MagicMock]:
     registry = MagicMock()
+    validator = MagicMock()
+    validator.validate.return_value = LiveCheckReport("sentinel")
     registry.Platforms = {
-        "sentinel": MagicMock(deployer=MagicMock(), validator=MagicMock()),
+        "sentinel": MagicMock(deployer=MagicMock(), validator=validator),
         "crowdstrike": MagicMock(deployer=MagicMock(), validator=MagicMock()),
     }
     return rule.bind_registry(registry), registry.Platforms["sentinel"].deployer.deploy
@@ -94,15 +97,11 @@ def test_detection_rule_deploy_and_validate_query_success(metadata: dict[str, An
         bound.deploy("not_a_platform", dry_run=True)
 
 
-def _raise_flag(flag: str) -> MagicMock:
-    """A validator that reports its verdict the way the platform validators do.
-
-    It takes run strategies, as every platform validator's ``validate`` does.
-    """
+def _reporting(*, errors: tuple[str, ...] = (), warnings: tuple[str, ...] = ()) -> MagicMock:
+    """A validator that returns its verdict as data, as every platform validator does."""
+    check = RuleCheck(rule="uuid", name="rule", tenant="soc", errors=errors, warnings=warnings)
     validator = MagicMock()
-    validator.validate.side_effect = lambda _uuids, _strategies: os.environ.__setitem__(
-        flag, "True"
-    )
+    validator.validate.return_value = LiveCheckReport("sentinel", [check])
     return validator
 
 
@@ -111,9 +110,8 @@ def test_validate_query_checks_the_rule_for_every_deployable_strategy(
 ) -> None:
     """It called ``validate([uuid])``: most validators require strategies (TypeError),
     and without them the planner targets no tenant, so nothing was checked."""
-    monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
     bound, _ = _bound(_sentinel_rule(metadata))
-    validator = _raise_flag("VALIDATION_WARNING_RAISED")
+    validator = _reporting(warnings=("slow",))
     bound._registry.Platforms["sentinel"].validator = validator
 
     bound.validate_query("sentinel")
@@ -126,27 +124,25 @@ def test_validate_query_reports_a_query_the_validator_refused(
 ) -> None:
     """An invalid query used to come back ``ok=True``.
 
-    Platform validators log a refused query and raise ``VALIDATION_ERROR_RAISED``,
-    a flag ``validate_query`` never read.
+    Platform validators logged a refused query and raised a process flag
+    ``validate_query`` never read; they now return the verdict (#673).
     """
     monkeypatch.delenv("VALIDATION_ERROR_RAISED", raising=False)
     bound, _ = _bound(_sentinel_rule(metadata))
-    bound._registry.Platforms["sentinel"].validator = _raise_flag("VALIDATION_ERROR_RAISED")
+    bound._registry.Platforms["sentinel"].validator = _reporting(errors=("refused",))
 
     result = bound.validate_query("sentinel")
 
     assert result.ok is False
     assert result.errors == ["Query validation failed for sentinel"]
-    # The flag is the CLI's run verdict; the SDK call reports and leaves it as it was.
     assert not os.environ.get("VALIDATION_ERROR_RAISED")
 
 
 def test_validate_query_reports_warnings_without_failing(
     metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("VALIDATION_WARNING_RAISED", raising=False)
     bound, _ = _bound(_sentinel_rule(metadata))
-    bound._registry.Platforms["sentinel"].validator = _raise_flag("VALIDATION_WARNING_RAISED")
+    bound._registry.Platforms["sentinel"].validator = _reporting(warnings=("slow",))
 
     result = bound.validate_query("sentinel")
 
@@ -157,7 +153,7 @@ def test_validate_query_reports_warnings_without_failing(
 def test_validate_query_ignores_an_earlier_failure(
     metadata: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A flag raised before the call belongs to another check, and survives it."""
+    """The process environment neither fails the call nor is changed by it."""
     monkeypatch.setenv("VALIDATION_ERROR_RAISED", "True")
     bound, _ = _bound(_sentinel_rule(metadata))
 
