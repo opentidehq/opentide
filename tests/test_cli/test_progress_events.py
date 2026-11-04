@@ -143,6 +143,17 @@ def test_validate_reports_objects_on_stderr_and_one_document_on_stdout(
     assert any(event["step"] == "queries" for event in events)
 
 
+def test_validate_query_offline_reports_its_queries(invoke_cli: Callable[..., Result]) -> None:
+    """The offline check sent no event, though the documentation lists `validate query`."""
+    result = invoke_cli("validate", "query", extra_env=PROGRESS)
+    document = _one_document(result)
+    queries = document["summary"]["queries"]
+    assert queries
+    assert _events(result.stderr) == [
+        {"event": "progress", "step": "queries", "done": queries, "total": queries}
+    ]
+
+
 def test_without_the_variable_validate_writes_no_event(invoke_cli: Callable[..., Result]) -> None:
     result = invoke_cli("validate")
     _one_document(result)

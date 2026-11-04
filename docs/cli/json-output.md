@@ -159,7 +159,7 @@ OPENTIDE_PROGRESS=json opentide --json generate 2> events.ndjson
 
 | Event | Keys | Sent by |
 |-------|------|---------|
-| `progress` | `step`, `done`, `total` (`null` when unknown) | `generate` and its subcommands: one per finished phase (`schemas`, `templates`, …). `validate`: `objects` as objects are checked, in batches (about 20 per run, and always the last one, where `done` equals `total`), then `queries` once the query check ran. `deploy --dry-run`: one per platform, `step` being the platform. `deploy`, `validate query` and the other commands with steps: one per finished step |
+| `progress` | `step`, `done`, `total` (`null` when unknown) | `generate` and its subcommands: one per finished phase (`schemas`, `templates`, …). `validate`: `objects` as objects are checked, in batches (about 20 per run, and always the last one, where `done` equals `total`), then `queries` once the query check ran. `validate query`: `queries` once the engine checked them offline (`done` and `total` are the number of queries); with `--live`, one step named after the platform (`Microsoft Sentinel queries`) once its tenants answered. `deploy --dry-run`: one per platform, `step` being the platform. `deploy` and the other commands with steps: one per finished step |
 | `tenant` | `platform`, `tenant`, `status` (`ok` or `failed`), `rows`, `elapsed_ms`; `label` when the rule holds several queries | `query`: one per tenant and query, as each answers |
 
 Each event is one line of compact JSON, written whole. Log lines share stderr (`OPENTIDE_LOG_JSON=1` makes them JSON too), so a reader keeps the lines whose `event` is `progress` or `tenant`. Under [`opentide serve`](./serve.md) the same events arrive as `progress` notifications instead of on stderr.
