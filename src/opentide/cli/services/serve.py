@@ -802,4 +802,44 @@ def serve_stdio(
         server.close_input()
 
     threading.Thread(target=read, name="opentide-serve-stdin", daemon=True).start()
-    return server.serve()
+    with _stop_on_termination(server) as signalled:
+        code = server.serve()
+    return 128 + signalled[0] if signalled else code
+
+
+@contextlib.contextmanager
+def _stop_on_termination(server: Server) -> Generator[list[int]]:
+    """Turn SIGTERM and SIGHUP into the end of input while *server* serves.
+
+    A run executes on a worker thread, where nothing (``setup --plan``'s
+    handler included) can catch a signal: Python's default ended the process
+    there, without the run's cleanup, and a plan left the repository's copy in
+    the temporary folder. The run is cancelled instead, as by ``exit``, and its
+    ``finally`` blocks run. A second signal ends the process at once. An
+    ignored signal stays ignored. Yields the signals received.
+    """
+    import signal
+
+    received: list[int] = []
+    if threading.current_thread() is not threading.main_thread():
+        yield received
+        return
+
+    def stop(signum: int, _frame: object) -> None:
+        received.append(signum)
+        signal.signal(signum, signal.SIG_DFL)
+        # Not here: the handler may run while this thread holds the server's lock.
+        threading.Thread(target=server.close_input, name="opentide-serve-stop").start()
+
+    previous: dict[int, Any] = {}
+    for name in ("SIGTERM", "SIGHUP"):
+        number = getattr(signal, name, None)
+        if number is None or signal.getsignal(number) is signal.SIG_IGN:
+            continue
+        previous[number] = signal.signal(number, stop)
+    try:
+        yield received
+    finally:
+        for number, handler in previous.items():
+            # None: a handler installed outside Python, which cannot be put back.
+            signal.signal(number, signal.SIG_DFL if handler is None else handler)

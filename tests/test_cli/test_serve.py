@@ -7,6 +7,7 @@ last ones spawn the console script and speak the protocol over its stdio.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import queue
@@ -509,6 +510,71 @@ def test_queued_runs_do_not_run_after_exit_or_the_end_of_input(ending: str) -> N
     assert runner.calls == []
     answers = {message["id"]: message["result"]["exit_code"] for message in written}
     assert answers == {1: 130, 2: 130, 3: 130}
+
+
+class PlanningRunner(CommandRunner):
+    """A run that holds a ``setup --plan`` copy of *target* until it is interrupted."""
+
+    def __init__(self, target: Path) -> None:
+        super().__init__(base_env={}, cwd=Path.cwd())
+        self.target = target
+        self.started = threading.Event()
+        self.copies: list[Path] = []
+
+    def run(self, argv: Any, *, cwd: str | None = None, env: Any = None, **_: Any) -> Any:
+        from opentide.cli.services.setup.plan import sandbox
+
+        with sandbox(self.target) as box:
+            self.copies.append(box.shadow_top)
+            self.started.set()
+            while True:
+                time.sleep(0.01)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is not delivered on Windows")
+def test_sigterm_stops_the_run_so_its_plan_copy_is_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run executes on a worker thread, where the plan cannot install its handler: SIGTERM
+    ended `opentide serve` and left the repository's copy in the temporary folder."""
+    import signal
+    import tempfile
+
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    target = tmp_path / "repo"
+    target.mkdir()
+    (target / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    runner = PlanningRunner(target)
+    request = {"jsonrpc": "2.0", "id": 1, "method": "run", "params": {"argv": ["setup"]}}
+    hold = threading.Event()
+
+    def requests() -> Iterator[bytes]:
+        yield json.dumps(request).encode()
+        hold.wait(TIMEOUT)
+
+    def terminate() -> None:
+        assert runner.started.wait(TIMEOUT)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    def unhandled(signum: int, frame: object) -> None:
+        raise AssertionError("opentide serve did not handle SIGTERM")
+
+    previous = signal.signal(signal.SIGTERM, unhandled)
+    output = io.BytesIO()
+    try:
+        threading.Thread(target=terminate, daemon=True).start()
+        code = serve_mod.serve_stdio(requests(), output, runner=runner)
+        assert signal.getsignal(signal.SIGTERM) is unhandled
+    finally:
+        hold.set()
+        signal.signal(signal.SIGTERM, previous)
+    assert code == 128 + signal.SIGTERM
+    assert runner.copies and not runner.copies[0].exists()
+    assert list(scratch.iterdir()) == []
+    [answer] = [json.loads(line) for line in output.getvalue().splitlines()]
+    assert answer["id"] == 1 and answer["result"]["exit_code"] == 130
 
 
 def test_a_client_that_disconnects_ends_the_session_with_zero() -> None:

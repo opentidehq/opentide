@@ -73,6 +73,8 @@ At 500 rules on 4 CPUs, a repeat `validate --file` answers in about 0.3 s, again
 
 `$/cancelRequest {id}` stops the run *id* as Ctrl-C would: `KeyboardInterrupt` is raised in the thread that runs it, so its cleanup runs (a CrowdStrike search is stopped), and it answers `exit_code` `130` with a document whose `failure.code` is [`interrupted`](./diagnostics.md#interrupted). A run blocked in one call (waiting on a tenant's answer) stops when that call returns. A cancel for a queued run answers it with `130` without running it; a cancel for a run that has answered, or for an id no request carries, changes nothing, also for a later request that reuses the id.
 
+SIGTERM and SIGHUP stop the server as the end of input does: the running command is cancelled, its cleanup runs (a `setup --plan` removes its copy of the repository), it answers `130`, queued runs answer `130` unrun, and the server exits `128` plus the signal's number (`143` for SIGTERM). A second signal ends it at once. A signal the server was started ignoring stays ignored.
+
 ### Progress
 
 The [progress events](./json-output.md#progress-events) a run emits arrive as `progress` notifications carrying the run's request `id`, whether or not `OPENTIDE_PROGRESS` is set, and never on stderr.
