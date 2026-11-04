@@ -177,6 +177,28 @@ class UnpublishedTest(unittest.TestCase):
             release.main(["unpublished", "v1.0.0"])
 
 
+class PublishTest(unittest.TestCase):
+    def test_cargo_publish_builds_nothing(self) -> None:
+        # The job holds an OIDC token and the registry tokens: a verify build
+        # would run every dependency's build script with them. The verify job
+        # already built each crate from its package.
+        crates = [{"name": "opentide-core"}, {"name": "opentide-lsp"}]
+        done = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with (
+            mock.patch.object(release, "workspace_version", return_value="1.0.0"),
+            mock.patch.object(release, "publishable_crates", return_value=crates),
+            mock.patch.object(release, "publish_order", side_effect=lambda c: c),
+            mock.patch.object(release, "on_crates_io", return_value=False),
+            mock.patch.object(release.subprocess, "run", return_value=done) as run,
+        ):
+            release.publish()
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(len(commands), 2, commands)
+        for command in commands:
+            self.assertEqual(command[:2], ["cargo", "publish"], command)
+            self.assertIn("--no-verify", command)
+
+
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml"
 
 

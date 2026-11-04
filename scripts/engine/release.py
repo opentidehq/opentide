@@ -18,9 +18,11 @@ crate reads (every `OPENTIDE_ASSETS` path in its sources, plus the directories i
 `[package.metadata.opentide] assets`) into `crates/<name>/assets/`, where build.rs
 looks when the workspace root is not there. `vendor --clean` removes the copies.
 
-`publish` can be re-run: it skips each crate whose version crates.io already has, and
-waits out the rate limit crates.io puts on brand-new crates, so a first release that
-stops partway resumes where it stopped.
+`publish` uploads each crate's package with `cargo publish --no-verify`: it builds
+nothing where the publishing tokens are (the Release workflow's `verify` job built
+every package, with no token). It can be re-run: it skips each crate whose version
+crates.io already has, and waits out the rate limit crates.io puts on brand-new
+crates, so a first release that stops partway resumes where it stopped.
 
 `trust` registers this repository's WORKFLOW (e.g. release.yml) as the trusted
 publisher of every published crate, with a crates.io token that has the
@@ -238,7 +240,10 @@ def publish() -> None:
         env = dict(os.environ)
         for attempt in range(1, RATE_LIMIT_TRIES + 1):
             result = subprocess.run(
-                ["cargo", "publish", "-p", name, "--allow-dirty"],
+                # No verify build: this runs where the OIDC token and the registry
+                # tokens are, and a build runs every dependency's build script.
+                # The verify job built each crate from its package, with neither.
+                ["cargo", "publish", "-p", name, "--allow-dirty", "--no-verify"],
                 cwd=ROOT,
                 capture_output=True,
                 text=True,

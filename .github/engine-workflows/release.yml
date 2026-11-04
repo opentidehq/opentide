@@ -335,7 +335,9 @@ jobs:
   # crates.io is permanent: publish only once the GitHub Release exists and its
   # assets verified (verify-assets). The crates go up in dependency order, each
   # pinned to this version; a crate already published is skipped, so a re-run
-  # resumes. crates.io rate-limits
+  # resumes. `cargo publish --no-verify` builds nothing here, where the OIDC
+  # token and the registry tokens are: a build runs every dependency's build
+  # script. `verify` built each package, without them. crates.io rate-limits
   # new crates (one every ten minutes after the first few), which only the
   # first release meets.
   #
