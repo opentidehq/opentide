@@ -45,7 +45,8 @@ JSON-RPC 2.0, one JSON message per line, on stdin and stdout, as MCP's stdio tra
 - **A failed command is a result.** A run that fails answers its document and its non-zero exit code, as the command would. JSON-RPC errors are only for protocol problems: a line that is not JSON (`-32700`), a message with no `method` (`-32600`), an unknown method (`-32601`), and a `run` without `argv` or with `cwd` or `env` of the wrong type (`-32602`).
 - **Prompts.** A command that would prompt exits `2` with [`usage_needs_input`](./json-output.md#failure-codes), as under `--json`.
 - **A crash.** An exception no command handles answers `failure.code` [`internal`](./diagnostics.md#internal), with `failure.crash_log` naming the redacted crash log, and the server keeps serving.
-- **Not here.** `serve`, `mcp start` and `lsp start` would read the server's own stdin, and `tui` needs a terminal: a run of one exits `2` with `usage_error`.
+- **Stdin.** A run, and any process it starts, reads an empty stdin: the server reads the requests from its own copy of the stream. `query -` exits `2` (`usage_invalid_value`, no query given); pass the query in `argv` or with `--query-file`.
+- **Not here.** `serve`, `mcp start` and `lsp start` would serve a protocol on stdin, and `tui` needs a terminal: a run of one exits `2` with `usage_error`.
 
 ### The workspace
 

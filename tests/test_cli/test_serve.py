@@ -706,6 +706,34 @@ def test_over_stdio_closing_stdin_ends_the_server(
     assert client.process.wait(TIMEOUT) == 0
 
 
+@pytest.mark.cli_smoke
+def test_over_stdio_a_run_that_reads_stdin_reads_nothing_of_the_protocol(
+    tide_corpus_repo: Path, stdio_env: dict[str, str]
+) -> None:
+    """`query -` read the server's stdin, the protocol stream: it took the next requests as
+    its query and the server answered nothing until the client closed stdin."""
+    client = StdioClient(tide_corpus_repo, stdio_env)
+    try:
+        client.send(
+            {"id": 1, "method": "run", "params": {"argv": ["query", "-", "--platform", "sentinel"]}}
+        )
+        client.send({"id": 2, "method": "run", "params": {"argv": ["explain", "vocab_unknown"]}})
+        answers: dict[int, dict[str, Any]] = {}
+        while len(answers) < 2:
+            message = json.loads(client.lines.get(timeout=30))
+            if "id" in message:
+                answers[message["id"]] = message["result"]
+        # An empty stdin: no query given.
+        assert answers[1]["exit_code"] == 2
+        assert answers[1]["document"]["failure"]["argument"] == "QUERY"
+        assert answers[2]["exit_code"] == 0
+        client.send({"method": "exit"})
+        assert client.process.wait(TIMEOUT) == 0
+    finally:
+        if client.process.poll() is None:
+            client.process.kill()
+
+
 def test_serve_is_listed_with_no_document(cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(app, ["--json", "commands"])
     tree = json.loads(result.stdout)

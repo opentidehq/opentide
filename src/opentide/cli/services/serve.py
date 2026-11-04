@@ -729,7 +729,9 @@ def serve_stdio(
 
     The protocol keeps a duplicate of descriptor 1; descriptor 1 itself then
     points at stderr, so nothing a command or a child process writes to
-    stdout can reach the client.
+    stdout can reach the client. In the same way it reads a duplicate of
+    descriptor 0, which then reads the null device: a run that reads stdin
+    (``query -``) or a child process reads nothing, not the client's requests.
     """
     if stdout is None:
         sys.stdout.flush()
@@ -738,9 +740,17 @@ def serve_stdio(
         sys.stdout = sys.stderr
     else:
         protocol = stdout
-    # The raw descriptor, not sys.stdin: a daemon thread blocked in a buffered
-    # read holds its lock, and the interpreter aborts on it at exit.
-    source: Iterable[bytes] = stdin if stdin is not None else _lines(0)
+    if stdin is None:
+        requests = os.dup(0)
+        null = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(null, 0)
+        os.close(null)
+        sys.stdin = open(os.devnull, encoding="utf-8")  # noqa: SIM115 -- stdin for the process life
+        # The raw descriptor, not a file object: a daemon thread blocked in a
+        # buffered read holds its lock, and the interpreter aborts on it at exit.
+        source: Iterable[bytes] = _lines(requests)
+    else:
+        source = stdin
 
     def write(message: Message) -> None:
         data = json.dumps(message, ensure_ascii=False, separators=(",", ":"), default=str)
