@@ -12,7 +12,8 @@ use std::collections::BTreeSet;
 /// One UUID an object's body names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObjectRef {
-    /// The UUID, as written.
+    /// The value, as written: a UUID, or whatever a malformed field holds
+    /// (a ref no object carries, as `invalid_ref` reports it).
     pub uuid: String,
     /// Where it sits in the object: mapping keys and list indexes joined
     /// with `.` (`detection_model`, `objective.signals.0.parent`), as
@@ -26,17 +27,6 @@ pub struct ObjectRef {
 enum Step {
     Key(String),
     Index(usize),
-}
-
-/// Whether a scalar is a UUID (any version: a reference may name an object
-/// whose UUID is not a v4, which the check of that object reports).
-pub(crate) fn is_uuid(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    bytes.len() == 36
-        && bytes.iter().enumerate().all(|(i, b)| match i {
-            8 | 13 | 18 | 23 => *b == b'-',
-            _ => b.is_ascii_hexdigit(),
-        })
 }
 
 /// Whether a field names an object or a signal by its UUID: the reference
@@ -62,9 +52,11 @@ fn is_reference(path: &[Step]) -> bool {
     }
 }
 
-/// Every UUID-valued reference field of `body` ([`is_reference`]) that does
-/// not name the object itself (`own`), in document order, each placed in
-/// `source`, the text `body` was parsed from.
+/// Every reference field of `body` ([`is_reference`]) whose string value is
+/// not empty and does not name the object itself (`own`), in document order,
+/// each placed in `source`, the text `body` was parsed from. A value that is
+/// not a UUID (a typo, `TODO`) is kept: `invalid_ref` reports it, and it is
+/// a ref no object carries.
 pub fn object_refs(source: &str, body: &serde_yaml::Value, own: &str) -> Vec<ObjectRef> {
     let mut found: Vec<(Vec<Step>, String)> = Vec::new();
     let mut path = Vec::new();
@@ -97,7 +89,7 @@ fn collect(
 ) {
     match value {
         serde_yaml::Value::String(text) => {
-            if text != own && is_uuid(text) && is_reference(path) {
+            if text != own && !text.trim().is_empty() && is_reference(path) {
                 let steps = path
                     .iter()
                     .map(|step| match step {
@@ -295,6 +287,39 @@ mod tests {
         );
         let paths: Vec<String> = refs(&threat).into_iter().map(|r| r.field_path).collect();
         assert_eq!(paths, ["threat.chaining.0.vector"]);
+    }
+
+    /// `invalid_ref` reports a reference field whatever its value, and
+    /// opentide's catalog has a missing edge for it: a value that is not a
+    /// UUID is a ref no object carries, not silently dropped.
+    #[test]
+    fn a_reference_field_whose_value_is_not_a_uuid_is_still_a_ref() {
+        let typo = "00000000-0000-4000-8002-00000000001";
+        let source = format!(
+            "name: R\nmetadata:\n  uuid: {OWN}\n  schema: rule::1.0\ndetection_model: {typo}\n"
+        );
+        let found = refs(&source);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].uuid, typo);
+        assert_eq!(found[0].field_path, "detection_model");
+        assert_eq!(found[0].range.start.line, 4);
+        assert_eq!(text_at(&source, found[0].range), typo);
+
+        let found = refs(
+            "objective:\n  threats:\n    - TODO\n  signals:\n    - name: s\n      parent: tbd\n      uuid: ''\n",
+        );
+        let found: Vec<(&str, &str)> = found
+            .iter()
+            .map(|r| (r.field_path.as_str(), r.uuid.as_str()))
+            .collect();
+        // An empty value names nothing.
+        assert_eq!(
+            found,
+            [
+                ("objective.threats.0", "TODO"),
+                ("objective.signals.0.parent", "tbd")
+            ]
+        );
     }
 
     #[test]

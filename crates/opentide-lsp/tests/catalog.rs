@@ -464,6 +464,24 @@ fn an_organisation_or_a_template_uuid_is_not_a_ref() {
     assert_eq!(refs, ["detection_model"], "{found}");
 }
 
+/// `invalid_ref` reports a `detection_model` that is not a UUID too: the
+/// catalog lists it as a ref that dangles, as for any other value.
+#[test]
+fn a_detection_model_that_is_not_a_uuid_is_a_dangling_ref() {
+    let typo = "00000000-0000-4000-8002-00000000001";
+    let scratch = workspace("catalog-typo");
+    let root = &scratch.0;
+    std::fs::write(root.join("objects/rules/rule-1.0.yaml"), rule(typo)).unwrap();
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    let found = object(&catalog, "00000000-0000-4000-8003-000000000001").expect("the rule");
+    let refs = found["refs"].as_array().unwrap();
+    assert_eq!(refs.len(), 1, "{found}");
+    assert_eq!(refs[0]["field_path"], "detection_model");
+    assert_eq!(refs[0]["uuid"], typo);
+    assert_eq!(refs[0]["range"], range(16, 17, 52));
+}
+
 #[test]
 fn a_catalog_request_without_params_or_with_null_asks_for_every_root() {
     let scratch = workspace("catalog-no-params");
