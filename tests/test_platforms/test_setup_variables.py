@@ -80,6 +80,33 @@ def test_a_dollar_literal_is_left_as_written_and_not_logged(
     assert "uP3r" not in caplog.text + captured.out + captured.err
 
 
+def test_a_set_variable_whose_name_is_not_an_identifier_still_resolves_with_a_warning(
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """0.21.0 read ``$AZ-SECRET`` from the variable ``AZ-SECRET``: a tenant that relied on
+    it got the literal text as its credential, without a word."""
+    monkeypatch.setattr(DebugHelpers, "is_debug", staticmethod(lambda: False))
+    monkeypatch.setenv("AZ-SECRET", "the-value")
+    monkeypatch.setattr("opentide.core.environment._reported_legacy_envvars", set())
+    resolved = DebugHelpers.fetch_config_envvar({"azure_client_secret": "$AZ-SECRET"})
+    assert resolved == {"azure_client_secret": "the-value"}
+    captured = capsys.readouterr()
+    logged = caplog.text + captured.out + captured.err
+    assert "AZ-SECRET" in logged
+    assert "azure_client_secret" in logged
+    assert "the-value" not in logged
+    # Once per variable: platform load resolves the setup once per object.
+    caplog.clear()
+    DebugHelpers.fetch_config_envvar({"azure_client_secret": "$AZ-SECRET"})
+    again = capsys.readouterr()
+    assert "AZ-SECRET" not in caplog.text + again.out + again.err
+    # Unset, the same text is a literal, as any other value that starts with `$`.
+    monkeypatch.delenv("AZ-SECRET")
+    assert DebugHelpers.fetch_config_envvar({"s": "$AZ-SECRET"}) == {"s": "$AZ-SECRET"}
+
+
 def test_no_setup_names_nothing() -> None:
     assert setup_variables({}) == []
     assert setup_variables(None) == []

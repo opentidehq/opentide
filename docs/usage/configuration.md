@@ -83,6 +83,8 @@ azure_client_id = "$AZURE_CLIENT_ID"
 azure_client_secret = "$AZURE_CLIENT_SECRET"
 ```
 
+A `setup` value that is `$NAME` or `${NAME}` as a whole, `NAME` being letters, digits and underscores, is read from that environment variable. Any other value is used as written, one that starts with `$` (a secret such as `$uP3r-S3cret!`) included. Releases through 0.21.0 read any value that starts with `$` from the variable named by the rest; when a variable of exactly that name is set (`$AZ-SECRET` and a variable `AZ-SECRET`), it is still read, with a warning to rename it: a later release will use the value as written.
+
 <Callout type="info">
 Exact connection keys differ per platform. Use `opentide info --platform <name>` to see what a platform expects, and never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
 </Callout>
