@@ -71,6 +71,8 @@ Query extras (the engines add these inside an injected query, and on a raw query
 - `config_check_failed` (warning, `opentide-config` only: the host's configuration checker failed; [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml))
 - `defender_output_columns`
 
+A query `opentide new` left as a placeholder gets none of the diagnostics inside it, as `opentide validate` skips it (`opentide lint` reports it as a `placeholders` finding): its first line, or the line above it, ends in `# opentide:placeholder`, and that first line is still `...` (`query: |  # opentide:placeholder` over `...`, or `query: ...  # opentide:placeholder`). The rule is opentide's (`is_placeholder_query` in `opentide.validation.queries`) and holds for every query language (`crates/opentide-tide/src/placeholder.rs`). A query written under a marker left behind is checked. The block's own findings are not the query's: `elastic_dataset_not_declared` on `index`, `threat.index` or `data_view_id`, and `falco_unknown_source` on `configurations.sysdig.source`, stay editor (and `opentide lint`) findings, and `analyze_queries` does not attach them to a placeholder query, which `opentide validate` skips.
+
 Severity of the KQL and SPL extras:
 
 | Severity | KQL and SPL codes |

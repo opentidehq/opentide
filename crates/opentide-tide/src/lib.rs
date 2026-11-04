@@ -8,6 +8,7 @@ mod falco;
 mod injection;
 mod intel;
 mod outline;
+mod placeholder;
 mod refs;
 mod sysdig;
 mod vocabs;
@@ -688,7 +689,8 @@ pub struct QueryAnalysis {
 /// including queries with no diagnostic (so a host can count what it checked).
 /// The object's other fields are not checked. A file that is not YAML has no
 /// queries. Spans and ranges are in the text after a leading byte-order mark
-/// ([`opentide_core::strip_bom`]).
+/// ([`opentide_core::strip_bom`]). A query `opentide new` left as a
+/// placeholder (`...` under `# opentide:placeholder`) has no diagnostics.
 pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<QueryAnalysis> {
     let source = opentide_core::strip_bom(source);
     let configurations = serde_yaml::from_str::<TideObject>(source)
@@ -702,12 +704,13 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
     );
     // The datasets the Elastic block reads (`index`, `threat.index`,
     // `data_view_id`) are its query's, so `opentide validate` reports them as
-    // the editor does.
+    // the editor does, except on a placeholder query, which validate skips
+    // (the editor still reports them on the block).
     if let Some(block) = configurations.as_ref().and_then(|c| c.get("elastic")) {
-        if let Some(query) = out
-            .iter_mut()
-            .find(|q| q.query.field_path == ["configurations", "elastic", "query"])
-        {
+        if let Some(query) = out.iter_mut().find(|q| {
+            q.query.field_path == ["configurations", "elastic", "query"]
+                && !placeholder::is_placeholder_query(source, &q.query)
+        }) {
             query
                 .diagnostics
                 .extend(elastic::dataset_declarations(source, block));
@@ -715,10 +718,10 @@ pub fn analyze_queries(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec<Q
     }
     // An unknown event source is the condition's: its fields go unchecked.
     if let Some(block) = configurations.as_ref().and_then(|c| c.get("sysdig")) {
-        if let Some(query) = out
-            .iter_mut()
-            .find(|q| q.query.field_path == ["configurations", "sysdig", "condition"])
-        {
+        if let Some(query) = out.iter_mut().find(|q| {
+            q.query.field_path == ["configurations", "sysdig", "condition"]
+                && !placeholder::is_placeholder_query(source, &q.query)
+        }) {
             query
                 .diagnostics
                 .extend(falco::source_diagnostics(source, block));
@@ -819,11 +822,13 @@ fn analyze_injections(
             }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
-        let mut diagnostics: Vec<Diagnostic> = found
-            .into_iter()
-            .map(|d| remap_diagnostic(source, &inj, d))
-            .collect();
-        diagnostics.extend(extra);
+        // The stand-in `opentide new` wrote is lint's `placeholders` finding,
+        // not a query to check: `opentide validate` skips it too.
+        let mut diagnostics: Vec<Diagnostic> = Vec::new();
+        if !placeholder::is_placeholder_query(source, &inj) {
+            diagnostics.extend(found.into_iter().map(|d| remap_diagnostic(source, &inj, d)));
+            diagnostics.extend(extra);
+        }
         let tokens = query_tokens
             .iter()
             .filter_map(|t| remap_token(source, &inj, t))
