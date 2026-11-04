@@ -541,6 +541,7 @@ def _exit_on_termination() -> Generator[None, None, None]:
     blocks, so the copy, the repository's secrets included, stayed in the
     temporary folder when an editor or a CI timeout stopped the plan.
     Only the main thread can install handlers; elsewhere this does nothing.
+    A signal whose handler is not the default is left alone.
     """
     import signal
     import threading
@@ -552,7 +553,13 @@ def _exit_on_termination() -> Generator[None, None, None]:
     def stop(signum: int, _frame: object) -> None:
         raise SystemExit(128 + signum)
 
-    names = [name for name in ("SIGTERM", "SIGHUP") if hasattr(signal, name)]
+    # Only over the default: an ignored signal (``nohup``) stays ignored, and a
+    # handler someone installed (``opentide serve``'s) keeps handling it.
+    names = [
+        name
+        for name in ("SIGTERM", "SIGHUP")
+        if hasattr(signal, name) and signal.getsignal(getattr(signal, name)) is signal.SIG_DFL
+    ]
     previous = {name: signal.signal(getattr(signal, name), stop) for name in names}
     try:
         yield

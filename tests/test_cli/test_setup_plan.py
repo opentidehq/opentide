@@ -438,6 +438,26 @@ def test_sigterm_during_a_plan_removes_the_copy(tmp_path: Path) -> None:
     assert signal.getsignal(signal.SIGTERM) is not None
 
 
+@pytest.mark.skipif(not hasattr(__import__("signal"), "SIGHUP"), reason="no SIGHUP here")
+def test_an_ignored_hangup_stays_ignored_during_a_plan(tmp_path: Path) -> None:
+    """Under ``nohup`` SIGHUP is ignored: the plan's handler turned a hangup into an exit."""
+    import signal
+
+    from opentide.cli.services.setup.plan import sandbox
+
+    target = tmp_path / "repo"
+    target.mkdir()
+    previous = signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    try:
+        with sandbox(target):
+            assert signal.getsignal(signal.SIGHUP) is signal.SIG_IGN
+            os.kill(os.getpid(), signal.SIGHUP)  # ignored: the plan carries on
+            assert signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL
+        assert signal.getsignal(signal.SIGHUP) is signal.SIG_IGN
+    finally:
+        signal.signal(signal.SIGHUP, previous)
+
+
 def test_the_plan_carries_the_runs_own_warnings(tmp_path: Path) -> None:
     target = tmp_path / "repo"
     args = ("--no-staging", "--lint-changed", "--env", "--path", str(target))
