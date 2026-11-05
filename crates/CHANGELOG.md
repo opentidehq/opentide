@@ -8,7 +8,11 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
-- `opentide/didChangeWorkspace` (a notification): a host with no filesystem, such as a browser worker or the VS Code extension's WebAssembly fallback, updates the workspace it supplied on `initialize` (`initializationOptions.workspace`) when its files change: `documents` and `objects` added or changed, `removed` URIs, and `visibility` (`null` when `visibility.toml` is gone). The server re-indexes, checks open documents again (or asks a client that pulls to), and sends `opentide/catalogChanged` for a catalog the client got that changed. The supplied workspace used to be fixed at `initialize`, so a host had to restart the server to follow a file created, edited or deleted outside the editor. `capabilities.experimental.opentide.workspaceUpdates` is `true`, so a client can tell this server from an older one.
+- `opentide/didChangeWorkspace` (a notification): a host with no filesystem, such as a browser worker or the VS Code extension's WebAssembly fallback, updates the workspace it supplied on `initialize` (`initializationOptions.workspace`) when its files change: `documents` and `objects` added or changed, `removed` URIs, and `visibility` (`null` when `visibility.toml` is gone). The server re-indexes, checks open documents again (or asks a client that pulls to), and sends `opentide/catalogChanged` for a catalog the client got that changed. The supplied workspace used to be fixed at `initialize`, so a host had to restart the server to follow a file created, edited or deleted outside the editor. `capabilities.experimental.opentide.workspaceUpdates` is `true`, so a client can tell this server from an older one. `@opentide/lsp-client`'s `OpentideClient.updateWorkspace(change)` sends it.
+
+### Changed
+
+- With several workspace folders, a supplied document belongs to the root whose folder holds it, as a file on disk does: a reference from one folder to an object only another folder supplied is an `invalid_ref`, as the CLI reports it, and each root's `opentide/catalog` lists its own objects. Supplied files used to be in every root's index. An object supplied with no `uri`, or outside every folder, is still every root's. A root's `.opentide/configurations/visibility.toml` among the supplied documents declares that root's datasets, before the one `visibility` the host supplies for every root.
 
 ## [0.10.0] - 2026-11-04
 

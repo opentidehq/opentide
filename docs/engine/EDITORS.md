@@ -82,7 +82,7 @@ in `relatedInformation`, and the document `version` on a published set.
 { name, version } | null, engine, catalog: "host" | "workspace" | "bundled",
 configurationChecks, configurationSchemas, workspaceUpdates }`.
 `workspaceUpdates` is `true` when the server takes `opentide/didChangeWorkspace`
-(this release and later); a client of an older server restarts it to give it a new
+(the release after 0.10.0 on); a client of an older server restarts it to give it a new
 workspace. `opentide lsp start` sets the
 host to `opentide`; the binary alone has none. `opentide-lsp --version --json`
 prints the same object without starting a session, so an extension can check
@@ -205,7 +205,7 @@ const client = createOpentideClient({ transport: "worker", worker });
 const { diagnostics } = await client.analyze("kql", "SecurityEvent | take 1");
 ```
 
-The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied. When those files change, send `opentide/didChangeWorkspace` with what changed ([Custom RPCs](#custom-rpcs)): the server has no file watcher to read, since it has no files.
+The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied. A supplied document under a workspace folder belongs to that folder's root alone, as a file on disk would, so a reference from one folder to another's object is an `invalid_ref`, as the CLI reports it; an object supplied with no `uri`, or one outside every folder, is every root's. A root's `.opentide/configurations/visibility.toml` among the documents declares that root's datasets; `visibility` declares them for a root that has none. When those files change, send `opentide/didChangeWorkspace` with what changed ([Custom RPCs](#custom-rpcs)), `client.updateWorkspace(change)` with `createOpentideClient`: the server has no file watcher to read, since it has no files.
 
 To highlight in the same thread instead, load the module with `loadHighlightModule` and hand it over as `module`:
 
