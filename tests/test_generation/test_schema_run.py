@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,7 @@ import pytest
 from opentide.generation.lsp_catalog import CATALOG_DIR
 
 ROOT = Path(__file__).resolve().parents[2]
+FIXTURE = ROOT / "tests/fixtures/generation/tide_workspace"
 
 
 @pytest.fixture
@@ -92,8 +94,32 @@ def _snapshot(folder: Path) -> dict[str, tuple[int, int, bytes]]:
     return snapshot
 
 
+def test_fixture_visibility_schema_is_the_generated_one(workspace: Path) -> None:
+    """The tracked fixture holds the schema `run()` writes, and the baseline records it.
+
+    The fixture used to hold `{"type": "object"}`, the mock above, while
+    `artifact_checksums.json` kept the hash of the real schema it replaced.
+    """
+    from opentide.generation import schema
+    from opentide.generation.artifact_gate import TIDE_PREFIX, load_checksum_baseline
+
+    rel = ".opentide/schemas/visibility.1.0.schema.json"
+    with (
+        patch("opentide.generation.schema.export_all_registered_schemas"),
+        patch("opentide.generation.schema.export_opentide_router"),
+    ):
+        schema.run()
+    tracked = (FIXTURE / rel).read_bytes()
+    assert tracked == (workspace / rel).read_bytes(), (
+        f"{rel} is stale: run `uv run opentide --repo {FIXTURE.relative_to(ROOT)} "
+        "generate schemas` and keep the visibility schema"
+    )
+    baseline = load_checksum_baseline(ROOT / "tests/fixtures/generation/artifact_checksums.json")
+    assert baseline[f"{TIDE_PREFIX}{rel}"] == hashlib.sha256(tracked).hexdigest()
+
+
 def test_schema_run_writes_nothing_in_the_repository(workspace: Path) -> None:
-    watched = [ROOT / ".opentide", ROOT / "tests/fixtures/generation/tide_workspace/.opentide"]
+    watched = [ROOT / ".opentide", FIXTURE / ".opentide"]
     before = [_snapshot(folder) for folder in watched]
     _run_with_mocked_exports(workspace)
     assert [_snapshot(folder) for folder in watched] == before
