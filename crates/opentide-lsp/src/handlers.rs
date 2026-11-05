@@ -88,6 +88,17 @@ pub mod custom {
         const METHOD: &'static str = "opentide/catalog";
     }
 
+    /// The workspace a host supplied on `initialize` changed: `{ documents?,
+    /// objects?, removed?, visibility? }`, merged into it
+    /// (`Supplied::apply`). A host with no filesystem sends it when the files
+    /// it supplied change; `experimental.opentide.workspaceUpdates` says the
+    /// server takes it.
+    pub enum DidChangeWorkspace {}
+    impl lsp_types::notification::Notification for DidChangeWorkspace {
+        type Params = Value;
+        const METHOD: &'static str = "opentide/didChangeWorkspace";
+    }
+
     /// Sent after a root's index changed, once the client has asked for its
     /// catalog: `{ root }`.
     pub enum CatalogChanged {}
@@ -296,6 +307,7 @@ pub(crate) fn notification(session: &mut Session, notification: lsp_server::Noti
     on::<DidCloseTextDocument>(session, &mut n, did_close);
     on::<DidChangeWatchedFiles>(session, &mut n, watched_files_changed);
     on::<DidChangeWorkspaceFolders>(session, &mut n, workspace_folders_changed);
+    on::<custom::DidChangeWorkspace>(session, &mut n, supplied_workspace_changed);
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +725,18 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
     }
     if everything {
         session.mark_all();
+    }
+}
+
+/// `opentide/didChangeWorkspace`: merge the change into the supplied
+/// workspace, and when it changed something, re-index and re-check.
+fn supplied_workspace_changed(session: &mut Session, params: Value) {
+    if !params.is_object() {
+        session.log_warning("invalid params for opentide/didChangeWorkspace: not an object");
+        return;
+    }
+    if session.supplied.apply(&params) {
+        session.supplied_changed();
     }
 }
 

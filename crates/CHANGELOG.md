@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+- `opentide/didChangeWorkspace` (a notification): a host with no filesystem, such as a browser worker or the VS Code extension's WebAssembly fallback, updates the workspace it supplied on `initialize` (`initializationOptions.workspace`) when its files change: `documents` and `objects` added or changed, `removed` URIs, and `visibility` (`null` when `visibility.toml` is gone). The server re-indexes, checks open documents again (or asks a client that pulls to), and sends `opentide/catalogChanged` for a catalog the client got that changed. The supplied workspace used to be fixed at `initialize`, so a host had to restart the server to follow a file created, edited or deleted outside the editor. `capabilities.experimental.opentide.workspaceUpdates` is `true`, so a client can tell this server from an older one.
+
 ## [0.10.0] - 2026-11-04
 
 The workspace index for editors' catalogue, graph and search views: `opentide/catalog` serves every object with its references, and `opentide/catalogChanged` says when a root's objects change, so an editor's relation views follow unsaved edits, on the desktop and in the browser build (the opentide VS Code extension's Relations view reads it when the runtime has no `info catalog`). Placeholder queries `opentide new` leaves are no longer reported as parse errors, folders moved under `objects/` are re-read, each GitHub Release carries `SHA256SUMS` and build provenance attestations, and the ES|QL grammar's scope no longer collides with Elastic's extension.

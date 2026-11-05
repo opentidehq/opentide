@@ -80,7 +80,10 @@ in `relatedInformation`, and the document `version` on a published set.
 
 `capabilities.experimental.opentide` says who runs the server: `{ host:
 { name, version } | null, engine, catalog: "host" | "workspace" | "bundled",
-configurationChecks, configurationSchemas }`. `opentide lsp start` sets the
+configurationChecks, configurationSchemas, workspaceUpdates }`.
+`workspaceUpdates` is `true` when the server takes `opentide/didChangeWorkspace`
+(this release and later); a client of an older server restarts it to give it a new
+workspace. `opentide lsp start` sets the
 host to `opentide`; the binary alone has none. `opentide-lsp --version --json`
 prints the same object without starting a session, so an extension can check
 a binary before it uses it. The object is stable for clients: a key is added in
@@ -125,6 +128,7 @@ Requests beyond LSP, for clients that know them (`crates/opentide-lsp/src/handle
 | `opentide/compiledKql` | `{ query, tenant? }` | `{ compiled }`: the KQL Sentinel runs for the query on `tenant` (`opentide_kql::compile_kql_query`, with no exclusions) |
 | `opentide/compiledSpl` | `{ query }` | `{ compiled }`: the search Splunk runs, the authored text (an implicit leading `\| search` is not a rewrite) |
 | `opentide/fs/read` | `{ path }` | `{ text }`: the file as the server sees it, the open buffer first, else the file on disk; `""` when there is neither |
+| `opentide/didChangeWorkspace` (notification) | `{ documents?, objects?, removed?, visibility? }` | None. The workspace a host supplied on `initialize` changed (below): `documents` and `objects` as on `initialize`, added or replacing what has their URI; `removed`, the URIs of files that are gone (`opentide-object:<uuid>` for an object supplied with no `uri`); `visibility`, the new text of `visibility.toml`, or `null` when it is gone (absent: unchanged). The index is rebuilt, open documents are checked again (or the client asked to pull), and a catalog the client got that changed gets `opentide/catalogChanged`. Params that are not an object are logged and ignored |
 
 Debug builds also answer `opentide/__panic`, `opentide/__sleep` and `opentide/__stats`, for the server's own tests. Release builds do not have them.
 
@@ -201,7 +205,7 @@ const client = createOpentideClient({ transport: "worker", worker });
 const { diagnostics } = await client.analyze("kql", "SecurityEvent | take 1");
 ```
 
-The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied.
+The browser has no filesystem to index, so pass the workspace on `initialize`: `workspace: { objects: [{ uuid, schema, name }], documents: [{ uri, text }], visibility }` (`initializationOptions.workspace` for any other client). Without it, a rule's `detection_model` is an `invalid_ref`. A document the client opens is that object, not a second one with its UUID, and a root's own files win over what is supplied. When those files change, send `opentide/didChangeWorkspace` with what changed ([Custom RPCs](#custom-rpcs)): the server has no file watcher to read, since it has no files.
 
 To highlight in the same thread instead, load the module with `loadHighlightModule` and hand it over as `module`:
 

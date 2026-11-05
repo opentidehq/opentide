@@ -355,6 +355,54 @@ impl Supplied {
             .map(str::to_string);
         supplied
     }
+
+    /// Apply `opentide/didChangeWorkspace`: what the host's workspace holds
+    /// now, as a change to what it supplied.
+    ///
+    /// - `documents`: `[{ "uri", "text" }]`, object files added or changed;
+    /// - `objects`: `[{ "uuid", "schema", "name"?, "uri"? }]`, objects known by
+    ///   their metadata, added or changed;
+    /// - `removed`: `[uri]`, files gone (an object known by its metadata alone
+    ///   and no `uri` is `opentide-object:<uuid>`);
+    /// - `visibility`: the new text of `visibility.toml`, or `null` when it is
+    ///   gone; absent, it is unchanged.
+    ///
+    /// Entries that lack what they need are skipped. Whether anything changed.
+    pub(crate) fn apply(&mut self, change: &serde_json::Value) -> bool {
+        use serde_json::Value;
+        let entries = |key: &str| {
+            change
+                .get(key)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        };
+        let mut changed = false;
+        for uri in entries("removed").filter_map(Value::as_str) {
+            changed |= self.files.remove(&path_key(&uri_to_path(uri))).is_some();
+        }
+        // The same reading as `initialize`, then merged: a newer text replaces
+        // an older one of the same file.
+        let added = Self::from_options(Some(change));
+        for (key, entry) in added.files {
+            let same = self
+                .files
+                .get(&key)
+                .is_some_and(|(_, text, _)| *text == entry.1);
+            if !same {
+                self.files.insert(key, entry);
+                changed = true;
+            }
+        }
+        if let Some(visibility) = change.get("visibility") {
+            let next = visibility.as_str().map(str::to_string);
+            if next != self.visibility {
+                self.visibility = next;
+                changed = true;
+            }
+        }
+        changed
+    }
 }
 
 #[derive(Default)]
@@ -591,6 +639,22 @@ impl Session {
                 let _ = install_visibility(kept.flatten().as_deref());
             }
         }
+    }
+
+    /// The workspace the host supplied changed (`opentide/didChangeWorkspace`):
+    /// every index holds it, and `visibility.toml` may be the supplied one, so
+    /// each root's index is rebuilt and the declared datasets installed again.
+    /// Open documents are analysed again and a client that pulls is asked to;
+    /// a catalog the client got that changed is announced at the end of the
+    /// batch.
+    pub(crate) fn supplied_changed(&self) {
+        for r in &self.roots {
+            r.drop_index();
+        }
+        self.loose_index.borrow_mut().take();
+        self.loose_catalog.dirty.set(true);
+        self.reactivate();
+        self.mark_all();
     }
 
     /// The installed catalogs or declared datasets are out of date.

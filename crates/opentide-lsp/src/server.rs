@@ -92,7 +92,10 @@ pub fn serve_with_status(reader: impl BufRead, mut writer: impl Write) -> Result
 ///   reference to one resolves and hover names it;
 /// - `visibility`: the text of the workspace's `visibility.toml`.
 ///
-/// A host with a filesystem may send it too: a root's own files win.
+/// A host with a filesystem may send it too: a root's own files win. When
+/// the files change, the host sends `opentide/didChangeWorkspace` with what
+/// changed (the same keys, plus `removed`: `[uri]`, and `visibility: null`
+/// when the file is gone), and the server re-indexes and re-checks.
 #[derive(Default)]
 pub struct MessageSession {
     session: Session,
@@ -193,6 +196,8 @@ pub fn host_info() -> Value {
         "catalog": catalog,
         "configurationChecks": opentide_analysis::has_configuration_checker(),
         "configurationSchemas": opentide_analysis::has_configuration_schemas(),
+        // The supplied workspace follows `opentide/didChangeWorkspace`.
+        "workspaceUpdates": true,
     })
 }
 
