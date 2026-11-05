@@ -127,6 +127,18 @@ export interface SuppliedWorkspace {
   visibility?: string;
 }
 
+/**
+ * What changed in a supplied workspace (`opentide/didChangeWorkspace`): documents and objects added or
+ * changed, the URIs of files that are gone (`opentide-object:<uuid>` for an object supplied without a
+ * `uri`), and `visibility.toml`'s new text, or `null` when it is gone.
+ */
+export interface WorkspaceChange {
+  documents?: { uri: string; text: string }[];
+  objects?: { uuid: string; schema: string; name?: string; uri?: string }[];
+  removed?: string[];
+  visibility?: string | null;
+}
+
 export interface OpentideClientOptions {
   transport: Transport;
   /** stdio: the server binary. Default `opentide-lsp`, found on `PATH`. */
@@ -182,6 +194,12 @@ export interface OpentideClient {
   highlight(languageId: string, text: string): Promise<HighlightResult>;
   legend(): Promise<string[]>;
   analyze(languageId: string, text: string): Promise<AnalyzeResult>;
+  /**
+   * Tell the server the supplied workspace changed (`opentide/didChangeWorkspace`): what `workspace` gave
+   * on `initialize` is all a server with no filesystem reads. stdio and worker (with `worker`); the
+   * other transports have no session to update, and reject.
+   */
+  updateWorkspace(change: WorkspaceChange): Promise<void>;
   dispose(): Promise<void>;
 }
 
@@ -284,6 +302,14 @@ abstract class Connection {
 
   request(method: string, params: unknown): Promise<unknown> {
     return this.start().then(() => this.send(method, params));
+  }
+
+  /** A notification, once the session is up. */
+  notification(method: string, params: unknown): Promise<void> {
+    return this.start().then(() => {
+      if (this.closed) throw this.closed;
+      this.notify(method, params);
+    });
   }
 
   private start(): Promise<void> {
@@ -441,6 +467,7 @@ function connectionClient(transport: Transport, connection: Connection): Opentid
       const uri = `untitled:query.${extensionFor(languageId)}`;
       return (await connection.request("opentide/analyze", { language: languageId, text, uri })) as AnalyzeResult;
     },
+    updateWorkspace: (change) => connection.notification("opentide/didChangeWorkspace", change),
     dispose: () => connection.dispose(),
   };
 }
@@ -469,6 +496,11 @@ function workerClient(options: OpentideClientOptions): OpentideClient {
     async analyze() {
       throw new Error(
         "analyze needs the language server: pass `worker` (serveLanguageServer from @opentide/lsp-worker), not a highlight `module`",
+      );
+    },
+    async updateWorkspace() {
+      throw new Error(
+        "updateWorkspace needs the language server: pass `worker` (serveLanguageServer from @opentide/lsp-worker), not a highlight `module`",
       );
     },
     async dispose() {},
@@ -542,6 +574,9 @@ function wasiClient(options: OpentideClientOptions): OpentideClient {
     async analyze(languageId, text) {
       // The CLI prints the diagnostics array; the RPC wraps it.
       return { diagnostics: (await run("analyze", languageId, text)) as Diagnostic[] };
+    },
+    async updateWorkspace() {
+      throw new Error("the wasi transport runs the CLI once per call: there is no session whose workspace to update");
     },
     async dispose() {},
   };

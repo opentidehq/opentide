@@ -352,6 +352,40 @@ test("worker transport: JSON-RPC to the language server in a worker, one message
   assert.deepEqual(init.initializationOptions, { workspace });
 });
 
+test("worker transport: updateWorkspace sends opentide/didChangeWorkspace in order with the requests", async () => {
+  const log: { method?: string; params?: unknown }[] = [];
+  const { port1, port2 } = new MessageChannel();
+  const served = serveLanguageServer(port2, fakeServer(log));
+  const client = createOpentideClient({ transport: "worker", worker: port1, workspace: { documents: [] } });
+  const change = {
+    documents: [{ uri: "file:///w/objects/objectives/o.yaml", text: "name: O" }],
+    removed: ["file:///w/objects/rules/gone.yaml"],
+    visibility: null,
+  };
+  await client.updateWorkspace(change);
+  await client.analyze("kql", "T");
+  await client.dispose();
+  await served;
+  assert.deepEqual(
+    log.map((m) => m.method),
+    ["initialize", "initialized", "opentide/didChangeWorkspace", "opentide/analyze", "shutdown", "exit"],
+  );
+  assert.deepEqual(log[2]!.params, change);
+  await assert.rejects(client.updateWorkspace({}), /disposed/);
+});
+
+test("updateWorkspace rejects on a transport with no session", async () => {
+  const module = { highlight: () => ({ language_id: "kql", tokens: [], legend: [] }), legend: () => [] };
+  await assert.rejects(
+    createOpentideClient({ transport: "worker", module }).updateWorkspace({}),
+    /needs the language server/,
+  );
+  await assert.rejects(
+    createOpentideClient({ transport: "wasi", wasi: new Uint8Array() }).updateWorkspace({}),
+    /no session/,
+  );
+});
+
 test("worker transport: a server that fails to load fails initialize with the reason, not an empty answer", async () => {
   const { port1, port2 } = new MessageChannel();
   void serveLanguageServer(port2, Promise.reject(new Error("404 Not Found")));

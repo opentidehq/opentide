@@ -251,3 +251,218 @@ fn an_open_object_is_not_a_duplicate_of_its_own_metadata() {
         "{diagnostics:?}"
     );
 }
+
+/// What `send` returned: the diagnostic codes published for `uri`, if any.
+fn published_codes(replies: &[Value], uri: &str) -> Option<Vec<String>> {
+    replies
+        .iter()
+        .find(|m| m["method"] == "textDocument/publishDiagnostics" && m["params"]["uri"] == uri)
+        .map(|m| {
+            m["params"]["diagnostics"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|d| d["code"].as_str().map(str::to_string))
+                .collect()
+        })
+}
+
+/// A host with no filesystem tells the server when the files it supplied
+/// change: references follow, open documents are checked again, and the
+/// catalog the client got is announced as changed.
+#[test]
+fn the_supplied_workspace_follows_did_change_workspace() {
+    let rule = "objects/rules/process-creation.yaml";
+    let objective_uri = "objects/objectives/suspicious-process-creation.yaml";
+    let objective = |name: &str| {
+        format!("name: {name}\nmetadata:\n  uuid: {OBJECTIVE}\n  schema: objective::1.0\n")
+    };
+    let mut session = start(json!({ "workspace": { "documents": [] } }));
+    assert!(codes(&open(&mut session, rule, "opentide-yaml", RULE)).contains(&"invalid_ref"));
+    let catalog = request(&mut session, 2, "opentide/catalog", json!({}));
+    assert_eq!(catalog["roots"][0]["objects"].as_array().unwrap().len(), 1);
+
+    // The objective appears: the rule's reference resolves.
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": {
+            "documents": [{ "uri": objective_uri, "text": objective("Suspicious process creation") }]
+        } }),
+    );
+    let after = published_codes(&replies, rule).expect("the open rule is checked again");
+    assert!(!after.contains(&"invalid_ref".to_string()), "{after:?}");
+    assert!(
+        replies
+            .iter()
+            .any(|m| m["method"] == "opentide/catalogChanged"),
+        "{replies:?}"
+    );
+    let catalog = request(&mut session, 3, "opentide/catalog", json!({}));
+    let names: Vec<&str> = catalog["roots"][0]["objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|o| o["name"].as_str())
+        .collect();
+    assert!(names.contains(&"Suspicious process creation"), "{names:?}");
+
+    // The same text again changes nothing, and says nothing.
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": {
+            "documents": [{ "uri": objective_uri, "text": objective("Suspicious process creation") }]
+        } }),
+    );
+    assert!(replies.is_empty(), "{replies:?}");
+
+    // A new name is a catalog change; the reference still resolves.
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": {
+            "documents": [{ "uri": objective_uri, "text": objective("Renamed objective") }]
+        } }),
+    );
+    assert!(
+        replies
+            .iter()
+            .any(|m| m["method"] == "opentide/catalogChanged")
+    );
+    let line = RULE
+        .lines()
+        .position(|l| l.starts_with("detection_model:"))
+        .unwrap();
+    let hover = request(
+        &mut session,
+        4,
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": rule }, "position": { "line": line, "character": 20 } }),
+    );
+    assert!(hover.to_string().contains("Renamed objective"), "{hover}");
+
+    // Removed, the objective is gone again.
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": { "removed": [objective_uri] } }),
+    );
+    let gone = published_codes(&replies, rule).expect("the open rule is checked again");
+    assert!(gone.contains(&"invalid_ref".to_string()), "{gone:?}");
+
+    // An object known by its metadata alone, and its removal by `opentide-object:<uuid>`.
+    send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": {
+            "objects": [{ "uuid": OBJECTIVE, "schema": "objective::1.0", "name": "Known by metadata" }]
+        } }),
+    );
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": {
+            "removed": [format!("opentide-object:{OBJECTIVE}")]
+        } }),
+    );
+    assert!(
+        published_codes(&replies, rule)
+            .expect("checked again")
+            .contains(&"invalid_ref".to_string())
+    );
+
+    // Params that are not an object are logged, and the session goes on.
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": [1] }),
+    );
+    assert!(
+        replies.iter().all(|m| m["method"] == "window/logMessage"),
+        "{replies:?}"
+    );
+}
+
+#[test]
+fn initialize_says_the_server_takes_workspace_updates() {
+    let mut session = MessageSession::new();
+    let replies = send(
+        &mut session,
+        json!({ "id": 1, "method": "initialize", "params": { "processId": null, "rootUri": null, "capabilities": {} } }),
+    );
+    assert_eq!(
+        replies[0]["result"]["capabilities"]["experimental"]["opentide"]["workspaceUpdates"],
+        true
+    );
+}
+
+/// An object known by its metadata, supplied with a `uri`: a change by that
+/// URI replaces it, and a removal by that URI drops it.
+#[test]
+fn an_object_supplied_with_a_uri_is_changed_and_removed_by_it() {
+    let rule = "objects/rules/process-creation.yaml";
+    let uri = "objects/objectives/known.yaml";
+    let object = |name: &str| json!({ "uuid": OBJECTIVE, "schema": "objective::1.0", "name": name, "uri": uri });
+    let mut session = start(json!({ "workspace": { "objects": [object("First name")] } }));
+    assert!(!codes(&open(&mut session, rule, "opentide-yaml", RULE)).contains(&"invalid_ref"));
+    let names = |session: &mut MessageSession, id: u64| -> Vec<String> {
+        request(session, id, "opentide/catalog", json!({}))["roots"][0]["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|o| o["uri"].as_str().is_some_and(|u| u.ends_with("known.yaml")))
+            .map(|o| o["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(names(&mut session, 2), ["First name"]);
+
+    send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": { "objects": [object("Second name")] } }),
+    );
+    assert_eq!(
+        names(&mut session, 3),
+        ["Second name"],
+        "replaced, not added"
+    );
+
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": { "removed": [uri] } }),
+    );
+    assert!(
+        published_codes(&replies, rule)
+            .expect("checked again")
+            .contains(&"invalid_ref".to_string())
+    );
+    assert!(names(&mut session, 4).is_empty());
+}
+
+/// One notification that removes a URI and adds it again: the removal goes
+/// first, so the file is there, with the new text.
+#[test]
+fn a_uri_removed_and_added_in_one_change_is_there_with_its_new_text() {
+    let rule = "objects/rules/process-creation.yaml";
+    let uri = "objects/objectives/moved.yaml";
+    let objective = |name: &str| {
+        format!("name: {name}\nmetadata:\n  uuid: {OBJECTIVE}\n  schema: objective::1.0\n")
+    };
+    let mut session = start(
+        json!({ "workspace": { "documents": [{ "uri": uri, "text": objective("Before") }] } }),
+    );
+    open(&mut session, rule, "opentide-yaml", RULE);
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": {
+            "removed": [uri],
+            "documents": [{ "uri": uri, "text": objective("After") }],
+        } }),
+    );
+    let after = published_codes(&replies, rule).expect("checked again");
+    assert!(!after.contains(&"invalid_ref".to_string()), "{after:?}");
+    let line = RULE
+        .lines()
+        .position(|l| l.starts_with("detection_model:"))
+        .unwrap();
+    let hover = request(
+        &mut session,
+        2,
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": rule }, "position": { "line": line, "character": 20 } }),
+    );
+    assert!(hover.to_string().contains("After"), "{hover}");
+}

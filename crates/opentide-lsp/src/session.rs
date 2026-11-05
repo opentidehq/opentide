@@ -291,8 +291,10 @@ impl DiskObjects {
 /// The workspace a host with no filesystem supplies on `initialize`
 /// (`initializationOptions.workspace`): a browser worker
 /// ([`MessageSession`](crate::MessageSession)). Its objects are indexed as
-/// if they were on disk, under every root and outside them; they are never
-/// checked or published.
+/// if they were on disk: a file under a root's folder in that root, one
+/// outside every root in every root and outside them. A root's
+/// `.opentide/configurations/visibility.toml` among the documents declares
+/// that root's datasets. They are never checked or published.
 #[derive(Default)]
 pub(crate) struct Supplied {
     /// [`path_key`] → (path, text, index entry).
@@ -354,6 +356,54 @@ impl Supplied {
             .and_then(Value::as_str)
             .map(str::to_string);
         supplied
+    }
+
+    /// Apply `opentide/didChangeWorkspace`: what the host's workspace holds
+    /// now, as a change to what it supplied.
+    ///
+    /// - `documents`: `[{ "uri", "text" }]`, object files added or changed;
+    /// - `objects`: `[{ "uuid", "schema", "name"?, "uri"? }]`, objects known by
+    ///   their metadata, added or changed;
+    /// - `removed`: `[uri]`, files gone (an object known by its metadata alone
+    ///   and no `uri` is `opentide-object:<uuid>`);
+    /// - `visibility`: the new text of `visibility.toml`, or `null` when it is
+    ///   gone; absent, it is unchanged.
+    ///
+    /// Entries that lack what they need are skipped. Whether anything changed.
+    pub(crate) fn apply(&mut self, change: &serde_json::Value) -> bool {
+        use serde_json::Value;
+        let entries = |key: &str| {
+            change
+                .get(key)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        };
+        let mut changed = false;
+        for uri in entries("removed").filter_map(Value::as_str) {
+            changed |= self.files.remove(&path_key(&uri_to_path(uri))).is_some();
+        }
+        // The same reading as `initialize`, then merged: a newer text replaces
+        // an older one of the same file.
+        let added = Self::from_options(Some(change));
+        for (key, entry) in added.files {
+            let same = self
+                .files
+                .get(&key)
+                .is_some_and(|(_, text, _)| *text == entry.1);
+            if !same {
+                self.files.insert(key, entry);
+                changed = true;
+            }
+        }
+        if let Some(visibility) = change.get("visibility") {
+            let next = visibility.as_str().map(str::to_string);
+            if next != self.visibility {
+                self.visibility = next;
+                changed = true;
+            }
+        }
+        changed
     }
 }
 
@@ -491,7 +541,10 @@ impl WorkspaceHost for SessionHost<'_> {
         );
         // What the host supplied stands in for objects the session has no
         // file for: an object open or on disk is itself, not a duplicate of
-        // its own metadata.
+        // its own metadata. A supplied file under a root's folder is that
+        // root's alone, as a file on disk would be; one outside every root
+        // (an object known by its metadata, `opentide-object:<uuid>`) is
+        // every root's.
         let known: HashSet<String> = index.iter().map(|o| o.uuid.clone()).collect();
         let on_disk = |key: &String| {
             self.root
@@ -503,6 +556,10 @@ impl WorkspaceHost for SessionHost<'_> {
                 .files
                 .iter()
                 .filter(|(key, _)| !open.contains_key(*key) && !on_disk(key))
+                .filter(|(_, (path, _, _))| {
+                    let owner = session.owning_root(path);
+                    owner.is_none() || owner == self.root
+                })
                 .filter_map(|(_, (_, _, indexed))| indexed.clone())
                 .filter(|o| !known.contains(&o.uuid)),
         );
@@ -562,10 +619,19 @@ impl Session {
             }
             return;
         };
+        // The editor's buffer, else the file on disk, else the root's own
+        // `visibility.toml` among the supplied documents, else the one
+        // `visibility` the host supplied for every root.
         let text = r
             .visibility
             .clone()
             .or_else(|| std::fs::read_to_string(r.visibility_path()).ok())
+            .or_else(|| {
+                self.supplied
+                    .files
+                    .get(&path_key(&r.visibility_path().display().to_string()))
+                    .map(|(_, text, _)| text.clone())
+            })
             .or_else(|| self.supplied.visibility.clone());
         match install_visibility(text.as_deref()) {
             Ok(()) => {
@@ -591,6 +657,22 @@ impl Session {
                 let _ = install_visibility(kept.flatten().as_deref());
             }
         }
+    }
+
+    /// The workspace the host supplied changed (`opentide/didChangeWorkspace`):
+    /// every index holds it, and `visibility.toml` may be the supplied one, so
+    /// each root's index is rebuilt and the declared datasets installed again.
+    /// Open documents are analysed again and a client that pulls is asked to;
+    /// a catalog the client got that changed is announced at the end of the
+    /// batch.
+    pub(crate) fn supplied_changed(&self) {
+        for r in &self.roots {
+            r.drop_index();
+        }
+        self.loose_index.borrow_mut().take();
+        self.loose_catalog.dirty.set(true);
+        self.reactivate();
+        self.mark_all();
     }
 
     /// The installed catalogs or declared datasets are out of date.
@@ -652,6 +734,18 @@ impl Session {
             .borrow_mut()
             .insert(uri.to_string(), (generation, Arc::clone(&response)));
         Some(response)
+    }
+
+    /// The deepest root whose folder holds `path`, if one does: unlike
+    /// [`root_for`](Self::root_for), no fallback to the first.
+    pub(crate) fn owning_root(&self, path: &str) -> Option<usize> {
+        let path = Path::new(path);
+        self.roots
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| path.starts_with(&r.path))
+            .max_by_key(|(_, r)| r.path.components().count())
+            .map(|(i, _)| i)
     }
 
     /// The root a file belongs to: the deepest workspace folder holding it,
