@@ -389,3 +389,80 @@ fn initialize_says_the_server_takes_workspace_updates() {
         true
     );
 }
+
+/// An object known by its metadata, supplied with a `uri`: a change by that
+/// URI replaces it, and a removal by that URI drops it.
+#[test]
+fn an_object_supplied_with_a_uri_is_changed_and_removed_by_it() {
+    let rule = "objects/rules/process-creation.yaml";
+    let uri = "objects/objectives/known.yaml";
+    let object = |name: &str| json!({ "uuid": OBJECTIVE, "schema": "objective::1.0", "name": name, "uri": uri });
+    let mut session = start(json!({ "workspace": { "objects": [object("First name")] } }));
+    assert!(!codes(&open(&mut session, rule, "opentide-yaml", RULE)).contains(&"invalid_ref"));
+    let names = |session: &mut MessageSession, id: u64| -> Vec<String> {
+        request(session, id, "opentide/catalog", json!({}))["roots"][0]["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|o| o["uri"].as_str().is_some_and(|u| u.ends_with("known.yaml")))
+            .map(|o| o["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(names(&mut session, 2), ["First name"]);
+
+    send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": { "objects": [object("Second name")] } }),
+    );
+    assert_eq!(
+        names(&mut session, 3),
+        ["Second name"],
+        "replaced, not added"
+    );
+
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": { "removed": [uri] } }),
+    );
+    assert!(
+        published_codes(&replies, rule)
+            .expect("checked again")
+            .contains(&"invalid_ref".to_string())
+    );
+    assert!(names(&mut session, 4).is_empty());
+}
+
+/// One notification that removes a URI and adds it again: the removal goes
+/// first, so the file is there, with the new text.
+#[test]
+fn a_uri_removed_and_added_in_one_change_is_there_with_its_new_text() {
+    let rule = "objects/rules/process-creation.yaml";
+    let uri = "objects/objectives/moved.yaml";
+    let objective = |name: &str| {
+        format!("name: {name}\nmetadata:\n  uuid: {OBJECTIVE}\n  schema: objective::1.0\n")
+    };
+    let mut session = start(
+        json!({ "workspace": { "documents": [{ "uri": uri, "text": objective("Before") }] } }),
+    );
+    open(&mut session, rule, "opentide-yaml", RULE);
+    let replies = send(
+        &mut session,
+        json!({ "method": "opentide/didChangeWorkspace", "params": {
+            "removed": [uri],
+            "documents": [{ "uri": uri, "text": objective("After") }],
+        } }),
+    );
+    let after = published_codes(&replies, rule).expect("checked again");
+    assert!(!after.contains(&"invalid_ref".to_string()), "{after:?}");
+    let line = RULE
+        .lines()
+        .position(|l| l.starts_with("detection_model:"))
+        .unwrap();
+    let hover = request(
+        &mut session,
+        2,
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": rule }, "position": { "line": line, "character": 20 } }),
+    );
+    assert!(hover.to_string().contains("After"), "{hover}");
+}
