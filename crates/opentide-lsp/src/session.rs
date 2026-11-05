@@ -291,8 +291,10 @@ impl DiskObjects {
 /// The workspace a host with no filesystem supplies on `initialize`
 /// (`initializationOptions.workspace`): a browser worker
 /// ([`MessageSession`](crate::MessageSession)). Its objects are indexed as
-/// if they were on disk, under every root and outside them; they are never
-/// checked or published.
+/// if they were on disk: a file under a root's folder in that root, one
+/// outside every root in every root and outside them. A root's
+/// `.opentide/configurations/visibility.toml` among the documents declares
+/// that root's datasets. They are never checked or published.
 #[derive(Default)]
 pub(crate) struct Supplied {
     /// [`path_key`] → (path, text, index entry).
@@ -539,7 +541,10 @@ impl WorkspaceHost for SessionHost<'_> {
         );
         // What the host supplied stands in for objects the session has no
         // file for: an object open or on disk is itself, not a duplicate of
-        // its own metadata.
+        // its own metadata. A supplied file under a root's folder is that
+        // root's alone, as a file on disk would be; one outside every root
+        // (an object known by its metadata, `opentide-object:<uuid>`) is
+        // every root's.
         let known: HashSet<String> = index.iter().map(|o| o.uuid.clone()).collect();
         let on_disk = |key: &String| {
             self.root
@@ -551,6 +556,10 @@ impl WorkspaceHost for SessionHost<'_> {
                 .files
                 .iter()
                 .filter(|(key, _)| !open.contains_key(*key) && !on_disk(key))
+                .filter(|(_, (path, _, _))| {
+                    let owner = session.owning_root(path);
+                    owner.is_none() || owner == self.root
+                })
                 .filter_map(|(_, (_, _, indexed))| indexed.clone())
                 .filter(|o| !known.contains(&o.uuid)),
         );
@@ -610,10 +619,19 @@ impl Session {
             }
             return;
         };
+        // The editor's buffer, else the file on disk, else the root's own
+        // `visibility.toml` among the supplied documents, else the one
+        // `visibility` the host supplied for every root.
         let text = r
             .visibility
             .clone()
             .or_else(|| std::fs::read_to_string(r.visibility_path()).ok())
+            .or_else(|| {
+                self.supplied
+                    .files
+                    .get(&path_key(&r.visibility_path().display().to_string()))
+                    .map(|(_, text, _)| text.clone())
+            })
             .or_else(|| self.supplied.visibility.clone());
         match install_visibility(text.as_deref()) {
             Ok(()) => {
@@ -716,6 +734,18 @@ impl Session {
             .borrow_mut()
             .insert(uri.to_string(), (generation, Arc::clone(&response)));
         Some(response)
+    }
+
+    /// The deepest root whose folder holds `path`, if one does: unlike
+    /// [`root_for`](Self::root_for), no fallback to the first.
+    pub(crate) fn owning_root(&self, path: &str) -> Option<usize> {
+        let path = Path::new(path);
+        self.roots
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| path.starts_with(&r.path))
+            .max_by_key(|(_, r)| r.path.components().count())
+            .map(|(i, _)| i)
     }
 
     /// The root a file belongs to: the deepest workspace folder holding it,

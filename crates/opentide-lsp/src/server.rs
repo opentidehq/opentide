@@ -86,7 +86,8 @@ pub fn serve_with_status(reader: impl BufRead, mut writer: impl Write) -> Result
 /// `initialize`, in `initializationOptions.workspace`:
 ///
 /// - `documents`: `[{ "uri", "text" }]`, object files indexed as if they were
-///   on disk (references resolve to them; they are not checked);
+///   on disk, each in the root whose folder holds it (references resolve to
+///   them; they are not checked), and a root's `visibility.toml`;
 /// - `objects`: `[{ "uuid", "schema", "name"?, "uri"? }]`, objects the host
 ///   knows by their metadata alone, indexed with just those keys, so a
 ///   reference to one resolves and hover names it;
