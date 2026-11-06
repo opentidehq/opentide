@@ -52,7 +52,7 @@ opentide validate --strict
 
 **Fixed**
 
-- **`deploy` and `--changed` work in a repository without commits.** `deploy`, `validate query --changed` and `lint --changed` no longer fail with `b'HEAD'`: outside CI they report, with a warning, that nothing has changed, and in CI the error is readable ([#769](https://github.com/opentidehq/opentide/pull/769)).
+- **`deploy` and `--changed` no longer fail with `b'HEAD'` before the first commit.** Outside CI, `deploy`, `validate query --changed` and `lint --changed` report, with a warning, that nothing has changed; in CI they still fail, with a readable message ([#769](https://github.com/opentidehq/opentide/pull/769)).
 - **`${VAR}` tenant setup values resolve on every platform.** Only Elastic's `api_key` and Sysdig's `api_token` resolved them. A secret that only starts with `$` is used as written, and `doctor` names the variable ([#766](https://github.com/opentidehq/opentide/pull/766), [#768](https://github.com/opentidehq/opentide/pull/768)).
 - **`info` counts a duplicate UUID as a load error.** It said `0 load errors` where `validate` reported `duplicate_id`; `info --strict` fails on it ([#766](https://github.com/opentidehq/opentide/pull/766)).
 - **Interrupting `opentide generate` no longer leaves an empty schema.** The empty file made every later command fail with `internal` (`JSONDecodeError`); a schema that cannot be parsed is skipped with a warning and rewritten ([#766](https://github.com/opentidehq/opentide/pull/766), [#768](https://github.com/opentidehq/opentide/pull/768)).
@@ -86,17 +86,24 @@ opentide validate --strict
 - Run `opentide validate --strict` and fix what it reports: it names each retired file and key, and what replaces it.
 - If your code imports `DeployTide`, `TideRepo`, `DetectionSystems` or `TideErrors`, import `EnabledPlatforms`, `GitRepository`, `DetectionPlatforms` or `Errors` instead.
 - If a script runs `opentide migrate objects` or `opentide export playbook-map`, remove those calls.
+- If a Sentinel block's `alert.techniques` lists an id newer than ATT&CK v18, replace it with the v18 id the `sentinel_attack_technique` message names, or remove it.
 - Re-run `opentide setup ci <provider> --yes` to pick up the pipeline fixes.
+- If you use GitLab, set the `opentide-production` resource group's process mode to `oldest_first`, so production deploys run in pipeline order.
+- If another TOML language server runs in your editor, turn it off for `.opentide/configurations/**`, where opentide checks the files.
 
 **Breaking**
 
 - **`global.toml`, `schema.toml` and `systems/` fail every command.** Under `.opentide/configurations/` they were loaded and ignored. `retired_configuration_file` names what replaces each: `paths.toml` for `global.toml`, `platforms/<platform>.toml` for `systems/`, and nothing for `schema.toml`.
-- **A platform file is identified by its file name.** `[platform] identifier`, `subschema` and `flags`, and the `[tide]` table, are unknown keys. So are Splunk's and Carbon Black's tenant-less `[setup]` and `[secrets]`: declare `[[tenants]]` with `[tenants.setup]`.
+- **A platform file is identified by its file name.** `[platform] identifier`, `subschema` and `flags`, and the `[tide]` table, are unknown keys. So are the tables that configured a platform without tenants: declare `[[tenants]]` with `[tenants.setup]`.
+  - Splunk: `[setup]`, `[secrets]`, `[defaults]` and table-form `[modifiers]`
+  - Carbon Black: `[setup]`, `[secrets]` and `[validation]`
+- **`[debug] proxy_enabled` in `deployment.toml` is an unknown key.** It was kept, and ignored, so a CoreTIDE file would load; `[proxy]` already was one.
 - **A Splunk block takes the `platform::splunk::1.0` layout only.** The splunk::2.x keys, such as `search`, `cron_schedule` and `advanced`, are unknown keys; they were rewritten onto the current layout before validation.
 - **An objective's root `composition` is an unknown key.** It was accepted and dropped: write it as `objective.composition`. The editor schema also drops a rule's `meta:`, which validation already refused.
 - **A platform block's `schema` is `platform::<platform>::1.0` or absent.** It took any string, which nothing read; any other value fails validation (`schema_validation`).
 - **`opentide migrate objects` is removed, with the migration guide.** It moved CoreTIDE folders but not their content, which opentide never read. `migrate vocab-scope` and `deploy migrate-state` stay.
 - **`opentide export playbook-map` is removed.** It read rule fields `rule::1.0` does not have, so it exported nothing; the `openpyxl` dependency goes with it.
+- **`configurations.sentinel.alert.techniques` takes ATT&CK v18 ids only.** That is the version Microsoft Sentinel is aligned to. The field accepted any string; any other value fails validation with `sentinel_attack_technique`, whose message names what to use instead ([#686](https://github.com/opentidehq/opentide/issues/686)).
 - **CoreTIDE names leave the Python API.** `EnabledPlatforms` replaces `DeployTide` and its aliases, `GitRepository` replaces `TideRepo`, `DetectionPlatforms` replaces `DetectionSystems`, and `Errors` replaces `TideErrors`.
 
 **Added**
@@ -104,7 +111,7 @@ opentide validate --strict
 - **Sysdig Secure and Falco are the ninth platform, `sysdig`.** A `configurations.sysdig` block is a Falco rule, or a tuning of an existing one, deployed through the Sysdig Secure runtime API with the block's macros and lists expanded. `opentide setup --sysdig` enables it ([#143](https://github.com/opentidehq/opentide/issues/143)).
 - **Falco conditions are checked offline.** `validate`, `lint`, the editor and MCP parse a Sysdig block's `condition`, macros and `output`: a syntax error fails validation (`falco_parse_error`), and an unknown field, macro or list is a warning.
 - **`opentide lint --changed` lints only the files a run changed.** `--file` lints the files it names, and `setup ci --lint-changed` gates the generated pipelines on `lint --strict --changed`, so strict lint can gate an inherited catalogue.
-- **`[skip deploy]` and the `skip-deploy` label skip a run's deploys.** Generated pipelines on GitLab, GitHub and Azure leave out the live query checks, the deploys and the share, so a catalogue-wide change does not deploy; validation and `lint` still run.
+- **`[skip deploy]` keeps a catalogue-wide change from deploying.** Generated pipelines leave out the live query checks, the deploys and the share when the commit message or the pull or merge request title says `[skip deploy]`, or, on GitHub and GitLab, a `skip-deploy` label is set; validation and `lint` still run.
 - **Generated GitLab write-backs push over SSH, or to any URL.** Set `OPENTIDE_PUSH_URL`, or the File variables `OPENTIDE_PUSH_SSH_KEY` and `OPENTIDE_PUSH_SSH_KNOWN_HOSTS`; without them the jobs push to the job-token URL.
 - **`validate query --live --check-timeout` bounds each query check.** `--check-timeout SECONDS`, or `OPENTIDE_QUERY_CHECK_TIMEOUT`, sets how long each check waits, on every platform.
 - **The editor checks configuration files.** `opentide lsp start` checks each open TOML file under `.opentide/configurations/` as `opentide validate` does, as you type ([#730](https://github.com/opentidehq/opentide/issues/730)).
@@ -115,7 +122,6 @@ opentide validate --strict
 - **The engine is [language-server 0.9.1](https://github.com/opentidehq/language-server/releases/tag/v0.9.1), from crates.io.** Its rebuilt server host answers a keystroke in a 500-object workspace in half the time and no longer crashes after an edit next to `日本` or an emoji; VS Code no longer shows each diagnostic twice.
 - **Generated pipelines pin opentide once, in `OPENTIDE_VERSION`.** Every job runs `pip install "opentide==$OPENTIDE_VERSION"`, and on GitLab a project or group CI/CD variable of that name overrides the file's.
 - **Generated GitLab deploy jobs record deployments.** `deploy_production` deploys to `production` and `deploy_staging` to `staging/mr-$CI_MERGE_REQUEST_IID`, one environment per merge request, so GitLab keeps a deployment history.
-- **`configurations.sentinel.alert.techniques` takes ATT&CK v18 ids.** That is the version Microsoft Sentinel is aligned to; any other value fails validation with `sentinel_attack_technique`, whose message names what to use instead ([#686](https://github.com/opentidehq/opentide/issues/686)).
 - **`generate templates` writes platform templates into the workspace.** Each is `.opentide/templates/platforms/<platform>.template.yaml`, which `generate snippets` reads; they were written into the installed package, which failed on a read-only install.
 
 **Fixed**
@@ -200,7 +206,7 @@ opentide validate --strict
 
 **Upgrade**
 
-- Run `opentide validate --strict` and fix what it reports: a rule the platform compiler cannot build, or a query with a near miss of a documented column, fails it.
+- Run `opentide validate --strict` and fix what it reports: a rule the platform compiler cannot build, or a query with a near miss of a documented column, fails it. `--queries warn` reports the queries as warnings while you fix them.
 - If a script reads `VALIDATION_ERROR_RAISED` or `VALIDATION_WARNING_RAISED`, read the exit code instead.
 - If your code calls `validation_exit_code` or `exit_on_validation_errors`, call `validation_outcome(failed=, warned=)` or `report_outcome(report)` instead.
 
@@ -258,13 +264,21 @@ opentide validate --strict
 
 - Run `opentide validate --strict` and fix what it reports: a rule whose query the platform would reject fails it.
 - Run `opentide generate schemas` to write the language server's catalogs.
+- If a script relied on `opentide validate query` refusing without `--live` (exit `2`), or on `--platform` being required there, pass `--live`: without it the command checks every query offline.
+- If you install opentide where no wheel is built (free-threaded Python, another platform), install a Rust toolchain first: pip builds the sdist.
+
+**Breaking**
+
+- **`validate query` without `--live` checks queries offline.** It checks every rule query (exit `1` on an error) instead of refusing with exit `2`, and `--platform` is not required; `--live` is unchanged.
+- **MCP `validate_query` without `live` checks offline.** `valid` is `true` or `false` instead of `null`; a SentinelOne query and an empty one are still refused, with `valid: null`.
+- **Wheels are built per platform.** Linux, macOS and Windows x64 get a prebuilt wheel; elsewhere, including free-threaded Python, pip builds from the sdist and needs a Rust toolchain.
 
 **Added**
 
 - **The analysis engine ships in every install.** KQL for Sentinel and Defender, SPL, ES|QL, EQL, Kibana KQL, Lucene and Carbon Black's Lucene are checked offline, with no extra and no second package ([#332](https://github.com/opentidehq/opentide/issues/332)).
 - **`validate` checks every rule query.** A query the platform would reject fails `validate` (exit `1`); `--queries warn` reports it as a warning, and `--queries off` skips queries ([#685](https://github.com/opentidehq/opentide/issues/685)).
 - **`lint` checks query style.** Its `queries` check reports the engine's warnings and notes, such as slow query shapes (`kql_where_not_first`, `spl_wildcard`) ([#685](https://github.com/opentidehq/opentide/issues/685)).
-- **`validate query` checks rule queries offline.** Without `--live` it checks every rule query instead of exiting `2`, `--file` takes query files, and MCP `validate_query` checks offline too; `--strategy` and `--wide` need `--live`.
+- **`validate query --file` takes query files.** It checks `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` and `.lucene` files offline; `--strategy` and `--wide` need `--live`.
 - **`opentide lsp start` serves editors.** It gives diagnostics, hover, completion and highlighting for Tide objects and their queries, and for `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` and `.lucene` files; `opentide tui` shows what it reports.
 - **`opentide query` runs a read-only query on a platform's tenants.** It returns the rows, and MCP `run_query` and `DetectionRule.run_query` do the same ([#665](https://github.com/opentidehq/opentide/issues/665)).
 - **`opentide deploy` reports each rule as it is sent.** It prints one line per rule as it finishes, with the platform's own message for a failure, and lists the rules it never reached ([#675](https://github.com/opentidehq/opentide/issues/675)).
@@ -274,7 +288,6 @@ opentide validate --strict
 
 - **The engine is [language-server 0.6.0](https://github.com/opentidehq/language-server/releases/tag/v0.6.0), from crates.io.** The sdist builds from published crates.
 - **A real deploy prints the plan before it sends anything.** Its outcome line always counts `failed` and `not attempted`.
-- **Wheels are built per platform.** Linux, macOS and Windows x64 get a prebuilt wheel; elsewhere, including free-threaded Python, pip builds from the sdist and needs a Rust toolchain.
 - **Elastic advisories use the specification's codes.** `lookback_long`, `threshold_lookback`, `risk_band` and the others replace event names such as `elastic_lookback_long_warning`, which `legacy_event` keeps until the release after next ([#637](https://github.com/opentidehq/opentide/issues/637)).
 
 See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0190--2026-10-29) for every change.
@@ -303,13 +316,24 @@ opentide validate --strict
 - If a rule's `severity` is an incident-scale value, replace it with an alert label (`Substantial incident` → `High`).
 - If you pin `mcp` 1.x beside opentide, move the pin to `mcp>=2.3,<3`.
 - Run `opentide setup ci <github|gitlab|azure> --yes`, so the pipeline keeps the SARIF and Code Quality reports.
-- Run `opentide generate` to refresh schemas and templates.
+- Run `opentide generate` to refresh schemas and templates, and `opentide setup skills` to refresh agent instruction files.
+- If a pipeline tests for exit `1` on a usage error, test for non-zero, or read `failure.code` from `--json`.
+- If a script matches indented `--json` text (`grep '"ok": true'`), parse it (`jq .ok`) or set `OPENTIDE_JSON_INDENT=2`.
+- If a script reads `failure.code` `command_failed` when findings fail a run, read `issues_found`.
+- If your code reads a signal's objective from `parent` or `SignalRecord.parent_uuid` and `parent_name`, read `owner`, `owner_uuid` and `owner_name`.
+
+**Breaking**
+
+- **Usage errors a command detects exit `2`, not `1`.** An unknown `info` section, an invalid `validate --type` and a `setup` prompt with no terminal are among them, as the exit codes page already said.
+- **`failure.code` is `issues_found` when findings fail a run.** It was `command_failed`, for `validate`, `lint --strict` and `info --strict`.
+- **`--json` prints one compact line unless stdout is a terminal.** A script that parses the document is unaffected; one that matched indented text is not.
+- **A signal's objective is `owner`, not `parent`.** `SignalRecord.parent_uuid` and `parent_name` are `owner_uuid` and `owner_name`, and `parent` holds the authored parent signal ([#585](https://github.com/opentidehq/opentide/issues/585)).
 
 **Added**
 
 - **`opentide new` scaffolds a threat, objective or rule.** The file validates at once, and `opentide lint` lists each placeholder until it is replaced.
 - **`opentide doctor` checks the installation and the workspace.** It checks the workspace's integrations too, with a fix per check, and exits `1` when a check fails.
-- **`validate --fix` applies safe fixes, and `--watch` re-validates on save.** A safe fix replaces a vocabulary value in the wrong case or spelling, and nothing else; `--fix --dry-run` prints the diff.
+- **`validate --fix` applies safe fixes, and `--watch` re-validates on save.** A safe fix replaces a vocabulary value that differs from a valid one only in case, spaces, `-` or `_`, and nothing else; `--fix --dry-run` prints the diff.
 - **`opentide explain <code>` explains any diagnostic or failure code.** It is also an MCP tool.
 - **`opentide tui` browses the catalogue in a terminal.** It shows each object with its diagnostics and coverage, and runs `validate`, `generate` and `deploy --dry-run` from its command palette.
 - **`opentide info vocab` reports a vocabulary's revisions.** It lists the contract revisions and the schema fields pinned to the vocabulary ([#523](https://github.com/opentidehq/opentide/issues/523)).
@@ -326,11 +350,7 @@ opentide validate --strict
   - a CoreTIDE `documentation.toml` must drop `skip_vocabularies`, `model_cover_pages` and `[titles]`
   - `sharing.toml`'s `api_key` names an upper-case variable (`${MISP_KEY}`)
 - **Rule `severity` uses the alert labels, `Informational` to `Critical`.** They are the labels of `response.alert_severity`; threats keep the incident scale ([opentidehq/specifications#60](https://github.com/opentidehq/specifications/pull/60)).
-- **The CLI's human and JSON output follow one grammar.** Findings print as code frames, and a script that matched the human output should read `--json`:
-  - every `--json` run prints one document, usage errors included
-  - the document is one compact line unless stdout is a terminal
-  - usage errors exit `2`
-  - `failure.code` is `issues_found` when findings fail a run
+- **The CLI's output follows one grammar.** Findings print as code frames, and every `--json` run prints one document, usage errors included; a script that matched the human output should read `--json`.
 - **The MCP server needs `mcp` 2.x.** `opentide mcp start` runs on `mcp>=2.3,<3`; with `mcp` 1.x installed it exits with the upgrade instruction on stderr instead of a traceback ([#581](https://github.com/opentidehq/opentide/issues/581)).
 - **The CLI starts faster.** `opentide --version` answers in about 30 ms, and `--help` and shell completion list the commands without loading the engine.
 - **`opentide` depends on Textual, for `opentide tui`.** It loads only when the UI opens, so start-up is unchanged.
@@ -340,7 +360,7 @@ opentide validate --strict
 - **Deploy no longer stops on a rule without platform blocks.** It failed every deploy with `'NoneType' object is not iterable`; `opentide new rule` without `--platform` writes that shape.
 - **Object files in subfolders are ignored everywhere, as deploy did.** `validate`, `lint`, docs and sharing treated them as objects; each is a `nested_object_file` warning, which fails `validate --strict` ([#584](https://github.com/opentidehq/opentide/issues/584)).
 - **A rule the production deploy promotes is shared that run.** It was not shared until it changed again; regenerated pipelines run the share job after the production deploy ([#590](https://github.com/opentidehq/opentide/issues/590)).
-- **A signal keeps its authored `parent`.** Its objective overwrote it: code that read the objective there reads `owner`. `validate` reports two signals that share a UUID ([#585](https://github.com/opentidehq/opentide/issues/585)).
+- **A signal keeps its authored `parent`.** Its objective overwrote it, and `validate` reports two signals that share a UUID ([#585](https://github.com/opentidehq/opentide/issues/585)).
 - **Elastic ES|QL and EQL checks read past comments and strings.** A comment before `FROM` no longer sends the check to the wrong indices ([#616](https://github.com/opentidehq/opentide/issues/616)). Empty durations, non-ASCII digits and malformed `api_key` references are reported ([#589](https://github.com/opentidehq/opentide/issues/589)).
 
 See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0180--2026-10-27) for every change.
@@ -368,10 +388,13 @@ opentide validate --strict
 - If your pipeline replaces opentide's Splunk handler with `verify=not ssl_enabled`, delete that step: with `ssl = false` it turns certificate verification on.
 - If you deleted it, list the Splunk host in `NO_PROXY` and `no_proxy`: the patch worked only by skipping the proxy.
 
+**Added**
+
+- **Each Splunk connection logs the route it takes.** `splunk_tenant_route` names the proxy it goes through, or `direct`.
+
 **Fixed**
 
 - **A proxy's page is named, not parsed as Splunk's.** It failed as `xml.etree.ElementTree.ParseError: mismatched tag`, which read as a certificate problem; the error names the Splunk address, the page title, the proxy and `NO_PROXY=<host>` ([Splunk answers with HTML instead of XML behind a proxy](./troubleshooting.md#splunk-answers-with-html-instead-of-xml-behind-a-proxy)).
-- **Each Splunk connection logs the route it takes.** `splunk_tenant_route` names the proxy it goes through, or `direct`.
 - **`uv` installs resolve a current boto3 again.** python-dateutil 3.0.0 led `uv` to install boto3 `0.0.3`, so the Carbon Black SDK failed to import (`No module named 'six.moves'`). opentide requires `boto3>=1.35`; `pip` was not affected.
 
 See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0172--2026-10-22) for every change.
@@ -429,18 +452,19 @@ opentide validate --strict
 
 **Upgrade**
 
-- Replace `--plan` with `--strategy`: `--plan STAGING` becomes `--strategy PREVIEW`, `--plan PRODUCTION` becomes `--strategy RELEASE`, and `--plan FULL`, or no plan, becomes `--strategy PREVIEW --strategy RELEASE --all`.
+- Replace `--plan` with `--strategy`: `--plan STAGING` becomes `--strategy PREVIEW`, `--plan PRODUCTION` becomes `--strategy RELEASE`, and `--plan FULL`, or no plan, becomes `--strategy PREVIEW --strategy RELEASE --all`, with `--keep-deprecated` to also disable or delete the rules that map to `DISABLEMENT` or `DELETION`.
 - Unset `DEPLOYMENT_PLAN`.
 - Replace each tenant's `deployment` key in `.opentide/configurations/platforms/*.toml`: `"STAGING"` becomes `strategies = ["PREVIEW"]`, `"PRODUCTION"` becomes `strategies = ["RELEASE"]`, `"ALWAYS"` is removed, and `"MANUAL"` becomes `manual = true`.
 - Run `opentide setup ci <github|gitlab|azure> --yes`, so deploy jobs pass `--strategy`, the live query check reads only the changed rules, and GitLab merge request pipelines start.
 - If your code uses `DeploymentStrategy` or passes `deployment_plan`, pass `strategies` instead.
+- Run `opentide generate` to refresh the editor schemas' objective and signal labels.
 
 **Breaking**
 
 - **`--strategy` replaces `--plan`.** A deploy names the status strategy it carries out, `PREVIEW` in the pull or merge request job and `RELEASE` on the default branch, and deploys the changed rules whose status maps to it. `STAGING` and `PRODUCTION` are default status names, not strategies ([Statuses, strategies and tenants](./concepts/statuses-and-strategies.md)).
 - **`--plan` and `DEPLOYMENT_PLAN` exit `2`, naming the replacement.** Generated inflight jobs no longer export `DEPLOYMENT_PLAN`.
 - **Tenants declare `strategies` and `manual`.** `strategies` takes `PREVIEW`, `RELEASE` or both (the default when omitted), and `manual = true` takes only the rules that name the tenant. The `deployment` key fails to load; the [migration table](./concepts/statuses-and-strategies.md#moving-from-deployment-plans-016-and-earlier) maps each old value.
-- **Deploy reads the changed rules, by CI context.** In CI that is the pull or merge request or the push; outside CI it is the last commit, where deploy read every rule file. `--all` reads every rule file.
+- **Deploy reads the changed rules, by CI context.** In CI that is the pull or merge request or the push; outside CI it is the last commit, where deploy read every rule file. `--all` reads every rule file and leaves out the rules that map to `DISABLEMENT` or `DELETION`, which `--keep-deprecated` includes.
 - **`validate query --live` checks each rule where deploy sends it.** It reached every tenant; `--json` reports `strategies` instead of `plan`.
 - **`DeploymentStrategy` is removed from the SDK.** Deployers and validators take `strategies`, and `rule.deploy(..., strategies=None)` deploys by the rule's own status.
 - **The `mdr_skipped_for_plan` log event is `rule_skipped_for_strategy`.** It carries the rule's `strategy`, the run's `run_strategies` and `deployed_by`.
