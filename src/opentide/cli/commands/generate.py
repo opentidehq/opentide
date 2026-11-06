@@ -11,7 +11,7 @@ from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import emit_error, emit_success, emit_usage_error
-from opentide.cli.ui.contract import USAGE_ERROR
+from opentide.cli.ui.contract import USAGE_ERROR, USAGE_MISSING_OPTION
 from opentide.core.errors import UserFileError
 
 
@@ -130,6 +130,17 @@ def generate_explorer_cmd(
     from opentide.cli.services.generation import ExplorerOptions, run_generate
 
     cli = get_context(ctx)
+    # Typed without the export it labels, the TLP would be dropped unseen.
+    # Compared by name: Typer vendors Click's ParameterSource in a private module.
+    tlp_source = ctx.get_parameter_source("visibility_tlp")
+    if not include_visibility and tlp_source is not None and tlp_source.name != "DEFAULT":
+        emit_usage_error(
+            cli,
+            "--visibility-tlp needs --include-visibility: it labels explorer.visibility.json, "
+            "which only --include-visibility writes.",
+            argument="--visibility-tlp",
+            code=USAGE_MISSING_OPTION,
+        )
     tlp = visibility_tlp.strip().lower()
     if tlp not in _TLP_CHOICES:
         emit_usage_error(

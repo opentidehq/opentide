@@ -228,7 +228,7 @@ opentide generate explorer --include-visibility --visibility-tlp red
 | Option | Description |
 |--------|-------------|
 | `--include-visibility` | Also write `explorer.visibility.json`, which the explorer's Visibility view reads |
-| `--visibility-tlp` | The TLP the explorer shows on that view: `clear`, `green`, `amber` (the default), `amber+strict` or `red`. Another value exits `2` |
+| `--visibility-tlp` | The TLP the explorer shows on that view: `clear`, `green`, `amber` (the default), `amber+strict` or `red`. Another value exits `2`, and so does the option without `--include-visibility` (`usage_missing_option`): there is no export for it to label |
 
 A visibility inventory shows what an organisation can and cannot see, and the explorer builds a static site anyone with its URL can read, so the export is **off by default**. It is opt-in per run: `generate explorer` without the flag removes an `explorer.visibility.json` an earlier run wrote, so the site shows the view only while you keep asking for it. Without the file, the explorer has no Visibility view.
 

@@ -96,3 +96,17 @@ def test_an_unknown_tlp_is_a_usage_error(invoke_cli, visibility_corpus: Path) ->
     assert payload["failure"]["code"].startswith("usage")
     assert "amber+strict" in payload["message"]
     assert not _export(visibility_corpus).exists()
+
+
+@pytest.mark.parametrize("tlp", ["red", "amber"])
+def test_visibility_tlp_without_include_visibility_is_a_usage_error(
+    invoke_cli, visibility_corpus: Path, tlp: str
+) -> None:
+    """A TLP for an export that is not written would be dropped unseen, even the default."""
+    result = invoke_cli("generate", "explorer", "--visibility-tlp", tlp)
+    assert result.exit_code == 2, result.stdout + result.stderr
+    payload = parse_cli_json(result)
+    assert payload["failure"]["code"] == "usage_missing_option"
+    assert "--visibility-tlp needs --include-visibility" in payload["message"]
+    assert not _export(visibility_corpus).exists()
+    assert not (visibility_corpus / ".opentide/exports/explorer.bundle.json").exists()
