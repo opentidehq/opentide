@@ -163,6 +163,10 @@ opentide validate --strict
 - If your `visibility.toml` declares `indexes`, `macros`, `data_views` or `ecs`, remove them: they cannot be declared.
 - If you rewrote `visibility.toml`, update the signals' `data.logsources` references to the log sources' names.
 
+**Breaking**
+
+- **Each `visibility.toml` log source is one dataset.** Its `name` is its KQL table, Splunk sourcetype or Elastic index pattern, and `columns` gives each column's `type` and an optional `description`. The 0.20.0 keys fail validation and say what to do instead; there is no migration command ([#718](https://github.com/opentidehq/opentide/issues/718)).
+
 **Added**
 
 - **`lint.toml` sets the filename convention per object kind.** `[filenames.threats]`, `[filenames.objectives]` and `[filenames.rules]` take `style` and `pattern`; a kind without a table follows `[filenames]` ([#721](https://github.com/opentidehq/opentide/issues/721)).
@@ -180,7 +184,6 @@ opentide validate --strict
 
 **Fixed**
 
-- **Each `visibility.toml` log source is one dataset.** Its `name` is its KQL table, Splunk sourcetype or Elastic index pattern, and `columns` gives each column's `type` and an optional `description`. The 0.20.0 keys fail validation and say what to do instead; there is no migration command ([#718](https://github.com/opentidehq/opentide/issues/718)).
 - **`lint` checks a file that starts with a byte-order mark.** None of its queries was analysed, so `lint` reported nothing for it while `validate` did ([#719](https://github.com/opentidehq/opentide/issues/719)).
 - **MCP `validate_query` reads `visibility.toml`.** It reports what `opentide validate query` reports, reading the file afresh on every call ([#720](https://github.com/opentidehq/opentide/issues/720)).
 
@@ -212,12 +215,12 @@ opentide validate --strict
 
 **Breaking**
 
+- **`validate` fails a rule a platform compiler cannot build.** It compiles each rule a deploy would compile, with the dry run's offline compiler, and reports its code (`compile_missing_field`, ...) at the key at fault, so a rule that validates deploys ([#660](https://github.com/opentidehq/opentide/issues/660)).
 - **The `VALIDATION_ERROR_RAISED` and `VALIDATION_WARNING_RAISED` flags are gone.** `validate query --live` no longer sets them: read its exit code, which is unchanged, or `report_outcome(report)` from Python ([#673](https://github.com/opentidehq/opentide/issues/673)).
 - **`validation_exit_code` and `exit_on_validation_errors` are removed.** `validation_outcome(failed=, warned=)` and `report_outcome(report)` replace them.
 
 **Added**
 
-- **`validate` fails a rule a platform compiler cannot build.** It compiles each rule a deploy would compile, with the dry run's offline compiler, and reports its code (`compile_missing_field`, ...) at the key at fault, so a rule that validates deploys ([#660](https://github.com/opentidehq/opentide/issues/660)).
 - **A `visibility.toml` log source names the datasets it fills.** By its `system` it takes `tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views` or `ecs`, which `validate`, `lint`, `tui` and the language server read. Undeclared-dataset warnings are opt-in ([#695](https://github.com/opentidehq/opentide/issues/695)).
 - **`lint.toml` sets the filename convention.** `[filenames]` takes `style` (`slug`, `name` or `none`) and `pattern`, and a stem that misses the pattern is a `filename_pattern` finding ([#699](https://github.com/opentidehq/opentide/issues/699)).
 - **`setup skills --plugin` enables the opentidehq/skills Agent Plugin.** It adds the plugin to `.claude/settings.json`, so Claude Code offers the skills and the MCP server to whoever opens the project ([#431](https://github.com/opentidehq/opentide/issues/431)).
@@ -269,6 +272,7 @@ opentide validate --strict
 
 **Breaking**
 
+- **`validate` checks every rule query.** A query the platform would reject fails `validate` (exit `1`); `--queries warn` reports it as a warning, and `--queries off` skips queries ([#685](https://github.com/opentidehq/opentide/issues/685)).
 - **`validate query` without `--live` checks queries offline.** It checks every rule query (exit `1` on an error) instead of refusing with exit `2`, and `--platform` is not required; `--live` is unchanged.
 - **MCP `validate_query` without `live` checks offline.** `valid` is `true` or `false` instead of `null`; a SentinelOne query and an empty one are still refused, with `valid: null`.
 - **Wheels are built per platform.** Linux, macOS and Windows x64 get a prebuilt wheel; elsewhere, including free-threaded Python, pip builds from the sdist and needs a Rust toolchain.
@@ -276,7 +280,6 @@ opentide validate --strict
 **Added**
 
 - **The analysis engine ships in every install.** KQL for Sentinel and Defender, SPL, ES|QL, EQL, Kibana KQL, Lucene and Carbon Black's Lucene are checked offline, with no extra and no second package ([#332](https://github.com/opentidehq/opentide/issues/332)).
-- **`validate` checks every rule query.** A query the platform would reject fails `validate` (exit `1`); `--queries warn` reports it as a warning, and `--queries off` skips queries ([#685](https://github.com/opentidehq/opentide/issues/685)).
 - **`lint` checks query style.** Its `queries` check reports the engine's warnings and notes, such as slow query shapes (`kql_where_not_first`, `spl_wildcard`) ([#685](https://github.com/opentidehq/opentide/issues/685)).
 - **`validate query --file` takes query files.** It checks `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` and `.lucene` files offline; `--strategy` and `--wide` need `--live`.
 - **`opentide lsp start` serves editors.** It gives diagnostics, hover, completion and highlighting for Tide objects and their queries, and for `.kql`, `.spl`, `.esql`, `.eql`, `.kuery` and `.lucene` files; `opentide tui` shows what it reports.
@@ -324,6 +327,10 @@ opentide validate --strict
 
 **Breaking**
 
+- **Configuration files are checked when a command reads them.** An unknown key or a wrong type in `.opentide/configurations/` fails the command, naming the file and the key, and `opentide validate` runs the same check ([#374](https://github.com/opentidehq/opentide/issues/374)). For example:
+  - a Splunk `schedule_offset = "5"` must be `5`
+  - a CoreTIDE `documentation.toml` must drop `skip_vocabularies`, `model_cover_pages` and `[titles]`
+  - `sharing.toml`'s `api_key` names an upper-case variable (`${MISP_KEY}`)
 - **Usage errors a command detects exit `2`, not `1`.** An unknown `info` section, an invalid `validate --type` and a `setup` prompt with no terminal are among them, as the exit codes page already said.
 - **`failure.code` is `issues_found` when findings fail a run.** It was `command_failed`, for `validate`, `lint --strict` and `info --strict`.
 - **`--json` prints one compact line unless stdout is a terminal.** A script that parses the document is unaffected; one that matched indented text is not.
@@ -345,10 +352,6 @@ opentide validate --strict
 
 **Changed**
 
-- **Configuration files are checked when a command reads them.** An unknown key or a wrong type in `.opentide/configurations/` fails the command, naming the file and the key, and `opentide validate` runs the same check ([#374](https://github.com/opentidehq/opentide/issues/374)). For example:
-  - a Splunk `schedule_offset = "5"` must be `5`
-  - a CoreTIDE `documentation.toml` must drop `skip_vocabularies`, `model_cover_pages` and `[titles]`
-  - `sharing.toml`'s `api_key` names an upper-case variable (`${MISP_KEY}`)
 - **Rule `severity` uses the alert labels, `Informational` to `Critical`.** They are the labels of `response.alert_severity`; threats keep the incident scale ([opentidehq/specifications#60](https://github.com/opentidehq/specifications/pull/60)).
 - **The CLI's output follows one grammar.** Findings print as code frames, and every `--json` run prints one document, usage errors included; a script that matched the human output should read `--json`.
 - **The MCP server needs `mcp` 2.x.** `opentide mcp start` runs on `mcp>=2.3,<3`; with `mcp` 1.x installed it exits with the upgrade instruction on stderr instead of a traceback ([#581](https://github.com/opentidehq/opentide/issues/581)).
