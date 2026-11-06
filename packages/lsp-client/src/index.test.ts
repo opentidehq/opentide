@@ -73,7 +73,14 @@ function cliCodes(binary: string, languageId: string, text: string): string[] {
     writeFileSync(file, text);
     const run = spawnSync(binary, ["analyze", file, "--language", languageId], { encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr);
-    return (JSON.parse(run.stdout) as { code: string }[]).map((d) => d.code).sort();
+    // The CLI analyses a file, so it checks the file's name against the object's; the
+    // `opentide/analyze` request these codes are compared with names no file (`memory`),
+    // which has no name to check (#214).
+    const fileNameCodes = new Set(["filename_slug", "filename_pattern"]);
+    return (JSON.parse(run.stdout) as { code: string }[])
+      .map((d) => d.code)
+      .filter((code) => !fileNameCodes.has(code))
+      .sort();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
