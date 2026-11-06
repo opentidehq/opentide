@@ -56,7 +56,9 @@ def load_page(code: str) -> ExplainPage | None:
 
 
 #: Engine codes that are about a Tide object, not a query, and where they show.
-_OBJECT_CODES = frozenset({"filename_slug", "missing_author", "missing_organisation"})
+_OBJECT_CODES = frozenset(
+    {"filename_slug", "filename_pattern", "missing_author", "missing_organisation"}
+)
 
 
 def engine_page(code: str) -> ExplainPage | None:
