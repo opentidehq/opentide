@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-06
+
+Filename and metadata warnings now follow the workspace's `lint.toml` as `opentide lint` does, a `detection_model` naming a signal is no longer an `invalid_ref`, and hover and findings point at the exact value they are about.
+
 ### Added
 
 - **`opentide/didChangeWorkspace` updates the workspace a host supplied on `initialize`.** A host with no filesystem, such as a browser worker, sends it when files change outside the editor, without a restart; the server re-indexes, re-checks open documents and sends `opentide/catalogChanged` for a catalog the client got that changed. `docs/EDITORS.md` (Custom RPCs) has the shape.
@@ -628,6 +632,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.11.0]: https://github.com/opentidehq/language-server/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/opentidehq/language-server/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/opentidehq/language-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/opentidehq/language-server/compare/v0.8.0...v0.9.0
