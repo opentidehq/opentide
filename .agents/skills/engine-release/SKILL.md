@@ -23,7 +23,7 @@ python3 scripts/release.py check vX.Y.Z   # tag, pins and CHANGELOG.md agree
 
 - The `Cargo.lock` diff is only the workspace crates' `version` lines. Anything else means Cargo re-resolved: restore the lock and bump again.
 - In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, keep an empty `## [Unreleased]` above it, and add `[X.Y.Z]: https://github.com/opentidehq/language-server/compare/vPREV...vX.Y.Z` to the links at the bottom.
-- The section's first paragraph is its summary: the GitHub Release and opentide.org show it above the change lists. Write one.
+- The section's first paragraph is its summary: the GitHub Release and opentide.org show it above the change lists. Write one, and check the entries, as `skills/release-notes/SKILL.md` says: the parts in order (Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed, Security), a bold lead on every entry.
 - `release.py vendor` + `cargo package --workspace --allow-dirty` + `release.py vendor --clean`, then `cargo test --workspace` (with `scripts/requirements-opentide.txt` installed, or `tide_corpus` fails on the missing `opentide` module). The vendored `crates/*/assets`, `LICENSE` and `NOTICE` copies are never committed.
 
 CI green on the PR, then merge it.
@@ -80,7 +80,7 @@ Open a PR against `opentidehq/opentide` `development`, branch `chore/engine-X.Y.
    uv run python scripts/build/check_engine_catalog.py
    scripts/ci-local.sh --full
    ```
-4. `CHANGELOG.md` `## [Unreleased]` → `### Changed`: one entry naming the release (linked) and the fixes opentide users see. Add no blank line inside the list; `test_the_unreleased_lists_hold_no_blank_lines` fails on one.
+4. `CHANGELOG.md` `## [Unreleased]` → `### Changed`: one entry naming the release (linked) and the fixes opentide users see, with a bold lead (opentide's `release-notes` skill). Add no blank line inside the list; `test_the_unreleased_lists_hold_no_blank_lines` fails on one.
 5. Follow opentide's PR template, drive the PR to green, and merge it.
 
 If `check_engine_catalog.py` fails, the engine's bundled Tide catalogs are behind opentide's models. Fix it here (`scripts/sync_opentide_schemas.py`, see `skills/catalogs`) and cut a patch release; never edit the catalog in opentide.
