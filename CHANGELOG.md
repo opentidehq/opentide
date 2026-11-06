@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`opentide tui` shows each finding in place** ([language-server#215](https://github.com/opentidehq/language-server/issues/215)). Findings were listed above the file, away from the lines they describe. Each one is now shown under its line, with its code, message and help, the line's gutter marked `✗`, `!` or `·`, and its span underlined over a tint of its severity. Hovering a span shows its frame and what an editor's hover shows there; `n` and `p` move to the next and previous finding from the keyboard, scroll to it and put it on the status line with the hover. The block above the file counts the findings (`✗ 1  ! 2  on lines 8, 28`). A long line wraps with its underline on its own text. The Python binding has `Workspace.hover(path, text, line, column)`, the language server's hover for a position. See [Findings in place](docs/cli/tui.md#findings-in-place).
+
 ### Fixed
 
 - **Coverage counts the techniques a rule inherits** ([#775](https://github.com/opentidehq/opentide/issues/775)). `opentide info coverage`, the MCP `coverage` tool and the TUI's Coverage tab read only a rule's own `techniques`, so a rule that takes its techniques from its objective, directly or through one of its signals, counted for nothing, and every such technique showed as a gap (`0 rules`, `covered: false`). They now use the walk `info catalog` reports as inherited techniques, from one shared resolver, so the four agree. `info coverage` adds `own`, `inherited` and `matched_techniques` and prints `3 rules (1 own, 2 inherited)`; MCP `coverage` adds `own_rules`, `inherited_rules` and `own_matrix`; the Coverage tab shows `3  1 own · 2 inherited`, and `Enter` opens a rule that lists the technique first. See [Coverage lookup](docs/cli/info.md#coverage-lookup).

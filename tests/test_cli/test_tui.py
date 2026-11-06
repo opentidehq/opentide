@@ -216,10 +216,14 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         assert "tlp: clearr" in _text(app, "#source")
         await pilot.press("v")
         await _settle(app, pilot)
+        # #215: the top block counts the finding; the source shows it at its line.
         detail = _text(app, "#diagnostics")
-        assert "error[vocab_unknown]:" in detail
-        assert f"╭─▶ {RULE_FILE}:8\n" in detail
-        assert "help: did you mean 'clear'?" in detail
+        assert "Last validate run\n✗ 1  on line 8" in detail
+        source = _text(app, "#source")
+        assert "tlp: clearr" in source
+        assert "error[vocab_unknown]:" in source
+        assert "help: did you mean 'clear'?" in source
+        assert source.index("tlp: clearr") < source.index("error[vocab_unknown]")
         assert "Sentinel KQL Rule  ✗ 1" in _labels(app.query_one("#tree", Tree).root)[-1]
         assert "opentide validate: 1 error in 1 file · " in _text(app, "#status")
         # The cursor stays on the rule after the tree is rebuilt.
@@ -906,11 +910,11 @@ def test_the_detail_pane_shows_what_the_editor_shows_before_any_validate_run(
         await pilot.press("down", "down")
         assert app.selected == RULE
         detail = _text(app, "#diagnostics")
-        assert "Language server\n" in detail
-        assert "error[kql_unknown_operator]: unknown tabular operator 'tak'" in detail
-        assert f"╭─▶ {RULE_FILE}:28:9\n" in detail
-        assert "help: did you mean 'take'?" in detail
+        assert "Language server\n✗ 1  on line 28" in detail
         assert "Not validated yet" in detail
+        source = _text(app, "#source")
+        assert "error[kql_unknown_operator]: unknown tabular operator 'tak'" in source
+        assert "help: did you mean 'take'?" in source
         await pilot.press("up")
         detail = _text(app, "#diagnostics")
         assert "✓ Nothing to report" in detail
@@ -950,16 +954,16 @@ def test_a_finding_both_report_is_shown_and_counted_once(tutorial_repo: Path) ->
 
     async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
         await pilot.press("down", "down")
-        before = _text(app, "#diagnostics")
+        before = _text(app, "#source")
         assert before.count("error[vocab_unknown]") == 1
         await pilot.press("v")
         await _settle(app, pilot)
-        after = _text(app, "#diagnostics")
-        # validate's frame, with its `did you mean`, and nothing left for the
+        after = _text(app, "#source")
+        # validate's finding, with its `did you mean`, and nothing left for the
         # language server to add.
         assert after.count("error[vocab_unknown]") == 1
         assert "help: did you mean 'clear'?" in after
-        assert "✓ Nothing to report" in after
+        assert "✓ Nothing to report" in _text(app, "#diagnostics")
         assert _labels(app.query_one("#tree", Tree).root)[-1].endswith("Sentinel KQL Rule  ✗ 1")
 
     _drive(tutorial_repo, script)
@@ -980,9 +984,8 @@ def test_validate_checks_queries_from_the_ui_and_its_query_findings_are_not_doub
         [deep] = [item for item in app.diagnostics if item.code == "kql_unknown_operator"]
         assert deep.source == tui_service.ENGINE
         assert (deep.line, deep.column, deep.end_column) == (28, 9, 14)
-        detail = _text(app, "#diagnostics")
-        assert detail.count("error[kql_unknown_operator]") == 1
-        assert "No diagnostics from the last validate run" in detail
+        assert _text(app, "#source").count("error[kql_unknown_operator]") == 1
+        assert "No diagnostics from the last validate run" in _text(app, "#diagnostics")
         assert _labels(app.query_one("#tree", Tree).root)[-1] == "    Sentinel KQL Rule  ✗ 1"
         log = await _results(app, pilot)
         assert "$ opentide validate" in log
@@ -1043,3 +1046,107 @@ def test_a_language_server_failure_does_not_lose_the_catalogue(
     assert catalogue.language_server.unavailable == (
         "The language server failed: RuntimeError: the engine broke"
     )
+
+
+# -- findings in place (#215) -------------------------------------------------
+
+
+def test_n_moves_to_each_finding_and_says_it_on_the_status_line(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+    _break_tlp(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        await pilot.press("n")
+        await pilot.pause()
+        assert app.current_finding == 0
+        status = _text(app, "#status")
+        assert status.startswith("1/2 error[vocab_unknown]:"), status
+        source = _text(app, "#source")
+        # The current finding is marked where it is, under its line.
+        assert "▶ error[vocab_unknown]" in source
+        assert "╰─ error[kql_unknown_operator]" in source
+        await pilot.press("n")
+        await pilot.pause()
+        assert _text(app, "#status").startswith("2/2 error[kql_unknown_operator]:")
+        assert "▶ error[kql_unknown_operator]" in _text(app, "#source")
+        # The pane scrolled the finding at line 28 into view.
+        detail = app.query_one("#detail")
+        assert detail.scroll_y > 0
+        await pilot.press("p")
+        await pilot.pause()
+        assert app.current_finding == 0
+        # Another object starts again from its first finding.
+        await pilot.press("up")
+        assert app.current_finding is None
+        await pilot.press("n")
+        assert _text(app, "#status").strip() == "No findings on this object"
+
+    _drive(tutorial_repo, script)
+
+
+def test_a_finding_span_carries_its_tooltip(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        view = app.query_one("#source", tui_app.SourceView)
+        [tak] = [
+            segment.style
+            for segment in Console(width=120, file=io.StringIO()).render(view._renderable)
+            if segment.text == "tak " and segment.style is not None
+        ]
+        assert tak.meta[tui_app.FINDING_META] == 0
+        tooltip = view.tooltip_text(0).plain
+        assert "error[kql_unknown_operator]: unknown tabular operator 'tak'" in tooltip
+        assert "help: did you mean 'take'?" in tooltip
+
+    _drive(tutorial_repo, script)
+
+
+def test_hover_comes_from_the_engine(tutorial_repo: Path) -> None:
+    _break_tlp(tutorial_repo)
+    catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+    rule = catalogue.entries[RULE]
+    assert rule.path is not None
+    text = rule.path.read_text(encoding="utf-8")
+    line = text.splitlines().index("  tlp: clearr") + 1
+    hover = catalogue.language_server.hover(rule.path, text, line, 4)
+    assert hover is not None and "tlp" in hover.lower()
+
+
+def test_without_a_hover_binding_the_tooltip_is_the_finding_alone() -> None:
+    report = tui_service.LanguageServerReport(workspace=object())
+    assert report.hover(Path("x.yaml"), "", 1, 1) is None
+    assert tui_service.LanguageServerReport().hover(Path("x.yaml"), "", 1, 1) is None
+
+
+def test_a_long_line_wraps_with_the_underline_on_its_own_text(tmp_path: Path) -> None:
+    path = tmp_path / "rule.yaml"
+    word = "verylongvalue"
+    path.write_text(f"name: x\ndescription: {' '.join([word] * 12)} BAD tail\n", encoding="utf-8")
+    line = path.read_text(encoding="utf-8").splitlines()[1]
+    column = line.index("BAD") + 1
+    finding = Diagnostic(
+        code="vocab_unknown",
+        severity="error",
+        message="m",
+        path=path,
+        line=2,
+        column=column,
+        end_column=column + 3,
+    )
+    view, findings = tui_app.source_view(path, [finding])
+    assert findings == [finding]
+    console = Console(width=60, file=io.StringIO(), color_system="truecolor")
+    underlined = "".join(
+        segment.text
+        for segment in console.render(view)
+        if segment.style is not None and segment.style.underline
+    )
+    assert underlined == "BAD"
+    rendered = "".join(segment.text for segment in console.render(view))
+    # The line wrapped, and the annotation follows it.
+    assert rendered.count(word) == 12
+    assert rendered.index("BAD") < rendered.index("error[vocab_unknown]")

@@ -132,6 +132,36 @@ impl Workspace {
         }))
     }
 
+    /// What the language server's hover shows at a position of *text*, as
+    /// Markdown, or `None` where it has nothing: the field's description, a
+    /// vocabulary value's meaning, the object a UUID names, a query token. The
+    /// same content an editor running `opentide lsp start` shows. *line* and
+    /// *column* are 1-based, *column* in code points, as diagnostics report
+    /// them; a position past its line or the text is clamped.
+    #[pyo3(signature = (path, text, line, column, language=None))]
+    fn hover(
+        &self,
+        py: Python<'_>,
+        path: String,
+        text: String,
+        line: usize,
+        column: usize,
+        language: Option<&str>,
+    ) -> PyResult<Option<String>> {
+        let language = match language {
+            Some(name) => parse_language(name)?,
+            None => language_of(&path).ok_or_else(|| {
+                PyValueError::new_err(format!(
+                    "cannot tell the language of {path:?} from its name; pass language="
+                ))
+            })?,
+        };
+        Ok(py.detach(|| {
+            let offset = LineStarts::new(&text).offset(&text, line, column);
+            opentide_analysis::hover(&self.host, language, &text, offset)
+        }))
+    }
+
     /// Every query the Tide object *text* carries, each with its diagnostics,
     /// including queries with none. CrowdStrike and HarfangLab queries are
     /// never analyzed, so they are not reported.
@@ -466,6 +496,18 @@ impl LineStarts {
         (line, column, end_line, end_column)
     }
 
+    /// The byte offset of 1-based *line* and code-point *column*, clamped to
+    /// the line's end and to the text.
+    fn offset(&self, text: &str, line: usize, column: usize) -> usize {
+        let index = line.saturating_sub(1).min(self.0.len() - 1);
+        let start = self.0[index];
+        let end = self.0.get(index + 1).map_or(text.len(), |next| next - 1);
+        text[start..end]
+            .char_indices()
+            .nth(column.saturating_sub(1))
+            .map_or(end, |(at, _)| start + at)
+    }
+
     fn position(&self, text: &str, line: u32, utf16: u32) -> (usize, usize) {
         let index = (line as usize).min(self.0.len() - 1);
         let start = self.0[index];
@@ -522,6 +564,18 @@ mod tests {
         // `x` starts at UTF-16 unit 7 (a, :, space, 🔥 = 2, é, space).
         assert_eq!(lines.convert(text, range(0, 7, 0, 8)), (1, 7, 1, 8));
         assert_eq!(lines.convert(text, range(1, 0, 1, 4)), (2, 1, 2, 5));
+    }
+
+    #[test]
+    fn one_based_code_point_positions_become_byte_offsets() {
+        let text = "a: 🔥é x\nnext\n";
+        let lines = LineStarts::new(text);
+        assert_eq!(&text[lines.offset(text, 1, 7)..], "x\nnext\n");
+        assert_eq!(&text[lines.offset(text, 2, 2)..], "ext\n");
+        // Past the line: its end; past the text: the last line.
+        assert_eq!(lines.offset(text, 1, 99), text.find('\n').unwrap());
+        assert_eq!(lines.offset(text, 99, 1), text.len());
+        assert_eq!(lines.offset(text, 0, 0), 0);
     }
 
     #[test]
