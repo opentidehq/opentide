@@ -72,7 +72,8 @@ def visibility_repo(tutorial_repo: Path) -> Iterator[Path]:  # noqa: F811 -- the
         .replace("SecurityEvent\n", "SigninLogs\n")
     )
     assert "SigninLogs" in second
-    (tutorial_repo / "objects/rules/undeclared-table-rule.yaml").write_text(second, encoding="utf-8")
+    rules = tutorial_repo / "objects" / "rules"
+    (rules / "undeclared-table-rule.yaml").write_text(second, encoding="utf-8")
     yield tutorial_repo
 
 
@@ -101,7 +102,8 @@ def test_the_report_joins_log_sources_with_queries_and_signals(visibility_repo: 
     assert unused is not None and not unused.used and not unused.columns
     # A table a rule reads that no log source declares.
     [missing] = report.undeclared
-    assert (missing.system, missing.name, missing.rules) == ("sentinel", "SigninLogs", (SECOND_RULE,))
+    assert (missing.system, missing.name) == ("sentinel", "SigninLogs")
+    assert missing.rules == (SECOND_RULE,)
     assert missing.system_declares
     assert report.systems["sentinel"] == {"logsources": 2, "with_columns": 1, "used": 1}
     # The workspace's own declarations are in force again afterwards.
