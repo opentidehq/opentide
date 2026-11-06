@@ -297,14 +297,62 @@ pub struct DocumentSymbol {
     pub detail: Option<String>,
 }
 
-/// Spans and ranges are in the text after a leading byte-order mark
-/// ([`opentide_core::strip_bom`]).
+/// Whether an [`ObjectRef`] field path is a signal's own UUID
+/// (`objective.signals.<i>.uuid`): what a rule's `detection_model` names
+/// when it implements one signal of an objective.
+fn is_signal_uuid_path(field_path: &str) -> bool {
+    field_path
+        .strip_prefix("objective.signals.")
+        .and_then(|rest| rest.strip_suffix(".uuid"))
+        .is_some_and(|index| !index.is_empty() && index.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The UUIDs a rule's `detection_model` may name: each indexed objective's,
+/// and each signal an indexed objective declares (#213). Signals live inside
+/// their objective and are not workspace objects, so they come from the
+/// objective's refs, as opentide validates the field against objectives and
+/// signals alike.
+fn detection_model_targets(workspace: &[IndexedObject]) -> impl Iterator<Item = &str> {
+    workspace
+        .iter()
+        .filter(|o| o.object_type == "objective")
+        .flat_map(|o| {
+            std::iter::once(o.uuid.as_str()).chain(
+                o.refs
+                    .iter()
+                    .filter(|r| is_signal_uuid_path(&r.field_path))
+                    .map(|r| r.uuid.as_str()),
+            )
+        })
+}
+
+/// The objective or signal UUID a dangling `detection_model` most plausibly
+/// meant: one within two edits of it, ignoring case (a mistyped or swapped
+/// character). `None` when nothing is that close, rather than an unrelated
+/// objective that would re-parent the rule if applied (#213).
+fn closest_detection_model(workspace: &[IndexedObject], value: &str) -> Option<String> {
+    const MAX_EDITS: usize = 2;
+    let needle = value.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    let mut best: Option<(usize, &str)> = None;
+    for target in detection_model_targets(workspace) {
+        let distance = vocabs::levenshtein(&target.to_ascii_lowercase(), &needle);
+        if distance <= MAX_EDITS && best.is_none_or(|(d, _)| distance < d) {
+            best = Some((distance, target));
+        }
+    }
+    best.map(|(_, target)| target.to_string())
+}
+
 /// `filename_slug` and `filename_pattern` for an object at `path`, under the
 /// `[filenames]` convention of its kind ([`LintSettings::filenames_for`]).
 /// The stem an object should have is `slugify(name)` (`style = "slug"`) or
 /// its name (`"name"`), optionally followed by `-<suffix>`, as `opentide lint`
 /// gives two objects of one name; `"none"` compares no stem. A `pattern` is
-/// matched against the whole stem as the file is named.
+/// matched against the whole stem as the file is named. Both are on the
+/// `name` value (#215).
 fn diagnose_filename(
     lint: &LintSettings,
     object_type: &str,
@@ -321,6 +369,7 @@ fn diagnose_filename(
         return;
     }
     let rules = lint.filenames_for(object_type);
+    let name = object.name.as_deref().unwrap_or_default();
     let mut push = |mut d: Diagnostic| {
         if let Some(severity) = lint.filenames_severity {
             d.severity = severity;
@@ -339,7 +388,10 @@ fn diagnose_filename(
                     Diagnostic::warning(
                         codes::FILENAME_SLUG,
                         format!("filename should be {expected}.yaml ({how})"),
-                        key_range(source, "name"),
+                        // The name the file is named after (#215). The
+                        // suggestion is a file name: hosts offer it as a
+                        // rename, never as an edit of this text.
+                        name_range(source, name),
                     )
                     .with_suggestion(format!("{expected}.yaml")),
                 );
@@ -354,11 +406,13 @@ fn diagnose_filename(
                 rules.pattern_key(),
                 rules.pattern.as_deref().unwrap_or_default()
             ),
-            key_range(source, "name"),
+            name_range(source, name),
         ));
     }
 }
 
+/// Spans and ranges are in the text after a leading byte-order mark
+/// ([`opentide_core::strip_bom`]).
 pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let input = AnalyzeInput {
         source: opentide_core::strip_bom(input.source),
@@ -568,23 +622,37 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         }
     }
 
+    // Where each reference value sits (#215): `invalid_ref` underlines the
+    // value, not its key, so a quick fix replaces the UUID and the YAML stays
+    // valid. A value the text does not spell out after its key (an alias,
+    // whose UUID is at the anchor before it) keeps the key's range.
+    let own_refs = serde_yaml::from_str::<serde_yaml::Value>(input.source)
+        .map(|body| object_refs(input.source, &body, &uuid))
+        .unwrap_or_default();
+    let ref_range = |field_path: &str, key: &str| {
+        let key = key_range(input.source, key);
+        let after_key = |range: &Range| {
+            (range.start.line, range.start.character) >= (key.end.line, key.end.character)
+        };
+        own_refs
+            .iter()
+            .find(|r| r.field_path == field_path && r.range != Range::point(0, 0))
+            .map(|r| r.range)
+            .filter(|range| key == Range::point(0, 0) || after_key(range))
+            .unwrap_or(key)
+    };
+
     // invalid_ref
     if object_type == "rule" {
         if let Some(parent) = &object.detection_model {
-            if !input
-                .workspace
-                .iter()
-                .any(|o| o.object_type == "objective" && o.uuid == *parent)
-            {
-                let suggestion = input
-                    .workspace
-                    .iter()
-                    .find(|o| o.object_type == "objective")
-                    .map(|o| o.uuid.clone());
+            if !detection_model_targets(input.workspace).any(|target| target == parent) {
+                let suggestion = closest_detection_model(input.workspace, parent);
                 let mut d = Diagnostic::error(
                     codes::INVALID_REF,
-                    format!("invalid_ref: detection_model {parent} is not an indexed objective"),
-                    key_range(input.source, "detection_model"),
+                    format!(
+                        "invalid_ref: detection_model {parent} is not an indexed objective or signal"
+                    ),
+                    ref_range("detection_model", "detection_model"),
                 )
                 .with_field_path(vec!["detection_model".into()]);
                 if let Some(s) = suggestion {
@@ -597,7 +665,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     if let Some(obj) = &object.objective {
         if let Some(threats) = obj.get("threats").and_then(|v| v.as_sequence()) {
-            for t in threats {
+            for (i, t) in threats.iter().enumerate() {
                 if let Some(id) = t.as_str() {
                     if !input
                         .workspace
@@ -608,7 +676,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                             Diagnostic::error(
                                 codes::INVALID_REF,
                                 format!("invalid_ref: threat {id} is not indexed"),
-                                key_range(input.source, "threats"),
+                                ref_range(&format!("objective.threats.{i}"), "threats"),
                             )
                             .with_field_path(vec!["objective".into(), "threats".into()]),
                         );
@@ -653,7 +721,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                                 format!(
                                     "invalid_ref: chaining vector {vector} is not an indexed threat"
                                 ),
-                                key_range(input.source, "vector"),
+                                ref_range(&format!("threat.chaining.{idx}.vector"), "vector"),
                             )
                             .with_field_path(vec![
                                 "threat".into(),
@@ -2753,6 +2821,185 @@ threat:
             "{:?}",
             r.diagnostics
         );
+    }
+
+    /// The rule fixture with its `detection_model` naming `target`.
+    fn rule_naming(target: &str) -> String {
+        RULE.replace("00000000-0000-4000-8002-000000000001", target)
+    }
+
+    fn invalid_refs(source: &str, workspace: &[IndexedObject]) -> Vec<Diagnostic> {
+        analyze(AnalyzeInput {
+            path: "objects/rules/sentinel-kql-rule.yaml",
+            source,
+            workspace,
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::INVALID_REF)
+        .collect()
+    }
+
+    fn signals_workspace() -> Vec<IndexedObject> {
+        vec![index_object("objects/objectives/obj.yaml", OBJECTIVE_SIGNALS).expect("indexed")]
+    }
+
+    #[test]
+    fn detection_model_naming_an_objective_is_valid() {
+        let found = invalid_refs(
+            &rule_naming("00000000-0000-4000-8002-000000000001"),
+            &signals_workspace(),
+        );
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn detection_model_naming_a_signal_is_valid() {
+        // #213: a signal lives inside its objective; opentide accepts its UUID.
+        for signal in [
+            "00000000-0000-4000-8099-000000000001",
+            "00000000-0000-4000-8099-000000000002",
+        ] {
+            let found = invalid_refs(&rule_naming(signal), &signals_workspace());
+            assert!(found.is_empty(), "{signal}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn detection_model_naming_nothing_is_invalid_with_no_unrelated_suggestion() {
+        let found = invalid_refs(
+            &rule_naming("5a1e4b8c-1d2f-4a3b-9c4d-0e1f2a3b4c5d"),
+            &signals_workspace(),
+        );
+        let [d] = found.as_slice() else {
+            panic!("{found:?}")
+        };
+        assert_eq!(
+            d.message,
+            "invalid_ref: detection_model 5a1e4b8c-1d2f-4a3b-9c4d-0e1f2a3b4c5d is not an indexed objective or signal"
+        );
+        assert_eq!(d.severity, opentide_core::Severity::Error);
+        // An objective about something else is not offered: applying it would
+        // re-parent the rule.
+        assert_eq!(d.suggestion, None);
+    }
+
+    #[test]
+    fn detection_model_one_typo_from_a_signal_suggests_it() {
+        let found = invalid_refs(
+            &rule_naming("00000000-0000-4000-8099-00000000002"),
+            &signals_workspace(),
+        );
+        let [d] = found.as_slice() else {
+            panic!("{found:?}")
+        };
+        assert_eq!(
+            d.suggestion.as_deref(),
+            Some("00000000-0000-4000-8099-000000000002")
+        );
+    }
+
+    /// The text a single-line range covers (ASCII fixtures: UTF-16 columns are bytes).
+    fn covered(source: &str, range: Range) -> &str {
+        assert_eq!(range.start.line, range.end.line, "{range:?}");
+        let line = source.lines().nth(range.start.line as usize).unwrap();
+        &line[range.start.character as usize..range.end.character as usize]
+    }
+
+    /// `source` with `range` replaced by `text`, as an editor applies a quick fix.
+    fn apply(source: &str, range: Range, text: &str) -> String {
+        let start = opentide_core::position_to_offset(source, range.start);
+        let end = opentide_core::position_to_offset(source, range.end);
+        format!("{}{text}{}", &source[..start], &source[end..])
+    }
+
+    #[test]
+    fn invalid_ref_underlines_the_uuid_and_its_fix_keeps_the_yaml_valid() {
+        // #215: the range is the value, so applying the suggestion replaces it.
+        let typo = "00000000-0000-4000-8099-00000000002";
+        let source = rule_naming(typo);
+        let found = invalid_refs(&source, &signals_workspace());
+        let [d] = found.as_slice() else {
+            panic!("{found:?}")
+        };
+        assert_eq!(covered(&source, d.range), typo);
+        let suggestion = d.suggestion.as_deref().expect("a near miss");
+        let fixed = apply(&source, d.range, suggestion);
+        let body: serde_yaml::Value = serde_yaml::from_str(&fixed).expect("valid YAML");
+        assert_eq!(body["detection_model"].as_str(), Some(suggestion));
+        assert!(invalid_refs(&fixed, &signals_workspace()).is_empty());
+    }
+
+    #[test]
+    fn an_aliased_detection_model_keeps_the_key_range() {
+        // The UUID is at the anchor, before the key: underlining it there
+        // would put the finding and its fix on another field.
+        let dangling = "00000000-0000-4000-8099-000000000099";
+        let source = RULE
+            .replace(
+                "description: |\n  test\n",
+                &format!("description: &dm {dangling}\n"),
+            )
+            .replace(
+                "detection_model: 00000000-0000-4000-8002-000000000001",
+                "detection_model: *dm",
+            );
+        assert!(source.contains("*dm") && source.contains("&dm"), "{source}");
+        let found = invalid_refs(&source, &signals_workspace());
+        let [d] = found.as_slice() else {
+            panic!("{found:?}")
+        };
+        assert_eq!(covered(&source, d.range), "detection_model");
+    }
+
+    #[test]
+    fn each_dangling_threat_underlines_its_own_uuid() {
+        let a = "00000000-0000-4000-8001-00000000000a";
+        let b = "00000000-0000-4000-8001-00000000000b";
+        let source = OBJECTIVE_SIGNALS.replace(
+            "  signals:\n",
+            &format!("  threats:\n    - {a}\n    - {b}\n  signals:\n"),
+        );
+        let found: Vec<_> = analyze(AnalyzeInput {
+            path: "objects/objectives/obj.yaml",
+            source: &source,
+            workspace: &[],
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::INVALID_REF)
+        .collect();
+        let texts: Vec<&str> = found.iter().map(|d| covered(&source, d.range)).collect();
+        assert_eq!(texts, [a, b]);
+    }
+
+    #[test]
+    fn filename_slug_underlines_the_name() {
+        let r = analyze(AnalyzeInput {
+            path: "objects/rules/not-the-slug.yaml",
+            source: RULE,
+            workspace: &[],
+            elastic_tenants: &[],
+        });
+        let d = r
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::FILENAME_SLUG)
+            .expect("filename_slug");
+        assert_eq!(covered(RULE, d.range), "Sentinel KQL Rule");
+        assert_eq!(d.suggestion.as_deref(), Some("sentinel-kql-rule.yaml"));
+    }
+
+    #[test]
+    fn signal_uuid_paths() {
+        assert!(is_signal_uuid_path("objective.signals.0.uuid"));
+        assert!(is_signal_uuid_path("objective.signals.12.uuid"));
+        assert!(!is_signal_uuid_path("objective.signals.0.parent"));
+        assert!(!is_signal_uuid_path("objective.signals..uuid"));
+        assert!(!is_signal_uuid_path("objective.threats.0"));
+        assert!(!is_signal_uuid_path("detection_model"));
     }
 
     #[test]

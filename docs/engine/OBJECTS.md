@@ -8,7 +8,7 @@ There is **no YAML formatter**. The LSP does not rename object `name`.
 
 | schema | refs |
 | --- | --- |
-| `rule::1.0`, `rule::1.1` | `detection_model` → objective UUID (optional; not schema-required). Each revision has its own fields: an object is checked against the revision its `metadata.schema` names (required fields, keys the revision does not define, enums). A revision the catalog does not know takes the newest one's fields, without the unknown-key check. `metadata.schema` offers both |
+| `rule::1.0`, `rule::1.1` | `detection_model` → the UUID of an objective, or of a signal an objective declares (`objective.signals.<i>.uuid`), as `opentide validate` accepts both (optional; not schema-required). Each revision has its own fields: an object is checked against the revision its `metadata.schema` names (required fields, keys the revision does not define, enums). A revision the catalog does not know takes the newest one's fields, without the unknown-key check. `metadata.schema` offers both |
 | `objective::1.0` | `objective.threats[]` → threat UUIDs |
 | `threat::1.0` | `threat.impact` / `threat.leverage` are non-empty lists. `threat.chaining[].vector` / `relation` are not schema properties |
 
@@ -28,11 +28,11 @@ Pydantic stays CLI authority. LSP emits the same `{code, field_path, severity}`:
 - `vocab_unknown`
 - `invalid_uuid`
 - `duplicate_id`
-- `invalid_ref`
+- `invalid_ref` — error on the reference field when the UUID names nothing in the workspace: a rule's `detection_model` that is neither an indexed objective nor a signal one declares, an objective's `objective.threats` entry, or a threat's `threat.chaining.<i>.vector` that is not an indexed threat.
 - `chaining_relation_unknown`
 - `deprecated_field`
-- `filename_slug` — warning on the `name` key. A non-empty file stem must equal the stem `[filenames] style` derives from the name, or start with `{stem}-`. With `style = "slug"` (the default) that is `slugify(name)`: ASCII alphanumerics lowercased, each run of other characters one `-`, and `-` trimmed from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). With `style = "name"` it is the name less `<>:"\/|?*`, control characters, the spaces and dots around it and a trailing `.debug`, as `opentide lint` derives it. `style = "none"` compares no stem. Suggestion text is `{stem}.yaml`.
-- `filename_pattern` — warning on the `name` key when the file stem does not match `[filenames] pattern` (the whole stem, as `re.fullmatch` matches it). A pattern the Rust `regex` crate cannot compile (look-around, backreferences) is not checked here; `opentide lint` still checks it.
+- `filename_slug` — warning on the `name` value. A non-empty file stem must equal the stem `[filenames] style` derives from the name, or start with `{stem}-`. With `style = "slug"` (the default) that is `slugify(name)`: ASCII alphanumerics lowercased, each run of other characters one `-`, and `-` trimmed from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). With `style = "name"` it is the name less `<>:"\/|?*`, control characters, the spaces and dots around it and a trailing `.debug`, as `opentide lint` derives it. `style = "none"` compares no stem. Suggestion text is `{stem}.yaml`.
+- `filename_pattern` — warning on the `name` value when the file stem does not match `[filenames] pattern` (the whole stem, as `re.fullmatch` matches it). A pattern the Rust `regex` crate cannot compile (look-around, backreferences) is not checked here; `opentide lint` still checks it.
 - `missing_author` — warning on the `metadata` key when `metadata` has no `author` and `[metadata] required` names it (the default does).
 - `missing_organisation` — warning on the `metadata` key when `metadata` has no `organisation` and `[metadata] required` names it (the default does).
 

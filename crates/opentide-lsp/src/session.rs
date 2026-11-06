@@ -39,6 +39,9 @@ pub(crate) struct ClientCaps {
     /// A workspace edit may create a file (`documentChanges` with the
     /// `create` resource operation).
     pub create_files: bool,
+    /// The client applies `RenameFile` operations (`workspaceEdit.documentChanges`
+    /// and `resourceOperations: ["rename"]`): a `filename_slug` fix renames the file.
+    pub rename_files: bool,
     pub code_description: bool,
     pub deprecated_tag: bool,
     pub related_information: bool,
