@@ -12,10 +12,13 @@ module joins it with the catalogue:
   reads them. Declaring is opt-in per system: once a system declares one log
   source, the engine reports every dataset a query of that system reads that
   none names (``kql_table_not_declared``, ``spl_dataset_not_declared``,
-  ``elastic_dataset_not_declared``). Analysing each query with a visibility
-  that declares only a placeholder for every system makes it name them all,
-  so the datasets come from the engine's own parsing, never from a second
-  parser here.
+  ``elastic_dataset_not_declared``), and a table outside its catalog (a
+  custom ``_CL`` table) is ``kql_unknown_table`` with help that names
+  ``visibility.toml``. Analysing each query with a visibility that declares
+  only a placeholder for every system makes it name them all, so the
+  datasets come from the engine's own parsing, never from a second parser
+  here; a declared name covers them as the engine's ``DatasetKind::covers``
+  does.
 
 The TUI's Visibility tab and ``opentide generate explorer --include-visibility``
 show the same report. A telemetry inventory says what an organisation cannot
@@ -25,7 +28,6 @@ see, so the explorer export is off unless asked for.
 from __future__ import annotations
 
 import contextlib
-import fnmatch
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -49,6 +51,9 @@ __all__ = [
 UNDECLARED_CODES = frozenset(
     {"kql_table_not_declared", "spl_dataset_not_declared", "elastic_dataset_not_declared"}
 )
+#: A table outside the engine's catalog (a custom ``_CL`` table): a read only
+#: when its message names ``visibility.toml``, as opentide-lsp's quick fix takes it.
+UNKNOWN_TABLE_CODE = "kql_unknown_table"
 #: The systems whose log source names declare datasets to the query checks.
 DATASET_SYSTEMS = ("sentinel", "defender_for_endpoint", "splunk", "elastic")
 #: A dataset name no query reads: declaring it per system opts every system in.
@@ -230,9 +235,28 @@ def _field(value: Any, key: str) -> Any:
     return value.get(key) if isinstance(value, Mapping) else getattr(value, key, None)
 
 
-def _covers(declared: str, read: str) -> bool:
-    """Whether a log source named *declared* (``*`` a wildcard) holds the dataset *read*."""
-    return declared == read or fnmatch.fnmatchcase(read, declared)
+def _glob(pattern: str, text: str) -> bool:
+    """Whether *pattern* matches all of *text*, ``*`` its only wildcard (any run)."""
+    regex = ".*".join(re.escape(part) for part in pattern.split("*"))
+    return re.fullmatch(regex, text, flags=re.DOTALL) is not None
+
+
+def _covers(system: str, declared: str, read: str) -> bool:
+    """Whether a log source of *system* named *declared* holds the dataset *read*.
+
+    The engine's ``DatasetKind::covers``: ``*`` in either name matches any run
+    of characters (``?`` and ``[`` are literal), the read name is trimmed, and
+    Splunk sourcetypes ignore case.
+    """
+    read = read.strip()
+    if system == "splunk":
+        declared, read = declared.lower(), read.lower()
+    return _glob(declared, read) or ("*" in read and _glob(read, declared))
+
+
+def _is_read(code: str, message: str) -> bool:
+    """Whether a finding names a dataset the query reads (see :data:`UNDECLARED_CODES`)."""
+    return code in UNDECLARED_CODES or (code == UNKNOWN_TABLE_CODE and "visibility.toml" in message)
 
 
 def dataset_reads(
@@ -261,7 +285,7 @@ def dataset_reads(
             path = list(report.field_path)
             system = path[1] if len(path) > 1 and path[0] == "configurations" else ""
             for finding in report.diagnostics:
-                if finding.code not in UNDECLARED_CODES:
+                if not _is_read(finding.code, finding.message):
                     continue
                 match = _QUOTED.search(finding.message)
                 name = (match.group(1) or match.group(2)) if match else ""
@@ -330,17 +354,21 @@ def collect_visibility(
             install_workspace_visibility(root)
 
     rows: list[LogSource] = []
-    named = {(source.name.lower()) for source in declared}
+    # A signal names a log source without regard to case: attaching it to a
+    # source and reporting it unknown compare the same way.
+    named = {source.name.lower() for source in declared}
     for source in declared:
         read_by = [
-            r.rule for r in reads if r.system == source.system and _covers(source.name, r.name)
+            r.rule
+            for r in reads
+            if r.system == source.system and _covers(source.system, source.name, r.name)
         ]
         objectives_using: list[str] = []
         signals: list[tuple[str, str, str]] = []
         signal_rules: list[str] = []
         for owner, owned in signal_sources.items():
             for signal, name, names in owned:
-                if source.name not in names:
+                if source.name.lower() not in {n.lower() for n in names}:
                     continue
                 objectives_using.append(owner)
                 signals.append((owner, signal, name))
@@ -363,7 +391,9 @@ def collect_visibility(
     declaring = {source.system for source in declared}
     missing: dict[tuple[str, str], list[str]] = {}
     for read in reads:
-        if not any(s.system == read.system and _covers(s.name, read.name) for s in declared):
+        if not any(
+            s.system == read.system and _covers(s.system, s.name, read.name) for s in declared
+        ):
             missing.setdefault((read.system, read.name), []).append(read.rule)
     undeclared = tuple(
         Undeclared(system, name, tuple(dict.fromkeys(found)), system in declaring)

@@ -23,11 +23,12 @@ from textual.worker import WorkerFailed
 
 from opentide.cli.context import CliContext
 from opentide.cli.services.tui import load_catalogue
-from opentide.cli.services.visibility import VisibilityReport
+from opentide.cli.services.visibility import VisibilityReport, _covers
 from opentide.cli.tui_app import OpentideTui
 from opentide.cli.tui_tabs.visibility import matches
 
 SECOND_RULE = "00000000-0000-4000-8003-000000000776"
+CUSTOM_RULE = "00000000-0000-4000-8003-000000000777"
 
 VISIBILITY = """\
 [[logsources]]
@@ -111,6 +112,101 @@ def test_the_report_joins_log_sources_with_queries_and_signals(visibility_repo: 
 
     assert engine().dataset_status("sentinel", "SecurityEvent") == "declared"
     assert engine().dataset_status("sentinel", "SigninLogs") == "undeclared"
+
+
+@pytest.mark.parametrize("declared", [True, False])
+def test_a_custom_table_is_read_like_a_catalog_one(visibility_repo: Path, declared: bool) -> None:
+    """A table outside the engine's catalog is ``kql_unknown_table``, not "not declared"."""
+    rule = (visibility_repo / RULE_FILE).read_text(encoding="utf-8")
+    custom = (
+        rule.replace(RULE, CUSTOM_RULE)
+        .replace("name: Sentinel KQL Rule", "name: Custom Table Rule")
+        .replace("      SecurityEvent\n", "      MyApp_CL\n      | union SecurityEvent\n")
+    )
+    assert "MyApp_CL" in custom
+    (visibility_repo / "objects/rules/custom-table-rule.yaml").write_text(custom, encoding="utf-8")
+    if declared:
+        config = visibility_repo / ".opentide/configurations/visibility.toml"
+        config.write_text(
+            config.read_text(encoding="utf-8")
+            + '\n[[logsources]]\nname = "MyApp_CL"\ndescription = "My app."\n'
+            'system = "sentinel"\n',
+            encoding="utf-8",
+        )
+    report = _report(visibility_repo)
+    assert report.reads_unavailable is None
+    security = report.find("sentinel", "SecurityEvent")
+    assert security is not None and set(security.read_by) == {RULE, CUSTOM_RULE}
+    undeclared = {(item.system, item.name): item.rules for item in report.undeclared}
+    if declared:
+        source = report.find("sentinel", "MyApp_CL")
+        assert source is not None and source.read_by == (CUSTOM_RULE,)
+        assert ("sentinel", "MyApp_CL") not in undeclared
+    else:
+        assert report.find("sentinel", "MyApp_CL") is None
+        assert undeclared[("sentinel", "MyApp_CL")] == (CUSTOM_RULE,)
+
+
+def test_a_signal_names_a_log_source_without_regard_to_case(visibility_repo: Path) -> None:
+    objective = visibility_repo / "objects/objectives/credential-access-objective.yaml"
+    objective.write_text(
+        objective.read_text(encoding="utf-8").replace(
+            "- Windows Security Events\n", "- securityevent\n"
+        ),
+        encoding="utf-8",
+    )
+    report = _report(visibility_repo)
+    security = report.find("sentinel", "SecurityEvent")
+    assert security is not None and security.objectives == (OBJECTIVE,)
+    assert set(security.signal_rules) == {RULE, SECOND_RULE}
+    assert report.unknown_signal_sources == ()
+    windows = report.find("splunk", "Windows Security Events")
+    assert windows is not None and windows.objectives == ()
+
+
+def test_an_unknown_signal_source_is_reported(visibility_repo: Path) -> None:
+    objective = visibility_repo / "objects/objectives/credential-access-objective.yaml"
+    objective.write_text(
+        objective.read_text(encoding="utf-8").replace(
+            "- Windows Security Events\n", "- Sysmon Events\n"
+        ),
+        encoding="utf-8",
+    )
+    report = _report(visibility_repo)
+    assert report.unknown_signal_sources == (("Sysmon Events", (OBJECTIVE,)),)
+
+
+@pytest.mark.parametrize(
+    ("system", "declared", "read", "covers"),
+    [
+        ("sentinel", "SecurityEvent", "SecurityEvent", True),
+        ("sentinel", "SecurityEvent", " SecurityEvent ", True),
+        # KQL tables and Elastic indices compare with case.
+        ("sentinel", "SecurityEvent", "securityevent", False),
+        ("elastic", "logs-*", "LOGS-windows", False),
+        # `*` is the only wildcard, in a declared name...
+        ("elastic", "logs-*", "logs-windows", True),
+        ("elastic", "logs-*-default", "logs-system-default", True),
+        ("elastic", "logs-*", "metrics-windows", False),
+        # ...and in a read one, which covers the declared name.
+        ("elastic", "logs-windows", "logs-*", True),
+        ("sentinel", "SecurityEvent", "Security*", True),
+        ("sentinel", "SecurityEvent", "security*", False),
+        ("elastic", "metrics-windows", "logs-*", False),
+        # `?` and `[` are literal: no fnmatch.
+        ("elastic", "logs-?", "logs-a", False),
+        ("elastic", "logs-?", "logs-?", True),
+        ("elastic", "logs-[ab]", "logs-a", False),
+        ("elastic", "logs-[ab]", "logs-[ab]", True),
+        ("elastic", "logs.windows", "logsXwindows", False),
+        # Splunk sourcetypes ignore case, in both directions.
+        ("splunk", "WinEventLog:Security", "wineventlog:security", True),
+        ("splunk", "wineventlog:*", "WinEventLog:Security", True),
+        ("splunk", "WinEventLog:Security", "WINEVENT*", True),
+    ],
+)
+def test_covers_matches_the_engine(system: str, declared: str, read: str, covers: bool) -> None:
+    assert _covers(system, declared, read) is covers
 
 
 def test_without_visibility_toml_the_report_says_so(tutorial_repo: Path) -> None:  # noqa: F811
