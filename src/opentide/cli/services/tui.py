@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
+from opentide.cli.services.object_view import LinkTarget, ObjectView, build_object_view
 from opentide.cli.ui.contract import Failure
 
 if TYPE_CHECKING:
@@ -112,6 +113,18 @@ class Catalogue:
     coverage: tuple[TechniqueCoverage, ...] = ()
     load_errors: tuple[LoadError, ...] = ()
     language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
+    #: Each object's body as the registry loaded it, for the object view.
+    bodies: Mapping[str, Mapping[str, Any]] = dataclasses.field(default_factory=dict)
+    #: What each UUID a reference can name is: the objects, and every signal.
+    links: Mapping[str, LinkTarget] = dataclasses.field(default_factory=dict)
+
+    def object_view(self, uuid: str) -> ObjectView | None:
+        """The page :mod:`opentide.cli.tui_app` shows for *uuid* by default (#776)."""
+        entry = self.entries.get(uuid)
+        body = self.bodies.get(uuid)
+        if entry is None or body is None:
+            return None
+        return build_object_view(body, entry.kind, self.links)
 
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
@@ -183,6 +196,20 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         for technique in sorted(techniques)
     )
 
+    from opentide.cli.services.object_view import catalogue_links, field_nodes
+    from opentide.core.object_fields import as_body
+
+    # The object view reads the field catalogue: build it here, off the UI thread.
+    field_nodes()
+    bodies = {
+        uuid: as_body(body)
+        for family, _kind in _FAMILIES
+        for uuid, body in families[family].items()
+    }
+    links = catalogue_links(
+        families, {uuid: (entry.name, entry.kind) for uuid, entry in entries.items()}
+    )
+
     load_errors = tuple(
         LoadError(
             path=Path(entry["path"]) if entry.get("path") else None,
@@ -196,6 +223,8 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         coverage=coverage,
         load_errors=load_errors,
         language_server=_language_server_report(),
+        bodies=bodies,
+        links=links,
     )
 
 

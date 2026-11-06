@@ -10,7 +10,7 @@ command tree. What it shows and runs comes from
 from __future__ import annotations
 
 import io
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar, cast
@@ -27,13 +27,23 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.theme import Theme
-from textual.widgets import DataTable, Footer, RichLog, Static, TabbedContent, TabPane, Tree
+from textual.widgets import (
+    Collapsible,
+    DataTable,
+    Footer,
+    RichLog,
+    Static,
+    TabbedContent,
+    TabPane,
+    Tree,
+)
 from textual.widgets.tree import TreeNode
 from textual.worker import Worker, WorkerState
 from typing_extensions import Self
 
 from opentide.cli.context import CliContext
 from opentide.cli.output import render_result
+from opentide.cli.services.object_view import FieldRow, LinkTarget, ObjectView
 from opentide.cli.services.tui import (
     ACTIONS,
     ACTIONS_BY_NAME,
@@ -291,6 +301,8 @@ class OpentideTui(App[None]):
         Binding("g", "run('generate')", "Generate"),
         Binding("d", "run('deploy-preview')", "Deploy dry run"),
         Binding("r", "reload", "Reload"),
+        Binding("y", "toggle_source", "YAML / page"),
+        Binding("f", "follow_link", "Follow reference"),
         Binding("n", "next_finding", "Next finding"),
         Binding("p", "previous_finding", "Previous", show=False),
         Binding("1", "show_tab('catalogue')", "Catalogue", show=False),
@@ -319,6 +331,10 @@ class OpentideTui(App[None]):
         self.summary = Text()
         #: The finding of the selected object that ``n`` and ``p`` moved to.
         self.current_finding: int | None = None
+        #: Whether the detail pane shows the object's file rather than its page (``y``).
+        self.raw = False
+        #: The reference of the selected object ``f`` follows next.
+        self.link_index = 0
         self.register_theme(THEME)
         self.theme = THEME.name
 
@@ -334,6 +350,9 @@ class OpentideTui(App[None]):
                 with VerticalScroll(id="detail"):
                     yield Static("", id="heading")
                     yield Static("", id="diagnostics")
+                    yield Static("", id="object")
+                    with Collapsible(title="Not set", id="unset", collapsed=True):
+                        yield Static("", id="unset-list")
                     yield SourceView("", id="source")
             with TabPane("Coverage", id="coverage"):
                 yield DataTable(id="coverage-table", cursor_type="row", zebra_stripes=True)
@@ -635,6 +654,7 @@ class OpentideTui(App[None]):
     def _show_detail(self, data: Any) -> None:
         if data != self.selected:
             self.current_finding = None
+            self.link_index = 0
         self.selected = data
         heading = self.query_one("#heading", Static)
         found = self.query_one("#diagnostics", Static)
@@ -647,6 +667,7 @@ class OpentideTui(App[None]):
             heading.update(Text(relative(error.path, catalogue.repo), style="bold"))
             found.update(Text.assemble(("error[yaml_parse]:", "bold red"), f" {error.message}"))
             source.show(error.path, (), catalogue)
+            self._show_page(None, None, (), catalogue)
             return
         entry = catalogue.entries.get(data) if isinstance(data, str) else None
         if entry is None:
@@ -660,6 +681,7 @@ class OpentideTui(App[None]):
             )
             found.update("")
             source.show(None, (), catalogue)
+            self._show_page(None, None, (), catalogue)
             return
         heading.update(
             Text.assemble(
@@ -674,6 +696,55 @@ class OpentideTui(App[None]):
         live, validated = self.findings(entry)
         found.update(self._diagnostics_view(live, validated, catalogue))
         source.show(entry.path, [*live, *validated], catalogue, self.current_finding)
+        view = None if self.current_finding is not None else catalogue.object_view(entry.uuid)
+        self._show_page(view, entry.path, [*live, *validated], catalogue)
+
+    def _show_page(
+        self,
+        view: ObjectView | None,
+        path: Path | None,
+        findings: Iterable[Diagnostic],
+        catalogue: Catalogue,
+    ) -> None:
+        """The object's page, or its file: ``y`` switches, ``n`` shows the file at a finding."""
+        page = self.query_one("#object", Static)
+        unset = self.query_one("#unset", Collapsible)
+        source = self.query_one("#source", SourceView)
+        show_page = view is not None and not self.raw
+        page.display = show_page
+        unset.display = show_page and bool(view and view.unset)
+        source.display = not show_page
+        if view is None:
+            page.update("")
+            return
+        languages = _query_languages(catalogue, path)
+        page.update(object_page(view, list(findings), languages))
+        unset.title = f"Not set ({len(view.unset)})"
+        self.query_one("#unset-list", Static).update(unset_fields(view))
+
+    def action_toggle_source(self) -> None:
+        """Switch the detail pane between the object's page and its file."""
+        self.raw = not self.raw
+        self.current_finding = None
+        self._show_detail(self.selected)
+        self._status("Showing the file" if self.raw else "Showing the object's page")
+
+    def action_follow_link(self) -> None:
+        """Open the next object or signal the selected object references."""
+        catalogue = self.catalogue
+        if catalogue is None or not isinstance(self.selected, str):
+            return
+        view = catalogue.object_view(self.selected)
+        if view is None or not view.links:
+            self._status("This object references nothing in the catalogue")
+            return
+        target = view.links[self.link_index % len(view.links)]
+        self.link_index += 1
+        if target.opens not in catalogue.entries:
+            self._status(f"{target.name} is not in the catalogue")
+            return
+        self.select(target.opens)
+        self._status(f"Opened {target.kind} {target.name}")
 
     def _diagnostics_view(
         self, live: list[Diagnostic], validated: list[Diagnostic], catalogue: Catalogue
@@ -742,6 +813,8 @@ class OpentideTui(App[None]):
             return
         self.action_show_tab("catalogue")
         count = len(source.findings)
+        # A finding is read at its line, in the file.
+        self.raw = True
         if self.current_finding is None:
             self.current_finding = 0 if step > 0 else count - 1
         else:
@@ -774,6 +847,209 @@ class OpentideTui(App[None]):
             if row.technique == technique and row.rules:
                 self.select(row.rules[0])
                 return
+
+
+#: A severity value's badge colours (background).
+_SEVERITY_BADGE = {
+    "critical": "#8b0000",
+    "high": "#b03a00",
+    "medium": "#8a6d00",
+    "low": "#1f4f7a",
+    "informational": "#3a3a3a",
+}
+#: A TLP's badge colours (foreground, background), as FIRST draws them.
+_TLP_BADGE = {
+    "clear": ("#000000", "#ffffff"),
+    "green": ("#000000", "#33ff00"),
+    "amber": ("#000000", "#ffc000"),
+    "amber+strict": ("#000000", "#ffc000"),
+    "red": ("#ffffff", "#ff2b2b"),
+}
+
+
+def _badge(text: str, foreground: str, background: str) -> Text:
+    return Text(f" {text} ", style=Style(color=foreground, bgcolor=background, bold=True))
+
+
+def severity_badge(value: str) -> Text:
+    """*value* as a badge coloured by its severity (``High`` on deep orange)."""
+    return _badge(value, WHITE, _SEVERITY_BADGE.get(value.lower(), "#3a3a3a"))
+
+
+def tlp_badge(value: str) -> Text:
+    """``TLP:AMBER`` in FIRST's colours."""
+    foreground, background = _TLP_BADGE.get(value.lower(), (WHITE, "#3a3a3a"))
+    return _badge(f"TLP:{value.upper()}", foreground, background)
+
+
+def _query_languages(catalogue: Catalogue, path: Path | None) -> dict[str, str]:
+    """Each query's field path in the object, to its language, as the engine reads them."""
+    workspace = catalogue.language_server.workspace
+    if path is None or workspace is None:
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+        reports = workspace.analyze_queries(text)
+    except (OSError, UnicodeDecodeError, ValueError):
+        return {}
+    return {".".join(report.field_path): str(report.language) for report in reports}
+
+
+def _link_text(target: LinkTarget) -> Text:
+    """``→ Name  objective`` that opens the object when clicked."""
+    text = Text()
+    text.append("→ ", style="bold")
+    text.append(
+        target.name,
+        style=Style(bold=True, underline=True, meta={"@click": f"app.select({target.opens!r})"}),
+    )
+    text.append(f"  {target.kind}", style="dim")
+    return text
+
+
+def _value_text(row: FieldRow) -> Text:
+    """A value as the page shows it: badges, links, and what a vocabulary value means."""
+    text = Text()
+    for index, value in enumerate(row.values):
+        if index:
+            text.append("\n")
+        target = row.links[index] if index < len(row.links) else None
+        meaning = row.meanings[index] if index < len(row.meanings) else ""
+        if target is not None:
+            text.append_text(_link_text(target))
+            text.append(f"  {value}", style="dim")
+            continue
+        shown = str(value).rstrip("\n")
+        if row.severity and isinstance(value, str):
+            text.append_text(severity_badge(value))
+        elif isinstance(value, bool):
+            text.append("yes" if value else "no", style="bold green" if value else "bold red")
+        else:
+            text.append(shown)
+        if meaning:
+            text.append(f"  {meaning}", style="dim italic")
+    if not row.values:
+        text.append("—", style="dim")
+    return text
+
+
+def _query_panel(row: FieldRow, language: str | None) -> RenderableType:
+    """A query in its own panel, coloured in its language by the engine."""
+    from rich.panel import Panel
+
+    code = str(row.value).rstrip("\n")
+    body: RenderableType = Text(code)
+    if language:
+        from opentide.analysis import EngineUnavailableError, highlight
+        from opentide.cli.ui.codeframe import SOURCE_STYLES
+
+        try:
+            tokens = highlight(code, language)
+        except (EngineUnavailableError, ValueError):
+            tokens = []
+        text = Text(code)
+        starts = _line_starts(code)
+        for token in tokens:
+            style = SOURCE_STYLES.get(token.capture)
+            if style and 0 < token.line <= len(starts) and 0 < token.end_line <= len(starts):
+                text.stylize(
+                    style,
+                    starts[token.line - 1] + token.column - 1,
+                    starts[token.end_line - 1] + token.end_column - 1,
+                )
+        body = text
+    title = f"{row.path.split('.', 2)[1] if row.path.startswith('configurations.') else row.title}"
+    return Panel(
+        body,
+        title=Text.assemble((title, "bold"), (f"  {language or 'query'}", "dim")),
+        title_align="left",
+        border_style="bright_black",
+        expand=True,
+    )
+
+
+def object_page(
+    view: ObjectView, findings: list[Diagnostic], languages: Mapping[str, str]
+) -> RenderableType:
+    """An object as a page: a header, a section per top-level field, queries in panels.
+
+    A field with a finding is marked under its value, as the file marks its
+    line. Links open the object they name (click, or ``f``).
+    """
+    from rich.rule import Rule
+
+    parts: list[RenderableType] = []
+    header = view.header
+    facts = Text()
+    if header.get("version"):
+        facts.append(f"v{header['version']}", style="bold")
+    for label in ("created", "modified"):
+        if header.get(label):
+            facts.append(f"  {label} {header[label]}", style="dim")
+    if header.get("tlp"):
+        facts.append("  ")
+        facts.append_text(tlp_badge(header["tlp"]))
+        if view.tlp_meaning:
+            facts.append(f"  {view.tlp_meaning}", style="dim italic")
+    parts.append(facts)
+    if header.get("schema"):
+        parts.append(Text(header["schema"], style="dim"))
+    if view.unknown_schema:
+        parts.append(Text(view.unknown_schema, style="yellow"))
+    by_path: dict[str, list[Diagnostic]] = {}
+    for item in findings:
+        if item.field_path:
+            by_path.setdefault(".".join(item.field_path), []).append(item)
+    for section in view.sections:
+        parts.append(Text(""))
+        parts.append(Rule(Text(section.title, style="bold"), align="left", style="bright_black"))
+        if section.description:
+            parts.append(Text(section.description, style="dim italic"))
+        grid = Table.grid(padding=(0, 2))
+        grid.add_column(no_wrap=True, max_width=36)
+        grid.add_column(ratio=1, overflow="fold")
+        queries: list[RenderableType] = []
+        for row in section.rows:
+            indent = "  " * row.depth
+            if row.kind == "value" and (
+                row.path in languages
+                or (row.path.startswith("configurations.") and row.path.endswith(".query"))
+            ):
+                queries.append(_query_panel(row, languages.get(row.path)))
+                queries.extend(_annotation(item, False) for item in by_path.get(row.path, ()))
+                continue
+            if row.kind == "group":
+                grid.add_row(
+                    Text(f"{indent}{row.title}", style="bold"),
+                    Text(row.description, style="dim italic"),
+                )
+            elif row.kind == "item":
+                grid.add_row(Text(f"{indent}{row.title}", style="bold cyan"), Text(""))
+            else:
+                grid.add_row(Text(f"{indent}{row.title}", style="bold"), _value_text(row))
+            for item in by_path.get(row.path, ()):
+                grid.add_row(Text(""), _annotation(item, False))
+        parts.append(grid)
+        parts.extend(queries)
+    return Group(*parts)
+
+
+def unset_fields(view: ObjectView) -> RenderableType:
+    """The optional fields the object's revision allows and it does not set, with what each is."""
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(no_wrap=True)
+    grid.add_column(ratio=1, overflow="fold")
+    for item in view.unset:
+        label = Text(item.path, style="bold")
+        if item.recommended:
+            label.append(" ★", style="yellow")
+        about = Text(item.description or item.title, style="dim")
+        if item.choices:
+            about.append(f"\none of: {', '.join(item.choices[:8])}", style="dim italic")
+            if len(item.choices) > 8:
+                about.append(" …", style="dim italic")
+        grid.add_row(label, about)
+    return grid
 
 
 def _first_line(markdown: str) -> str:
