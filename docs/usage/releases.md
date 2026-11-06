@@ -569,10 +569,12 @@ opentide validate --strict
 
 **Removed**
 
+- **`deploy --dry-run` no longer falls back to the configuration block.** It always previews the compiled ARM body, which it fell back from when the SDK was missing ([#576](https://github.com/opentidehq/opentide/issues/576)).
 - **`opentide.extraction.malapi` is no longer part of the package.** It scraped malapi.io on import and needed an undeclared BeautifulSoup dependency; it lives on as a maintainer script ([#539](https://github.com/opentidehq/opentide/issues/539)).
 
 **Fixed**
 
+- **A vendor SDK that will not import names the fix.** `validate query --live` and `generate extract` report an incomplete install and advise `pip install --force-reinstall opentide`, instead of naming an extra ([#576](https://github.com/opentidehq/opentide/issues/576)).
 - **Techniques added since ATT&CK v17 validate again.** ATT&CK 19.2 is restored at `att&ck::1.1`, so T1685–T1690, T1059.013 and the other v18 and v19 techniques pass, and the IDs MITRE has since revoked still validate ([#568](https://github.com/opentidehq/opentide/issues/568)).
 - **SDK validation checks a rule against its `metadata.schema` revision.** `Opentide.validate_rule()` and `validate_raw_payload()` no longer fail a valid `rule::1.1` rule with `metadata.reviewed` as `rule::1.0` ([#582](https://github.com/opentidehq/opentide/issues/582)).
 - **`share push` selects promoted rules by their platform status.** A sharing block's `rule_statuses` match the status of the rule's enabled platform blocks, which promotion rewrites, not the root `status`, which promotion leaves at `STAGING` ([#583](https://github.com/opentidehq/opentide/issues/583), [#590](https://github.com/opentidehq/opentide/issues/590)).
@@ -629,7 +631,7 @@ opentide validate --strict
   - `deploy` refuses such a rule on every platform, before any HTTP call.
   - With neither key nor shard, deploy creates a second remote rule.
 - **Deploy writes vendor ids to the shard, not the rule.** A create records the id and logs `external_id_recorded`, and is refused with `deployment_state_ignored` while git ignores the shard directory; a `DELETION` or `DISABLEMENT` with no entry warns `external_id_missing` and calls nothing. `opentide.deployment.ExternalIdHelper` is removed ([#396](https://github.com/opentidehq/opentide/issues/396)).
-- **Non-production CI deploys refuse to create untracked vendor rules.** In CI, a deploy whose plan is not `PRODUCTION` refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule with `deployment_state_unpersisted`, since only the production job commits shards. A pipeline that commits `.opentide/states/deployment/` itself passes `opentide deploy --persist-state-externally` ([#554](https://github.com/opentidehq/opentide/issues/554)).
+- **Non-production CI deploys refuse to create untracked vendor rules.** In CI, a deploy whose plan is not `PRODUCTION` refuses to create a Defender for Endpoint, SentinelOne or CrowdStrike rule with `deployment_state_unpersisted`, since only the production job commits shards. Updates and deletes of bound rules still run, and local runs may still create. A pipeline that commits `.opentide/states/deployment/` itself passes `opentide deploy --persist-state-externally` ([#554](https://github.com/opentidehq/opentide/issues/554)).
 - **A shard not in canonical form refuses its rule.** A file name other than the rule's lowercase uuid, a mismatched `object_uuid` or a second file for the same rule is `deployment_state_uuid_mismatch`, and a tenant key with surrounding spaces is `deployment_state_shape` ([#396](https://github.com/opentidehq/opentide/issues/396)).
 - **`deploy --plan PRODUCTION` disables and deletes retired rules.** It includes `DISABLED` and `REMOVED` rules, as [the deployment spec](https://github.com/opentidehq/specifications/blob/main/specs/deployment.md) defines, where the `--keep-deprecated` default dropped them and a retirement never reached the platform; `--drop-deprecated` restores the old behaviour ([#548](https://github.com/opentidehq/opentide/issues/548)).
 - **`validate --file` fails when any target matches no object.** It reports `scope_no_match` and names the target in `context.targets`, where a run passed as long as one target matched; a script passing `--file` for a file that may not exist exits `1`.
@@ -815,9 +817,12 @@ opentide validate --strict
 
 **Fixed**
 
-- **Only pull requests to the default branch deploy and push.** A pull request between two feature branches deployed detections to the live staging tenant and committed to the default branch; six generated GitLab, GitHub and Azure jobs check the target branch.
 - **`threat.actors.name` accepts 220 more MISP clusters.** It is pinned to `actors::1.1`, so a correctly authored MISP cluster UUID is no longer reported as an unknown vocabulary value; `actors::1.0` keys are unaffected.
 - **`setup skills --install` accepts every bundled authoring skill.** Three of the four, such as `opentide-detection-rule`, were missing from the discovery catalogue and failed as an unknown slug, although the default set installed them.
+
+**Security**
+
+- **Only pull requests to the default branch deploy and push.** A pull request between two feature branches deployed detections to the live staging tenant and committed to the default branch; six generated GitLab, GitHub and Azure jobs check the target branch.
 
 See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0130--2026-10-12) for every change.
 
@@ -1114,7 +1119,12 @@ opentide validate --strict
 **Upgrade**
 
 - Run `opentide setup ci <github|gitlab|azure> --yes` to pick up the strict gates and the `--skip-unconfigured` deploy.
+- Give every object file a `uuid`: one without fails validation with `missing_uuid`.
 - If you use Azure Repos, add a build validation policy on the default branch, so a pull request sets `Build.Reason` to `PullRequest`; the pipeline file cannot create it.
+
+**Breaking**
+
+- **An object file with no `uuid` fails validation.** The schema check reports `missing_uuid`, and an empty catalogue still exits `0` ([#397](https://github.com/opentidehq/opentide/issues/397)).
 
 **Added**
 
@@ -1130,7 +1140,6 @@ opentide validate --strict
 
 **Fixed**
 
-- **An object file with no `uuid` fails validation.** The schema check reports `missing_uuid`, and an empty catalogue still exits `0` ([#397](https://github.com/opentidehq/opentide/issues/397)).
 - **`deploy --plan STAGING` works on a detached pull-request checkout.** It fetches `origin` by name instead of dying with `list index out of range` ([#402](https://github.com/opentidehq/opentide/issues/402), [#415](https://github.com/opentidehq/opentide/issues/415)).
 - **The inflight prune job creates `.opentide/inflight` before `git add`.** A repository that never committed that directory no longer exits 128 ([#403](https://github.com/opentidehq/opentide/issues/403)).
 - **`setup skills` downloads every file under `skills/<slug>/`.** It renders `AGENTS.md` from the package template, and the four authoring skills it installs from the package describe `rule::1.0`, `objective::1.0` and `threat::1.0` ([#399](https://github.com/opentidehq/opentide/issues/399), [#405](https://github.com/opentidehq/opentide/issues/405)).
@@ -1177,6 +1186,10 @@ opentide validate --strict
 **Changed**
 
 - **Generated GitHub workflows compare `github.ref` to a literal ref.** A regenerated workflow compares it with `'refs/heads/<branch>'`, because `format()` with only the format string is not a valid Actions expression.
+
+**Fixed**
+
+- **`--json` and usage errors no longer print `pymisp loaded properly`.** Importing the CLI no longer imports PyMISP.
 
 See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#070--2026-09-29) for every change.
 
@@ -1236,7 +1249,7 @@ opentide validate --strict
 **Fixed**
 
 - **A missing tip SHA names the variable to set.** A CI diff plan whose `CI_COMMIT_SHA`, `GITHUB_SHA` or `BUILD_SOURCEVERSION` is unset exits `1` and names that variable, instead of `'NoneType' object has no attribute 'encode'` ([#339](https://github.com/opentidehq/opentide/issues/339)).
-- **Azure `STAGING` names its missing pull-request variables.** Without `SYSTEM_PULLREQUEST_SOURCEBRANCH` and `SYSTEM_PULLREQUEST_TARGETBRANCHNAME` it exits `1` naming them, before any fetch, instead of `KeyError while compiling the deployment plan` or, with no remote, `No git repository was found at origin` ([#339](https://github.com/opentidehq/opentide/issues/339)).
+- **Azure `STAGING` names its missing pull-request variables.** Without `SYSTEM_PULLREQUEST_SOURCEBRANCH` or `SYSTEM_PULLREQUEST_TARGETBRANCHNAME` it exits `1` naming them, before any fetch, instead of `KeyError while compiling the deployment plan` or, with no remote, `No git repository was found at origin` ([#339](https://github.com/opentidehq/opentide/issues/339)).
 - **A pull-request ref missing from `origin` is named.** GitHub or Azure `STAGING` exits `1` with `Could not find git ref origin/<name>` instead of `Invalid object name` ([#339](https://github.com/opentidehq/opentide/issues/339)).
 - **`DEBUG`, `MANUAL` and `ALWAYS` are refused as CI diff plans.** Under CI they exit `1` with `Deployment plan <NAME> is not a CI diff plan. Use STAGING, PRODUCTION, or FULL.`; `ALWAYS` is no longer an alias of `FULL`, which is unchanged ([#339](https://github.com/opentidehq/opentide/issues/339)).
 - **GitLab merged-result commits with one parent no longer fail.** The plan keeps `CI_COMMIT_SHA` as the tip and exits `0` when both SHAs are in the checkout, instead of `list index out of range` ([#339](https://github.com/opentidehq/opentide/issues/339)).
@@ -1718,7 +1731,7 @@ opentide validate --strict
 - **The tutorial's objects validate and lint** ([#165](https://github.com/opentidehq/opentide/issues/165)).
 - **Generated templates include `YYYY-MM-DD` dates** ([#165](https://github.com/opentidehq/opentide/issues/165)).
 - **`generate docs` writes under the detection repository** ([#165](https://github.com/opentidehq/opentide/issues/165)).
-- **A base `pip install` can deploy.** `opentide info` reports `can_deploy: true` without the Azure or pandas extras, which a dry run and platform loading no longer need ([#166](https://github.com/opentidehq/opentide/issues/166)).
+- **`opentide info` reports `can_deploy: true` after a base `pip install`.** A dry run and platform loading no longer need the Azure or pandas extras ([#166](https://github.com/opentidehq/opentide/issues/166)).
 
 See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#013--2026-09-11) for every change.
 
@@ -1801,6 +1814,11 @@ pip install opentide==0.1.0
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
+
+**Upgrade**
+
+- If you run CoreTide, drop its submodule, depend on this package, replace the `Orchestration/` scripts with the CLI, set `OPENTIDE_REPO_ROOT` and run `opentide validate --strict` ([Migration](https://opentide.org/docs/usage/migration/)).
+- Pass `--platform` where CoreTide scripts passed `--system`.
 
 **Added**
 
