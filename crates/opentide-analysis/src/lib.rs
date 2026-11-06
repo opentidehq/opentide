@@ -23,7 +23,9 @@ pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
 pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
-pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
+pub use opentide_tide::{
+    DocumentSymbol, ElasticTenant, IndexedObject, LINT_CONFIGURATION, LintSettings, lint_settings,
+};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
 use opentide_kql::Profile;
@@ -370,6 +372,23 @@ pub fn check_visibility(text: &str) -> Result<(), String> {
 pub fn install_visibility(text: Option<&str>) -> Result<(), String> {
     let datasets = parse_visibility(text)?;
     set_dataset_layer(true, datasets);
+    Ok(())
+}
+
+/// Whether `lint.toml` text parses, without installing it.
+pub fn check_lint(text: &str) -> Result<(), String> {
+    opentide_tide::parse_lint_settings(text).map(|_| ())
+}
+
+/// Follow a workspace's `.opentide/configurations/lint.toml` (the file's
+/// text) in the Tide checks, for the whole process, as `opentide lint` does:
+/// `[filenames]` decides `filename_slug` and `filename_pattern`, `[metadata]`
+/// decides `missing_author` and `missing_organisation` (#214). `None` goes
+/// back to `opentide lint`'s defaults. Text that is not TOML is an error and
+/// keeps the settings in use.
+pub fn install_lint(text: Option<&str>) -> Result<(), String> {
+    let settings = text.map(opentide_tide::parse_lint_settings).transpose()?;
+    opentide_tide::install_lint_settings(settings);
     Ok(())
 }
 

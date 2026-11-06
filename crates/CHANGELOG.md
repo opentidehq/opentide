@@ -14,6 +14,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - `visibility`: the text of `visibility.toml`, or `null` when it is gone
   - `capabilities.experimental.opentide.workspaceUpdates` is `true`, so a client can tell this server from an older one
   - `@opentide/lsp-client`: `OpentideClient.updateWorkspace(change)` sends it
+- **`filename_pattern` reports a file name `[filenames] pattern` does not match.** A warning on the `name` value, as `opentide lint` reports it; a pattern the Rust `regex` crate cannot compile is left to `opentide lint` ([#214](https://github.com/opentidehq/language-server/issues/214)).
+- **Hosts install a root's `lint.toml` with `opentide_analysis::install_lint`.** For a host other than `opentide-lsp`, which reads the file itself; `opentide_analysis::check_lint` parses one without installing it ([#214](https://github.com/opentidehq/language-server/issues/214)).
 
 ### Changed
 
@@ -32,6 +34,13 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **A `detection_model` naming a signal is not an `invalid_ref`.** A rule may implement a signal an indexed objective declares, as `opentide validate` accepts; the message says `is not an indexed objective or signal`, and the suggestion is a UUID within two edits of the value, never the first indexed objective ([#213](https://github.com/opentidehq/language-server/issues/213)).
 - **The `invalid_ref` quick fix keeps the YAML valid.** It replaces the UUID, where it used to replace the key with one (`<uuid>: <old uuid>`) ([#215](https://github.com/opentidehq/language-server/issues/215)).
 - **The `filename_slug` fix renames the file, not the object.** Its suggestion is a `RenameFile` beside the file, for a client that applies one, a `file:` document and a name no other file has; it is never a text edit, and `source.fixAll.opentide` leaves it out ([#215](https://github.com/opentidehq/language-server/issues/215)).
+- **Filename and metadata warnings follow `lint.toml`.** `filename_slug`, `missing_author` and `missing_organisation` read the root's `.opentide/configurations/lint.toml` as `opentide lint` does, so a repository with its own naming, or no `organisation` requirement, no longer carries a warning on every object ([OBJECTS.md](docs/OBJECTS.md#linttoml), [#214](https://github.com/opentidehq/language-server/issues/214)).
+  - `[filenames] enabled`, `style` (`slug`, `name`, `none`) and the `[filenames.<kind>]` tables
+  - `[metadata] enabled` and `required`
+  - each check's `severity`
+  - the open buffer, else the file on disk, else a supplied document; editing it re-checks open documents
+  - `opentide-lsp analyze` reads the workspace's file too
+- **Debug fixtures and unsaved buffers get no false filename warning.** `x.debug.yaml` is compared without its `.debug` infix, and its suggestion keeps it; an `untitled:` document gets no `filename_slug` or `filename_pattern` ([#214](https://github.com/opentidehq/language-server/issues/214)).
 
 ## [0.10.0] - 2026-11-04
 

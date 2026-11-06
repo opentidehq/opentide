@@ -64,6 +64,13 @@ const SAMPLES: Record<string, string> = {
 };
 
 /** Diagnostic codes the native CLI reports for `text`, the reference for every transport. */
+// The CLI analyses a file, so it checks the file's name against the object's; an
+// `opentide/analyze` request names no file (`memory`), which has no name to check (#214).
+const FILE_NAME_CODES = new Set(["filename_slug", "filename_pattern"]);
+function withoutFileNames(codes: string[]): string[] {
+  return codes.filter((code) => !FILE_NAME_CODES.has(code));
+}
+
 function cliCodes(binary: string, languageId: string, text: string): string[] {
   const dir = mkdtempSync(join(tmpdir(), "opentide-cli-"));
   try {
@@ -416,7 +423,7 @@ test("stdio: the server's diagnostics, tokens and legend", { skip: !server && "n
       const tokens = (await client.highlight(id, text)).tokens;
       assert.ok(tokens.length > 0, `${id}: no tokens`);
       const codes = (await client.analyze(id, text)).diagnostics.map((d) => d.code).sort();
-      assert.deepEqual(codes, cliCodes(server!, id, text), id);
+      assert.deepEqual(codes, withoutFileNames(cliCodes(server!, id, text)), id);
     }
     // Faults reach the client, so an empty list above is not a dead transport.
     const broken = await client.analyze("kql", "SecurityEvent | wher EventID == 1");
@@ -471,7 +478,7 @@ test("worker: the language server in opentide-wasm answers like the native serve
       assert.ok((await client.highlight(id, text)).tokens.length > 0, `${id}: no tokens`);
       if (server) {
         const codes = (await client.analyze(id, text)).diagnostics.map((d) => d.code).sort();
-        assert.deepEqual(codes, cliCodes(server, id, text), id);
+        assert.deepEqual(codes, withoutFileNames(cliCodes(server, id, text)), id);
       }
     }
     const broken = await client.analyze("kql", "SecurityEvent | wher EventID == 1");
