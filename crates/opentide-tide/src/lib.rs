@@ -346,13 +346,46 @@ fn closest_detection_model(workspace: &[IndexedObject], value: &str) -> Option<S
     best.map(|(_, target)| target.to_string())
 }
 
+/// The stem and the suffix of an object file at `path`, as opentide's
+/// `split_object_name` reads them: `x.debug.yaml` is `("x", ".debug.yaml")`,
+/// so a debug fixture is compared by the stem its name names and keeps its
+/// `.debug` infix when renamed. `None` when `path` is not a filesystem path
+/// (a URI such as `untitled:Untitled-1` or a host's `opentide-object:<uuid>`)
+/// or has no directory: such a document has no file name to check.
+fn object_file_stem(path: &str) -> Option<(&str, &'static str)> {
+    let scheme = path.split_once(':').is_some_and(|(scheme, _)| {
+        scheme.len() > 1
+            && scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    });
+    let file = std::path::Path::new(path);
+    if scheme || file.parent().is_none_or(|dir| dir.as_os_str().is_empty()) {
+        return None;
+    }
+    let name = file.file_name()?.to_str()?;
+    for (suffix, kept) in [
+        (".debug.yaml", ".debug.yaml"),
+        (".debug.yml", ".debug.yaml"),
+        (".yaml", ".yaml"),
+        (".yml", ".yaml"),
+    ] {
+        if let Some(stem) = name.strip_suffix(suffix) {
+            return (!stem.is_empty()).then_some((stem, kept));
+        }
+    }
+    let stem = file.file_stem()?.to_str()?;
+    (!stem.is_empty()).then_some((stem, ".yaml"))
+}
+
 /// `filename_slug` and `filename_pattern` for an object at `path`, under the
 /// `[filenames]` convention of its kind ([`LintSettings::filenames_for`]).
 /// The stem an object should have is `slugify(name)` (`style = "slug"`) or
 /// its name (`"name"`), optionally followed by `-<suffix>`, as `opentide lint`
 /// gives two objects of one name; `"none"` compares no stem. A `pattern` is
-/// matched against the whole stem as the file is named. Both are on the
-/// `name` value (#215).
+/// matched against the whole stem as the file is named, less a `.debug`
+/// infix ([`object_file_stem`]). Both are on the `name` value (#215).
 fn diagnose_filename(
     lint: &LintSettings,
     object_type: &str,
@@ -361,13 +394,9 @@ fn diagnose_filename(
     source: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let stem = std::path::Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
-    if stem.is_empty() {
+    let Some((stem, suffix)) = object_file_stem(path) else {
         return;
-    }
+    };
     let rules = lint.filenames_for(object_type);
     let name = object.name.as_deref().unwrap_or_default();
     let mut push = |mut d: Diagnostic| {
@@ -387,13 +416,13 @@ fn diagnose_filename(
                 push(
                     Diagnostic::warning(
                         codes::FILENAME_SLUG,
-                        format!("filename should be {expected}.yaml ({how})"),
+                        format!("filename should be {expected}{suffix} ({how})"),
                         // The name the file is named after (#215). The
                         // suggestion is a file name: hosts offer it as a
                         // rename, never as an edit of this text.
                         name_range(source, name),
                     )
-                    .with_suggestion(format!("{expected}.yaml")),
+                    .with_suggestion(format!("{expected}{suffix}")),
                 );
             }
         }
@@ -2990,6 +3019,83 @@ threat:
             .expect("filename_slug");
         assert_eq!(covered(RULE, d.range), "Sentinel KQL Rule");
         assert_eq!(d.suggestion.as_deref(), Some("sentinel-kql-rule.yaml"));
+    }
+
+    /// The filename findings `diagnose_filename` gives for `RULE` at `path`
+    /// under `lint_toml`, as (code, suggestion).
+    fn filename_findings(path: &str, lint_toml: &str) -> Vec<(String, Option<String>)> {
+        let lint = parse_lint_settings(lint_toml).expect("lint.toml");
+        let object: TideObject = serde_yaml::from_str(RULE).expect("rule");
+        let mut found = Vec::new();
+        diagnose_filename(&lint, "rule", path, &object, RULE, &mut found);
+        found.into_iter().map(|d| (d.code, d.suggestion)).collect()
+    }
+
+    #[test]
+    fn object_file_stems_drop_the_debug_infix() {
+        assert_eq!(
+            object_file_stem("objects/rules/x.debug.yaml"),
+            Some(("x", ".debug.yaml"))
+        );
+        assert_eq!(
+            object_file_stem("/w/objects/rules/x.debug.yml"),
+            Some(("x", ".debug.yaml"))
+        );
+        assert_eq!(
+            object_file_stem("objects/rules/x.yaml"),
+            Some(("x", ".yaml"))
+        );
+        assert_eq!(
+            object_file_stem("c:/w/objects/rules/x.yml"),
+            Some(("x", ".yaml"))
+        );
+        assert_eq!(
+            object_file_stem("/w/objects/rules/[SEN] a: b.yaml"),
+            Some(("[SEN] a: b", ".yaml"))
+        );
+    }
+
+    #[test]
+    fn documents_that_are_not_files_have_no_stem() {
+        for path in [
+            "untitled:Untitled-1",
+            "opentide-object:00000000-0000-4000-8003-000000000001",
+            "vscode-vfs://github/org/repo/objects/rules/x.yaml",
+            "Untitled-1",
+            "x.yaml",
+            "",
+        ] {
+            assert_eq!(object_file_stem(path), None, "{path:?}");
+        }
+    }
+
+    #[test]
+    fn an_untitled_document_gets_no_filename_finding() {
+        let pattern = "[filenames]\npattern = '^[a-z-]+$'\n";
+        assert!(filename_findings("untitled:Untitled-1", pattern).is_empty());
+        assert!(filename_findings("untitled:Untitled-1", "").is_empty());
+        // The same text in a file is checked.
+        let found = filename_findings("objects/rules/Not The Slug.yaml", pattern);
+        let codes: Vec<&str> = found.iter().map(|(c, _)| c.as_str()).collect();
+        assert_eq!(codes, [codes::FILENAME_SLUG, codes::FILENAME_PATTERN]);
+    }
+
+    #[test]
+    fn a_debug_file_is_compared_without_its_infix() {
+        let pattern = "[filenames]\npattern = '^[a-z-]+$'\n";
+        assert!(
+            filename_findings("objects/rules/sentinel-kql-rule.debug.yaml", pattern).is_empty()
+        );
+        assert!(filename_findings("objects/rules/sentinel-kql-rule-2.debug.yml", "").is_empty());
+        assert_eq!(
+            filename_findings("objects/rules/not-the-slug.debug.yaml", ""),
+            [(
+                codes::FILENAME_SLUG.to_string(),
+                Some("sentinel-kql-rule.debug.yaml".to_string())
+            )]
+        );
+        let named = "[filenames]\nstyle = \"name\"\n";
+        assert!(filename_findings("objects/rules/Sentinel KQL Rule.debug.yaml", named).is_empty());
     }
 
     #[test]

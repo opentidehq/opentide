@@ -111,7 +111,7 @@ Suggestions the KQL, SPL and Tide engines attach:
 | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` | the data model reference | the corrected name ([spl/cim-fields.md](spl/cim-fields.md)) |
 | `invalid_ref` on `detection_model` | the UUID value | the objective or signal UUID within two edits of the value, ignoring case (a mistyped or swapped character); none when nothing is that close, so an unrelated objective is never offered |
 | `schema_validation` (string where a list is required) | the field key | `- {text}` |
-| `filename_slug` | the `name` value | `{stem}.yaml`, the stem `[filenames] style` derives from the name (`slug` or `name`, [OBJECTS.md](OBJECTS.md)), a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
+| `filename_slug` | the `name` value | `{stem}.yaml` (`{stem}.debug.yaml` for a debug file), the stem `[filenames] style` derives from the name (`slug` or `name`, [OBJECTS.md](OBJECTS.md)), a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
 
 A reference finding (`invalid_ref` on `detection_model`, on each
 `objective.threats` entry and on a `threat.chaining` `vector`) is on the UUID

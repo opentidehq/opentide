@@ -657,22 +657,40 @@ fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root
         } else {
             // Mid-edit text keeps the declarations in use: only the
             // configuration documents (`visibility.toml` among them) change.
-            let config: Vec<String> = session
-                .docs
-                .iter()
-                .filter(|(_, d)| d.language == LanguageId::Config)
-                .map(|(u, _)| u.clone())
-                .collect();
-            for uri in config {
-                session.mark(&uri);
-            }
+            mark_configuration(session);
         }
     } else if language == LanguageId::Config {
-        if Session::is_lint(uri) {
-            // lint.toml decides the filename and metadata checks (#214).
-            session.reactivate();
+        let parses = !Session::is_lint(uri)
+            || session
+                .docs
+                .get(uri)
+                .is_none_or(|d| opentide_analysis::check_lint(&d.text).is_ok());
+        if !parses {
+            // Mid-edit lint.toml keeps the settings that last parsed (#214):
+            // the Tide checks are as they were.
+            mark_configuration(session);
+        } else {
+            if Session::is_lint(uri) {
+                // lint.toml decides the filename and metadata checks (#214).
+                session.reactivate();
+            }
+            session.mark_all();
         }
-        session.mark_all();
+    }
+}
+
+/// Re-check the open configuration documents only: a configuration file
+/// that does not parse yet changes what the others may say, not the
+/// settings the other documents are checked under.
+fn mark_configuration(session: &Session) {
+    let config: Vec<String> = session
+        .docs
+        .iter()
+        .filter(|(_, d)| d.language == LanguageId::Config)
+        .map(|(u, _)| u.clone())
+        .collect();
+    for uri in config {
+        session.mark(&uri);
     }
 }
 
@@ -727,10 +745,18 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 everything = true;
             }
         } else if normalized.contains(".opentide/configurations/") {
+            session.touch();
             if Session::is_lint(uri) && !session.docs.contains_key(uri) {
+                // A file that does not parse keeps the settings in use
+                // (#214); one that is gone is the defaults.
+                let parses = std::fs::read_to_string(&path)
+                    .map_or(true, |text| opentide_analysis::check_lint(&text).is_ok());
+                if !parses {
+                    mark_configuration(session);
+                    continue;
+                }
                 session.reactivate();
             }
-            session.touch();
             everything = true;
         } else if normalized.contains(crate::server::WORKSPACE_CATALOGS) {
             session.log_info(&format!("{path} changed: reading the catalogs again"));

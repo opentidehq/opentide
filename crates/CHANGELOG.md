@@ -39,6 +39,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - `[metadata] enabled` and `required`
   - each check's `severity`
   - the open buffer, else the file on disk, else a supplied document; editing it re-checks open documents
+  - `opentide-lsp analyze` reads the workspace's file too
+- **Debug fixtures and unsaved buffers get no false filename warning.** `x.debug.yaml` is compared without its `.debug` infix, and its suggestion keeps it; an `untitled:` document gets no `filename_slug` or `filename_pattern` ([#214](https://github.com/opentidehq/language-server/issues/214)).
 
 ## [0.10.0] - 2026-11-04
 
