@@ -7,6 +7,43 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 0.23.0 — 6 November 2026
+
+`opentide tui` shows each object as a page with its findings in place, and gains Visibility, Configuration and Chains tabs. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility.
+
+**Install**
+
+```bash
+pip install opentide==0.23.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Added**
+
+- **`opentide tui` shows an object as a page.** The detail pane reads the object by its schema revision: a header with its TLP, a section per block, vocabulary values with their meaning, references by name (`f` follows them), and the optional fields it leaves out. `y` shows the file ([#776](https://github.com/opentidehq/opentide/issues/776)).
+- **`opentide tui` shows each finding under its line.** The gutter marks it, its span is underlined, hovering shows the editor's hover, and `n` and `p` move between findings ([language-server#215](https://github.com/opentidehq/language-server/issues/215)).
+- **A Visibility tab in `opentide tui`.** Tab `4` lists the log sources `visibility.toml` declares, the rules and objectives that use each, and what needs attention: log sources without columns or unused, and datasets rules read that none declares ([#776](https://github.com/opentidehq/opentide/issues/776)).
+- **A Configuration tab in `opentide tui`.** Tab `5` reads each configuration file by section, with effective values, defaults, findings and each platform's tenants. A credential shows as its variable name and whether it is set, never its value ([#776](https://github.com/opentidehq/opentide/issues/776)).
+- **A Chains tab in `opentide tui`.** Tab `6` draws `threat.chaining` around the selected threat as attack flow, with the rules under each threat and how many of its techniques they cover ([#776](https://github.com/opentidehq/opentide/issues/776)).
+- **`generate explorer --include-visibility` exports visibility for the explorer.** It writes `explorer.visibility.json` with a TLP marking (`--visibility-tlp`, `amber` by default). It is off by default, since it maps what an organisation cannot see, and a run without the flag removes it ([explorer#85](https://github.com/opentidehq/explorer/issues/85)).
+
+**Changed**
+
+- **The engine is [language-server 0.11.0](https://github.com/opentidehq/language-server/releases/tag/v0.11.0).** The editor follows the workspace's `lint.toml` for the filename and metadata checks, as `opentide lint` does, and no longer reports a signal's UUID as `invalid_ref`.
+
+**Fixed**
+
+- **Coverage counts the techniques a rule inherits.** `info coverage`, the MCP `coverage` tool and the TUI read only a rule's own `techniques`, so techniques taken from its objective or signals showed as gaps. They report `own` and `inherited` counts ([#775](https://github.com/opentidehq/opentide/issues/775)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0230--2026-11-06) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.23.0/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.23.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.22.0 — 4 November 2026
 
 The [opentide VS Code extension](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) ships its first release, built on `opentide --json info catalog` and `opentide serve`. Installs are smaller without pandas and numpy, and Windows on Arm gets a wheel.

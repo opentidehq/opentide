@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-11-06
+
+`opentide tui` reads a detection repository the way you think about it: each object as a page, its findings in place, and tabs for visibility, configuration and threat chains. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility, opt-in. The engine is language-server 0.11.0. A minor because it adds features, the `--include-visibility` export and four TUI views, and changes what `info coverage` and the MCP `coverage` tool count and report.
+
 ### Added
 
 - **`opentide generate explorer --include-visibility` exports visibility for the explorer** ([explorer#85](https://github.com/opentidehq/explorer/issues/85)). The explorer had no data about telemetry. With the flag, `generate explorer` also writes `.opentide/exports/explorer.visibility.json`: each log source `visibility.toml` declares, its columns, the rules whose queries read it and the objectives and rules that use it through a signal, the datasets rules read that no log source declares, and per-system counts, with a TLP marking (`--visibility-tlp`, `amber` by default, a usage error without `--include-visibility`) for the explorer to show. An inventory of what an organisation can see is sensitive, so the export is off by default, and a run without the flag removes the file an earlier run wrote. See [Visibility export](docs/cli/generate.md#visibility-export).
@@ -1569,7 +1573,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/opentidehq/opentide/releases/tag/v0.23.0
 [0.22.0]: https://github.com/opentidehq/opentide/releases/tag/v0.22.0
 [0.21.0]: https://github.com/opentidehq/opentide/releases/tag/v0.21.0
 [0.20.1]: https://github.com/opentidehq/opentide/releases/tag/v0.20.1
