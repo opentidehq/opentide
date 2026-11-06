@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
-- **A Configuration tab in `opentide tui`** ([#776](https://github.com/opentidehq/opentide/issues/776)). Tab `5` shows `deployment.toml`, `lint.toml`, `documentation.toml`, `sharing.toml` and each `platforms/*.toml` by section: each setting's effective value, whether the workspace sets it or it is the bundled default, and what it does, the configuration checks' findings in place, and the options nothing sets with their descriptions. A platform reads as a card: enabled or not, and each tenant's strategies, credentials and the rules a deploy reaches it with. `t` shows the raw file. No credential value is shown anywhere, the raw file included: a credential reads as its variable name and whether it is set, or as hidden. See [Configuration](docs/cli/tui.md#configuration).
+- **A Configuration tab in `opentide tui`** ([#776](https://github.com/opentidehq/opentide/issues/776)). Tab `5` shows `deployment.toml`, `lint.toml`, `documentation.toml`, `sharing.toml` and each `platforms/*.toml` by section: each setting's effective value, whether the workspace sets it or it is the bundled default, and what it does, the configuration checks' findings in place, and the options nothing sets with their descriptions. A platform reads as a card: enabled or not, and each tenant's strategies, credentials and the rules a deploy reaches it with. `t` shows the raw file. No credential value is shown anywhere, the raw file included: a credential reads as its variable name and whether it is set, or as hidden, and a file that is not valid TOML, or whose redaction cannot be proven, has no raw view. See [Configuration](docs/cli/tui.md#configuration).
 
 ## [0.22.0] — 2026-11-04
 

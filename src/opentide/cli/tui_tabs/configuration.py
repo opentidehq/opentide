@@ -263,7 +263,10 @@ class ConfigurationPane(Horizontal):
             target.update("")
             return
         if self.raw:
-            if item.raw is None:
+            if item.raw is None and item.raw_problem is not None:
+                # Never the content: a file that is not proven redacted is not shown.
+                target.update(Text(f"{item.key}: {item.raw_problem}", style="yellow"))
+            elif item.raw is None:
                 target.update(Text(f"The workspace has no {item.key}.", style="dim"))
             else:
                 target.update(

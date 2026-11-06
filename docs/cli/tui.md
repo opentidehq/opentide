@@ -52,7 +52,9 @@ The Configuration tab lists the configuration files on the left and shows the hi
 - **A platform file** starts with its card: enabled or not, the rules with a block for it, and each tenant with its strategies, whether it is `manual`, its credentials, and the rules a deploy run reaches it with (a rule that lists tenants reaches those; otherwise a tenant that is not `manual` takes the rules whose status a strategy it accepts deploys).
 - **`t`** shows the raw file instead.
 
-No credential value appears anywhere, the raw file included. A value under a tenant's `setup` table, or under a key that names a secret (`key`, `token`, `password`, `secret`…), reads as its variable name and whether the environment sets it (`${AZURE_CLIENT_SECRET}  unset`), as [`opentide doctor`](./doctor.md) reports it, or as `•••• hidden` when it is a literal. The user and password of a URL are hidden too. A switch such as `ssl = true` is shown as it is.
+No credential value appears anywhere, the raw file included. A value with a `setup` table, or a key that names a secret (`key`, `token`, `password`, `secret`, `auth`, `credentials`…), anywhere on its key path, such as each value under `[platform.credentials]`, reads as its variable name and whether the environment sets it (`${AZURE_CLIENT_SECRET}  unset`), as [`opentide doctor`](./doctor.md) reports it, or as `•••• hidden` when it is a literal. The user and password of a URL are hidden too, up to the last `@` before the host. A switch such as `ssl = true` is shown as it is.
+
+The raw file is redacted however its TOML writes a value (inline tables and arrays, quoted keys and headers, strings over several lines), then read back to check that no credential is left in it. A file that is not valid TOML has no raw view: `t` says where the error is (`not valid TOML: line 3, column 14`), never what the line holds. A file whose redaction cannot be proven, for example because a comment quotes a credential the file also sets, has no raw view either; its settings are still listed.
 
 ## The language server
 
