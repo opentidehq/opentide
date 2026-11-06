@@ -21,6 +21,7 @@ It reads the same registry as every other command and runs the same service func
 | Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right counts what the [language server](#the-language-server) reports for the selected object and what the last validate run found (`✗ 1  ! 2  on lines 8, 28`), then shows the object as a [page](#the-object-page). `y` shows its file instead, with line numbers, coloured by the language server: Tide keys, UUIDs, schemas and vocabulary values, and the query inside a rule in its own language. Each finding is shown [in place](#findings-in-place), under the line it is about |
 | Coverage | `2` | One row per ATT&CK technique named by a threat, an objective or a rule: how many rules detect it and how (`13  2 own · 11 inherited`), which rules, and which threats and objectives name it. A rule covers a technique it lists in its own `techniques`, and one it inherits from its objective (directly or through a signal) or that objective's threats, as `opentide info coverage --technique T1059` and `info catalog` count it. A technique counts the rules on its sub-techniques. A row with `0` rules is a gap: no rule lists or inherits it. `Enter` opens the first rule, one that lists the technique when there is one |
 | Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
+| Visibility | `4` | The log sources `.opentide/configurations/visibility.toml` declares and the detections that use them: see [Visibility](#visibility) |
 
 The header carries the opentide pill, the tagline, the repository name and the catalogue counts. The tagline shows only where it fits whole: when the terminal is too narrow for it beside the counts, the header keeps the pill and the counts.
 
@@ -43,6 +44,16 @@ Run them with their key, or from the command palette (`ctrl+p`), which lists the
 | `q` | | Quit. While a command runs, the UI stays up, shows `Waiting for opentide generate to finish…` and closes when it is done: a command cannot be stopped halfway, and it would otherwise go on writing files and printing into the shell after the UI had gone |
 
 A command runs in the background, one at a time, so the UI stays responsive. When it finishes, the catalogue is read again (generate may have rewritten it), and an object with findings shows `✗ 2` (errors) or `! 1` (warnings) after its name. In the Results tab, the query lines of a code frame are coloured as at a terminal.
+
+## Visibility
+
+The Visibility tab reads `.opentide/configurations/visibility.toml` as a table, not as TOML:
+
+- **Tiles** at the top: log sources per system, how many declare columns and how many are used, then what needs attention: log sources with no columns (the column checks cannot run on them), log sources no rule uses, and datasets rules read that no log source declares.
+- **The table:** each log source with its system, column count, how many rules use it, what needs attention and its description, then each dataset rules read that is not declared, in red. Type in the filter to narrow it by name or description, or `system:sentinel` by system.
+- **The drill-down** below shows the highlighted log source's columns with their types and descriptions, the rules whose queries read it, the rules that use it through a signal, and the objectives whose signals name it. `Enter` opens the first rule that uses it.
+
+A rule uses a log source in two ways. Its query reads the dataset: the table, sourcetype or index pattern, as the analysis engine reads the query, custom tables its catalog does not list (`MyApp_CL`) included. Names match as the query checks match them: `*` is the only wildcard, in a declared pattern (`logs-*` covers `logs-windows`) or in one a query reads, and Splunk sourcetypes ignore case. Or it implements a signal, or the objective of a signal, whose `data.logsources` names it, without regard to case. A dataset read that no log source of its system declares is listed even when the system declares none; the query checks only warn about it (`kql_table_not_declared`) once the system declares one. Without the engine, the datasets queries read are not known, and the tab says so.
 
 ## The language server
 

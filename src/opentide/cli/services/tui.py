@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
 from opentide.cli.services.object_view import LinkTarget, ObjectView, build_object_view
+from opentide.cli.services.visibility import VisibilityReport
 from opentide.cli.ui.contract import Failure
 
 if TYPE_CHECKING:
@@ -119,6 +120,8 @@ class Catalogue:
     coverage: tuple[TechniqueCoverage, ...] = ()
     load_errors: tuple[LoadError, ...] = ()
     language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
+    #: The log sources ``visibility.toml`` declares and what uses them (the Visibility tab).
+    visibility: VisibilityReport | None = None
     #: Each object's body as the registry loaded it, for the object view.
     bodies: Mapping[str, Mapping[str, Any]] = dataclasses.field(default_factory=dict)
     #: What each UUID a reference can name is: the objects, and every signal.
@@ -235,9 +238,21 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         coverage=tuple(coverage),
         load_errors=load_errors,
         language_server=_language_server_report(),
+        visibility=_visibility_report(),
         bodies=bodies,
         links=links,
     )
+
+
+def _visibility_report() -> VisibilityReport | None:
+    """:func:`load_visibility`, or ``None`` when it fails: the other tabs do not depend on it."""
+    from opentide.cli.services.visibility import load_visibility
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        return load_visibility(discover_workspace())
+    except Exception as exc:
+        return VisibilityReport(present=True, problem=f"{type(exc).__name__}: {exc}")
 
 
 def _language_server_report() -> LanguageServerReport:
