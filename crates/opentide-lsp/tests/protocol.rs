@@ -730,6 +730,55 @@ fn links_and_lenses_come_from_the_index() {
     assert_eq!(lens["command"]["arguments"][2][0]["uri"], rule_uri.as_str());
 }
 
+/// #219: a `filename_slug` rename is offered only where it can land: not
+/// for an unsaved `untitled:` buffer, which has no file to rename, and not
+/// onto a path another open document already has.
+#[test]
+fn filename_slug_renames_only_a_file_onto_a_free_name() {
+    let scratch = Scratch::new("filename-slug-no-rename");
+    let path = scratch.0.join("objects/rules/not-the-slug.yaml");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let text = fixture(RULE);
+    std::fs::write(&path, &text).unwrap();
+    let uri = file_uri(&path);
+    let whole =
+        json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 200, "character": 0 } });
+    let renaming = json!({ "workspace": { "workspaceEdit": {
+        "documentChanges": true, "resourceOperations": ["create", "rename"]
+    } } });
+    let (mut lsp, _) = start(json!({ "capabilities": renaming, "rootUri": file_uri(&scratch.0) }));
+    open(&mut lsp, &uri, "opentide-yaml", &text);
+    let diagnostics = published_for(&mut lsp, &uri);
+    let slug = diagnostics
+        .iter()
+        .find(|d| d["code"] == "filename_slug")
+        .unwrap_or_else(|| panic!("{diagnostics:#?}"))
+        .clone();
+    let suggestion = slug["data"]["suggestion"].as_str().unwrap().to_string();
+    let actions = |lsp: &mut Lsp, uri: &str| {
+        lsp.request(
+            "textDocument/codeAction",
+            json!({ "textDocument": { "uri": uri }, "range": whole, "context": { "diagnostics": [slug] } }),
+        )["result"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(actions(&mut lsp, &uri).len(), 1);
+
+    // An unsaved buffer: nothing to rename.
+    let untitled = "untitled:Untitled-1";
+    open(&mut lsp, untitled, "opentide-yaml", &text);
+    let found = actions(&mut lsp, untitled);
+    assert!(found.is_empty(), "{found:#?}");
+
+    // Another open document has the target path, not yet on disk.
+    let taken = file_uri(&path.with_file_name(&suggestion));
+    open(&mut lsp, &taken, "opentide-yaml", &text);
+    let found = actions(&mut lsp, &uri);
+    assert!(found.is_empty(), "{found:#?}");
+}
+
 /// P3.6: closed files are checked too, for a client that pulls.
 #[test]
 fn workspace_diagnostics_cover_closed_files() {

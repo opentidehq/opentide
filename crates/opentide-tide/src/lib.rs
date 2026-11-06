@@ -549,15 +549,22 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
 
     // Where each reference value sits (#215): `invalid_ref` underlines the
     // value, not its key, so a quick fix replaces the UUID and the YAML stays
-    // valid. A value the text does not spell out (an alias) keeps its key.
+    // valid. A value the text does not spell out after its key (an alias,
+    // whose UUID is at the anchor before it) keeps the key's range.
     let own_refs = serde_yaml::from_str::<serde_yaml::Value>(input.source)
         .map(|body| object_refs(input.source, &body, &uuid))
         .unwrap_or_default();
     let ref_range = |field_path: &str, key: &str| {
+        let key = key_range(input.source, key);
+        let after_key = |range: &Range| {
+            (range.start.line, range.start.character) >= (key.end.line, key.end.character)
+        };
         own_refs
             .iter()
             .find(|r| r.field_path == field_path && r.range != Range::point(0, 0))
-            .map_or_else(|| key_range(input.source, key), |r| r.range)
+            .map(|r| r.range)
+            .filter(|range| key == Range::point(0, 0) || after_key(range))
+            .unwrap_or(key)
     };
 
     // invalid_ref
@@ -2857,6 +2864,28 @@ threat:
         let body: serde_yaml::Value = serde_yaml::from_str(&fixed).expect("valid YAML");
         assert_eq!(body["detection_model"].as_str(), Some(suggestion));
         assert!(invalid_refs(&fixed, &signals_workspace()).is_empty());
+    }
+
+    #[test]
+    fn an_aliased_detection_model_keeps_the_key_range() {
+        // The UUID is at the anchor, before the key: underlining it there
+        // would put the finding and its fix on another field.
+        let dangling = "00000000-0000-4000-8099-000000000099";
+        let source = RULE
+            .replace(
+                "description: |\n  test\n",
+                &format!("description: &dm {dangling}\n"),
+            )
+            .replace(
+                "detection_model: 00000000-0000-4000-8002-000000000001",
+                "detection_model: *dm",
+            );
+        assert!(source.contains("*dm") && source.contains("&dm"), "{source}");
+        let found = invalid_refs(&source, &signals_workspace());
+        let [d] = found.as_slice() else {
+            panic!("{found:?}")
+        };
+        assert_eq!(covered(&source, d.range), "detection_model");
     }
 
     #[test]

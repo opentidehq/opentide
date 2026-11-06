@@ -5,7 +5,7 @@
 //! (P1.5).
 
 use crate::server::{host_info, path_to_uri_value};
-use crate::session::{Document, Root, Session};
+use crate::session::{Document, Root, Session, path_key};
 use crate::uri::{path_to_uri, uri_to_path};
 use lsp_server::{ErrorCode, Request, Response};
 use lsp_types as lsp;
@@ -1634,18 +1634,30 @@ fn handle_code_action(
 /// the file name the object should have, next to the file. Only for a client
 /// that applies `RenameFile`; the others get no action, since editing the
 /// text the finding underlines (the object's name) would rename the object.
+/// Only for a `file:` document, into its own directory, and never onto a
+/// file that exists, is open or was supplied, except the document itself
+/// under another case (a case-insensitive filesystem).
 fn rename_action(
     session: &Session,
     uri: &lsp::Uri,
     finding: &Finding,
     file_name: &str,
 ) -> Option<lsp::CodeActionOrCommand> {
-    if !session.caps.rename_files || file_name.contains(['/', '\\']) {
+    if !session.caps.rename_files {
         return None;
     }
-    let path = std::path::PathBuf::from(uri_to_path(uri.as_str()));
-    let target = path.with_file_name(file_name);
-    if target == path || target.exists() {
+    let path = PathBuf::from(uri_to_path(uri.as_str()));
+    let target = rename_target(uri.as_str(), file_name)?;
+    if target.exists() && !(is_case_only_rename(&path, &target) && same_file(&path, &target)) {
+        return None;
+    }
+    let key = path_key(&target.to_string_lossy());
+    let taken = session
+        .docs
+        .keys()
+        .any(|open| open != uri.as_str() && path_key(&uri_to_path(open)) == key)
+        || session.supplied.files.contains_key(&key);
+    if taken {
         return None;
     }
     let new_uri = path_to_uri_value(&target)?;
@@ -1670,6 +1682,57 @@ fn rename_action(
         is_preferred: Some(true),
         ..Default::default()
     }))
+}
+
+/// Where a `filename_slug` rename moves the document at `uri`: `file_name`
+/// in the document's own, non-empty directory. `None` for a document that is
+/// not a `file:` URI (`untitled:Untitled-1`, a host's virtual file), a name
+/// that is not one plain file name, or the document's own name.
+fn rename_target(uri: &str, file_name: &str) -> Option<PathBuf> {
+    if url::Url::parse(uri).ok()?.scheme() != "file" {
+        return None;
+    }
+    if file_name.is_empty() || matches!(file_name, "." | "..") || file_name.contains(['/', '\\']) {
+        return None;
+    }
+    let path = PathBuf::from(uri_to_path(uri));
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty())?;
+    let target = parent.join(file_name);
+    (target != path && target.parent() == Some(parent)).then_some(target)
+}
+
+/// Whether `target` is `path` with another case in its file name, in the
+/// same directory: what a case-insensitive filesystem reports as existing
+/// because it is the document itself.
+fn is_case_only_rename(path: &std::path::Path, target: &std::path::Path) -> bool {
+    let name = |p: &std::path::Path| p.file_name().and_then(|n| n.to_str()).map(str::to_string);
+    match (name(path), name(target)) {
+        (Some(from), Some(to)) => {
+            path.parent() == target.parent()
+                && from != to
+                && from.to_lowercase() == to.to_lowercase()
+        }
+        _ => false,
+    }
+}
+
+/// Whether two paths name one file on disk.
+fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        match (std::fs::metadata(a), std::fs::metadata(b)) {
+            (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+            _ => false,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 /// "Declare it in visibility.toml" for an undeclared table, sourcetype or
@@ -2257,5 +2320,64 @@ mod tests {
         assert!(is_deprecation(codes::DEPRECATED_FIELD));
         assert!(is_deprecation(codes::KQL_DEPRECATED_OPERATOR));
         assert!(!is_deprecation(codes::DUPLICATE_ID));
+    }
+
+    /// #219: a `filename_slug` rename is for a `file:` document, into its own
+    /// directory, with one plain file name.
+    #[test]
+    fn rename_targets_stay_beside_a_file() {
+        let dir = std::env::temp_dir().join("opentide-rename-target");
+        let uri = path_to_uri(&dir.join("old-name.yaml").to_string_lossy());
+        assert_eq!(
+            rename_target(&uri, "new-name.yaml"),
+            Some(dir.join("new-name.yaml"))
+        );
+        assert_eq!(rename_target(&uri, "old-name.yaml"), None);
+        for name in ["", ".", "..", "sub/new.yaml", "..\\new.yaml"] {
+            assert_eq!(rename_target(&uri, name), None, "{name:?}");
+        }
+        assert_eq!(rename_target("untitled:Untitled-1", "new-name.yaml"), None);
+        assert_eq!(
+            rename_target(
+                "vscode-vfs://github/org/repo/objects/rules/x.yaml",
+                "y.yaml"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn case_only_renames_are_the_same_name_in_the_same_directory() {
+        let dir = std::path::Path::new("/w/objects/rules");
+        let from = dir.join("Rule-Name.yaml");
+        assert!(is_case_only_rename(&from, &dir.join("rule-name.yaml")));
+        assert!(!is_case_only_rename(&from, &from));
+        assert!(!is_case_only_rename(&from, &dir.join("other.yaml")));
+        assert!(!is_case_only_rename(
+            &from,
+            &std::path::Path::new("/w/objects/other").join("rule-name.yaml")
+        ));
+    }
+
+    /// The document itself under another case is not another file; on a
+    /// case-sensitive filesystem the other case does not exist at all.
+    #[test]
+    fn a_case_only_target_that_exists_is_the_document_itself() {
+        let dir = std::env::temp_dir().join(format!("opentide-case-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let from = dir.join("Rule-Name.yaml");
+        let other = dir.join("other.yaml");
+        std::fs::write(&from, "name: x\n").unwrap();
+        std::fs::write(&other, "name: y\n").unwrap();
+        let lower = dir.join("rule-name.yaml");
+        assert!(same_file(&from, &from));
+        assert!(!same_file(&from, &other));
+        if lower.exists() {
+            // Case-insensitive: the rename is still offered.
+            assert!(same_file(&from, &lower));
+        } else {
+            assert!(!same_file(&from, &lower));
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
