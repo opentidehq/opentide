@@ -460,3 +460,15 @@ def test_a_typo_of_a_command_is_still_named() -> None:
     assert finding.severity == "error"
     diagnostic = diagnostic_from_engine(finding, file_path=Path("q.spl"), workspace=None)
     assert diagnostic.help == "did you mean 'stats'?"
+
+
+def test_a_lint_toml_that_is_not_toml_is_the_defaults_and_says_why(tmp_path: Path) -> None:
+    lint = tmp_path / analysis.LINT_CONFIGURATION
+    assert analysis.install_workspace_lint(tmp_path) is None  # no file: the defaults
+    lint.parent.mkdir(parents=True)
+    lint.write_text("﻿[filenames]\nenabled = false\n", encoding="utf-8")
+    assert analysis.install_workspace_lint(tmp_path) is None
+    lint.write_text("[filenames\n", encoding="utf-8")
+    problem = analysis.install_workspace_lint(tmp_path)
+    assert problem is not None and problem.startswith("the lint settings could not be read")
+    analysis.install_workspace_lint(None)

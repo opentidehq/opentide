@@ -347,6 +347,18 @@ fn install_visibility(text: Option<&str>) -> PyResult<()> {
     opentide_analysis::install_visibility(text).map_err(PyValueError::new_err)
 }
 
+/// Follow a workspace's `.opentide/configurations/lint.toml` (the file's
+/// text) in the Tide checks, as `opentide lint` does: `[filenames]` decides
+/// `filename_slug` and `filename_pattern`, `[metadata]` decides
+/// `missing_author` and `missing_organisation`. `None` goes back to
+/// `opentide lint`'s defaults. Raises `ValueError`, and changes nothing, when
+/// the text is not TOML.
+#[pyfunction]
+#[pyo3(signature = (text=None))]
+fn install_lint(text: Option<&str>) -> PyResult<()> {
+    opentide_analysis::install_lint(text).map_err(PyValueError::new_err)
+}
+
 /// What the declared datasets in use (the workspace's `visibility.toml`, else
 /// the host's) say about `name` on `platform`: a log source's `name` is its
 /// dataset, whose kind follows from the system (a table for `sentinel` and
@@ -534,8 +546,9 @@ mod _native {
     use super::{
         Diagnostic, QueryReport, Workspace, analyze_query, bundled_catalog, catalog_is_workspace,
         catalog_version, dataset_status, describe_code, highlight, install_catalog,
-        install_configuration_schemas, install_visibility, language_for_path, serve_stdio,
-        set_configuration_checker, set_default_catalog, set_host_info, use_host_catalogs,
+        install_configuration_schemas, install_lint, install_visibility, language_for_path,
+        serve_stdio, set_configuration_checker, set_default_catalog, set_host_info,
+        use_host_catalogs,
     };
 
     #[pymodule_init]

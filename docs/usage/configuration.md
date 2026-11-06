@@ -304,6 +304,8 @@ pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem must match this regular expres
 
 A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
 
+The editor (`opentide lsp start`) and `opentide tui` read the same file: their `filename_slug`, `filename_pattern`, `missing_author` and `missing_organisation` warnings follow `[filenames]` and `[metadata]` as `opentide lint` does. A file that is not TOML leaves them at the defaults, and `opentide validate` reports it.
+
 ## Paths
 
 `paths.toml` overrides the default workspace layout (where `objects/`, `docs/`, and `.opentide/` live). Most repos never touch it; the defaults are described in the [Workspace spec](/docs/specifications/specs/workspace/).
