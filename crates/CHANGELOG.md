@@ -12,6 +12,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Changed
 
+- `invalid_ref` on a rule's `detection_model` accepts the UUID of a signal an indexed objective declares, as `opentide validate` does ([#213](https://github.com/opentidehq/language-server/issues/213)). Signals live inside their objective and are not workspace objects, so a rule that implements one signal was reported as naming no objective, a false positive the CLI never reports. The message says `is not an indexed objective or signal`. Its suggestion is the objective or signal UUID within two edits of the value, and none otherwise: it was the first indexed objective, whatever that objective was about, which applied would have re-parented the rule. A UUID that names nothing is still an error. `testdata/conformance/refs/detection-model` holds the three cases.
 - With several workspace folders, a supplied document belongs to the root whose folder holds it, as a file on disk does: a reference from one folder to an object only another folder supplied is an `invalid_ref`, as the CLI reports it, and each root's `opentide/catalog` lists its own objects. Supplied files used to be in every root's index. An object supplied with no `uri`, or outside every folder, is still every root's. A root's `.opentide/configurations/visibility.toml` among the supplied documents declares that root's datasets, before the one `visibility` the host supplies for every root.
 
 ## [0.10.0] - 2026-11-04
