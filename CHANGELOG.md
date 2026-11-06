@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [0.23.0] — 2026-11-06
 
-`opentide tui` reads a detection repository the way you think about it: each object as a page, its findings in place, and tabs for visibility, configuration and threat chains. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility, opt-in. The engine is language-server 0.11.0. A minor because it adds features, the `--include-visibility` export and four TUI views, and changes what `info coverage` and the MCP `coverage` tool count and report.
+`opentide tui` shows each object as a page with its findings in place, and gains Visibility, Configuration and Chains tabs. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility, opt-in.
 
 ### Added
 

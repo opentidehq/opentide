@@ -30,7 +30,7 @@ opentide validate --strict
 
 **Changed**
 
-- **The engine is [language-server 0.11.0](https://github.com/opentidehq/language-server/releases/tag/v0.11.0).** The editor follows the workspace's `lint.toml` for the filename and metadata checks, as `opentide lint` does, and no longer reports a signal's UUID as `invalid_ref`.
+- **The engine is [language-server 0.11.0](https://github.com/opentidehq/language-server/releases/tag/v0.11.0).** The editor and `opentide tui` follow the workspace's `lint.toml` for the filename and metadata checks, as `opentide lint` does, and no longer reports a signal's UUID as `invalid_ref`.
 
 **Fixed**
 
