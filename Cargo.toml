@@ -11,6 +11,7 @@ members = [
     "crates/opentide-kuery",
     "crates/opentide-lucene",
     "crates/opentide-falco",
+    "crates/opentide-cql",
     "crates/opentide-ecs",
     "crates/opentide-tide",
     "crates/opentide-analysis",
@@ -38,6 +39,7 @@ opentide-eql = { path = "crates/opentide-eql", version = "=0.10.0" }
 opentide-kuery = { path = "crates/opentide-kuery", version = "=0.10.0" }
 opentide-lucene = { path = "crates/opentide-lucene", version = "=0.10.0" }
 opentide-falco = { path = "crates/opentide-falco", version = "=0.10.0" }
+opentide-cql = { path = "crates/opentide-cql", version = "=0.10.0" }
 opentide-ecs = { path = "crates/opentide-ecs", version = "=0.10.0" }
 opentide-tide = { path = "crates/opentide-tide", version = "=0.10.0" }
 opentide-analysis = { path = "crates/opentide-analysis", version = "=0.10.0" }
