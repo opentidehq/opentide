@@ -250,14 +250,17 @@ opentide info
 opentide --json info --technique T1059 coverage
 ```
 
-`info` reports the package version, your object counts, and each platform's deploy/validate capabilities. The coverage query returns the same payload plus a `coverage` object listing the rules whose `techniques` include T1059, trimmed here to that key:
+`info` reports the package version, your object counts, and each platform's deploy/validate capabilities. The coverage query returns the same payload plus a `coverage` object listing the rules that cover T1059, trimmed here to that key. Your rule lists T1059 in its own `techniques`, so it is under `own`; a rule that lists none would still count, under `inherited`, through its objective's or threat's techniques:
 
 ```json output-of="opentide --json info --technique T1059 coverage"
 {
   "coverage": {
     "technique": "T1059",
     "rules": ["00000000-0000-4000-8003-000000000001"],
-    "count": 1
+    "count": 1,
+    "own": ["00000000-0000-4000-8003-000000000001"],
+    "inherited": [],
+    "matched_techniques": ["T1059"]
   }
 }
 ```

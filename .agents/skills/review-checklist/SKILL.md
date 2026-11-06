@@ -109,7 +109,8 @@ triggers it; drop anything you cannot tie to a trigger.
 3. No new `# noqa` / `# ty: ignore` without a reason on the same line; new and touched
    functions fully annotated.
 4. User-visible behaviour change → an entry under `## [Unreleased]` in `CHANGELOG.md`, in
-   the house style (bold symptom first, then cause and fix).
+   the right part and the house style ([`release-notes`](../release-notes/SKILL.md): a bold
+   lead naming the change or the symptom it fixes, then the effect, then the issue link).
 5. CLI/MCP/SDK surface change → docs updated ([`docs-maintenance`](../docs-maintenance/SKILL.md)).
 6. Mechanical refactors (formatting, renames, lint autofixes, string splitting) are verified
    behaviour-preserving with `uv run python scripts/ast_equivalence.py <base-rev>`: it lists the

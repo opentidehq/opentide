@@ -167,11 +167,47 @@ def build_search_documents(
     return documents
 
 
-class ExplorerExport:
-    """Build explorer.bundle.json and explorer.search.json for the static UI."""
+#: The visibility export's file, written only when asked for (explorer#85).
+VISIBILITY_EXPORT = "explorer.visibility.json"
+#: The marking the explorer shows on the Visibility view unless told otherwise.
+DEFAULT_VISIBILITY_TLP = "amber"
 
-    def __init__(self, export_dir: Path | None = None) -> None:
+
+class ExplorerExport:
+    """Build explorer.bundle.json and explorer.search.json for the static UI.
+
+    With *include_visibility*, also ``explorer.visibility.json``: the log
+    sources ``visibility.toml`` declares, their columns, and which rules and
+    objectives use each (:mod:`opentide.cli.services.visibility`). A telemetry
+    inventory says what an organisation cannot see, so it is never written
+    unless asked for, and a run without it removes the one an earlier run
+    wrote: what the explorer publishes is what this run chose.
+    """
+
+    def __init__(
+        self,
+        export_dir: Path | None = None,
+        *,
+        include_visibility: bool = False,
+        visibility_tlp: str = DEFAULT_VISIBILITY_TLP,
+    ) -> None:
         self.export_dir = export_dir or Path(Opentide.Configurations.Global.Paths.Tide.exports)
+        self.include_visibility = include_visibility
+        self.visibility_tlp = visibility_tlp
+
+    def build_visibility(self) -> dict[str, Any]:
+        """The visibility export: the report, with its marking and when it was made."""
+        from opentide.cli.services.visibility import load_visibility
+        from opentide.registry.discovery import discover_workspace
+
+        Opentide.initialise()
+        report = load_visibility(discover_workspace())
+        return {
+            "version": "1.0",
+            "generatedAt": utc_now().isoformat(),
+            "tlp": self.visibility_tlp,
+            **report.to_dict(),
+        }
 
     def build_bundle(self) -> dict[str, Any]:
         Opentide.initialise()
@@ -236,6 +272,17 @@ class ExplorerExport:
             ),
             encoding="utf-8",
         )
+        visibility_path = self.export_dir / VISIBILITY_EXPORT
+        if self.include_visibility:
+            visibility_path.write_text(
+                json.dumps(self.build_visibility(), default=json_timestamp_default),
+                encoding="utf-8",
+            )
+            logger.info("Wrote the visibility export to %s", visibility_path)
+        elif visibility_path.is_file():
+            # Opt-in per run: an inventory an earlier run wrote is not published again.
+            visibility_path.unlink()
+            logger.info("Removed %s: pass --include-visibility to export it", visibility_path)
         logger.info(
             "Wrote explorer exports to %s (%d objects)",
             self.export_dir,
@@ -244,14 +291,30 @@ class ExplorerExport:
         return bundle_path, search_path
 
 
-def export_explorer_bundle(export_dir: Path | None = None) -> tuple[Path, Path]:
+def export_explorer_bundle(
+    export_dir: Path | None = None,
+    *,
+    include_visibility: bool = False,
+    visibility_tlp: str = DEFAULT_VISIBILITY_TLP,
+) -> tuple[Path, Path]:
     """Write the explorer bundle, previewing open pull requests' inflight shards."""
     from opentide.indexing.inflight import inflight_preview
 
     with inflight_preview():
-        return ExplorerExport(export_dir=export_dir).export()
+        return ExplorerExport(
+            export_dir=export_dir,
+            include_visibility=include_visibility,
+            visibility_tlp=visibility_tlp,
+        ).export()
 
 
-def run(export_dir: Path | None = None) -> tuple[Path, Path]:
+def run(
+    export_dir: Path | None = None,
+    *,
+    include_visibility: bool = False,
+    visibility_tlp: str = DEFAULT_VISIBILITY_TLP,
+) -> tuple[Path, Path]:
     """Generation-phase entry point, matching the other export modules."""
-    return export_explorer_bundle(export_dir)
+    return export_explorer_bundle(
+        export_dir, include_visibility=include_visibility, visibility_tlp=visibility_tlp
+    )

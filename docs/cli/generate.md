@@ -23,7 +23,7 @@ opentide generate extract sentinel   # opt-in platform import
 |------------|--------|
 | [`generate docs`](#generate-docs) | Markdown pages for rules, objectives and threats, and their indexes |
 | [`generate exports`](#generate-exports) | `.opentide/exports/`: the ATT&CK Navigator layer, the objects export and the revisions export |
-| [`generate explorer`](#generate-explorer) | `.opentide/exports/explorer.bundle.json` and `explorer.search.json`, for the explorer site |
+| [`generate explorer`](#generate-explorer) | `.opentide/exports/explorer.bundle.json` and `explorer.search.json`, for the explorer site; with `--include-visibility`, `explorer.visibility.json` |
 | [`generate inflight`](#generate-inflight) | Preview shards of changed objects under `.opentide/inflight/` |
 | [`generate extract`](#generate-extract) | `Imported/`: rules exported from a platform, converted to opentide rules |
 
@@ -216,6 +216,35 @@ opentide generate explorer
 |------|-------|
 | `explorer.bundle.json` | `models` (every threat, objective, signal and rule body by family), `flatIndex` (the same bodies by UUID), `summaries` (per object: `uuid`, `type`, `name`, `schema`, `version`, `tlp`, `status`, `techniques`, `actors`, `relatedCount`, `platforms`), `chaining` (the threat chaining graph), `signals`, `stagingIndex` (objects by status: production, staging, other), `version` (the bundle format) and `generatedAt` |
 | `explorer.search.json` | `documents`: one search document per summary, with the first 4,000 characters of the object's body as `content` |
+| `explorer.visibility.json` | Only with `--include-visibility`: see [Visibility export](#visibility-export) |
+
+### Visibility export
+
+```bash
+opentide generate explorer --include-visibility
+opentide generate explorer --include-visibility --visibility-tlp red
+```
+
+| Option | Description |
+|--------|-------------|
+| `--include-visibility` | Also write `explorer.visibility.json`, which the explorer's Visibility view reads |
+| `--visibility-tlp` | The TLP the explorer shows on that view: `clear`, `green`, `amber` (the default), `amber+strict` or `red`. Another value exits `2`, and so does the option without `--include-visibility` (`usage_missing_option`): there is no export for it to label |
+
+A visibility inventory shows what an organisation can and cannot see, and the explorer builds a static site anyone with its URL can read, so the export is **off by default**. It is opt-in per run: `generate explorer` without the flag removes an `explorer.visibility.json` an earlier run wrote, so the site shows the view only while you keep asking for it. Without the file, the explorer has no Visibility view.
+
+The file holds the log sources `.opentide/configurations/visibility.toml` declares and what uses them, as the TUI's [Visibility tab](./tui.md#visibility) shows them:
+
+| Key | Contents |
+|-----|----------|
+| `version`, `generatedAt`, `tlp` | The format (`1.0`), when it was written, and the marking |
+| `present`, `problem`, `reads_unavailable` | Whether the workspace has a `visibility.toml`, why it could not be read, and why the datasets queries read are not known (the engine did not load) |
+| `systems` | Per system: `logsources`, `with_columns` and `used` |
+| `logsources` | Each log source: `name`, `system`, `description`, `tenants`, `columns` (`name`, `type`, `description`), `read_by` (rules whose queries read it), `objectives` and `signals` (that name it in `data.logsources`), `signal_rules` (rules implementing those signals or objectives) and `rules` (both) |
+| `undeclared` | Datasets rules read that no log source of their system declares: `system`, `name`, `rules`, and `system_declares` (whether the system declares any, so the query checks warn about it) |
+| `unknown_signal_sources` | `data.logsources` names no log source declares, with the objectives that name them |
+| `reads` | Each dataset each rule's queries read: `rule`, `system`, `name`, `field_path` |
+
+The datasets a query reads come from the analysis engine, which reads the table, sourcetype or index pattern as the query checks do; a declared pattern (`logs-*`) covers the datasets it matches.
 
 The explorer previews open pull requests: the bundle is built with the [inflight](#generate-inflight) shards on `.opentide/inflight/` applied over the object files, as `generate docs` is. Every other command reads the object files alone. `generate explorer` is not a phase of the default run. The pipelines `opentide setup ci github --explorer-pages` writes run `opentide --json generate explorer` and publish the site to GitHub Pages ([setup](./setup.md)).
 
