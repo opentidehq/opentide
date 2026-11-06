@@ -871,6 +871,22 @@ def test_the_language_server_reports_each_object_at_load(tutorial_repo: Path) ->
     assert report.for_path(catalogue.entries[THREAT].path) == ()
 
 
+def test_the_language_server_follows_the_workspace_lint_toml(tutorial_repo: Path) -> None:
+    """``[filenames]`` decides the engine's file name warning, as it does ``opentide lint``'s."""
+    renamed = tutorial_repo / "objects/rules/Not A Slug.yaml"
+    (tutorial_repo / RULE_FILE).rename(renamed)
+
+    def codes() -> list[str]:
+        catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+        return [f.code for f in catalogue.language_server.for_path(renamed)]
+
+    assert "filename_slug" in codes()
+    lint = tutorial_repo / ".opentide/configurations/lint.toml"
+    lint.parent.mkdir(parents=True, exist_ok=True)
+    lint.write_text("[filenames]\nenabled = false\n", encoding="utf-8")
+    assert "filename_slug" not in codes()
+
+
 def test_without_the_engine_nothing_is_checked_and_the_ui_says_so(
     tutorial_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

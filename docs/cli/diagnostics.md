@@ -101,7 +101,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`falco_value_type`](#falco_value_type) | The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule. |
 | [`filename_mismatch`](#filename_mismatch) | An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default. |
 | [`filename_pattern`](#filename_pattern) | An object file's name does not match the regular expression `lint.toml` sets for it. |
-| [`filename_slug`](#filename_slug) | The file name is not the slug of the object's name. |
+| [`filename_slug`](#filename_slug) | The file name is not the one lint.toml's [filenames] style derives from the object's name. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
 | [`internal`](#internal) | opentide stopped on an exception it did not handle: a bug in opentide, not in your input. |
@@ -1734,7 +1734,7 @@ The pattern is matched against the whole file name without its extension (`re.fu
 
 ## filename_slug
 
-The file name is not the slug of the object's name.
+The file name is not the one lint.toml's [filenames] style derives from the object's name.
 
 Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
 

@@ -74,6 +74,10 @@ DECLARED_DATASET_CODES = frozenset(
 #: language server does.
 VISIBILITY_CONFIGURATION = ".opentide/configurations/visibility.toml"
 
+#: The workspace's ``opentide lint`` settings: ``[filenames]`` and
+#: ``[metadata]`` decide the engine's file name and metadata warnings too.
+LINT_CONFIGURATION = ".opentide/configurations/lint.toml"
+
 #: Where the Elastic tenants' stack versions are read from; the engine matches
 #: this path's ending, so it is passed as written here.
 ELASTIC_CONFIGURATION = ".opentide/configurations/platforms/elastic.toml"
@@ -283,6 +287,7 @@ def install_workspace_catalog(root: Path | None) -> CatalogState:
         own = own_catalog(root)
         module.install_catalog(fields=own[FIELDS_FILE], deprecations=own[DEPRECATIONS_FILE])
         install_workspace_visibility(root)
+        install_workspace_lint(root)
     except Exception as exc:  # generating the catalog never fails a command
         own_problem = f"opentide's catalog could not be generated: {type(exc).__name__}: {exc}"
         logger.warning("own_catalog_unavailable", problem=own_problem)
@@ -295,6 +300,7 @@ def install_workspace_catalog(root: Path | None) -> CatalogState:
         )
     state = _install_committed_catalog(module, directory)
     install_workspace_visibility(root)
+    install_workspace_lint(root)
     if own_problem is None:
         return state
     problem = own_problem if state.problem is None else f"{own_problem}; {state.problem}"
@@ -339,6 +345,32 @@ def install_workspace_visibility(root: Path | None) -> str | None:
         problem = f"the declared datasets could not be read: {exc}"
         logger.warning("declared_datasets_unavailable", path=str(path), problem=problem)
         module.install_visibility(None)
+    return problem
+
+
+def install_workspace_lint(root: Path | None) -> str | None:
+    """Follow *root*'s ``lint.toml`` in the engine's Tide checks; process-wide.
+
+    ``filename_slug``, ``filename_pattern``, ``missing_author`` and
+    ``missing_organisation`` then follow ``[filenames]`` and ``[metadata]`` as
+    ``opentide lint`` does, so the TUI reports what ``opentide lint`` and the
+    editor report. No workspace or no file is ``opentide lint``'s defaults.
+    When the file cannot be read or is not TOML (``opentide validate`` reports
+    that), the defaults apply, and the reason is returned and logged. Raises
+    :class:`EngineUnavailableError`.
+    """
+    module = engine()
+    path = None if root is None else root / LINT_CONFIGURATION
+    text = None
+    problem = None
+    try:
+        if path is not None and path.is_file():
+            text = path.read_text(encoding="utf-8-sig")
+        module.install_lint(text)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:  # reported by the configuration check
+        problem = f"the lint settings could not be read: {exc}"
+        logger.warning("lint_settings_unavailable", path=str(path), problem=problem)
+        module.install_lint(None)
     return problem
 
 
