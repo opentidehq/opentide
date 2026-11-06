@@ -109,12 +109,16 @@ Suggestions the KQL, SPL and Tide engines attach:
 | `spl_search_operator` | the operator | `=`, `!=`, `>=` or `<=` ([spl/search-syntax.md](spl/search-syntax.md)) |
 | `spl_command_without_pipe` | the command word | `\| {command}` |
 | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` | the data model reference | the corrected name ([spl/cim-fields.md](spl/cim-fields.md)) |
-| `invalid_ref` on `detection_model` | the `detection_model` key | the objective or signal UUID within two edits of the value, ignoring case (a mistyped or swapped character); none when nothing is that close, so an unrelated objective is never offered |
+| `invalid_ref` on `detection_model` | the UUID value | the objective or signal UUID within two edits of the value, ignoring case (a mistyped or swapped character); none when nothing is that close, so an unrelated objective is never offered |
 | `schema_validation` (string where a list is required) | the field key | `- {text}` |
-| `filename_slug` | the first `name:` key | `{slug}.yaml` |
+| `filename_slug` | the `name` value | `{slug}.yaml`, a file name: the quick fix renames the file (`RenameFile`, for a client with `workspaceEdit.documentChanges` and `resourceOperations: ["rename"]`) beside it, only for a `file:` document and when no other file, open document or supplied document has that name (the same file under another case is renamed), and is never a text edit nor part of `source.fixAll.opentide` |
 
-On Tide keys the range is the key, so applying the edit overwrites the key
-text. On query tokens the range is the bad name, so the edit replaces that
+A reference finding (`invalid_ref` on `detection_model`, on each
+`objective.threats` entry and on a `threat.chaining` `vector`) is on the UUID
+value, so applying its edit replaces the value and the YAML stays valid
+([#215](https://github.com/opentidehq/language-server/issues/215)); a value
+the text does not spell out after its key (an alias, whose UUID is at its anchor) keeps the key's range. On other Tide
+keys the range is the key, so applying the edit overwrites the key text. On query tokens the range is the bad name, so the edit replaces that
 name. The Elastic engines attach suggestions too ([LANGUAGE.md](LANGUAGE.md)).
 
 ## Custom RPCs

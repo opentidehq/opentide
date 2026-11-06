@@ -22,10 +22,16 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - Each root's `opentide/catalog` lists its own objects
   - An object supplied with no `uri`, or outside every folder, is still every root's
   - A root's `.opentide/configurations/visibility.toml` among the supplied documents declares its datasets, in place of the `visibility` the host supplies for every root
+- **Reference findings are on the value, not its key.** `invalid_ref` is on the UUID it is about in these fields, and `filename_slug` on the `name` value ([#215](https://github.com/opentidehq/language-server/issues/215)).
+  - `detection_model`
+  - each `objective.threats` entry, on its own UUID, where all of them shared the `threats` key
+  - a `threat.chaining` `vector`
 
 ### Fixed
 
 - **A `detection_model` naming a signal is not an `invalid_ref`.** A rule may implement a signal an indexed objective declares, as `opentide validate` accepts; the message says `is not an indexed objective or signal`, and the suggestion is a UUID within two edits of the value, never the first indexed objective ([#213](https://github.com/opentidehq/language-server/issues/213)).
+- **The `invalid_ref` quick fix keeps the YAML valid.** It replaces the UUID, where it used to replace the key with one (`<uuid>: <old uuid>`) ([#215](https://github.com/opentidehq/language-server/issues/215)).
+- **The `filename_slug` fix renames the file, not the object.** Its suggestion is a `RenameFile` beside the file, for a client that applies one, a `file:` document and a name no other file has; it is never a text edit, and `source.fixAll.opentide` leaves it out ([#215](https://github.com/opentidehq/language-server/issues/215)).
 
 ## [0.10.0] - 2026-11-04
 
