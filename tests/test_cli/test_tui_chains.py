@@ -132,7 +132,7 @@ def test_the_chains_tab(chained_repo: Path) -> None:
             await pilot.pause()
             assert app.query_one(TabbedContent).active == "chains"
             table = app.query_one("#chain-nodes", DataTable)
-            assert [row.value for row in table.rows][0] == THREAT
+            assert next(row.value for row in table.rows) == THREAT
             assert {row.value for row in table.rows} == {THREAT, FOLLOW_UP, ENABLED}
             shown = _plain(app.query_one("#chain-flow", Static).content)
             # The focused threat has the tutorial's rule; its follow-up none.
