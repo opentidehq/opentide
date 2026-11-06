@@ -18,7 +18,7 @@ It reads the same registry as every other command and runs the same service func
 
 | Tab | Key | What it shows |
 |-----|-----|---------------|
-| Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right shows what the [language server](#the-language-server) reports for the selected object and what the last validate run found (`error[code]: message`, `╭─▶ path:line:column`, `╰─ help: …`), then its file with line numbers, coloured by the language server: Tide keys, UUIDs, schemas and vocabulary values, and the query inside a rule in its own language. Each line with a finding is marked, and the finding's span is underlined |
+| Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right counts what the [language server](#the-language-server) reports for the selected object and what the last validate run found (`✗ 1  ! 2  on lines 8, 28`), then shows its file with line numbers, coloured by the language server: Tide keys, UUIDs, schemas and vocabulary values, and the query inside a rule in its own language. Each finding is shown [in place](#findings-in-place), under the line it is about |
 | Coverage | `2` | One row per ATT&CK technique named by a threat, an objective or a rule: how many rules detect it, which rules, and which threats and objectives name it. A technique counts the rules on its sub-techniques, as `opentide info --technique T1059 coverage` does. A row with `0` rules is a gap. `Enter` opens the first rule |
 | Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
 
@@ -37,6 +37,7 @@ Run them with their key, or from the command palette (`ctrl+p`), which lists the
 | `d` | `opentide deploy --dry-run --strategy PREVIEW --all` | The same command: the payloads a PREVIEW deploy of every rule file would send. No platform is called |
 | | `opentide deploy --dry-run --strategy RELEASE --all` | The same command, for a RELEASE run |
 | `r` | Reload the catalogue | Read every object file again, after editing one elsewhere |
+| `n`, `p` | | The selected object's next or previous finding: see [Findings in place](#findings-in-place) |
 | `q` | | Quit. While a command runs, the UI stays up, shows `Waiting for opentide generate to finish…` and closes when it is done: a command cannot be stopped halfway, and it would otherwise go on writing files and printing into the shell after the UI had gone |
 
 A command runs in the background, one at a time, so the UI stays responsive. When it finishes, the catalogue is read again (generate may have rewritten it), and an object with findings shows `✗ 2` (errors) or `! 1` (warnings) after its name. In the Results tab, the query lines of a code frame are coloured as at a terminal.
@@ -47,13 +48,24 @@ Each time the catalogue is read (at start, after `r`, after each command), the T
 
 ```text illustrative
 Language server
-error[kql_unknown_operator]: unknown tabular operator 'wher'
-  ╭─▶ objects/rules/rule-sentinel.yaml:61:9
-  ╰─ help: did you mean 'where'?
+✗ 1  on line 61  · n next finding, p previous
 
 Last validate run
 Not validated yet: press v to run opentide validate.
+
+ 60      query: |
+ 61 ✗      SecurityEvent | wher EventID == 4688
+         ╰─ error[kql_unknown_operator]: unknown tabular operator 'wher' · help: did you mean 'where'?
 ```
+
+### Findings in place
+
+Each finding is shown under the line it is about, with its code, message and help, so you read it without scrolling back to the top of the pane. The line's gutter carries `✗` (error), `!` (warning) or `·` (note), and the finding's span is underlined, with a tint of its severity behind it so the text keeps its colours (a terminal cannot colour an underline apart from its text). A long line wraps inside the source column, and the underline stays on its own characters. A finding with no line (one validate reports by field only) is shown in full in the block above.
+
+- **Mouse:** hover a finding's span for a tooltip: its frame, then what your editor's hover shows there (the field's description, a vocabulary value's meaning, the object a UUID names), from the same engine.
+- **Keyboard:** not every terminal passes mouse events, so `n` and `p` move to the selected object's next and previous finding: the pane scrolls to it, its annotation is marked `▶`, and the status line carries `2/5 error[code]: message · <hover>`.
+
+The span is the range the engine reports: with an engine that puts reference findings on their value ([language-server#215](https://github.com/opentidehq/language-server/issues/215)), a dangling `detection_model` underlines the UUID; with the engine this release ships, the key.
 
 A finding both report (the same code on the same line, such as a TLP value that is not in the vocabulary) is shown and counted once, as validate's. The query findings of validate's `queries` check come from the same engine, so they are shown once, under the language server. Notes (hints) are shown, but are not counted in the tree. [`opentide validate`](./validate.md) stays the authority on whether an object deploys.
 

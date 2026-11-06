@@ -76,6 +76,23 @@ class LanguageServerReport:
     unavailable: str | None = None
     #: What to do about it.
     advice: str | None = None
+    #: The engine's index of the workspace, for :meth:`hover`; ``None`` without the engine.
+    workspace: Any = dataclasses.field(default=None, compare=False, repr=False)
+
+    def hover(self, path: Path | None, text: str, line: int, column: int) -> str | None:
+        """What an editor's hover shows at 1-based *line* and *column* of *path*, as Markdown.
+
+        ``None`` without the engine, or where it has nothing to say. An engine
+        whose binding has no ``hover`` (one older than this opentide) says
+        nothing either: the TUI shows the finding without it.
+        """
+        hover = getattr(self.workspace, "hover", None)
+        if path is None or hover is None:
+            return None
+        try:
+            return hover(str(path), text, line, column)
+        except ValueError:
+            return None
 
     def for_path(self, path: Path | None) -> tuple[Diagnostic, ...]:
         if path is None:
@@ -242,7 +259,7 @@ def language_server_report() -> LanguageServerReport:
             )
     except EngineUnavailableError as exc:
         return LanguageServerReport(unavailable=str(exc), advice=exc.advice)
-    return LanguageServerReport(findings=findings)
+    return LanguageServerReport(findings=findings, workspace=space)
 
 
 def _name(body: Mapping[str, Any], uuid: str) -> str:

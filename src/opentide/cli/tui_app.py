@@ -19,6 +19,7 @@ from rich.cells import set_cell_size
 from rich.console import Console, Group, RenderableType
 from rich.style import Style
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult, SystemCommand
@@ -79,8 +80,15 @@ _TAB_FOCUS = {"catalogue": "#tree", "coverage": "#coverage-table", "results": "#
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
 _FRAME_STYLE = "blue"
 #: How a finding's span is marked in the source pane, as an editor underlines it.
-#: The tokens keep their colours; the line's marker in the gutter says how bad.
+#: Rich cannot colour an underline apart from its text, so the severity is a
+#: tint behind the span: the tokens keep their colours (#215).
 _SPAN_STYLE = {"error": "underline bold", "warning": "underline", "note": "underline"}
+_SPAN_TINT = {"error": "#5a1d1d", "warning": "#4a3f12", "note": "#1f2f4f"}
+#: The gutter mark of a line with a finding, the worst one's.
+_GUTTER_MARK = {"error": "✗", "warning": "!", "note": "·"}
+_SEVERITY_RANK = {"error": 0, "warning": 1, "note": 2}
+#: The key under which a finding span's style carries its index (Textual style ``meta``).
+FINDING_META = "opentide.finding"
 
 
 def pill() -> Text:
@@ -283,6 +291,8 @@ class OpentideTui(App[None]):
         Binding("g", "run('generate')", "Generate"),
         Binding("d", "run('deploy-preview')", "Deploy dry run"),
         Binding("r", "reload", "Reload"),
+        Binding("n", "next_finding", "Next finding"),
+        Binding("p", "previous_finding", "Previous", show=False),
         Binding("1", "show_tab('catalogue')", "Catalogue", show=False),
         Binding("2", "show_tab('coverage')", "Coverage", show=False),
         Binding("3", "show_tab('results')", "Results", show=False),
@@ -307,6 +317,8 @@ class OpentideTui(App[None]):
         self.reload_error: str | None = None
         #: The masthead's right side: workspace name and counts.
         self.summary = Text()
+        #: The finding of the selected object that ``n`` and ``p`` moved to.
+        self.current_finding: int | None = None
         self.register_theme(THEME)
         self.theme = THEME.name
 
@@ -322,7 +334,7 @@ class OpentideTui(App[None]):
                 with VerticalScroll(id="detail"):
                     yield Static("", id="heading")
                     yield Static("", id="diagnostics")
-                    yield Static("", id="source")
+                    yield SourceView("", id="source")
             with TabPane("Coverage", id="coverage"):
                 yield DataTable(id="coverage-table", cursor_type="row", zebra_stripes=True)
             with TabPane("Results", id="results"):
@@ -621,10 +633,12 @@ class OpentideTui(App[None]):
         self._show_detail(event.node.data)
 
     def _show_detail(self, data: Any) -> None:
+        if data != self.selected:
+            self.current_finding = None
         self.selected = data
         heading = self.query_one("#heading", Static)
         found = self.query_one("#diagnostics", Static)
-        source = self.query_one("#source", Static)
+        source = self.query_one("#source", SourceView)
         catalogue = self.catalogue
         if catalogue is None:
             return
@@ -632,7 +646,7 @@ class OpentideTui(App[None]):
             error = catalogue.load_errors[data[1]]
             heading.update(Text(relative(error.path, catalogue.repo), style="bold"))
             found.update(Text.assemble(("error[yaml_parse]:", "bold red"), f" {error.message}"))
-            source.update(_yaml(error.path))
+            source.show(error.path, (), catalogue)
             return
         entry = catalogue.entries.get(data) if isinstance(data, str) else None
         if entry is None:
@@ -645,7 +659,7 @@ class OpentideTui(App[None]):
                 )
             )
             found.update("")
-            source.update("")
+            source.show(None, (), catalogue)
             return
         heading.update(
             Text.assemble(
@@ -659,7 +673,7 @@ class OpentideTui(App[None]):
         )
         live, validated = self.findings(entry)
         found.update(self._diagnostics_view(live, validated, catalogue))
-        source.update(_yaml(entry.path, [*live, *validated]))
+        source.show(entry.path, [*live, *validated], catalogue, self.current_finding)
 
     def _diagnostics_view(
         self, live: list[Diagnostic], validated: list[Diagnostic], catalogue: Catalogue
@@ -674,14 +688,14 @@ class OpentideTui(App[None]):
                 unavailable.append(f" {report.advice}")
             parts.append(unavailable)
         elif live:
-            parts.extend(diagnostic_text(item, catalogue.repo) for item in live)
+            parts.extend(_findings_summary(live, catalogue.repo))
         else:
             parts.append(Text.assemble(("✓", "bold green"), " Nothing to report"))
         parts.append(Text("\nLast validate run", style="bold underline"))
         if not self.validated:
             parts.append(Text("Not validated yet: press v to run opentide validate.", style="dim"))
         elif validated:
-            parts.extend(diagnostic_text(item, catalogue.repo) for item in validated)
+            parts.extend(_findings_summary(validated, catalogue.repo))
         else:
             parts.append(
                 Text.assemble(("✓", "bold green"), " No diagnostics from the last validate run")
@@ -709,6 +723,48 @@ class OpentideTui(App[None]):
                 key=row.technique,
             )
 
+    def action_next_finding(self) -> None:
+        self._move_finding(1)
+
+    def action_previous_finding(self) -> None:
+        self._move_finding(-1)
+
+    def _move_finding(self, step: int) -> None:
+        """Go to the selected object's next (or previous) finding in its source.
+
+        The source scrolls to the finding's line, its annotation is marked, and
+        the status line carries its message and the hover for its span: the
+        keyboard reaches what the mouse's tooltip shows (#215).
+        """
+        source = self.query_one("#source", SourceView)
+        if not source.findings:
+            self._status("No findings on this object")
+            return
+        self.action_show_tab("catalogue")
+        count = len(source.findings)
+        if self.current_finding is None:
+            self.current_finding = 0 if step > 0 else count - 1
+        else:
+            self.current_finding = (self.current_finding + step) % count
+        self._show_detail(self.selected)
+        finding = source.findings[self.current_finding]
+        hover = source.hover_for(self.current_finding)
+        position = f"{self.current_finding + 1}/{count}"
+        said = f"{position} {finding.severity}[{finding.code}]: {finding.message}"
+        if hover:
+            said = f"{said} · {_first_line(hover)}"
+        self._status(said)
+        self.call_after_refresh(self._scroll_to_finding)
+
+    def _scroll_to_finding(self) -> None:
+        source = self.query_one("#source", SourceView)
+        row = source.marked_row()
+        if row is None:
+            return
+        detail = self.query_one("#detail", VerticalScroll)
+        top = source.virtual_region.y + row
+        detail.scroll_to(y=max(top - 3, 0), animate=False)
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Enter on a technique opens the first rule that detects it."""
         if self.catalogue is None:
@@ -720,40 +776,241 @@ class OpentideTui(App[None]):
                 return
 
 
-def _yaml(path: Any, diagnostics: Iterable[Diagnostic] = ()) -> RenderableType:
-    """The object's file with line numbers, coloured as the editor colours it.
+def _first_line(markdown: str) -> str:
+    """The first line of hover Markdown with its emphasis marks dropped, for the status line."""
+    line = next((part for part in markdown.splitlines() if part.strip()), "")
+    return line.replace("**", "").replace("`", "").strip()
 
-    The language server's tokens colour the YAML and the queries inside it.
-    Lines with a finding are marked, and a finding with a column is underlined
-    where the editor would underline it. Without the engine the file is
-    coloured as plain YAML.
+
+def _findings_summary(findings: list[Diagnostic], root: Path) -> list[RenderableType]:
+    """``✗ 1  ! 2`` and how to reach them; a finding with no line is shown in full.
+
+    A finding with a line is shown in the source, under the line it is about
+    (#215), so only its count is here.
+    """
+    placed = [item for item in findings if item.line is not None]
+    loose = [item for item in findings if item.line is None]
+    parts: list[RenderableType] = []
+    if placed:
+        summary = Text()
+        errors = sum(1 for item in placed if item.severity == "error")
+        warnings = sum(1 for item in placed if item.severity == "warning")
+        notes = len(placed) - errors - warnings
+        for count, mark, style in (
+            (errors, "✗", "bold red"),
+            (warnings, "!", "bold yellow"),
+            (notes, "·", "bold blue"),
+        ):
+            if count:
+                summary.append(f"{mark} {count}  ", style=style)
+        lines = sorted({item.line for item in placed if item.line is not None})
+        where = ", ".join(str(line) for line in lines[:6]) + (" …" if len(lines) > 6 else "")
+        summary.append(f"on line{'s' if len(lines) > 1 else ''} {where}", style="dim")
+        summary.append("  · n next finding, p previous", style="dim")
+        parts.append(summary)
+    parts.extend(diagnostic_text(item, root) for item in loose)
+    return parts
+
+
+def source_view(
+    path: Any,
+    diagnostics: Iterable[Diagnostic] = (),
+    current: int | None = None,
+) -> tuple[RenderableType, list[Diagnostic]]:
+    """The object's file with line numbers, coloured as the editor colours it,
+    each finding in place: and the findings, in the order the view numbers them.
+
+    The language server's tokens colour the YAML and the queries inside it;
+    without the engine the file is coloured as plain YAML. A finding with a
+    column is underlined on its span, with a severity tint behind it, and its
+    style carries ``meta`` naming it, which the source pane's tooltip reads.
+    Under each line with findings, an annotation gives each one's code,
+    message and help, so a finding is read at its own line (#215). The
+    finding *current* (``n``/``p``) is marked ``▶``.
+
+    A line is one cell of a grid, so a long line wraps inside its cell and an
+    underline stays on its own characters.
     """
     if path is None:
-        return Text("The index does not record this object's file.", style="dim")
+        return Text("The index does not record this object's file.", style="dim"), []
     try:
         code = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as exc:
-        return Text(f"Cannot read {path}: {exc}", style="red")
-    diagnostics = list(diagnostics)
-    tokens = _tokens(path, code)
-    syntax = Syntax(
-        code,
-        "yaml" if tokens is None else "text",
-        line_numbers=True,
-        highlight_lines={item.line for item in diagnostics if item.line},
-        background_color="default",
-        word_wrap=True,
+        return Text(f"Cannot read {path}: {exc}", style="red"), []
+    findings = sorted(
+        (item for item in diagnostics if item.line is not None),
+        key=lambda item: (item.line or 0, item.column or 0, _SEVERITY_RANK.get(item.severity, 3)),
     )
-    for line, column, end_line, end_column, style in tokens or ():
-        syntax.stylize_range(style, (line, column - 1), (end_line, end_column - 1))
-    for item in diagnostics:
-        if item.line is not None and item.column is not None and item.end_column is not None:
-            syntax.stylize_range(
-                _SPAN_STYLE.get(item.severity, "underline"),
-                (item.line, item.column - 1),
-                (item.line, item.end_column - 1),
+    text = _highlighted(path, code)
+    starts = _line_starts(code)
+    for index, item in enumerate(findings):
+        span = _span(code, starts, item)
+        if span is None:
+            continue
+        style = Style.parse(_SPAN_STYLE.get(item.severity, "underline")) + Style(
+            bgcolor=_SPAN_TINT.get(item.severity), meta={FINDING_META: index}
+        )
+        text.stylize(style, *span)
+    lines = text.split("\n", allow_blank=True)
+    if code.endswith("\n") and lines and not lines[-1].plain:
+        lines = lines[:-1]
+    by_line: dict[int, list[int]] = {}
+    for index, item in enumerate(findings):
+        by_line.setdefault(item.line or 0, []).append(index)
+    grid = Table.grid(padding=(0, 1))
+    grid.add_column(justify="right", no_wrap=True, style="dim")
+    grid.add_column(width=1, no_wrap=True)
+    grid.add_column(ratio=1, overflow="fold")
+    for number, line in enumerate(lines, start=1):
+        marked = by_line.get(number, [])
+        mark = Text()
+        if marked:
+            worst = min(
+                (findings[i] for i in marked), key=lambda d: _SEVERITY_RANK.get(d.severity, 3)
             )
-    return syntax
+            mark = Text(
+                _GUTTER_MARK.get(worst.severity, "·"),
+                style=_SEVERITY_STYLE.get(worst.severity, "bold"),
+            )
+        grid.add_row(Text(str(number)), mark, line)
+        for index in marked:
+            grid.add_row(Text(""), Text(""), _annotation(findings[index], index == current))
+    return grid, findings
+
+
+def _annotation(item: Diagnostic, current: bool) -> Text:
+    """``╰─ error[code]: message · help: …`` under the line a finding is about."""
+    text = Text()
+    text.append("▶ " if current else "╰─ ", style="bold reverse" if current else _FRAME_STYLE)
+    text.append(f"{item.severity}[{item.code}]", style=_SEVERITY_STYLE.get(item.severity, "bold"))
+    text.append(f": {item.message}")
+    help_text = item.help_text()
+    if help_text:
+        text.append(" · ", style="dim")
+        text.append("help:", style="bold cyan")
+        text.append(f" {help_text}")
+    return text
+
+
+def _line_starts(code: str) -> list[int]:
+    """The offset in *code* where each line starts."""
+    starts = [0]
+    starts.extend(index + 1 for index, char in enumerate(code) if char == "\n")
+    return starts
+
+
+def _span(code: str, starts: list[int], item: Diagnostic) -> tuple[int, int] | None:
+    """*item*'s span as offsets into *code*, on its line; ``None`` without a column."""
+    if item.line is None or item.column is None or not 0 < item.line <= len(starts):
+        return None
+    start = starts[item.line - 1]
+    line_end = starts[item.line] - 1 if item.line < len(starts) else len(code)
+    begin = min(start + item.column - 1, line_end)
+    end = line_end if item.end_column is None else min(start + item.end_column - 1, line_end)
+    return (begin, max(end, begin + 1)) if begin < line_end else None
+
+
+def _highlighted(path: Path, code: str) -> Text:
+    """*code* coloured by the engine's tokens, else as plain YAML."""
+    tokens = _tokens(path, code)
+    if tokens is None:
+        return Syntax(code, "yaml", background_color="default").highlight(code).copy()
+    text = Text(code)
+    starts = _line_starts(code)
+    for line, column, end_line, end_column, style in tokens:
+        if 0 < line <= len(starts) and 0 < end_line <= len(starts):
+            text.stylize(
+                style, starts[line - 1] + column - 1, starts[end_line - 1] + end_column - 1
+            )
+    return text
+
+
+class SourceView(Static):
+    """The source pane: the file with its findings in place, and a tooltip on each span.
+
+    Hovering a finding's span shows its frame and what an editor's hover
+    shows there (the field's description, the object a UUID names). Not
+    every terminal reports the mouse: ``n`` and ``p`` reach the same
+    content from the keyboard.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.findings: list[Diagnostic] = []
+        self.path: Path | None = None
+        self.code = ""
+        self.catalogue: Catalogue | None = None
+        self.current: int | None = None
+        self._tooltip_for: int | None = None
+        self._renderable: RenderableType = ""
+
+    def show(
+        self,
+        path: Path | None,
+        diagnostics: Iterable[Diagnostic],
+        catalogue: Catalogue,
+        current: int | None = None,
+    ) -> None:
+        self.path = path
+        self.catalogue = catalogue
+        self.current = current
+        try:
+            self.code = path.read_text(encoding="utf-8-sig") if path is not None else ""
+        except (OSError, UnicodeDecodeError):
+            self.code = ""
+        if path is None and not list(diagnostics):
+            self.findings = []
+            self.update("")
+            return
+        self._renderable, self.findings = source_view(path, diagnostics, current)
+        self._tooltip_for = None
+        self.tooltip = None
+        self.update(self._renderable)
+
+    def hover_for(self, index: int) -> str | None:
+        """The engine's hover at the start of finding *index*'s span."""
+        if self.catalogue is None or not 0 <= index < len(self.findings):
+            return None
+        item = self.findings[index]
+        if item.line is None:
+            return None
+        return self.catalogue.language_server.hover(
+            self.path, self.code, item.line, item.column or 1
+        )
+
+    def tooltip_text(self, index: int) -> Text:
+        """The tooltip of finding *index*: its frame, then the hover at its span."""
+        item = self.findings[index]
+        root = self.catalogue.repo if self.catalogue is not None else Path.cwd()
+        text = diagnostic_text(item, root)
+        hover = self.hover_for(index)
+        if hover:
+            text.append("\n\n")
+            text.append(hover.replace("**", "").replace("`", ""), style="dim")
+        return text
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        index = event.style.meta.get(FINDING_META) if event.style else None
+        if index == self._tooltip_for:
+            return
+        self._tooltip_for = index
+        if isinstance(index, int) and 0 <= index < len(self.findings):
+            self.tooltip = self.tooltip_text(index)
+        else:
+            self.tooltip = None
+
+    def marked_row(self) -> int | None:
+        """The rendered row of the current finding's annotation, for scrolling to it."""
+        if self.current is None:
+            return None
+        width = max(self.content_region.width, 20)
+        lines = self.app.console.render_lines(
+            self._renderable, self.app.console.options.update_width(width), pad=False
+        )
+        for row, segments in enumerate(lines):
+            if "▶ " in "".join(segment.text for segment in segments):
+                return row
+        return None
 
 
 def _tokens(path: Path, code: str) -> list[tuple[int, int, int, int, str]] | None:
