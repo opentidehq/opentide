@@ -109,7 +109,7 @@ Suggestions the KQL, SPL and Tide engines attach:
 | `spl_search_operator` | the operator | `=`, `!=`, `>=` or `<=` ([spl/search-syntax.md](spl/search-syntax.md)) |
 | `spl_command_without_pipe` | the command word | `\| {command}` |
 | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` | the data model reference | the corrected name ([spl/cim-fields.md](spl/cim-fields.md)) |
-| `invalid_ref` on `detection_model` | the `detection_model` key | UUID of the first indexed objective, when one exists |
+| `invalid_ref` on `detection_model` | the `detection_model` key | the objective or signal UUID within two edits of the value, ignoring case (a mistyped or swapped character); none when nothing is that close, so an unrelated objective is never offered |
 | `schema_validation` (string where a list is required) | the field key | `- {text}` |
 | `filename_slug` | the first `name:` key | `{slug}.yaml` |
 

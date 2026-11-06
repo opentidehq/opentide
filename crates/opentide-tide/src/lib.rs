@@ -292,6 +292,55 @@ pub struct DocumentSymbol {
     pub detail: Option<String>,
 }
 
+/// Whether an [`ObjectRef`] field path is a signal's own UUID
+/// (`objective.signals.<i>.uuid`): what a rule's `detection_model` names
+/// when it implements one signal of an objective.
+fn is_signal_uuid_path(field_path: &str) -> bool {
+    field_path
+        .strip_prefix("objective.signals.")
+        .and_then(|rest| rest.strip_suffix(".uuid"))
+        .is_some_and(|index| !index.is_empty() && index.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The UUIDs a rule's `detection_model` may name: each indexed objective's,
+/// and each signal an indexed objective declares (#213). Signals live inside
+/// their objective and are not workspace objects, so they come from the
+/// objective's refs, as opentide validates the field against objectives and
+/// signals alike.
+fn detection_model_targets(workspace: &[IndexedObject]) -> impl Iterator<Item = &str> {
+    workspace
+        .iter()
+        .filter(|o| o.object_type == "objective")
+        .flat_map(|o| {
+            std::iter::once(o.uuid.as_str()).chain(
+                o.refs
+                    .iter()
+                    .filter(|r| is_signal_uuid_path(&r.field_path))
+                    .map(|r| r.uuid.as_str()),
+            )
+        })
+}
+
+/// The objective or signal UUID a dangling `detection_model` most plausibly
+/// meant: one within two edits of it, ignoring case (a mistyped or swapped
+/// character). `None` when nothing is that close, rather than an unrelated
+/// objective that would re-parent the rule if applied (#213).
+fn closest_detection_model(workspace: &[IndexedObject], value: &str) -> Option<String> {
+    const MAX_EDITS: usize = 2;
+    let needle = value.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    let mut best: Option<(usize, &str)> = None;
+    for target in detection_model_targets(workspace) {
+        let distance = vocabs::levenshtein(&target.to_ascii_lowercase(), &needle);
+        if distance <= MAX_EDITS && best.is_none_or(|(d, _)| distance < d) {
+            best = Some((distance, target));
+        }
+    }
+    best.map(|(_, target)| target.to_string())
+}
+
 /// Spans and ranges are in the text after a leading byte-order mark
 /// ([`opentide_core::strip_bom`]).
 pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
@@ -501,19 +550,13 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     // invalid_ref
     if object_type == "rule" {
         if let Some(parent) = &object.detection_model {
-            if !input
-                .workspace
-                .iter()
-                .any(|o| o.object_type == "objective" && o.uuid == *parent)
-            {
-                let suggestion = input
-                    .workspace
-                    .iter()
-                    .find(|o| o.object_type == "objective")
-                    .map(|o| o.uuid.clone());
+            if !detection_model_targets(input.workspace).any(|target| target == parent) {
+                let suggestion = closest_detection_model(input.workspace, parent);
                 let mut d = Diagnostic::error(
                     codes::INVALID_REF,
-                    format!("invalid_ref: detection_model {parent} is not an indexed objective"),
+                    format!(
+                        "invalid_ref: detection_model {parent} is not an indexed objective or signal"
+                    ),
                     key_range(input.source, "detection_model"),
                 )
                 .with_field_path(vec!["detection_model".into()]);
@@ -2690,6 +2733,93 @@ threat:
             "{:?}",
             r.diagnostics
         );
+    }
+
+    /// The rule fixture with its `detection_model` naming `target`.
+    fn rule_naming(target: &str) -> String {
+        RULE.replace("00000000-0000-4000-8002-000000000001", target)
+    }
+
+    fn invalid_refs(source: &str, workspace: &[IndexedObject]) -> Vec<Diagnostic> {
+        analyze(AnalyzeInput {
+            path: "objects/rules/sentinel-kql-rule.yaml",
+            source,
+            workspace,
+            elastic_tenants: &[],
+        })
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.code == codes::INVALID_REF)
+        .collect()
+    }
+
+    fn signals_workspace() -> Vec<IndexedObject> {
+        vec![index_object("objects/objectives/obj.yaml", OBJECTIVE_SIGNALS).expect("indexed")]
+    }
+
+    #[test]
+    fn detection_model_naming_an_objective_is_valid() {
+        let found = invalid_refs(
+            &rule_naming("00000000-0000-4000-8002-000000000001"),
+            &signals_workspace(),
+        );
+        assert!(found.is_empty(), "{found:?}");
+    }
+
+    #[test]
+    fn detection_model_naming_a_signal_is_valid() {
+        // #213: a signal lives inside its objective; opentide accepts its UUID.
+        for signal in [
+            "00000000-0000-4000-8099-000000000001",
+            "00000000-0000-4000-8099-000000000002",
+        ] {
+            let found = invalid_refs(&rule_naming(signal), &signals_workspace());
+            assert!(found.is_empty(), "{signal}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn detection_model_naming_nothing_is_invalid_with_no_unrelated_suggestion() {
+        let found = invalid_refs(
+            &rule_naming("5a1e4b8c-1d2f-4a3b-9c4d-0e1f2a3b4c5d"),
+            &signals_workspace(),
+        );
+        let [d] = found.as_slice() else {
+            panic!("{found:?}")
+        };
+        assert_eq!(
+            d.message,
+            "invalid_ref: detection_model 5a1e4b8c-1d2f-4a3b-9c4d-0e1f2a3b4c5d is not an indexed objective or signal"
+        );
+        assert_eq!(d.severity, opentide_core::Severity::Error);
+        // An objective about something else is not offered: applying it would
+        // re-parent the rule.
+        assert_eq!(d.suggestion, None);
+    }
+
+    #[test]
+    fn detection_model_one_typo_from_a_signal_suggests_it() {
+        let found = invalid_refs(
+            &rule_naming("00000000-0000-4000-8099-00000000002"),
+            &signals_workspace(),
+        );
+        let [d] = found.as_slice() else {
+            panic!("{found:?}")
+        };
+        assert_eq!(
+            d.suggestion.as_deref(),
+            Some("00000000-0000-4000-8099-000000000002")
+        );
+    }
+
+    #[test]
+    fn signal_uuid_paths() {
+        assert!(is_signal_uuid_path("objective.signals.0.uuid"));
+        assert!(is_signal_uuid_path("objective.signals.12.uuid"));
+        assert!(!is_signal_uuid_path("objective.signals.0.parent"));
+        assert!(!is_signal_uuid_path("objective.signals..uuid"));
+        assert!(!is_signal_uuid_path("objective.threats.0"));
+        assert!(!is_signal_uuid_path("detection_model"));
     }
 
     #[test]

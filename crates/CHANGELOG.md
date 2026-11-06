@@ -23,6 +23,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - An object supplied with no `uri`, or outside every folder, is still every root's
   - A root's `.opentide/configurations/visibility.toml` among the supplied documents declares its datasets, in place of the `visibility` the host supplies for every root
 
+### Fixed
+
+- **A `detection_model` naming a signal is not an `invalid_ref`.** A rule may implement a signal an indexed objective declares, as `opentide validate` accepts; the message says `is not an indexed objective or signal`, and the suggestion is a UUID within two edits of the value, never the first indexed objective ([#213](https://github.com/opentidehq/language-server/issues/213)).
+
 ## [0.10.0] - 2026-11-04
 
 Editors get the workspace index for their catalogue, graph and search views, following unsaved edits on the desktop and in the browser, and placeholder queries from `opentide new` are no longer reported as errors.
