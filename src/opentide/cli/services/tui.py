@@ -19,6 +19,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
 from opentide.cli.services.chains_view import ChainEdge, chain_edges
+from opentide.cli.services.configuration_view import ConfigurationView
+from opentide.cli.services.object_view import LinkTarget, ObjectView, build_object_view
+from opentide.cli.services.visibility import VisibilityReport
 from opentide.cli.ui.contract import Failure
 
 if TYPE_CHECKING:
@@ -83,6 +86,23 @@ class LanguageServerReport:
     unavailable: str | None = None
     #: What to do about it.
     advice: str | None = None
+    #: The engine's index of the workspace, for :meth:`hover`; ``None`` without the engine.
+    workspace: Any = dataclasses.field(default=None, compare=False, repr=False)
+
+    def hover(self, path: Path | None, text: str, line: int, column: int) -> str | None:
+        """What an editor's hover shows at 1-based *line* and *column* of *path*, as Markdown.
+
+        ``None`` without the engine, or where it has nothing to say. An engine
+        whose binding has no ``hover`` (one older than this opentide) says
+        nothing either: the TUI shows the finding without it.
+        """
+        hover = getattr(self.workspace, "hover", None)
+        if path is None or hover is None:
+            return None
+        try:
+            return hover(str(path), text, line, column)
+        except ValueError:
+            return None
 
     def for_path(self, path: Path | None) -> tuple[Diagnostic, ...]:
         if path is None:
@@ -102,6 +122,23 @@ class Catalogue:
     coverage: tuple[TechniqueCoverage, ...] = ()
     load_errors: tuple[LoadError, ...] = ()
     language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
+    #: The log sources ``visibility.toml`` declares and what uses them (the Visibility tab).
+    visibility: VisibilityReport | None = None
+    #: Each object's body as the registry loaded it, for the object view.
+    bodies: Mapping[str, Mapping[str, Any]] = dataclasses.field(default_factory=dict)
+    #: What each UUID a reference can name is: the objects, and every signal.
+    links: Mapping[str, LinkTarget] = dataclasses.field(default_factory=dict)
+
+    def object_view(self, uuid: str) -> ObjectView | None:
+        """The page :mod:`opentide.cli.tui_app` shows for *uuid* by default (#776)."""
+        entry = self.entries.get(uuid)
+        body = self.bodies.get(uuid)
+        if entry is None or body is None:
+            return None
+        return build_object_view(body, entry.kind, self.links)
+
+    #: The configuration files, read for the Configuration tab (no credential value in it).
+    configuration: ConfigurationView | None = None
     #: Every threat chaining link, each once (the Chains tab).
     chains: tuple[ChainEdge, ...] = ()
 
@@ -181,6 +218,20 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
             )
         )
 
+    from opentide.cli.services.object_view import catalogue_links, field_nodes
+    from opentide.core.object_fields import as_body
+
+    # The object view reads the field catalogue: build it here, off the UI thread.
+    field_nodes()
+    bodies = {
+        uuid: as_body(body)
+        for family, _kind in _FAMILIES
+        for uuid, body in families[family].items()
+    }
+    links = catalogue_links(
+        families, {uuid: (entry.name, entry.kind) for uuid, entry in entries.items()}
+    )
+
     load_errors = tuple(
         LoadError(
             path=Path(entry["path"]) if entry.get("path") else None,
@@ -194,8 +245,34 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         coverage=tuple(coverage),
         load_errors=load_errors,
         language_server=_language_server_report(),
+        visibility=_visibility_report(),
+        bodies=bodies,
+        links=links,
+        configuration=_configuration_view(families["rules"]),
         chains=chain_edges(families["threats"]),
     )
+
+
+def _visibility_report() -> VisibilityReport | None:
+    """:func:`load_visibility`, or ``None`` when it fails: the other tabs do not depend on it."""
+    from opentide.cli.services.visibility import load_visibility
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        return load_visibility(discover_workspace())
+    except Exception as exc:
+        return VisibilityReport(present=True, problem=f"{type(exc).__name__}: {exc}")
+
+
+def _configuration_view(rules: Mapping[str, Any]) -> ConfigurationView:
+    """:func:`load_configuration_view`, or why it failed: the other tabs do not depend on it."""
+    from opentide.cli.services.configuration_view import load_configuration_view
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        return load_configuration_view(discover_workspace(), rules)
+    except Exception as exc:
+        return ConfigurationView(problem=f"{type(exc).__name__}: {exc}")
 
 
 def _language_server_report() -> LanguageServerReport:
@@ -258,7 +335,7 @@ def language_server_report() -> LanguageServerReport:
             )
     except EngineUnavailableError as exc:
         return LanguageServerReport(unavailable=str(exc), advice=exc.advice)
-    return LanguageServerReport(findings=findings)
+    return LanguageServerReport(findings=findings, workspace=space)
 
 
 def _name(body: Mapping[str, Any], uuid: str) -> str:
