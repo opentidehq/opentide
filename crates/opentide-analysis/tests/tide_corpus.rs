@@ -100,7 +100,7 @@ fn splunk_rule_injects_spl_and_tokenizes_authored_text() {
 }
 
 #[test]
-fn crowdstrike_is_unsupported_never_faked() {
+fn crowdstrike_rule_is_checked_as_cql() {
     let host = load_workspace("testdata/workspaces/tide_corpus");
     let (uri, text) = host
         .files
@@ -116,12 +116,17 @@ fn crowdstrike_is_unsupported_never_faked() {
             text,
         },
     );
+    let cql: Vec<_> = r
+        .diagnostics
+        .iter()
+        .filter(|d| d.code.starts_with("cql_"))
+        .collect();
+    assert!(cql.is_empty(), "{cql:?}");
+    // The query is highlighted as CQL: `groupBy` is a catalogued function.
     assert!(
-        r.diagnostics
-            .iter()
-            .any(|d| d.code == "crowdstrike_unsupported"),
+        r.tokens.iter().any(|t| t.capture == "function.builtin"),
         "{:?}",
-        r.diagnostics
+        r.tokens
     );
 }
 

@@ -6501,6 +6501,7 @@ multi = true
 query = false
 default = "number"
 values = ["hex", "number", "string"]
+deprecated_values = ["any"]
 
 [[functions]]
 name = "split"

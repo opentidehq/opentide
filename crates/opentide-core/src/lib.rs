@@ -608,6 +608,7 @@ pub mod codes {
     pub const CQL_STRING_ESCAPE: &str = "cql_string_escape";
     pub const CQL_FREE_TEXT_AFTER_AGGREGATE: &str = "cql_free_text_after_aggregate";
     pub const CQL_ASSIGNMENT_AS: &str = "cql_assignment_as";
+    pub const CQL_LINK_OUTSIDE_CORRELATE: &str = "cql_link_outside_correlate";
     pub const CQL_UNKNOWN_EVENT: &str = "cql_unknown_event";
     pub const CQL_CORRELATE_AGGREGATE: &str = "cql_correlate_aggregate";
 
@@ -757,6 +758,7 @@ pub mod codes {
         CQL_STRING_ESCAPE,
         CQL_FREE_TEXT_AFTER_AGGREGATE,
         CQL_ASSIGNMENT_AS,
+        CQL_LINK_OUTSIDE_CORRELATE,
         CQL_UNKNOWN_EVENT,
         CQL_CORRELATE_AGGREGATE,
     ];
@@ -1090,6 +1092,9 @@ pub mod codes {
             }
             CQL_ASSIGNMENT_AS => {
                 "A CQL assignment names the output field and the function's as= parameter names it again."
+            }
+            CQL_LINK_OUTSIDE_CORRELATE => {
+                "The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields."
             }
             CQL_UNKNOWN_EVENT => {
                 "The #event_simpleName value is not a Falcon sensor event the engine knows."

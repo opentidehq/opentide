@@ -97,7 +97,8 @@ pub struct Parameter {
 impl Parameter {
     /// Whether `name` (case-insensitive) names this parameter or an alias.
     pub fn answers_to(&self, name: &str) -> bool {
-        self.name.eq_ignore_ascii_case(name) || self.aliases.iter().any(|a| a.eq_ignore_ascii_case(name))
+        self.name.eq_ignore_ascii_case(name)
+            || self.aliases.iter().any(|a| a.eq_ignore_ascii_case(name))
     }
 }
 
@@ -120,7 +121,13 @@ impl Function {
             .parameters
             .iter()
             .filter(|p| !p.deprecated)
-            .map(|p| if p.required { p.name.clone() } else { format!("[{}]", p.name) })
+            .map(|p| {
+                if p.required {
+                    p.name.clone()
+                } else {
+                    format!("[{}]", p.name)
+                }
+            })
             .collect();
         format!("{}({})", self.name, params.join(", "))
     }
@@ -206,10 +213,8 @@ impl Catalog {
         CATALOG.get_or_init(|| {
             let functions: FunctionsFile =
                 toml::from_str(FUNCTIONS_TOML).expect("catalogs/cql/functions.toml");
-            let events: EventsFile =
-                toml::from_str(EVENTS_TOML).expect("catalogs/cql/events.toml");
-            let fields: FieldsFile =
-                toml::from_str(FIELDS_TOML).expect("catalogs/cql/fields.toml");
+            let events: EventsFile = toml::from_str(EVENTS_TOML).expect("catalogs/cql/events.toml");
+            let fields: FieldsFile = toml::from_str(FIELDS_TOML).expect("catalogs/cql/fields.toml");
             let mut by_function = HashMap::new();
             for (i, f) in functions.functions.iter().enumerate() {
                 by_function.insert(f.name.to_ascii_lowercase(), i);
@@ -279,7 +284,11 @@ impl Catalog {
 
     /// An event whose name differs only in case, else one within two edits.
     pub fn suggest_event(&self, name: &str) -> Option<&str> {
-        if let Some(e) = self.events.iter().find(|e| e.name.eq_ignore_ascii_case(name)) {
+        if let Some(e) = self
+            .events
+            .iter()
+            .find(|e| e.name.eq_ignore_ascii_case(name))
+        {
             return Some(e.name.as_str());
         }
         closest(self.events.iter().map(|e| e.name.as_str()), name, 2)
@@ -329,7 +338,10 @@ mod tests {
         let g = c.function("groupby").expect("case-insensitive lookup");
         assert_eq!(g.name, "groupBy");
         assert!(g.aggregate);
-        assert_eq!(g.unnamed_parameter().map(|p| p.name.as_str()), Some("field"));
+        assert_eq!(
+            g.unnamed_parameter().map(|p| p.name.as_str()),
+            Some("field")
+        );
         assert!(c.function("array:contains").is_some());
         assert!(c.function("rdns").is_some_and(|f| f.removed));
         assert!(c.event("ProcessRollup2").is_some());

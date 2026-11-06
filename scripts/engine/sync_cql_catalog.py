@@ -599,6 +599,10 @@ PARAM_FIXES: dict[tuple[str, str], dict[str, Any]] = {
     ("formatDuration", "from"): {"type": "enum", "values_open": False},
     # The page gives now()'s output name `_now` as the default output array.
     ("matchAsArray", "asArray"): {"default": None},
+    # The page no longer lists `any`, but CrowdStrike's own content still sorts
+    # with it (logscale-community-content: the PAN-Firewall summary dashboard,
+    # Helpful-CQL-Queries "Decode Base64"). Accepted, not offered.
+    ("sort", "type"): {"deprecated_values": ["any"]},
 }
 FUNCTION_FIXES: dict[str, dict[str, Any]] = {
     # The page lists every context, but says it "can only be used within the
