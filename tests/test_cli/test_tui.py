@@ -1150,3 +1150,123 @@ def test_a_long_line_wraps_with_the_underline_on_its_own_text(tmp_path: Path) ->
     # The line wrapped, and the annotation follows it.
     assert rendered.count(word) == 12
     assert rendered.index("BAD") < rendered.index("error[vocab_unknown]")
+
+
+# -- the object view (#776) ---------------------------------------------------
+
+
+def test_the_object_view_reads_the_rule_by_its_schema(tutorial_repo: Path) -> None:
+    from opentide.cli.services.object_view import field_nodes
+
+    catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+    view = catalogue.object_view(RULE)
+    assert view is not None
+    assert view.name == "Sentinel KQL Rule"
+    assert view.header["schema"] == "rule::1.0"
+    assert view.header["tlp"] == "clear"
+    assert "disclosure" in view.tlp_meaning
+    titles = [section.title for section in view.sections]
+    assert titles[0] == "Overview"
+    rows = {row.path: row for section in view.sections for row in section.rows}
+    # A UUID reads as the name of what it names, and can be followed.
+    model = rows["detection_model"]
+    [target] = model.links
+    assert target is not None
+    assert (target.name, target.kind, target.opens) == (
+        "Credential Access Objective",
+        "objective",
+        OBJECTIVE,
+    )
+    assert view.links == (target,)
+    # A vocabulary value carries what it means; a severity is a badge.
+    severity = rows["severity"]
+    assert severity.severity and severity.meanings[0]
+    # The unused optional fields of rule::1.0: none set, none required, each
+    # under a parent the rule sets (or top-level), with its description.
+    from opentide.cli.services.object_view import _present
+
+    nodes = field_nodes()["rule::1.0"]
+    present = _present(catalogue.bodies[RULE])
+    assert view.unset
+    for item in view.unset:
+        node = nodes[item.path]
+        assert not node["required"], item.path
+        assert item.path not in present, item.path
+        parent = item.path.rsplit(".", 1)[0] if "." in item.path else ""
+        assert parent == "" or parent in present, item.path
+    assert "metadata.reviewed" not in {item.path for item in view.unset}
+
+
+def test_unset_fields_follow_the_objects_revision() -> None:
+    from opentide.cli.services.object_view import build_object_view
+
+    body = {
+        "name": "Rule",
+        "metadata": {"uuid": RULE, "schema": "rule::1.1", "version": 1, "tlp": "clear"},
+        "description": "d",
+    }
+    newer = {item.path for item in build_object_view(body, "rule", {}).unset}
+    older = {
+        item.path
+        for item in build_object_view(
+            {**body, "metadata": {**body["metadata"], "schema": "rule::1.0"}}, "rule", {}
+        ).unset
+    }
+    # rule::1.1 adds metadata.reviewed; rule::1.0 does not define it.
+    assert "metadata.reviewed" in newer
+    assert "metadata.reviewed" not in older
+    unknown = build_object_view(
+        {**body, "metadata": {**body["metadata"], "schema": "rule::9.9"}}, "rule", {}
+    )
+    assert unknown.unknown_schema and unknown.unset == ()
+
+
+def test_the_page_is_the_default_and_y_shows_the_file(tutorial_repo: Path) -> None:
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        page = app.query_one("#object", Static)
+        source = app.query_one("#source", Static)
+        assert page.display and not source.display
+        shown = _text(app, "#object")
+        assert "TLP:CLEAR" in shown
+        assert "Overview" in shown
+        assert "→ Credential Access Objective  objective" in shown
+        # The query has its own panel, named by platform and language.
+        assert "sentinel  kql" in shown
+        unset = app.query_one("#unset", tui_app.Collapsible)
+        assert unset.display and unset.collapsed
+        assert unset.title.startswith("Not set (")
+        assert "Not set (0)" not in unset.title
+        await pilot.press("y")
+        assert source.display and not page.display
+        assert "detection_model:" in _text(app, "#source")
+        await pilot.press("y")
+        assert page.display
+
+    _drive(tutorial_repo, script)
+
+
+def test_f_follows_a_reference_and_n_opens_the_file_at_a_finding(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        # The finding is marked under its field on the page too.
+        assert "error[kql_unknown_operator]" in _text(app, "#object")
+        await pilot.press("n")
+        await pilot.pause()
+        assert app.query_one("#source", Static).display
+        assert "▶ error[kql_unknown_operator]" in _text(app, "#source")
+        # Another object opens on its page again, not on the file `n` showed.
+        await pilot.press("up")
+        await pilot.pause()
+        assert not app.raw
+        assert app.query_one("#object", Static).display
+        await pilot.press("down", "f")
+        await pilot.pause()
+        assert app.selected == OBJECTIVE
+        assert "Opened objective Credential Access Objective" in _text(app, "#status")
+
+    _drive(tutorial_repo, script)

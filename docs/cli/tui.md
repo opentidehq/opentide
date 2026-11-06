@@ -18,7 +18,7 @@ It reads the same registry as every other command and runs the same service func
 
 | Tab | Key | What it shows |
 |-----|-----|---------------|
-| Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right counts what the [language server](#the-language-server) reports for the selected object and what the last validate run found (`✗ 1  ! 2  on lines 8, 28`), then shows its file with line numbers, coloured by the language server: Tide keys, UUIDs, schemas and vocabulary values, and the query inside a rule in its own language. Each finding is shown [in place](#findings-in-place), under the line it is about |
+| Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right counts what the [language server](#the-language-server) reports for the selected object and what the last validate run found (`✗ 1  ! 2  on lines 8, 28`), then shows the object as a [page](#the-object-page). `y` shows its file instead, with line numbers, coloured by the language server: Tide keys, UUIDs, schemas and vocabulary values, and the query inside a rule in its own language. Each finding is shown [in place](#findings-in-place), under the line it is about |
 | Coverage | `2` | One row per ATT&CK technique named by a threat, an objective or a rule: how many rules detect it and how (`13  2 own · 11 inherited`), which rules, and which threats and objectives name it. A rule covers a technique it lists in its own `techniques`, and one it inherits from its objective (directly or through a signal) or that objective's threats, as `opentide info coverage --technique T1059` and `info catalog` count it. A technique counts the rules on its sub-techniques. A row with `0` rules is a gap: no rule lists or inherits it. `Enter` opens the first rule, one that lists the technique when there is one |
 | Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
 
@@ -37,7 +37,9 @@ Run them with their key, or from the command palette (`ctrl+p`), which lists the
 | `d` | `opentide deploy --dry-run --strategy PREVIEW --all` | The same command: the payloads a PREVIEW deploy of every rule file would send. No platform is called |
 | | `opentide deploy --dry-run --strategy RELEASE --all` | The same command, for a RELEASE run |
 | `r` | Reload the catalogue | Read every object file again, after editing one elsewhere |
-| `n`, `p` | | The selected object's next or previous finding: see [Findings in place](#findings-in-place) |
+| `y` | | Switch the detail pane between the object's [page](#the-object-page) and its file |
+| `f` | | Open the next object or signal the selected object references (its `detection_model`, threats, chained threats) |
+| `n`, `p` | | The selected object's next or previous finding, in its file: see [Findings in place](#findings-in-place) |
 | `q` | | Quit. While a command runs, the UI stays up, shows `Waiting for opentide generate to finish…` and closes when it is done: a command cannot be stopped halfway, and it would otherwise go on writing files and printing into the shell after the UI had gone |
 
 A command runs in the background, one at a time, so the UI stays responsive. When it finishes, the catalogue is read again (generate may have rewritten it), and an object with findings shows `✗ 2` (errors) or `! 1` (warnings) after its name. In the Results tab, the query lines of a code frame are coloured as at a terminal.
@@ -57,6 +59,19 @@ Not validated yet: press v to run opentide validate.
  61 ✗      SecurityEvent | wher EventID == 4688
          ╰─ error[kql_unknown_operator]: unknown tabular operator 'wher' · help: did you mean 'where'?
 ```
+
+### The object page
+
+The detail pane shows the selected object as a page read from its schema, the revision its `metadata.schema` names, as validation reads it:
+
+- **Header:** version, created and modified dates, and the TLP as a badge in FIRST's colours with what it means. The schema revision follows.
+- **Sections:** the top-level values (description, status, severity, techniques, `detection_model`) under *Overview*, then a section per block (`objective`, `threat`, `response`, `configurations`), each field under its title and each list item under its name.
+- **Values explained:** a vocabulary value carries what the vocabulary says it means; a severity is a coloured badge.
+- **References:** a UUID reads as the name of the objective, signal or threat it names (`→ Credential Access Objective  objective`). Click it, or press `f`, to open it.
+- **Queries:** each query has its own panel, named by platform and language and coloured by the engine.
+- **Not set (N):** a collapsed section listing every optional field the object's revision allows and the object does not set, each with its description and, for a vocabulary, its values; `★` marks a field the schema recommends. A block the object leaves out is one entry, not one per field inside it. An unknown revision shows its fields as written, with no list.
+
+A finding with a field is marked under that field. `y` shows the file, and `n` opens the file at the next finding.
 
 ### Findings in place
 
