@@ -292,8 +292,6 @@ pub struct DocumentSymbol {
     pub detail: Option<String>,
 }
 
-/// Spans and ranges are in the text after a leading byte-order mark
-/// ([`opentide_core::strip_bom`]).
 /// Whether an [`ObjectRef`] field path is a signal's own UUID
 /// (`objective.signals.<i>.uuid`): what a rule's `detection_model` names
 /// when it implements one signal of an objective.
@@ -343,6 +341,8 @@ fn closest_detection_model(workspace: &[IndexedObject], value: &str) -> Option<S
     best.map(|(_, target)| target.to_string())
 }
 
+/// Spans and ranges are in the text after a leading byte-order mark
+/// ([`opentide_core::strip_bom`]).
 pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let input = AnalyzeInput {
         source: opentide_core::strip_bom(input.source),
