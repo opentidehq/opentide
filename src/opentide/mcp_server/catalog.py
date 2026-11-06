@@ -10,8 +10,6 @@ from opentide.core.object_fields import (
     matches_actor,
     matches_platform,
     matches_technique,
-    object_techniques,
-    technique_covers,
 )
 from opentide.core.registry import Opentide
 
@@ -246,19 +244,37 @@ def get_chaining_graph(uuid: str) -> dict[str, Any]:
 
 
 def coverage_analysis(*, technique: str = "", tactic: str = "") -> dict[str, Any]:
+    """Which rules cover a technique, or the whole matrix, counting inherited techniques.
+
+    A rule covers what it lists and what it inherits from its objective
+    (through a signal's objective) or that objective's threats, as
+    ``opentide info catalog`` resolves them. ``own_rules`` and
+    ``inherited_rules`` keep the two apart; ``rules`` holds both.
+    """
+    from opentide.core.technique_coverage import match_technique, rule_technique_index
+
     ensure_initialised()
-    covered: dict[str, list[str]] = {}
-    for uuid, entry in Opentide.Models.rules.items():
-        for tech in sorted(object_techniques(entry)):
-            covered.setdefault(tech, []).append(uuid)
+    index = rule_technique_index(Opentide.Models)
     if technique:
-        needle = technique.strip()
-        matched = sorted(key for key in covered if technique_covers(needle, key))
-        rules = sorted({uuid for key in matched for uuid in covered[key]})
+        found = match_technique(technique, index)
         return {
-            "technique": needle,
-            "covered": bool(rules),
-            "matched_techniques": matched,
-            "rules": rules,
+            "technique": found.technique,
+            "covered": bool(found.rules),
+            "matched_techniques": list(found.matched),
+            "rules": sorted(found.rules),
+            "own_rules": sorted(found.own),
+            "inherited_rules": sorted(found.inherited),
         }
-    return {"technique_count": len(covered), "matrix": covered, "tactic_filter": tactic or None}
+    covered: dict[str, list[str]] = {}
+    own: dict[str, list[str]] = {}
+    for uuid, techniques in index.items():
+        for tech in sorted(set(techniques.all)):
+            covered.setdefault(tech, []).append(uuid)
+            if tech in techniques.own:
+                own.setdefault(tech, []).append(uuid)
+    return {
+        "technique_count": len(covered),
+        "matrix": covered,
+        "own_matrix": own,
+        "tactic_filter": tactic or None,
+    }

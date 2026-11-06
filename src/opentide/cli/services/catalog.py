@@ -10,7 +10,8 @@ over every object is quadratic; this module reads the same fields and uses the
 same edge names (``covers``, ``implements``) instead.
 
 Inherited techniques follow :func:`opentide.generation.framework.techniques_resolver`
-(:func:`_inherited_techniques`), chains come from the registry's memoised chaining
+(:func:`opentide.core.technique_coverage.inherited_techniques`, which ``info coverage``,
+MCP ``coverage`` and the TUI read too), chains come from the registry's memoised chaining
 index (:mod:`opentide.core.chaining`).
 """
 
@@ -23,6 +24,8 @@ from typing import Any
 
 from opentide.core.logging import get_logger
 from opentide.core.object_fields import object_role_values
+from opentide.core.technique_coverage import as_list as _as_list
+from opentide.core.technique_coverage import inherited_techniques as _inherited_techniques
 from opentide.models.base import FieldRole
 
 logger = get_logger(__name__)
@@ -451,68 +454,6 @@ def _parent_threats(
     section = body.get("objective")
     threats = section.get("threats") if isinstance(section, Mapping) else None
     return [threat for threat in _as_list(threats) if isinstance(threat, str)]
-
-
-def _as_list(value: Any) -> list[Any]:
-    """A field that holds a list, read as one: ``[value]`` for a lone string.
-
-    An author who writes ``threats: <uuid>`` or ``logsources: Windows`` means one
-    item; iterating the string would make one per character.
-    """
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    return []
-
-
-def _techniques(body: Any) -> list[str]:
-    return [technique for _, technique in object_role_values(body, FieldRole.TECHNIQUES)]
-
-
-def _objective_techniques(body: Any, threats: Mapping[str, Any]) -> list[str]:
-    """An objective's techniques: its own, else those of each threat it covers that exists."""
-    own = _techniques(body)
-    if own:
-        return own
-    section = body.get("objective") if isinstance(body, Mapping) else None
-    covered = _as_list(section.get("threats")) if isinstance(section, Mapping) else []
-    found: list[str] = []
-    for threat in covered:
-        parent = threats.get(threat) if isinstance(threat, str) else None
-        # A dangling threat: its covers edge says so (missing: true); the others still count.
-        if isinstance(parent, Mapping):
-            found.extend(_techniques(parent))
-    return list(dict.fromkeys(found))
-
-
-def _inherited_techniques(
-    family: str,
-    body: Mapping[str, Any],
-    threats: Mapping[str, Any],
-    objectives: Mapping[str, Any],
-    signals: Mapping[str, Any],
-) -> list[str]:
-    """What an object gets from its parents, as ``techniques_resolver`` resolves it.
-
-    A rule takes its objective's (through a signal's owner), an objective its
-    threats'; a threat has no parent. Resolved here rather than by
-    ``techniques_resolver``, which gives up on the first missing parent and
-    iterates a lone string per character.
-    """
-    if family == "objective":
-        return _objective_techniques(body, threats)
-    if family != "rule":
-        return []
-    target = body.get("detection_model")
-    if not isinstance(target, str):
-        return []
-    signal = signals.get(target)
-    owner = signal.get("owner") if isinstance(signal, Mapping) else target
-    objective = objectives.get(owner) if isinstance(owner, str) else None
-    if not isinstance(objective, Mapping):
-        return []
-    return _objective_techniques(objective, threats)
 
 
 def _platform_blocks(
