@@ -21,6 +21,7 @@ It reads the same registry as every other command and runs the same service func
 | Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right shows what the [language server](#the-language-server) reports for the selected object and what the last validate run found (`error[code]: message`, `╭─▶ path:line:column`, `╰─ help: …`), then its file with line numbers, coloured by the language server: Tide keys, UUIDs, schemas and vocabulary values, and the query inside a rule in its own language. Each line with a finding is marked, and the finding's span is underlined |
 | Coverage | `2` | One row per ATT&CK technique named by a threat, an objective or a rule: how many rules detect it, which rules, and which threats and objectives name it. A technique counts the rules on its sub-techniques, as `opentide info --technique T1059 coverage` does. A row with `0` rules is a gap. `Enter` opens the first rule |
 | Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
+| Configuration | `5` | `deployment.toml`, `lint.toml`, `documentation.toml`, `sharing.toml` and each `platforms/*.toml`, read rather than as TOML: see [Configuration](#configuration) |
 
 The header carries the opentide pill, the tagline, the repository name and the catalogue counts. The tagline shows only where it fits whole: when the terminal is too narrow for it beside the counts, the header keeps the pill and the counts.
 
@@ -40,6 +41,18 @@ Run them with their key, or from the command palette (`ctrl+p`), which lists the
 | `q` | | Quit. While a command runs, the UI stays up, shows `Waiting for opentide generate to finish…` and closes when it is done: a command cannot be stopped halfway, and it would otherwise go on writing files and printing into the shell after the UI had gone |
 
 A command runs in the background, one at a time, so the UI stays responsive. When it finishes, the catalogue is read again (generate may have rewritten it), and an object with findings shows `✗ 2` (errors) or `! 1` (warnings) after its name. In the Results tab, the query lines of a code frame are coloured as at a terminal.
+
+## Configuration
+
+The Configuration tab lists the configuration files on the left and shows the highlighted one on the right:
+
+- **Each setting** by section, with its effective value (the bundled file, the workspace's and the parent instance merged, as every command reads them), whether the workspace sets it (`set here`) or it is the bundled `default`, and what it does: the description its schema gives, or for `lint.toml` the bundled file's comment.
+- **Findings** from the configuration checks `opentide validate` runs, under the setting they are about.
+- **Not set (N):** the options nothing sets, with their descriptions.
+- **A platform file** starts with its card: enabled or not, the rules with a block for it, and each tenant with its strategies, whether it is `manual`, its credentials, and the rules a deploy run reaches it with (a rule that lists tenants reaches those; otherwise a tenant that is not `manual` takes the rules whose status a strategy it accepts deploys).
+- **`t`** shows the raw file instead.
+
+No credential value appears anywhere, the raw file included. A value under a tenant's `setup` table, or under a key that names a secret (`key`, `token`, `password`, `secret`…), reads as its variable name and whether the environment sets it (`${AZURE_CLIENT_SECRET}  unset`), as [`opentide doctor`](./doctor.md) reports it, or as `•••• hidden` when it is a literal. The user and password of a URL are hidden too. A switch such as `ssl = true` is shown as it is.
 
 ## The language server
 

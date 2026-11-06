@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
+from opentide.cli.services.configuration_view import ConfigurationView
 from opentide.cli.ui.contract import Failure
 
 if TYPE_CHECKING:
@@ -95,6 +96,8 @@ class Catalogue:
     coverage: tuple[TechniqueCoverage, ...] = ()
     load_errors: tuple[LoadError, ...] = ()
     language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
+    #: The configuration files, read for the Configuration tab (no credential value in it).
+    configuration: ConfigurationView | None = None
 
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
@@ -179,7 +182,19 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         coverage=coverage,
         load_errors=load_errors,
         language_server=_language_server_report(),
+        configuration=_configuration_view(families["rules"]),
     )
+
+
+def _configuration_view(rules: Mapping[str, Any]) -> ConfigurationView:
+    """:func:`load_configuration_view`, or why it failed: the other tabs do not depend on it."""
+    from opentide.cli.services.configuration_view import load_configuration_view
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        return load_configuration_view(discover_workspace(), rules)
+    except Exception as exc:
+        return ConfigurationView(problem=f"{type(exc).__name__}: {exc}")
 
 
 def _language_server_report() -> LanguageServerReport:

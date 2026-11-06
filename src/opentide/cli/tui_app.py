@@ -48,6 +48,7 @@ from opentide.cli.services.tui import (
     run_action,
     summary_line,
 )
+from opentide.cli.tui_tabs.configuration import ConfigurationPane
 from opentide.cli.ui.mode import OutputMode
 
 # TODO: take the pill and colours from opentide.cli.ui.brand once the brand
@@ -74,7 +75,12 @@ THEME = Theme(
 )
 
 #: The widget each tab focuses when shown.
-_TAB_FOCUS = {"catalogue": "#tree", "coverage": "#coverage-table", "results": "#log"}
+_TAB_FOCUS = {
+    "catalogue": "#tree",
+    "coverage": "#coverage-table",
+    "results": "#log",
+    "configuration": "#config-files",
+}
 
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
 _FRAME_STYLE = "blue"
@@ -286,6 +292,7 @@ class OpentideTui(App[None]):
         Binding("1", "show_tab('catalogue')", "Catalogue", show=False),
         Binding("2", "show_tab('coverage')", "Coverage", show=False),
         Binding("3", "show_tab('results')", "Results", show=False),
+        Binding("5", "show_tab('configuration')", "Configuration", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -327,6 +334,8 @@ class OpentideTui(App[None]):
                 yield DataTable(id="coverage-table", cursor_type="row", zebra_stripes=True)
             with TabPane("Results", id="results"):
                 yield RichLog(id="log", wrap=True, markup=False, highlight=False)
+            with TabPane("Configuration", id="configuration"):
+                yield ConfigurationPane(self.select, id="configuration-pane")
         yield Static("", id="status")
         yield Footer()
 
@@ -483,6 +492,7 @@ class OpentideTui(App[None]):
         self._fit_masthead()
         self._fill_tree(catalogue)
         self._fill_coverage(catalogue)
+        self.query_one(ConfigurationPane).show(catalogue.configuration, catalogue)
         self._show_detail(self.selected)
 
     def findings(self, entry: CatalogueEntry) -> tuple[list[Diagnostic], list[Diagnostic]]:
