@@ -6,6 +6,7 @@ import os
 import time
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -33,7 +34,15 @@ _PHASE_ORDER: tuple[str, ...] = (
 )
 
 
-def run_generate_phase(phase: str) -> None:
+@dataclass(frozen=True)
+class ExplorerOptions:
+    """``generate explorer``'s options: whether to export visibility, and its marking."""
+
+    include_visibility: bool = False
+    visibility_tlp: str = "amber"
+
+
+def run_generate_phase(phase: str, *, explorer: ExplorerOptions | None = None) -> None:
     """Run a single generation phase."""
     if phase == "vocabs":
         from opentide.indexing.object_vocab import run as generate_object_vocab
@@ -71,7 +80,11 @@ def run_generate_phase(phase: str) -> None:
     if phase == "explorer":
         from opentide.export.explorer_export import run as export_explorer
 
-        export_explorer()
+        options = explorer or ExplorerOptions()
+        export_explorer(
+            include_visibility=options.include_visibility,
+            visibility_tlp=options.visibility_tlp,
+        )
         return
     if phase == "inflight":
         from opentide.indexing.inflight import run as generate_inflight
@@ -399,6 +412,7 @@ def run_generate(
     *,
     phase: str | None = None,
     phases: Sequence[str] | None = None,
+    explorer: ExplorerOptions | None = None,
 ) -> dict[str, object]:
     """Entry point for generate command.
 
@@ -419,7 +433,7 @@ def run_generate(
                 run_generate_all(checklist)
             else:
                 with generation_step(checklist, phase), failing_phase(phase):
-                    run_generate_phase(phase)
+                    run_generate_phase(phase, explorer=explorer)
     except GenerationPhaseError as exc:
         return phase_failure(exc)
     if phases:

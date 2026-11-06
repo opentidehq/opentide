@@ -11,7 +11,7 @@ from opentide.cli.context import get_context
 from opentide.cli.enums import DocumentScope, ExportTarget, ExtractImport
 from opentide.cli.group_options import hand_down, refuse_dropped
 from opentide.cli.output import emit_error, emit_success, emit_usage_error
-from opentide.cli.ui.contract import USAGE_ERROR
+from opentide.cli.ui.contract import USAGE_ERROR, USAGE_MISSING_OPTION
 from opentide.core.errors import UserFileError
 
 
@@ -103,13 +103,55 @@ def generate_all(ctx: typer.Context) -> None:
     emit_success(cli, run_generate(cli, phases=phases))
 
 
+#: The TLP values ``--visibility-tlp`` takes (``tlp::1.0``).
+_TLP_CHOICES = ("clear", "green", "amber", "amber+strict", "red")
+
+
 @generate_app.command("explorer")
-def generate_explorer_cmd(ctx: typer.Context) -> None:
+def generate_explorer_cmd(
+    ctx: typer.Context,
+    include_visibility: bool = typer.Option(
+        False,
+        "--include-visibility",
+        help=(
+            "Also write explorer.visibility.json: the log sources visibility.toml declares and "
+            "the rules that use them. Off by default: it shows what you cannot see. A run "
+            "without it removes the file"
+        ),
+    ),
+    visibility_tlp: str = typer.Option(
+        "amber",
+        "--visibility-tlp",
+        help="The TLP the explorer shows on the Visibility view: clear, green, amber, "
+        "amber+strict or red",
+    ),
+) -> None:
     """Write explorer.bundle.json and explorer.search.json under .opentide/exports/."""
-    from opentide.cli.services.generation import run_generate
+    from opentide.cli.services.generation import ExplorerOptions, run_generate
 
     cli = get_context(ctx)
-    emit_success(cli, run_generate(cli, phase="explorer"))
+    # Typed without the export it labels, the TLP would be dropped unseen.
+    # Compared by name: Typer vendors Click's ParameterSource in a private module.
+    tlp_source = ctx.get_parameter_source("visibility_tlp")
+    if not include_visibility and tlp_source is not None and tlp_source.name != "DEFAULT":
+        emit_usage_error(
+            cli,
+            "--visibility-tlp needs --include-visibility: it labels explorer.visibility.json, "
+            "which only --include-visibility writes.",
+            argument="--visibility-tlp",
+            code=USAGE_MISSING_OPTION,
+        )
+    tlp = visibility_tlp.strip().lower()
+    if tlp not in _TLP_CHOICES:
+        emit_usage_error(
+            cli,
+            f"Unknown TLP {visibility_tlp!r}. Pass one of: {', '.join(_TLP_CHOICES)}.",
+            argument="--visibility-tlp",
+            value=visibility_tlp,
+            choices=list(_TLP_CHOICES),
+        )
+    options = ExplorerOptions(include_visibility=include_visibility, visibility_tlp=tlp)
+    emit_success(cli, run_generate(cli, phase="explorer", explorer=options))
 
 
 inflight_app = typer.Typer(help="Inflight preview shard generation and prune")
