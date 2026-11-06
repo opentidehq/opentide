@@ -41,6 +41,9 @@ configurations:
       index=main | statz count
   crowdstrike:
     query: |
+      #event_simpleName=ProcessRollup2 | groupBi([aid])
+  harfanglab:
+    query: |
       anything at all
 """
 
@@ -110,8 +113,12 @@ def test_every_query_of_a_file_is_checked_and_platforms_filter_them(tmp_path: Pa
     assert [(check.platform, check.language) for check in checks] == [
         ("sentinel", "kql"),
         ("splunk", "spl"),
-    ], "CrowdStrike is never validated, so it is never a query here"
-    sentinel, splunk = checks
+        ("crowdstrike", "cql"),
+    ], "HarfangLab is never validated, so it is never a query here"
+    sentinel, splunk, crowdstrike = checks
+    (unknown,) = crowdstrike.findings
+    assert unknown.code == "cql_unknown_function"
+    assert TWO_PLATFORMS.splitlines()[unknown.line - 1][unknown.column - 1 :].startswith("groupBi")
     assert sentinel.findings == () and sentinel.errors == 0
     assert splunk.errors == 1
     (finding,) = splunk.findings

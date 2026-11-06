@@ -407,8 +407,13 @@ def test_offline_and_live_flags_that_do_not_combine_are_usage_errors(
     assert (failure["code"], failure.get("argument")) == (code, argument)
 
 
-def test_crowdstrike_is_never_validated(invoke_cli, tutorial: Path) -> None:
-    result = invoke_cli("validate", "query", "--platform", "crowdstrike", repo=tutorial)
+@pytest.mark.parametrize(
+    "argv", [("--platform", "harfanglab"), ("--platform", "crowdstrike", "--live")]
+)
+def test_a_platform_with_no_check_is_never_validated(
+    invoke_cli, tutorial: Path, argv: tuple[str, ...]
+) -> None:
+    result = invoke_cli("validate", "query", *argv, repo=tutorial)
     assert result.exit_code == 1
     payload = parse_cli_json(result)
     assert payload["supported"] is False

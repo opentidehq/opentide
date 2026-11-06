@@ -168,7 +168,12 @@
     'enabled': True,
     'flags': None,
     'name': 'CrowdStrike Deploy Rule',
-    'query': 'index=main',
+    'query': '''
+      #event_simpleName=ProcessRollup2 event_platform=Win
+      | FileName=/^(whoami|net1?)\.exe$/i
+      | select([aid, ComputerName, CommandLine])
+  
+    ''',
     'schedule': dict({
       'end': None,
       'frequency': '1h',

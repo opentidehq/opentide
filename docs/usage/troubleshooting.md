@@ -458,7 +458,7 @@ opentide validate
 
 ### `supported: false` for a platform
 
-CrowdStrike and HarfangLab are **deploy-only** — they cannot validate query syntax, and opentide reports this honestly rather than faking a pass. This is expected behaviour, not an error. Validate queries on a supporting platform (Sentinel, Defender, Splunk, Elastic, SentinelOne, Carbon Black). See [Platforms](./concepts/platforms.md#query-validation-policy).
+HarfangLab is **deploy-only**: opentide cannot check its Sigma or YARA rules, and reports this honestly rather than faking a pass. CrowdStrike and Sysdig have no tenant check, so `--live` reports `supported: false` for them; drop `--live` to check their CQL and Falco offline. This is expected behaviour, not an error. See [Platforms](./concepts/platforms.md#query-validation-policy).
 
 ### MCP `validate_query` refuses
 

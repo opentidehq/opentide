@@ -28,6 +28,7 @@ VALID_QUERIES = {
     "splunk": "index=main sourcetype=WinEventLog EventCode=4688",
     "elastic": 'process.name : "cmd.exe"',
     "carbon_black_cloud": "process_name:cmd.exe",
+    "crowdstrike": "#event_simpleName=ProcessRollup2 | groupBy([aid, ComputerName])",
 }
 
 
@@ -102,12 +103,49 @@ def test_validate_query_live_calls_the_tenant(monkeypatch: pytest.MonkeyPatch) -
     assert result["mode"] == "live"
 
 
-@pytest.mark.parametrize("platform", ["crowdstrike", "harfanglab"])
-def test_validate_query_never_fakes_an_unsupported_platform(platform: str) -> None:
-    result = tools.tool_validate_query("anything at all", platform)
+@pytest.mark.parametrize(("platform", "live"), [("harfanglab", False), ("harfanglab", True)])
+def test_validate_query_never_fakes_an_unsupported_platform(platform: str, live: bool) -> None:
+    result = tools.tool_validate_query("anything at all", platform, live=live)
     assert result["supported"] is False
     assert result["valid"] is None
     assert "not supported" in result["message"]
+
+
+def test_validate_query_checks_a_cql_query_offline() -> None:
+    """CrowdStrike has no tenant check, but the engine checks CQL offline."""
+    result = tools.tool_validate_query(
+        "#event_simpleName=ProcessRollup2 | groupBi([aid])", "crowdstrike"
+    )
+    assert result["mode"] == "offline"
+    assert result["language"] == "cql"
+    assert result["valid"] is False
+    (error,) = result["errors"]
+    assert (error["code"], error["line"], error["column"]) == ("cql_unknown_function", 1, 36)
+    assert error["suggestion"] == "groupBy"
+    assert error["reference"] == "https://library.humio.com/crowdstrike-query-language/"
+    # The live check would be refused: the next step is the explain page only.
+    assert [action["tool"] for action in result["next_actions"]] == ["explain"]
+    unknown_event = tools.tool_validate_query("#event_simpleName=ProcesRollup2", "crowdstrike")
+    assert unknown_event["valid"] is True
+    assert [w["code"] for w in unknown_event["warnings"]] == ["cql_unknown_event"]
+
+
+def test_validate_query_applies_the_correlation_rule_checks() -> None:
+    """A Next-Gen SIEM correlation rule may not combine correlate() with another aggregate."""
+    query = (
+        "correlate(a: { #event_simpleName=ProcessRollup2 }, "
+        "b: { #event_simpleName=NetworkConnectIP4 | aid <=> a.aid }, sequence=false, "
+        "within=1h) | count()"
+    )
+    result = tools.tool_validate_query(query, "crowdstrike")
+    assert "cql_correlate_aggregate" in {e["code"] for e in result["errors"]}, result
+
+
+def test_validate_query_crowdstrike_live_is_unsupported() -> None:
+    result = tools.tool_validate_query("#event_simpleName=ProcessRollup2", "crowdstrike", live=True)
+    assert result["supported"] is False
+    assert result["valid"] is None
+    assert result["mode"] == "unsupported"
 
 
 def test_validate_query_checks_a_falco_condition_offline() -> None:
@@ -123,6 +161,14 @@ def test_validate_query_checks_a_falco_condition_offline() -> None:
     broken = tools.tool_validate_query("spawned_process and (proc.name = bash", "sysdig")
     assert broken["valid"] is False
     assert {e["code"] for e in broken["errors"]} == {"falco_parse_error"}
+
+
+def test_validate_query_offers_the_live_step_only_where_there_is_one() -> None:
+    sentinel = tools.tool_validate_query(VALID_QUERIES["sentinel"], "sentinel")
+    assert [action["tool"] for action in sentinel["next_actions"]] == ["validate_query"]
+    sysdig = tools.tool_validate_query("spawned_process and proc.name = bash", "sysdig")
+    assert sysdig["valid"] is True
+    assert sysdig["next_actions"] == []
 
 
 def test_validate_query_sysdig_live_is_unsupported() -> None:

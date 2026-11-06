@@ -611,7 +611,7 @@ def check_query(
 
 
 #: Extensions of a query file: one query in the language its extension names.
-QUERY_FILE_SUFFIXES = (".kql", ".spl", ".esql", ".eql", ".kuery", ".lucene", ".falco")
+QUERY_FILE_SUFFIXES = (".kql", ".spl", ".esql", ".eql", ".kuery", ".lucene", ".falco", ".cql")
 
 
 def is_query_file(path: Path | str) -> bool:

@@ -379,7 +379,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
 | `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`) is one query in that language, checked offline. Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
@@ -401,8 +401,9 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
+| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike and HarfangLab are never validated by `validate query`, and Sysdig only offline: `--platform sysdig --live` reports `supported: false`, because Sysdig Secure has no rule preview (see [Supported platforms](#supported-platforms)).
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. HarfangLab is never validated by `validate query`, and Sysdig and CrowdStrike only offline: `--platform sysdig --live` and `--platform crowdstrike --live` report `supported: false`, because Sysdig Secure has no rule preview and opentide calls no CrowdStrike query check (see [Supported platforms](#supported-platforms)). The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -578,7 +579,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **six platforms**; the offline engine on six too, five of them the same:
+Live query validation works on **six platforms**; the offline engine on seven, five of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -589,7 +590,8 @@ Live query validation works on **six platforms**; the offline engine on six too,
 | `sentinel_one` (S1QL) | ✅ | ❌ |
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
-| `crowdstrike`, `harfanglab` | ❌ `supported: false` | ❌ |
+| `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
+| `harfanglab` | ❌ `supported: false` | ❌ |
 
 ### Elastic live validation and deploy
 
@@ -622,23 +624,23 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-CrowdStrike (correlation filter), HarfangLab (Sigma or YARA) and Sysdig (Falco, which has no rule preview) return unsupported — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+HarfangLab (Sigma or YARA) returns unsupported, and so does `--live` for CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
 supported and unsupported platforms:
 
 ```bash
-opentide --json validate query --platform crowdstrike
+opentide --json validate query --platform harfanglab
 ```
 
-```json output-of="opentide --json validate query --platform crowdstrike" exit=1
+```json output-of="opentide --json validate query --platform harfanglab" exit=1
 {
-  "platform": "crowdstrike",
+  "platform": "harfanglab",
   "valid": null,
   "supported": false,
   "ok": false,
   "status": "failed",
-  "message": "query validation not supported for crowdstrike"
+  "message": "query validation not supported for harfanglab"
 }
 ```
 

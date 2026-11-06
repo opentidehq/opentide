@@ -156,7 +156,8 @@ The generated `AGENTS.md` already tells the agent to validate until clean and to
   `validate_query` with `live: true` checks the catalogue rules against the tenant.
   Never report a rule as platform-ready on its result alone.
 - Ask before `run_query` with `live: true`: it queries a tenant with real credentials.
-- Never claim query validation for CrowdStrike or HarfangLab — they are deploy-only.
+- Never claim live query validation for CrowdStrike or HarfangLab: CrowdStrike's CQL is
+  checked offline only, and HarfangLab's Sigma and YARA not at all.
 - Deploys are `dry_run=true` unless a human explicitly approves a real deploy.
 ```
 

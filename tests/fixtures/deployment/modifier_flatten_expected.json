@@ -2212,7 +2212,7 @@
      "start": null,
      "end": null
     },
-    "query": "index=main"
+    "query": "#event_simpleName=ProcessRollup2 event_platform=Win\n| FileName=/^(whoami|net1?)\\.exe$/i\n| select([aid, ComputerName, CommandLine])\n"
    },
    "api_request": {
     "enabled": true,
@@ -2237,7 +2237,7 @@
      "start": null,
      "end": null
     },
-    "query": "index=main"
+    "query": "#event_simpleName=ProcessRollup2 event_platform=Win\n| FileName=/^(whoami|net1?)\\.exe$/i\n| select([aid, ComputerName, CommandLine])\n"
    }
   },
   {
@@ -2277,7 +2277,7 @@
      "start": null,
      "end": null
     },
-    "query": "index=main"
+    "query": "#event_simpleName=ProcessRollup2 event_platform=Win\n| FileName=/^(whoami|net1?)\\.exe$/i\n| select([aid, ComputerName, CommandLine])\n"
    },
    "api_request": {
     "enabled": true,
@@ -2302,7 +2302,7 @@
      "start": null,
      "end": null
     },
-    "query": "index=main"
+    "query": "#event_simpleName=ProcessRollup2 event_platform=Win\n| FileName=/^(whoami|net1?)\\.exe$/i\n| select([aid, ComputerName, CommandLine])\n"
    }
   },
   {

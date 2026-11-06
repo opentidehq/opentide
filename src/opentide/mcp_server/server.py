@@ -192,10 +192,11 @@ Check one query offline with the analysis engine, or the catalogue's rules on th
 
 live false (default) parses query in its platform's language, with the
 platform's profile (Defender tables for defender_for_endpoint, Carbon Black
-Lucene for carbon_black_cloud), and returns {{valid, status, language,
-errors, warnings, diagnostics}}; positions are in the query (1-based, code
-points). Elastic takes language: esql, eql, kuery (default) or lucene, and
-stack (such as "9.5") for ES|QL. Offline: {", ".join(sorted(OFFLINE_QUERY_LANGUAGES))}.
+Lucene for carbon_black_cloud, the correlation-rule checks for crowdstrike's
+CQL), and returns {{valid, status, language, errors, warnings, diagnostics}};
+positions are in the query (1-based, code points). Elastic takes language:
+esql, eql, kuery (default) or lucene, and stack (such as "9.5") for ES|QL.
+Offline: {", ".join(sorted(OFFLINE_QUERY_LANGUAGES))}.
 live true contacts the tenant with the configured credentials and validates
 the catalogue rules for platform, not query; ask a person first.
 Platforms: {", ".join(sorted(QUERY_VALIDATION_PLATFORMS))}; others return

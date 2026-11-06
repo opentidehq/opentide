@@ -24,7 +24,10 @@ configurations:
     enabled: true
     name: CrowdStrike Deploy Rule
     status: STAGING
-    query: index=main
+    query: |
+      #event_simpleName=ProcessRollup2 event_platform=Win
+      | FileName=/^(whoami|net1?)\.exe$/i
+      | select([aid, ComputerName, CommandLine])
     details:
       trigger: event
       outcome: detection

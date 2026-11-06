@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you deploy to CrowdStrike, run `opentide validate query --platform crowdstrike` and fix the `cql_*` errors it reports, so `opentide validate` keeps passing in CI.
+
+### Breaking
+
+- **CrowdStrike queries are checked as CQL, and `crowdstrike_unsupported` is gone.** `configurations.crowdstrike.query` was never checked, and the editor showed one `crowdstrike_unsupported` warning on it; `opentide validate` now fails a rule whose query Next-Gen SIEM would refuse, with the `cql_*` codes ([opentidehq/language-server@79c8962](https://github.com/opentidehq/language-server/commit/79c8962197ba3386f3f33259cad9dc43b34ec245)). `validate query --platform crowdstrike` checks offline where it reported `supported: false`; `--live` still reports `supported: false`.
+
+### Added
+
+- **CrowdStrike Next-Gen SIEM queries are checked offline, as CQL.** The analysis engine gains the CrowdStrike Query Language: `opentide validate`, `validate query --platform crowdstrike`, `lint`, `opentide lsp` and MCP `validate_query` parse a CrowdStrike block's `query`, a hunt's query with `system: crowdstrike` and a `.cql` file, against CrowdStrike's grammar and function reference ([Platforms](docs/usage/concepts/platforms.md#crowdstrike-the-offline-cql-checks)).
+  - Errors: `cql_parse_error`, `cql_unknown_function` (with the nearest name), `cql_removed_function`, `cql_unknown_parameter`, `cql_duplicate_parameter`, `cql_unnamed_argument`, `cql_missing_parameter`, `cql_parameter_value`, `cql_regex_flag`, `cql_free_text_after_aggregate`, `cql_assignment_as`, `cql_link_outside_correlate`
+  - Correlation rules: `cql_correlate_aggregate`, `correlate()` combined with another aggregate
+  - Warnings: `cql_deprecated_function`, `cql_string_escape`, `cql_unknown_event` (a `#event_simpleName` no Falcon event has)
+  - Fields, saved searches, lookup files and repositories live in the tenant and are never reported unknown
+  - The engine is pinned to a language-server revision until its next release
+
+### Fixed
+
+- **MCP `validate_query` suggests a live check only where there is one.** Its `next_actions` for a Sysdig or CrowdStrike query named `validate_query` with `live: true`, which those platforms refuse with `supported: false`; they now name the finding's `explain` page only.
+
 ## [0.22.0] — 2026-11-04
 
 Minor release. The opentide VS Code extension ([`opentidehq.opentide`](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide)) ships its first release with it, and builds its catalogue, graph, relations and deploy-plan views on two new commands: `opentide --json info catalog`, the catalogue and its relationships in one document, and `opentide serve`, CLI commands from one warm process. `setup vscode` recommends the extension and stops mapping opentide's schemas for the YAML extension. `pip install opentide` no longer installs pandas or numpy, and Windows on Arm installs a wheel. `deploy --uuid` and `--file`, `setup --plan`, progress events and each platform's tenants in `info` are new. A minor because it adds commands, changes the files `setup vscode` and `generate snippets` write, changes the `end_column` of a query finding over several lines, and drops two dependencies: run `opentide setup vscode --settings --no-generate` and `opentide generate snippets`, and add pandas or numpy to your own requirements if your code imports them.

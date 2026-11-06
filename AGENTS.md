@@ -101,11 +101,13 @@ scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use befo
 | Splunk | ✅ | ✅ SPL | ✅ SPL | ✅ SPL |
 | SentinelOne | ✅ | ✅ S1QL | ❌ | ✅ PowerQuery |
 | Carbon Black | ✅ | ✅ Lucene | ✅ Lucene | ✅ Lucene |
-| CrowdStrike | ✅ | ❌ | ❌ | ✅ CQL (Next-Gen SIEM) |
+| CrowdStrike | ✅ | ❌ | ✅ CQL | ✅ CQL (Next-Gen SIEM) |
 | HarfangLab | ✅ | ❌ | ❌ | ✅ telemetry filters (no `--rule`) |
 | Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
 
-CrowdStrike, HarfangLab and Sysdig: `can_validate is False` — return `supported: False`, never fake validation.
+CrowdStrike, HarfangLab and Sysdig: `can_validate is False` — no tenant check, so `--live` (and HarfangLab
+offline) returns `supported: False`, never fake validation. CrowdStrike's CQL and Sysdig's Falco are checked
+offline by the engine only.
 Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
 id in deployment state; block macros and lists are expanded into the condition.
 `opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
