@@ -22,7 +22,8 @@
 | CLI E2E tests, tide_corpus, deploy payloads | [`.agents/skills/cli-e2e-testing/SKILL.md`](.agents/skills/cli-e2e-testing/SKILL.md) |
 | MCP server tools, resources, stdio | [`.agents/skills/mcp-server/SKILL.md`](.agents/skills/mcp-server/SKILL.md) |
 | Documentation pages, Fumadocs structure, doc/code sync | [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md) |
-| PyPI release, changelog, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
+| Changelog entries and release notes: summary, Upgrade, Breaking, categories | [`.agents/skills/release-notes/SKILL.md`](.agents/skills/release-notes/SKILL.md) |
+| PyPI release, `v*` tag, install pins | [`.agents/skills/release-management/SKILL.md`](.agents/skills/release-management/SKILL.md) |
 
 Claude Code discovers these through `.claude/skills` (a symlink to `.agents/skills`); cloud
 sessions run `.claude/hooks/session-start.sh`, which syncs the dev environment.
@@ -147,7 +148,8 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`. Skills:
 1. Each fix has a regression test that fails without it; each feature has tests at the
    level it is used (unit, CLI E2E, MCP).
 2. `scripts/ci-local.sh --full` passes.
-3. User-visible change → `## [Unreleased]` in `CHANGELOG.md`; CLI/MCP/SDK surface change →
+3. User-visible change → `## [Unreleased]` in `CHANGELOG.md`, written to
+   [release-notes](.agents/skills/release-notes/SKILL.md); CLI/MCP/SDK surface change →
    `docs/` ([docs-maintenance](.agents/skills/docs-maintenance/SKILL.md)).
 4. Mechanical refactors are proven behaviour-preserving with
    `uv run python scripts/ast_equivalence.py <base-rev>`.
