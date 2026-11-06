@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **A Visibility tab in `opentide tui`** ([#776](https://github.com/opentidehq/opentide/issues/776)). `visibility.toml` could only be read as TOML, often more than a thousand lines. Tab `4` shows its log sources as a table with system, column count, the rules that use each and what needs attention, filtered by name or `system:`, and drills into the highlighted one: its columns with types and descriptions, the rules whose queries read it, and the objectives and rules that use it through a signal. Tiles count log sources per system and how many declare columns, and flag log sources without columns, log sources nothing uses, and datasets rules read that no log source declares. The datasets each query reads come from the analysis engine. See [Visibility](docs/cli/tui.md#visibility).
+
 ## [0.22.0] — 2026-11-04
 
 Minor release. The opentide VS Code extension ([`opentidehq.opentide`](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide)) ships its first release with it, and builds its catalogue, graph, relations and deploy-plan views on two new commands: `opentide --json info catalog`, the catalogue and its relationships in one document, and `opentide serve`, CLI commands from one warm process. `setup vscode` recommends the extension and stops mapping opentide's schemas for the YAML extension. `pip install opentide` no longer installs pandas or numpy, and Windows on Arm installs a wheel. `deploy --uuid` and `--file`, `setup --plan`, progress events and each platform's tenants in `info` are new. A minor because it adds commands, changes the files `setup vscode` and `generate snippets` write, changes the `end_column` of a query finding over several lines, and drops two dependencies: run `opentide setup vscode --settings --no-generate` and `opentide generate snippets`, and add pandas or numpy to your own requirements if your code imports them.

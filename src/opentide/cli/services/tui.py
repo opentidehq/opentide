@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
+from opentide.cli.services.visibility import VisibilityReport
 from opentide.cli.ui.contract import Failure
 
 if TYPE_CHECKING:
@@ -95,6 +96,8 @@ class Catalogue:
     coverage: tuple[TechniqueCoverage, ...] = ()
     load_errors: tuple[LoadError, ...] = ()
     language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
+    #: The log sources ``visibility.toml`` declares and what uses them (the Visibility tab).
+    visibility: VisibilityReport | None = None
 
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
@@ -179,7 +182,19 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         coverage=coverage,
         load_errors=load_errors,
         language_server=_language_server_report(),
+        visibility=_visibility_report(),
     )
+
+
+def _visibility_report() -> VisibilityReport | None:
+    """:func:`load_visibility`, or ``None`` when it fails: the other tabs do not depend on it."""
+    from opentide.cli.services.visibility import load_visibility
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        return load_visibility(discover_workspace())
+    except Exception as exc:
+        return VisibilityReport(present=True, problem=f"{type(exc).__name__}: {exc}")
 
 
 def _language_server_report() -> LanguageServerReport:
