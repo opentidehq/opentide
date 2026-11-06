@@ -299,7 +299,7 @@ def test_coverage_lists_techniques_and_opens_the_rule(tutorial_repo: Path) -> No
         table = app.query_one("#coverage-table", DataTable)
         assert [str(cell) for cell in table.get_row_at(0)] == [
             "T1059",
-            "1",
+            "1  1 own · 0 inherited",
             "Sentinel KQL Rule",
             "Simulated Actor",
         ]

@@ -1,7 +1,8 @@
 """What ``opentide tui`` shows and runs, without Textual.
 
 The catalogue comes from the registry (:func:`collect_info` reloads it), the
-coverage table from the same lookup as ``opentide info --technique … coverage``,
+coverage table from the same lookup as ``opentide info coverage --technique …``
+(own and inherited techniques, :mod:`opentide.core.technique_coverage`),
 the language server's findings from the engine behind ``opentide lsp start``,
 and the actions call the service functions behind ``validate``, ``generate``
 and ``deploy --dry-run``, so the terminal UI cannot disagree with the CLI.
@@ -53,9 +54,14 @@ class TechniqueCoverage:
     """One ATT&CK technique: the rules that detect it and the objects that name it."""
 
     technique: str
+    #: Every rule that covers it: those that list it, then those that inherit it.
     rules: tuple[str, ...]
     #: Threats and objectives that list the technique.
     referenced_by: tuple[str, ...]
+    #: Rules that list the technique (or a sub-technique) themselves.
+    own: tuple[str, ...] = ()
+    #: Rules that cover it only through their objective, or that objective's threats.
+    inherited: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -140,10 +146,11 @@ class Catalogue:
 
 def load_catalogue(ctx: CliContext) -> Catalogue:
     """Reload the registry for *ctx*'s workspace and snapshot what the UI shows."""
-    from opentide.cli.services.info import _technique_coverage, collect_info
+    from opentide.cli.services.info import collect_info
     from opentide.core.index_manager import IndexManager
     from opentide.core.object_fields import object_techniques
     from opentide.core.registry import Opentide
+    from opentide.core.technique_coverage import match_technique, rule_technique_index
 
     collect_info(ctx)  # applies the context's environment and reloads the registry
     index = Opentide.Index
@@ -172,16 +179,21 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
                 techniques.add(key)
                 if family != "rules":
                     referenced.setdefault(key, set()).add(uuid)
-    coverage = tuple(
-        TechniqueCoverage(
-            technique=technique,
-            # The lookup behind `opentide info --technique … coverage`: a
-            # parent technique also counts the rules on its sub-techniques.
-            rules=tuple(_technique_coverage(technique)["rules"]),
-            referenced_by=tuple(sorted(referenced.get(technique, ()))),
+    # The lookup behind `opentide info coverage --technique …`: own and inherited
+    # techniques, and a parent technique also counts its sub-techniques' rules.
+    rule_techniques = rule_technique_index(Opentide.Models)
+    coverage: list[TechniqueCoverage] = []
+    for technique in sorted(techniques):
+        found = match_technique(technique, rule_techniques)
+        coverage.append(
+            TechniqueCoverage(
+                technique=technique,
+                rules=found.rules,
+                referenced_by=tuple(sorted(referenced.get(technique, ()))),
+                own=found.own,
+                inherited=found.inherited,
+            )
         )
-        for technique in sorted(techniques)
-    )
 
     load_errors = tuple(
         LoadError(
@@ -193,7 +205,7 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
     return Catalogue(
         repo=Path(ctx.repo).resolve(),
         entries=entries,
-        coverage=coverage,
+        coverage=tuple(coverage),
         load_errors=load_errors,
         language_server=_language_server_report(),
     )
