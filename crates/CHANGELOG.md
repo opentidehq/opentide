@@ -178,7 +178,8 @@ The server runs in a browser Web Worker, and a rebuilt protocol host keeps up wi
 - **Edits after a multi-byte character no longer crash the server.** An incremental edit after `日本`, `é` or an emoji read the editor's UTF-16 column as a byte offset and sliced inside the character ([#178](https://github.com/opentidehq/language-server/issues/178)).
 - **The server follows the LSP lifecycle** ([#185](https://github.com/opentidehq/language-server/issues/185)).
   - Before `initialize`: a request gets `ServerNotInitialized`, and a notification is dropped
-  - After `shutdown`: a request, or a second `initialize`, gets `InvalidRequest`, and nothing is published
+  - After `shutdown`: a request gets `InvalidRequest`, and nothing is published
+  - A second `initialize` gets `InvalidRequest`
   - `opentide-lsp --stdio` exits 0 after `shutdown`, and 1 when the client exits or closes the stream without it
   - API: `serve_with_status` and `run_stdio_status` return whether the session ended cleanly; `serve` and `run_stdio` are unchanged
 - **Bad frames and failing handlers no longer end the session** ([#185](https://github.com/opentidehq/language-server/issues/185)).
@@ -291,7 +292,7 @@ Declared datasets carry their columns: in the corrected `visibility::1.0`, a log
   - `ecs = true` no longer makes an index ECS: ECS checks run on `logs-*` data streams
 - **The declared-dataset API takes no dataset kind.**
   - `DatasetKind` has `Tables`, `Sourcetypes` and `Indices` only, with `DatasetKind::of_system`
-  - `DeclaredDatasets::status`, `names`, `declares` and `declare_dataset` take no kind
+  - `DeclaredDatasets::status`, `names` and `declares` take no kind, and neither does the function `declare_dataset`
   - `DeclaredDatasets::from_names` takes `(platform, names)`
   - `opentide_ecs::data_view_not_declared` is gone
 
@@ -300,7 +301,7 @@ Declared datasets carry their columns: in the corrected `visibility::1.0`, a log
 - **A log source may list its dataset's columns.** `[logsources.columns]` is keyed by column name, each `{ type, description }`; columns on a name with `*` apply to every dataset it matches, merged with an exact entry's, which wins on a same-named column ([#146](https://github.com/opentidehq/language-server/issues/146)). `docs/kql/columns.md` has the details.
   - KQL: a declared table with columns is checked like a documented one (`kql_unknown_column`, `kql_type_mismatch`)
   - KQL: they extend a catalog table's columns, replacing a same-named one's type and description
-  - Elastic: fields are mapped for their index pattern, for `ecs_unknown_field` and `ecs_type_mismatch`
+  - Elastic: fields are mapped for their index pattern, so a declared field is not `ecs_unknown_field` and its type is checked for `ecs_type_mismatch`
   - hover and completion show them, Splunk fields included
   - API: `DeclaredDatasets::sources`; `Catalog::for_workspace` and `opentide_ecs::with_declared_fields` apply them
 
@@ -347,9 +348,9 @@ Queries are checked against the tables and columns they read: every Azure Monito
 
 - **SPL knows every CIM data model, dataset and field.** After `tstats ... from datamodel=`, `| datamodel`, `| from datamodel:` or `| pivot`, a near miss is an error: `spl_unknown_datamodel_field` for a field (`Processes.proces_name` suggests `Processes.process_name`), `spl_unknown_datamodel` for a data model or dataset ([#115](https://github.com/opentidehq/language-server/issues/115)). Completion offers lineage-prefixed fields and CIM's expected values; fields a site adds, and fields after `drop_dm_object_name`, are not checked.
 - **Codes for SPL that Splunk accepts but that does nothing.** `spl_parse_error` means Splunk's own parser rejects the query, and a form it accepts that does nothing, returns nothing or searches for literal words has a code of its own ([#135](https://github.com/opentidehq/language-server/issues/135)). Each was checked against Splunk 10.6.1; `docs/spl/search-syntax.md` lists them.
-  - `spl_empty_command`: a command with no arguments; a warning, or an error for `stats` and `| inputlookup`
+  - `spl_empty_command`: a command with no arguments; a warning, or an error for `stats` and `| inputlookup`; `head`, `spath`, `fillnull` and `tojson` have defaults and are not reported
   - `spl_empty_stage` (warning): a trailing `|`, which Splunk ignores
-  - `spl_command_without_pipe` (error): a query starting with a command but no `|`, which the fix adds
+  - `spl_command_without_pipe` (error): a query starting with a command but no `|`, which the fix adds; a command word followed by one term or none (`tstats`, `delete user`) is not reported, nor is `search ...`
 - **`spl_search_operator` (error) for search comparisons that never match.** `==`, `<>`, `=>`, `=<` or `!~` in a search clause never matches in Splunk, so a detection that uses one never fires; the quick fix rewrites `==`, `<>`, `=>` and `=<` to `=`, `!=`, `>=` and `<=` ([#136](https://github.com/opentidehq/language-server/issues/136)). `=~` is a warning; `docs/spl/search-syntax.md` lists the clauses checked.
 - **SPL knows the Machine Learning Toolkit commands.** `fit`, `apply`, `score`, `summary`, `listmodels` and `deletemodel` are in the catalog, marked `app = "MLTK"`, with hover and completion ([#123](https://github.com/opentidehq/language-server/issues/123)).
 
@@ -421,7 +422,7 @@ Queries are checked against the tables and columns they read: every Azure Monito
 
 - **SPL search clauses from deployed detections parse.** The base search, `search`, `tstats ... where` and subsearches no longer report `spl_parse_error` on these forms, while upper-case `AND`, `OR` and `NOT` stay reserved ([#120](https://github.com/opentidehq/language-server/issues/120)):
   - `TERM()` and `CASE()` contents, raw, even without the `)`
-  - `tstats ... by PREFIX(src=)` and `by _time span=1h`
+  - `tstats ... by PREFIX(src=)` and `by _time span=1h` (`PREFIX(src=)` is still an error as a `where` term)
   - a quoted field (`"a.b"=x`) or one holding `-` or `{}`
   - values such as `earliest=-1h@h`, `latest=now()` and `host=S-RC*`
   - `IN` with a space-separated list
@@ -442,7 +443,7 @@ Queries are checked against the tables and columns they read: every Azure Monito
 - **SPL commands Splunk rejects without arguments are syntax errors again.** `append`, `top`, `rare`, `transaction`, `bin`, `geostats` and 42 other catalogued commands (`xyseries`, `regex`, `iplocation`, `rest`, `metadata`, ...) were accepted with none, and `geostats` with a `by` clause and no aggregate is an error too ([#135](https://github.com/opentidehq/language-server/issues/135)).
 - **SPL syntax errors point at the bad token.** Every error ran from the query's first line to its end; `spl_parse_error` marks the first bad token of each error region (`SPL syntax error: unexpected '.'`), an unclosed `(` or `[`, or a missing token, at most five per query ([#119](https://github.com/opentidehq/language-server/issues/119)). Unbalanced parentheses say so, on the parenthesis.
 - **`spl_unknown_command` is reported only in command position.** That is after a `|` or first in the query or a subsearch, outside an error region; a word error recovery stranded, such as `dest` in `| lookup t-x.csv key AS dest OUTPUT c AS m`, was reported as an unknown command ([#119](https://github.com/opentidehq/language-server/issues/119)).
-- **`spl_wildcard` and `spl_leading_not` look only at the base search.** They describe the cost of reading the index, so a later `| search NOT outcome="Failure"` is no longer flagged, and `field=*`, the existence check, is never `spl_wildcard` ([#124](https://github.com/opentidehq/language-server/issues/124)). A leading or mid-token wildcard is flagged only when no `index=`, `sourcetype=`, `source=`, `host=`, `TERM()`, `PREFIX()` or macro narrows the read.
+- **`spl_wildcard` and `spl_leading_not` look only at the base search.** They describe the cost of reading the index, so a later `| search NOT outcome="Failure"` is no longer flagged, and `field=*`, the existence check, is never `spl_wildcard`, though a bare `*` term still is ([#124](https://github.com/opentidehq/language-server/issues/124)). A leading or mid-token wildcard is flagged only when no `index=`, `sourcetype=`, `source=`, `host=`, `TERM()`, `PREFIX()` or macro narrows the read.
 
 ## [0.6.0] - 2026-10-29
 
