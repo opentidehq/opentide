@@ -63,7 +63,7 @@ Precedents:
 - **0.4.0**: fixes changed output that scripts depend on, and a security fix required users to regenerate CI (#244).
 - **0.5.0**: `threat.impact` and `threat.leverage` became lists (#189).
 
-State the rationale in the CHANGELOG upgrade cue.
+State the rationale in the version's summary or in the GitHub Release body ("It is a minor because …").
 
 ## Required two-step flow
 
@@ -84,16 +84,17 @@ Create a `docs:` (or `chore:`) PR against `development`.
 - **Cloud agents:** branch `cursor/prepare-0.x.y-…`, Conventional Commit, PR to `development`.
 - **Local agents:** branch `docs/prepare-0.x.y` from `origin/development`, `gh pr create --base development`.
 
+What the three notes files say, and how, is the [`release-notes`](../release-notes/SKILL.md) skill:
+the parts of a version (summary, Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed,
+Security, in that order) and how to write each entry. This step is where they go.
+
 #### 1. `CHANGELOG.md` (Keep a Changelog)
 
 Move `[Unreleased]` into a dated version section. Keep an empty `[Unreleased]` heading above it.
 
-Shape (see existing `[0.1.3]` section):
-
 - Keep a blank `## [Unreleased]` above the new version
-- `## [0.x.y] — YYYY-MM-DD` plus one-line upgrade cue
-- `### Added` / `### Changed` / `### Fixed` as appropriate
-- `### Install` with `pip install opentide==0.x.y` and the `OPENTIDE_REPO_ROOT` + `opentide validate --strict` snippet used in prior versions
+- `## [0.x.y] — YYYY-MM-DD`, then its summary paragraph
+- The entries the pull requests added, in their parts (`### Upgrade`, `### Breaking`, `### Added`, …), in the order of the release-notes skill. No `### Install`: the install commands are in the other two files
 
 Footer compare links (bottom of `CHANGELOG.md`):
 
@@ -106,15 +107,15 @@ Keep existing `[0.x.(y-1)]:` (etc.) rows.
 
 #### 2. `docs/usage/releases.md`
 
-Add a **new top section** (Fumadocs page users see). Copy the 0.1.3 block: title, date, upgrade cue, Install, what changed, Links (PyPI / GitHub Release / CHANGELOG).
+Add a **new top section**: the page [opentide.org/releases](https://opentide.org/releases/) renders. Its shape is in the release-notes skill: heading, summary, **Install** (three lines), **Upgrade**, the change parts as bold lines, the CHANGELOG line with the version's anchor, **Links** (PyPI / GitHub Release / CHANGELOG).
 
 #### 3. `.github/release-notes/v0.x.y.md`
 
-GitHub Release body. Copy [`.github/release-notes/v0.1.3.md`](../../../.github/release-notes/v0.1.3.md):
+GitHub Release body, in the order of the release-notes skill:
 
-- Title + date + "Patch on …"
-- Install
-- Fixed / Added (with issue links)
+- Title + date + "Minor release on …" / "Patch release on …", then the summary
+- `## Upgrade`: a fence with the install and upgrade commands, and a Before/Now table where behaviour changed
+- `## Breaking`, `## Added`, `## Changed`, … (with issue links)
 - Verify (commands; expect `0.x.y`)
 - Links (PyPI, GitHub Release, CHANGELOG, Usage → Releases)
 
@@ -301,6 +302,7 @@ Job needs `id-token: write` and `contents: read` (already set in the workflow).
 - [`docs/internal/pypi-trusted-publishing.md`](../../../docs/internal/pypi-trusted-publishing.md) — OIDC publisher fields, first-upload vs later releases
 - [`docs/usage/releases.md`](../../../docs/usage/releases.md) — public release page
 - [`CHANGELOG.md`](../../../CHANGELOG.md)
-- [`.github/release-notes/v0.1.3.md`](../../../.github/release-notes/v0.1.3.md) — notes template
+- [`release-notes`](../release-notes/SKILL.md) — what the notes say, and the shape of each file
+- [`.github/release-notes/v0.22.0.md`](../../../.github/release-notes/v0.22.0.md) — a GitHub Release body
 - [`docs-maintenance`](../docs-maintenance/SKILL.md) — Fumadocs pages in Step 1
 - `AGENTS.md` — trunk, Conventional Commits, branch and PR workflow

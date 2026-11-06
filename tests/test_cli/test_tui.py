@@ -216,10 +216,14 @@ def test_select_a_rule_run_validate_and_see_its_diagnostic(tutorial_repo: Path) 
         assert "tlp: clearr" in _text(app, "#source")
         await pilot.press("v")
         await _settle(app, pilot)
+        # #215: the top block counts the finding; the source shows it at its line.
         detail = _text(app, "#diagnostics")
-        assert "error[vocab_unknown]:" in detail
-        assert f"╭─▶ {RULE_FILE}:8\n" in detail
-        assert "help: did you mean 'clear'?" in detail
+        assert "Last validate run\n✗ 1  on line 8" in detail
+        source = _text(app, "#source")
+        assert "tlp: clearr" in source
+        assert "error[vocab_unknown]:" in source
+        assert "help: did you mean 'clear'?" in source
+        assert source.index("tlp: clearr") < source.index("error[vocab_unknown]")
         assert "Sentinel KQL Rule  ✗ 1" in _labels(app.query_one("#tree", Tree).root)[-1]
         assert "opentide validate: 1 error in 1 file · " in _text(app, "#status")
         # The cursor stays on the rule after the tree is rebuilt.
@@ -295,7 +299,7 @@ def test_coverage_lists_techniques_and_opens_the_rule(tutorial_repo: Path) -> No
         table = app.query_one("#coverage-table", DataTable)
         assert [str(cell) for cell in table.get_row_at(0)] == [
             "T1059",
-            "1",
+            "1  1 own · 0 inherited",
             "Sentinel KQL Rule",
             "Simulated Actor",
         ]
@@ -906,11 +910,11 @@ def test_the_detail_pane_shows_what_the_editor_shows_before_any_validate_run(
         await pilot.press("down", "down")
         assert app.selected == RULE
         detail = _text(app, "#diagnostics")
-        assert "Language server\n" in detail
-        assert "error[kql_unknown_operator]: unknown tabular operator 'tak'" in detail
-        assert f"╭─▶ {RULE_FILE}:28:9\n" in detail
-        assert "help: did you mean 'take'?" in detail
+        assert "Language server\n✗ 1  on line 28" in detail
         assert "Not validated yet" in detail
+        source = _text(app, "#source")
+        assert "error[kql_unknown_operator]: unknown tabular operator 'tak'" in source
+        assert "help: did you mean 'take'?" in source
         await pilot.press("up")
         detail = _text(app, "#diagnostics")
         assert "✓ Nothing to report" in detail
@@ -950,16 +954,16 @@ def test_a_finding_both_report_is_shown_and_counted_once(tutorial_repo: Path) ->
 
     async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
         await pilot.press("down", "down")
-        before = _text(app, "#diagnostics")
+        before = _text(app, "#source")
         assert before.count("error[vocab_unknown]") == 1
         await pilot.press("v")
         await _settle(app, pilot)
-        after = _text(app, "#diagnostics")
-        # validate's frame, with its `did you mean`, and nothing left for the
+        after = _text(app, "#source")
+        # validate's finding, with its `did you mean`, and nothing left for the
         # language server to add.
         assert after.count("error[vocab_unknown]") == 1
         assert "help: did you mean 'clear'?" in after
-        assert "✓ Nothing to report" in after
+        assert "✓ Nothing to report" in _text(app, "#diagnostics")
         assert _labels(app.query_one("#tree", Tree).root)[-1].endswith("Sentinel KQL Rule  ✗ 1")
 
     _drive(tutorial_repo, script)
@@ -980,9 +984,8 @@ def test_validate_checks_queries_from_the_ui_and_its_query_findings_are_not_doub
         [deep] = [item for item in app.diagnostics if item.code == "kql_unknown_operator"]
         assert deep.source == tui_service.ENGINE
         assert (deep.line, deep.column, deep.end_column) == (28, 9, 14)
-        detail = _text(app, "#diagnostics")
-        assert detail.count("error[kql_unknown_operator]") == 1
-        assert "No diagnostics from the last validate run" in detail
+        assert _text(app, "#source").count("error[kql_unknown_operator]") == 1
+        assert "No diagnostics from the last validate run" in _text(app, "#diagnostics")
         assert _labels(app.query_one("#tree", Tree).root)[-1] == "    Sentinel KQL Rule  ✗ 1"
         log = await _results(app, pilot)
         assert "$ opentide validate" in log
@@ -1043,3 +1046,227 @@ def test_a_language_server_failure_does_not_lose_the_catalogue(
     assert catalogue.language_server.unavailable == (
         "The language server failed: RuntimeError: the engine broke"
     )
+
+
+# -- findings in place (#215) -------------------------------------------------
+
+
+def test_n_moves_to_each_finding_and_says_it_on_the_status_line(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+    _break_tlp(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        await pilot.press("n")
+        await pilot.pause()
+        assert app.current_finding == 0
+        status = _text(app, "#status")
+        assert status.startswith("1/2 error[vocab_unknown]:"), status
+        source = _text(app, "#source")
+        # The current finding is marked where it is, under its line.
+        assert "▶ error[vocab_unknown]" in source
+        assert "╰─ error[kql_unknown_operator]" in source
+        await pilot.press("n")
+        await pilot.pause()
+        assert _text(app, "#status").startswith("2/2 error[kql_unknown_operator]:")
+        assert "▶ error[kql_unknown_operator]" in _text(app, "#source")
+        # The pane scrolled the finding at line 28 into view.
+        detail = app.query_one("#detail")
+        assert detail.scroll_y > 0
+        await pilot.press("p")
+        await pilot.pause()
+        assert app.current_finding == 0
+        # Another object starts again from its first finding.
+        await pilot.press("up")
+        assert app.current_finding is None
+        await pilot.press("n")
+        assert _text(app, "#status").strip() == "No findings on this object"
+
+    _drive(tutorial_repo, script)
+
+
+def test_a_finding_span_carries_its_tooltip(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        view = app.query_one("#source", tui_app.SourceView)
+        [tak] = [
+            segment.style
+            for segment in Console(width=120, file=io.StringIO()).render(view._renderable)
+            if segment.text == "tak " and segment.style is not None
+        ]
+        assert tak.meta[tui_app.FINDING_META] == 0
+        tooltip = view.tooltip_text(0).plain
+        assert "error[kql_unknown_operator]: unknown tabular operator 'tak'" in tooltip
+        assert "help: did you mean 'take'?" in tooltip
+
+    _drive(tutorial_repo, script)
+
+
+def test_hover_comes_from_the_engine(tutorial_repo: Path) -> None:
+    _break_tlp(tutorial_repo)
+    catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+    rule = catalogue.entries[RULE]
+    assert rule.path is not None
+    text = rule.path.read_text(encoding="utf-8")
+    line = text.splitlines().index("  tlp: clearr") + 1
+    hover = catalogue.language_server.hover(rule.path, text, line, 4)
+    assert hover is not None and "tlp" in hover.lower()
+
+
+def test_without_a_hover_binding_the_tooltip_is_the_finding_alone() -> None:
+    report = tui_service.LanguageServerReport(workspace=object())
+    assert report.hover(Path("x.yaml"), "", 1, 1) is None
+    assert tui_service.LanguageServerReport().hover(Path("x.yaml"), "", 1, 1) is None
+
+
+def test_a_long_line_wraps_with_the_underline_on_its_own_text(tmp_path: Path) -> None:
+    path = tmp_path / "rule.yaml"
+    word = "verylongvalue"
+    path.write_text(f"name: x\ndescription: {' '.join([word] * 12)} BAD tail\n", encoding="utf-8")
+    line = path.read_text(encoding="utf-8").splitlines()[1]
+    column = line.index("BAD") + 1
+    finding = Diagnostic(
+        code="vocab_unknown",
+        severity="error",
+        message="m",
+        path=path,
+        line=2,
+        column=column,
+        end_column=column + 3,
+    )
+    view, findings = tui_app.source_view(path, [finding])
+    assert findings == [finding]
+    console = Console(width=60, file=io.StringIO(), color_system="truecolor")
+    underlined = "".join(
+        segment.text
+        for segment in console.render(view)
+        if segment.style is not None and segment.style.underline
+    )
+    assert underlined == "BAD"
+    rendered = "".join(segment.text for segment in console.render(view))
+    # The line wrapped, and the annotation follows it.
+    assert rendered.count(word) == 12
+    assert rendered.index("BAD") < rendered.index("error[vocab_unknown]")
+
+
+# -- the object view (#776) ---------------------------------------------------
+
+
+def test_the_object_view_reads_the_rule_by_its_schema(tutorial_repo: Path) -> None:
+    from opentide.cli.services.object_view import field_nodes
+
+    catalogue = load_catalogue(CliContext(repo=tutorial_repo))
+    view = catalogue.object_view(RULE)
+    assert view is not None
+    assert view.name == "Sentinel KQL Rule"
+    assert view.header["schema"] == "rule::1.0"
+    assert view.header["tlp"] == "clear"
+    assert "disclosure" in view.tlp_meaning
+    titles = [section.title for section in view.sections]
+    assert titles[0] == "Overview"
+    rows = {row.path: row for section in view.sections for row in section.rows}
+    # A UUID reads as the name of what it names, and can be followed.
+    model = rows["detection_model"]
+    [target] = model.links
+    assert target is not None
+    assert (target.name, target.kind, target.opens) == (
+        "Credential Access Objective",
+        "objective",
+        OBJECTIVE,
+    )
+    assert view.links == (target,)
+    # A vocabulary value carries what it means; a severity is a badge.
+    severity = rows["severity"]
+    assert severity.severity and severity.meanings[0]
+    # The unused optional fields of rule::1.0: none set, none required, each
+    # under a parent the rule sets (or top-level), with its description.
+    from opentide.cli.services.object_view import _present
+
+    nodes = field_nodes()["rule::1.0"]
+    present = _present(catalogue.bodies[RULE])
+    assert view.unset
+    for item in view.unset:
+        node = nodes[item.path]
+        assert not node["required"], item.path
+        assert item.path not in present, item.path
+        parent = item.path.rsplit(".", 1)[0] if "." in item.path else ""
+        assert parent == "" or parent in present, item.path
+    assert "metadata.reviewed" not in {item.path for item in view.unset}
+
+
+def test_unset_fields_follow_the_objects_revision() -> None:
+    from opentide.cli.services.object_view import build_object_view
+
+    body = {
+        "name": "Rule",
+        "metadata": {"uuid": RULE, "schema": "rule::1.1", "version": 1, "tlp": "clear"},
+        "description": "d",
+    }
+    newer = {item.path for item in build_object_view(body, "rule", {}).unset}
+    older = {
+        item.path
+        for item in build_object_view(
+            {**body, "metadata": {**body["metadata"], "schema": "rule::1.0"}}, "rule", {}
+        ).unset
+    }
+    # rule::1.1 adds metadata.reviewed; rule::1.0 does not define it.
+    assert "metadata.reviewed" in newer
+    assert "metadata.reviewed" not in older
+    unknown = build_object_view(
+        {**body, "metadata": {**body["metadata"], "schema": "rule::9.9"}}, "rule", {}
+    )
+    assert unknown.unknown_schema and unknown.unset == ()
+
+
+def test_the_page_is_the_default_and_y_shows_the_file(tutorial_repo: Path) -> None:
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        page = app.query_one("#object", Static)
+        source = app.query_one("#source", Static)
+        assert page.display and not source.display
+        shown = _text(app, "#object")
+        assert "TLP:CLEAR" in shown
+        assert "Overview" in shown
+        assert "→ Credential Access Objective  objective" in shown
+        # The query has its own panel, named by platform and language.
+        assert "sentinel  kql" in shown
+        unset = app.query_one("#unset", tui_app.Collapsible)
+        assert unset.display and unset.collapsed
+        assert unset.title.startswith("Not set (")
+        assert "Not set (0)" not in unset.title
+        await pilot.press("y")
+        assert source.display and not page.display
+        assert "detection_model:" in _text(app, "#source")
+        await pilot.press("y")
+        assert page.display
+
+    _drive(tutorial_repo, script)
+
+
+def test_f_follows_a_reference_and_n_opens_the_file_at_a_finding(tutorial_repo: Path) -> None:
+    _break_query(tutorial_repo)
+
+    async def script(app: OpentideTui, pilot: Pilot[None]) -> None:
+        await pilot.press("down", "down")
+        assert app.selected == RULE
+        # The finding is marked under its field on the page too.
+        assert "error[kql_unknown_operator]" in _text(app, "#object")
+        await pilot.press("n")
+        await pilot.pause()
+        assert app.query_one("#source", Static).display
+        assert "▶ error[kql_unknown_operator]" in _text(app, "#source")
+        # Another object opens on its page again, not on the file `n` showed.
+        await pilot.press("up")
+        await pilot.pause()
+        assert not app.raw
+        assert app.query_one("#object", Static).display
+        await pilot.press("down", "f")
+        await pilot.pause()
+        assert app.selected == OBJECTIVE
+        assert "Opened objective Credential Access Objective" in _text(app, "#status")
+
+    _drive(tutorial_repo, script)

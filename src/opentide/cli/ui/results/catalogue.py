@@ -289,9 +289,30 @@ class PlatformInfo(ResultModel):
 
 
 class TechniqueCoverage(ResultModel):
+    """The rules that cover a technique: listed by the rule, or inherited from its objective."""
+
     technique: str
-    rules: list[str] = Field(description="UUIDs of the rules that cover the technique")
+    rules: list[str] = Field(
+        description=(
+            "UUIDs of the rules that cover the technique or a sub-technique of it, "
+            "own first, then inherited"
+        )
+    )
     count: int
+    own: list[str] = Field(
+        default_factory=list, description="Rules that list the technique in their own techniques"
+    )
+    inherited: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Rules that cover it only through their objective (directly or through a "
+            "signal) or that objective's threats"
+        ),
+    )
+    matched_techniques: list[str] = Field(
+        default_factory=list,
+        description="The catalogue's technique IDs that matched (T1059.001 for T1059)",
+    )
 
 
 class VocabularyOverview(ResultModel):

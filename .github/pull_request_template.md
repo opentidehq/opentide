@@ -9,7 +9,7 @@
 
 ## Checklist
 
-- [ ] User-visible change: entry under `## [Unreleased]` in `CHANGELOG.md`
+- [ ] User-visible change: entry under `## [Unreleased]` in `CHANGELOG.md`, in the right part with a bold lead ([`release-notes`](../.agents/skills/release-notes/SKILL.md))
 - [ ] CLI / MCP / SDK surface change: `docs/` updated
 - [ ] No new `# noqa` / `# ty: ignore` without a reason on the same line
 - [ ] Checked against [`review-checklist`](../.agents/skills/review-checklist/SKILL.md)

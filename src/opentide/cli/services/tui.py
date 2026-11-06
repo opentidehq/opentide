@@ -1,7 +1,8 @@
 """What ``opentide tui`` shows and runs, without Textual.
 
 The catalogue comes from the registry (:func:`collect_info` reloads it), the
-coverage table from the same lookup as ``opentide info --technique … coverage``,
+coverage table from the same lookup as ``opentide info coverage --technique …``
+(own and inherited techniques, :mod:`opentide.core.technique_coverage`),
 the language server's findings from the engine behind ``opentide lsp start``,
 and the actions call the service functions behind ``validate``, ``generate``
 and ``deploy --dry-run``, so the terminal UI cannot disagree with the CLI.
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
+from opentide.cli.services.object_view import LinkTarget, ObjectView, build_object_view
 from opentide.cli.services.visibility import VisibilityReport
 from opentide.cli.ui.contract import Failure
 
@@ -54,9 +56,14 @@ class TechniqueCoverage:
     """One ATT&CK technique: the rules that detect it and the objects that name it."""
 
     technique: str
+    #: Every rule that covers it: those that list it, then those that inherit it.
     rules: tuple[str, ...]
     #: Threats and objectives that list the technique.
     referenced_by: tuple[str, ...]
+    #: Rules that list the technique (or a sub-technique) themselves.
+    own: tuple[str, ...] = ()
+    #: Rules that cover it only through their objective, or that objective's threats.
+    inherited: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -77,6 +84,23 @@ class LanguageServerReport:
     unavailable: str | None = None
     #: What to do about it.
     advice: str | None = None
+    #: The engine's index of the workspace, for :meth:`hover`; ``None`` without the engine.
+    workspace: Any = dataclasses.field(default=None, compare=False, repr=False)
+
+    def hover(self, path: Path | None, text: str, line: int, column: int) -> str | None:
+        """What an editor's hover shows at 1-based *line* and *column* of *path*, as Markdown.
+
+        ``None`` without the engine, or where it has nothing to say. An engine
+        whose binding has no ``hover`` (one older than this opentide) says
+        nothing either: the TUI shows the finding without it.
+        """
+        hover = getattr(self.workspace, "hover", None)
+        if path is None or hover is None:
+            return None
+        try:
+            return hover(str(path), text, line, column)
+        except ValueError:
+            return None
 
     def for_path(self, path: Path | None) -> tuple[Diagnostic, ...]:
         if path is None:
@@ -98,6 +122,18 @@ class Catalogue:
     language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
     #: The log sources ``visibility.toml`` declares and what uses them (the Visibility tab).
     visibility: VisibilityReport | None = None
+    #: Each object's body as the registry loaded it, for the object view.
+    bodies: Mapping[str, Mapping[str, Any]] = dataclasses.field(default_factory=dict)
+    #: What each UUID a reference can name is: the objects, and every signal.
+    links: Mapping[str, LinkTarget] = dataclasses.field(default_factory=dict)
+
+    def object_view(self, uuid: str) -> ObjectView | None:
+        """The page :mod:`opentide.cli.tui_app` shows for *uuid* by default (#776)."""
+        entry = self.entries.get(uuid)
+        body = self.bodies.get(uuid)
+        if entry is None or body is None:
+            return None
+        return build_object_view(body, entry.kind, self.links)
 
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
@@ -126,10 +162,11 @@ class Catalogue:
 
 def load_catalogue(ctx: CliContext) -> Catalogue:
     """Reload the registry for *ctx*'s workspace and snapshot what the UI shows."""
-    from opentide.cli.services.info import _technique_coverage, collect_info
+    from opentide.cli.services.info import collect_info
     from opentide.core.index_manager import IndexManager
     from opentide.core.object_fields import object_techniques
     from opentide.core.registry import Opentide
+    from opentide.core.technique_coverage import match_technique, rule_technique_index
 
     collect_info(ctx)  # applies the context's environment and reloads the registry
     index = Opentide.Index
@@ -158,15 +195,34 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
                 techniques.add(key)
                 if family != "rules":
                     referenced.setdefault(key, set()).add(uuid)
-    coverage = tuple(
-        TechniqueCoverage(
-            technique=technique,
-            # The lookup behind `opentide info --technique … coverage`: a
-            # parent technique also counts the rules on its sub-techniques.
-            rules=tuple(_technique_coverage(technique)["rules"]),
-            referenced_by=tuple(sorted(referenced.get(technique, ()))),
+    # The lookup behind `opentide info coverage --technique …`: own and inherited
+    # techniques, and a parent technique also counts its sub-techniques' rules.
+    rule_techniques = rule_technique_index(Opentide.Models)
+    coverage: list[TechniqueCoverage] = []
+    for technique in sorted(techniques):
+        found = match_technique(technique, rule_techniques)
+        coverage.append(
+            TechniqueCoverage(
+                technique=technique,
+                rules=found.rules,
+                referenced_by=tuple(sorted(referenced.get(technique, ()))),
+                own=found.own,
+                inherited=found.inherited,
+            )
         )
-        for technique in sorted(techniques)
+
+    from opentide.cli.services.object_view import catalogue_links, field_nodes
+    from opentide.core.object_fields import as_body
+
+    # The object view reads the field catalogue: build it here, off the UI thread.
+    field_nodes()
+    bodies = {
+        uuid: as_body(body)
+        for family, _kind in _FAMILIES
+        for uuid, body in families[family].items()
+    }
+    links = catalogue_links(
+        families, {uuid: (entry.name, entry.kind) for uuid, entry in entries.items()}
     )
 
     load_errors = tuple(
@@ -179,10 +235,12 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
     return Catalogue(
         repo=Path(ctx.repo).resolve(),
         entries=entries,
-        coverage=coverage,
+        coverage=tuple(coverage),
         load_errors=load_errors,
         language_server=_language_server_report(),
         visibility=_visibility_report(),
+        bodies=bodies,
+        links=links,
     )
 
 
@@ -257,7 +315,7 @@ def language_server_report() -> LanguageServerReport:
             )
     except EngineUnavailableError as exc:
         return LanguageServerReport(unavailable=str(exc), advice=exc.advice)
-    return LanguageServerReport(findings=findings)
+    return LanguageServerReport(findings=findings, workspace=space)
 
 
 def _name(body: Mapping[str, Any], uuid: str) -> str:

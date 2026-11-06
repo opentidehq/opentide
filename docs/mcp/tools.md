@@ -124,8 +124,12 @@ ATT&CK coverage analysis with gap identification. Use it to answer "what do we d
 | `technique` | string | `""` | When set, return coverage for that technique only |
 | `tactic` | string | `""` | Echoed as `tactic_filter` when no technique is set; **does not filter** the matrix today |
 
-Coverage reads the same technique locations as `opentide info coverage --technique <id>`:
-top-level `techniques`, `tags.techniques`, `tags.attack`, and `threat.att&ck`.
+Coverage counts the same rules as `opentide info coverage --technique <id>`: a rule
+covers the techniques in its own `techniques`, and those it inherits from the objective
+its `detection_model` names (directly, or through one of the objective's signals), or,
+when that objective lists none, from the objective's threats. `own_rules` and
+`inherited_rules` keep the two apart; `rules` holds both. In the matrix, `own_matrix`
+lists only the rules that name each technique themselves.
 
 Matching is case-insensitive, and a parent technique covers its sub-techniques:
 `T1059` returns rules tagged `T1059` **and** `T1059.001`, `T1059.003`, … . A
@@ -142,7 +146,9 @@ answered, so you can tell parent-level from sub-technique-level coverage.
   "technique": "T1059",
   "covered": true,
   "matched_techniques": ["T1059", "T1059.001"],
-  "rules": ["00000000-0000-4000-8003-000000000001"]
+  "rules": ["00000000-0000-4000-8003-000000000001", "00000000-0000-4000-8003-000000000002"],
+  "own_rules": ["00000000-0000-4000-8003-000000000001"],
+  "inherited_rules": ["00000000-0000-4000-8003-000000000002"]
 }
 ```
 
@@ -151,7 +157,8 @@ Without `technique`:
 ```json
 {
   "technique_count": 12,
-  "matrix": { "T1059": ["…8003…"], "T1003": [] },
+  "matrix": { "T1059": ["…8003…01", "…8003…02"], "T1003": ["…8003…02"] },
+  "own_matrix": { "T1059": ["…8003…01"] },
   "tactic_filter": null
 }
 ```
@@ -519,7 +526,7 @@ deploy_rule(uuid=<new rule>, platform="sentinel", dry_run=true)   → preview
 ### Audit coverage
 
 ```text
-coverage()                                → technique_count + matrix of technique → rule UUIDs
+coverage()                                → technique_count + matrix of technique → rule UUIDs (own and inherited)
 coverage(technique="T1059")               → covered bool + rules list for one technique
 search(technique=<gap>)                   → confirm nothing exists
 # propose new objective/rule for the gap
