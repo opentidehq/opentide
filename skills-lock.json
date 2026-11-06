@@ -55,6 +55,12 @@
       "skillPath": ".agents/skills/release-management/SKILL.md",
       "computedHash": "project-local"
     },
+    "release-notes": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/release-notes/SKILL.md",
+      "computedHash": "project-local"
+    },
     "review-checklist": {
       "source": "opentidehq/opentide",
       "sourceType": "project",

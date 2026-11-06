@@ -9,7 +9,7 @@ from opentide.cli.enums import DetectionPlatform, platform_label
 from opentide.cli.ui.glyphs import glyph
 from opentide.core.index_manager import IndexManager
 from opentide.core.logging.config import get_stdout_console
-from opentide.core.object_fields import as_body, matches_technique, object_platforms
+from opentide.core.object_fields import as_body, object_platforms
 from opentide.core.registry import Opentide
 from opentide.generation.vocabulary import (
     VocabularyDefinition,
@@ -195,8 +195,13 @@ def render_info(payload: dict[str, Any], *, section: str | None = None) -> None:
     if section == "coverage":
         coverage = payload["coverage"]
         count = coverage["count"]
+        split = (
+            f" ({len(coverage.get('own', ()))} own, {len(coverage.get('inherited', ()))} inherited)"
+            if count
+            else ""
+        )
         console.print(
-            f"Coverage for {coverage['technique']}: {count} rule{'' if count == 1 else 's'}",
+            f"Coverage for {coverage['technique']}: {count} rule{'' if count == 1 else 's'}{split}",
             markup=False,
         )
         if coverage["rules"]:
@@ -337,12 +342,15 @@ def _package_version() -> str:
 
 
 def _technique_coverage(technique: str) -> dict[str, Any]:
-    """Return rules referencing an ATT&CK technique."""
-    needle = technique.strip()
-    matching = [
-        uuid for uuid, rule in Opentide.Models.rules.items() if matches_technique(rule, needle)
-    ]
-    return {"technique": needle, "rules": matching, "count": len(matching)}
+    """The rules that cover an ATT&CK technique: those that list it and those that inherit it.
+
+    A rule inherits its objective's techniques (through a signal's objective),
+    or that objective's threats', as ``info catalog`` reports them. ``rules``
+    and ``count`` hold both; ``own`` and ``inherited`` keep them apart.
+    """
+    from opentide.core.technique_coverage import match_technique, rule_technique_index
+
+    return match_technique(technique, rule_technique_index(Opentide.Models)).as_payload()
 
 
 def _file_vocabularies() -> dict[str, VocabularyDefinition]:

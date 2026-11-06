@@ -56,7 +56,8 @@ runner lost) and treat a second failure as real.
 1. `scripts/ci-local.sh --full` green (it is the pre-push hook; cloud sessions don't install it).
 2. The diff passes [`review-checklist`](../review-checklist/SKILL.md), including a regression
    test that fails without the fix.
-3. User-visible change → `## [Unreleased]` in `CHANGELOG.md`; CLI/MCP/SDK surface change →
+3. User-visible change → `## [Unreleased]` in `CHANGELOG.md`
+   ([`release-notes`](../release-notes/SKILL.md)); CLI/MCP/SDK surface change →
    `docs/` ([`docs-maintenance`](../docs-maintenance/SKILL.md)).
 4. Conventional Commit subject (`fix(scope): …`), body explains the failure a user saw.
 

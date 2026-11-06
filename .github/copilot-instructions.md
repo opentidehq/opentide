@@ -19,6 +19,7 @@ including the code quality bar and the definition of done.
 | CLI E2E tests | [`.agents/skills/cli-e2e-testing/SKILL.md`](../.agents/skills/cli-e2e-testing/SKILL.md) |
 | MCP server | [`.agents/skills/mcp-server/SKILL.md`](../.agents/skills/mcp-server/SKILL.md) |
 | Docs | [`.agents/skills/docs-maintenance/SKILL.md`](../.agents/skills/docs-maintenance/SKILL.md) |
+| Changelog entries, release notes | [`.agents/skills/release-notes/SKILL.md`](../.agents/skills/release-notes/SKILL.md) |
 | Releases | [`.agents/skills/release-management/SKILL.md`](../.agents/skills/release-management/SKILL.md) |
 
 **Version control:** git. Branch from `origin/development` as `<type>/<short-slug>`, use Conventional Commits, and open PRs against `development` with `gh pr create`.

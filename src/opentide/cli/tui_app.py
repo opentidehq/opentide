@@ -53,6 +53,7 @@ from opentide.cli.services.tui import (
     Catalogue,
     CatalogueEntry,
     Diagnostic,
+    TechniqueCoverage,
     load_catalogue,
     plural,
     relative,
@@ -655,6 +656,8 @@ class OpentideTui(App[None]):
         if data != self.selected:
             self.current_finding = None
             self.link_index = 0
+            # `n` showed the file at a finding; another object opens on its page.
+            self.raw = False
         self.selected = data
         heading = self.query_one("#heading", Static)
         found = self.query_one("#diagnostics", Static)
@@ -785,7 +788,7 @@ class OpentideTui(App[None]):
                 for uuid in row.referenced_by
                 if uuid in catalogue.entries
             ]
-            count = Text(str(len(row.rules)), style="" if row.rules else "bold red")
+            count = coverage_count(row)
             table.add_row(
                 row.technique,
                 count,
@@ -847,6 +850,20 @@ class OpentideTui(App[None]):
             if row.technique == technique and row.rules:
                 self.select(row.rules[0])
                 return
+
+
+def coverage_count(row: TechniqueCoverage) -> Text:
+    """``13  0 own · 13 inherited``: how many rules cover a technique, and how.
+
+    A rule that lists the technique is a stronger claim than one whose
+    objective does, so the split is shown; ``0`` in red is a gap.
+    """
+    if not row.rules:
+        return Text("0", style="bold red")
+    return Text.assemble(
+        str(len(row.rules)),
+        (f"  {len(row.own)} own · {len(row.inherited)} inherited", "dim"),
+    )
 
 
 #: A severity value's badge colours (background).

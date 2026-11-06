@@ -299,7 +299,7 @@ def test_coverage_lists_techniques_and_opens_the_rule(tutorial_repo: Path) -> No
         table = app.query_one("#coverage-table", DataTable)
         assert [str(cell) for cell in table.get_row_at(0)] == [
             "T1059",
-            "1",
+            "1  1 own · 0 inherited",
             "Sentinel KQL Rule",
             "Simulated Actor",
         ]
@@ -1259,7 +1259,12 @@ def test_f_follows_a_reference_and_n_opens_the_file_at_a_finding(tutorial_repo: 
         await pilot.pause()
         assert app.query_one("#source", Static).display
         assert "▶ error[kql_unknown_operator]" in _text(app, "#source")
-        await pilot.press("y", "f")
+        # Another object opens on its page again, not on the file `n` showed.
+        await pilot.press("up")
+        await pilot.pause()
+        assert not app.raw
+        assert app.query_one("#object", Static).display
+        await pilot.press("down", "f")
         await pilot.pause()
         assert app.selected == OBJECTIVE
         assert "Opened objective Credential Access Objective" in _text(app, "#status")
