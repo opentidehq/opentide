@@ -60,6 +60,7 @@ from opentide.cli.services.tui import (
     run_action,
     summary_line,
 )
+from opentide.cli.tui_tabs.chains import ChainsPane
 from opentide.cli.tui_tabs.configuration import ConfigurationPane
 from opentide.cli.tui_tabs.visibility import VisibilityPane
 from opentide.cli.ui.mode import OutputMode
@@ -94,6 +95,7 @@ _TAB_FOCUS = {
     "results": "#log",
     "visibility": "#vis-table",
     "configuration": "#config-files",
+    "chains": "#chain-nodes",
 }
 
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
@@ -319,6 +321,7 @@ class OpentideTui(App[None]):
         Binding("3", "show_tab('results')", "Results", show=False),
         Binding("4", "show_tab('visibility')", "Visibility", show=False),
         Binding("5", "show_tab('configuration')", "Configuration", show=False),
+        Binding("6", "show_tab('chains')", "Chains", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -373,6 +376,8 @@ class OpentideTui(App[None]):
                 yield VisibilityPane(self.select, id="visibility-pane")
             with TabPane("Configuration", id="configuration"):
                 yield ConfigurationPane(self.select, id="configuration-pane")
+            with TabPane("Chains", id="chains"):
+                yield ChainsPane(self.select, id="chains-pane")
         yield Static("", id="status")
         yield Footer()
 
@@ -407,6 +412,9 @@ class OpentideTui(App[None]):
         self._start("load", self._load, "the catalogue reload")
 
     def action_show_tab(self, tab: str) -> None:
+        if tab == "chains" and self.catalogue is not None:
+            # The chain is drawn around the threat selected in the Catalogue.
+            self.query_one(ChainsPane).show(self.catalogue, self.selected)
         self.query_one(TabbedContent).active = tab
         # Focus follows the tab: TabbedContent shows the pane holding the
         # focused widget, so a focus left in the hidden pane switches back.
@@ -531,6 +539,7 @@ class OpentideTui(App[None]):
         self._fill_coverage(catalogue)
         self.query_one(VisibilityPane).show(catalogue.visibility, catalogue)
         self.query_one(ConfigurationPane).show(catalogue.configuration, catalogue)
+        self.query_one(ChainsPane).show(catalogue, self.selected)
         self._show_detail(self.selected)
 
     def findings(self, entry: CatalogueEntry) -> tuple[list[Diagnostic], list[Diagnostic]]:

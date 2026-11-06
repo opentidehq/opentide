@@ -23,6 +23,7 @@ It reads the same registry as every other command and runs the same service func
 | Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
 | Visibility | `4` | The log sources `.opentide/configurations/visibility.toml` declares and the detections that use them: see [Visibility](#visibility) |
 | Configuration | `5` | `deployment.toml`, `lint.toml`, `documentation.toml`, `sharing.toml` and each `platforms/*.toml`, read rather than as TOML: see [Configuration](#configuration) |
+| Chains | `6` | `threat.chaining` around the selected threat, drawn as attack flow: see [Chains](#chains) |
 
 The header carries the opentide pill, the tagline, the repository name and the catalogue counts. The tagline shows only where it fits whole: when the terminal is too narrow for it beside the counts, the header keeps the pill and the counts.
 
@@ -68,6 +69,15 @@ The Configuration tab lists the configuration files on the left and shows the hi
 No credential value appears anywhere, the raw file included. A value with a `setup` table, or a key that names a secret (`key`, `token`, `password`, `secret`, `auth`, `credentials`…), anywhere on its key path, such as each value under `[platform.credentials]`, reads as its variable name and whether the environment sets it (`${AZURE_CLIENT_SECRET}  unset`), as [`opentide doctor`](./doctor.md) reports it, or as `•••• hidden` when it is a literal. The user and password of a URL are hidden too, up to the last `@` before the host. A switch such as `ssl = true` is shown as it is.
 
 The raw file is redacted however its TOML writes a value (inline tables and arrays, quoted keys and headers, strings over several lines), then read back to check that no credential is left in it. A file that is not valid TOML has no raw view: `t` says where the error is (`not valid TOML: line 3, column 14`), never what the line holds. A file whose redaction cannot be proven, for example because a comment quotes a credential the file also sets, has no raw view either; its settings are still listed.
+## Chains
+
+The Chains tab draws `threat.chaining` around one threat: the one selected in the Catalogue, else the first with links. A whole catalogue's chaining is too much to read at once, so it starts with the threats one link away and grows by hops.
+
+- **Sequence links** (`sequence::preceeds`, `sequence::succeeds`) run left to right as attack flow: each threat is a box, `──▶` between steps.
+- **Each box** shows the rules under the threat's objectives, in red when there are none (an undetected step), and how many of the techniques it names some rule covers, own or inherited, as the [Coverage tab](#layout) counts them.
+- **Supporting and atomicity links** (`support::*`, `atomicity::*`) are listed beside the flow, labelled by how they read (`enables`, `implemented by`, `synergizes with`) and coloured by relation. Threats linked only that way are shown under the flow.
+- **One link, shown once:** a link written from both ends (`A preceeds B` in A, `B succeeds A` in B) is merged, with both descriptions. A link to a threat the catalogue does not have says so.
+- **The list on the left** holds the threats shown. Highlighting one describes its links. `Enter` opens it in the Catalogue, `c` centres the chain on it, `+` and `-` add or remove a hop (up to 4), and `l` cycles the relations shown: all, sequence, atomicity, support (`r` stays Reload).
 
 ## The language server
 

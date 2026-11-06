@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
+from opentide.cli.services.chains_view import ChainEdge, chain_edges
 from opentide.cli.services.configuration_view import ConfigurationView
 from opentide.cli.services.object_view import LinkTarget, ObjectView, build_object_view
 from opentide.cli.services.visibility import VisibilityReport
@@ -138,6 +139,8 @@ class Catalogue:
 
     #: The configuration files, read for the Configuration tab (no credential value in it).
     configuration: ConfigurationView | None = None
+    #: Every threat chaining link, each once (the Chains tab).
+    chains: tuple[ChainEdge, ...] = ()
 
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
@@ -246,6 +249,7 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         bodies=bodies,
         links=links,
         configuration=_configuration_view(families["rules"]),
+        chains=chain_edges(families["threats"]),
     )
 
 
