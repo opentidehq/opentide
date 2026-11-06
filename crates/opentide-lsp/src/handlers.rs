@@ -350,6 +350,10 @@ fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::Cli
             && edit
                 .and_then(|e| e.resource_operations.as_ref())
                 .is_some_and(|ops| ops.contains(&lsp::ResourceOperationKind::Create)),
+        rename_files: edit.and_then(|e| e.document_changes).unwrap_or(false)
+            && edit
+                .and_then(|e| e.resource_operations.as_ref())
+                .is_some_and(|ops| ops.contains(&lsp::ResourceOperationKind::Rename)),
         code_description: publish
             .and_then(|p| p.code_description_support)
             .unwrap_or(false),
@@ -1592,6 +1596,11 @@ fn handle_code_action(
             let Some(suggestion) = &finding.suggestion else {
                 continue;
             };
+            if finding.code == codes::FILENAME_SLUG {
+                // A file name, not text: rename the file where the client can.
+                actions.extend(rename_action(session, &uri, finding, suggestion));
+                continue;
+            }
             actions.push(lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
                 title: format!("Apply suggestion: {suggestion}"),
                 kind: Some(lsp::CodeActionKind::QUICKFIX),
@@ -1619,6 +1628,48 @@ fn handle_code_action(
         }
     }
     Some(actions)
+}
+
+/// "Rename the file to {name}" for `filename_slug` (#215): its suggestion is
+/// the file name the object should have, next to the file. Only for a client
+/// that applies `RenameFile`; the others get no action, since editing the
+/// text the finding underlines (the object's name) would rename the object.
+fn rename_action(
+    session: &Session,
+    uri: &lsp::Uri,
+    finding: &Finding,
+    file_name: &str,
+) -> Option<lsp::CodeActionOrCommand> {
+    if !session.caps.rename_files || file_name.contains(['/', '\\']) {
+        return None;
+    }
+    let path = std::path::PathBuf::from(uri_to_path(uri.as_str()));
+    let target = path.with_file_name(file_name);
+    if target == path || target.exists() {
+        return None;
+    }
+    let new_uri = path_to_uri_value(&target)?;
+    Some(lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
+        title: format!("Rename the file to {file_name}"),
+        kind: Some(lsp::CodeActionKind::QUICKFIX),
+        diagnostics: Some(vec![finding.diagnostic.clone()]),
+        edit: Some(lsp::WorkspaceEdit {
+            document_changes: Some(lsp::DocumentChanges::Operations(vec![
+                lsp::DocumentChangeOperation::Op(lsp::ResourceOp::Rename(lsp::RenameFile {
+                    old_uri: uri.clone(),
+                    new_uri,
+                    options: Some(lsp::RenameFileOptions {
+                        overwrite: Some(false),
+                        ignore_if_exists: Some(false),
+                    }),
+                    annotation_id: None,
+                })),
+            ])),
+            ..Default::default()
+        }),
+        is_preferred: Some(true),
+        ..Default::default()
+    }))
 }
 
 /// "Declare it in visibility.toml" for an undeclared table, sourcetype or
@@ -1710,6 +1761,8 @@ fn fix_all(session: &Session, uri: &lsp::Uri) -> Option<lsp::CodeActionOrCommand
     let mut fixes: Vec<(Range, String)> = analysis
         .diagnostics
         .iter()
+        // A file name is not an edit of the text (#215).
+        .filter(|d| d.code != codes::FILENAME_SLUG)
         .filter_map(|d| Some((d.range, d.suggestion.clone()?)))
         .collect();
     fixes.sort_by_key(|(range, _)| (range.start.line, range.start.character));

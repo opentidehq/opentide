@@ -31,7 +31,7 @@ Pydantic stays CLI authority. LSP emits the same `{code, field_path, severity}`:
 - `invalid_ref` — error on the reference field when the UUID names nothing in the workspace: a rule's `detection_model` that is neither an indexed objective nor a signal one declares, an objective's `objective.threats` entry, or a threat's `threat.chaining.<i>.vector` that is not an indexed threat.
 - `chaining_relation_unknown`
 - `deprecated_field`
-- `filename_slug` — warning on the `name` key. A non-empty file stem must equal `slugify(name)` or start with `{slug}-`. `slugify` lowercases ASCII alphanumerics, turns each run of other characters into one `-`, and trims `-` from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). Suggestion text is `{slug}.yaml`.
+- `filename_slug` — warning on the `name` value. A non-empty file stem must equal `slugify(name)` or start with `{slug}-`. `slugify` lowercases ASCII alphanumerics, turns each run of other characters into one `-`, and trims `-` from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). Suggestion text is `{slug}.yaml`.
 - `missing_author` — warning on the `metadata` key when `metadata` has no `author`.
 - `missing_organisation` — warning on the `metadata` key when `metadata` has no `organisation`.
 

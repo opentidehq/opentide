@@ -759,3 +759,79 @@ fn workspace_diagnostics_cover_closed_files() {
     );
     assert_eq!(again["result"]["items"][0]["kind"], "unchanged", "{again}");
 }
+
+/// #215: `filename_slug`'s suggestion is a file name. A client that applies
+/// `RenameFile` gets an action that renames the file; no client gets an edit
+/// of the text, which is the object's name, and fixAll leaves it out.
+#[test]
+fn filename_slug_is_a_rename_never_a_text_edit() {
+    let scratch = Scratch::new("filename-slug-rename");
+    let path = scratch.0.join("objects/rules/not-the-slug.yaml");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let text = fixture(RULE);
+    std::fs::write(&path, &text).unwrap();
+    let uri = file_uri(&path);
+    let whole =
+        json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 200, "character": 0 } });
+    let renaming = json!({ "workspace": { "workspaceEdit": {
+        "documentChanges": true, "resourceOperations": ["create", "rename"]
+    } } });
+    for (capabilities, renames) in [(json!({}), false), (renaming, true)] {
+        let (mut lsp, _) =
+            start(json!({ "capabilities": capabilities, "rootUri": file_uri(&scratch.0) }));
+        open(&mut lsp, &uri, "opentide-yaml", &text);
+        let diagnostics = published_for(&mut lsp, &uri);
+        let slug: Vec<&Value> = diagnostics
+            .iter()
+            .filter(|d| d["code"] == "filename_slug")
+            .collect();
+        let [slug] = slug.as_slice() else {
+            panic!("{diagnostics:#?}")
+        };
+        // The range is the name the file should be named after.
+        let line = text
+            .lines()
+            .nth(slug["range"]["start"]["line"].as_u64().unwrap() as usize)
+            .unwrap();
+        let (start, end) = (
+            slug["range"]["start"]["character"].as_u64().unwrap() as usize,
+            slug["range"]["end"]["character"].as_u64().unwrap() as usize,
+        );
+        assert!(line.starts_with("name:"), "{line}");
+        assert_eq!(&line[start..end], line["name: ".len()..].trim(), "{line}");
+
+        let found = lsp.request(
+            "textDocument/codeAction",
+            json!({ "textDocument": { "uri": uri }, "range": whole, "context": { "diagnostics": [slug] } }),
+        )["result"]
+            .as_array()
+            .unwrap()
+            .clone();
+        if renames {
+            let [action] = found.as_slice() else {
+                panic!("{found:#?}")
+            };
+            let operation = &action["edit"]["documentChanges"][0];
+            assert_eq!(operation["kind"], "rename", "{action:#}");
+            assert_eq!(operation["oldUri"], uri.as_str());
+            let suggestion = slug["data"]["suggestion"].as_str().unwrap();
+            assert!(
+                operation["newUri"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with(&format!("/{suggestion}")),
+                "{action:#}"
+            );
+            assert!(action["edit"]["changes"].is_null(), "{action:#}");
+        } else {
+            assert!(found.is_empty(), "{found:#?}");
+        }
+        let fix_all = lsp.request(
+            "textDocument/codeAction",
+            json!({ "textDocument": { "uri": uri }, "range": whole, "context": { "diagnostics": [], "only": ["source.fixAll"] } }),
+        )["result"]
+            .clone();
+        let edits = fix_all.to_string();
+        assert!(!edits.contains(".yaml\""), "{fix_all:#}");
+    }
+}
