@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
-- **A Chains tab in `opentide tui`** ([#776](https://github.com/opentidehq/opentide/issues/776)). `threat.chaining` had no view: following it meant reading UUIDs. Tab `6` draws the chain around the selected threat: sequence links left to right as attack flow, each threat a box with the rules under it (red when none) and how many of its techniques rules cover, own or inherited; supporting and atomicity links beside it, labelled and coloured by relation; a link written from both ends shown once. `+` and `-` change how many hops it shows, `r` the relations, `c` centres it on the highlighted threat and `Enter` opens that threat in the Catalogue. See [Chains](docs/cli/tui.md#chains).
+- **A Chains tab in `opentide tui`** ([#776](https://github.com/opentidehq/opentide/issues/776)). `threat.chaining` had no view: following it meant reading UUIDs. Tab `6` draws the chain around the selected threat: sequence links left to right as attack flow, each threat a box with the rules under it (red when none) and how many of its techniques rules cover, own or inherited; supporting and atomicity links beside it, labelled and coloured by relation; a link written from both ends shown once. `+` and `-` change how many hops it shows, `l` the relations, `c` centres it on the highlighted threat and `Enter` opens that threat in the Catalogue. See [Chains](docs/cli/tui.md#chains).
 
 ### Fixed
 

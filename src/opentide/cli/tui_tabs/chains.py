@@ -8,7 +8,7 @@ how many of its techniques some rule covers; supporting and atomicity links
 are listed beside the flow, labelled and coloured by relation. The list on
 the left is the threats shown: the highlighted one's links are described
 below, ``Enter`` opens it in the Catalogue and ``c`` centres the chain on it.
-``+`` and ``-`` change the hops, ``r`` the relations shown.
+``+`` and ``-`` change the hops, ``l`` the links (relations) shown.
 """
 
 from __future__ import annotations
@@ -149,7 +149,7 @@ class ChainsPane(Horizontal):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("plus,equals_sign", "hops(1)", "More hops"),
         Binding("minus", "hops(-1)", "Fewer hops"),
-        Binding("r", "cycle_stage", "Relations"),
+        Binding("l", "cycle_stage", "Relations"),
         Binding("c", "centre", "Centre"),
     ]
 
@@ -238,7 +238,7 @@ class ChainsPane(Horizontal):
         summary = Text()
         summary.append(names.get(view.focus, view.focus), style="bold")
         summary.append(f"   {self.hops} hop{'s' if self.hops != 1 else ''} (+/-)", style="dim")
-        summary.append(f"   relations: {self.stage or 'all'} (r)", style="dim")
+        summary.append(f"   relations: {self.stage or 'all'} (l)", style="dim")
         counts = "  ".join(f"{stage} {view.totals.get(stage, 0)}" for stage in STAGES)
         summary.append(f"\n{counts}", style="dim")
         if view.hidden:

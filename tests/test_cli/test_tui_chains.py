@@ -147,7 +147,7 @@ def test_the_chains_tab(chained_repo: Path) -> None:
             await pilot.press("plus")
             await pilot.pause()
             assert LATER in {row.value for row in table.rows}
-            await pilot.press("r")  # sequence only
+            await pilot.press("l")  # sequence only
             await pilot.pause()
             assert ENABLED not in {row.value for row in table.rows}
             header = _plain(app.query_one("#chain-header", Static).content)

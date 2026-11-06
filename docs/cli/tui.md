@@ -50,7 +50,7 @@ The Chains tab draws `threat.chaining` around one threat: the one selected in th
 - **Each box** shows the rules under the threat's objectives, in red when there are none (an undetected step), and how many of the techniques it names some rule covers, own or inherited, as the [Coverage tab](#layout) counts them.
 - **Supporting and atomicity links** (`support::*`, `atomicity::*`) are listed beside the flow, labelled by how they read (`enables`, `implemented by`, `synergizes with`) and coloured by relation. Threats linked only that way are shown under the flow.
 - **One link, shown once:** a link written from both ends (`A preceeds B` in A, `B succeeds A` in B) is merged, with both descriptions. A link to a threat the catalogue does not have says so.
-- **The list on the left** holds the threats shown. Highlighting one describes its links. `Enter` opens it in the Catalogue, `c` centres the chain on it, `+` and `-` add or remove a hop (up to 4), and `r` cycles the relations shown: all, sequence, atomicity, support.
+- **The list on the left** holds the threats shown. Highlighting one describes its links. `Enter` opens it in the Catalogue, `c` centres the chain on it, `+` and `-` add or remove a hop (up to 4), and `l` cycles the relations shown: all, sequence, atomicity, support (`r` stays Reload).
 
 ## The language server
 
