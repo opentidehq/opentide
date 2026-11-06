@@ -31,9 +31,24 @@ Pydantic stays CLI authority. LSP emits the same `{code, field_path, severity}`:
 - `invalid_ref`
 - `chaining_relation_unknown`
 - `deprecated_field`
-- `filename_slug` — warning on the `name` key. A non-empty file stem must equal `slugify(name)` or start with `{slug}-`. `slugify` lowercases ASCII alphanumerics, turns each run of other characters into one `-`, and trims `-` from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). Suggestion text is `{slug}.yaml`.
-- `missing_author` — warning on the `metadata` key when `metadata` has no `author`.
-- `missing_organisation` — warning on the `metadata` key when `metadata` has no `organisation`.
+- `filename_slug` — warning on the `name` key. A non-empty file stem must equal the stem `[filenames] style` derives from the name, or start with `{stem}-`. With `style = "slug"` (the default) that is `slugify(name)`: ASCII alphanumerics lowercased, each run of other characters one `-`, and `-` trimmed from both ends (`Sentinel KQL Rule` → `sentinel-kql-rule`). With `style = "name"` it is the name less `<>:"\/|?*`, control characters, the spaces and dots around it and a trailing `.debug`, as `opentide lint` derives it. `style = "none"` compares no stem. Suggestion text is `{stem}.yaml`.
+- `filename_pattern` — warning on the `name` key when the file stem does not match `[filenames] pattern` (the whole stem, as `re.fullmatch` matches it). A pattern the Rust `regex` crate cannot compile (look-around, backreferences) is not checked here; `opentide lint` still checks it.
+- `missing_author` — warning on the `metadata` key when `metadata` has no `author` and `[metadata] required` names it (the default does).
+- `missing_organisation` — warning on the `metadata` key when `metadata` has no `organisation` and `[metadata] required` names it (the default does).
+
+### `lint.toml`
+
+The four checks above follow the root's `.opentide/configurations/lint.toml` as `opentide lint` does ([#214](https://github.com/opentidehq/language-server/issues/214)), so the editor and the CLI agree:
+
+| `lint.toml` | Decides |
+| --- | --- |
+| `[filenames] enabled = false` | no `filename_slug` or `filename_pattern` |
+| `[filenames] style`, `pattern`, and `[filenames.threats]`, `[filenames.objectives]`, `[filenames.rules]` (a key a kind leaves unset comes from `[filenames]`) | `filename_slug`, `filename_pattern` |
+| `[metadata] enabled = false` | no `missing_author` or `missing_organisation` |
+| `[metadata] required` | which of `missing_author` and `missing_organisation` apply |
+| `[filenames] severity`, `[metadata] severity` (`error`, `warning`, `info`) | the findings' severity |
+
+Without a `lint.toml` the defaults are `opentide lint`'s: slug filenames, no pattern, `author` and `organisation` required. Other keys `required` names (`reviewed`) have no engine finding. The language server reads the file of the document's root: the editor's buffer while it is open, else the file on disk, else the root's `lint.toml` among the documents a browser host supplies; editing it re-checks open documents. Another host installs it with `opentide_analysis::install_lint`. The host checks the file itself (`opentide-config`); a value of the wrong type keeps its default here. `testdata/conformance/lint-toml` is a workspace with its own conventions and `opentide-lint.json` what `opentide lint` reports for it (`scripts/opentide_lint_findings.py` records it); `crates/opentide-analysis/tests/lint_settings.rs` checks the engine reports the same.
 
 Query extras (the engines add these inside an injected query, and on a raw query file):
 

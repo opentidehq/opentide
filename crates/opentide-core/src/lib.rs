@@ -524,6 +524,7 @@ pub mod codes {
     pub const TECHNIQUE_NOT_ENTERPRISE: &str = "technique_not_enterprise";
     pub const CROWDSTRIKE_UNSUPPORTED: &str = "crowdstrike_unsupported";
     pub const FILENAME_SLUG: &str = "filename_slug";
+    pub const FILENAME_PATTERN: &str = "filename_pattern";
     pub const MISSING_AUTHOR: &str = "missing_author";
     pub const MISSING_ORGANISATION: &str = "missing_organisation";
     /// A field the templates ask for and validation does not require.
@@ -667,6 +668,7 @@ pub mod codes {
         TECHNIQUE_NOT_ENTERPRISE,
         CROWDSTRIKE_UNSUPPORTED,
         FILENAME_SLUG,
+        FILENAME_PATTERN,
         MISSING_AUTHOR,
         MISSING_ORGANISATION,
         RECOMMENDED_FIELD_MISSING,
@@ -884,7 +886,12 @@ pub mod codes {
             CROWDSTRIKE_UNSUPPORTED => {
                 "CrowdStrike queries are not validated; the engine never fakes it."
             }
-            FILENAME_SLUG => "The file name is not the slug of the object's name.",
+            FILENAME_SLUG => {
+                "The file name is not the one lint.toml's [filenames] style derives from the object's name."
+            }
+            FILENAME_PATTERN => {
+                "The file name does not match the pattern lint.toml's [filenames] sets."
+            }
             MISSING_AUTHOR => "The recommended metadata.author field is missing.",
             MISSING_ORGANISATION => "The recommended metadata.organisation field is missing.",
             RECOMMENDED_FIELD_MISSING => {

@@ -617,6 +617,10 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
         session.reactivate();
         session.mark_all();
     } else if closed.language == LanguageId::Config {
+        if Session::is_lint(uri) {
+            // The Tide checks follow the file on disk again (#214).
+            session.reactivate();
+        }
         // The others read the file on disk again.
         session.mark_all();
     }
@@ -660,6 +664,10 @@ fn document_changed(session: &mut Session, uri: &str, language: LanguageId, root
             }
         }
     } else if language == LanguageId::Config {
+        if Session::is_lint(uri) {
+            // lint.toml decides the filename and metadata checks (#214).
+            session.reactivate();
+        }
         session.mark_all();
     }
 }
@@ -715,6 +723,9 @@ fn watched_files_changed(session: &mut Session, params: lsp::DidChangeWatchedFil
                 everything = true;
             }
         } else if normalized.contains(".opentide/configurations/") {
+            if Session::is_lint(uri) && !session.docs.contains_key(uri) {
+                session.reactivate();
+            }
             session.touch();
             everything = true;
         } else if normalized.contains(crate::server::WORKSPACE_CATALOGS) {

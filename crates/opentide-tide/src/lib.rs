@@ -7,6 +7,7 @@ mod elastic;
 mod falco;
 mod injection;
 mod intel;
+mod lint;
 mod outline;
 mod placeholder;
 mod refs;
@@ -32,6 +33,10 @@ pub use falco::falco_context;
 pub use injection::hunt_query_language;
 pub use intel::{
     TideInlay, completions_tide, field_markdown, hover_tide, inlay_hints, resolve_completion,
+};
+pub use lint::{
+    FilenameRules, FilenameStyle, LINT_CONFIGURATION, LintSettings, install_lint_settings,
+    lint_settings, name_stem, parse_lint_settings,
 };
 pub use outline::{
     LinkTarget, OutlineKind, OutlineNode, ReferenceLens, TideLink, attack_url, document_links,
@@ -294,6 +299,66 @@ pub struct DocumentSymbol {
 
 /// Spans and ranges are in the text after a leading byte-order mark
 /// ([`opentide_core::strip_bom`]).
+/// `filename_slug` and `filename_pattern` for an object at `path`, under the
+/// `[filenames]` convention of its kind ([`LintSettings::filenames_for`]).
+/// The stem an object should have is `slugify(name)` (`style = "slug"`) or
+/// its name (`"name"`), optionally followed by `-<suffix>`, as `opentide lint`
+/// gives two objects of one name; `"none"` compares no stem. A `pattern` is
+/// matched against the whole stem as the file is named.
+fn diagnose_filename(
+    lint: &LintSettings,
+    object_type: &str,
+    path: &str,
+    object: &TideObject,
+    source: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let stem = std::path::Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    if stem.is_empty() {
+        return;
+    }
+    let rules = lint.filenames_for(object_type);
+    let mut push = |mut d: Diagnostic| {
+        if let Some(severity) = lint.filenames_severity {
+            d.severity = severity;
+        }
+        diagnostics.push(d);
+    };
+    if let Some(name) = &object.name {
+        let expected = match rules.style {
+            FilenameStyle::Slug => Some((slugify(name), "slugify of name")),
+            FilenameStyle::Name => lint::name_stem(name).map(|stem| (stem, "the name")),
+            FilenameStyle::None => None,
+        };
+        if let Some((expected, how)) = expected {
+            if stem != expected && !stem.starts_with(&format!("{expected}-")) {
+                push(
+                    Diagnostic::warning(
+                        codes::FILENAME_SLUG,
+                        format!("filename should be {expected}.yaml ({how})"),
+                        key_range(source, "name"),
+                    )
+                    .with_suggestion(format!("{expected}.yaml")),
+                );
+            }
+        }
+    }
+    if !rules.matches_pattern(stem) {
+        push(Diagnostic::warning(
+            codes::FILENAME_PATTERN,
+            format!(
+                "filename {stem} does not match {} ('{}')",
+                rules.pattern_key(),
+                rules.pattern.as_deref().unwrap_or_default()
+            ),
+            key_range(source, "name"),
+        ));
+    }
+}
+
 pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     let input = AnalyzeInput {
         source: opentide_core::strip_bom(input.source),
@@ -301,6 +366,7 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
     };
     let spec = HighlightSpec::load().expect("spec");
     let vocabs = bundled_vocabs();
+    let lint = lint::lint_settings();
     let mut diagnostics = Vec::new();
     let parsed: Result<TideObject, _> = serde_yaml::from_str(input.source);
     let object = match parsed {
@@ -434,25 +500,29 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
                 );
             }
         }
-        if meta.author.is_none() {
-            diagnostics.push(
-                Diagnostic::warning(
-                    codes::MISSING_AUTHOR,
-                    "recommended field metadata.author is missing",
-                    key_range(input.source, "metadata"),
-                )
-                .with_field_path(vec!["metadata".into(), "author".into()]),
-            );
-        }
-        if meta.organisation.is_none() {
-            diagnostics.push(
-                Diagnostic::warning(
+        // `[metadata]` in lint.toml decides these, as it does `opentide lint`'s (#214).
+        if lint.metadata_enabled {
+            for (key, missing, code) in [
+                ("author", meta.author.is_none(), codes::MISSING_AUTHOR),
+                (
+                    "organisation",
+                    meta.organisation.is_none(),
                     codes::MISSING_ORGANISATION,
-                    "recommended field metadata.organisation is missing",
-                    key_range(input.source, "metadata"),
-                )
-                .with_field_path(vec!["metadata".into(), "organisation".into()]),
-            );
+                ),
+            ] {
+                if missing && lint.requires(key) {
+                    let mut d = Diagnostic::warning(
+                        code,
+                        format!("recommended field metadata.{key} is missing"),
+                        key_range(input.source, "metadata"),
+                    )
+                    .with_field_path(vec!["metadata".into(), key.into()]);
+                    if let Some(severity) = lint.metadata_severity {
+                        d.severity = severity;
+                    }
+                    diagnostics.push(d);
+                }
+            }
         }
     }
 
@@ -612,23 +682,16 @@ pub fn analyze(input: AnalyzeInput<'_>) -> TideAnalyzeResult {
         ));
     }
 
-    // filename slug
-    let stem = std::path::Path::new(input.path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
-    if let Some(name) = &object.name {
-        let expected = slugify(name);
-        if !stem.is_empty() && stem != expected && !stem.starts_with(&format!("{expected}-")) {
-            diagnostics.push(
-                Diagnostic::warning(
-                    codes::FILENAME_SLUG,
-                    format!("filename should be {expected}.yaml (slugify of name)"),
-                    key_range(input.source, "name"),
-                )
-                .with_suggestion(format!("{expected}.yaml")),
-            );
-        }
+    // Filenames, as `[filenames]` in lint.toml asks (#214).
+    if lint.filenames_enabled {
+        diagnose_filename(
+            &lint,
+            &object_type,
+            input.path,
+            &object,
+            input.source,
+            &mut diagnostics,
+        );
     }
 
     if object_type == "rule"
