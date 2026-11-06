@@ -29,12 +29,12 @@ pub(crate) fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagno
             "function_call" => function_call(node, ancestors, source, catalog, &mut out),
             "regex" => regex(node, source, &mut out),
             "string" => string(node, ancestors, source, &mut out),
-            "pipeline" => pipeline(node, source, catalog, &mut out),
             "link_constraint" => link_constraint(node, ancestors, source, &mut out),
             "field_filter" => event_name(node, source, catalog, &mut out),
             _ => {}
         }
     });
+    free_text_after_aggregate(root, source, catalog, &mut out);
     if ctx.correlation_rule {
         correlation_rule(root, source, catalog, &mut out);
     }
@@ -378,15 +378,21 @@ fn value_problem(parameter: &Parameter, lit: &str) -> Option<String> {
         return None;
     }
     // CrowdStrike's own content writes `order=des`, `asce`, `ascending`: LogScale
-    // reads these values more loosely than the reference lists them, so a value
-    // that a listed one starts with, or that starts with a listed one, passes.
+    // reads these values more loosely than the reference lists them. Accepted:
+    // an abbreviation of three or more letters, or a value of three or more
+    // letters written out longer. `from=minutes` (values `m`, `h`, ...) and
+    // `type=ip` (`ip_address`) are still refused.
     let lower = lit.to_ascii_lowercase();
     let known = parameter
         .values
         .iter()
         .chain(&parameter.deprecated_values)
         .map(|v| v.to_ascii_lowercase())
-        .any(|v| v.starts_with(&lower) || lower.starts_with(&v));
+        .any(|v| {
+            v == lower
+                || (lower.len() >= 3 && v.starts_with(&lower))
+                || (v.len() >= 3 && lower.starts_with(&v))
+        });
     if known {
         return None;
     }
@@ -460,6 +466,10 @@ fn string(node: Node, ancestors: &[Node], source: &str, out: &mut Vec<Diagnostic
         let Some((_, next)) = chars.next() else {
             break;
         };
+        // A backslash may end a line of a string that spans lines.
+        if next == '\n' || next == '\r' {
+            continue;
+        }
         if !STRING_ESCAPES.contains(&next) {
             let start = node.start_byte() + i;
             let span = opentide_core::ByteSpan::new(start, start + 1 + next.len_utf8());
@@ -498,33 +508,75 @@ fn aggregates(step: Node, source: &str, catalog: &Catalog) -> bool {
 }
 
 /// Free text after the first aggregate of a pipeline (refused since 1.190).
-fn pipeline(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let mut cursor = node.walk();
-    let mut aggregated = false;
-    for step in node.children_by_field_name("step", &mut cursor) {
-        if aggregated {
-            walk_with_ancestors(step, |n, below_step| {
-                if n.kind() != "free_text" {
-                    return;
+///
+/// One pass over the tree, linear in its size: each pipeline walks only its
+/// own steps, stopping at nested pipelines, which it queues. A `case` branch
+/// or a `match` body runs on the events its step receives, so it starts
+/// aggregated when its step comes after an aggregate; a `{ ... }` subquery
+/// (`join`, `defineTable`, `correlate`) reads events of its own, so it does not.
+/// An aggregate inside a branch is not carried out of it: a miss, never a
+/// false finding.
+fn free_text_after_aggregate(
+    root: Node,
+    source: &str,
+    catalog: &Catalog,
+    out: &mut Vec<Diagnostic>,
+) {
+    let mut queue: Vec<(Node, bool)> = Vec::new();
+    let mut cursor = root.walk();
+    queue.extend(
+        root.named_children(&mut cursor)
+            .filter(|n| n.kind() == "pipeline")
+            .map(|n| (n, false)),
+    );
+    while let Some((pipeline, inherited)) = queue.pop() {
+        let mut aggregated = inherited;
+        let mut steps = pipeline.walk();
+        for step in pipeline.children_by_field_name("step", &mut steps) {
+            let mut c = step.walk();
+            // Kinds of the nodes above the cursor, below `step`.
+            let mut above: Vec<&str> = Vec::new();
+            'walk: loop {
+                let n = c.node();
+                let mut descend = true;
+                if n.kind() == "pipeline" {
+                    let body = matches!(above.last(), Some(&("case_branch" | "match_branch")));
+                    queue.push((n, aggregated && body));
+                    descend = false;
+                } else if aggregated && n.kind() == "free_text" {
+                    // A bare regex searches fields, and `*` (a `case` branch
+                    // that takes every event) matches all: neither is text search.
+                    let value = n.child_by_field_name("value");
+                    let regex = value.is_some_and(|v| v.kind() == "regex");
+                    let everything = value.is_some_and(|v| text(v, source) == "*");
+                    if !regex && !everything {
+                        out.push(Diagnostic::error(
+                            codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
+                            "free-text search cannot follow an aggregate function: filter on a field, or move it before the aggregate",
+                            range(source, n),
+                        ));
+                    }
                 }
-                // A bare regex searches fields; only text search is refused.
-                let regex = n
-                    .child_by_field_name("value")
-                    .is_some_and(|v| v.kind() == "regex");
-                // A `{ ... }`, `case` or `match` body is its own pipeline,
-                // checked on its own.
-                let nested = below_step.iter().any(|a| a.kind() == "pipeline");
-                if !regex && !nested {
-                    out.push(Diagnostic::error(
-                        codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
-                        "free-text search cannot follow an aggregate function: filter on a field, or move it before the aggregate",
-                        range(source, n),
-                    ));
+                if descend && c.goto_first_child() {
+                    above.push(n.kind());
+                    continue;
                 }
-            });
-        }
-        if aggregates(step, source, catalog) {
-            aggregated = true;
+                loop {
+                    if c.node().id() == step.id() {
+                        break 'walk;
+                    }
+                    if c.goto_next_sibling() {
+                        break;
+                    }
+                    if !c.goto_parent() {
+                        break 'walk;
+                    }
+                    above.pop();
+                }
+            }
+            if aggregates(step, source, catalog) {
+                aggregated = true;
+            }
         }
     }
 }
@@ -596,8 +648,19 @@ fn correlation_rule(root: Node, source: &str, catalog: &Catalog, out: &mut Vec<D
             has_correlate = true;
             return;
         }
-        // Aggregates inside correlate()'s own arguments follow its rules.
-        if ancestors.iter().any(|a| is_correlate(*a, source)) {
+        // Aggregates inside correlate()'s own arguments follow its rules, and
+        // one inside another aggregate (`groupBy(x, function=count())`) is
+        // that aggregate's finding.
+        let under_aggregate = |a: &Node| {
+            a.kind() == "function_call"
+                && catalog
+                    .function(call_name(*a, source))
+                    .is_some_and(|f| f.aggregate)
+        };
+        if ancestors
+            .iter()
+            .any(|a| is_correlate(*a, source) || under_aggregate(a))
+        {
             return;
         }
         if let Some(function) = catalog

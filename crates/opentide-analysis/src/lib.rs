@@ -297,7 +297,9 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
         LanguageId::Kql => opentide_kql::analyze(&request.text, kql_profile(platform)).diagnostics,
-        // CrowdStrike deploys a CQL query as a Next-Gen SIEM correlation rule.
+        // `platform: crowdstrike` is the query of a CrowdStrike rule block,
+        // which deploys as a Next-Gen SIEM correlation rule. A hunt search is
+        // not one: [`analyze_queries`] checks it without the correlation rules.
         LanguageId::Cql if platform == "crowdstrike" => {
             opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
                 .diagnostics

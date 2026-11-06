@@ -173,31 +173,19 @@ fn word_char(c: char) -> bool {
 /// The innermost call left open before the cursor: its name, the text of its
 /// argument list so far, and where that text starts.
 fn open_call(before: &str) -> Option<(String, &str)> {
+    let (code, open_string) = code_chars(before);
+    if open_string {
+        return None;
+    }
     let mut stack: Vec<usize> = Vec::new();
-    let mut in_string = false;
-    let mut escaped = false;
-    for (i, c) in before.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                in_string = false;
-            }
-            continue;
-        }
+    for (i, c) in code {
         match c {
-            '"' => in_string = true,
             '(' => stack.push(i),
             ')' => {
                 stack.pop();
             }
             _ => {}
         }
-    }
-    if in_string {
-        return None;
     }
     let open = *stack.last()?;
     let name_start = opentide_core::word_start(&before[..open], |c| {
@@ -207,36 +195,83 @@ fn open_call(before: &str) -> Option<(String, &str)> {
     (!name.is_empty()).then(|| (name.to_string(), &before[open + 1..]))
 }
 
-/// Split argument text at top-level commas.
-fn top_level_arguments(args: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0i32;
-    let mut in_string = false;
-    let mut escaped = false;
-    let mut start = 0;
-    for (i, c) in args.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                in_string = false;
+/// The characters of `text` outside strings and comments, with their byte
+/// offsets, and whether `text` ends inside a string or a comment. A comment
+/// starts only where a token may, as in CQL: `https://x` is not one.
+fn code_chars(text: &str) -> (Vec<(usize, char)>, bool) {
+    #[derive(PartialEq)]
+    enum In {
+        Code,
+        String { escaped: bool },
+        Line,
+        Block,
+    }
+    let mut state = In::Code;
+    let mut out = Vec::new();
+    let mut prev = ' ';
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        let next = chars.peek().map(|&(_, n)| n);
+        match state {
+            In::String { escaped } => {
+                state = if escaped {
+                    In::String { escaped: false }
+                } else if c == '\\' {
+                    In::String { escaped: true }
+                } else if c == '"' {
+                    In::Code
+                } else {
+                    In::String { escaped: false }
+                };
             }
-            continue;
+            In::Line => {
+                if c == '\n' {
+                    state = In::Code;
+                }
+            }
+            In::Block => {
+                if c == '*' && next == Some('/') {
+                    chars.next();
+                    state = In::Code;
+                }
+            }
+            In::Code => {
+                let token_start = prev.is_whitespace() || "|([{,;=".contains(prev);
+                if c == '/' && token_start && next == Some('/') {
+                    state = In::Line;
+                } else if c == '/' && token_start && next == Some('*') {
+                    chars.next();
+                    state = In::Block;
+                } else if c == '"' {
+                    state = In::String { escaped: false };
+                } else {
+                    out.push((i, c));
+                }
+            }
         }
+        prev = c;
+    }
+    (out, matches!(state, In::String { .. } | In::Block))
+}
+
+/// Split argument text at top-level commas, comments left out.
+fn top_level_arguments(args: &str) -> Vec<String> {
+    let mut parts = vec![String::new()];
+    let mut depth = 0i32;
+    for (_, c) in code_chars(args).0 {
         match c {
-            '"' => in_string = true,
             '(' | '[' | '{' => depth += 1,
             ')' | ']' | '}' => depth -= 1,
             ',' if depth == 0 => {
-                parts.push(&args[start..i]);
-                start = i + 1;
+                parts.push(String::new());
+                continue;
             }
             _ => {}
         }
+        if let Some(last) = parts.last_mut() {
+            last.push(c);
+        }
     }
-    parts.push(&args[start..]);
     parts
 }
 
@@ -268,8 +303,8 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
             documentation: Some(parameter_detail(p)),
         })
         .collect();
-    let current = top_level_arguments(args).pop().unwrap_or("");
-    let active = match argument_name(current) {
+    let current = top_level_arguments(args).pop().unwrap_or_default();
+    let active = match argument_name(&current) {
         Some(n) => shown.iter().position(|p| p.answers_to(n)),
         None => shown.iter().position(|p| p.unnamed),
     }
@@ -336,6 +371,14 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     let word_start = opentide_core::word_start(before, word_char);
     let head = before[..word_start].trim_end();
 
+    // `#event_simpleName!=`: events, as after `=`.
+    if let Some(lhs) = head.strip_suffix("!=") {
+        let lhs = lhs.trim_end();
+        let name = unquote(&lhs[opentide_core::word_start(lhs, |c| word_char(c) || c == '"')..]);
+        if name == "#event_simpleName" || name == "event_simpleName" {
+            return event_items(catalog);
+        }
+    }
     // `field=` / `param=`: values.
     if let Some(lhs) = head
         .strip_suffix('=')
@@ -348,8 +391,8 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
             return event_items(catalog);
         }
         if let Some((call, args)) = open_call(before) {
-            let current = top_level_arguments(args).pop().unwrap_or("");
-            if let (Some(f), Some(arg)) = (catalog.function(&call), argument_name(current)) {
+            let current = top_level_arguments(args).pop().unwrap_or_default();
+            if let (Some(f), Some(arg)) = (catalog.function(&call), argument_name(&current)) {
                 if let Some(p) = f.parameter(arg) {
                     if !p.values.is_empty() {
                         return p

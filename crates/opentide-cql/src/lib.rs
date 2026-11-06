@@ -16,7 +16,7 @@ use catalog::Catalog;
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, codes, span_to_range};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use opentide_syntax::{first_error, node_span, parse as ts_parse};
-use tree_sitter::Node;
+use tree_sitter::{Node, Tree};
 
 /// Where the query runs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -68,7 +68,7 @@ pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
     diagnostics.extend(check::diagnostics(root, source, ctx));
     AnalyzeResult {
         diagnostics,
-        tokens: highlight(&spec, source),
+        tokens: highlight(&spec, &tree, source),
     }
 }
 
@@ -76,14 +76,10 @@ fn parse_error_message(err: Node, source: &str) -> String {
     if err.is_missing() {
         return format!("CQL syntax error: missing `{}`", err.kind());
     }
-    let start = err.start_byte();
-    let line_start = source[..start].rfind('\n').map_or(0, |i| i + 1);
-    let line_end = source[start..]
-        .find('\n')
-        .map_or(source.len(), |i| start + i);
     // Text pasted from a web page often carries U+00A0, which CQL does not
-    // read as a space.
-    if source[line_start..line_end].contains('\u{a0}') || text(err, source).contains('\u{a0}') {
+    // read as a space: blame it when it is where the parser stopped.
+    let before = source[..err.start_byte()].chars().next_back();
+    if before == Some('\u{a0}') || text(err, source).contains('\u{a0}') {
         return "CQL syntax error: a non-breaking space (U+00A0) is not whitespace in CQL; replace it with a space".to_string();
     }
     let first = text(err, source).split_whitespace().next().unwrap_or("");
@@ -96,9 +92,10 @@ fn parse_error_message(err: Node, source: &str) -> String {
 
 /// Highlight tokens. A call to a catalogued function is `function.builtin`;
 /// any other call (a newer function) stays `function`.
-fn highlight(spec: &HighlightSpec, source: &str) -> Vec<HighlightToken> {
-    let Ok(mut spans) = opentide_syntax::query_captures(
+fn highlight(spec: &HighlightSpec, tree: &Tree, source: &str) -> Vec<HighlightToken> {
+    let Ok(mut spans) = opentide_syntax::query_captures_in(
         LanguageId::Cql,
+        tree,
         source,
         opentide_highlight::CQL_HIGHLIGHTS_SCM,
     ) else {

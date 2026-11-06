@@ -264,3 +264,105 @@ fn deep_nesting_stays_fast() {
         t.elapsed()
     );
 }
+
+// Review regressions: each failed before its fix.
+
+#[test]
+fn loose_values_still_need_three_letters() {
+    // `m`, `h`, ... and `ip_address` are the only values.
+    only(
+        "formatDuration(x, from=minutes)",
+        codes::CQL_PARAMETER_VALUE,
+    );
+    only("ioc:lookup(field=x, type=ip)", codes::CQL_PARAMETER_VALUE);
+    only("sort(x, order=d)", codes::CQL_PARAMETER_VALUE);
+    clean("sort(x, order=des)");
+    clean("sort(x, order=descending)");
+}
+
+#[test]
+fn free_text_in_a_branch_after_an_aggregate() {
+    only(
+        "groupBy(x) | case { a=1 | foo ; * }",
+        codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
+    );
+    only(
+        "groupBy(x) | kind match { a => foo ; * => * }",
+        codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
+    );
+    // A subquery reads its own events.
+    clean("groupBy(x) | join({ foo }, field=x)");
+}
+
+#[test]
+fn free_text_check_stays_linear_in_branch_depth() {
+    let q = format!(
+        "count() | {}a=1{}",
+        "case { ".repeat(2000),
+        " }".repeat(2000)
+    );
+    let t = std::time::Instant::now();
+    let _ = analyze(&q);
+    assert!(
+        t.elapsed() < std::time::Duration::from_secs(2),
+        "{:?}",
+        t.elapsed()
+    );
+}
+
+#[test]
+fn one_correlation_finding_per_aggregate_step() {
+    let q = "correlate(A: { a=1 }, B: { b=1 | aid <=> A.aid }, within=5m) | groupBy(x, function=count())";
+    let found = codes_in_rule(q);
+    assert_eq!(
+        found
+            .iter()
+            .filter(|c| *c == codes::CQL_CORRELATE_AGGREGATE)
+            .count(),
+        1,
+        "{found:?}"
+    );
+}
+
+#[test]
+fn a_backslash_may_end_a_string_line() {
+    clean("x := \"foo\\\nbar\"");
+}
+
+#[test]
+fn events_complete_after_not_equals() {
+    let q = "#event_simpleName!=";
+    let labels: Vec<String> = completions(q, q.len())
+        .into_iter()
+        .map(|i| i.label)
+        .collect();
+    assert!(
+        labels.contains(&"ProcessRollup2".to_string()),
+        "{:?}",
+        &labels[..5]
+    );
+}
+
+#[test]
+fn a_parenthesis_in_a_comment_keeps_the_call_open() {
+    let q = "groupBy(aid, // a )\n  limit=";
+    let s = signature_help(q, q.len()).expect("still inside groupBy(");
+    assert_eq!(
+        s.signatures[0].parameters[s.active_parameter as usize].label,
+        "limit"
+    );
+    assert_eq!(
+        completions(q, q.len())
+            .into_iter()
+            .map(|i| i.label)
+            .collect::<Vec<_>>(),
+        vec!["max"]
+    );
+}
+
+#[test]
+fn a_non_breaking_space_is_blamed_only_where_parsing_stopped() {
+    let d = analyze("x=\"a\u{a0}b\" | groupBy(").diagnostics;
+    assert_eq!(d[0].code, codes::CQL_PARSE_ERROR);
+    assert!(!d[0].message.contains("U+00A0"), "{}", d[0].message);
+}
