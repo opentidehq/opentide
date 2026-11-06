@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
+from opentide.cli.services.chains_view import ChainEdge, chain_edges
 from opentide.cli.ui.contract import Failure
 
 if TYPE_CHECKING:
@@ -101,6 +102,8 @@ class Catalogue:
     coverage: tuple[TechniqueCoverage, ...] = ()
     load_errors: tuple[LoadError, ...] = ()
     language_server: LanguageServerReport = dataclasses.field(default_factory=LanguageServerReport)
+    #: Every threat chaining link, each once (the Chains tab).
+    chains: tuple[ChainEdge, ...] = ()
 
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
@@ -191,6 +194,7 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         coverage=tuple(coverage),
         load_errors=load_errors,
         language_server=_language_server_report(),
+        chains=chain_edges(families["threats"]),
     )
 
 

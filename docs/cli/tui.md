@@ -21,6 +21,7 @@ It reads the same registry as every other command and runs the same service func
 | Catalogue | `1` | Threats → objectives → rules, with how many objectives and rules sit under each. Objectives that name no threat, rules whose `detection_model` names no objective in the catalogue, and files that failed to load get their own groups. The pane on the right shows what the [language server](#the-language-server) reports for the selected object and what the last validate run found (`error[code]: message`, `╭─▶ path:line:column`, `╰─ help: …`), then its file with line numbers, coloured by the language server: Tide keys, UUIDs, schemas and vocabulary values, and the query inside a rule in its own language. Each line with a finding is marked, and the finding's span is underlined |
 | Coverage | `2` | One row per ATT&CK technique named by a threat, an objective or a rule: how many rules detect it and how (`13  2 own · 11 inherited`), which rules, and which threats and objectives name it. A rule covers a technique it lists in its own `techniques`, and one it inherits from its objective (directly or through a signal) or that objective's threats, as `opentide info coverage --technique T1059` and `info catalog` count it. A technique counts the rules on its sub-techniques. A row with `0` rules is a gap: no rule lists or inherits it. `Enter` opens the first rule, one that lists the technique when there is one |
 | Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
+| Chains | `6` | `threat.chaining` around the selected threat, drawn as attack flow: see [Chains](#chains) |
 
 The header carries the opentide pill, the tagline, the repository name and the catalogue counts. The tagline shows only where it fits whole: when the terminal is too narrow for it beside the counts, the header keeps the pill and the counts.
 
@@ -40,6 +41,16 @@ Run them with their key, or from the command palette (`ctrl+p`), which lists the
 | `q` | | Quit. While a command runs, the UI stays up, shows `Waiting for opentide generate to finish…` and closes when it is done: a command cannot be stopped halfway, and it would otherwise go on writing files and printing into the shell after the UI had gone |
 
 A command runs in the background, one at a time, so the UI stays responsive. When it finishes, the catalogue is read again (generate may have rewritten it), and an object with findings shows `✗ 2` (errors) or `! 1` (warnings) after its name. In the Results tab, the query lines of a code frame are coloured as at a terminal.
+
+## Chains
+
+The Chains tab draws `threat.chaining` around one threat: the one selected in the Catalogue, else the first with links. A whole catalogue's chaining is too much to read at once, so it starts with the threats one link away and grows by hops.
+
+- **Sequence links** (`sequence::preceeds`, `sequence::succeeds`) run left to right as attack flow: each threat is a box, `──▶` between steps.
+- **Each box** shows the rules under the threat's objectives, in red when there are none (an undetected step), and how many of the techniques it names some rule covers, own or inherited, as the [Coverage tab](#layout) counts them.
+- **Supporting and atomicity links** (`support::*`, `atomicity::*`) are listed beside the flow, labelled by how they read (`enables`, `implemented by`, `synergizes with`) and coloured by relation. Threats linked only that way are shown under the flow.
+- **One link, shown once:** a link written from both ends (`A preceeds B` in A, `B succeeds A` in B) is merged, with both descriptions. A link to a threat the catalogue does not have says so.
+- **The list on the left** holds the threats shown. Highlighting one describes its links. `Enter` opens it in the Catalogue, `c` centres the chain on it, `+` and `-` add or remove a hop (up to 4), and `r` cycles the relations shown: all, sequence, atomicity, support.
 
 ## The language server
 

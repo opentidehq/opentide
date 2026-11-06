@@ -49,6 +49,7 @@ from opentide.cli.services.tui import (
     run_action,
     summary_line,
 )
+from opentide.cli.tui_tabs.chains import ChainsPane
 from opentide.cli.ui.mode import OutputMode
 
 # TODO: take the pill and colours from opentide.cli.ui.brand once the brand
@@ -75,7 +76,12 @@ THEME = Theme(
 )
 
 #: The widget each tab focuses when shown.
-_TAB_FOCUS = {"catalogue": "#tree", "coverage": "#coverage-table", "results": "#log"}
+_TAB_FOCUS = {
+    "catalogue": "#tree",
+    "coverage": "#coverage-table",
+    "results": "#log",
+    "chains": "#chain-nodes",
+}
 
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
 _FRAME_STYLE = "blue"
@@ -287,6 +293,7 @@ class OpentideTui(App[None]):
         Binding("1", "show_tab('catalogue')", "Catalogue", show=False),
         Binding("2", "show_tab('coverage')", "Coverage", show=False),
         Binding("3", "show_tab('results')", "Results", show=False),
+        Binding("6", "show_tab('chains')", "Chains", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -328,6 +335,8 @@ class OpentideTui(App[None]):
                 yield DataTable(id="coverage-table", cursor_type="row", zebra_stripes=True)
             with TabPane("Results", id="results"):
                 yield RichLog(id="log", wrap=True, markup=False, highlight=False)
+            with TabPane("Chains", id="chains"):
+                yield ChainsPane(self.select, id="chains-pane")
         yield Static("", id="status")
         yield Footer()
 
@@ -362,6 +371,9 @@ class OpentideTui(App[None]):
         self._start("load", self._load, "the catalogue reload")
 
     def action_show_tab(self, tab: str) -> None:
+        if tab == "chains" and self.catalogue is not None:
+            # The chain is drawn around the threat selected in the Catalogue.
+            self.query_one(ChainsPane).show(self.catalogue, self.selected)
         self.query_one(TabbedContent).active = tab
         # Focus follows the tab: TabbedContent shows the pane holding the
         # focused widget, so a focus left in the hidden pane switches back.
@@ -484,6 +496,7 @@ class OpentideTui(App[None]):
         self._fit_masthead()
         self._fill_tree(catalogue)
         self._fill_coverage(catalogue)
+        self.query_one(ChainsPane).show(catalogue, self.selected)
         self._show_detail(self.selected)
 
     def findings(self, entry: CatalogueEntry) -> tuple[list[Diagnostic], list[Diagnostic]]:
