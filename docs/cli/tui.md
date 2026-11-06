@@ -22,6 +22,7 @@ It reads the same registry as every other command and runs the same service func
 | Coverage | `2` | One row per ATT&CK technique named by a threat, an objective or a rule: how many rules detect it and how (`13  2 own · 11 inherited`), which rules, and which threats and objectives name it. A rule covers a technique it lists in its own `techniques`, and one it inherits from its objective (directly or through a signal) or that objective's threats, as `opentide info coverage --technique T1059` and `info catalog` count it. A technique counts the rules on its sub-techniques. A row with `0` rules is a gap: no rule lists or inherits it. `Enter` opens the first rule, one that lists the technique when there is one |
 | Results | `3` | The output of each command run from the UI, as the command prints it: code frames, a dry run's plan, warnings, the outcome line and next steps |
 | Visibility | `4` | The log sources `.opentide/configurations/visibility.toml` declares and the detections that use them: see [Visibility](#visibility) |
+| Configuration | `5` | `deployment.toml`, `lint.toml`, `documentation.toml`, `sharing.toml` and each `platforms/*.toml`, read rather than as TOML: see [Configuration](#configuration) |
 
 The header carries the opentide pill, the tagline, the repository name and the catalogue counts. The tagline shows only where it fits whole: when the terminal is too narrow for it beside the counts, the header keeps the pill and the counts.
 
@@ -54,6 +55,19 @@ The Visibility tab reads `.opentide/configurations/visibility.toml` as a table, 
 - **The drill-down** below shows the highlighted log source's columns with their types and descriptions, the rules whose queries read it, the rules that use it through a signal, and the objectives whose signals name it. `Enter` opens the first rule that uses it.
 
 A rule uses a log source in two ways. Its query reads the dataset: the table, sourcetype or index pattern, as the analysis engine reads the query, custom tables its catalog does not list (`MyApp_CL`) included. Names match as the query checks match them: `*` is the only wildcard, in a declared pattern (`logs-*` covers `logs-windows`) or in one a query reads, and Splunk sourcetypes ignore case. Or it implements a signal, or the objective of a signal, whose `data.logsources` names it, without regard to case. A dataset read that no log source of its system declares is listed even when the system declares none; the query checks only warn about it (`kql_table_not_declared`) once the system declares one. Without the engine, the datasets queries read are not known, and the tab says so.
+## Configuration
+
+The Configuration tab lists the configuration files on the left and shows the highlighted one on the right:
+
+- **Each setting** by section, with its effective value (the bundled file, the workspace's and the parent instance merged, as every command reads them), whether the workspace sets it (`set here`) or it is the bundled `default`, and what it does: the description its schema gives, or for `lint.toml` the bundled file's comment.
+- **Findings** from the configuration checks `opentide validate` runs, under the setting they are about.
+- **Not set (N):** the options nothing sets, with their descriptions.
+- **A platform file** starts with its card: enabled or not, the rules with a block for it, and each tenant with its strategies, whether it is `manual`, its credentials, and the rules a deploy run reaches it with (a rule that lists tenants reaches those; otherwise a tenant that is not `manual` takes the rules whose status a strategy it accepts deploys).
+- **`t`** shows the raw file instead.
+
+No credential value appears anywhere, the raw file included. A value with a `setup` table, or a key that names a secret (`key`, `token`, `password`, `secret`, `auth`, `credentials`…), anywhere on its key path, such as each value under `[platform.credentials]`, reads as its variable name and whether the environment sets it (`${AZURE_CLIENT_SECRET}  unset`), as [`opentide doctor`](./doctor.md) reports it, or as `•••• hidden` when it is a literal. The user and password of a URL are hidden too, up to the last `@` before the host. A switch such as `ssl = true` is shown as it is.
+
+The raw file is redacted however its TOML writes a value (inline tables and arrays, quoted keys and headers, strings over several lines), then read back to check that no credential is left in it. A file that is not valid TOML has no raw view: `t` says where the error is (`not valid TOML: line 3, column 14`), never what the line holds. A file whose redaction cannot be proven, for example because a comment quotes a credential the file also sets, has no raw view either; its settings are still listed.
 
 ## The language server
 

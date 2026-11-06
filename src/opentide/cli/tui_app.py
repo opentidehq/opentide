@@ -60,6 +60,7 @@ from opentide.cli.services.tui import (
     run_action,
     summary_line,
 )
+from opentide.cli.tui_tabs.configuration import ConfigurationPane
 from opentide.cli.tui_tabs.visibility import VisibilityPane
 from opentide.cli.ui.mode import OutputMode
 
@@ -92,6 +93,7 @@ _TAB_FOCUS = {
     "coverage": "#coverage-table",
     "results": "#log",
     "visibility": "#vis-table",
+    "configuration": "#config-files",
 }
 
 _SEVERITY_STYLE = {"error": "bold red", "warning": "bold yellow", "note": "bold blue"}
@@ -316,6 +318,7 @@ class OpentideTui(App[None]):
         Binding("2", "show_tab('coverage')", "Coverage", show=False),
         Binding("3", "show_tab('results')", "Results", show=False),
         Binding("4", "show_tab('visibility')", "Visibility", show=False),
+        Binding("5", "show_tab('configuration')", "Configuration", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -368,6 +371,8 @@ class OpentideTui(App[None]):
                 yield RichLog(id="log", wrap=True, markup=False, highlight=False)
             with TabPane("Visibility", id="visibility"):
                 yield VisibilityPane(self.select, id="visibility-pane")
+            with TabPane("Configuration", id="configuration"):
+                yield ConfigurationPane(self.select, id="configuration-pane")
         yield Static("", id="status")
         yield Footer()
 
@@ -525,6 +530,7 @@ class OpentideTui(App[None]):
         self._fill_tree(catalogue)
         self._fill_coverage(catalogue)
         self.query_one(VisibilityPane).show(catalogue.visibility, catalogue)
+        self.query_one(ConfigurationPane).show(catalogue.configuration, catalogue)
         self._show_detail(self.selected)
 
     def findings(self, entry: CatalogueEntry) -> tuple[list[Diagnostic], list[Diagnostic]]:

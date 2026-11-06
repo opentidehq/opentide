@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentide.cli.output import CommandResult
+from opentide.cli.services.configuration_view import ConfigurationView
 from opentide.cli.services.object_view import LinkTarget, ObjectView, build_object_view
 from opentide.cli.services.visibility import VisibilityReport
 from opentide.cli.ui.contract import Failure
@@ -135,6 +136,9 @@ class Catalogue:
             return None
         return build_object_view(body, entry.kind, self.links)
 
+    #: The configuration files, read for the Configuration tab (no credential value in it).
+    configuration: ConfigurationView | None = None
+
     def of_kind(self, kind: ObjectKind) -> list[CatalogueEntry]:
         return sorted(
             (entry for entry in self.entries.values() if entry.kind == kind),
@@ -241,6 +245,7 @@ def load_catalogue(ctx: CliContext) -> Catalogue:
         visibility=_visibility_report(),
         bodies=bodies,
         links=links,
+        configuration=_configuration_view(families["rules"]),
     )
 
 
@@ -253,6 +258,17 @@ def _visibility_report() -> VisibilityReport | None:
         return load_visibility(discover_workspace())
     except Exception as exc:
         return VisibilityReport(present=True, problem=f"{type(exc).__name__}: {exc}")
+
+
+def _configuration_view(rules: Mapping[str, Any]) -> ConfigurationView:
+    """:func:`load_configuration_view`, or why it failed: the other tabs do not depend on it."""
+    from opentide.cli.services.configuration_view import load_configuration_view
+    from opentide.registry.discovery import discover_workspace
+
+    try:
+        return load_configuration_view(discover_workspace(), rules)
+    except Exception as exc:
+        return ConfigurationView(problem=f"{type(exc).__name__}: {exc}")
 
 
 def _language_server_report() -> LanguageServerReport:
