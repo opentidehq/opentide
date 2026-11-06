@@ -244,3 +244,23 @@ fn signature_help_tracks_the_parameter() {
     );
     assert!(signature_help("x := 1", 6).is_none());
 }
+
+/// A range counts lines from the start of the text, so it is computed only
+/// for a finding: 3000 nested calls stay linear.
+#[test]
+fn deep_nesting_stays_fast() {
+    let q = format!(
+        "{}count(){}",
+        "groupBy(a, function=".repeat(3000),
+        ")".repeat(3000)
+    );
+    let t = std::time::Instant::now();
+    let r = analyze(&q);
+    assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+    // Debug builds are slow; the quadratic version took seconds even in release.
+    assert!(
+        t.elapsed() < std::time::Duration::from_secs(2),
+        "{:?}",
+        t.elapsed()
+    );
+}

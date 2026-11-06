@@ -74,6 +74,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "cql"
+path = "fuzz_targets/cql.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "tide"
 path = "fuzz_targets/tide.rs"
 test = false

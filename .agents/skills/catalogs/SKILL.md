@@ -84,6 +84,16 @@ ECS is never a closed list: elastic-1.0 says field names MUST NOT be checked aga
 
 `scripts/sync_falco_catalog.py --website <falco-website> --plugins <plugins> --rules <rules>` regenerates them (`--check` compares, `--corpus` also writes `testdata/conformance/external/falco/`); never hand-edit. The field reference is CC BY 4.0, the plugin READMEs and default rules Apache-2.0 (`catalogs/falco/NOTICE`). `LEGACY_FIELDS` in the script adds fields current libsinsp no longer documents that Sysdig and older Falco rules still use (`evt.dir`), each with its reason. Nothing here is a closed list: an unknown field, macro, list, or event is a warning, because plugins add fields and Sysdig manages macros of its own (sysdig-1.0).
 
+## CQL catalogs
+
+| Path | Contents |
+| --- | --- |
+| `catalogs/cql/functions.toml` | every function of CrowdStrike's CQL reference plus the removed ones: category, aggregate, contexts, lifecycle, `ngsiem` evidence, citation, and each parameter's type, required, omittable (`unnamed`), array (`multi`), subquery (`query`), default, `values` (with `values_open` when any number is valid too), deprecated values, bounds and aliases |
+| `catalogs/cql/events.toml` | Falcon `#event_simpleName` values with the platforms and fields public sources show, the common sensor fields, and the field set of each Sentinel FDR table |
+| `catalogs/cql/fields.toml` | LogScale built-ins (`@timestamp`, `#repo`), Falcon tags and fields, and CPS (ECS-based) fields, each with its `layer` |
+
+`scripts/sync_cql_catalog.py --cache <pages> --lcc <logscale-community-content> --query-hub <Query-Hub> --cql-queries <CQL-Queries> --sentinel <Azure-Sentinel> --pysigma <pySigma-backend-crowdstrike>` regenerates them (`--offline` reads only the page cache; `--check` compares and makes no request); never hand-edit. Facts only: `FUNCTION_SUMMARIES` is written here and the script refuses a function without one; no name only Elastic's integration (ELv2) supplies is used. `PARAM_FIXES` and `FUNCTION_FIXES` correct the reference where CrowdStrike's own content or the page itself contradicts its table, each with its evidence. LogScale is schemaless: fields are hover and completion data, never a finding; an unknown event is a warning, because a newer sensor sends events the catalog lacks.
+
 ## Tide objects
 
 `scripts/sync_opentide_schemas.py` runs opentide's own generator (`python -m opentide.generation.lsp_catalog`) and writes `catalogs/tide/generated/`, the reference schemas and the highlights key list; it needs an opentide that ships the generator (`uv run --project ../opentide python scripts/sync_opentide_schemas.py` from a checkout). Rows are keyed by schema id; lookups resolve an object's `metadata.schema`, a bare family or unknown revision taking the newest, and a family-keyed catalog (an older workspace one) applying to every revision. Required fields, closed objects and legacy keys come from the catalog: never hard-code a revision check in Rust. `scripts/requirements-opentide.txt` pins the opentide release `pydantic_object_issues.py` uses as its oracle. Pydantic is the CLI authority. The LSP emits the same `{code, field_path, severity}` with ranges. `scripts/pydantic_object_issues.py` is the comparison source. Do not re-encode the object schema as hand-written Rust structs when the generated field catalog already has the answer.

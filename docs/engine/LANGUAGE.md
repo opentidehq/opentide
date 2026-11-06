@@ -315,3 +315,52 @@ Where every index is ECS, an integration data stream (`logs-*`), fields are chec
 - `ecs_unknown_field` (warning), only a near miss of an ECS field under an ECS field set, with the field as the suggestion (`process.nmae` → `process.name`). ECS allows custom fields, so `labels.*`, children of object, flattened, and nested fields, Elastic Defend's `*.Ext.*`, integration namespaces (`azure.*`, `okta.*`, `winlog.*`), wildcards, and optional EQL fields (`?x`) are never reported. `.text`, `.keyword`, and `.caseless` multi-fields resolve to their parent.
 
 Corpus lives in `testdata/corpus/{kql,spl,esql,eql,kuery,lucene}/` tagged `prod:<rule>`.
+
+## CQL
+
+Language id `cql` (`.cql`). The CrowdStrike Query Language of Falcon LogScale and Falcon Next-Gen SIEM: `configurations.crowdstrike.query` (platform::crowdstrike::1.0, a correlation rule) and hunts with `system: crowdstrike` in Tide. CQL is closed source, so the grammar follows CrowdStrike's published "CQL Grammar Subset" and reference pages; `docs/CQL.md` has the language, the diagnostics and the conformance results.
+
+- **Syntax** is the tree-sitter grammar, with an external scanner for what CQL lexes by position: a word is a function name only when `(` follows at once, a field name before a filter operator and a pattern elsewhere; `/` is a comment, a regex, a pattern character or division. `or` binds tighter than `and`, juxtaposition is `and`, `|` is loosest. Filter and expression constructs are separate nodes. It parses 99.86 % of the 2,786 genuine queries in CrowdStrike's public content; the rest are not CQL (non-breaking spaces pasted from the web, prose, SPL, author errors).
+- **Checks** run on the tree against `catalogs/cql/` (`scripts/sync_cql_catalog.py`): functions (matched without regard to case), parameters, the one omittable argument, enumerated values and bounds, regex flags, string escapes, where free text and `<=>` may appear, and Falcon event names. A correlation rule also refuses `correlate()` with another aggregate.
+
+Errors are what LogScale refuses to compile: `cql_parse_error`, `cql_unknown_function`, `cql_removed_function`, `cql_unknown_parameter`, `cql_duplicate_parameter`, `cql_unnamed_argument`, `cql_missing_parameter`, `cql_parameter_value`, `cql_regex_flag`, `cql_free_text_after_aggregate`, `cql_assignment_as`, `cql_link_outside_correlate`, and in a correlation rule `cql_correlate_aggregate`. Warnings: `cql_deprecated_function`, `cql_string_escape`, `cql_unknown_event`. No field, saved search, lookup file or repository is ever reported unknown: they live in the tenant.
+
+Hover explains functions (signature, summary, aggregate, lifecycle, CrowdStrike's page), parameters (type, default, allowed values, bounds), tags and fields (LogScale, Falcon or CPS) and Falcon events; completion offers functions and fields in a step, the parameters a call has not been given, allowed values after `name=`, and Falcon events after `#event_simpleName=`; signature help follows the parameter by name, or the omittable one.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| cql.pipeline | `pipeline` | `pipeline__valid`, `pipeline__invalid` | `operator.pipe` |
+| cql.and-filter | `and_filter` | `and_filter__valid`, `and_filter__invalid` | `keyword` |
+| cql.or-filter | `or_filter` | `or_filter__valid`, `or_filter__invalid` | `keyword` |
+| cql.not-filter | `not_filter` | `not_filter__valid`, `not_filter__invalid` | `keyword`, `operator` |
+| cql.parenthesized-filter | `parenthesized_filter` | `parenthesized_filter__valid`, `parenthesized_filter__invalid` | `punctuation.bracket` |
+| cql.field-filter | `field_filter` | `field_filter__valid`, `field_filter__invalid` | `property`, `operator` |
+| cql.free-text | `free_text` | `free_text__valid`, `free_text__invalid` | `string` |
+| cql.regex | `regex` | `regex__valid`, `regex__invalid` | `string`, `constant` (flags) |
+| cql.string | `string` | `string__valid`, `string__invalid` | `string` |
+| cql.field-name | `field_name` | `field_name__valid`, `field_name__invalid` | `property`, `type` (a `#tag`) |
+| cql.function-call | `function_call` | `function_call__valid`, `function_call__invalid` | `function.builtin` (catalogued), `function` |
+| cql.negated-function-call | `negated_function_call` | `negated_function_call__valid`, `negated_function_call__invalid` | `operator`, `function.builtin` |
+| cql.argument | `argument` | `argument__valid`, `argument__invalid` | by value |
+| cql.named-argument | `named_argument` | `named_argument__valid`, `named_argument__invalid` | `variable` (the name) |
+| cql.array | `array` | `array__valid`, `array__invalid` | `punctuation.bracket` |
+| cql.assignment | `assignment` | `assignment__valid`, `assignment__invalid` | `property`, `operator` |
+| cql.field-shorthand | `field_shorthand` | `field_shorthand__valid`, `field_shorthand__invalid` | `property`, `operator` |
+| cql.stats-shorthand | `stats_shorthand` | `stats_shorthand__valid`, `stats_shorthand__invalid` | `punctuation.bracket` |
+| cql.case-statement | `case_statement` | `case_statement__valid`, `case_statement__invalid` | `keyword` |
+| cql.case-branch | `case_branch` | `case_branch__valid`, `case_branch__invalid` | `punctuation.delimiter` |
+| cql.match-statement | `match_statement` | `match_statement__valid`, `match_statement__invalid` | `property`, `keyword` |
+| cql.match-branch | `match_branch` | `match_branch__valid`, `match_branch__invalid` | `operator` |
+| cql.saved-query | `saved_query` | `saved_query__valid`, `saved_query__invalid` | `macro` |
+| cql.saved-query-argument | `saved_query_argument` | `saved_query_argument__valid`, `saved_query_argument__invalid` | `variable` |
+| cql.query-parameter | `query_parameter` | `query_parameter__valid`, `query_parameter__invalid` | `macro` |
+| cql.subquery | `subquery` | `subquery__valid`, `subquery__invalid` | `punctuation.bracket` |
+| cql.named-subquery | `named_subquery` | `named_subquery__valid`, `named_subquery__invalid` | `variable` |
+| cql.attributed-expression | `attributed_expression` | `attributed_expression__valid`, `attributed_expression__invalid` | by expression |
+| cql.expression-attribute | `expression_attribute` | `expression_attribute__valid`, `expression_attribute__invalid` | `variable` |
+| cql.binary-expression | `binary_expression` | `binary_expression__valid`, `binary_expression__invalid` | `operator` |
+| cql.unary-expression | `unary_expression` | `unary_expression__valid`, `unary_expression__invalid` | `operator` |
+| cql.parenthesized-expression | `parenthesized_expression` | `parenthesized_expression__valid`, `parenthesized_expression__invalid` | `punctuation.bracket` |
+| cql.link-constraint | `link_constraint` | `link_constraint__valid`, `link_constraint__invalid` | `property`, `operator` |
+| cql.line-comment | `line_comment` | `line_comment__valid`, `line_comment__invalid` | `comment` |
+| cql.block-comment | `block_comment` | `block_comment__valid`, `block_comment__invalid` | `comment` |

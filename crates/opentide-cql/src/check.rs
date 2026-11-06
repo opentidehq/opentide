@@ -5,8 +5,9 @@
 //! tenant's fields, saved searches, lookup files or repositories.
 
 use crate::catalog::{Catalog, Function, Parameter};
-use crate::{Context, range, text, walk};
+use crate::{Context, range, text};
 use opentide_core::{Diagnostic, codes};
+use opentide_syntax::walk_with_ancestors;
 use tree_sitter::Node;
 
 /// Regex flags CQL accepts (`d` dot-all, `g`, `i`, `m`, `F` regex engine v2).
@@ -18,16 +19,18 @@ const STRING_ESCAPES: &[char] = &['"', '\\', 'n', 't'];
 pub(crate) fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagnostic> {
     let catalog = Catalog::cached();
     let mut out = Vec::new();
-    walk(root, &mut |node| {
+    // Checks that look upward read `ancestors`: `Node::parent` re-descends
+    // from the root, which makes a deeply nested query quadratic.
+    walk_with_ancestors(root, |node, ancestors| {
         if node.is_error() || node.is_missing() {
             return;
         }
         match node.kind() {
-            "function_call" => function_call(node, source, catalog, &mut out),
+            "function_call" => function_call(node, ancestors, source, catalog, &mut out),
             "regex" => regex(node, source, &mut out),
-            "string" => string(node, source, &mut out),
+            "string" => string(node, ancestors, source, &mut out),
             "pipeline" => pipeline(node, source, catalog, &mut out),
-            "link_constraint" => link_constraint(node, source, &mut out),
+            "link_constraint" => link_constraint(node, ancestors, source, &mut out),
             "field_filter" => event_name(node, source, catalog, &mut out),
             _ => {}
         }
@@ -75,17 +78,24 @@ pub(crate) fn unquote(s: &str) -> &str {
         .unwrap_or(s)
 }
 
-fn function_call(call: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+fn function_call(
+    call: Node,
+    ancestors: &[Node],
+    source: &str,
+    catalog: &Catalog,
+    out: &mut Vec<Diagnostic>,
+) {
     let Some(name_node) = call.child_by_field_name("name") else {
         return;
     };
     let name = text(name_node, source);
-    let name_range = range(source, name_node);
+    // Computed only for a finding: a range counts lines from the start.
+    let name_range = || range(source, name_node);
     let Some(function) = catalog.function(name) else {
         let mut d = Diagnostic::error(
             codes::CQL_UNKNOWN_FUNCTION,
             format!("unknown CQL function `{name}`"),
-            name_range,
+            name_range(),
         );
         if let Some(s) = catalog.suggest_function(name) {
             d = d.with_suggestion(s);
@@ -98,7 +108,7 @@ fn function_call(call: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diag
         if let Some(v) = &function.removed_in {
             message.push_str(&format!(" in {v}"));
         }
-        let mut d = Diagnostic::error(codes::CQL_REMOVED_FUNCTION, message, name_range);
+        let mut d = Diagnostic::error(codes::CQL_REMOVED_FUNCTION, message, name_range());
         if let Some(r) = &function.replacement {
             d = d.with_suggestion(r.clone());
         }
@@ -117,18 +127,20 @@ fn function_call(call: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diag
         out.push(Diagnostic::warning(
             codes::CQL_DEPRECATED_FUNCTION,
             message,
-            name_range,
+            name_range(),
         ));
     }
-    arguments(call, function, source, catalog, out);
+    let implied = implied_parameters(call, ancestors);
+    arguments(call, function, implied, source, catalog, out);
 }
 
 /// What the call's position supplies without an argument: `x =~ f()` gives
 /// `field`, `x := f()` gives `as`, and a `match` guard gives `field`.
-fn implied_parameters(call: Node) -> (bool, bool) {
-    let mut parent = call.parent();
+fn implied_parameters(call: Node, ancestors: &[Node]) -> (bool, bool) {
+    let mut up = ancestors.iter().rev();
+    let mut parent = up.next();
     if parent.is_some_and(|p| p.kind() == "negated_function_call") {
-        parent = parent.and_then(|p| p.parent());
+        parent = up.next();
     }
     let Some(parent) = parent else {
         return (false, false);
@@ -142,6 +154,7 @@ fn implied_parameters(call: Node) -> (bool, bool) {
 fn arguments(
     call: Node,
     function: &Function,
+    (implied_field, assigned): (bool, bool),
     source: &str,
     catalog: &Catalog,
     out: &mut Vec<Diagnostic>,
@@ -150,7 +163,6 @@ fn arguments(
     if function.parameters.is_empty() {
         return;
     }
-    let (implied_field, assigned) = implied_parameters(call);
     let mut given: Vec<&str> = Vec::new();
     if implied_field {
         given.push("field");
@@ -194,9 +206,11 @@ fn arguments(
                 if named_subquery && unnamed_seen {
                     continue;
                 }
-                let at = value
-                    .map(|v| range(source, v))
-                    .unwrap_or_else(|| range(source, call));
+                let at = || {
+                    value
+                        .map(|v| range(source, v))
+                        .unwrap_or_else(|| range(source, call))
+                };
                 match function.unnamed_parameter() {
                     None => {
                         out.push(Diagnostic::error(
@@ -205,7 +219,7 @@ fn arguments(
                                 "`{}` takes no argument without a name: write `parameter=value`",
                                 function.name
                             ),
-                            at,
+                            at(),
                         ));
                         None
                     }
@@ -216,7 +230,7 @@ fn arguments(
                                 "`{}` takes at most one argument without a name",
                                 function.name
                             ),
-                            at,
+                            at(),
                         ));
                         unnamed_seen = true;
                         continue;
@@ -409,13 +423,12 @@ fn regex(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
 
 /// A string bound to a regex parameter (`regex("\d+")`) goes to the regex
 /// engine, where `\d` is meant; only other strings get the escape warning.
-fn regex_argument(node: Node, source: &str) -> bool {
-    let Some(arg) = node.parent() else {
+fn regex_argument(ancestors: &[Node], source: &str) -> bool {
+    // string <- argument <- argument_list <- function_call
+    let [.., call, _list, arg] = ancestors else {
         return false;
     };
-    let Some(call) = arg.parent().and_then(|list| list.parent()) else {
-        return false;
-    };
+    let (call, arg) = (*call, *arg);
     if call.kind() != "function_call" {
         return false;
     }
@@ -433,10 +446,10 @@ fn regex_argument(node: Node, source: &str) -> bool {
         || function.category.iter().any(|c| c == "regular-expression")
 }
 
-fn string(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
+fn string(node: Node, ancestors: &[Node], source: &str, out: &mut Vec<Diagnostic>) {
     // A quoted name (`"user name" = x`, `"name"=value` in a call) is not a value.
     let raw = text(node, source);
-    if !raw.contains('\\') || regex_argument(node, source) {
+    if !raw.contains('\\') || regex_argument(ancestors, source) {
         return;
     }
     let mut chars = raw.char_indices().peekable();
@@ -490,7 +503,7 @@ fn pipeline(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnosti
     let mut aggregated = false;
     for step in node.children_by_field_name("step", &mut cursor) {
         if aggregated {
-            walk(step, &mut |n| {
+            walk_with_ancestors(step, |n, below_step| {
                 if n.kind() != "free_text" {
                     return;
                 }
@@ -498,7 +511,10 @@ fn pipeline(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnosti
                 let regex = n
                     .child_by_field_name("value")
                     .is_some_and(|v| v.kind() == "regex");
-                if !regex && !inside_subquery(n, step) {
+                // A `{ ... }`, `case` or `match` body is its own pipeline,
+                // checked on its own.
+                let nested = below_step.iter().any(|a| a.kind() == "pipeline");
+                if !regex && !nested {
                     out.push(Diagnostic::error(
                         codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
                         "free-text search cannot follow an aggregate function: filter on a field, or move it before the aggregate",
@@ -513,30 +529,10 @@ fn pipeline(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnosti
     }
 }
 
-/// Whether `node` sits in a `{ ... }` or `case`/`match` body below `step`, which
-/// is its own pipeline and checked on its own.
-fn inside_subquery(node: Node, step: Node) -> bool {
-    let mut cur = Some(node);
-    while let Some(n) = cur {
-        if n.id() == step.id() {
-            return false;
-        }
-        if n.kind() == "pipeline" {
-            return true;
-        }
-        cur = n.parent();
-    }
-    false
-}
-
 /// `a <=> B.b` links two correlate() queries; anywhere else it is an error.
-fn link_constraint(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
-    let mut cur = node.parent();
-    while let Some(n) = cur {
-        if n.kind() == "function_call" && call_name(n, source).eq_ignore_ascii_case("correlate") {
-            return;
-        }
-        cur = n.parent();
+fn link_constraint(node: Node, ancestors: &[Node], source: &str, out: &mut Vec<Diagnostic>) {
+    if ancestors.iter().any(|n| is_correlate(*n, source)) {
+        return;
     }
     out.push(Diagnostic::error(
         codes::CQL_LINK_OUTSIDE_CORRELATE,
@@ -584,49 +580,47 @@ fn event_name(node: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnos
     out.push(d);
 }
 
+fn is_correlate(node: Node, source: &str) -> bool {
+    node.kind() == "function_call" && call_name(node, source).eq_ignore_ascii_case("correlate")
+}
+
 /// Next-Gen SIEM: `correlate()` takes no other aggregate in the same query.
 fn correlation_rule(root: Node, source: &str, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let mut correlates: Vec<Node> = Vec::new();
-    walk(root, &mut |n| {
-        if n.kind() == "function_call" && call_name(n, source).eq_ignore_ascii_case("correlate") {
-            correlates.push(n);
+    let mut has_correlate = false;
+    let mut outside: Vec<(Node, &str)> = Vec::new();
+    walk_with_ancestors(root, |n, ancestors| {
+        if n.kind() != "function_call" {
+            return;
+        }
+        if is_correlate(n, source) {
+            has_correlate = true;
+            return;
+        }
+        // Aggregates inside correlate()'s own arguments follow its rules.
+        if ancestors.iter().any(|a| is_correlate(*a, source)) {
+            return;
+        }
+        if let Some(function) = catalog
+            .function(call_name(n, source))
+            .filter(|f| f.aggregate)
+        {
+            outside.push((n, function.name.as_str()));
         }
     });
-    if correlates.is_empty() {
+    if !has_correlate {
         return;
     }
-    let inside_correlate = |n: Node| {
-        let mut cur = n.parent();
-        while let Some(p) = cur {
-            if correlates.iter().any(|c| c.id() == p.id()) {
-                return true;
-            }
-            cur = p.parent();
-        }
-        false
-    };
-    walk(root, &mut |n| {
-        if n.kind() != "function_call" || correlates.iter().any(|c| c.id() == n.id()) {
-            return;
-        }
-        let Some(function) = catalog.function(call_name(n, source)) else {
-            return;
-        };
-        if function.aggregate && !inside_correlate(n) {
-            let at = n
-                .child_by_field_name("name")
-                .map(|x| range(source, x))
-                .unwrap_or_else(|| range(source, n));
-            out.push(Diagnostic::error(
-                codes::CQL_CORRELATE_AGGREGATE,
-                format!(
-                    "a correlation rule cannot combine correlate() with the aggregate `{}`",
-                    function.name
-                ),
-                at,
-            ));
-        }
-    });
+    for (n, name) in outside {
+        let at = n
+            .child_by_field_name("name")
+            .map(|x| range(source, x))
+            .unwrap_or_else(|| range(source, n));
+        out.push(Diagnostic::error(
+            codes::CQL_CORRELATE_AGGREGATE,
+            format!("a correlation rule cannot combine correlate() with the aggregate `{name}`"),
+            at,
+        ));
+    }
 }
 
 #[cfg(test)]

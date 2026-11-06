@@ -157,3 +157,13 @@ fn falco_golden() {
         "spawned_process and container and not proc.name in (shell_binaries, \"sh -c\") and proc.aname[2] = sshd and tolower(fd.name) startswith /etc and fd.sport > 1024",
     );
 }
+
+#[test]
+fn cql_golden() {
+    exact_golden(
+        "cql",
+        "detection",
+        LanguageId::Cql,
+        "// Encoded PowerShell launched by an Office application\n#event_simpleName=ProcessRollup2 event_platform=Win\n| ImageFileName=/\\\\powershell(_ise)?\\.exe$/i ParentBaseFileName=?parent\n/* longer command lines are more suspicious */\n| cmdLength := length(CommandLine)\n| case {\n    CommandLine=/-e(nc|ncodedcommand)?\\s/i | technique := \"T1059.001\";\n    * | technique := \"other\";\n  }\n| $falcon/helper:enrich(field=ProductType)\n| groupBy([aid, ComputerName], function=[count(), max(cmdLength)])",
+    );
+}

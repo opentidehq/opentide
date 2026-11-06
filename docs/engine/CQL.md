@@ -13,6 +13,18 @@ CQL is closed source. There is no reference parser to port (Falco has libsinsp) 
 
 CrowdStrike's grammar text is cited, not copied: the grammar is re-derived in `grammar.js`, and catalog summaries are written for this repository. Facts (names, parameter names, types, defaults, enums) are generated.
 
+## Conformance results
+
+| Suite | Queries | Agreement | Harness |
+|-------|---------|-----------|---------|
+| CrowdStrike/logscale-community-content@77cfc4e3 (searches, saved searches, dashboards, parsers; measured, not vendored) | 2,812 blocks labelled CQL | 2,782 parse; the 30 that do not are not CQL: 11 non-breaking spaces pasted from the web, 4 files with two alternative queries, 5 prose or input lists, 2 SPL, 4 YAML leftovers, 4 author errors | `cql_parse_error` |
+| The same, every check | 2,812 | no false positive found: every finding is a removed function (`rdns`, `lookup`), a deprecated one (`lowercase`), a genuine mistake in the published query (`bucket(span=1day,(field="Tactic"))`, `worldMap(brokenWidget)`), SPL, or an event the catalog lacks (warning) | `opentide_cql::analyze` |
+| Public queries, vendored (`testdata/conformance/external/cql/`, Unlicense parts only, unmodified) | 45, each with a `.broken.cql` twin | 45 / 45 clean; every twin reports the code `FAULTS.toml` names (14 fault kinds) | `crates/opentide-analysis/tests/external_cql.rs` |
+| Grammar productions | 35 rules, one valid and one invalid fixture each | 35 / 35 | `crates/opentide-syntax/tests/corpus_gate.rs` |
+| CrowdStrike's own reference examples (the grammar subset, operators, filters, conditionals, comments, regex pages) | 105, valid and invalid | 83 valid parse; the invalid ones are parse errors or, where the grammar accepts them (an unknown function, two unnamed arguments, `:=` with `as=`, free text after an aggregate, `<=>` outside `correlate()`, regex flags), the matching check | `crates/opentide-cql/src/tests.rs` (one test per code) |
+
+Where CrowdStrike's published content and its reference disagree, the content wins, as a query a tenant runs is the stronger evidence: `order=des`, `asce` and `ascending` are accepted for `asc`/`desc` (an allowed value is matched by prefix), `sort(type=any)` is accepted, a parameter the reference calls required but gives a default (`time:dayOfWeek(field=@timestamp)`) may be left out, and strings may span lines.
+
 ## Language
 
 ### Two modes
@@ -105,6 +117,7 @@ Every diagnostic has a stable code (`opentide_core::codes`) and a test that fail
 | `cql_string_escape` | warning | a string has an escape other than `\"`, `\\`, `\n`, `\t`; LogScale keeps it verbatim |
 | `cql_free_text_after_aggregate` | error | free text after the first aggregate function (an error since 1.190) |
 | `cql_assignment_as` | error | `x := f(..., as=y)`: the assignment already names the output |
+| `cql_link_outside_correlate` | error | `a <=> B.b` outside the queries of `correlate()`, the only place it links fields |
 | `cql_unknown_event` | warning | `#event_simpleName` compared with a literal no Falcon event has; a near match is suggested |
 | `cql_correlate_aggregate` | error | a Next-Gen SIEM correlation rule combines `correlate()` with another aggregate function |
 
@@ -141,4 +154,7 @@ Diagnostics map back onto the YAML (block scalar indent stripped), with `field_p
 ## Known differences
 
 - The grammar follows the published grammar where CrowdStrike's pages disagree with each other (`like` with a regex, saved searches inside composite functions, an empty `match` guard in one example).
-- Mixed-case `case`, `match` and `like` (`CASE {`) are not documented anywhere and parse as errors.
+- Mixed-case `case`, `match` and `like` (`CASE {`) are not documented anywhere and parse as errors; `and`, `or` and `not` are reserved in any case.
+- Trailing commas, empty pipeline steps and empty `match` guards are errors; a trailing `|` at the end of the whole query is accepted, as CrowdStrike's content writes it. Block comments do not nest.
+- A string bound to a regex parameter (`regex("\d+")`) is passed to the regex engine as written, so it gets no `cql_string_escape`.
+- Two queries written into one file report a parse error where the grammar first fails, which can be a line before the second query starts.

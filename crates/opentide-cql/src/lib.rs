@@ -117,29 +117,6 @@ fn highlight(spec: &HighlightSpec, source: &str) -> Vec<HighlightToken> {
     tokens_from_spans(spec, source, &refs).unwrap_or_default()
 }
 
-/// Pre-order walk. Iterative: a query thousands of levels deep must not
-/// overflow the stack, notably in WASM.
-pub(crate) fn walk<'t>(node: Node<'t>, f: &mut impl FnMut(Node<'t>)) {
-    let mut cursor = node.walk();
-    loop {
-        f(cursor.node());
-        if cursor.goto_first_child() {
-            continue;
-        }
-        loop {
-            if cursor.node().id() == node.id() {
-                return;
-            }
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() {
-                return;
-            }
-        }
-    }
-}
-
 pub(crate) fn text<'a>(node: Node, source: &'a str) -> &'a str {
     source.get(node.start_byte()..node.end_byte()).unwrap_or("")
 }
