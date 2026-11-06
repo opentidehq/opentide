@@ -1,6 +1,6 @@
 # opentide language server
 
-Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, and **Tide YAML** objects.
+Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), and **Tide YAML** objects.
 
 v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/FALCO.md](docs/FALCO.md)). SQL is out of scope. Names use `opentide`, never `otide`.
 
@@ -75,7 +75,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 
 - I/O-free engine crates (`opentide-kql`, `opentide-spl`, `opentide-esql`, `opentide-eql`, `opentide-kuery`, `opentide-lucene`, `opentide-ecs`, `opentide-tide`, `opentide-analysis`). No `std::fs`.
 - HighlightSpec capture rename is a **major**.
-- Never fake CrowdStrike validation.
+- Never report a CQL field, saved search, lookup file or repository as unknown: they live in the tenant.
 - Control commands (`.show` / `.create`) → `kql_control_command_unsupported`.
 - Highlight tokenizes **authored** SPL (implicit `| search` is semantic, not a rewrite).
 - opentide LSP owns Tide diagnostics — disable yamlls on `objects/**`.

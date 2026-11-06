@@ -36,6 +36,10 @@ pub enum LanguageId {
     /// Falco rule conditions (Sysdig Secure `configurations.sysdig`).
     #[serde(rename = "falco", alias = "opentide-falco")]
     Falco,
+    /// CrowdStrike Query Language: Falcon LogScale and Next-Gen SIEM
+    /// (`configurations.crowdstrike`). Not Cassandra's CQL.
+    #[serde(rename = "cql", alias = "opentide-cql")]
+    Cql,
 }
 
 impl LanguageId {
@@ -50,6 +54,7 @@ impl LanguageId {
             Self::Lucene => "lucene",
             Self::Config => "opentide-config",
             Self::Falco => "falco",
+            Self::Cql => "cql",
         }
     }
 
@@ -64,6 +69,7 @@ impl LanguageId {
             "lucene" | "opentide-lucene" | "Lucene" => Some(Self::Lucene),
             "opentide-config" => Some(Self::Config),
             "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
+            "cql" | "opentide-cql" | "CQL" | "logscale" | "crowdstrike" => Some(Self::Cql),
             _ => None,
         }
     }
@@ -79,12 +85,13 @@ impl LanguageId {
             "kuery" => Some(Self::Kuery),
             "lucene" => Some(Self::Lucene),
             "falco" => Some(Self::Falco),
+            "cql" => Some(Self::Cql),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 7] = [
+    pub const QUERY_LANGUAGES: [Self; 8] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -92,6 +99,7 @@ impl LanguageId {
         Self::Kuery,
         Self::Lucene,
         Self::Falco,
+        Self::Cql,
     ];
 }
 
@@ -522,7 +530,6 @@ pub mod codes {
     pub const THRESHOLD_LOOKBACK: &str = "threshold_lookback";
     pub const RISK_BAND: &str = "risk_band";
     pub const TECHNIQUE_NOT_ENTERPRISE: &str = "technique_not_enterprise";
-    pub const CROWDSTRIKE_UNSUPPORTED: &str = "crowdstrike_unsupported";
     pub const FILENAME_SLUG: &str = "filename_slug";
     pub const MISSING_AUTHOR: &str = "missing_author";
     pub const MISSING_ORGANISATION: &str = "missing_organisation";
@@ -586,6 +593,23 @@ pub mod codes {
     pub const SYSDIG_DEFINITION_ORDER: &str = "sysdig_definition_order";
     pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
     pub const SYSDIG_LIST_SELF_REFERENCE: &str = "sysdig_list_self_reference";
+
+    // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
+    pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
+    pub const CQL_UNKNOWN_FUNCTION: &str = "cql_unknown_function";
+    pub const CQL_REMOVED_FUNCTION: &str = "cql_removed_function";
+    pub const CQL_DEPRECATED_FUNCTION: &str = "cql_deprecated_function";
+    pub const CQL_UNKNOWN_PARAMETER: &str = "cql_unknown_parameter";
+    pub const CQL_DUPLICATE_PARAMETER: &str = "cql_duplicate_parameter";
+    pub const CQL_UNNAMED_ARGUMENT: &str = "cql_unnamed_argument";
+    pub const CQL_MISSING_PARAMETER: &str = "cql_missing_parameter";
+    pub const CQL_PARAMETER_VALUE: &str = "cql_parameter_value";
+    pub const CQL_REGEX_FLAG: &str = "cql_regex_flag";
+    pub const CQL_STRING_ESCAPE: &str = "cql_string_escape";
+    pub const CQL_FREE_TEXT_AFTER_AGGREGATE: &str = "cql_free_text_after_aggregate";
+    pub const CQL_ASSIGNMENT_AS: &str = "cql_assignment_as";
+    pub const CQL_UNKNOWN_EVENT: &str = "cql_unknown_event";
+    pub const CQL_CORRELATE_AGGREGATE: &str = "cql_correlate_aggregate";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -665,7 +689,6 @@ pub mod codes {
         THRESHOLD_LOOKBACK,
         RISK_BAND,
         TECHNIQUE_NOT_ENTERPRISE,
-        CROWDSTRIKE_UNSUPPORTED,
         FILENAME_SLUG,
         MISSING_AUTHOR,
         MISSING_ORGANISATION,
@@ -721,6 +744,21 @@ pub mod codes {
         SYSDIG_DEFINITION_ORDER,
         SYSDIG_LIST_IN_VALUE,
         SYSDIG_LIST_SELF_REFERENCE,
+        CQL_PARSE_ERROR,
+        CQL_UNKNOWN_FUNCTION,
+        CQL_REMOVED_FUNCTION,
+        CQL_DEPRECATED_FUNCTION,
+        CQL_UNKNOWN_PARAMETER,
+        CQL_DUPLICATE_PARAMETER,
+        CQL_UNNAMED_ARGUMENT,
+        CQL_MISSING_PARAMETER,
+        CQL_PARAMETER_VALUE,
+        CQL_REGEX_FLAG,
+        CQL_STRING_ESCAPE,
+        CQL_FREE_TEXT_AFTER_AGGREGATE,
+        CQL_ASSIGNMENT_AS,
+        CQL_UNKNOWN_EVENT,
+        CQL_CORRELATE_AGGREGATE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -881,9 +919,6 @@ pub mod codes {
             TECHNIQUE_NOT_ENTERPRISE => {
                 "The ATT&CK technique is not in the Enterprise matrix that Elastic maps."
             }
-            CROWDSTRIKE_UNSUPPORTED => {
-                "CrowdStrike queries are not validated; the engine never fakes it."
-            }
             FILENAME_SLUG => "The file name is not the slug of the object's name.",
             MISSING_AUTHOR => "The recommended metadata.author field is missing.",
             MISSING_ORGANISATION => "The recommended metadata.organisation field is missing.",
@@ -1029,6 +1064,39 @@ pub mod codes {
             FALCO_APPEND_CONDITION => {
                 "A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not."
             }
+            CQL_PARSE_ERROR => "The CrowdStrike Query Language (CQL) query does not parse.",
+            CQL_UNKNOWN_FUNCTION => {
+                "No CQL function has this name; function names are matched without regard to case."
+            }
+            CQL_REMOVED_FUNCTION => {
+                "The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it."
+            }
+            CQL_DEPRECATED_FUNCTION => "CrowdStrike's reference marks the CQL function deprecated.",
+            CQL_UNKNOWN_PARAMETER => "The CQL function has no parameter with this name.",
+            CQL_DUPLICATE_PARAMETER => "A CQL function parameter is given more than once.",
+            CQL_UNNAMED_ARGUMENT => {
+                "A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name."
+            }
+            CQL_MISSING_PARAMETER => "A CQL function call leaves out a required parameter.",
+            CQL_PARAMETER_VALUE => {
+                "A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds."
+            }
+            CQL_REGEX_FLAG => "A CQL regex literal has a flag other than d, g, i, m or F.",
+            CQL_STRING_ESCAPE => {
+                "A CQL string has an escape LogScale does not translate; it keeps the backslash and the character."
+            }
+            CQL_FREE_TEXT_AFTER_AGGREGATE => {
+                "A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190."
+            }
+            CQL_ASSIGNMENT_AS => {
+                "A CQL assignment names the output field and the function's as= parameter names it again."
+            }
+            CQL_UNKNOWN_EVENT => {
+                "The #event_simpleName value is not a Falcon sensor event the engine knows."
+            }
+            CQL_CORRELATE_AGGREGATE => {
+                "A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow."
+            }
             _ => return None,
         })
     }
@@ -1137,6 +1205,9 @@ mod tests {
         assert_eq!(LanguageId::from_extension("eql"), Some(LanguageId::Eql));
         assert_eq!(LanguageId::from_extension("falco"), Some(LanguageId::Falco));
         assert_eq!(LanguageId::parse("falco"), Some(LanguageId::Falco));
+        assert_eq!(LanguageId::parse("cql"), Some(LanguageId::Cql));
+        assert_eq!(LanguageId::parse("logscale"), Some(LanguageId::Cql));
+        assert_eq!(LanguageId::from_extension("cql"), Some(LanguageId::Cql));
     }
 
     #[test]

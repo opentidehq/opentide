@@ -103,7 +103,7 @@ Injection, from `language_for_field_path`:
 | `response.procedure.searches[].query` with `system: elastic` | the entry's `language`; none when omitted |
 | `response.procedure.searches[].query` with `system:` a platform identifier above | that platform's language and profile, in any key order (`hunt_query_language`) |
 | `configurations.splunk.actions.notable.drilldown.search`, any other `query:` / `search:` | none |
-| `configurations.crowdstrike.*` | unsupported |
+| `configurations.crowdstrike.query`, hunts with `system: crowdstrike` | CQL (Next-Gen SIEM correlation checks on the rule block) |
 | markdown fields | HighlightSpec `markdown.*`, not a query engine |
 
 Injections come from the YAML structure (`injection.rs` over `yaml_scalar.rs`), not from line prefixes, and carry their real path and their platform. The analysed text is the scalar's value (folded, unquoted, escapes decoded, block indent stripped). Tokens are remapped onto the original YAML coordinates through the byte map. Do not highlight the dedented buffer's offsets. `scripts/oracles/oracle.py` extracts the same paths with PyYAML, and `crates/opentide-tide/tests/query_extraction.rs` holds every `testdata/` object to it.
