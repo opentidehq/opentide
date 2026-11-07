@@ -140,6 +140,9 @@ jobs:
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
       # backtraces keep file:line, and target/ stays a few GB on the runner.
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      # As in engine-ci.yml, whose `clients` and `elastic-sweep` read this
+      # job's Rust cache: rust-cache hashes CARGO_* and RUST* into its key.
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -159,9 +162,15 @@ jobs:
           rustup toolchain install stable --profile minimal --no-self-update --component rustfmt,clippy
           rustup default stable
 
+      # Dependencies only: rust-cache drops the workspace crates before saving.
+      # engine-ci.yml's `clients` and `elastic-sweep` build a subset of this
+      # debug tree and read the same cache (`save-if: false`), so the repository
+      # keeps one copy of it, as language-server's CI did
+      # (tests/test_ci/test_rust_caches.py).
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: . -> target
+          shared-key: engine-dev
 
       - name: Install dependencies
         run: uv sync --group dev

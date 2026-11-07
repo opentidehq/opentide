@@ -68,15 +68,21 @@ jobs:
     name: LSP clients (informational)
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      # ci.yml's `engine` job builds with it; the same environment gives the
+      # same rust-cache key, so this job reads that job's cache.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      # A subset of ci.yml's `engine` debug tree: read its cache, never save one.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          save-if: ${{ github.event_name == 'push' }}
+          shared-key: engine-dev
+          save-if: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -161,6 +167,10 @@ jobs:
   elastic-sweep:
     name: Elastic detection-rules sweep
     runs-on: ubuntu-latest
+    env:
+      # ci.yml's `engine` job builds with it; the same environment gives the
+      # same rust-cache key, so this job reads that job's cache.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -177,9 +187,11 @@ jobs:
             hunting
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      # A subset of ci.yml's `engine` debug tree: read its cache, never save one.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          save-if: ${{ github.event_name == 'push' }}
+          shared-key: engine-dev
+          save-if: false
       - name: detection-rules sweep
         env:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
