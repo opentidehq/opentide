@@ -163,6 +163,7 @@ tests/
 docs/
 scripts/          # ci-local.sh, codeql-local.sh, validate-docs.sh
 .agents/skills/
+publishing/       # name placeholders for crates.io and npm (docs/internal/publishing.md)
 ```
 
 Bundled data: `src/opentide/data/`. Logging: `opentide.core.logging` (structlog + Rich) — no operational `print()`.
