@@ -1,3 +1,8 @@
+---
+title: "SPL search macros"
+description: "Macros are knowledge objects that expand to SPL fragments before the search runs."
+---
+
 # SPL search macros
 
 Macros are knowledge objects that expand to SPL fragments before the search runs. They are ubiquitous in Splunk ES / ESCU detections.

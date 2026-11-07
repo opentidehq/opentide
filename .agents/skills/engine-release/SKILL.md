@@ -1,6 +1,6 @@
 ---
-name: release
-description: Cut an opentide language-server release, from the version bump to crates.io, and repin the engine in opentidehq/opentide. Covers scripts/engine/release.py, CHANGELOG.md sections, the Release workflow, proving the GitHub Release and crates.io, and the opentide analysis/Cargo.toml pin PR without which the release is not done. Use when releasing, tagging v*, bumping the workspace version, or publishing crates.
+name: engine-release
+description: Release the engine crates (crates/, the language server) to crates.io, npm and their GitHub Release assets. Covers scripts/engine/release.py, crates/CHANGELOG.md sections, the parked Release workflow (.github/engine-workflows/release.yml, which UC-0.3 restores here) and proving the GitHub Release and crates.io. Use when releasing the engine, bumping the workspace version, or publishing crates; not for opentide's PyPI release (release-management).
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -8,9 +8,9 @@ metadata:
 
 # Releasing the language server
 
-Every crate shares the workspace version, and the internal crates pin each other to it with `=X.Y.Z`. Versions follow Semantic Versioning; before 1.0, a minor version may change diagnostics and settings. Tags are `vX.Y.Z` and independent of `opentide`.
+Every crate shares the workspace version, and the internal crates pin each other to it with `=X.Y.Z`. Versions follow Semantic Versioning; before 1.0, a minor version may change diagnostics and settings.
 
-A release has four steps. **It is not done until step 4 is merged**: opentide compiles this engine into its Python package, and it cannot publish while it builds from a git revision.
+**The engine was imported from opentidehq/language-server (#800) and does not release from this repository yet.** Its Release workflow is parked in `.github/engine-workflows/release.yml`, where GitHub does not run it: it triggers on `v*.*.*` tags, which are opentide's release tags here, and would publish the crates and npm packages on an opentide release. UC-0.3 (#801) brings engine releases back with tags of their own; until then the steps below describe that workflow as it ran in language-server. opentide builds the engine from `crates/` by path, so nothing is pinned and no release is needed for opentide to ship an engine change.
 
 ## 1. Release PR
 
@@ -22,9 +22,9 @@ python3 scripts/engine/release.py check vX.Y.Z   # tag, pins and CHANGELOG.md ag
 ```
 
 - The `Cargo.lock` diff is only the workspace crates' `version` lines. Anything else means Cargo re-resolved: restore the lock and bump again.
-- In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, keep an empty `## [Unreleased]` above it, and add `[X.Y.Z]: https://github.com/opentidehq/language-server/compare/vPREV...vX.Y.Z` to the links at the bottom.
+- In `crates/CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, keep an empty `## [Unreleased]` above it, and add `[X.Y.Z]: https://github.com/opentidehq/language-server/compare/vPREV...vX.Y.Z` to the links at the bottom.
 - The section's first paragraph is its summary: the GitHub Release and opentide.org show it above the change lists. Write one, and check the entries, as `.agents/skills/engine-release-notes/SKILL.md` says: the parts in order (Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed, Security), a bold lead on every entry.
-- `release.py vendor` + `cargo package --workspace --allow-dirty` + `release.py vendor --clean`, then `cargo test --workspace` (with `scripts/engine/requirements-opentide.txt` installed, or `tide_corpus` fails on the missing `opentide` module). The vendored `crates/*/assets`, `LICENSE` and `NOTICE` copies are never committed.
+- `release.py vendor` + `cargo package --workspace --exclude opentide-native --allow-dirty` + `release.py vendor --clean`, then `cargo test --workspace` after `uv sync --group dev` (`tide_corpus` runs this checkout's `src/opentide` models). The vendored `crates/*/assets`, `LICENSE` and `NOTICE` copies are never committed.
 
 CI green on the PR, then merge it.
 
@@ -40,7 +40,7 @@ Run **Release** on `main` (Actions → Release → Run workflow, or `workflow_di
 6. `verify-assets`: downloads the published assets and checks `sha256sum -c`, `release.py verify-sums` (SHA256SUMS lists every asset and no other) and `gh attestation verify` on every asset, with `--cert-identity-regex` tying the signature to `release.yml` run from `main` or from the tag (`--repo` alone accepts any workflow of the repository, on any branch). It runs for `publish_only` too, so a release whose check failed is not resumed past it.
 7. `crates` and `npm`: only once `verify-assets` passed. `crates` publishes in dependency order with `cargo publish --no-verify`, so no build script runs where the OIDC and registry tokens are (`verify` built every package, without them); a re-run resumes past crates already published.
 
-Watch every job to the end, `crates` included. A green `release` with a red `crates` is a release opentide cannot use.
+Watch every job to the end, `crates` included. A green `release` with a red `crates` is a release crates.io users cannot build on.
 
 ### Re-running
 
@@ -64,32 +64,9 @@ done
 
 The latest release is `vX.Y.Z` with its binaries, WASM builds, highlights zip, licence files and `SHA256SUMS`; each crate's `max_version` is `X.Y.Z`. `gh release list` uses GraphQL, which cloud sessions cannot reach: use `gh api` (REST).
 
-## 4. Repin the engine in opentide
-
-Open a PR against `opentidehq/opentide` `development`, branch `chore/engine-X.Y.Z`:
-
-1. In `analysis/Cargo.toml`, set both crates together, replacing any git `rev`:
-   ```toml
-   opentide-analysis = "=X.Y.Z"
-   opentide-lsp = "=X.Y.Z"
-   ```
-2. In `analysis/`: `cargo update -p opentide-analysis -p opentide-lsp`. The lock diff touches only the engine crates (`opentide-*`).
-3. From the opentide root:
-   ```bash
-   uv run python scripts/build/check_engine_pin.py --release
-   uv run python scripts/build/check_engine_catalog.py
-   scripts/engine/ci-local.sh --full
-   ```
-4. `CHANGELOG.md` `## [Unreleased]` → `### Changed`: one entry naming the release (linked) and the fixes opentide users see, with a bold lead (opentide's `release-notes` skill). Add no blank line inside the list; `test_the_unreleased_lists_hold_no_blank_lines` fails on one.
-5. Follow opentide's PR template, drive the PR to green, and merge it.
-
-If `check_engine_catalog.py` fails, the engine's bundled Tide catalogs are behind opentide's models. Fix it here (`scripts/engine/sync_opentide_schemas.py`, see `.agents/skills/catalogs`) and cut a patch release; never edit the catalog in opentide.
-
-opentide's own release (`release-management` there) then builds from the crates.io version.
-
 ## Never
 
 - Tag or release from a branch other than `main`.
 - Hand-edit a published version: fix forward with a patch release.
 - Commit vendored assets, or a `Cargo.lock` Cargo re-resolved.
-- Call a release done before the opentide pin PR is merged.
+- Push a `v*` tag for the engine: in this repository those are opentide's release tags.

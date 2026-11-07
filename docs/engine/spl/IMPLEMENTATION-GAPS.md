@@ -1,3 +1,8 @@
+---
+title: "SPL implementation gaps (catalog / grammar / scm / hover / completions)"
+description: "The exact SPL tokens still missing or miswired in the catalog, grammar, highlight queries, hover and completions."
+---
+
 # SPL implementation gaps (catalog / grammar / scm / hover / completions)
 
 Machine-oriented punch list. Inventory prose lives in the other `docs/engine/spl/*.md` files; this file names **exact tokens** still missing or miswired in the opentide SPL stack.

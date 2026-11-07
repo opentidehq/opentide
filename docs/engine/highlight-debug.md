@@ -1,3 +1,8 @@
+---
+title: "opentide highlight debug (KQL / SPL / Tide)"
+description: "An investigation of mostly white highlighting, and how highlight captures reach the editor."
+---
+
 # opentide highlight debug (KQL / SPL / Tide)
 
 Investigation of “mostly white” highlighting (only table names looking cyan).

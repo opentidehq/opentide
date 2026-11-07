@@ -1,3 +1,8 @@
+---
+title: "Coverage gap: `data/catalogs/kql` vs Microsoft Learn inventory"
+description: "A historical comparison (2026-09-15) of the KQL catalogs with the Microsoft Learn inventory."
+---
+
 # Coverage gap: `data/catalogs/kql` vs Microsoft Learn inventory
 
 Historical inventory (2026-09-15). The punch list is [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).

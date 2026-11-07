@@ -1,3 +1,8 @@
+---
+title: "CIM data models and fields (detections)"
+description: "The Splunk Common Information Model (CIM) data models, their datasets and field names, as the engine knows them for ES / ESCU-style `splunk.query` blocks."
+---
+
 # CIM data models and fields (detections)
 
 The Splunk Common Information Model (CIM) data models, their datasets and field names, as the engine knows them for ES / ESCU-style `splunk.query` blocks.

@@ -1,3 +1,8 @@
+---
+title: "Tide objects"
+description: "How the language server checks Tide objects: types, references, vocabularies, lint.toml and the diagnostics it reports."
+---
+
 # Tide objects
 
 opentide LSP owns Tide diagnostics. Disable Red Hat YAML / yamlls on `objects/**`.

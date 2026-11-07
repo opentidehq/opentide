@@ -1,3 +1,8 @@
+---
+title: "KQL aggregation functions"
+description: "KQL aggregation functions, used with summarize and make-series."
+---
+
 # KQL aggregation functions
 
 Used with [`summarize`](https://learn.microsoft.com/kusto/query/summarize-operator) and [`make-series`](https://learn.microsoft.com/kusto/query/make-series-operator). They reduce a group of rows to scalar(s).

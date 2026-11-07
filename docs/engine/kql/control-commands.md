@@ -1,3 +1,8 @@
+---
+title: "KQL control / management commands (unsupported in detections)"
+description: "KQL control (management) commands: not query operators, and unsupported in detections."
+---
+
 # KQL control / management commands (unsupported in detections)
 
 Control (management) commands are **not** Kusto Query Language query operators. They begin with `.` and mutate or inspect cluster/database metadata and data.

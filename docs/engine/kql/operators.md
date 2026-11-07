@@ -1,3 +1,8 @@
+---
+title: "KQL tabular operators"
+description: "Tabular operators consume a table (from the pipe or as a source) and produce a table."
+---
+
 # KQL tabular operators
 
 Tabular operators consume a table (from the pipe or as a source) and produce a table. Index hubs:

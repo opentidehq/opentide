@@ -1,3 +1,8 @@
+---
+title: "KQL scalar and comparison operators"
+description: "These operators appear in `where`, `extend`, `project`, `join` predicates, and other scalar expressions."
+---
+
 # KQL scalar and comparison operators
 
 These operators appear in `where`, `extend`, `project`, `join` predicates, and other scalar expressions. They are **not** tabular pipeline operators (`| where` is tabular; `==` / `has` inside the predicate are scalar).

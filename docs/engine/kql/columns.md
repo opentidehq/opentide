@@ -1,3 +1,8 @@
+---
+title: "Tables and columns"
+description: "What the engine knows about the datasets a KQL query reads, and what it reports."
+---
+
 # Tables and columns
 
 What the engine knows about the datasets a KQL query reads, and what it reports. Epic [#110](https://github.com/opentidehq/language-server/issues/110).

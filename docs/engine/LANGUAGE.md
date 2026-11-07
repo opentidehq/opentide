@@ -1,3 +1,8 @@
+---
+title: "Languages"
+description: "The query languages the engine knows, with each language's grammar rules, fixtures and highlight captures."
+---
+
 # Languages
 
 SQL is out of scope. There is no `opentide-sql`.

@@ -4,7 +4,7 @@
 opentide itself:
 
 ```bash
-uv run --project <opentide checkout> python -m opentide.generation.configuration_schemas crates/testdata/config/schemas
+uv run python -m opentide.generation.configuration_schemas crates/testdata/config/schemas
 ```
 
 The files here came from opentide at `615cbdc` (the `claude/friendly-bardeen-y8tdxm` branch, after CoreTIDE's `[tide]` table was dropped). Only

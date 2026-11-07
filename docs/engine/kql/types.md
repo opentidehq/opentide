@@ -1,3 +1,8 @@
+---
+title: "KQL scalar types"
+description: "KQL's scalar types, their aliases, literals and nulls, as the engine models them."
+---
+
 # KQL scalar types
 
 Citation hub: [Scalar data types](https://learn.microsoft.com/kusto/query/scalar-data-types/)

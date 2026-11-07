@@ -1,6 +1,6 @@
 ---
-name: release-notes
-description: Write and review the language server's release notes in CHANGELOG.md, the GitHub Release body and opentide.org/releases/language-server - the summary, Upgrade and Breaking, the Keep a Changelog categories in a fixed order, and entries with a bold lead that name the protocol methods, settings, codes and API items integrators use. Use when a change needs a changelog entry, when preparing a release's notes, or when reviewing either.
+name: engine-release-notes
+description: Write and review the language server's (the engine crates') release notes in crates/CHANGELOG.md, the GitHub Release body and opentide.org/releases/language-server - the summary, Upgrade and Breaking, the Keep a Changelog categories in a fixed order, and entries with a bold lead that name the protocol methods, settings, codes and API items integrators use. Use when a change needs a changelog entry, when preparing a release's notes, or when reviewing either.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -8,17 +8,20 @@ metadata:
 
 # Release notes: the language server
 
-How to write what integrators read about a release. The release procedure itself (version bump,
-crates.io, the opentide pin) is `.agents/skills/engine-release/SKILL.md`.
+How to write what integrators read about a release of the engine crates. opentide's own notes
+(`CHANGELOG.md` at the root) follow `.agents/skills/release-notes/SKILL.md`. The release procedure
+itself (version bump, crates.io) is `.agents/skills/engine-release/SKILL.md`.
 
 ## Where they are read
 
-- `CHANGELOG.md` is the only source. Its version section is the GitHub Release body
+- `crates/CHANGELOG.md` is the only source. Its version section is the GitHub Release body
   (`scripts/engine/release.py notes X.Y.Z`, run by `release.yml`), and
   [opentide.org/releases/language-server](https://opentide.org/releases/language-server/) renders
-  it, synced from `main` every hour.
-- opentide's own changelog cites the release when it repins the engine (`.agents/skills/engine-release`, step 4),
-  so the summary is what opentide's users read about it too.
+  it. The site still syncs language-server's own `CHANGELOG.md`, frozen at the import (#800),
+  until it reads this file.
+- opentide compiles the engine from `crates/`, so an engine change its users see ships in
+  opentide's next release and also gets an entry in opentide's `CHANGELOG.md`
+  (`.agents/skills/release-notes/SKILL.md`).
 
 ## When they are written
 

@@ -1,3 +1,8 @@
+---
+title: "SPL search commands (detection-relevant)"
+description: "Inventory of Search Reference commands that appear in (or are adjacent to) Splunk ES / ESCU / opentide `splunk.query` pipelines."
+---
+
 # SPL search commands (detection-relevant)
 
 Inventory of Search Reference commands that appear in (or are adjacent to) Splunk ES / ESCU / opentide `splunk.query` pipelines.

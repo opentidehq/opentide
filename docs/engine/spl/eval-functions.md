@@ -1,3 +1,8 @@
+---
+title: "Evaluation functions"
+description: "Functions used with `eval`, `where`, `fieldformat`, and eval-expressions inside `stats`/`tstats`/`chart`."
+---
+
 # Evaluation functions
 
 Functions used with `eval`, `where`, `fieldformat`, and eval-expressions inside `stats`/`tstats`/`chart`.

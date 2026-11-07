@@ -1,3 +1,8 @@
+---
+title: "KQL language design (Sentinel / Defender)"
+description: "The runtime model the KQL catalogs and the language server implement for Sentinel and Defender."
+---
+
 # KQL language design (Sentinel / Defender)
 
 Context base for the opentide KQL engine. Inventory stays in the sibling

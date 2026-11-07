@@ -1,3 +1,8 @@
+---
+title: "Falco conformance"
+description: "The Falco language engine (`crates/opentide-falco`) checks a Sysdig Secure / Falco rule (`configurations.sysdig`, sysdig-1.0) against the sources Falco itself runs, not against documentation."
+---
+
 # Falco conformance
 
 The Falco language engine (`crates/opentide-falco`) checks a Sysdig Secure / Falco rule (`configurations.sysdig`, sysdig-1.0) against the sources Falco itself runs, not against documentation:

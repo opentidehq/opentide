@@ -181,4 +181,4 @@ Use `opentide lsp start` when opentide is installed; the binary on its own suits
 
 ## Source
 
-`src/opentide/cli/lsp_app.py`, `src/opentide/cli/services/lsp.py`, `src/opentide/analysis.py`, and the bindings in `analysis/`.
+`src/opentide/cli/lsp_app.py`, `src/opentide/cli/services/lsp.py`, `src/opentide/analysis.py`, the bindings in `analysis/`, and the engine in `crates/`.

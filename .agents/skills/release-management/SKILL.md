@@ -41,12 +41,7 @@ A GitHub Release whose `--target` is not the tagged commit is a failed release. 
 
 ## The engine is part of the wheels
 
-opentide compiles its analysis engine (`analysis/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm) and an sdist that carries `analysis/`, and refuses to publish when a platform's wheel is missing.
-
-| Before tagging | Check |
-|----------------|-------|
-| `analysis/Cargo.toml` takes `opentide-analysis` / `opentide-lsp` (the language-server crates) from git | Release the language server to crates.io first, then pin both to `"=<version>"`. `uv run python scripts/build/check_engine_pin.py --release` must pass, or the publish fails before building |
-| The engine's bundled catalog | `scripts/build/check_engine_catalog.py` passes (CI) |
+opentide compiles its analysis engine (the Cargo workspace: `analysis/` and the engine crates in `crates/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm) and an sdist that carries the workspace's manifests, sources and embedded data, and refuses to publish when a platform's wheel is missing. The engine builds from this repository by path: there is no engine version to pin before tagging, and the engine's bundled Tide catalog is checked on every pull request (`tests/test_generation/test_bundled_tide_catalog.py`).
 
 ## Patch vs minor
 
@@ -200,7 +195,7 @@ Run **Publish to PyPI** on `development` with `checkout_ref` **empty**, as langu
 
 The run:
 
-1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading and runs `scripts/build/release.py check v0.x.y` (changelog section and links, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin), then `check_engine_pin.py --release`. It refuses a tag or Release that already exists and a run from another branch.
+1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading and runs `scripts/build/release.py check v0.x.y` (changelog section and links, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin). It refuses a tag or Release that already exists and a run from another branch.
 2. **Wheels** and **Sdist** build that commit with the changelog's version.
 3. **GitHub Release** creates tag `v0.x.y` on the built commit (`--target $GITHUB_SHA`) with the notes file as body. Latest by default.
 4. **Publish to PyPI** uploads and refuses files of any version other than the guard's.

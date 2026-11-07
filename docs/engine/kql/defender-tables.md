@@ -1,3 +1,8 @@
+---
+title: "Microsoft Defender XDR / MDE tables"
+description: "The fixed schema of tables that Defender XDR advanced hunting and custom detections query."
+---
+
 # Microsoft Defender XDR / MDE tables
 
 Advanced hunting and custom detections query a **fixed schema** of tables. Column-level docs are one Learn page per table.

@@ -1,3 +1,8 @@
+---
+title: "KQL implementation gaps (punch-list)"
+description: "The exact KQL names still missing from each engine surface after the 2026-09-15 catalog expansion."
+---
+
 # KQL implementation gaps (punch-list)
 
 Exact names still missing from each opentide surface after the 2026-09-15 catalog expansion.

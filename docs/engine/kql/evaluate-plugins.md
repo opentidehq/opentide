@@ -1,3 +1,8 @@
+---
+title: "KQL `evaluate` plugins"
+description: "The KQL evaluate plugins the engine knows, with their arguments and citations."
+---
+
 # KQL `evaluate` plugins
 
 Plugins are invoked as:

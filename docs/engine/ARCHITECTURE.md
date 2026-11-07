@@ -1,3 +1,8 @@
+---
+title: "Architecture"
+description: "The engine's architecture: an I/O-free Rust engine and thin hosts (the language server, WebAssembly, the TypeScript client, opentide)."
+---
+
 # Architecture
 
 opentide LSP is an I/O-free Rust engine plus thin hosts.

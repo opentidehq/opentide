@@ -1,3 +1,8 @@
+---
+title: "Scalar functions: `series_*`, `geo_*`, `convert_*`"
+description: "The KQL series_*, geo_* and convert_* function families, and how much of them the catalog covers."
+---
+
 # Scalar functions: `series_*`, `geo_*`, `convert_*`
 
 These families appear on Microsoft Learn and are named or summarized in [`scalar-functions.md`](scalar-functions.md), but are **almost entirely absent** from [`data/catalogs/kql/core/functions.toml`](../../../data/catalogs/kql/core/functions.toml).

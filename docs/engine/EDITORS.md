@@ -1,3 +1,8 @@
+---
+title: "Editor hosts"
+description: "How an editor hosts the opentide language server: language ids, the TypeScript client, TextMate grammars, settings and the custom requests."
+---
+
 # Editor hosts
 
 The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `objects/**`.

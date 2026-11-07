@@ -1,3 +1,8 @@
+---
+title: "SPL subsearches"
+description: "Subsearches run an inner pipeline and feed its results into the outer search (as filter terms, join rows, appended rows, or returned field values)."
+---
+
 # SPL subsearches
 
 Subsearches run an inner pipeline and feed its results into the outer search (as filter terms, join rows, appended rows, or returned field values).

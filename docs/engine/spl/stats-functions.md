@@ -1,3 +1,8 @@
+---
+title: "Statistical and charting functions"
+description: "Functions used with `stats`, `eventstats`, `streamstats`, `chart`, `timechart`, and (a subset) `tstats` / `mstats` / `geostats` / `sistats`."
+---
+
 # Statistical and charting functions
 
 Functions used with `stats`, `eventstats`, `streamstats`, `chart`, `timechart`, and (a subset) `tstats` / `mstats` / `geostats` / `sistats`.

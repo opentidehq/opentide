@@ -1,3 +1,8 @@
+---
+title: "SPL comments"
+description: "Splunk search comments are literal text ignored by the search processor."
+---
+
 # SPL comments
 
 Splunk search comments are literal text ignored by the search processor. They appear in hand-written detections and in macros.

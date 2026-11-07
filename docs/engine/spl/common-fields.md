@@ -1,3 +1,8 @@
+---
+title: "Common fields (CIM / ES detections)"
+description: "Fields that appear in Splunk Enterprise Security detections, CIM-normalized data, and opentide `splunk.query` blocks."
+---
+
 # Common fields (CIM / ES detections)
 
 Fields that appear in Splunk Enterprise Security detections, CIM-normalized data, and opentide `splunk.query` blocks. Default Splunk fields are always present; CIM fields exist when a TA / datamodel maps them.

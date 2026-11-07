@@ -1,3 +1,8 @@
+---
+title: "KQL scalar functions"
+description: "Scalar functions take scalar arguments and return a scalar."
+---
+
 # KQL scalar functions
 
 Scalar functions take scalar arguments and return a scalar. Index: [Scalar functions](https://learn.microsoft.com/kusto/query/scalar-functions)

@@ -1,3 +1,8 @@
+---
+title: "SPL language design (ES / CIM / ESCU)"
+description: "The runtime model of the SPL engine for Splunk ES, CIM and ESCU detections; authored text is never rewritten."
+---
+
 # SPL language design (ES / CIM / ESCU)
 
 Context base for the opentide SPL engine. Authored text is never rewritten

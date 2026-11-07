@@ -1,3 +1,8 @@
+---
+title: "KQL syntax used in hunting and detections"
+description: "KQL query syntax used in hunting and detections, beside the operators."
+---
+
 # KQL syntax used in hunting and detections
 
 This page covers query **syntax** (not operators). Control commands that start with `.` are **not** query syntax and are unsupported in detections.

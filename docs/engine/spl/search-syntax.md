@@ -1,3 +1,8 @@
+---
+title: "SPL search syntax"
+description: "Syntax used in Splunk ES detections and opentide `splunk.query` blocks."
+---
+
 # SPL search syntax
 
 Syntax used in Splunk ES detections and opentide `splunk.query` blocks. Citations are Search Reference / Search Manual pages under `docs.splunk.com`.

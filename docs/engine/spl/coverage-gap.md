@@ -1,3 +1,8 @@
+---
+title: "Coverage gap: inventory vs `data/catalogs/spl/commands.toml`"
+description: "A historical comparison of the SPL docs inventory with the commands catalog compiled into the engine."
+---
+
 # Coverage gap: inventory vs `data/catalogs/spl/commands.toml`
 
 Historical inventory. The punch list is [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).

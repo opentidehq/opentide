@@ -18,15 +18,14 @@ cargo install opentide-lsp          # or build it from crates.io
 opentide-lsp --version
 ```
 
-Each [GitHub Release](https://github.com/opentidehq/language-server/releases) also carries a prebuilt binary per target (`opentide-lsp-<version>-<target>`), the browser WASM build, and the highlights zip. The `opentide` Python package wraps the server in its own CLI; this repository publishes no Python package.
+Each [GitHub Release](https://github.com/opentidehq/language-server/releases) also carries a prebuilt binary per target (`opentide-lsp-<version>-<target>`), the browser WASM build, and the highlights zip. The `opentide` Python package, built from the same repository, compiles the engine in and serves it as `opentide lsp start`.
 
 ## Releases
 
-Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](../CHANGELOG.md). Every crate shares the workspace version, and the internal crates pin each other to it. The procedure is [`.agents/skills/engine-release/SKILL.md`](../../.agents/skills/engine-release/SKILL.md):
+Versions follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](../CHANGELOG.md). Every crate shares the workspace version, and the internal crates pin each other to it. The procedure is [`.agents/skills/engine-release/SKILL.md`](../../.agents/skills/engine-release/SKILL.md). The crates moved into [opentidehq/opentide](https://github.com/opentidehq/opentide) with their history; their Release workflow is parked there (`.github/engine-workflows/release.yml`) until engine releases resume from that repository:
 
-1. In a pull request, run `python3 scripts/engine/release.py bump X.Y.Z` (workspace version, internal pins, `Cargo.lock`) and write the `X.Y.Z` section of CHANGELOG.md; its first paragraph is the summary. `python3 scripts/engine/release.py check vX.Y.Z` confirms they agree.
-2. Merge it, then run the **Release** workflow on `main` (Actions → Release → Run workflow). Pushing a `vX.Y.Z` tag does the same.
-3. Open a PR in [opentidehq/opentide](https://github.com/opentidehq/opentide) that pins `opentide-analysis` and `opentide-lsp` in `analysis/Cargo.toml` to `"=X.Y.Z"`, and merge it. opentide compiles the engine into its Python package and cannot publish while it builds from a git revision, so a release is not done until that PR is merged.
+1. In a pull request, run `python3 scripts/engine/release.py bump X.Y.Z` (workspace version, internal pins, `Cargo.lock`) and write the `X.Y.Z` section of `crates/CHANGELOG.md`; its first paragraph is the summary. `python3 scripts/engine/release.py check vX.Y.Z` confirms they agree.
+2. Merge it, then run the **Release** workflow.
 
 The workflow checks the version, packages every crate, builds every target, and opens the GitHub Release with the changelog notes, creating the tag. Then it publishes the crates to crates.io in dependency order (re-running the failed `crates` job resumes where it stopped). Assets are never uploaded over: once a GitHub Release has them, a re-run of its tag push or of the release job fails, so each asset keeps the digest consumers pinned. To finish publishing a released version, run the workflow on `main` with `publish_only`.
 

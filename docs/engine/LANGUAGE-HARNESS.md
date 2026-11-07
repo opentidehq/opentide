@@ -1,3 +1,8 @@
+---
+title: "Adding a language"
+description: "What adding a query language to the engine takes: grammar, corpus gate, catalogs, HighlightSpec and YAML injection."
+---
+
 # Adding a language
 
 KQL, SPL, and Tide YAML are the 1.0 engines. ES|QL, EQL, Kibana KQL (`kuery`), and Lucene cover Elastic Security rules. A later language (S1QL, Sigma, YARA) follows this list. CrowdStrike stays unsupported.

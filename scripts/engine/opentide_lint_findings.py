@@ -13,8 +13,8 @@ counterpart for them. `crates/opentide-analysis/tests/lint_settings.rs` checks
 the engine against the recorded file, so `lint.toml` cannot be read two ways.
 
 Needs an opentide that reads `[filenames] style` and `pattern` (0.20.0 or later),
-on PATH as `opentide`: CI's pinned opentide is older, so the file is recorded
-and the Rust test reads it.
+on PATH as `opentide` (`uv run`, from this checkout). The file is recorded and the
+Rust test reads it.
 """
 
 from __future__ import annotations

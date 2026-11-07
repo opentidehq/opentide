@@ -81,7 +81,7 @@ The client is TypeScript ESM (`"type": "module"`). Do not add a compile step or 
 
 ## Packaging
 
-This repository publishes no Python package. The Python bindings and the `opentide` command that wraps the server live in `opentidehq/opentide`. Do not add `pyproject.toml`, maturin, or PyO3 here.
+The engine's one Python binding is `analysis/` (PyO3), which `hatch_build.py` compiles into the `opentide` package; the `opentide` command wraps the server (`opentide lsp start`). Do not add another Python package, maturin, or PyO3 to the engine crates.
 
 The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `package` runs `scripts/engine/release.py vendor` and `cargo package --workspace`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
 

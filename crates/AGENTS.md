@@ -10,8 +10,8 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 | `grammars/`, `crates/opentide-syntax`, `highlights/queries/` | `.agents/skills/tree-sitter/SKILL.md` |
 | `crates/opentide-lsp`, `editors/`, stdio tests | `.agents/skills/lsp-host/SKILL.md` |
 | `crates/opentide-wasm`, `packages/`, packaging | `.agents/skills/wasm-hosts/SKILL.md` |
-| A `CHANGELOG.md` entry, or a release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
-| A release: `scripts/engine/release.py`, `release.yml`, the opentide engine pin | `.agents/skills/engine-release/SKILL.md` |
+| A `crates/CHANGELOG.md` entry, or an engine release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
+| An engine release: `scripts/engine/release.py`, `.github/engine-workflows/release.yml` | `.agents/skills/engine-release/SKILL.md` |
 | `data/catalogs/`, `highlights/spec.toml`, `crates/testdata/conformance`, `crates/testdata/oracles`, `scripts/engine/oracles`, schema sync | `.agents/skills/catalogs/SKILL.md` |
 | A new query language (S1QL, Sigma, YARA) | `.agents/skills/add-language/SKILL.md` (then the rows above) |
 
@@ -33,7 +33,7 @@ Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript pack
 - Do not hand-edit `grammars/**/src/parser.c`, `grammar.json`, or `node-types.json`. Regenerate with `tree-sitter-cli` **0.25.10**.
 - Do not commit a rewritten `Cargo.lock`. Resolution prunes entries the lock keeps on purpose. Restore the committed lock if Cargo rewrites it.
 - Configuration TOML (`opentide-config`, #158) is checked by the host, never by Rust. The engine places the host checker's `{code, field_path, severity}` findings and reads the host's schemas for hover and completion. No configuration check logic in Rust, no vendored or hand-written configuration schema, no TOML grammar, no HighlightSpec captures. Without a host checker there are no configuration diagnostics.
-- Pydantic in the pinned `opentide` package remains CLI authority for Tide objects. The LSP matches `{code, field_path, severity}` and adds ranges.
+- Pydantic in this repository's `opentide` package (`src/opentide`) remains CLI authority for Tide objects. The LSP matches `{code, field_path, severity}` and adds ranges.
 
 ## Verify
 

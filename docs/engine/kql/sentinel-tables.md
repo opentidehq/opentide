@@ -1,3 +1,8 @@
+---
+title: "Microsoft Sentinel tables used in detections"
+description: "The Log Analytics tables Microsoft Sentinel detections query, first-party and commonly used."
+---
+
 # Microsoft Sentinel tables used in detections
 
 Sentinel queries Log Analytics tables. The marketplace connector catalog lists **600+** tables (many partner `_CL` custom logs). This inventory covers **first-party and commonly used detection tables**, not every `_CL` connector.
