@@ -1,8 +1,9 @@
-name: fuzz
+name: Engine fuzz
 
 # Each engine and the LSP host under cargo-fuzz for five minutes a night
-# (#182). Informational: a crash uploads its input and fails this run only.
-# Fix it, then save the input under fuzz/regressions/<target>/ (fuzz/README.md).
+# (language-server#182), imported with the engine (#800). Informational: a crash
+# uploads its input and fails this run only. Fix it, then save the input under
+# fuzz/regressions/<target>/ (fuzz/README.md).
 on:
   schedule:
     - cron: "43 2 * * *"
@@ -17,24 +18,31 @@ permissions:
 
 jobs:
   fuzz:
+    name: fuzz ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         target: [kql, spl, esql, eql, kuery, lucene, falco, tide, protocol]
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-fuzz --locked
-      - uses: actions/cache@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # scripts/engine/fuzz.sh runs `cargo +nightly fuzz`.
+      - name: Set up Rust (nightly)
+        run: rustup toolchain install nightly --profile minimal --no-self-update
+      - run: cargo +nightly install cargo-fuzz --locked
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fuzz/corpus/${{ matrix.target }}
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
           restore-keys: fuzz-corpus-${{ matrix.target }}-
       - name: fuzz ${{ matrix.target }}
-        run: bash scripts/engine/fuzz.sh ${{ matrix.target }} ${{ inputs.seconds || '300' }}
+        env:
+          SECONDS_PER_TARGET: ${{ inputs.seconds || '300' }}
+        run: bash scripts/engine/fuzz.sh "${{ matrix.target }}" "$SECONDS_PER_TARGET"
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-${{ matrix.target }}-artifacts
           path: fuzz/artifacts/${{ matrix.target }}

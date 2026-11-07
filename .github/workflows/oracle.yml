@@ -5,9 +5,10 @@ name: Oracle
 # `falco --validate`, and the Elastic and Lucene parsers (@elastic/esql,
 # EqlBase.g4, Kibana's kuery grammar, Lucene's QueryParser). A disagreement not
 # listed in crates/testdata/oracles/exceptions.toml is a red build, and so is a
-# listed one that is gone. The references never ship; the engine's release
-# workflow (.github/engine-workflows/release.yml) runs
-# scripts/engine/license-scan.sh on every artifact.
+# listed one that is gone. The references never ship: the `package` job of
+# engine-ci.yml runs scripts/engine/license-scan.sh on the packaged crates, as
+# the engine's parked release workflow (.github/engine-workflows/release.yml)
+# does on every artifact.
 #
 # Imported from opentidehq/language-server (#800). No tag trigger: here `v*`
 # tags are opentide's releases, cut from a development commit these jobs
@@ -47,6 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       # Every oracle builds the same debug opentide-lsp: one cache, saved by
@@ -61,7 +64,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
+      - run: pip install pyyaml==6.0.3
       - run: bash scripts/engine/ci-oracle.sh kql
 
   spl:
@@ -69,6 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -78,7 +83,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
+      - run: pip install pyyaml==6.0.3
       # Not a service container: splunkd takes minutes to start and the runner's
       # readiness check needs a health status, so start.sh runs it and
       # oracle.py waits. Starting it accepts the Splunk General Terms for this
@@ -101,6 +106,8 @@ jobs:
         falco: ["0.45.2"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: falcosecurity/rules
@@ -117,7 +124,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
+      - run: pip install pyyaml==6.0.3
       - run: docker pull falcosecurity/falco:${{ matrix.falco }}
       - name: Falco oracle
         run: >
@@ -136,9 +143,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # Elastic's public rules (ELv2), read at CI time and never vendored.
       # Elasticsearch accepts every one, so they are queries the engine must
-      # not reject. Same pin as the elastic-sweep job in ci.yml.
+      # not reject. Same pin as the elastic-sweep job in engine-ci.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: elastic/detection-rules
@@ -165,7 +174,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
+      - run: pip install pyyaml==6.0.3
       - name: Elastic oracles
         env:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
@@ -183,6 +192,8 @@ jobs:
         version: ["8.19.23", "9.5.5"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -213,6 +224,8 @@ jobs:
       OPENTIDE_CBC_TOKEN: ${{ secrets.OPENTIDE_CBC_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Rust
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -222,5 +235,5 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install pyyaml
+      - run: pip install pyyaml==6.0.3
       - run: bash scripts/engine/ci-oracle.sh carbon_black

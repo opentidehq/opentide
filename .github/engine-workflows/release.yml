@@ -60,7 +60,7 @@ jobs:
               fi
               # The crates are published from this commit: their sources must be the tag's.
               git fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
-              if ! git diff --quiet "${tag}" HEAD -- crates catalogs grammars highlights Cargo.toml Cargo.lock LICENSE NOTICE; then
+              if ! git diff --quiet "${tag}" HEAD -- crates data/catalogs grammars highlights Cargo.toml Cargo.lock LICENSE NOTICE; then
                 echo "::error::the crate sources changed since ${tag}; publish_only would publish different crates"
                 exit 1
               fi
@@ -72,7 +72,7 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
       - run: python3 scripts/engine/release.py check "${{ steps.tag.outputs.tag }}"
       - run: python3 scripts/engine/release.py vendor
-      - run: cargo package --workspace --allow-dirty
+      - run: cargo package --workspace --exclude opentide-native --allow-dirty
       - name: license scan (no oracle references)
         run: bash scripts/engine/license-scan.sh target/package/*.crate
 

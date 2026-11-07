@@ -1,110 +1,86 @@
-name: CI
+name: Engine CI
+
+# The engine's pull-request gates from language-server's ci.yml, imported with
+# it (#800). Its rustfmt, clippy, tests, engine checks, WebAssembly builds and
+# npm packages run in ci.yml (jobs `engine` and `engine-wasm`); these are the
+# rest, until UC-0.3 (#801) brings the repository's CI together. No tag
+# trigger: here `v*` tags are opentide's releases.
 
 on:
   push:
     branches: [main, development]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: engine-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
-  test:
+  # The generated grammars as VS Code reads them (language-server#171).
+  textmate:
+    name: TextMate grammars (vscode-textmate)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          components: rustfmt, clippy
-      # Dependencies only: rust-cache drops the workspace crates before saving.
-      # Pushes to main and development save; pull requests restore theirs.
-      # `clients` and `elastic-sweep` build a subset of this debug tree and read
-      # the same cache, so the repository keeps one copy of it.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: dev
-          save-if: ${{ github.event_name == 'push' }}
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest@0.9.148
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      # tide_corpus.rs runs this checkout's src/opentide models (.venv).
-      - name: opentide (src/opentide)
-        run: python -m pip install uv && uv sync --group dev
-      - name: rustfmt
-        run: cargo fmt --all -- --check
-      - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: io-free engines
-        run: bash scripts/engine/check-io-free.sh
-      - name: names
-        run: bash scripts/engine/check-names.sh
-      - name: skills
-        run: bash scripts/engine/validate-skills.sh
-      # nextest runs each test in its own process, across binaries at once
-      # (.config/nextest.toml); it does not run doctests.
-      - name: test
-        run: cargo nextest run --workspace --profile ci
-      - name: doctests
-        run: cargo test --workspace --doc
-      - name: generate-highlights --check
-        run: cargo run -p opentide-lsp -- generate-highlights --check
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-      # The generated grammars as VS Code reads them (#171).
       - name: TextMate grammars (vscode-textmate)
         working-directory: highlights/test
         run: npm ci && npm test
-      # The npm packages build and pack only what they publish (#167).
-      - name: npm packs
-        run: |
-          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
-          node scripts/engine/check-npm-packs.mjs
-      # The TypeScript client against the debug server the test step built.
-      - name: lsp-client (stdio)
-        env:
-          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
-        run: node --experimental-strip-types --test packages/lsp-client/src/index.test.ts
 
-  # The language server on Windows (#185 P0.3): drive-letter and UNC `file:`
-  # URIs name the same file as the workspace walk, and the protocol tests run
-  # against the Windows build.
+  # The language server on Windows (language-server#185 P0.3): drive-letter and
+  # UNC `file:` URIs name the same file as the workspace walk, and the protocol
+  # tests run against the Windows build.
   windows:
+    name: Language server on Windows
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.event_name == 'push' }}
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: cargo-nextest@0.9.148
       - name: test (opentide-lsp, opentide-core)
-        run: cargo nextest run -p opentide-lsp -p opentide-core --profile ci
+        run: cargo nextest run --locked -p opentide-lsp -p opentide-core --profile ci
 
-  # Real clients against the server (#185 P2.8): pytest-lsp replays the
-  # capabilities VS Code, Neovim and Emacs send and checks each response
-  # against them, and Neovim's own client must show each diagnostic once.
-  # Informational while the recorded capabilities and Ubuntu's Neovim move.
+  # Real clients against the server (language-server#185 P2.8): pytest-lsp
+  # replays the capabilities VS Code, Neovim and Emacs send and checks each
+  # response against them, and Neovim's own client must show each diagnostic
+  # once. Informational while the recorded capabilities and Ubuntu's Neovim move.
   clients:
+    name: LSP clients (informational)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          shared-key: dev
-          save-if: false
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.event_name == 'push' }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: cargo build -p opentide-lsp
+      - run: cargo build --locked -p opentide-lsp
       - name: pytest-lsp (VS Code, Neovim, Emacs capabilities)
         env:
           OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
@@ -116,110 +92,95 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q neovim
           nvim --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
 
-  # analyze() per language and hover in a 1,000-object workspace (#181).
-  # The numbers go in the job summary for comparing runs; they gate nothing.
+  # analyze() per language and hover in a 1,000-object workspace
+  # (language-server#181). The numbers go in the job summary for comparing
+  # runs; they gate nothing.
   bench:
+    name: Benchmarks (informational)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.event_name == 'push' }}
       - name: cargo bench (opentide-analysis)
         run: |
-          cargo bench -p opentide-analysis --bench analyze | tee bench.txt
+          cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
           { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-  # Every crate builds from its packaged sources, as it will from crates.io:
-  # a crate that reads a file outside OPENTIDE_ASSETS fails here, not at release.
+  # Every engine crate builds from its packaged sources, as it will from
+  # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
+  # at release. The binding (analysis/, opentide-native) is not a crate to
+  # publish. release.py's own tests run in ci.yml's `engine` job.
   package:
+    name: Engine crates package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.event_name == 'push' }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - name: release.py tests
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - run: python3 scripts/engine/release.py vendor
-      - run: cargo package --workspace --allow-dirty
+      - run: cargo package --locked --workspace --exclude opentide-native --allow-dirty
       # The crates carry the embedded catalogs; catch an oracle reference here
       # rather than at release time.
       - name: license scan (no oracle references)
         run: bash scripts/engine/license-scan.sh target/package/*.crate
 
+  # The vendored parser.c of every grammar is what tree-sitter-cli generates
+  # from its grammar.js (crates/AGENTS.md: never hand-edited).
   grammars:
+    name: Grammars regenerate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - run: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10
       - run: bash scripts/engine/check-grammars.sh
 
-  # Both WASM artifacts: the browser highlight() module and the WASI CLI.
-  # scripts/engine/build-wasm.sh pins wasi-sdk for the C parsers and smoke-tests each.
-  wasm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown, wasm32-wasip1
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.event_name == 'push' }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      # The prebuilt release, not a 1-minute `cargo install`. The version must
-      # match the wasm-bindgen crate in Cargo.lock.
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-bindgen@0.2.128
-      - run: bash scripts/engine/build-wasm.sh
-      # The TypeScript client's worker and wasi transports on what was just
-      # built, compared with the native CLI.
-      - run: cargo build -p opentide-lsp
-      - name: lsp-client (worker, wasi)
-        env:
-          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
-          OPENTIDE_WASI_BIN: target/wasm32-wasip1/release/opentide-lsp.wasm
-          OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
-        # node:wasi's path_open is a V8 fast API call whose allocation can
-        # start a GC inside the call, which segfaults the process once the
-        # WASI instances hold enough memory (node 22). Plain calls do not.
-        run: node --no-turbo-fast-api-calls --experimental-strip-types --test packages/lsp-client/src/index.test.ts
-
   # Every public Elastic rule passes Elasticsearch's parser, so any engine
-  # error on them is an engine bug (#82). The rules are ELv2: checked out
-  # here at a pinned commit, never vendored.
+  # error on them is an engine bug (language-server#82). The rules are ELv2:
+  # checked out here at a pinned commit (the one oracle.yml reads), never
+  # vendored.
   elastic-sweep:
+    name: Elastic detection-rules sweep
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: elastic/detection-rules
+          persist-credentials: false
           ref: 2b30453d7dede69f980472cff51a2ae9a6917bae
           path: detection-rules
           sparse-checkout: |
             rules
             rules_building_block
             hunting
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          shared-key: dev
-          save-if: false
+          save-if: ${{ github.event_name == 'push' }}
       - name: detection-rules sweep
         env:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
-        run: cargo test -p opentide-analysis --test elastic_detection_rules -- --nocapture
+        run: cargo test --locked -p opentide-analysis --test elastic_detection_rules -- --nocapture

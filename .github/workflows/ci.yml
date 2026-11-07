@@ -127,17 +127,23 @@ jobs:
   # The Cargo workspace: the engine crates (crates/, imported from
   # opentidehq/language-server) and their PyO3 binding (analysis/). The
   # engine's tests compare it with this checkout's Pydantic models, so they run
-  # after `uv sync`. The rest of language-server's CI is parked in
-  # .github/engine-workflows/ until UC-0.3 (#801) rebuilds CI.
+  # after `uv sync`. The rest of language-server's CI runs in engine-ci.yml
+  # until UC-0.3 (#801) brings CI together.
   engine:
     name: Engine (Rust workspace)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
+      # A compiler warning fails the build, as in language-server's CI.
+      RUSTFLAGS: "-Dwarnings"
       # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
       # backtraces keep file:line, and target/ stays a few GB on the runner.
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -193,8 +199,15 @@ jobs:
   engine-wasm:
     name: Engine WebAssembly and npm packages
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # build-wasm.sh adds its link arguments to these flags.
+      RUSTFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Rust
         run: |
