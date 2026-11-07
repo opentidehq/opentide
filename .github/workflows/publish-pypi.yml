@@ -42,12 +42,12 @@
 # `skip-existing: true` makes it upload only the files PyPI does not have yet,
 # and the verify step fails the job unless PyPI lists every file in dist/.
 #
-# opentide compiles its analysis engine (analysis/, Rust) into the package
-# (hatch_build.py), so a release is one wheel per platform and an sdist, all
-# of opentide: cibuildwheel builds the wheels ([tool.cibuildwheel] in
-# pyproject.toml), each tagged cp310-abi3-<platform> for every CPython from
-# 3.10. A platform without a wheel builds the sdist, which needs Rust. The
-# engine builds from crates.io sources only (check_engine_pin.py --release).
+# opentide compiles its analysis engine (analysis/ and the engine crates in
+# crates/, one Cargo workspace, Rust) into the package (hatch_build.py), so a
+# release is one wheel per platform and an sdist, all of opentide: cibuildwheel
+# builds the wheels ([tool.cibuildwheel] in pyproject.toml), each tagged
+# cp310-abi3-<platform> for every CPython from 3.10. A platform without a wheel
+# builds the sdist, which carries the workspace and needs Rust.
 name: Publish to PyPI
 
 on:
@@ -75,7 +75,7 @@ concurrency:
 jobs:
   # Nothing is built, let alone published, from a commit that is not the
   # release tag (or, releasing from development, whose notes PR has not
-  # merged), or with the engine from git sources.
+  # merged).
   guard:
     name: Release guard
     runs-on: ubuntu-latest
@@ -123,9 +123,6 @@ jobs:
           echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
           echo "create_release=${FROM_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Engine sources are crates.io releases
-        run: python scripts/build/check_engine_pin.py --release
 
   wheels:
     name: Wheel (${{ matrix.os }})
