@@ -1,0 +1,2 @@
+// prod:string valid
+process where file.path == """C:\Windows\cmd.exe""" and a == "tab\t"

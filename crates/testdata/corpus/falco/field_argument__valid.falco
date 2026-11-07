@@ -1,0 +1,2 @@
+# prod:field_argument valid
+proc.aname[2] = sshd and proc.env[HOME] startswith /root and json.value[/user/name] = "admin" and k8s.pod.label['app'] = web

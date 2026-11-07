@@ -1,0 +1,49 @@
+name: 
+criticality: 
+
+metadata:
+  uuid: 
+  schema: threat::1.0
+  version: 
+  created: YYYY-MM-DD
+  modified: YYYY-MM-DD
+  tlp: 
+  #author: 
+  #contributors:
+    #- 
+  #organisation:
+    #uuid: 
+    #name: 
+threat:
+  description: |
+    ...
+  severity: 
+  impact:
+    - 
+  leverage:
+    - 
+  viability: 
+  terrain: 
+  surface:
+    - 
+  mitre_attack:
+    - 
+  #actors:
+    #- name: 
+      #sighting: |
+        #...
+      #references:
+        #- 
+  #killchain:
+    #- 
+  #chaining:
+    #- key: 
+  #cve:
+    #- 
+#references:
+  #public:
+    #1: 
+  #internal:
+    #key: 
+  #reports:
+    #- 

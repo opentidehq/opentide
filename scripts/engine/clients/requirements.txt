@@ -1,0 +1,4 @@
+# The client-capability tests (#185 P2.8): pytest-lsp replays the
+# capabilities VS Code, Neovim and Emacs send, and checks every response
+# against them.
+pytest-lsp==1.0.1

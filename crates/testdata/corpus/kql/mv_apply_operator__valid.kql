@@ -1,0 +1,2 @@
+// prod:mv_apply_operator valid
+AuditLogs | mv-apply TargetResource = TargetResources on (where TargetResource.type == "User" | take 1)

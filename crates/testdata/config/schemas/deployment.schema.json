@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "DebugSettings": {
+      "additionalProperties": false,
+      "description": "`[debug]`: settings read when opentide runs in debug mode.",
+      "properties": {
+        "mdr_test_uuids": {
+          "description": "UUIDs of rules usable for debugging.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Mdr Test Uuids",
+          "type": "array"
+        },
+        "ssl_enabled": {
+          "default": true,
+          "description": "Whether TLS certificates are verified in debug mode.",
+          "title": "Ssl Enabled",
+          "type": "boolean"
+        },
+        "proxy_enabled": {
+          "default": false,
+          "description": "Ignored. Pass the proxy URL with `opentide --proxy` instead.",
+          "title": "Proxy Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "DebugSettings",
+      "type": "object"
+    },
+    "DeploymentResponder": {
+      "additionalProperties": false,
+      "description": "One `[[responders]]` entry: an alert-handling team a rule's responders may name.",
+      "properties": {
+        "name": {
+          "description": "Team name a rule's response.responders takes.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "What the team does; shown in the editor next to the name.",
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "DeploymentResponder",
+      "type": "object"
+    },
+    "DeploymentStatusEntry": {
+      "additionalProperties": false,
+      "description": "One `[[statuses]]` entry: a status a rule may carry, and what deploy does with it.",
+      "properties": {
+        "name": {
+          "description": "Status name a rule's status field takes, for example STAGING.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "description": "What a rule in this status is.",
+          "title": "Description",
+          "type": "string"
+        },
+        "strategy": {
+          "description": "What opentide deploy does with a rule in this status: INERT, PREVIEW, RELEASE, DISABLEMENT, DELETION or UNIVERSAL.",
+          "enum": [
+            "INERT",
+            "RELEASE",
+            "PREVIEW",
+            "DISABLEMENT",
+            "DELETION",
+            "UNIVERSAL"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "strategy"
+      ],
+      "title": "DeploymentStatusEntry",
+      "type": "object"
+    },
+    "PromotionSettings": {
+      "additionalProperties": false,
+      "description": "`[promotion]`: whether deploy rewrites a promotable status, and to which status.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether status promotion is allowed.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "promotion_target": {
+          "default": "PRODUCTION",
+          "description": "Status a promotable rule is rewritten to. Must name a [[statuses]] entry.",
+          "minLength": 1,
+          "title": "Promotion Target",
+          "type": "string"
+        }
+      },
+      "title": "PromotionSettings",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Merged `deployment.toml`: the statuses a rule may carry and how deploy treats them.",
+  "properties": {
+    "default_responders": {
+      "default": "",
+      "description": "Team applied when a rule sets no response.responders. Must stay above every [[...]] block in the file.",
+      "title": "Default Responders",
+      "type": "string"
+    },
+    "statuses": {
+      "description": "The statuses a rule may carry.",
+      "items": {
+        "$ref": "#/$defs/DeploymentStatusEntry"
+      },
+      "minItems": 1,
+      "title": "Statuses",
+      "type": "array"
+    },
+    "promotion": {
+      "$ref": "#/$defs/PromotionSettings",
+      "description": "Status promotion on deploy."
+    },
+    "debug": {
+      "$ref": "#/$defs/DebugSettings",
+      "description": "Settings read in debug mode."
+    },
+    "responders": {
+      "description": "Alert-handling teams. None declared leaves response.responders unconstrained.",
+      "items": {
+        "$ref": "#/$defs/DeploymentResponder"
+      },
+      "title": "Responders",
+      "type": "array"
+    }
+  },
+  "required": [
+    "statuses"
+  ],
+  "title": "deployment.toml",
+  "type": "object"
+}

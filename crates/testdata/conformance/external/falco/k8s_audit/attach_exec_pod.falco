@@ -1,0 +1,1 @@
+kevt_started and pod_subresource and (kcreate or kget) and ka.target.subresource in (exec,attach) and not user_known_exec_pod_activities

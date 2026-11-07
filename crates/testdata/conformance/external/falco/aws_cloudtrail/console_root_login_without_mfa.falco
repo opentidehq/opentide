@@ -1,0 +1,1 @@
+ct.name="ConsoleLogin" and not ct.error exists and json.value[/additionalEventData/MFAUsed]="No" and ct.user.identitytype!="AssumedRole" and json.value[/responseElements/ConsoleLogin]="Success" and ct.user.identitytype="Root"

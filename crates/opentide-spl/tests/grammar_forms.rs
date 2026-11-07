@@ -1,0 +1,574 @@
+//! SPL forms from deployed detections that the grammar must accept, and the
+//! faults next to them it must still reject (opentidehq/language-server#117).
+
+use opentide_core::codes;
+use opentide_spl::analyze;
+
+fn parse_errors(src: &str) -> usize {
+    analyze(src)
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == codes::SPL_PARSE_ERROR)
+        .count()
+}
+
+fn assert_parses(forms: &[&str]) {
+    let failing: Vec<&str> = forms
+        .iter()
+        .copied()
+        .filter(|src| parse_errors(src) > 0)
+        .collect();
+    assert!(failing.is_empty(), "should parse: {failing:#?}");
+}
+
+fn assert_rejected(faults: &[&str]) {
+    let accepted: Vec<&str> = faults
+        .iter()
+        .copied()
+        .filter(|src| parse_errors(src) == 0)
+        .collect();
+    assert!(
+        accepted.is_empty(),
+        "should be a syntax error: {accepted:#?}"
+    );
+}
+
+/// #120: search clauses and comments.
+#[test]
+fn search_clauses_parse() {
+    assert_parses(&[
+        "index=a TERM(EventID=4688)",
+        "`m` TERM(user=)",
+        "index=a TERM(TERMSRV/*)",
+        "index=a (TERM(N1*) OR TERM(N2*)) CASE(Admin)",
+        "| tstats count where index=a by PREFIX(src=)",
+        "| tstats count where index=a by _time PREFIX(dst=) span=1s",
+        "index=a TERM(EventID=4688",
+        "index=a TERM(\"a-b\"\n| stats count",
+        "index=a TERM(\"a b\") TERM(x",
+        "index=a \"http_request.user_agent\"=x",
+        "index=a | search \"{}.Id\"=\"x\"",
+        "index=a earliest=-1h@h latest=now",
+        "index=a earliest=-15m@m latest=now()",
+        "_index_earliest=-7m@m _index_latest=@m",
+        "index=a app IN (\"a\" \"b\")",
+        "index=a app IN (\"a\", \"b\")",
+        "index=a version=2.0.0",
+        "index=a host=S-RC*",
+        "index=a domain_rank=-1",
+        "index=a user=svc-x",
+        "index=a alert.attack-time=x",
+        "index=a severity >= 2 AND x!=y",
+        "\"Accepted\" index=a",
+        "NOT `m` index=a",
+        "`m` NOT title=\"a - *\" status=new",
+        "| tstats count as c, values(tag) as tag where index=a earliest=-1h by _time span=1h",
+        "index=a [| inputlookup t.csv | fields x]",
+        "index=a and or not",
+    ]);
+}
+
+#[test]
+fn search_clause_faults_are_rejected() {
+    assert_rejected(&[
+        "index=a (TERM(EventID=4688)",
+        "index=a app IN (\"a\" \"b\"",
+        "index=a OR",
+        "OR index=a",
+        "index=a AND OR b=1",
+        "index=a NOT",
+        "index=a (x=1",
+        "index=a x=1)",
+        // Splunk: "Comparator '=' is missing a term on the right hand side".
+        "| tstats count where index=a PREFIX(src=) by host",
+    ]);
+}
+
+#[test]
+fn comments_span_lines_and_take_any_backtick_run() {
+    assert_parses(&[
+        "index=a\n``` multi\nline ```\n| stats count",
+        "index=a ```` four ```\n| stats count",
+        "index=a ``````\n| stats count",
+        "index=a | join host ``` why ``` [| search index=b]",
+        "index=a ``` `m` is not expanded here ```",
+    ]);
+    // The comment ends at the first run of three backticks.
+    assert_rejected(&[
+        "index=a ``` unclosed\n| stats count",
+        "index=a (\n``` multi\nline ```\n| stats count",
+    ]);
+}
+
+/// Reserving `AND`, `OR` and `NOT` must not break commands that take them.
+#[test]
+fn reserved_booleans_are_arguments() {
+    assert_parses(&[
+        "| metasearch index=a OR index=b",
+        "| metasearch NOT index=a",
+        "| metasearch index=a AND sourcetype=b",
+        "| mpreview index=a OR index=b",
+        "| eventcount index=a OR index=b",
+        "| metadata type=hosts index=a OR index=b",
+        "| searchtxn t max_terms=10 a OR b",
+        "index=a | bogus a OR b",
+        "index=a | bogus NOT b",
+    ]);
+}
+
+/// #135: with no leading `|`, Splunk runs the text as `search <text>`, so a
+/// leading word is a search term. After a `|` it is a command.
+#[test]
+fn leading_bare_word_is_a_search_term_and_piped_word_a_command() {
+    for src in [
+        "index=main | bogus foo=bar",
+        "| bogus foo=bar",
+        "index=a [bogus x]",
+    ] {
+        let r = analyze(src);
+        assert!(
+            r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::SPL_UNKNOWN_COMMAND),
+            "{src}: {:?}",
+            r.diagnostics
+        );
+    }
+    for src in [
+        "bogus foo=bar",
+        "error",
+        "index",
+        "tstats",
+        "makeresults count=5",
+    ] {
+        let r = analyze(src);
+        assert!(
+            !r.diagnostics
+                .iter()
+                .any(|d| d.code == codes::SPL_UNKNOWN_COMMAND || d.code == codes::SPL_PARSE_ERROR),
+            "{src}: {:?}",
+            r.diagnostics
+        );
+    }
+    // Splunk: "Unknown search command 'index'".
+    assert_rejected(&["| index=a", "| index=a sourcetype=b | stats count"]);
+}
+
+/// #135: what Splunk 10.6.1's parser accepts with no arguments, and the
+/// trailing empty stage it ignores.
+#[test]
+fn argumentless_commands_and_a_trailing_pipe_parse() {
+    assert_parses(&[
+        "index=a | where",
+        "index=a | search",
+        "index=a | fields",
+        "index=a | fields -",
+        "index=a | eventstats",
+        "index=a | streamstats",
+        "index=a | sistats",
+        "index=a | stats",
+        "index=a | lookup",
+        "| inputlookup",
+        "index=a [| inputlookup]",
+        "index=a | head",
+        "index=a | spath",
+        "index=a | fillnull",
+        "index=a | tojson",
+        "index=a | where | stats count",
+        "index=a | stats count |",
+        "index=a ```c``` |",
+        "search |",
+        "| makeresults |",
+        "tstats count where index=a by sourcetype",
+    ]);
+}
+
+/// #135: what Splunk 10.6.1's parser rejects with no arguments, and an empty
+/// stage anywhere but last.
+#[test]
+fn argumentless_commands_splunk_rejects() {
+    let commands = [
+        "chart",
+        "timechart",
+        "sichart",
+        "sitimechart",
+        "geostats",
+        "foreach",
+        "outputlookup",
+        "sort",
+        "rename",
+        "dedup",
+        "table",
+        "eval",
+        "rex",
+        "mvexpand",
+        "join",
+        "append",
+        "top",
+        "rare",
+        "transaction",
+        "bin",
+        "tstats",
+        "makemv",
+    ];
+    let faults: Vec<String> = commands.iter().map(|c| format!("index=a | {c}")).collect();
+    assert_rejected(&faults.iter().map(String::as_str).collect::<Vec<_>>());
+    // Catalog commands without a rule of their own that Splunk rejects bare.
+    let catalog = [
+        "metadata",
+        "from",
+        "rest",
+        "inputcsv",
+        "gentimes",
+        "mstats",
+        "savedsearch",
+        "multisearch",
+        "set",
+        "xyseries",
+        "contingency",
+        "mvcombine",
+        "sitop",
+        "sirare",
+        "timewrap",
+        "regex",
+        "replace",
+        "setfields",
+        "fieldformat",
+        "nomv",
+        "strcat",
+        "bucket",
+        "rangemap",
+        "iplocation",
+        "fromjson",
+        "appendcols",
+        "appendpipe",
+        "selfjoin",
+        "return",
+        "map",
+        "concurrency",
+        "script",
+        "mcollect",
+        "accum",
+        "analyzefields",
+        "arules",
+        "autoregress",
+        "cofilter",
+        "delta",
+        "gauge",
+        "trendline",
+        "typeahead",
+    ];
+    let faults: Vec<String> = catalog.iter().map(|c| format!("index=a | {c}")).collect();
+    assert_rejected(&faults.iter().map(String::as_str).collect::<Vec<_>>());
+    // ... and the ones it runs with defaults.
+    assert_parses(&[
+        "index=a | reverse",
+        "index=a | addtotals",
+        "index=a | transpose",
+        "index=a | filldown",
+        "index=a | tail",
+        "| makeresults",
+        "| eventcount",
+        "index=a | append [search b]",
+        "index=a | top user",
+        "index=a | bin _time",
+        "index=a | geostats count",
+    ]);
+    assert_rejected(&[
+        // Splunk: "At least one data field must be specified."
+        "index=a | geostats by x",
+        "| geostats latfield=lat longfield=lon by x",
+        "index=a | | stats count",
+        "| | stats count",
+        "index=a [search b |]",
+        "| makeresults | inputlookup",
+        "index=a TERM(a)) AND b",
+        "index=a (a OR b",
+    ]);
+}
+
+/// #121: eval and where expressions.
+#[test]
+fn eval_expressions_parse() {
+    assert_parses(&[
+        "index=a | eval k=a.\"-\".b",
+        "index=a | eval k = \"x\" . b",
+        "index=a | eval s=case(x>1, 1, true(), 0)",
+        "index=a | eval s=if(x, false(), null())",
+        "index=a | eval s=if(x like \"a%\", 1, 0)",
+        "index=a | where x like \"a%\"",
+        "index=a | where like(x, \"a%\") OR x LIKE \"b%\"",
+        "index=a | eval \"a.b\"='c.d'",
+        "index=a | eval {f}=v",
+        "index=a | eval x=mvindex('a{}.b', 0)",
+        "index=a | eval x=a*2, y=-abs(z), w=a%2",
+        "index=a | eval x=Processes.user",
+        "index=a | eval s=case(\n    x>1, 1,\n    true(), 0)",
+        "index=a | eval x=if(!match(a, \"-\") AND isnotnull(b), 1, 0)",
+        "index=a | where isnull(x) AND NOT y!=2",
+        "index=a | where n > $threshold$",
+        "index=a | where NOT [| inputlookup t.csv | fields x]",
+        "index=a | join x [| eval <<FIELD>>=mvdedup('<<FIELD>>')]",
+        "index=a | join x [| eval r<<MATCHSTR>>=lower('<<FIELD>>')]",
+        "index=a | join x [| eval y=\"<<FIELD>>=\".mvjoin('<<FIELD>>', \" | \")]",
+    ]);
+}
+
+#[test]
+fn eval_expression_faults_are_rejected() {
+    assert_rejected(&[
+        "index=a | eval k=a.",
+        "index=a | eval k=.a",
+        "index=a | eval x=a*",
+        "index=a | eval x=*",
+        "index=a | eval {f=v",
+        "index=a | eval x=true(",
+        "index=a | where x like",
+        "index=a | eval \"a.b\"=",
+        "index=a | eval x=!",
+    ]);
+}
+
+/// #122: field names, wildcards and command arguments.
+#[test]
+fn command_arguments_parse() {
+    assert_parses(&[
+        "index=a | rename a as b",
+        "index=a | rename DNS.* as *",
+        "index=a | rename a AS b, c As d,\n| eval x=1",
+        "index=a | rename IsOutlier(x) as o, f, as g",
+        "| tstats count where index=a by PREFIX(dst=) | rename dst= as dest, *= as *",
+        "index=a | rename a.$date as d",
+        "index=a | stats values(*) as * by user",
+        "index=a | stats earliest(_time) as \"earliest\"",
+        "index=a | stats count, dc(x) as y BY a, , b",
+        "index=a | stats values(*) as *,\n| eval x=1",
+        "index=a | lookup t ip as src OUTPUT x",
+        "index=a | lookup t ip AS src OUTPUTNEW x AS y, z",
+        "index=a | lookup t-include.csv ip OUTPUT x",
+        "index=a | lookup local=t t a as b OUTPUTNEW\n| stats count",
+        "index=a | eventstats dc(src) as c by user",
+        "index=a | eventstats values(dns_*) as dns_* by dest",
+        "index=a | eventstats min(eval(if(t==\"a\", _time, null()))) as e",
+        "index=a | fillnull value=\"-\" a, b",
+        "index=a | fillnull a value=-1",
+        "index=a | fillnull",
+        "index=a | foreach * [ eval <<FIELD>>=mvdedup(<<FIELD>>) ]",
+        "index=a | foreach user* [| eval r<<MATCHSTR>>=lower('<<FIELD>>') ]",
+        "index=a | foreach a, b mode=multifield [ eval <<FIELD>>=1 ]",
+        "| tstats count, values(a) as a\n    values(b) as b fillnull_value=\"-\" from datamodel=X.Y where index=a by _time host span=1h",
+        "| tstats count from datamodel=\"Web\" by _time PREFIX(dst=) span=1s",
+        "index=a | sort -lt limit=0",
+        "index=a | sort 0 host _time",
+        "index=a | sort limit=0 + src, _time",
+        "index=a | sort - et limit=0",
+        "index=a | sort num(x) desc",
+        "index=a | tojson * output_field=j",
+        "index=a | tojson fill_null=true a, b* output_field=j",
+        "index=a | spath a{}",
+        "index=a | spath input=x path=a{}.b output=y",
+        "index=a | spath path={}",
+        "index=a | rex mode=sed field=x \"s/a/b/g\"",
+        "index=a | rex field=x max_match=0 \"(?<y>.)\"",
+        "index=a | rex field=x, \"(?<y>.)\"",
+        "index=a | streamstats window=1 current=f values(_time) as t by user",
+        "index=a | streamstats count by user reset_on_change=true",
+        "index=a | streamstats time_window=3h count by user",
+        "index=a | streamstats count by src reset_after=\"(\"action==\\\"success\\\"\")\"",
+        "index=a | fields a{}.b",
+        "index=a | fields InsightData{}.Details{}.Name",
+        "index=a | fields alert.attack-time",
+        "index=a | fields a, , b",
+        "index=a | table a, \"b c\", d*",
+        "index=a | join type=left k [ search index=b | fields k ]",
+        "index=a | join type=left a, b [ search index=b ]",
+        "index=a | mvexpand a{}",
+        "index=a | mvexpand x limit=10",
+        "index=a | mvexpand(x)",
+        "| inputlookup append=t t where (x=\"a\" OR x=\"b\") AND y <= 60",
+        "index=a | outputlookup append=true t-x.csv",
+        "| rest /services/data/indexes count=0",
+        "index=a | convert timeformat=\"%Y\" ctime(_time) AS t",
+        "index=a | fromjson x prefix=y_",
+        "index=a | timechart span=1h count by host limit=0 useother=f",
+        "index=a | chart count over a by b",
+        "index=a | stats values(PREFIX(dpt=)) as p",
+        "index=a | dedup host user keepempty=true sortby -_time",
+        "index=a | bin _time span=1h",
+        "index=a | top limit=10 x by y showperc=f",
+        "index=a | regex _raw!=\"a\"",
+        "index=a | strcat a \"-\" b c",
+        "index=a | makemv delim=\",\" allowempty=t x",
+        "index=a | iplocation src",
+    ]);
+}
+
+#[test]
+fn command_argument_faults_are_rejected() {
+    assert_rejected(&[
+        "index=a | rename a as",
+        "index=a | rename a b",
+        "index=a | lookup t",
+        "index=a | lookup t a OUTPUT x AS",
+        "index=a | stats values(",
+        "index=a | stats count by",
+        "index=a | eventstats dc(src as c",
+        "index=a | foreach * eval x=1",
+        "index=a | sort",
+        "index=a | rex field=x",
+        "index=a | join type=left k",
+        "index=a | mvexpand",
+        "| makeresults | inputlookup",
+        "index=a | lookup local=t",
+    ]);
+}
+
+#[test]
+fn known_command_arguments_never_make_an_unknown_command() {
+    let r = analyze(
+        "index=a | bin _time span=1h | xyseries a b c | metasearch index=a OR index=b NOT c | notacommand x",
+    );
+    let unknown: Vec<&str> = r
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == codes::SPL_UNKNOWN_COMMAND)
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(
+        unknown,
+        [
+            "'notacommand' is not a command opentide knows; if an app on the search head provides it, declare it"
+        ],
+        "{r:?}",
+        r = r.diagnostics
+    );
+}
+
+#[test]
+fn keywords_highlight_whatever_their_case() {
+    let src = "index=a | lookup t ip AS src OUTPUT x | rename a as b | stats count BY h";
+    let r = analyze(src);
+    let keywords: Vec<&str> = r
+        .tokens
+        .iter()
+        .filter(|t| t.capture == "keyword")
+        .map(|t| &src[t.span.start..t.span.end])
+        .collect();
+    for word in ["lookup", "AS", "OUTPUT", "rename", "as", "stats", "BY"] {
+        assert!(
+            keywords.contains(&word),
+            "{word} not a keyword: {keywords:?}"
+        );
+    }
+}
+
+/// chart and timechart end in an optional `where` clause.
+#[test]
+fn chart_where_clause_parses() {
+    assert_parses(&[
+        "index=a | timechart count by host where count > 10",
+        "index=a | timechart span=1h count by host where count < 5",
+        "index=a | chart count by host where count > 10",
+        "index=a | timechart count by host where max in top5",
+        "index=a | timechart count by host where sum(x) notin bottom10",
+    ]);
+    // Splunk's parser accepts a dangling comparison (`where count >`), so
+    // only a clause with nothing after `where` is a fault here.
+    assert_rejected(&[
+        "index=a | timechart count by host where",
+        "index=a | stats count by host where count > 10",
+    ]);
+}
+
+/// A macro may stand for a field, table or aggregate, and a quoted name
+/// for a by-field, wherever a dedicated rule replaced argument_list.
+#[test]
+fn macros_and_quoted_names_in_command_rules() {
+    assert_parses(&[
+        "index=a | spath `m`",
+        "index=a | fillnull value=0 `m`",
+        "index=a | tojson `m`",
+        "| inputlookup `m` where x=1",
+        "index=a | outputlookup `m`",
+        "index=a | foreach `m` [eval x=1]",
+        "index=a | eventstats count by `m`",
+        "index=a | timechart `m` count",
+        "index=a | timechart count by \"Source IP\"",
+        "index=a | eventstats count by \"Source IP\"",
+        "index=a | chart count over \"a b\"",
+        "index=a | stats count by x `m`",
+        "index=a | table `m`",
+        "index=a | fields `m`",
+        "index=a | dedup `m`",
+        "index=a | lookup `m` x",
+        "| tstats `m` count where index=a by host",
+        "index=a | spath input=x [search a]",
+        "index=a | timechart count by x [search a]",
+        "index=a | outputlookup t x=(a,b)",
+    ]);
+}
+
+#[test]
+fn inputlookup_options_and_geostats_without_aggregates() {
+    assert_parses(&[
+        "| inputlookup t.csv max=10",
+        "| inputlookup t start=0 max=10",
+        "| inputlookup t append=true",
+        "| inputlookup t [search a]",
+        "| geostats latfield=lat longfield=lon",
+        "index=a | geostats count by x",
+    ]);
+}
+
+/// PREFIX() is valid in tstats aggregates and `by`, not in `where`.
+#[test]
+fn prefix_belongs_to_aggregates_and_by() {
+    assert_parses(&[
+        "| tstats count values(PREFIX(x=)) as p where index=a by _time PREFIX(dst=) span=1s",
+    ]);
+    assert_rejected(&["| tstats count where index=a PREFIX(src=) by host"]);
+}
+
+/// #136: Splunk 10.6.1 parses `==`, `<>`, `=>`, `=<` and `!~` in a search
+/// (they never match; that is a lint, not a syntax error), and rejects them
+/// in `tstats ... where`.
+#[test]
+fn loose_comparisons_parse_in_searches() {
+    assert_parses(&[
+        "index=a status==200",
+        "index=a status==\"200\" code<>404 bytes=>10 bytes=<99 user!~admin",
+        "index=a status == 200 NOT code <> 404",
+        "index=a dGVzdA==",
+        "index=a ==200",
+        "index=a x=a==b",
+        "index=a *==*",
+        "index=a | search status==200 OR code<>404",
+        "index=a [search status!~200 | fields status]",
+        "| inputlookup t.csv where a==1 b<>2",
+        "| tstats count where index=a sourcetype=~x by host",
+        "index=a | where status==200",
+    ]);
+    assert_rejected(&[
+        "| tstats count where index=a sourcetype==x by host",
+        "| tstats count where index=a sourcetype <> x by host",
+        "| tstats count where index=a sourcetype=>x",
+        "| tstats count where index=a sourcetype=<x",
+        "| tstats count where index=a sourcetype!~x",
+    ]);
+}
+
+/// Splunk ends a stage at a `|` outside quotes, comments, macros and `[ ]`,
+/// whatever parentheses are open.
+#[test]
+fn a_pipe_ends_the_stage_inside_open_parentheses() {
+    assert_parses(&[
+        "index=a TERM(\"x\" | eval y=1",
+        "index=a TERM(x | stats count",
+        "index=a TERM(x|stats count",
+        "index=a TERM(\"x|y\") | stats count",
+        "index=a ([search b | fields x] OR c)",
+        "index=a x=\"a|b\" ```c|d``` `m(\"e|f\")` | stats count",
+    ]);
+    // Splunk: "Unknown search command 'y'".
+    assert_rejected(&["index=a TERM(x|y)", "index=a CASE(x|y) | stats count"]);
+}

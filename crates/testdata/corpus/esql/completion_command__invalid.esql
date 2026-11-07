@@ -1,0 +1,3 @@
+// prod:completion_command invalid
+FROM logs-* METADATA _id
+| COMPLETION summary =

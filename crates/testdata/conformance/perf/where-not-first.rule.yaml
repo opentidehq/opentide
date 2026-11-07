@@ -1,0 +1,42 @@
+name: Where Not First
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000056
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: analyst
+  organisation: opentide
+
+description: |
+  KQL where is not the first operator after the table.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  sentinel:
+    enabled: true
+    name: Where Not First
+    status: STAGING
+    query: |
+      SecurityEvent
+      | extend Computer = tolower(Computer)
+      | where EventID == 4688
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Where Not First
+      suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

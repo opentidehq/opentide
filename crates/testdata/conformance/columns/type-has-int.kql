@@ -1,0 +1,1 @@
+SecurityEvent | where EventID has "46"

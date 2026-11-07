@@ -1,6 +1,18 @@
 {
   "version": 1,
   "skills": {
+    "add-language": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/add-language/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "catalogs": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/catalogs/SKILL.md",
+      "computedHash": "project-local"
+    },
     "cli-e2e-testing": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
@@ -19,11 +31,29 @@
       "skillPath": ".agents/skills/docs-maintenance/SKILL.md",
       "computedHash": "project-local"
     },
+    "engine-release": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/engine-release/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "engine-release-notes": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/engine-release-notes/SKILL.md",
+      "computedHash": "project-local"
+    },
     "github-actions-templates": {
       "source": "wshobson/agents",
       "sourceType": "github",
       "skillPath": "plugins/cicd-automation/skills/github-actions-templates/SKILL.md",
       "computedHash": "93e92fd674dea084628e95f9c48af806f9672ac08f815c84f85adedb55742c59"
+    },
+    "lsp-host": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/lsp-host/SKILL.md",
+      "computedHash": "project-local"
     },
     "mcp-server": {
       "source": "opentidehq/opentide",
@@ -73,16 +103,34 @@
       "skillPath": ".agents/skills/ruff/SKILL.md",
       "computedHash": "project-local"
     },
+    "rust-engine": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/rust-engine/SKILL.md",
+      "computedHash": "project-local"
+    },
     "steward": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/steward/SKILL.md",
       "computedHash": "project-local"
     },
+    "tree-sitter": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/tree-sitter/SKILL.md",
+      "computedHash": "project-local"
+    },
     "uv": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/uv/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "wasm-hosts": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/wasm-hosts/SKILL.md",
       "computedHash": "project-local"
     }
   }

@@ -1,0 +1,3 @@
+// prod:dense_vector_command valid
+FROM docs METADATA _id
+| DENSE_VECTOR embedding = title WITH { "inference_id": "e5" }

@@ -1,0 +1,2 @@
+// prod:relationship valid
+process where descendant of [process where true]

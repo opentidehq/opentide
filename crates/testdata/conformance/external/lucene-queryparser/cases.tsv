@@ -1,0 +1,361 @@
+# verdict	query (\t \n \r \\ escaped)	source
+accept	term　term　term	QueryParserTestBase.java:254 assertQueryEquals
+accept	用語　用語　用語	QueryParserTestBase.java:255 assertQueryEquals
+accept	中国	QueryParserTestBase.java:291 getQuery
+accept	中国^0.5	QueryParserTestBase.java:304 getQuery
+accept	"中国"	QueryParserTestBase.java:313 getQuery
+accept	"中国"^0.5	QueryParserTestBase.java:323 getQuery
+accept	"中国"~3	QueryParserTestBase.java:332 getQuery
+accept	term term term	QueryParserTestBase.java:349 assertQueryEquals
+accept	türm term term	QueryParserTestBase.java:350 assertQueryEquals
+accept	ümlaut	QueryParserTestBase.java:351 assertQueryEquals
+accept	""	QueryParserTestBase.java:355 assertQueryEquals
+accept	foo:""	QueryParserTestBase.java:356 assertQueryEquals
+accept	a AND b	QueryParserTestBase.java:358 assertQueryEquals
+accept	(a AND b)	QueryParserTestBase.java:359 assertQueryEquals
+accept	c OR (a AND b)	QueryParserTestBase.java:360 assertQueryEquals
+accept	a AND NOT b	QueryParserTestBase.java:361 assertQueryEquals
+accept	a AND -b	QueryParserTestBase.java:362 assertQueryEquals
+accept	a AND !b	QueryParserTestBase.java:363 assertQueryEquals
+accept	a && b	QueryParserTestBase.java:364 assertQueryEquals
+accept	a && ! b	QueryParserTestBase.java:365 assertQueryEquals
+accept	a OR b	QueryParserTestBase.java:367 assertQueryEquals
+accept	a || b	QueryParserTestBase.java:368 assertQueryEquals
+accept	a OR !b	QueryParserTestBase.java:369 assertQueryEquals
+accept	a OR ! b	QueryParserTestBase.java:370 assertQueryEquals
+accept	a OR -b	QueryParserTestBase.java:371 assertQueryEquals
+accept	+term -term term	QueryParserTestBase.java:373 assertQueryEquals
+accept	foo:term AND field:anotherTerm	QueryParserTestBase.java:374 assertQueryEquals
+accept	term AND "phrase phrase"	QueryParserTestBase.java:375 assertQueryEquals
+accept	"hello there"	QueryParserTestBase.java:376 assertQueryEquals
+accept	hello	QueryParserTestBase.java:378 getQuery
+accept	germ term^2.0	QueryParserTestBase.java:381 assertQueryEquals
+accept	(term)^2.0	QueryParserTestBase.java:382 assertQueryEquals
+accept	(germ term)^2.0	QueryParserTestBase.java:383 assertQueryEquals
+accept	term^2.0	QueryParserTestBase.java:384 assertQueryEquals
+accept	term^2	QueryParserTestBase.java:385 assertQueryEquals
+accept	"germ term"^2.0	QueryParserTestBase.java:386 assertQueryEquals
+accept	"term germ"^2	QueryParserTestBase.java:387 assertQueryEquals
+accept	(foo OR bar) AND (baz OR boo)	QueryParserTestBase.java:389 assertQueryEquals
+accept	((a OR b) AND NOT c) OR d	QueryParserTestBase.java:390 assertQueryEquals
+accept	+(apple "steve jobs") -(foo bar baz)	QueryParserTestBase.java:391 assertQueryEquals
+accept	+title:(dog OR cat) -author:"bob dole"	QueryParserTestBase.java:393 assertQueryEquals
+accept	a - b	QueryParserTestBase.java:411 assertQueryEquals
+accept	a + b	QueryParserTestBase.java:412 assertQueryEquals
+accept	a ! b	QueryParserTestBase.java:413 assertQueryEquals
+accept	a&b	QueryParserTestBase.java:418 assertQueryEquals
+accept	a&&b	QueryParserTestBase.java:419 assertQueryEquals
+accept	.NET	QueryParserTestBase.java:420 assertQueryEquals
+accept	"term germ"~2	QueryParserTestBase.java:424 assertQueryEquals
+accept	"term germ"~2 flork	QueryParserTestBase.java:425 assertQueryEquals
+accept	"term"~2	QueryParserTestBase.java:426 assertQueryEquals
+accept	" "~2 germ	QueryParserTestBase.java:427 assertQueryEquals
+accept	"term germ"~2^2	QueryParserTestBase.java:428 assertQueryEquals
+accept	3	QueryParserTestBase.java:433 assertMatchNoDocsQuery
+accept	term 1.0 1 2	QueryParserTestBase.java:434 assertQueryEquals
+accept	term term1 term2	QueryParserTestBase.java:435 assertQueryEquals
+accept	term*	QueryParserTestBase.java:444 assertQueryEquals
+accept	term*^2	QueryParserTestBase.java:445 assertQueryEquals
+accept	term~	QueryParserTestBase.java:446 assertQueryEquals
+accept	term~1	QueryParserTestBase.java:447 assertQueryEquals
+accept	term~0.7	QueryParserTestBase.java:448 assertQueryEquals
+accept	term~^3	QueryParserTestBase.java:449 assertQueryEquals
+accept	term*germ	QueryParserTestBase.java:450 assertQueryEquals
+accept	term*germ^3	QueryParserTestBase.java:451 assertQueryEquals
+reject	term~1.1	QueryParserTestBase.java:465 assertParseException
+accept	Term*	QueryParserTestBase.java:474 assertWildcardQueryEquals
+accept	TERM*	QueryParserTestBase.java:478 assertWildcardQueryEquals
+accept	Te?m	QueryParserTestBase.java:481 assertWildcardQueryEquals
+accept	te?m	QueryParserTestBase.java:483 assertWildcardQueryEquals
+accept	TE?M	QueryParserTestBase.java:485 assertWildcardQueryEquals
+accept	Te?m*gerM	QueryParserTestBase.java:486 assertWildcardQueryEquals
+accept	Term~	QueryParserTestBase.java:488 assertWildcardQueryEquals
+accept	[A TO C]	QueryParserTestBase.java:490 assertWildcardQueryEquals
+accept	*Term	QueryParserTestBase.java:496 assertWildcardQueryEquals
+accept	?Term	QueryParserTestBase.java:504 assertWildcardQueryEquals
+accept	t*erm*	QueryParserTestBase.java:516 getQuery
+accept	?term*	QueryParserTestBase.java:517 getQuery
+accept	*term*	QueryParserTestBase.java:518 getQuery
+accept	term term^3.0 term	QueryParserTestBase.java:522 assertQueryEquals
+accept	term stop^3.0 term	QueryParserTestBase.java:523 assertQueryEquals
+accept	term +stop term	QueryParserTestBase.java:526 assertQueryEquals
+accept	term -stop term	QueryParserTestBase.java:527 assertQueryEquals
+accept	drop AND (stop) AND roll	QueryParserTestBase.java:529 assertQueryEquals
+accept	term +(stop) term	QueryParserTestBase.java:530 assertQueryEquals
+accept	term -(stop) term	QueryParserTestBase.java:531 assertQueryEquals
+accept	drop AND stop AND roll	QueryParserTestBase.java:533 assertQueryEquals
+accept	term phrase term	QueryParserTestBase.java:536 assertQueryEquals
+accept	term AND NOT phrase term	QueryParserTestBase.java:538 assertQueryEquals
+accept	stop^3	QueryParserTestBase.java:539 assertMatchNoDocsQuery
+accept	stop	QueryParserTestBase.java:540 assertMatchNoDocsQuery
+accept	(stop)^3	QueryParserTestBase.java:541 assertMatchNoDocsQuery
+accept	((stop))^3	QueryParserTestBase.java:542 assertMatchNoDocsQuery
+accept	(stop^3)	QueryParserTestBase.java:543 assertMatchNoDocsQuery
+accept	((stop)^3)	QueryParserTestBase.java:544 assertMatchNoDocsQuery
+accept	(stop)	QueryParserTestBase.java:545 assertMatchNoDocsQuery
+accept	((stop))	QueryParserTestBase.java:546 assertMatchNoDocsQuery
+accept	term +stop	QueryParserTestBase.java:548 getQuery
+accept	field	QueryParserTestBase.java:553 assertQueryEquals
+accept	[ a TO z]	QueryParserTestBase.java:559 assertQueryEquals
+accept	[ a TO z}	QueryParserTestBase.java:560 assertQueryEquals
+accept	{ a TO z]	QueryParserTestBase.java:561 assertQueryEquals
+accept	[ a TO * ]	QueryParserTestBase.java:576 assertQueryEquals
+accept	[ * TO z ]	QueryParserTestBase.java:577 assertQueryEquals
+accept	[ * TO * ]	QueryParserTestBase.java:578 assertQueryEquals
+accept	{ a TO z ]	QueryParserTestBase.java:581 assertQueryEquals
+accept	[ a TO z }	QueryParserTestBase.java:582 assertQueryEquals
+accept	{ a TO * ]	QueryParserTestBase.java:583 assertQueryEquals
+accept	[ * TO z }	QueryParserTestBase.java:584 assertQueryEquals
+accept	[ a TO z ]	QueryParserTestBase.java:586 assertQueryEquals
+accept	{ a TO z}	QueryParserTestBase.java:587 assertQueryEquals
+accept	{ a TO z }	QueryParserTestBase.java:588 assertQueryEquals
+accept	{ a TO z }^2.0	QueryParserTestBase.java:589 assertQueryEquals
+accept	[ a TO z] OR bar	QueryParserTestBase.java:590 assertQueryEquals
+accept	[ a TO z] AND bar	QueryParserTestBase.java:591 assertQueryEquals
+accept	( bar blar { a TO z}) 	QueryParserTestBase.java:592 assertQueryEquals
+accept	gack ( bar blar { a TO z}) 	QueryParserTestBase.java:593 assertQueryEquals
+accept	[* TO Z]	QueryParserTestBase.java:595 assertQueryEquals
+accept	[A TO *]	QueryParserTestBase.java:596 assertQueryEquals
+accept	[* TO *]	QueryParserTestBase.java:597 assertQueryEquals
+accept	[\\* TO "*"]	QueryParserTestBase.java:601 assertQueryEquals
+accept	["*" TO *]	QueryParserTestBase.java:602 assertQueryEquals
+accept	[to TO to]	QueryParserTestBase.java:607 assertQueryEquals
+accept	[to TO TO]	QueryParserTestBase.java:608 assertQueryEquals
+accept	[TO TO to]	QueryParserTestBase.java:609 assertQueryEquals
+accept	[TO TO TO]	QueryParserTestBase.java:610 assertQueryEquals
+accept	["TO" TO "TO"]	QueryParserTestBase.java:612 assertQueryEquals
+accept	["TO" TO TO]	QueryParserTestBase.java:613 assertQueryEquals
+accept	[TO TO "TO"]	QueryParserTestBase.java:614 assertQueryEquals
+accept	[to TO xx]	QueryParserTestBase.java:616 assertQueryEquals
+accept	["TO" TO xx]	QueryParserTestBase.java:617 assertQueryEquals
+accept	[TO TO xx]	QueryParserTestBase.java:618 assertQueryEquals
+accept	[xx TO to]	QueryParserTestBase.java:620 assertQueryEquals
+accept	[xx TO "TO"]	QueryParserTestBase.java:621 assertQueryEquals
+accept	[xx TO TO]	QueryParserTestBase.java:622 assertQueryEquals
+accept	{A TO B}	QueryParserTestBase.java:628 assertQueryEquals
+accept	[A TO B}	QueryParserTestBase.java:629 assertQueryEquals
+accept	{A TO B]	QueryParserTestBase.java:630 assertQueryEquals
+accept	[A TO B]	QueryParserTestBase.java:631 assertQueryEquals
+reject	{A B}	QueryParserTestBase.java:640 getQuery
+reject	[A B}	QueryParserTestBase.java:641 getQuery
+reject	{A B]	QueryParserTestBase.java:642 getQuery
+reject	[A B]	QueryParserTestBase.java:643 getQuery
+reject	{TO B}	QueryParserTestBase.java:645 getQuery
+reject	[TO B}	QueryParserTestBase.java:646 getQuery
+reject	{TO B]	QueryParserTestBase.java:647 getQuery
+reject	[TO B]	QueryParserTestBase.java:648 getQuery
+reject	{A TO}	QueryParserTestBase.java:650 getQuery
+reject	[A TO}	QueryParserTestBase.java:651 getQuery
+reject	{A TO]	QueryParserTestBase.java:652 getQuery
+reject	[A TO]	QueryParserTestBase.java:653 getQuery
+accept	\\[brackets	QueryParserTestBase.java:757 assertQueryEquals
+accept	\\\\	QueryParserTestBase.java:759 assertQueryEquals
+accept	\\+blah	QueryParserTestBase.java:760 assertQueryEquals
+accept	\\(blah	QueryParserTestBase.java:761 assertQueryEquals
+accept	\\-blah	QueryParserTestBase.java:763 assertQueryEquals
+accept	\\!blah	QueryParserTestBase.java:764 assertQueryEquals
+accept	\\{blah	QueryParserTestBase.java:765 assertQueryEquals
+accept	\\}blah	QueryParserTestBase.java:766 assertQueryEquals
+accept	\\:blah	QueryParserTestBase.java:767 assertQueryEquals
+accept	\\^blah	QueryParserTestBase.java:768 assertQueryEquals
+accept	\\[blah	QueryParserTestBase.java:769 assertQueryEquals
+accept	\\]blah	QueryParserTestBase.java:770 assertQueryEquals
+accept	\\"blah	QueryParserTestBase.java:771 assertQueryEquals
+accept	\\)blah	QueryParserTestBase.java:773 assertQueryEquals
+accept	\\~blah	QueryParserTestBase.java:774 assertQueryEquals
+accept	\\*blah	QueryParserTestBase.java:775 assertQueryEquals
+accept	\\?blah	QueryParserTestBase.java:776 assertQueryEquals
+accept	foo \\&\\& bar	QueryParserTestBase.java:777 assertQueryEquals
+accept	foo \\|| bar	QueryParserTestBase.java:778 assertQueryEquals
+accept	foo \\AND bar	QueryParserTestBase.java:779 assertQueryEquals
+accept	\\a	QueryParserTestBase.java:781 assertQueryEquals
+accept	a\\-b:c	QueryParserTestBase.java:783 assertQueryEquals
+accept	a\\+b:c	QueryParserTestBase.java:784 assertQueryEquals
+accept	a\\:b:c	QueryParserTestBase.java:785 assertQueryEquals
+accept	a\\\\b:c	QueryParserTestBase.java:786 assertQueryEquals
+accept	a:b\\-c	QueryParserTestBase.java:788 assertQueryEquals
+accept	a:b\\+c	QueryParserTestBase.java:789 assertQueryEquals
+accept	a:b\\:c	QueryParserTestBase.java:790 assertQueryEquals
+accept	a:b\\\\c	QueryParserTestBase.java:791 assertQueryEquals
+accept	a:b\\-c*	QueryParserTestBase.java:793 assertQueryEquals
+accept	a:b\\+c*	QueryParserTestBase.java:794 assertQueryEquals
+accept	a:b\\:c*	QueryParserTestBase.java:795 assertQueryEquals
+accept	a:b\\\\c*	QueryParserTestBase.java:797 assertQueryEquals
+accept	a:b\\-c~	QueryParserTestBase.java:799 assertQueryEquals
+accept	a:b\\+c~	QueryParserTestBase.java:800 assertQueryEquals
+accept	a:b\\:c~	QueryParserTestBase.java:801 assertQueryEquals
+accept	a:b\\\\c~	QueryParserTestBase.java:802 assertQueryEquals
+accept	[ a\\- TO a\\+ ]	QueryParserTestBase.java:804 assertQueryEquals
+accept	[ a\\: TO a\\~ ]	QueryParserTestBase.java:805 assertQueryEquals
+accept	[ a\\\\ TO a\\* ]	QueryParserTestBase.java:806 assertQueryEquals
+accept	["c\\:\\\\temp\\\\\\~foo0.txt" TO "c\\:\\\\temp\\\\\\~foo9.txt"]	QueryParserTestBase.java:808 assertQueryEquals
+accept	a\\\\\\+b	QueryParserTestBase.java:813 assertQueryEquals
+accept	a \\"b c\\" d	QueryParserTestBase.java:815 assertQueryEquals
+accept	"a \\"b c\\" d"	QueryParserTestBase.java:816 assertQueryEquals
+accept	"a \\+b c d"	QueryParserTestBase.java:817 assertQueryEquals
+accept	c\\:\\\\temp\\\\\\~foo.txt	QueryParserTestBase.java:819 assertQueryEquals
+reject	XY\\	QueryParserTestBase.java:821 assertParseException
+accept	a\\u0062c	QueryParserTestBase.java:824 assertQueryEquals
+accept	XY\\u005a	QueryParserTestBase.java:825 assertQueryEquals
+accept	XY\\u005A	QueryParserTestBase.java:826 assertQueryEquals
+accept	"a \\\\\\u0028\\u0062\\" c"	QueryParserTestBase.java:827 assertQueryEquals
+reject	XY\\u005G	QueryParserTestBase.java:829 assertParseException
+reject	XY\\u005	QueryParserTestBase.java:830 assertParseException
+accept	(item:\\\\ item:ABCD\\\\)	QueryParserTestBase.java:833 assertQueryEquals
+reject	(item:\\\\ item:ABCD\\\\))	QueryParserTestBase.java:834 assertParseException
+accept	\\*	QueryParserTestBase.java:835 assertQueryEquals
+reject	\\	QueryParserTestBase.java:838 assertParseException
+accept	("a\\\\") or ("b")	QueryParserTestBase.java:841 assertQueryEquals
+accept	a:b\\-?c	QueryParserTestBase.java:846 assertQueryEquals
+accept	a:b\\+?c	QueryParserTestBase.java:847 assertQueryEquals
+accept	a:b\\:?c	QueryParserTestBase.java:848 assertQueryEquals
+accept	a:b\\\\?c	QueryParserTestBase.java:850 assertQueryEquals
+accept	a-b:c	QueryParserTestBase.java:856 assertEscapedQueryEquals
+accept	a+b:c	QueryParserTestBase.java:857 assertEscapedQueryEquals
+reject	a:b:c	QueryParserTestBase.java:858 assertEscapedQueryEquals
+accept	a\\b:c	QueryParserTestBase.java:859 assertEscapedQueryEquals
+accept	a:b-c	QueryParserTestBase.java:861 assertEscapedQueryEquals
+accept	a:b+c	QueryParserTestBase.java:862 assertEscapedQueryEquals
+accept	a:b\\c	QueryParserTestBase.java:864 assertEscapedQueryEquals
+accept	a:b-c*	QueryParserTestBase.java:866 assertEscapedQueryEquals
+accept	a:b+c*	QueryParserTestBase.java:867 assertEscapedQueryEquals
+reject	a:b:c*	QueryParserTestBase.java:868 assertEscapedQueryEquals
+accept	a:b-?c	QueryParserTestBase.java:872 assertEscapedQueryEquals
+accept	a:b+?c	QueryParserTestBase.java:873 assertEscapedQueryEquals
+reject	a:b:?c	QueryParserTestBase.java:874 assertEscapedQueryEquals
+accept	a:b?c	QueryParserTestBase.java:876 assertEscapedQueryEquals
+accept	a:b-c~	QueryParserTestBase.java:878 assertEscapedQueryEquals
+accept	a:b+c~	QueryParserTestBase.java:879 assertEscapedQueryEquals
+reject	a:b:c~	QueryParserTestBase.java:880 assertEscapedQueryEquals
+accept	a:b\\c~	QueryParserTestBase.java:881 assertEscapedQueryEquals
+reject	[ a - TO a+ ]	QueryParserTestBase.java:883 assertEscapedQueryEquals
+reject	[ a : TO a~ ]	QueryParserTestBase.java:884 assertEscapedQueryEquals
+reject	[ a\\ TO a* ]	QueryParserTestBase.java:885 assertEscapedQueryEquals
+reject	|| abc ||	QueryParserTestBase.java:888 assertEscapedQueryEquals
+reject	&& abc &&	QueryParserTestBase.java:889 assertEscapedQueryEquals
+accept	+weltbank +worlbank	QueryParserTestBase.java:893 assertQueryEqualsDOA
+accept	+weltbank\n+worlbank	QueryParserTestBase.java:895 assertQueryEqualsDOA
+accept	weltbank \n+worlbank	QueryParserTestBase.java:896 assertQueryEqualsDOA
+accept	weltbank \n +worlbank	QueryParserTestBase.java:897 assertQueryEqualsDOA
+accept	+weltbank\r+worlbank	QueryParserTestBase.java:899 assertQueryEqualsDOA
+accept	weltbank \r+worlbank	QueryParserTestBase.java:900 assertQueryEqualsDOA
+accept	weltbank \r +worlbank	QueryParserTestBase.java:901 assertQueryEqualsDOA
+accept	+weltbank\r\n+worlbank	QueryParserTestBase.java:903 assertQueryEqualsDOA
+accept	weltbank \r\n+worlbank	QueryParserTestBase.java:904 assertQueryEqualsDOA
+accept	weltbank \r\n +worlbank	QueryParserTestBase.java:905 assertQueryEqualsDOA
+accept	weltbank \r \n +worlbank	QueryParserTestBase.java:906 assertQueryEqualsDOA
+accept	+weltbank\t+worlbank	QueryParserTestBase.java:908 assertQueryEqualsDOA
+accept	weltbank \t+worlbank	QueryParserTestBase.java:909 assertQueryEqualsDOA
+accept	weltbank \t +worlbank	QueryParserTestBase.java:910 assertQueryEqualsDOA
+accept	term +term term	QueryParserTestBase.java:915 assertQueryEqualsDOA
+accept	term term +term	QueryParserTestBase.java:916 assertQueryEqualsDOA
+accept	term +term +term	QueryParserTestBase.java:917 assertQueryEqualsDOA
+accept	-term term term	QueryParserTestBase.java:918 assertQueryEqualsDOA
+accept	on^1.0	QueryParserTestBase.java:925 getQuery
+accept	"hello"^2.0	QueryParserTestBase.java:927 getQuery
+accept	hello^2.0	QueryParserTestBase.java:930 getQuery
+accept	"on"^1.0	QueryParserTestBase.java:933 getQuery
+accept	the^3	QueryParserTestBase.java:939 getQuery
+reject	"some phrase	QueryParserTestBase.java:969 assertParseException
+reject	(foo bar	QueryParserTestBase.java:970 assertParseException
+reject	foo bar))	QueryParserTestBase.java:971 assertParseException
+reject	field:term:with:colon some more terms	QueryParserTestBase.java:972 assertParseException
+reject	(sub query)^5.0^2.0 plus more	QueryParserTestBase.java:973 assertParseException
+reject	secret AND illegal) AND access:confidential	QueryParserTestBase.java:974 assertParseException
+accept	one two three	QueryParserTestBase.java:980 assertParseException
+accept	A AND B OR C AND D	QueryParserTestBase.java:987 getQuery
+accept	+A +B +C +D	QueryParserTestBase.java:988 getQuery
+accept	["a[i]" TO "b[i]"]	QueryParserTestBase.java:1026 assertQueryEquals
+accept	{"a[i]" TO "b[i]"}	QueryParserTestBase.java:1027 assertQueryEquals
+accept	["a[i]" TO "b[i]"}	QueryParserTestBase.java:1028 assertQueryEquals
+accept	{"a[i]" TO "b[i]"]	QueryParserTestBase.java:1029 assertQueryEquals
+accept	["a[i\\]" TO "b[i\\]"]	QueryParserTestBase.java:1031 assertQueryEquals
+accept	["a\\[i\\]" TO "b\\[i\\]"]	QueryParserTestBase.java:1032 assertQueryEquals
+accept	["a[i][j]" TO "b[i][j]"]	QueryParserTestBase.java:1034 assertQueryEquals
+accept	[ "2024-01-01T01:01:01+01:00[Europe/Warsaw]" TO "2025-01-01T01:01:01+01:00[Europe/Warsaw]" ]	QueryParserTestBase.java:1036 assertQueryEquals
+reject	[a[i] TO b[i]]	QueryParserTestBase.java:1042 assertParseException
+reject	[a\\[i\\] TO b\\[i\\]]	QueryParserTestBase.java:1043 assertParseException
+accept	foo\\?ba?r	QueryParserTestBase.java:1052 getQuery
+accept	/[a-z][123]/	QueryParserTestBase.java:1059 getQuery
+accept	/[A-Z][123]/	QueryParserTestBase.java:1060 getQuery
+accept	/[A-Z][123]/^0.5	QueryParserTestBase.java:1061 getQuery
+accept	/[a-z]\\/[123]/	QueryParserTestBase.java:1064 getQuery
+accept	/[a-z]\\*[123]/	QueryParserTestBase.java:1066 getQuery
+accept	/[a-z]\\/[123]/ AND path:"/etc/init.d/" OR "/etc\\/init\\[.\\]d/lucene/" 	QueryParserTestBase.java:1074 getQuery
+accept	field:/http.*/	QueryParserTestBase.java:1078 getQuery
+accept	/http.*/	QueryParserTestBase.java:1079 getQuery
+accept	field:/http~0.5/	QueryParserTestBase.java:1082 getQuery
+accept	/http~0.5/	QueryParserTestBase.java:1083 getQuery
+accept	field:/boo/	QueryParserTestBase.java:1086 getQuery
+accept	/boo/	QueryParserTestBase.java:1087 getQuery
+accept	"/boo/"	QueryParserTestBase.java:1089 getQuery
+accept	\\/boo\\/	QueryParserTestBase.java:1090 getQuery
+accept	field:/foo/ field:/bar/	QueryParserTestBase.java:1095 getQuery
+accept	/foo/ /bar/	QueryParserTestBase.java:1096 getQuery
+accept	field:the OR field:foo	QueryParserTestBase.java:1120 getQuery
+accept	field:woo OR field:the	QueryParserTestBase.java:1128 getQuery
+accept	(fieldX:xxxxx OR fieldy:xxxxxxxx)^2 AND (fieldx:the OR fieldy:foo)	QueryParserTestBase.java:1131 getQuery
+accept	*:*	QueryParserTestBase.java:1166 getQuery
+accept	(*:*)	QueryParserTestBase.java:1167 getQuery
+accept	+*:* -*:*	QueryParserTestBase.java:1168 getQuery
+accept	"wizard of ozzy"	QueryParserTestBase.java:1209 getQuery
+accept	[abc TO def]	QueryParserTestBase.java:1279 getQuery
+accept	foobar~2	QueryParserTestBase.java:1284 getQuery
+accept	"this hi this is a test is"	QueryParserTestBase.java:1293 getQuery
+accept	"1 stop 2"	QueryParserTestBase.java:1349 getQuery
+accept	+guinea pig	TestQueryParser.java:669 assertQueryEquals
+accept	-guinea pig	TestQueryParser.java:670 assertQueryEquals
+accept	!guinea pig	TestQueryParser.java:671 assertQueryEquals
+accept	guinea* pig	TestQueryParser.java:672 assertQueryEquals
+accept	guinea? pig	TestQueryParser.java:673 assertQueryEquals
+accept	guinea~2 pig	TestQueryParser.java:674 assertQueryEquals
+accept	guinea^2 pig	TestQueryParser.java:675 assertQueryEquals
+accept	guinea +pig	TestQueryParser.java:677 assertQueryEquals
+accept	guinea -pig	TestQueryParser.java:678 assertQueryEquals
+accept	guinea !pig	TestQueryParser.java:679 assertQueryEquals
+accept	guinea pig*	TestQueryParser.java:680 assertQueryEquals
+accept	guinea pig?	TestQueryParser.java:681 assertQueryEquals
+accept	guinea pig~2	TestQueryParser.java:682 assertQueryEquals
+accept	guinea pig^2	TestQueryParser.java:683 assertQueryEquals
+accept	field:guinea pig	TestQueryParser.java:685 assertQueryEquals
+accept	guinea field:pig	TestQueryParser.java:686 assertQueryEquals
+accept	NOT guinea pig	TestQueryParser.java:688 assertQueryEquals
+accept	guinea NOT pig	TestQueryParser.java:689 assertQueryEquals
+accept	guinea pig AND dogs	TestQueryParser.java:691 assertQueryEquals
+accept	dogs AND guinea pig	TestQueryParser.java:692 assertQueryEquals
+accept	guinea pig && dogs	TestQueryParser.java:693 assertQueryEquals
+accept	dogs && guinea pig	TestQueryParser.java:694 assertQueryEquals
+accept	guinea pig OR dogs	TestQueryParser.java:696 assertQueryEquals
+accept	dogs OR guinea pig	TestQueryParser.java:697 assertQueryEquals
+accept	guinea pig || dogs	TestQueryParser.java:698 assertQueryEquals
+accept	dogs || guinea pig	TestQueryParser.java:699 assertQueryEquals
+accept	"guinea" pig	TestQueryParser.java:701 assertQueryEquals
+accept	guinea "pig"	TestQueryParser.java:702 assertQueryEquals
+accept	(guinea) pig	TestQueryParser.java:704 assertQueryEquals
+accept	guinea (pig)	TestQueryParser.java:705 assertQueryEquals
+accept	/guinea/ pig	TestQueryParser.java:707 assertQueryEquals
+accept	guinea /pig/	TestQueryParser.java:708 assertQueryEquals
+accept	(guinea pig)	TestQueryParser.java:711 assertQueryEquals
+accept	+(guinea pig)	TestQueryParser.java:712 assertQueryEquals
+accept	-(guinea pig)	TestQueryParser.java:713 assertQueryEquals
+accept	!(guinea pig)	TestQueryParser.java:714 assertQueryEquals
+accept	NOT (guinea pig)	TestQueryParser.java:715 assertQueryEquals
+accept	(guinea pig)^2	TestQueryParser.java:716 assertQueryEquals
+accept	field:(guinea pig)	TestQueryParser.java:718 assertQueryEquals
+accept	+small guinea pig	TestQueryParser.java:720 assertQueryEquals
+accept	-small guinea pig	TestQueryParser.java:721 assertQueryEquals
+accept	!small guinea pig	TestQueryParser.java:722 assertQueryEquals
+accept	NOT small guinea pig	TestQueryParser.java:723 assertQueryEquals
+accept	small* guinea pig	TestQueryParser.java:724 assertQueryEquals
+accept	small? guinea pig	TestQueryParser.java:725 assertQueryEquals
+accept	"small" guinea pig	TestQueryParser.java:726 assertQueryEquals
+accept	guinea pig +running	TestQueryParser.java:728 assertQueryEquals
+accept	guinea pig -running	TestQueryParser.java:729 assertQueryEquals
+accept	guinea pig !running	TestQueryParser.java:730 assertQueryEquals
+accept	guinea pig NOT running	TestQueryParser.java:731 assertQueryEquals
+accept	guinea pig running*	TestQueryParser.java:732 assertQueryEquals
+accept	guinea pig running?	TestQueryParser.java:733 assertQueryEquals
+accept	guinea pig "running"	TestQueryParser.java:734 assertQueryEquals
+accept	"guinea pig"~2	TestQueryParser.java:736 assertQueryEquals
+accept	field:"guinea pig"	TestQueryParser.java:738 assertQueryEquals
+accept	guinea pig	TestQueryParser.java:852 assertQueryEquals

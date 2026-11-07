@@ -1,0 +1,1 @@
+print x = 1 | extend range = 1 | where range > 0 | summarize range = max(x) - min(x) | project range

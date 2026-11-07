@@ -1,0 +1,1 @@
+(EventID:4624 AND LogonType:9 AND LogonProcessName:Advapi AND AuthenticationPackageName:Negotiate AND ImpersonationLevel:%%1833

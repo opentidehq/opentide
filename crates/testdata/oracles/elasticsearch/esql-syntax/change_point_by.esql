@@ -1,0 +1,1 @@
+FROM logs-* | STATS c = COUNT(*) BY t = BUCKET(@timestamp, 1 hour), host.name | CHANGE_POINT c ON t BY host.name

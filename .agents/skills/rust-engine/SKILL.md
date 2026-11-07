@@ -1,0 +1,112 @@
+---
+name: rust-engine
+description: Change the opentide Rust workspace (edition 2024, rust-version 1.85). Covers I/O-free engine crates, thiserror 2 versus anyhow, serde, toml 0.8, uuid, regex, OnceLock catalogs, clippy -D warnings, and the Cargo.lock that must not be pruned. Use when editing crates/, Cargo.toml, Cargo.lock, or any Rust test.
+license: EUPL-1.2
+metadata:
+  author: opentidehq
+---
+
+# Rust engine
+
+The workspace is edition **2024**, `rust-version` **1.85**, toolchain channel `stable` with `rustfmt` and `clippy` (`rust-toolchain.toml`). CI exports `RUSTFLAGS=-Dwarnings` and runs `cargo clippy --workspace --all-targets -- -D warnings`. A warning is a failed build.
+
+Read `references/crates.md` before adding a dependency or a new crate. Read `references/edition-2024.md` before writing `unsafe`, `extern`, or a function that returns `impl Trait`.
+
+## Layout
+
+| Crate | May call `std::fs` in `src/` | Error type | Role |
+| --- | --- | --- | --- |
+| `opentide-core` | no | `thiserror` | `LanguageId`, ranges, `codes` |
+| `opentide-highlight` | no | `thiserror` | HighlightSpec, semantic tokens |
+| `opentide-syntax` | no | strings at the query boundary | tree-sitter 0.25 bindings |
+| `opentide-kql` | no | `Diagnostic` | KQL catalog, HIR, profiles (`thiserror` is declared and unused) |
+| `opentide-spl` | no | `Diagnostic` | SPL catalog |
+| `opentide-esql` | no | `Diagnostic` | ES\|QL catalog, stack-version lifecycle |
+| `opentide-eql` | no | `Diagnostic` | EQL catalog, sequence and sample checks |
+| `opentide-kuery` | no | `Diagnostic` | Kibana KQL checks |
+| `opentide-lucene` | no | `Diagnostic` | Lucene `query_string` checks |
+| `opentide-falco` | no | `Diagnostic` | Falco conditions: fields per event source, default macros and lists, events (`OnceLock`), output templates |
+| `opentide-ecs` | no | `Diagnostic` | ECS field catalog (`OnceLock`), ECS-index detection, the ECS type and near-miss helpers the Elastic engines share |
+| `opentide-tide` | no | `Diagnostic` | Tide YAML, UUID graph, injection |
+| `opentide-analysis` | no | — | `WorkspaceHost` orchestrator |
+| `opentide-lsp` | yes | `anyhow` | stdio host and CLI |
+| `opentide-wasm` | no (host is JS) | `JsValue` | `highlight` / `legend`, and `LanguageServer` over `opentide-lsp`'s `MessageSession` |
+
+`scripts/engine/check-io-free.sh` greps `use std::fs` and `std::fs::` under those engine `src/` trees. `build.rs` and `tests/` may touch the filesystem. `opentide-lsp` and `main.rs` are the native host.
+
+New engine code takes bytes or strings from the caller. It does not open paths, environment variables, or the network. Catalog text is `include_str!` at compile time. `WorkspaceHost` is how analysis sees a workspace (`MemoryWorkspace` in tests).
+
+## Dependencies
+
+Versions live in the workspace `[workspace.dependencies]` table. Path crates use `opentide-core.workspace = true`, never a second version number. Do not `cargo add` a crate into one member without putting the version in the workspace table.
+
+Pinned stack (do not bump in passing):
+
+| Crate | Locked | Where it is allowed |
+| --- | --- | --- |
+| `serde` 1 / `serde_json` 1 | lockfile | derive on engine types; JSON at the host boundary |
+| `toml` 0.8 | 0.8.23 | catalog files and `highlights/spec.toml` |
+| `serde_yaml` 0.9 | lockfile | Tide YAML only. Do not migrate to `serde_yml` |
+| `thiserror` 2 | 2.0.20 | library errors |
+| `anyhow` 1 | 1.0.104 | `opentide-lsp` binary only |
+| `clap` 4 | derive | `opentide-lsp` CLI only |
+| `regex` 1 | lockfile | compile once |
+| `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
+| `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
+
+`Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI does not pass `--locked`. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/engine/cloud-agent-install.sh` does this restore after warming the build.
+
+## Types agents get wrong
+
+`LanguageId` is `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `opentide-yaml`, or `opentide-config` (configuration TOML, checked by the host; it has no grammar and is not in `QUERY_LANGUAGES`). `LanguageId::parse` also accepts `kusto`, `opentide-kql`, `opentide-spl`, `es|ql`, `kibana-kql`, `yaml`, `tide`, and the other aliases in `crates/opentide-core/src/lib.rs`. `kuery` is Kibana KQL; `kql` stays Microsoft KQL. It returns `None` for `sql`. Serde uses kebab-case plus the aliases in `crates/opentide-core/src/lib.rs`. A new variant needs `as_str`, `parse`, and `Display` updated together.
+
+Diagnostic codes are constants in `opentide_core::codes`. Add a constant, list it in `codes::ALL` and give it a sentence in `codes::describe` (a unit test fails otherwise; `opentide explain` prints it). Do not invent a second string at the call site. Issue identity for Tide objects is `{code, field_path, severity}` plus a real `Range`.
+
+LSP `character` is a UTF-16 code unit count. `é` is one unit; an emoji outside the BMP is two. Ranges **sent** to the client go through `span_to_range` / `offset_to_position` in `opentide-core`, which uses `char::len_utf16`.
+
+Inbound positions (LSP → byte offset) go through `opentide_core::position_to_offset`, which counts UTF-16 and always returns a char boundary. The host converts once, in `offset` (`crates/opentide-lsp/src/handlers.rs`), and the engines take byte offsets; `position_to_offset` in `opentide-kql` is a thin wrapper over it (#178: the byte-index version panicked after `日本`). Do not add another converter, and do not index the source with `position.character` as a byte index; a change here needs a fixture with `é`, a CJK character and a non-BMP character.
+
+`uuid::Uuid::parse_str` plus `get_version_num() == 4` is the object-id check (`is_uuidv4`). Do not add another parser. A 36-character hex UUID that is not version 4 is a different future check (configuration `organisation_uuid`) and does not belong in this function.
+
+## Errors
+
+`opentide-core` and `opentide-highlight` use `thiserror` 2. Query and Tide engines return `opentide_core::Diagnostic` instead of a second error enum. Do not add `thiserror` to a crate that already returns `Diagnostic`.
+
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum HighlightError {
+    #[error("highlight spec: {0}")]
+    Spec(String),
+    #[error("unknown capture '{0}' (not in highlights/spec.toml)")]
+    UnknownCapture(String),
+}
+```
+
+`#[error("...")]` is the display text. `anyhow` stays in the binary (`Context` on I/O). Do not return `anyhow::Error` from an engine crate. Do not `unwrap()` catalog parses on a request path that should surface a diagnostic. `expect` on `include_str!` data is acceptable because a bad catalog fails the build's tests, not a user document.
+
+`clap` 4: `#[derive(Parser)]` on `Cli`, `#[command(subcommand)]` for `analyze` / `highlight` / `generate-highlights`. `--stdio` and `--listen` are flags checked **before** the subcommand. A new subcommand must print plain JSON or text. It must not write `Content-Length` frames.
+
+## Regex and OnceLock
+
+Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::cached`, `HighlightSpec::load`). Parse each profile once per process. Do not re-parse TOML on every keystroke.
+
+`regex::Regex::new` is expensive and fallible. New regexes go in a `OnceLock<Regex>` (or a function-scoped `OnceLock`) and the pattern is a tested string. Do not call `Regex::new` inside a loop over diagnostics. Existing call sites that still compile per call are not a reason to copy that shape.
+
+## Tests
+
+- Engine unit tests sit next to the code (`#[cfg(test)]`) or in `crates/<crate>/tests/*.rs`.
+- Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `crates/testdata/`.
+- Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct unless the user asked; there is no snapshot crate.
+- `cargo test --workspace` is the default. Name the test binary when iterating: `cargo test -p opentide-kql --lib`.
+- CI runs `cargo nextest run --workspace --profile ci` (`.config/nextest.toml`) and then `cargo test --workspace --doc`, because nextest does not run doctests. Each test gets its own process, so a test cannot rely on a `OnceLock` or other static that another test filled. If you have nextest installed, `cargo nextest run --workspace` is the same check.
+- The dev and test profiles build dependencies at `opt-level = 1` with line tables (`[profile.dev.package."*"]`); workspace crates stay at 0 with full debuginfo. The tests spend most of their time in `toml`, `serde`, `regex` and tree-sitter, which run about four times slower unoptimised. Do not drop it to speed up a cold build.
+- `crates/opentide-syntax/build.rs` watches each grammar's `src/` directory. Never print `rerun-if-changed` for a path that may not exist: cargo then treats the build script as stale on every run and rebuilds every crate.
+- `cargo fmt --all` before finishing. rustfmt is not optional.
+
+## What not to add
+
+- `tower-lsp`, `async-lsp`, or a second JSON-RPC stack beside `lsp-server`. See `lsp-host`.
+- `std::fs` in an engine `src/` tree. Pass the text in.
+- `async` / `tokio` in the engine. The server is a blocking stdio loop.
+- A new `LanguageId` without the `add-language` skill.
+- `unsafe` except the existing tree-sitter FFI and a documented invariant. Edition 2024 requires `unsafe extern` and `#[unsafe(no_mangle)]`. See `references/edition-2024.md`.

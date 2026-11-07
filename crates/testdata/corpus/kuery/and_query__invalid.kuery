@@ -1,0 +1,2 @@
+# prod:and_query invalid
+event.category:process and(event.type:start)

@@ -1,0 +1,1 @@
+FROM logs-* | EVAL y = Öabs(

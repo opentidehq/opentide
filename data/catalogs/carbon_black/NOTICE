@@ -1,0 +1,12 @@
+data/catalogs/carbon_black/fields.toml lists Carbon Black Cloud process search
+field names, value types and values. They are facts, attested by:
+
+- carbonblack/carbon-black-cloud-sdk-python (MIT License, Copyright (c)
+  Broadcom, Inc. 2020-2026), commit fc0c2643f340af86e3b4ac39b800cce2c661f664:
+  the recorded process search and observation responses in
+  src/tests/unit/fixtures/.
+- 7RedViolin/pySigma-backend-carbonblack (MIT License, Copyright (c) 2023
+  7RedViolin), commit 24d4ee2a55f4fa736ef6fc46ddaf33cb798bfe7f: the process
+  search field mapping and values in sigma/pipelines/carbonblack/.
+
+No code or text is copied from either; the descriptions are written here.

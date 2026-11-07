@@ -1,0 +1,1 @@
+FROM logs-* | EVAL p = "x" | COMPLETION c = p WITH my_endpoint

@@ -1,0 +1,4 @@
+spawned_process and (proc.cmdline contains "stratum+tcp" or
+     proc.cmdline contains "stratum2+tcp" or
+     proc.cmdline contains "stratum+ssl" or
+     proc.cmdline contains "stratum2+ssl")

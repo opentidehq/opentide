@@ -1,0 +1,2 @@
+``` prod:catalog_command valid
+index=main | top limit=10 host

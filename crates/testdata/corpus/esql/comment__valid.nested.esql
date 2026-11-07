@@ -1,0 +1,3 @@
+// prod:comment valid (Elasticsearch nests block comments)
+FROM logs-* /* outer /* inner */ still outer */ METADATA _id
+| LIMIT 1 /* an unbalanced /* opener ends at the first close */

@@ -1,0 +1,3 @@
+// prod:is_null_expression valid
+FROM logs-* METADATA _id
+| WHERE user.name IS NOT NULL AND host.ip IS NULL

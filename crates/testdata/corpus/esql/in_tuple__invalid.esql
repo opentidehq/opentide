@@ -1,0 +1,3 @@
+// prod:in_tuple invalid (a tuple compares only against a subquery)
+FROM logs-* METADATA _id
+| WHERE (host.name, user.name) IN ("a", "b")

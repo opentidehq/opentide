@@ -1,0 +1,3 @@
+// prod:is_null_expression invalid
+FROM logs-* METADATA _id
+| WHERE user.name IS NOT

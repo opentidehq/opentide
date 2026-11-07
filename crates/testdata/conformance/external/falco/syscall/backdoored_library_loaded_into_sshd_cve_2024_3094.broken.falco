@@ -1,0 +1,1 @@
+open_read and proc.name in (oops and proc.name=sshd and (fd.name contains "liblzma.so.5.6.0" or fd.name contains "liblzma.so.5.6.1")

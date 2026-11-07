@@ -1,0 +1,3 @@
+// prod:fuse_command invalid
+FROM docs
+| FUSE SCORE BY

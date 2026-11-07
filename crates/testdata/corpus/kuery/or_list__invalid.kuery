@@ -1,0 +1,2 @@
+# prod:or_list invalid
+host.os.type:(windows or )

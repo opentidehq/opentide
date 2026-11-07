@@ -1,0 +1,2 @@
+# prod:boolean_query valid
+event.category:process AND process.name:cmd.exe

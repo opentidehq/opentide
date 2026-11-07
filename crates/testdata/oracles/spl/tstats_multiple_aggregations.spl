@@ -1,0 +1,1 @@
+| tstats count min(_time) as firstTime max(_time) as lastTime from datamodel=Endpoint.Processes by Processes.dest

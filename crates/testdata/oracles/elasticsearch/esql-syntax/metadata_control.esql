@@ -1,0 +1,1 @@
+FROM logs-* METADATA _id | LIMIT 1

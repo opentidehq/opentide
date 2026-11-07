@@ -1,0 +1,3 @@
+// prod:set_command valid
+SET time_zone = "+01:00";
+FROM logs-* | LIMIT 1

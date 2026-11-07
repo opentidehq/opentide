@@ -1,0 +1,1 @@
+open_write and monitored_dir and not package_mgmt_procs and not coreos_write_ssh_dir and not exe_running_docker_save and not python_running_get_pip and not python_running_ms_oms and not google_accounts_daemon_writing_ssh and not cloud_init_writing_ssh and not user_known_write_monitored_dir_conditions

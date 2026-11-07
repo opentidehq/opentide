@@ -1,0 +1,3 @@
+// prod:completion_command valid (the 8.19 and 9.1 endpoint form)
+FROM logs-* METADATA _id
+| COMPLETION summary = message WITH my_llm

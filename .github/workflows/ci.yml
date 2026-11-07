@@ -44,7 +44,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: analysis -> target
+          workspaces: . -> target
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -58,22 +58,8 @@ jobs:
       - name: Ty type check
         run: uv run ty check src/opentide --output-format github
 
-      - name: Engine bindings (rustfmt, clippy, cargo test)
-        run: |
-          rustup component add rustfmt clippy
-          cargo fmt --manifest-path analysis/Cargo.toml -- --check
-          cargo clippy --manifest-path analysis/Cargo.toml --all-targets -- -D warnings
-          cargo test --manifest-path analysis/Cargo.toml
-
-      - name: The engine crates come from one source
-        run: uv run python scripts/build/check_engine_pin.py
-
-      # The engine ships a Tide catalog for editors that run opentide-lsp on
-      # its own; a model or vocabulary change makes it stale until
-      # language-server regenerates it and this pins that engine.
-      - name: The engine's bundled catalogs match the models
-        run: uv run python scripts/build/check_engine_catalog.py
-
+      # The wheel is built from the sdist in a directory of its own, so this
+      # also proves the sdist carries everything the engine's build reads.
       - name: Build sdist and wheel
         run: uv build
 
@@ -138,6 +124,120 @@ jobs:
           OPENTIDE_REQUIRE_SPECIFICATIONS: "1"
         run: uv run pytest tests/test_models/test_spec_field_descriptions.py --no-cov -q
 
+  # The Cargo workspace: the engine crates (crates/, imported from
+  # opentidehq/language-server) and their PyO3 binding (analysis/). The
+  # engine's tests compare it with this checkout's Pydantic models, so they run
+  # after `uv sync`. The rest of language-server's CI is parked in
+  # .github/engine-workflows/ until UC-0.3 (#801) rebuilds CI.
+  engine:
+    name: Engine (Rust workspace)
+    runs-on: ubuntu-latest
+    env:
+      # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
+      # backtraces keep file:line, and target/ stays a few GB on the runner.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update --component rustfmt,clippy
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: . -> target
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: rustfmt
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # pydantic_object_issues_are_subset_of_lsp runs src/opentide's models
+      # with the interpreter `uv sync` installed (.venv).
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+      - name: Engine invariants (I/O-free crates, names, skills, generated highlights)
+        run: |
+          bash scripts/engine/check-io-free.sh
+          bash scripts/engine/check-names.sh
+          bash scripts/engine/validate-skills.sh
+          cargo run --locked -p opentide-lsp -- generate-highlights --check
+
+      # The Tide catalog the engine compiles in is what the models generate
+      # (scripts/engine/sync_opentide_schemas.py), until UC-1.8 generates it in Rust.
+      - name: The engine's bundled Tide catalog matches the models
+        run: uv run pytest tests/test_generation/test_bundled_tide_catalog.py --no-cov -q
+
+      - name: The engine release script's tests
+        run: uv run python -m unittest discover -s scripts/engine -p "test_*.py"
+
+  # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
+  # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
+  # what they publish; the TypeScript client runs against the native, worker
+  # and WASI servers.
+  engine-wasm:
+    name: Engine WebAssembly and npm packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update \
+            --component rustfmt,clippy --target wasm32-unknown-unknown,wasm32-wasip1
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: . -> target
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      # The prebuilt release; its version must match the wasm-bindgen crate in Cargo.lock.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: wasm-bindgen@0.2.128
+
+      - name: WebAssembly engine (browser and WASI)
+        run: bash scripts/engine/build-wasm.sh
+
+      - name: npm packages build and pack
+        run: |
+          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          node scripts/engine/check-npm-packs.mjs
+
+      - name: Native language server
+        run: cargo build --locked -p opentide-lsp
+
+      # node:wasi's path_open is a V8 fast API call whose allocation can start
+      # a GC inside the call, which segfaults node 22 once the WASI instances
+      # hold enough memory; plain calls do not.
+      - name: lsp-client (stdio, worker, wasi)
+        env:
+          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
+          OPENTIDE_WASI_BIN: target/wasm32-wasip1/release/opentide-lsp.wasm
+          OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
+        run: >-
+          node --no-turbo-fast-api-calls --experimental-strip-types
+          --test packages/lsp-client/src/index.test.ts
+
   test:
     name: Test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -179,7 +279,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: analysis -> target
+          workspaces: . -> target
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -286,7 +386,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: analysis -> target
+          workspaces: . -> target
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -346,7 +446,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: analysis -> target
+          workspaces: . -> target
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -387,7 +487,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: analysis -> target
+          workspaces: . -> target
 
       - name: Install dependencies
         run: uv sync --group dev

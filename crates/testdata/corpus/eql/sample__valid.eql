@@ -1,0 +1,4 @@
+// prod:sample valid
+sample by host.id
+  [process where true]
+  [file where true]

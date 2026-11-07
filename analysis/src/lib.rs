@@ -376,7 +376,7 @@ fn dataset_status(platform: &str, name: &str) -> &'static str {
 
 /// The Tide catalogs compiled into the engine, `(fields, deprecations)`, as
 /// their files hold them: opentide compares them with what its models
-/// generate (`scripts/build/check_engine_catalog.py`).
+/// generate (`tests/test_generation/test_bundled_tide_catalog.py`).
 #[pyfunction]
 fn bundled_catalog() -> (Option<String>, Option<String>) {
     let catalog = opentide_analysis::bundled_catalog();

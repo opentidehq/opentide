@@ -1,0 +1,1 @@
+index=main uri="/a==b" | search note="x<>y" path="=~home"

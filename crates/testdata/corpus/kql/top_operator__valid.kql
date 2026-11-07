@@ -1,0 +1,2 @@
+// prod:top_operator valid
+SecurityEvent | top 10 by TimeGenerated

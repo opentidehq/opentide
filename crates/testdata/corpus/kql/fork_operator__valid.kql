@@ -1,0 +1,3 @@
+// prod:fork_operator prod:fork_branch valid
+SecurityEvent
+| fork failed = (where EventID == 4625 | take 5) (count)

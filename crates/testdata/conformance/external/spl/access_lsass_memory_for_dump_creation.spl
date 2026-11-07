@@ -1,0 +1,15 @@
+`sysmon` EventCode=10 TargetImage=*lsass.exe CallTrace=*dbgcore.dll* OR CallTrace=*dbghelp.dll*
+  | stats count min(_time) as firstTime max(_time) as lastTime
+    BY CallTrace EventID GrantedAccess
+       Guid Opcode ProcessID
+       SecurityID SourceImage SourceProcessGUID
+       SourceProcessId TargetImage TargetProcessGUID
+       TargetProcessId UserID dest
+       granted_access parent_process_exec parent_process_guid
+       parent_process_id parent_process_name parent_process_path
+       process_exec process_guid process_id
+       process_name process_path signature
+       signature_id user_id vendor_product
+  | `security_content_ctime(firstTime)`
+  | `security_content_ctime(lastTime)`
+  | `access_lsass_memory_for_dump_creation_filter`

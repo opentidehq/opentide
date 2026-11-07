@@ -1,0 +1,2 @@
+# prod:or_list valid
+host.os.type:(windows or linux)

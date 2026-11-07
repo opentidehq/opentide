@@ -96,10 +96,32 @@ workshop/
 .claude/settings.local.json
 .claude/worktrees/
 
-# The engine (analysis/): cargo output, and the module an editable install
-# compiles into the package (hatch_build.py).
-analysis/target/
+# The module an editable install compiles into the package (hatch_build.py).
 src/opentide/_native.*.so
 src/opentide/_native.pyd
 src/opentide/_native.*.pyd
 src/opentide/_native.so
+
+# The Cargo workspace (crates/, analysis/) and the engine's tooling.
+/target
+/node_modules
+/packages/*/node_modules
+/packages/*/dist
+**/*.wasm
+grammars/*/build
+grammars/*/node_modules
+*.profraw
+coverage
+lcov.info
+/tmp
+scripts/engine/oracles/kusto/bin
+scripts/engine/oracles/kusto/obj
+scripts/engine/oracles/elastic/node_modules
+scripts/engine/oracles/elastic/.cache
+highlights/test/node_modules
+
+# Generated, and source here: the engine's bundled Tide catalog and the
+# highlighting artifacts, which `generated/` above would hide (and keep out of
+# the sdist, whose build compiles them in).
+!/data/catalogs/tide/generated/
+!/highlights/generated/

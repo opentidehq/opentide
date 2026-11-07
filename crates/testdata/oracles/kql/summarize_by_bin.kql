@@ -1,0 +1,1 @@
+SecurityEvent | summarize count() by bin(TimeGenerated, 1h), Computer

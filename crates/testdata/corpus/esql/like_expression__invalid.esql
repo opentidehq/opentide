@@ -1,0 +1,3 @@
+// prod:like_expression invalid
+FROM logs-* METADATA _id
+| WHERE process.name LIKE

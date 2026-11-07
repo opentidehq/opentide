@@ -1,0 +1,2 @@
+// prod:predicate_expression invalid
+process where process.name in ()

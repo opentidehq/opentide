@@ -1,0 +1,3 @@
+// prod:ip_location_command invalid
+FROM logs-* METADATA _id
+| IP_LOCATION geo
