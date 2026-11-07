@@ -199,7 +199,8 @@ def elastic_language(rule_type: object, language: object) -> str | None:
     if rule_type in ("esql", "eql"):
         return str(rule_type)
     if rule_type in ("query", "threshold", "new_terms", "threat_match"):
-        return {None: "kuery", "kuery": "kuery", "lucene": "lucene"}.get(language)  # type: ignore[arg-type]
+        languages: dict[object, str] = {None: "kuery", "kuery": "kuery", "lucene": "lucene"}
+        return languages.get(language)
     return None
 
 
