@@ -12,6 +12,8 @@ step.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +101,23 @@ def test_crate_lockfile_is_committed() -> None:
     # needs it, and an untracked one makes cargo refuse a dirty tree.
     lock = tomllib.loads((CRATE / "Cargo.lock").read_text(encoding="utf-8"))
     assert lock["package"] == [{"name": "opentide", "version": VERSION}]
+
+
+def test_crate_build_output_stays_out_of_the_sdist() -> None:
+    """hatchling reads the root ``.gitignore`` only. Ignored by a ``.gitignore`` in the
+    placeholder, the ``target/`` a local dry run leaves went into the next sdist."""
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout")
+    built = CRATE.relative_to(ROOT) / "target" / "debug" / "libopentide.rlib"
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", "--verbose", built.as_posix()],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.split(":", 1)[0] == ".gitignore"
 
 
 @pytest.mark.parametrize(("name", "directory"), sorted(NPM_PACKAGES.items()))
