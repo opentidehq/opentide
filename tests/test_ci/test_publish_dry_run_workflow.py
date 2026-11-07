@@ -75,12 +75,20 @@ PUBLISHED_FROM = {
     "CHANGELOG.md",
     "scripts/build/release.py",
 }
-#: One publish command: from `cargo publish` or `npm publish` to the end of
-#: that shell command (`;`, `&&`, `||`, a pipe, a closing subshell or the line).
-_PUBLISH = re.compile(r"\b(?:cargo|npm) publish\b[^;&|)\n]*")
-#: `--dry-run` as a flag of its own: not `--dry-run=false`, not `--no-dry-run`.
-_DRY_RUN = re.compile(r"(?<!\S)--dry-run(?!\S)")
-_NOT_DRY_RUN = re.compile(r"--dry-run=|--no-dry-run\b")
+#: Where a shell command ends: `;`, `&&`, `||`, `&`, a pipe, a subshell or a
+#: command substitution, a backtick, or the end of the line.
+_COMMAND_END = re.compile(r"&&|\|\||[;&|()`\n]")
+#: The words each tool runs as a publish. npm runs every prefix of `publish`
+#: from `pu` on (npm 11.21.1, `deref` in lib/utils/cmd-list.js), and takes
+#: options before the command as well as after it; cargo has no abbreviation.
+_PUBLISH_WORDS = {
+    "npm": frozenset("publish"[:end] for end in range(2, len("publish") + 1)),
+    "cargo": frozenset({"publish"}),
+}
+#: Any spelling of npm's `dry-run` option: one or two dashes, an abbreviation
+#: (`--dry`), `--no-` before it, a value after `=` (nopt, which parses npm's
+#: options). A dry run has the plain `--dry-run` and no other.
+_DRY_RUN_OPTION = re.compile(r"^-+(?:no-)*dr", flags=re.IGNORECASE)
 _EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", flags=re.DOTALL)
 _SECRETS = re.compile(r"\bsecrets\b")
 _PINNED = re.compile(r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}$")
@@ -113,6 +121,38 @@ def _runs(workflow: dict[Any, Any], job: str | None = None) -> list[str]:
         for name, step in _steps(workflow)
         if "run" in step and (job is None or name == job)
     ]
+
+
+def _unquote(word: str) -> str:
+    return word.replace('"', "").replace("'", "")
+
+
+def _publishes(script: str) -> list[list[str]]:
+    """Each shell command in ``script`` that publishes with npm or cargo, as its
+    words from the tool on. Each command, not each line: ``npm publish
+    --dry-run && npm publish`` is one line and two publishes. A continued line
+    is joined to the next first."""
+    found = []
+    for command in _COMMAND_END.split(script.replace("\\\n", " ")):
+        words = command.split()
+        plain = [_unquote(word) for word in words]
+        for at, word in enumerate(plain):
+            # `npm`, a path to it, or `npm@11.21.1` as npx runs it.
+            tool = word.rsplit("/", 1)[-1].split("@", 1)[0]
+            if tool in _PUBLISH_WORDS and _PUBLISH_WORDS[tool].intersection(plain[at + 1 :]):
+                found.append(words[at:])
+                break
+    return found
+
+
+def _is_dry_run(command: list[str]) -> bool:
+    # The words as written: a quoted `"--dry-run"`, or one inside another
+    # quoted argument, does not count.
+    if [word for word in command if _DRY_RUN_OPTION.match(word)] != ["--dry-run"]:
+        return False
+    # nopt reads the word after a boolean option as its value: `--dry-run false`.
+    after = command[command.index("--dry-run") + 1 :]
+    return not (after and _unquote(after[0]) == "false")
 
 
 def _strings(node: Any) -> Iterator[str]:
@@ -170,19 +210,81 @@ def test_every_job_runs_its_own_steps(workflow: dict[Any, Any]) -> None:
 
 
 def test_every_publish_command_is_a_dry_run(workflow: dict[Any, Any]) -> None:
-    # Each command, not each line: `npm publish --dry-run && npm publish` is one
-    # line and two publishes. A continued line is joined to the next first.
-    publishes = [
-        command.strip()
-        for run in _runs(workflow)
-        for command in _PUBLISH.findall(run.replace("\\\n", " "))
-    ]
+    publishes = [command for run in _runs(workflow) for command in _publishes(run)]
     assert publishes, "the workflow rehearses no publish"
-    assert [
-        command
-        for command in publishes
-        if not _DRY_RUN.search(command) or _NOT_DRY_RUN.search(command)
-    ] == []
+    assert [" ".join(command) for command in publishes if not _is_dry_run(command)] == []
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "npm publish",
+        "npm pu",
+        "npm pub --provenance",
+        "npm publis --tag next",
+        "npm --loglevel=info publish",
+        "npm --loglevel info publish",
+        'npm "publish"',
+        "npx --yes npm@11.21.1 publish",
+        "/usr/local/bin/npm publish",
+        'echo start\n(cd "${dir}" && npm pub)',
+        "npm publish --dry-run && npm publish",
+        "npm publish --dry-run || npm pub",
+        "npm publish --dry-run; npm publish",
+        "npm publish --dry-run | tee log & npm publish",
+        "npm \\\n  publish",
+        "npm publish --dry-run=false",
+        "npm publish --dry-run false",
+        "npm publish --dry-run 'false'",
+        "npm publish --dry-run --no-dry-run",
+        "npm publish --dry-run --no-dry",
+        "npm publish --dry-run --dry=false",
+        'npm publish --tag "next --dry-run"',
+        'npm publish "--dry-run"',
+        "cargo publish",
+        "cargo +stable publish --locked",
+        "cargo --locked publish --manifest-path Cargo.toml",
+    ],
+)
+def test_a_publish_that_is_not_a_dry_run_is_caught(script: str) -> None:
+    # npm resolves `pu` to `publis` to `publish` and reads options anywhere on
+    # the command line; nopt reads `--no-dry`, `--dry=false` and `--dry-run
+    # false` as "not a dry run". Each is a real publish the workflow test must see.
+    publishes = _publishes(script)
+    assert publishes, script
+    assert not all(_is_dry_run(command) for command in publishes), publishes
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "npm publish --dry-run",
+        '(cd "${dir}" && npm publish --dry-run)',
+        "npm --dry-run pub",
+        "npx --yes npm@11.21.1 publish --dry-run",
+        'cargo publish --manifest-path "${MANIFEST}" --locked --dry-run',
+        "cargo publish \\\n  --dry-run",
+    ],
+)
+def test_a_dry_run_publish_passes(script: str) -> None:
+    publishes = _publishes(script)
+    assert publishes, script
+    assert all(_is_dry_run(command) for command in publishes), publishes
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "npm pack --dry-run --json",
+        'npm view "${name}@${version}" version',
+        "npm install --global npm@11.21.1",
+        "npm p",
+        'echo "npm publishes a version once"',
+        'cargo package --manifest-path "${MANIFEST}" --locked --list',
+    ],
+)
+def test_other_commands_are_not_publishes(script: str) -> None:
+    assert _publishes(script) == []
 
 
 def test_nothing_logs_in_uploads_or_changes_owners(workflow: dict[Any, Any]) -> None:
