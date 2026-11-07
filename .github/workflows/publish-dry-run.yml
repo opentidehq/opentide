@@ -8,6 +8,13 @@
 # three registries needs, no secret is read, and every publish command runs
 # with --dry-run. tests/test_ci/test_publish_dry_run_workflow.py keeps it so.
 #
+# What it leaves out on purpose: the release guard's checks on the state of
+# the repository (`release.py check`, the version not tagged yet, and
+# `check_engine_pin.py --release`). Between releases the newest version in
+# CHANGELOG.md is already tagged, and development may pin the engine to a git
+# revision, so those checks would fail most pull requests without saying
+# anything about the packages. publish-pypi.yml still runs them.
+#
 # docs/internal/publishing.md lists every name, owner and trusted publisher,
 # and the steps a maintainer takes to publish the placeholders.
 name: Publish dry run
@@ -20,10 +27,17 @@ on:
       - "pyproject.toml"
       - "hatch_build.py"
       - "analysis/**"
+      # The engine the wheel compiles, once UC-0.2 builds it from a root Cargo
+      # workspace (a filter for a path that does not exist yet matches nothing).
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
       # The packages' long descriptions and licence (twine check, the placeholders' copies).
       - "README.md"
       - "LICENSE"
-      # The version a release builds.
+      # The version a release builds, and the script that reads it.
+      - "CHANGELOG.md"
       - "scripts/build/release.py"
   push:
     branches: [development]
@@ -33,8 +47,13 @@ on:
       - "pyproject.toml"
       - "hatch_build.py"
       - "analysis/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
       - "README.md"
       - "LICENSE"
+      - "CHANGELOG.md"
       - "scripts/build/release.py"
   workflow_dispatch:
 
@@ -212,7 +231,9 @@ jobs:
           problems = []
           if len(sdists) != 1:
               problems.append(f"expected one sdist, found {sdists}")
-          if versions != {os.environ["EXPECTED_VERSION"]}:
+          if len(versions) != 1 or any("dev" in v or "+" in v for v in versions):
+              problems.append(f"expected one release version, found {sorted(versions)}")
+          elif versions != {os.environ["EXPECTED_VERSION"]}:
               problems.append(f"built {sorted(versions)}, expected {os.environ['EXPECTED_VERSION']}")
           for platform in ("manylinux", "musllinux"):
               if not any(platform in name for name in wheels):

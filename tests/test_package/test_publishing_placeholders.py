@@ -12,6 +12,7 @@ step.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -32,6 +33,9 @@ PAGE = ROOT / "docs" / "internal" / "publishing.md"
 REPOSITORY = "https://github.com/opentidehq/opentide"
 LICENCE = "EUPL-1.2"
 VERSION = "0.0.0"
+#: A fenced shell block in the page, and a URL in it that is not quoted.
+_SHELL_BLOCK = re.compile(r"^```(?:bash|sh|shell)\n(.*?)^```", flags=re.MULTILINE | re.DOTALL)
+_BARE_URL = re.compile(r"(?<![\"'])\bhttps?://[^\s\"']+")
 
 
 def _crate_manifest() -> dict[str, Any]:
@@ -158,3 +162,13 @@ def test_publishing_page_names_every_placeholder() -> None:
 def test_publishing_page_is_in_the_internal_navigation() -> None:
     meta = json.loads((PAGE.parent / "meta.json").read_text(encoding="utf-8"))
     assert "publishing" in meta["pages"]
+
+
+def test_publishing_page_quotes_every_url_a_shell_would_expand() -> None:
+    # The maintainer pastes these commands. zsh, macOS's default shell, aborts
+    # on an unquoted `?` or `*` it cannot match ("no matches found"), and bash
+    # expands one that matches a file.
+    blocks = _SHELL_BLOCK.findall(PAGE.read_text(encoding="utf-8"))
+    assert blocks
+    bare = [url for block in blocks for url in _BARE_URL.findall(block) if set(url) & set("?*[]{}")]
+    assert bare == []

@@ -25,21 +25,59 @@ PUBLISH_PYPI = ROOT / ".github" / "workflows" / "publish-pypi.yml"
 PLACEHOLDERS = ROOT / "publishing" / "placeholders"
 #: What trusted publishing on npm needs (docs.npmjs.com/trusted-publishers).
 NPM_FLOOR = (11, 5, 1)
-#: Commands that publish, log in, or change who may publish.
+#: Commands that publish, log in, change who may publish, or change what a
+#: registry or a release already holds.
 FORBIDDEN = (
     "twine upload",
     "gh-action-pypi-publish",
+    "uv publish",
+    "maturin publish",
+    "maturin upload",
+    "hatch publish",
+    "poetry publish",
+    "flit publish",
     "crates-io-auth-action",
     "cargo login",
     "cargo owner",
+    "cargo yank",
     "npm login",
     "npm owner",
     "npm trust",
     "npm stage",
     "npm dist-tag",
     "npm access",
+    "npm unpublish",
+    "npm deprecate",
+    "pnpm publish",
+    "yarn publish",
+    "yarn npm publish",
+    "gh release",
+    "action-gh-release",
 )
+#: The workflow's whole trigger set: no `pull_request_target` or `workflow_run`,
+#: which run with the base repository's token and secrets.
+TRIGGERS = {"pull_request", "push", "workflow_dispatch"}
+#: What a release builds from, besides the placeholders and this workflow.
+#: `crates/**`, `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml` arrive
+#: with UC-0.2, which compiles the engine from a root Cargo workspace.
+PUBLISHED_FROM = {
+    "publishing/**",
+    ".github/workflows/publish-dry-run.yml",
+    "pyproject.toml",
+    "hatch_build.py",
+    "analysis/**",
+    "crates/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "scripts/build/release.py",
+}
 _PUBLISH = re.compile(r"\b(cargo|npm) publish\b")
+_EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", flags=re.DOTALL)
+_SECRETS = re.compile(r"\bsecrets\b")
 _PINNED = re.compile(r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}$")
 
 
@@ -59,7 +97,8 @@ def _triggers(workflow: dict[Any, Any]) -> dict[str, Any]:
 
 def _steps(workflow: dict[Any, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
     for name, job in workflow["jobs"].items():
-        for step in job["steps"]:
+        # A job without steps fails test_every_job_runs_its_own_steps instead.
+        for step in job.get("steps", []):
             yield name, step
 
 
@@ -84,6 +123,16 @@ def _strings(node: Any) -> Iterator[str]:
         yield str(node)
 
 
+def _expressions(workflow: dict[Any, Any]) -> Iterator[str]:
+    """Every expression GitHub evaluates: each ``${{ }}``, and each ``if:``, which
+    is an expression with or without the braces."""
+    for text in _strings(workflow):
+        yield from _EXPRESSION.findall(text)
+    for job in workflow["jobs"].values():
+        conditions = [job.get("if"), *(step.get("if") for step in job.get("steps", []))]
+        yield from (str(condition) for condition in conditions if condition is not None)
+
+
 def test_token_is_read_only_everywhere(workflow: dict[Any, Any]) -> None:
     assert workflow["permissions"] == {"contents": "read"}
     widened = [name for name, job in workflow["jobs"].items() if "permissions" in job]
@@ -97,6 +146,22 @@ def test_no_oidc_token_no_secret_no_environment(workflow: dict[Any, Any]) -> Non
     assert not [value for value in text if "id-token" in value]
     assert not [value for value in text if "secrets." in value or "secrets[" in value]
     assert not [name for name, job in workflow["jobs"].items() if "environment" in job]
+
+
+def test_no_expression_reads_the_secrets_context(workflow: dict[Any, Any]) -> None:
+    # `toJSON(secrets)` reads every secret without the `secrets.` the test above
+    # looks for, and `if: secrets.X` needs no braces.
+    assert [
+        expression for expression in _expressions(workflow) if _SECRETS.search(expression)
+    ] == []
+
+
+def test_every_job_runs_its_own_steps(workflow: dict[Any, Any]) -> None:
+    # A job that calls a reusable workflow (`uses:`) runs steps this test cannot
+    # see, and `secrets: inherit` hands it every secret.
+    jobs = workflow["jobs"]
+    assert [name for name, job in jobs.items() if "uses" in job or "secrets" in job] == []
+    assert [name for name, job in jobs.items() if not job.get("steps")] == []
 
 
 def test_every_publish_command_is_a_dry_run(workflow: dict[Any, Any]) -> None:
@@ -129,17 +194,15 @@ def test_no_expression_is_interpolated_into_a_script(workflow: dict[Any, Any]) -
 def test_runs_whenever_what_is_published_changes(workflow: dict[Any, Any]) -> None:
     triggers = _triggers(workflow)
     paths = triggers["pull_request"]["paths"]
-    assert {
-        "publishing/**",
-        ".github/workflows/publish-dry-run.yml",
-        "pyproject.toml",
-        "hatch_build.py",
-        "analysis/**",
-        "README.md",
-        "LICENSE",
-    } <= set(paths)
+    assert set(paths) >= PUBLISHED_FROM, sorted(PUBLISHED_FROM - set(paths))
     assert triggers["push"] == {"branches": ["development"], "paths": paths}
     assert "workflow_dispatch" in triggers
+
+
+def test_runs_on_no_trigger_that_carries_the_base_repository_secrets(
+    workflow: dict[Any, Any],
+) -> None:
+    assert set(_triggers(workflow)) == TRIGGERS
 
 
 def test_crate_job_rehearses_the_placeholder(workflow: dict[Any, Any]) -> None:
@@ -199,3 +262,11 @@ def test_pypi_job_builds_as_the_release_does(workflow: dict[Any, Any]) -> None:
             step["env"]["SETUPTOOLS_SCM_PRETEND_VERSION"] == "${{ steps.version.outputs.version }}"
         )
     assert "scripts/build/release.py version" in runs
+
+
+def test_pypi_job_refuses_what_the_release_refuses(workflow: dict[Any, Any]) -> None:
+    # The publish job rejects a dev or local version before it compares the
+    # version with the guard's; the rehearsal keeps the same check.
+    check = 'any("dev" in v or "+" in v for v in versions)'
+    assert check in "\n".join(_runs(_load(PUBLISH_PYPI), "publish"))
+    assert check in "\n".join(_runs(workflow, "pypi"))
