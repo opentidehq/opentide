@@ -30,5 +30,5 @@ input to `fuzz/regressions/<target>/` with a name that says what it was
 and `crates/opentide-lsp/tests/fuzz_regressions.rs` replay every saved input
 on stable Rust in the normal test run.
 
-`.github/engine-workflows/fuzz.yml` runs each target for five minutes every night
+`.github/workflows/engine-fuzz.yml` runs each target for five minutes every night
 and uploads what crashed. It does not gate pull requests.

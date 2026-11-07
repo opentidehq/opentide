@@ -54,7 +54,7 @@ Pinned stack (do not bump in passing):
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
 
-`Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI does not pass `--locked`. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/engine/cloud-agent-install.sh` does this restore after warming the build.
+`Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI passes `--locked`, so a lock that needs rewriting fails it. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/engine/cloud-agent-install.sh` does this restore after warming the build.
 
 ## Types agents get wrong
 
@@ -98,7 +98,7 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 - Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `crates/testdata/`.
 - Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct unless the user asked; there is no snapshot crate.
 - `cargo test --workspace` is the default. Name the test binary when iterating: `cargo test -p opentide-kql --lib`.
-- CI runs `cargo nextest run --workspace --profile ci` (`.config/nextest.toml`) and then `cargo test --workspace --doc`, because nextest does not run doctests. Each test gets its own process, so a test cannot rely on a `OnceLock` or other static that another test filled. If you have nextest installed, `cargo nextest run --workspace` is the same check.
+- CI runs `cargo test --workspace` (`ci.yml`, job `engine`, doctests included) and, on Windows, `cargo nextest run -p opentide-lsp -p opentide-core --profile ci` (`engine-ci.yml`, `.config/nextest.toml`); nextest does not run doctests. Each test gets its own process, so a test cannot rely on a `OnceLock` or other static that another test filled. If you have nextest installed, `cargo nextest run --workspace` is the same check.
 - The dev and test profiles build dependencies at `opt-level = 1` with line tables (`[profile.dev.package."*"]`); workspace crates stay at 0 with full debuginfo. The tests spend most of their time in `toml`, `serde`, `regex` and tree-sitter, which run about four times slower unoptimised. Do not drop it to speed up a cold build.
 - `crates/opentide-syntax/build.rs` watches each grammar's `src/` directory. Never print `rerun-if-changed` for a path that may not exist: cargo then treats the build script as stale on every run and rebuilds every crate.
 - `cargo fmt --all` before finishing. rustfmt is not optional.

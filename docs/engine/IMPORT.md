@@ -30,7 +30,7 @@ No language-server tag was imported: its tags are `vX.Y.Z`, the form of opentide
 | `skills/release-notes/` | `.agents/skills/engine-release-notes/` |
 | `skills/release/` | `.agents/skills/engine-release/` |
 | `skills/` (the other skills, `README.md`) | `.agents/skills/` |
-| `.github/workflows/` | `.github/engine-workflows/` |
+| `.github/workflows/` | `.github/engine-workflows/`; then `ci.yml` → `.github/workflows/engine-ci.yml`, `fuzz.yml` → `.github/workflows/engine-fuzz.yml`, `oracle.yml` → `.github/workflows/oracle.yml` |
 | `AGENTS.md` | `crates/AGENTS.md` |
 | `CHANGELOG.md` | `crates/CHANGELOG.md` |
 | `README.md` | `crates/opentide-lsp/README.md` |
@@ -44,8 +44,8 @@ Why the files that do not map one to one went where they did:
 - **`CHANGELOG.md`** records the engine crates' releases: `crates/CHANGELOG.md`, which `scripts/engine/release.py` reads.
 - **`README.md`** describes the `opentide-lsp` binary and was already that crate's crates.io readme.
 - **`tests/clients/`** is a pytest-lsp suite for the server binary, with its own dependencies. Under `scripts/engine/` ruff lints it, and opentide's test suite, which collects `tests/`, does not run it.
-- **Workflows.** GitHub runs only `.github/workflows/`. language-server's `release.yml` triggers on `v*.*.*` tags, which opentide's releases push, and would publish the engine crates and npm packages, so it must not run here; its `ci.yml` collides by name. They wait in `.github/engine-workflows/` for UC-0.3, which rebuilds CI. `oracle.yml` moved on to `.github/workflows/` (without its tag trigger), so the vendor-parser oracles keep checking the engine.
-- **Commit messages.** A bare `#N` in a language-server commit message became `opentidehq/language-server#N`, so it still names the issue or pull request it meant.
+- **Workflows.** The filter puts them in `.github/engine-workflows/`, where GitHub does not run them: language-server's `release.yml` triggers on `v*.*.*` tags, which opentide's releases push, and would publish the engine crates and npm packages, so it stays there until UC-0.3 gives engine releases tags of their own. The commits after the merge move the others on to `.github/workflows/` with their history, so the engine keeps every gate it had: `oracle.yml` (without its tag trigger), `ci.yml` as `engine-ci.yml` (its name collides with opentide's; its rustfmt, clippy, test and WebAssembly steps run in `ci.yml`'s `engine` and `engine-wasm` jobs) and `fuzz.yml` as `engine-fuzz.yml`.
+- **Commit messages.** A bare `#N` in a language-server commit message became `opentidehq/language-server#N`, so it still names the issue or pull request it meant. A `#N` right after a letter, digit, `_`, `/`, `&`, `.` or `-` was left as it was, as the expression below says: the second half of `#120-#122` or `#20/#21` still reads as this repository's issue of that number.
 
 The merge had two add/add conflicts, resolved in the merge commit: `.gitignore` kept opentide's rules followed by language-server's, and `.cursor/environment.json` kept opentide's.
 
@@ -86,7 +86,7 @@ The renames apply in order, each to the result of the one before, so `scripts/` 
 
 The commits after the merge make the imported tree build and test here:
 
-- One Cargo workspace at the root, with `analysis/` a member that takes `opentide-analysis` and `opentide-lsp` by path. Its lock is language-server's with PyO3 and its dependencies added at the versions `analysis/Cargo.lock` held. `hatch_build.py` builds the `_native` library of the workspace and finds it in cargo's JSON messages.
+- One Cargo workspace at the root, with `analysis/` a member that takes `opentide-analysis` and `opentide-lsp` by path. Its lock is language-server's, all 120 packages at the same versions, plus the 9 packages only `analysis/` needs (PyO3 and its dependencies) at the versions `analysis/Cargo.lock` held. One lock holds one version of a crate, so the 23 crates the two locks held at different versions take language-server's version: 14 move to the older version (among them `serde_json` 1.0.154 → 1.0.151, `syn` 3.0.9 → 3.0.5, `cc` 1.10.0 → 1.4.6, `thiserror` 2.0.21 → 2.0.20, `wasm-bindgen` 0.2.129 → 0.2.128) and 9 to the newer (`icu_*` 2.1 → 2.4, `idna_adapter` 1.2.1 → 1.2.2, `tree-sitter-language` 0.1.7 → 0.1.8), and `foldhash`, which only `serde_json` 1.0.154 used, drops out. 17 of the changes are in `_native`'s dependencies (`cargo tree -p opentide-native --target all`); the other six (`cfg-if`, `js-sys`, `wasm-bindgen*`) are only `opentide-wasm`'s. They are the versions language-server 0.11.0 was tested and released with, on every target opentide builds wheels for. `hatch_build.py` builds the `_native` library of the workspace and finds it in cargo's JSON messages.
 - Paths inside the moved files follow the move: `include_str!` and build scripts (`OPENTIDE_ASSETS` points at `data/catalogs/`), crate tests, scripts, docs, skills and parked workflows. Generated files keep their bytes: `data/catalogs/`, `highlights/generated/`, `highlights/queries/tide/highlights.scm` and the grammars' `src/` are what language-server 0.11.0 compiled in, so a header naming its generator still names the script's path before the import until the next regeneration.
 - The cross-repository machinery is gone: `scripts/build/check_engine_pin.py`, `scripts/build/check_engine_catalog.py` (now `tests/test_generation/test_bundled_tide_catalog.py`), `opentide-canary.yml` and `requirements-opentide.txt`. `scripts/engine/sync_opentide_schemas.py` and `tide_corpus.rs` read `src/opentide`.
 

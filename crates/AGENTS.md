@@ -1,6 +1,6 @@
 # AGENTS.md — opentide language server
 
-Instructions for coding agents in **this** repository (`opentidehq/language-server`). Detection-authoring skills live in `opentidehq/skills` and are not an engine.
+Instructions for coding agents working on the engine of this repository (`opentidehq/opentide`): the crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), and the grammars, highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` covers the rest of the repository. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
 
 Before editing, read the one skill that matches the change. Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
@@ -47,7 +47,7 @@ cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). CI sets `RUSTFLAGS=-Dwarnings`.
+Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`'s `engine` and `engine-wasm`, and `engine-ci.yml`) set `RUSTFLAGS=-Dwarnings`.
 
 ## Upstream docs, not downloaded skills
 

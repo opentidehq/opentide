@@ -14,7 +14,7 @@ Every crate shares the workspace version, and the internal crates pin each other
 
 ## 1. Release PR
 
-On a branch from `origin/main`:
+On a branch from `origin/development`:
 
 ```bash
 python3 scripts/engine/release.py bump X.Y.Z     # workspace version, internal pins, Cargo.lock
