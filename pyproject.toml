@@ -8,7 +8,17 @@ dynamic = ["version"]
 description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across nine security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
-license-files = ["LICENSE", "NOTICE"]
+# NOTICE covers the third-party data the engine compiles in; the licence and notice
+# files it cites ship beside it.
+license-files = [
+    "LICENSE",
+    "NOTICE",
+    "data/catalogs/ecs/LICENSE.txt",
+    "data/catalogs/ecs/NOTICE",
+    "data/catalogs/falco/LICENSE.txt",
+    "data/catalogs/falco/LICENSE-MIT.txt",
+    "data/catalogs/falco/NOTICE",
+]
 authors = [
     { name = "opentide", email = "digit-ec-opentide@ec.europa.eu" },
 ]

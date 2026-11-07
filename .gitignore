@@ -111,7 +111,7 @@ src/opentide/_native.so
 grammars/*/build
 grammars/*/node_modules
 *.profraw
-coverage
+/coverage
 lcov.info
 /tmp
 scripts/engine/oracles/kusto/bin
@@ -122,6 +122,9 @@ highlights/test/node_modules
 
 # Generated, and source here: the engine's bundled Tide catalog and the
 # highlighting artifacts, which `generated/` above would hide (and keep out of
-# the sdist, whose build compiles them in).
+# the sdist, whose build compiles them in), and their copies in a crate's assets/
+# (`scripts/engine/release.py vendor`), which `cargo package` would leave out.
 !/data/catalogs/tide/generated/
 !/highlights/generated/
+!/crates/*/assets/data/catalogs/tide/generated/
+!/crates/*/assets/highlights/generated/

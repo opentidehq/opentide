@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
-- **The analysis engine builds from this repository** ([#800](https://github.com/opentidehq/opentide/issues/800)). Its crates moved here from opentidehq/language-server with their history, and opentide compiles them by path instead of from crates.io; the engine is still language-server 0.11.0, so no finding changes. The sdist carries them, and the wheel and sdist ship `NOTICE`, the notices of the data the engine embeds.
+- **The analysis engine builds from this repository** ([#800](https://github.com/opentidehq/opentide/issues/800)). Its crates moved here from opentidehq/language-server with their history, and opentide compiles them by path instead of from crates.io; the engine is still language-server 0.11.0, so no finding changes. The sdist carries them, and the wheel and sdist ship `NOTICE`, the notices of the data the engine embeds, with the licence and notice files it cites (Elastic Common Schema, Falco).
 
 ## [0.23.0] — 2026-11-06
 
