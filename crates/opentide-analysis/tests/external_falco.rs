@@ -2,8 +2,8 @@
 //! rules files), each condition unmodified, plus a twin with one injected
 //! fault.
 //!
-//! Sources and licence: `testdata/conformance/external/SOURCES.md`. The
-//! conditions are written by `scripts/sync_falco_catalog.py --corpus`, one
+//! Sources and licence: `crates/testdata/conformance/external/SOURCES.md`. The
+//! conditions are written by `scripts/engine/sync_falco_catalog.py --corpus`, one
 //! directory per event source. Every public condition must parse and come out
 //! clean: no error and no warning, with the default macros and lists the
 //! engine bundles. Every broken twin must report `falco_parse_error`.
@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 fn corpus() -> Vec<(String, String, String, String)> {
     let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/conformance/external/falco");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/external/falco");
     let mut out = Vec::new();
     for dir in fs::read_dir(&root).unwrap() {
         let dir = dir.unwrap().path();

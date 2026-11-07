@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate catalogs/ecs/fields.json from an elastic/ecs checkout.
+"""Generate data/catalogs/ecs/fields.json from an elastic/ecs checkout.
 
 Reads generated/ecs/ecs_flat.yml (Elastic Common Schema, Apache-2.0) and
 writes one row per field: name, Elasticsearch type, ECS level, whether the
@@ -8,14 +8,14 @@ values with the first sentence of each value's description. Multi-fields
 such as `process.command_line.text` get their own rows.
 
 ECS is Apache-2.0, so its short descriptions are kept, with attribution in
-catalogs/ecs/NOTICE.
+data/catalogs/ecs/NOTICE.
 
 The ES|QL, EQL, kuery, and Lucene engines never treat this list as closed:
 elastic-1.0 says field names MUST NOT be checked against one. It feeds
 completion, hover, and hints where a field's type is known.
 
 Usage:
-    python scripts/sync_ecs_fields.py --ecs ../ecs
+    python scripts/engine/sync_ecs_fields.py --ecs ../ecs
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ecs", type=Path, required=True)
     parser.add_argument(
-        "--out", type=Path, default=Path(__file__).resolve().parent.parent / "catalogs/ecs"
+        "--out", type=Path, default=Path(__file__).resolve().parents[2] / "data/catalogs/ecs"
     )
     args = parser.parse_args()
     ecs = args.ecs.resolve()

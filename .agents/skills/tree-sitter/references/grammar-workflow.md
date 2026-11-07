@@ -17,16 +17,16 @@ Do not `npm install tree-sitter-cli` at the repo root. There is no root `package
 
 ## Generate
 
-From the repository root. The subshell is what puts `tree-sitter` next to `grammar.js`; the check script resolves the repo from its own path and must be invoked as `scripts/check-grammars.sh`.
+From the repository root. The subshell is what puts `tree-sitter` next to `grammar.js`; the check script resolves the repo from its own path and must be invoked as `scripts/engine/check-grammars.sh`.
 
 ```bash
 (cd grammars/tree-sitter-opentide-kql && tree-sitter generate)   # or -spl
-bash scripts/check-grammars.sh
+bash scripts/engine/check-grammars.sh
 ```
 
 0.25 reads `grammar.js` and writes `src/parser.c`, `src/grammar.json`, `src/node-types.json`, and `src/tree_sitter/parser.h`. Commit every file git shows as changed. Do not format `parser.c` with rustfmt or clang-format; the diff against a fresh generate must be empty.
 
-`scripts/check-grammars.sh` generates in a temp copy and diffs only `parser.c`. If `grammar.json` drifted but `parser.c` did not, still commit `grammar.json`: `corpus_gate.rs` reads it.
+`scripts/engine/check-grammars.sh` generates in a temp copy and diffs only `parser.c`. If `grammar.json` drifted but `parser.c` did not, still commit `grammar.json`: `corpus_gate.rs` reads it.
 
 ## Rule design
 
@@ -34,10 +34,10 @@ Tree-sitter is GLR. Conflicts are allowed when they are real (a token that start
 
 ```bash
 # grammar directory, so the CLI finds grammar.js; the corpus lives two levels up
-tree-sitter parse ../../testdata/corpus/kql/take_operator__valid.kql
+tree-sitter parse ../testdata/corpus/kql/take_operator__valid.kql
 ```
 
-Run that from `grammars/tree-sitter-opentide-kql` (use `...-spl` and `../../testdata/corpus/spl/...` for SPL). A successful parse prints an S-expression. `ERROR` or `MISSING` nodes are failures even if the process exits 0. The Rust tests use `has_error`.
+Run that from `grammars/tree-sitter-opentide-kql` (use `...-spl` and `../testdata/corpus/spl/...` for SPL). A successful parse prints an S-expression. `ERROR` or `MISSING` nodes are failures even if the process exits 0. The Rust tests use `has_error`.
 
 Keywords that are also identifiers (`and`, `or`, `by`) belong in the expression rules as literals, not as a reserved-word list that rejects them as column names. Look at the existing `grammar.js` before adding a word to a reserved set.
 
@@ -59,4 +59,4 @@ Invalid fixtures are for productions that must parse as an error node (`has_erro
 
 ## Renames
 
-Renaming a rule is an engine change: `.scm` patterns, `node.kind()` matches, corpus tags, and `docs/LANGUAGE.md`. Do it in one commit. Do not leave the old kind as an alias node unless the old name is still a real production.
+Renaming a rule is an engine change: `.scm` patterns, `node.kind()` matches, corpus tags, and `docs/engine/LANGUAGE.md`. Do it in one commit. Do not leave the old kind as an alias node unless the old name is still a real production.

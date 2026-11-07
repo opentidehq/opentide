@@ -45,6 +45,6 @@ Citation: [Null values](https://learn.microsoft.com/kusto/query/scalar-data-type
 
 ## Related
 
-- [types.toml catalog](../../catalogs/kql/core/types.toml) currently lists 9 types and **omits `decimal`**.
+- [types.toml catalog](../../../data/catalogs/kql/core/types.toml) currently lists 9 types and **omits `decimal`**.
 - String literals, timespan suffixes, and `dynamic` access: [`syntax.md`](syntax.md)
 - String operators on `string`: [`operators-scalar.md`](operators-scalar.md)

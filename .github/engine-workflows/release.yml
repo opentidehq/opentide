@@ -46,13 +46,13 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             # A re-run of the tag push would rebuild assets that do not
             # reproduce byte for byte and upload them over the published ones.
-            python3 scripts/release.py unpublished "${tag}"
+            python3 scripts/engine/release.py unpublished "${tag}"
           else
             if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
               echo "::error::Run the release from main, not ${GITHUB_REF_NAME}"
               exit 1
             fi
-            tag="v$(python3 scripts/release.py version)"
+            tag="v$(python3 scripts/engine/release.py version)"
             if [ "${PUBLISH_ONLY}" = "true" ]; then
               if ! gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
                 echo "::error::publish_only resumes a released version, and ${tag} has no GitHub Release"
@@ -65,16 +65,16 @@ jobs:
                 exit 1
               fi
             elif gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-              echo "::error::${tag} is already released; bump the version first (scripts/release.py bump)"
+              echo "::error::${tag} is already released; bump the version first (scripts/engine/release.py bump)"
               exit 1
             fi
           fi
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-      - run: python3 scripts/release.py check "${{ steps.tag.outputs.tag }}"
-      - run: python3 scripts/release.py vendor
+      - run: python3 scripts/engine/release.py check "${{ steps.tag.outputs.tag }}"
+      - run: python3 scripts/engine/release.py vendor
       - run: cargo package --workspace --allow-dirty
       - name: license scan (no oracle references)
-        run: bash scripts/license-scan.sh target/package/*.crate
+        run: bash scripts/engine/license-scan.sh target/package/*.crate
 
   native:
     needs: verify
@@ -156,7 +156,7 @@ jobs:
         with:
           node-version: "22"
       - run: cargo install --locked wasm-bindgen-cli --version 0.2.128
-      - run: bash scripts/build-wasm.sh
+      - run: bash scripts/engine/build-wasm.sh
       - name: package
         run: |
           set -euo pipefail
@@ -210,7 +210,7 @@ jobs:
           path: dist
           merge-multiple: true
       - name: license scan (no oracle references)
-        run: bash scripts/license-scan.sh dist
+        run: bash scripts/engine/license-scan.sh dist
       # The binaries embed third-party code and data: ship the notices with
       # them. NOTICE covers ECS, Lucene, dk.brics, and the wasi-libc the WASM
       # builds link (texts in licenses/wasi-libc, shipped as WASI-LIBC-LICENSES.txt); cargo-about lists every Rust
@@ -235,7 +235,7 @@ jobs:
       # Last, once dist holds every asset (#196): a consumer runs
       # `sha256sum -c SHA256SUMS` on what it downloads.
       - name: SHA256SUMS
-        run: python3 scripts/release.py sums dist
+        run: python3 scripts/engine/release.py sums dist
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets
@@ -281,7 +281,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 scripts/release.py notes "${TAG}" > notes.md
+          python3 scripts/engine/release.py notes "${TAG}" > notes.md
           # From "Run workflow", the tag does not exist yet: the release creates it
           # on the commit this run built.
           if ! gh release create "${TAG}" dist/* \
@@ -293,7 +293,7 @@ jobs:
             # over assets it already has (a re-run of this job): consumers
             # pinned their digests, and this run's differ. Without --clobber, an
             # asset that appeared meanwhile fails the upload too.
-            python3 scripts/release.py unpublished "${TAG}"
+            python3 scripts/engine/release.py unpublished "${TAG}"
             gh release upload "${TAG}" dist/* --repo "${GITHUB_REPOSITORY}"
           fi
 
@@ -324,7 +324,7 @@ jobs:
           # sha256sum checks the names SHA256SUMS lists; verify-sums also fails on
           # an asset it leaves out.
           (cd published && sha256sum --check --strict SHA256SUMS)
-          python3 scripts/release.py verify-sums published
+          python3 scripts/engine/release.py verify-sums published
           # --repo alone accepts an attestation any workflow of the repository
           # signed, on any branch: each asset's must come from release.yml run
           # from main or from this tag.
@@ -365,7 +365,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python3 scripts/release.py vendor
+      - run: python3 scripts/engine/release.py vendor
       # Fails until trusted publishing is registered; the token covers that.
       - name: crates.io login (trusted publishing)
         id: trusted
@@ -390,11 +390,11 @@ jobs:
             echo "::error::No trusted publishing and no CARGO_REGISTRY_TOKEN; the crates were not published"
             exit 1
           fi
-          python3 scripts/release.py publish
+          python3 scripts/engine/release.py publish
       - name: register trusted publishing
         env:
           CRATES_IO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: python3 scripts/release.py trust release.yml
+        run: python3 scripts/engine/release.py trust release.yml
 
   # npm (#167): @opentide/lsp-client and @opentide/lsp-worker at the tag's
   # version, with npm trusted publishing (the workflow's OIDC identity, no
@@ -420,7 +420,7 @@ jobs:
       - name: build and check the packs
         run: |
           for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
-          node scripts/check-npm-packs.mjs
+          node scripts/engine/check-npm-packs.mjs
       - name: publish
         run: |
           set -euo pipefail

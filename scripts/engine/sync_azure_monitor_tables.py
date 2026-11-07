@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate catalogs/kql/azure-monitor/tables.toml from a MicrosoftDocs/azure-monitor-docs checkout.
+"""Generate data/catalogs/kql/azure-monitor/tables.toml from a MicrosoftDocs/azure-monitor-docs checkout.
 
 Reads articles/azure-monitor/reference/tables/*.md, the Azure Monitor Logs
 table reference that Microsoft generates from the service's own schemas
@@ -33,8 +33,8 @@ Usage (a sparse checkout is enough):
         https://github.com/MicrosoftDocs/azure-monitor-docs.git
     git -C azure-monitor-docs sparse-checkout set --no-cone \\
         '/articles/azure-monitor/reference/tables/*' /LICENSE
-    python scripts/sync_azure_monitor_tables.py --docs azure-monitor-docs --sentinel Azure-Sentinel
-    python scripts/sync_azure_monitor_tables.py --docs azure-monitor-docs --sentinel Azure-Sentinel --check
+    python scripts/engine/sync_azure_monitor_tables.py --docs azure-monitor-docs --sentinel Azure-Sentinel
+    python scripts/engine/sync_azure_monitor_tables.py --docs azure-monitor-docs --sentinel Azure-Sentinel --check
 """
 
 from __future__ import annotations
@@ -47,13 +47,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "catalogs/kql/azure-monitor/tables.toml"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "data/catalogs/kql/azure-monitor/tables.toml"
 TABLES = Path("articles/azure-monitor/reference/tables")
 VALIDATION = Path(".script/tests/KqlvalidationsTests/CustomTables")
 LEARN = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/"
 # Kusto scalar types, as the reference spells them, to the names the KQL
-# catalog uses (catalogs/kql/core/types.toml).
+# catalog uses (data/catalogs/kql/core/types.toml).
 TYPES = {
     "string": "string",
     "datetime": "datetime",

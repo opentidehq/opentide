@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Check the `versions` lists in catalogs/esql/*.toml against a live server.
+"""Check the `versions` lists in data/catalogs/esql/*.toml against a live server.
 
-Usage: python3 scripts/oracles/elasticsearch/esql_catalog.py [--url URL] [--all]
+Usage: python3 scripts/engine/oracles/elasticsearch/esql_catalog.py [--url URL] [--all]
 
 Asks the server (ES_URL, default http://127.0.0.1:9200) for its version,
 then sends one minimal query per command, function (and alias), and `::type`
@@ -37,7 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run  # noqa: E402  (sibling module)
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 
 # A literal for each parameter type, most common first.
 LITERALS = [
@@ -189,7 +189,7 @@ def main() -> int:
     line = server_line(url)
     rows: list[tuple[str, str, bool, bool, str]] = []
 
-    functions = tomllib.loads((ROOT / "catalogs/esql/functions.toml").read_text())["functions"]
+    functions = tomllib.loads((ROOT / "data/catalogs/esql/functions.toml").read_text())["functions"]
     for f in functions:
         for name in [f["name"], *f.get("aliases", [])]:
             query = function_query(f, name)
@@ -200,7 +200,7 @@ def main() -> int:
             absent = absent or parse_error_at_or_before(status, body, query.index(name.upper() + "("))
             rows.append(("function", name, line in f.get("versions", []), not absent, f"{query} => {text}"))
 
-    for t in tomllib.loads((ROOT / "catalogs/esql/types.toml").read_text())["types"]:
+    for t in tomllib.loads((ROOT / "data/catalogs/esql/types.toml").read_text())["types"]:
         query = f"ROW x = null::{t['name']}"
         status, body = ask(url, query, mapped)
         text = error_text(body) if status != 200 else "OK"
@@ -209,7 +209,7 @@ def main() -> int:
         ) is not None
         rows.append(("cast", t["name"], line in t.get("versions", []), not absent, f"{query} => {text}"))
 
-    commands = {c["name"]: c for c in tomllib.loads((ROOT / "catalogs/esql/commands.toml").read_text())["commands"]}
+    commands = {c["name"]: c for c in tomllib.loads((ROOT / "data/catalogs/esql/commands.toml").read_text())["commands"]}
     for name, row in commands.items():
         queries = COMMANDS.get(name)
         if not queries:

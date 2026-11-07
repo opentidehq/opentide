@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 fn read(name: &str) -> String {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    std::fs::read_to_string(root.join("testdata/conformance/tables").join(name)).unwrap()
+    std::fs::read_to_string(root.join("crates/testdata/conformance/tables").join(name)).unwrap()
 }
 
 fn diagnostics(language: LanguageId, uri: &str, text: String) -> Vec<Diagnostic> {

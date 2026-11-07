@@ -2,11 +2,11 @@
 # Cloud Agent environment bootstrap for the opentide language server.
 # Idempotent: safe to run repeatedly and against a warm/cached checkout.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # ---------------------------------------------------------------------------
 # tree-sitter CLI
-# scripts/check-grammars.sh and the CI "grammars" job regenerate the vendored
+# scripts/engine/check-grammars.sh and the CI "grammars" job regenerate the vendored
 # parsers with this exact version. Install it into the nvm-managed Node prefix:
 # that bin directory is already on PATH and lives under $HOME, so it persists in
 # environment snapshots. Use an inline `--prefix` rather than `npm config set`

@@ -12,7 +12,7 @@ fn golden(dir: &str, name: &str, language: LanguageId, src: &str) {
     let result = highlight(language, src);
     let captures: Vec<&str> = result.tokens.iter().map(|t| t.capture.as_str()).collect();
     let path = repo_root()
-        .join("testdata/highlight")
+        .join("crates/testdata/highlight")
         .join(dir)
         .join(format!("{name}.json"));
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -84,7 +84,7 @@ fn exact_golden(dir: &str, name: &str, language: LanguageId, src: &str) {
     golden(dir, name, language, src);
     let result = highlight(language, src);
     let path = repo_root()
-        .join("testdata/highlight")
+        .join("crates/testdata/highlight")
         .join(dir)
         .join(format!("{name}.json"));
     let expected: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();

@@ -1,7 +1,7 @@
 //! Generated table and ASIM catalogs: the Azure Monitor Logs table reference
-//! (`catalogs/kql/azure-monitor/tables.toml`, `scripts/sync_azure_monitor_tables.py`)
-//! and the ASIM schemas and parsers (`catalogs/kql/asim/asim.toml`,
-//! `scripts/sync_asim_schemas.py`), parsed once per process.
+//! (`data/catalogs/kql/azure-monitor/tables.toml`, `scripts/engine/sync_azure_monitor_tables.py`)
+//! and the ASIM schemas and parsers (`data/catalogs/kql/asim/asim.toml`,
+//! `scripts/engine/sync_asim_schemas.py`), parsed once per process.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -9,11 +9,11 @@ use std::sync::OnceLock;
 
 const AZURE_MONITOR_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/azure-monitor/tables.toml"
+    "/data/catalogs/kql/azure-monitor/tables.toml"
 ));
 const ASIM_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/asim/asim.toml"
+    "/data/catalogs/kql/asim/asim.toml"
 ));
 
 /// One table of the Azure Monitor Logs reference.

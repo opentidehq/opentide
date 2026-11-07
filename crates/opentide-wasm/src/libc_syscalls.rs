@@ -2,7 +2,7 @@
 //!
 //! tree-sitter and the grammars are C. On `wasm32-unknown-unknown` they get
 //! their libc (`malloc`, `snprintf`, `strncmp`, `iswalnum`, …) from wasi-sdk's
-//! `libc.a`, linked by `scripts/build-wasm.sh`. libc's stdio and clock code
+//! `libc.a`, linked by `scripts/engine/build-wasm.sh`. libc's stdio and clock code
 //! can reach seven WASI syscalls. Defining their import symbols here keeps the
 //! artifact free of WASI imports, so a browser loads it with wasm-bindgen's
 //! glue alone: there are no files (every descriptor is bad) and no clock (time

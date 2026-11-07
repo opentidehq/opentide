@@ -1,4 +1,4 @@
-//! `spl_search_operator` on the fixtures in `testdata/conformance/lint/`,
+//! `spl_search_operator` on the fixtures in `crates/testdata/conformance/lint/`,
 //! as raw `.spl` files and inside a Tide rule's splunk block (#136).
 //!
 //! Splunk 10.6.1's parser accepts every fixture but `search-operator-tstats.spl`
@@ -11,7 +11,7 @@ use opentide_core::{Diagnostic, LanguageId, Severity, codes};
 use std::path::PathBuf;
 
 fn lint_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/conformance/lint")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/lint")
 }
 
 fn search_operators(

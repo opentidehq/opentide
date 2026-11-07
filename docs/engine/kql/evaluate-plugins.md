@@ -56,7 +56,7 @@ ADX also documents HTTP egress plugins (`http_request` / `http_request_post`) â€
 
 | Surface | Status |
 | --- | --- |
-| `catalogs/kql/**` | **No** `evaluate-plugins.toml` yet |
+| `data/catalogs/kql/**` | **No** `evaluate-plugins.toml` yet |
 | Grammar | Parses `evaluate` via `keyword_operator`; plugin identifier is generic |
 | Completions | Suggests `evaluate` as an operator; **does not** suggest plugin names |
 | Hover | No plugin docs |

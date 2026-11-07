@@ -15,10 +15,10 @@ use thiserror::Error;
 pub use markdown::highlight_markdown_line;
 
 pub const SPEC_TOML: &str = include_str!(concat!(env!("OPENTIDE_ASSETS"), "/highlights/spec.toml"));
-/// Tide field catalog generated from opentide JSON Schema (`scripts/sync_opentide_schemas.py`).
+/// Tide field catalog generated from opentide JSON Schema (`scripts/engine/sync_opentide_schemas.py`).
 pub const TIDE_FIELDS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/tide/generated/fields.json"
+    "/data/catalogs/tide/generated/fields.json"
 ));
 pub const KQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
@@ -352,7 +352,7 @@ fn text_hash(text: &str) -> u64 {
 }
 
 /// Replace the bundled Tide field catalog with a workspace one: a
-/// `fields.json` in the shape of `catalogs/tide/generated/fields.json`, as
+/// `fields.json` in the shape of `data/catalogs/tide/generated/fields.json`, as
 /// `opentide generate schemas` writes it to `.opentide/lsp/catalogs/generated/`.
 /// `None` goes back to the bundled catalog. Process-wide: every thread sees it.
 ///
@@ -764,7 +764,7 @@ pub fn tokens_from_spans(
 /// ES|QL is `source.opentide.esql`: `source.esql` is the scope of Elastic's own
 /// ES|QL extension, which registers the same `esql` language id, and two
 /// grammars with one scope replace each other. The other grammars keep
-/// `source.<id>`: no known extension owns those scopes (`docs/EDITORS.md`).
+/// `source.<id>`: no known extension owns those scopes (`docs/engine/EDITORS.md`).
 /// This is not a HighlightSpec capture, so the rename does not bump
 /// `highlights/spec.toml`.
 pub fn tm_scope_name(language: LanguageId) -> String {
@@ -941,7 +941,7 @@ pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde
 }
 
 /// The query fields whose path alone fixes their language, as
-/// `docs/ARCHITECTURE.md`'s injection table lists them: each platform block
+/// `docs/engine/ARCHITECTURE.md`'s injection table lists them: each platform block
 /// under `configurations`, its query keys, and the language. Elastic is not
 /// here: its language follows the block's `type` and `language` keys, which
 /// a TextMate grammar cannot read reliably, so its queries are coloured by

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fail if vendored parser.c is stale versus grammar.js.
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 TS="${TREE_SITTER_CLI:-}"
 if [[ -z "$TS" ]]; then
   if [[ -x /tmp/ts-cli/node_modules/.bin/tree-sitter ]]; then

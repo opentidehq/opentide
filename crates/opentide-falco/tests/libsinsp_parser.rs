@@ -1,6 +1,6 @@
-//! libsinsp's own parser tests (`testdata/conformance/libsinsp/parser.json`,
+//! libsinsp's own parser tests (`crates/testdata/conformance/libsinsp/parser.json`,
 //! ported from falcosecurity/libs `filter_parser.ut.cpp` by
-//! `scripts/sync_libsinsp_conformance.py`): every accepted input parses, every
+//! `scripts/engine/sync_libsinsp_conformance.py`): every accepted input parses, every
 //! rejected one fails with libs' message where the test names one, and the
 //! AST prints as libs prints it.
 
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 fn fixtures() -> Vec<Value> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/libsinsp/parser.json");
+        .join("../testdata/conformance/libsinsp/parser.json");
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     doc["fixtures"].as_array().unwrap().clone()
 }

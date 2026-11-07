@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate catalogs/esql/*.toml from an Elasticsearch checkout.
+"""Generate data/catalogs/esql/*.toml from an Elasticsearch checkout.
 
 Elasticsearch generates one JSON definition per ES|QL function and operator
 (docs/reference/query-languages/esql/kibana/generated/x-pack-esql/definition)
@@ -25,7 +25,7 @@ can take. Command and operator summaries below are written for this catalog;
 hover links to Elastic's page for the full text.
 
 Usage:
-    python scripts/sync_esql_catalog.py --elasticsearch ../elasticsearch \
+    python scripts/engine/sync_esql_catalog.py --elasticsearch ../elasticsearch \
         --branches ../es-branches
 
 The checkout only needs `docs/reference/query-languages/esql`. `--branches`
@@ -75,7 +75,7 @@ BRANCH_CAST_GLOBS = [
 # EsqlDataTypeConverter maps to a conversion function, plus the aliases
 # DataType.fromNameOrAlias accepts (`bool`, `int`, `string`, `date`).
 # 9.0 has no `date` alias: a 9.0.8 server answers `null::date` with
-# "Unknown data type named [date]" (scripts/oracles/elasticsearch/esql_catalog.py).
+# "Unknown data type named [date]" (scripts/engine/oracles/elasticsearch/esql_catalog.py).
 CASTS_WITHOUT_JSON = {
     "9.0": [
         "bool", "boolean", "cartesian_point", "cartesian_shape", "date_nanos",
@@ -345,7 +345,7 @@ def branch_functions(branches: Path) -> dict[str, dict[str, dict]]:
 
 
 # Release lines where a live server accepts a function its branch's
-# definitions omit or mark snapshot-only (scripts/oracles/elasticsearch/
+# definitions omit or mark snapshot-only (scripts/engine/oracles/elasticsearch/
 # esql_catalog.py against the latest patch of each line): TO_TDIGEST is a
 # 9.3 preview, WITHOUT ships in 9.4 time-series queries.
 LIVE_FUNCTION_RELEASES = {
@@ -866,7 +866,7 @@ def main() -> None:
         help="directory with one docs checkout per release branch (8.19/, 9.0/, ...)",
     )
     parser.add_argument(
-        "--out", type=Path, default=Path(__file__).resolve().parent.parent / "catalogs/esql"
+        "--out", type=Path, default=Path(__file__).resolve().parents[2] / "data/catalogs/esql"
     )
     args = parser.parse_args()
     es = args.elasticsearch.resolve()

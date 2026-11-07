@@ -9,7 +9,12 @@ fn repo_root() -> PathBuf {
 }
 
 fn read(name: &str) -> String {
-    std::fs::read_to_string(repo_root().join("testdata/conformance/perf").join(name)).unwrap()
+    std::fs::read_to_string(
+        repo_root()
+            .join("crates/testdata/conformance/perf")
+            .join(name),
+    )
+    .unwrap()
 }
 
 fn codes_for(language: LanguageId, text: &str) -> Vec<String> {

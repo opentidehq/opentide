@@ -1,5 +1,5 @@
 # Known disagreements between the opentide engine and the reference parsers.
-# scripts/ci-oracle.sh enforces this file (see scripts/oracles/README.md):
+# scripts/engine/ci-oracle.sh enforces this file (see scripts/engine/oracles/README.md):
 #
 # - A query where ours and the reference disagree fails CI unless an entry
 #   lists it in `paths`. Paths are repository-relative; a query inside a Tide
@@ -11,13 +11,13 @@
 #
 # Every entry has an `id`, a `reason`, and exactly one of `paths` or `names`.
 # The references are CI-only. Do not ship Microsoft Kusto.Language, Splunk,
-# or a Splunk SDK in any release artifact (scripts/license-scan.sh).
+# or a Splunk SDK in any release artifact (scripts/engine/license-scan.sh).
 
 # ---------------------------------------------------------------------------
 # KQL: Microsoft Kusto.Language
 # ---------------------------------------------------------------------------
 
-# Probes in testdata/oracles/kql/ are one form each, taken from real Sentinel
+# Probes in crates/testdata/oracles/kql/ are one form each, taken from real Sentinel
 # and Defender rules. Ours must accept each with no error-severity diagnostic;
 # that check cannot be excepted.
 
@@ -27,22 +27,22 @@
 id = "kql-empty-column-lists"
 reason = "Kept on purpose. Kusto.Language parses `T | project`, `project-away` and `project-rename` with no columns; ours reports a syntax error because an empty column list is always a mistake in a detection. (`summarize` with no aggregates parses, since `summarize by x` is valid.)"
 paths = [
-  "testdata/corpus/kql/project_operator__invalid.kql",
-  "testdata/corpus/kql/project_away_operator__invalid.kql",
-  "testdata/corpus/kql/project_rename_operator__invalid.kql",
+  "crates/testdata/corpus/kql/project_operator__invalid.kql",
+  "crates/testdata/corpus/kql/project_away_operator__invalid.kql",
+  "crates/testdata/corpus/kql/project_rename_operator__invalid.kql",
 ]
 
 [[kql]]
 id = "kql-number-suffix"
 reason = "Kusto.Language lexes `42x` as a name and rejects it only in semantic analysis (KS142); our lexer rejects it as a malformed number."
-paths = ["testdata/corpus/kql/number__invalid.kql"]
+paths = ["crates/testdata/corpus/kql/number__invalid.kql"]
 
 [[kql]]
 id = "kql-control-command-arguments"
 reason = "Kusto.Language parses the whole `.create table X (a:string)` command; our grammar parses only enough of a control command to report kql_control_command_unsupported, which still fires."
-paths = ["testdata/corpus/kql/control_command__invalid.kql"]
+paths = ["crates/testdata/corpus/kql/control_command__invalid.kql"]
 
-# Names: catalogs/kql/core against Kusto.Language GlobalState.Default.
+# Names: data/catalogs/kql/core against Kusto.Language GlobalState.Default.
 
 [[kql]]
 id = "kql-log-analytics-functions"
@@ -56,7 +56,7 @@ names = ["materialize", "toscalar"]
 
 [[kql]]
 id = "kql-plugins-missing-from-kusto-language"
-reason = "Documented on Learn and in catalogs/kql/core/evaluate-plugins.toml, but absent from Kusto.Language 12.4.1."
+reason = "Documented on Learn and in data/catalogs/kql/core/evaluate-plugins.toml, but absent from Kusto.Language 12.4.1."
 names = ["diffpatterns_text", "schema_merge"]
 
 [[kql]]
@@ -83,11 +83,11 @@ names = [
 ]
 
 # ---------------------------------------------------------------------------
-# SPL: Splunk search/parser (scripts/oracles/oracle.py prefixes `search` to
-# text that does not start with `|`, as Splunk does; docs/spl/README.md)
+# SPL: Splunk search/parser (scripts/engine/oracles/oracle.py prefixes `search` to
+# text that does not start with `|`, as Splunk does; docs/engine/spl/README.md)
 # ---------------------------------------------------------------------------
 
-# Probes in testdata/oracles/spl/ are one form each, taken from ESCU
+# Probes in crates/testdata/oracles/spl/ are one form each, taken from ESCU
 # detections, plus the argumentless commands and empty stages of #135 (their
 # `.broken.` twins are the forms Splunk rejects). Ours must accept each with
 # no error-severity diagnostic; that check cannot be excepted. Forms Splunk
@@ -99,9 +99,9 @@ names = [
 [[spl]]
 id = "spl-parse-only-subsearch"
 reason = "Splunk's search/parser answers \"This search cannot be parsed when parse_only is set to true\" for a subsearch it would have to run first (`where NOT [| makeresults ...]`). It is a limit of parse_only, not a syntax error: a deployed detection uses the form."
-paths = ["testdata/oracles/spl/where_not_subsearch.spl"]
+paths = ["crates/testdata/oracles/spl/where_not_subsearch.spl"]
 
-# Names: catalogs/spl/commands.toml against Splunk searchbnf.conf.
+# Names: data/catalogs/spl/commands.toml against Splunk searchbnf.conf.
 
 [[spl]]
 id = "spl-public-commands-missing"
@@ -132,20 +132,20 @@ names = ["apply", "deletemodel", "fit", "listmodels", "score", "summary"]
 id = "esql-8.19-only-forms"
 reason = "8.19-only forms. Ours accepts them with an esql_unavailable warning naming 8.19, because the supported floor is 8.19; @elastic/esql follows Elasticsearch main, which removed them (`FROM x [METADATA ...]`, `COMPLETION ... WITH endpoint`)."
 paths = [
-  "testdata/corpus/esql/completion_command__valid.endpoint.esql",
-  "testdata/corpus/esql/metadata__valid.bracketed.esql",
+  "crates/testdata/corpus/esql/completion_command__valid.endpoint.esql",
+  "crates/testdata/corpus/esql/metadata__valid.bracketed.esql",
 ]
 
 [[eql]]
 id = "eql-builder-parsing-exceptions"
 reason = "Elasticsearch's LogicalPlanBuilder raises a ParsingException after EqlBase.g4 accepts the text: a sample without join keys, missing events without maxspan, an unknown sequence term option. Ours reports them as eql_parse_error, as Elasticsearch does; the grammar alone cannot see them."
 paths = [
-  "testdata/corpus/eql/sample__invalid.eql",
-  "testdata/corpus/eql/subquery__invalid.eql",
-  "testdata/corpus/eql/term_option__invalid.eql",
+  "crates/testdata/corpus/eql/sample__invalid.eql",
+  "crates/testdata/corpus/eql/subquery__invalid.eql",
+  "crates/testdata/corpus/eql/term_option__invalid.eql",
 ]
 
 [[lucene]]
 id = "lucene-elasticsearch-fuzziness"
 reason = "Lucene's QueryParser reads `~0.7` as a legacy similarity; Elasticsearch's query_string parses fuzziness with Fuzziness.fromString and fails on a fraction, so ours reports lucene_fuzzy."
-paths = ["testdata/conformance/external/lucene-queryparser/cases.tsv:61"]
+paths = ["crates/testdata/conformance/external/lucene-queryparser/cases.tsv:61"]

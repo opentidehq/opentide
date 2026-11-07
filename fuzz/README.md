@@ -10,19 +10,19 @@ through `opentide_lsp::serve`. A panic, or an input that runs past
 
 | Target | Seeds |
 | --- | --- |
-| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco` | `testdata/corpus/<lang>/`, `testdata/conformance/external/<lang>/` |
-| `tide` | `testdata/objects/`, `testdata/workspaces/tide_corpus/objects/` |
+| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco` | `crates/testdata/corpus/<lang>/`, `crates/testdata/conformance/external/<lang>/` |
+| `tide` | `crates/testdata/objects/`, `crates/testdata/workspaces/tide_corpus/objects/` |
 | `protocol` | `fuzz/seeds/protocol/` |
 
 ```bash
 rustup toolchain install nightly
 cargo install cargo-fuzz
-cargo +nightly fuzz run kql fuzz/corpus/kql testdata/corpus/kql -- -timeout=10 -max_total_time=300
+cargo +nightly fuzz run kql fuzz/corpus/kql crates/testdata/corpus/kql -- -timeout=10 -max_total_time=300
 ```
 
 The first corpus directory is where libFuzzer keeps what it learns
 (`fuzz/corpus/`, not committed); the others are read-only seeds.
-`scripts/fuzz.sh <target> [seconds]` runs one target with its seeds.
+`scripts/engine/fuzz.sh <target> [seconds]` runs one target with its seeds.
 
 A crash is saved under `fuzz/artifacts/<target>/`. Fix it, then copy the
 input to `fuzz/regressions/<target>/` with a name that says what it was
@@ -30,5 +30,5 @@ input to `fuzz/regressions/<target>/` with a name that says what it was
 and `crates/opentide-lsp/tests/fuzz_regressions.rs` replay every saved input
 on stable Rust in the normal test run.
 
-`.github/workflows/fuzz.yml` runs each target for five minutes every night
+`.github/engine-workflows/fuzz.yml` runs each target for five minutes every night
 and uploads what crashed. It does not gate pull requests.

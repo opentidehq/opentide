@@ -39,7 +39,7 @@ fn invalid_fixtures_produce_an_error() {
         ("kuery", LanguageId::Kuery),
         ("lucene", LanguageId::Lucene),
     ] {
-        let dir = repo_root().join("testdata/corpus").join(id);
+        let dir = repo_root().join("crates/testdata/corpus").join(id);
         let mut checked = 0;
         for entry in fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();

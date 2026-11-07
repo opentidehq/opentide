@@ -1,7 +1,7 @@
-//! The probes in `testdata/oracles/kql/` without the reference parser: each
+//! The probes in `crates/testdata/oracles/kql/` without the reference parser: each
 //! is a valid detection form, so the Sentinel profile reports no error on it, and
 //! each `.broken.` twin is a syntax error. CI's oracle job checks the same files
-//! against the reference parser (`scripts/oracles/README.md`).
+//! against the reference parser (`scripts/engine/oracles/README.md`).
 
 use std::fs;
 use std::path::PathBuf;
@@ -11,9 +11,9 @@ use opentide_kql::{Profile, analyze};
 
 #[test]
 fn kql_probes_parse_and_broken_twins_do_not() {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/oracles/kql");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/oracles/kql");
     let mut paths: Vec<PathBuf> = fs::read_dir(&dir)
-        .expect("testdata/oracles/kql")
+        .expect("crates/testdata/oracles/kql")
         .map(|entry| entry.expect("entry").path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "kql"))
         .collect();

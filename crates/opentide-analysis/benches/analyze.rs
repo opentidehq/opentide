@@ -2,7 +2,7 @@
 //!
 //!     cargo bench -p opentide-analysis --bench analyze
 //!
-//! Each language runs its whole `testdata/corpus/<lang>/` corpus; the line is
+//! Each language runs its whole `crates/testdata/corpus/<lang>/` corpus; the line is
 //! the median time per file over the rounds. The workspace case is hover on a
 //! rule among 1,000 indexed objects, the index built once as the language
 //! server keeps it. CI runs this without gating (ci.yml, `bench`): the numbers
@@ -24,7 +24,7 @@ fn median(mut times: Vec<Duration>) -> Duration {
 
 fn corpus(language: &str) -> Vec<String> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/corpus")
+        .join("../testdata/corpus")
         .join(language);
     let mut files: Vec<_> = std::fs::read_dir(dir)
         .map(|d| d.flatten().map(|e| e.path()).collect())
@@ -95,7 +95,7 @@ fn main() {
     }
 
     // Hover in a 1,000-object workspace.
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata");
     let rule = std::fs::read_to_string(root.join("objects/rules/rule-1.0.yaml")).unwrap();
     let objective = std::fs::read_to_string(root.join("objects/objective-1.0.yaml")).unwrap();
     let mut files = Vec::new();

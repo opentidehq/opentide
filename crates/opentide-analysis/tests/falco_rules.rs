@@ -1,5 +1,5 @@
 //! Public Falco rules converted into opentide rules (`configurations.sysdig`,
-//! sysdig-1.0), in `testdata/workspaces/falco/`: the injected condition,
+//! sysdig-1.0), in `crates/testdata/workspaces/falco/`: the injected condition,
 //! macro conditions, and output are checked as Falco, with the block's own
 //! macros and lists and its event source; hover and completion work inside
 //! them; a fault in any of them is reported on the source text that holds it.
@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 fn rules() -> Vec<(String, String)> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/workspaces/falco/objects/rules");
+        .join("../testdata/workspaces/falco/objects/rules");
     let mut out: Vec<(String, String)> = fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().path())

@@ -2,8 +2,8 @@
 -- to opentide-lsp and shows each diagnostic once (a client given both push
 -- and pull diagnostics would show it twice).
 --
---   nvim --headless --clean -l scripts/nvim-smoke.lua target/debug/opentide-lsp
-local bin = assert(arg[1], "usage: nvim -l scripts/nvim-smoke.lua <opentide-lsp>")
+--   nvim --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
+local bin = assert(arg[1], "usage: nvim -l scripts/engine/nvim-smoke.lua <opentide-lsp>")
 local dir = vim.fn.tempname()
 vim.fn.mkdir(dir, "p")
 local file = dir .. "/typo.kql"

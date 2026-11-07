@@ -4,11 +4,11 @@ This directory inventories **Splunk Processing Language (SPL)** as used in Splun
 
 It is a **docs inventory**, not a grammar. The engine still owns parsing. Catalogs:
 
-- [`catalogs/spl/commands.toml`](../../catalogs/spl/commands.toml) — commands + eval/stats functions
-- [`catalogs/spl/fields.toml`](../../catalogs/spl/fields.toml) — default + CIM + raw Windows fields
-- [`catalogs/spl/datamodels.toml`](../../catalogs/spl/datamodels.toml) — `tstats from datamodel=`
-- [`catalogs/spl/macros.toml`](../../catalogs/spl/macros.toml) — ESCU / ES macros (never expanded)
-- [`catalogs/spl/command-options.toml`](../../catalogs/spl/command-options.toml) — command arguments for completion and signature help
+- [`data/catalogs/spl/commands.toml`](../../../data/catalogs/spl/commands.toml) — commands + eval/stats functions
+- [`data/catalogs/spl/fields.toml`](../../../data/catalogs/spl/fields.toml) — default + CIM + raw Windows fields
+- [`data/catalogs/spl/datamodels.toml`](../../../data/catalogs/spl/datamodels.toml) — `tstats from datamodel=`
+- [`data/catalogs/spl/macros.toml`](../../../data/catalogs/spl/macros.toml) — ESCU / ES macros (never expanded)
+- [`data/catalogs/spl/command-options.toml`](../../../data/catalogs/spl/command-options.toml) — command arguments for completion and signature help
 
 Runtime model: [`DESIGN.md`](DESIGN.md).
 
@@ -28,7 +28,7 @@ That implied command is a **Splunk runtime default**, not a source rewrite:
 - Splunk then runs it as if `| search index=main sourcetype=WinEventLog EventCode=4688`.
 - A query that already starts with a generating command (`| tstats …`, `| inputlookup …`, `| makeresults`) is **not** prefixed with `search`.
 
-The Splunk oracle (`scripts/oracles/README.md`) sends Splunk `search <text>` for text that does not start with `|`, because that is what Splunk runs. The engine still sees the authored text: it is not rewritten with an implicit `| search`. See also `docs/LANGUAGE.md` (SPL section) and `docs/ARCHITECTURE.md` (injection table).
+The Splunk oracle (`scripts/engine/oracles/README.md`) sends Splunk `search <text>` for text that does not start with `|`, because that is what Splunk runs. The engine still sees the authored text: it is not rewritten with an implicit `| search`. See also `docs/engine/LANGUAGE.md` (SPL section) and `docs/engine/ARCHITECTURE.md` (injection table).
 
 ## Command kinds
 
@@ -85,7 +85,7 @@ Bare field-value searches are the common case. Generating commands other than im
 | [comments.md](comments.md) | `` ```comment``` `` form vs macros; placement limits |
 | [common-fields.md](common-fields.md) | Default Splunk fields plus CIM / ES fields used in detections |
 | [cim-fields.md](cim-fields.md) | CIM data-model coverage checklist and critical field set |
-| [coverage-gap.md](coverage-gap.md) | Inventory vs current `catalogs/spl/commands.toml` (live counts) |
+| [coverage-gap.md](coverage-gap.md) | Inventory vs current `data/catalogs/spl/commands.toml` (live counts) |
 | [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md) | Exact missing names across catalog / grammar / scm / hover / completions |
 
 ## Canonical citations
@@ -107,7 +107,7 @@ Newer portal mirrors live under `help.splunk.com`; citations in this inventory k
 
 Measured from the tables in this directory (aliases and dual-kind rows included; trig evals listed in prose are counted) against the **current** catalog:
 
-| Surface | Documented here | In `catalogs/spl/commands.toml` |
+| Surface | Documented here | In `data/catalogs/spl/commands.toml` |
 | --- | --- | --- |
 | Commands | **~115** unique primary table names (+ aliases / adjacent) | **118** `[[commands]]` |
 | Eval functions | **107** (93 table rows + 14 trig) | **109** `kind = "eval"` (includes trig + dual-use math) |

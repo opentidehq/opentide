@@ -1,8 +1,8 @@
-//! Every Tide object under `testdata/`: the queries the engine extracts are the
+//! Every Tide object under `crates/testdata/`: the queries the engine extracts are the
 //! ones YAML loads at the paths opentide models, with the same text.
 //!
 //! The expected side reads each file with `serde_yaml` and follows the rules
-//! `scripts/oracles/oracle.py` (`embedded`, `elastic_embedded`) uses to feed
+//! `scripts/engine/oracles/oracle.py` (`embedded`, `elastic_embedded`) uses to feed
 //! the reference parsers, so the oracles check the text the engine checks.
 
 use opentide_core::LanguageId;
@@ -148,7 +148,7 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
 #[test]
 fn every_testdata_query_is_extracted_as_yaml_loads_it() {
     let mut files = Vec::new();
-    yaml_files(&repo_root().join("testdata"), &mut files);
+    yaml_files(&repo_root().join("crates/testdata"), &mut files);
     files.sort();
     let mut checked = 0;
     let mut hunts = 0;
@@ -173,6 +173,9 @@ fn every_testdata_query_is_extracted_as_yaml_loads_it() {
         checked += want.len();
         hunts += want.iter().filter(|q| q.0.starts_with("response.")).count();
     }
-    assert!(checked >= 20, "only {checked} queries under testdata/");
-    assert!(hunts >= 3, "only {hunts} hunts under testdata/");
+    assert!(
+        checked >= 20,
+        "only {checked} queries under crates/testdata/"
+    );
+    assert!(hunts >= 3, "only {hunts} hunts under crates/testdata/");
 }

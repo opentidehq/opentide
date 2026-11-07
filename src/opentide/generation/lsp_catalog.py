@@ -15,13 +15,12 @@
   vocabulary rather than the snapshot compiled into the engine.
 - ``deprecations.json``: the fields marked deprecated (``deprecated_field``).
 
-The shapes are the engine's own (``catalogs/tide/generated/`` in
-opentidehq/language-server), and this module is their only generator:
-language-server's ``scripts/sync_opentide_schemas.py`` runs it to write the
-catalogs compiled into the engine::
+The shapes are the engine's own (``data/catalogs/tide/generated/``), and this
+module is their only generator: ``scripts/engine/sync_opentide_schemas.py`` runs
+it to write the catalogs compiled into the engine::
 
-    python -m opentide.generation.lsp_catalog --out catalogs/tide/generated
-    python -m opentide.generation.lsp_catalog --out catalogs/tide/generated --check
+    python -m opentide.generation.lsp_catalog --out data/catalogs/tide/generated
+    python -m opentide.generation.lsp_catalog --out data/catalogs/tide/generated --check
 
 ``opentide lsp start``, ``opentide tui`` and the query checks install
 them (:mod:`opentide.analysis`).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate catalogs/spl/datamodels.toml from a splunk/pytest-splunk-addon checkout.
+"""Generate data/catalogs/spl/datamodels.toml from a splunk/pytest-splunk-addon checkout.
 
 pytest-splunk-addon (Apache-2.0) ships one JSON file per Splunk Common
 Information Model (CIM) data model in pytest_splunk_addon/data_models/: the
@@ -36,8 +36,8 @@ missing from a `complete` dataset *and* is a near miss of one it has, so a
 field a site adds to its CIM models is never an error.
 
 Usage:
-    python scripts/sync_cim_datamodels.py --source ../pytest-splunk-addon
-    python scripts/sync_cim_datamodels.py --source ../pytest-splunk-addon --check
+    python scripts/engine/sync_cim_datamodels.py --source ../pytest-splunk-addon
+    python scripts/engine/sync_cim_datamodels.py --source ../pytest-splunk-addon --check
 """
 
 from __future__ import annotations
@@ -48,8 +48,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "catalogs/spl/datamodels.toml"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "data/catalogs/spl/datamodels.toml"
 CIM_DOCS = "https://docs.splunk.com/Documentation/CIM/latest/User/"
 
 BASE_FIELDS = ["_time", "host", "source", "sourcetype"]
@@ -313,7 +313,7 @@ def main() -> None:
         # The commit line changes with every checkout; compare the rows.
         strip = lambda t: "\n".join(l for l in t.splitlines() if not l.startswith("# splunk/"))
         if strip(current) != strip(text):
-            sys.exit(f"{OUT.relative_to(ROOT)} is stale: rerun scripts/sync_cim_datamodels.py")
+            sys.exit(f"{OUT.relative_to(ROOT)} is stale: rerun scripts/engine/sync_cim_datamodels.py")
         print(f"{OUT.relative_to(ROOT)} is current")
         return
     OUT.write_text(text)

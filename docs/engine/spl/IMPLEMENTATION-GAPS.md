@@ -1,10 +1,10 @@
 # SPL implementation gaps (catalog / grammar / scm / hover / completions)
 
-Machine-oriented punch list. Inventory prose lives in the other `docs/spl/*.md` files; this file names **exact tokens** still missing or miswired in the opentide SPL stack.
+Machine-oriented punch list. Inventory prose lives in the other `docs/engine/spl/*.md` files; this file names **exact tokens** still missing or miswired in the opentide SPL stack.
 
 Measured against:
 
-- `catalogs/spl/commands.toml` — **150** commands, **148** functions (**109** eval + **39** aggregate, including aggregate `sum` / `avg` / `min` / `max`)
+- `data/catalogs/spl/commands.toml` — **150** commands, **148** functions (**109** eval + **39** aggregate, including aggregate `sum` / `avg` / `min` / `max`)
 - `grammars/tree-sitter-opentide-spl/grammar.js` — 23 dedicated command rules + `catalog_command_name`
 - `highlights/queries/spl/highlights.scm`
 - `crates/opentide-spl/src/lib.rs` — completions / hover / analyze / highlight
@@ -115,9 +115,9 @@ Newer portal / SPL2-oriented names such as `toarray` `tobool` `tomv` `isarray` `
 | `hover` on commands | Catalog docs + citation |
 | `hover` on functions | Catalog docs, kind, Search Reference signature, citation. Aggregate kind inside stats-family commands |
 | `hover` on a catalogued argument | `command-options.toml` docs + citation |
-| Field completions (CIM) | `catalogs/spl/fields.toml` + datamodel-prefixed completions (lineage-prefixed for child datasets) and expected values after `Prefix.field=` |
+| Field completions (CIM) | `data/catalogs/spl/fields.toml` + datamodel-prefixed completions (lineage-prefixed for child datasets) and expected values after `Prefix.field=` |
 | CIM checks | `spl_unknown_datamodel`, `spl_unknown_datamodel_field` (near misses only) and `spl_dataset_not_declared` ([cim-fields.md](cim-fields.md)) |
-| Macro name completions | `catalogs/spl/macros.toml` after `` ` `` / inside `tstats` |
+| Macro name completions | `data/catalogs/spl/macros.toml` after `` ` `` / inside `tstats` |
 | Signature help | Command arguments from `command-options.toml`; function `signature` strings; macro `signature` strings |
 
 ---

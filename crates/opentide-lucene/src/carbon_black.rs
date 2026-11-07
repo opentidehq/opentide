@@ -1,6 +1,6 @@
 //! Carbon Black Cloud process search fields (#162): the catalog the Carbon
 //! Black dialect checks fields against and documents them from
-//! (`catalogs/carbon_black/fields.toml`, with its sources).
+//! (`data/catalogs/carbon_black/fields.toml`, with its sources).
 
 use opentide_core::{ByteSpan, CompletionItem, Diagnostic, codes, span_to_range};
 use serde::Deserialize;
@@ -9,7 +9,7 @@ use tree_sitter::Node;
 
 const FIELDS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/carbon_black/fields.toml"
+    "/data/catalogs/carbon_black/fields.toml"
 ));
 
 /// One process search field.
@@ -35,7 +35,7 @@ pub fn fields() -> &'static [Field] {
     static FIELDS: OnceLock<Vec<Field>> = OnceLock::new();
     FIELDS.get_or_init(|| {
         toml::from_str::<Catalog>(FIELDS_TOML)
-            .expect("catalogs/carbon_black/fields.toml")
+            .expect("data/catalogs/carbon_black/fields.toml")
             .field
     })
 }

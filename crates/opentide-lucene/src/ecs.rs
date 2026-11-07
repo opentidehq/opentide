@@ -3,7 +3,7 @@
 //! runs `query_string` with `lenient: false`, so a term the field's type
 //! cannot parse, and a wildcard, regexp, or fuzzy term on a number, date, ip,
 //! or boolean field, fail the search
-//! (`testdata/oracles/elasticsearch/lucene`).
+//! (`crates/testdata/oracles/elasticsearch/lucene`).
 
 use crate::{range, text};
 use opentide_core::{Diagnostic, LanguageId};
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn rejected_by_elasticsearch() {
-        // testdata/oracles/elasticsearch/lucene: ERR with `lenient: false`.
+        // crates/testdata/oracles/elasticsearch/lucene: ERR with `lenient: false`.
         for query in [
             "process.pid:12*",
             "process.pid:/12.*/",

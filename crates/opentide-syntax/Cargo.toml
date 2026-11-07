@@ -21,7 +21,7 @@ cc.workspace = true
 [dev-dependencies]
 serde_json.workspace = true
 
-# build.rs compiles these. scripts/release.py copies them into assets/ at publish
+# build.rs compiles these. scripts/engine/release.py copies them into assets/ at publish
 # time, beside the files the crate's include_str! calls name.
 [package.metadata.opentide]
 assets = [

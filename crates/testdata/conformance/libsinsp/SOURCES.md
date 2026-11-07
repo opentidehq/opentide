@@ -2,7 +2,7 @@
 
 Ported from [falcosecurity/libs](https://github.com/falcosecurity/libs) at
 `f13bc241815d463be433e947b90f42713df1abf9` by
-`scripts/sync_libsinsp_conformance.py` (`--check` in CI keeps them in step).
+`scripts/engine/sync_libsinsp_conformance.py` (`--check` in CI keeps them in step).
 Copyright The Falco Authors, licensed under the Apache License, Version 2.0
 (`../external/LICENSE.Apache-2.0.txt`). The inputs and libs' verdicts are
 copied unchanged; only the C++ test scaffolding is dropped.

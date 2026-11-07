@@ -96,7 +96,7 @@ pub(crate) fn parameters(name: &str) -> Option<(&'static [Want], bool)> {
 
 // Operator operands are verified like function arguments; every release from
 // 8.19 to 9.5 rejects a wrong literal type, mapped field or not
-// (testdata/oracles/elasticsearch/eql-argument-types).
+// (crates/testdata/oracles/elasticsearch/eql-argument-types).
 const OPERAND_STRING: (Want, Severity) = (Want::Str, Severity::Error);
 const OPERAND_NUMBER: (Want, Severity) = (Want::Numeric, Severity::Error);
 

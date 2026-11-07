@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate catalogs/kql/asim/asim.toml from an Azure/Azure-Sentinel checkout.
+"""Generate data/catalogs/kql/asim/asim.toml from an Azure/Azure-Sentinel checkout.
 
 Microsoft Sentinel's Advanced Security Information Model (ASIM) normalizes
 sources to schemas (Network Session, DNS, Authentication, ...). Two files in
@@ -29,8 +29,8 @@ Usage (a sparse checkout is enough):
     git clone --depth 1 --filter=blob:none --sparse https://github.com/Azure/Azure-Sentinel.git
     git -C Azure-Sentinel sparse-checkout set --no-cone \\
         /ASIM/dev/ASimTester/ '/Parsers/ASim*/' /LICENSE
-    python scripts/sync_asim_schemas.py --sentinel Azure-Sentinel
-    python scripts/sync_asim_schemas.py --sentinel Azure-Sentinel --check
+    python scripts/engine/sync_asim_schemas.py --sentinel Azure-Sentinel
+    python scripts/engine/sync_asim_schemas.py --sentinel Azure-Sentinel --check
 """
 
 from __future__ import annotations
@@ -46,8 +46,8 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "catalogs/kql/asim/asim.toml"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "data/catalogs/kql/asim/asim.toml"
 TESTER = Path("ASIM/dev/ASimTester/ASimTester.csv")
 TYPES = {
     "string": "string",

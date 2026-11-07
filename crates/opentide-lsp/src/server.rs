@@ -181,7 +181,7 @@ static CATALOG_SOURCE: AtomicU8 = AtomicU8::new(0);
 /// What a client can learn about the server before it uses it, the same at
 /// `initialize` (`capabilities.experimental.opentide`) and from
 /// `opentide-lsp --version --json`. A key is added in a minor release and
-/// never removed (docs/EDITORS.md).
+/// never removed (docs/engine/EDITORS.md).
 pub fn host_info() -> Value {
     let host = HOST.read().unwrap_or_else(|p| p.into_inner()).clone();
     let catalog = if HOST_CATALOGS.load(Ordering::SeqCst) {

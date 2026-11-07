@@ -50,15 +50,15 @@ pub use yaml_path::{
 
 const RULE_TEMPLATE: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/tide/templates/rule.1.0.template.yaml"
+    "/data/catalogs/tide/templates/rule.1.0.template.yaml"
 ));
 const OBJECTIVE_TEMPLATE: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/tide/templates/objective.1.0.template.yaml"
+    "/data/catalogs/tide/templates/objective.1.0.template.yaml"
 ));
 const THREAT_TEMPLATE: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/tide/templates/threat.1.0.template.yaml"
+    "/data/catalogs/tide/templates/threat.1.0.template.yaml"
 ));
 
 /// Map a `configurations` field path to an injected query language.
@@ -1357,7 +1357,7 @@ fn tide_key_capture_at_or(field: Option<&TideField>) -> &'static str {
 /// The bundled `deprecations.json`, as compiled into the engine.
 pub const DEPRECATIONS_JSON: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/tide/generated/deprecations.json"
+    "/data/catalogs/tide/generated/deprecations.json"
 ));
 
 #[derive(Debug, Clone, Deserialize)]

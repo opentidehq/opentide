@@ -8,7 +8,7 @@ Legend: **MUST** = blocks 100% completion/hover/highlight fidelity; **SHOULD** =
 
 ---
 
-## a) Catalogs (`catalogs/kql`)
+## a) Catalogs (`data/catalogs/kql`)
 
 ### Columns — `sentinel/columns.toml` / `defender/columns.toml`
 
@@ -36,6 +36,6 @@ Detection-critical columns for SecurityEvent, SigninLogs, AuditLogs, Defender en
 
 **SHOULD — kind fix:** `hll_merge` is cataloged as `scalar`; Learn lists it under aggregations.
 
-### Evaluate plugins — [`core/evaluate-plugins.toml`](../../catalogs/kql/core/evaluate-plugins.toml) — **22**
+### Evaluate plugins — [`core/evaluate-plugins.toml`](../../../data/catalogs/kql/core/evaluate-plugins.toml) — **22**
 
 All 22 names from [`evaluate-plugins.md`](evaluate-plugins.md) are catalogued. Completions after `| evaluate ` and hover are wired. AM-no plugins carry `warning = "am_no"`.

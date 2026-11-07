@@ -10,7 +10,7 @@ use std::path::PathBuf;
 #[test]
 fn tree_sitter_accepts_what_libsinsp_accepts() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/libsinsp/parser.json");
+        .join("../testdata/conformance/libsinsp/parser.json");
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let mut errors = Vec::new();
     let mut accepted = 0;

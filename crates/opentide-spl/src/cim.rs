@@ -8,7 +8,7 @@
 //! `` `drop_dm_object_name(Processes)` `` (or `rename Processes.* as *`)
 //! strips the prefix.
 //!
-//! The catalog (`catalogs/spl/datamodels.toml`) lists every CIM data model,
+//! The catalog (`data/catalogs/spl/datamodels.toml`) lists every CIM data model,
 //! dataset and field. Sites extend their CIM models with fields and datasets
 //! of their own, and Enterprise Security and apps add data models, so a name
 //! the catalog lacks is not an error by itself. Precision over recall: a

@@ -4,16 +4,16 @@
 # @elastic/esql (esql), Elasticsearch's EqlBase.g4 (eql), Kibana's kuery
 # grammar.peggy (kuery), Lucene's QueryParser (lucene), and a Carbon Black
 # Cloud tenant's search_validation (carbon_black).
-# See scripts/oracles/README.md.
+# See scripts/engine/oracles/README.md.
 #
-#   scripts/ci-oracle.sh [kql] [spl] [esql] [eql] [kuery] [lucene] [carbon_black]
+#   scripts/engine/ci-oracle.sh [kql] [spl] [esql] [eql] [kuery] [lucene] [carbon_black]
 #                                                     default: all but carbon_black
 #
 # Optional locally: a language whose reference is unavailable (no dotnet, no
 # SPLUNK_PASSWORD, no node, no java) is skipped unless
 # OPENTIDE_ORACLE_REQUIRED=1, which CI sets. Do not ship any reference.
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 languages=("$@")
 [[ ${#languages[@]} -gt 0 ]] || languages=(kql spl esql eql kuery lucene)
 
@@ -50,7 +50,7 @@ for language in "${languages[@]}"; do
       fi ;;
     spl)
       if [[ -z "${SPLUNK_PASSWORD:-}" ]]; then
-        unavailable "spl: SPLUNK_PASSWORD not set (scripts/oracles/splunk/start.sh)"
+        unavailable "spl: SPLUNK_PASSWORD not set (scripts/engine/oracles/splunk/start.sh)"
         continue
       fi ;;
     esql | eql | kuery)
@@ -74,6 +74,6 @@ for language in "${languages[@]}"; do
       exit 2 ;;
   esac
   DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
-    python3 "$root/scripts/oracles/oracle.py" "$language" || status=1
+    python3 "$root/scripts/engine/oracles/oracle.py" "$language" || status=1
 done
 exit "$status"

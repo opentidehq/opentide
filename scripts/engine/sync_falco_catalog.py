@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the Falco catalogs (catalogs/falco/) from public Falco sources.
+"""Generate the Falco catalogs (data/catalogs/falco/) from public Falco sources.
 
 Reads three checkouts:
 
@@ -19,19 +19,19 @@ Reads three checkouts:
 
 and writes:
 
-- ``catalogs/falco/fields.toml``: event sources, then one row per field;
-- ``catalogs/falco/defaults.toml``: the macros and lists of the Falco default
+- ``data/catalogs/falco/fields.toml``: event sources, then one row per field;
+- ``data/catalogs/falco/defaults.toml``: the macros and lists of the Falco default
   rules, with the condition or items and the file that defines them (a later
   file overrides an earlier one, as Falco loads them);
-- ``catalogs/falco/events.toml``: event names, event argument names with
+- ``data/catalogs/falco/events.toml``: event names, event argument names with
   their types (``evt.arg.<name>``, ``evt.rawarg.<name>``), and syscall names.
 
-With ``--corpus``, it also writes ``testdata/conformance/external/falco/``:
+With ``--corpus``, it also writes ``crates/testdata/conformance/external/falco/``:
 each default rule's condition, unmodified, as ``<slug>.falco``, plus a
 ``.broken.falco`` twin with one injected fault.
 
 Usage:
-    python scripts/sync_falco_catalog.py --libs ../libs --falco ../falco \
+    python scripts/engine/sync_falco_catalog.py --libs ../libs --falco ../falco \
         --plugins ../plugins --rules ../rules [--corpus] [--check]
 """
 
@@ -46,9 +46,9 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "catalogs" / "falco"
-CORPUS = ROOT / "testdata" / "conformance" / "external" / "falco"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "data" / "catalogs" / "falco"
+CORPUS = ROOT / "crates" / "testdata" / "conformance" / "external" / "falco"
 
 # libsinsp's filter check classes, in the order `sinsp_filter_check_list`
 # tries them (`filter_check_list.cpp`): a name is resolved by the first class

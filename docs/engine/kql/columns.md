@@ -25,9 +25,9 @@ The engine reads `.opentide/configurations/visibility.toml` itself (`DeclaredDat
 
 | File | Source | Generator |
 | --- | --- | --- |
-| `catalogs/kql/azure-monitor/tables.toml` | [Azure Monitor Logs table reference](https://learn.microsoft.com/azure/azure-monitor/reference/tables/tables-category) (MicrosoftDocs/azure-monitor-docs, CC BY 4.0), plus the columns of Azure-Sentinel's KQL validation schemas (MIT) | `scripts/sync_azure_monitor_tables.py` |
-| `catalogs/kql/asim/asim.toml` | [ASIM](https://learn.microsoft.com/azure/sentinel/normalization) schemas from `ASIM/dev/ASimTester/ASimTester.csv` and parsers from `Parsers/ASim*/Parsers/*.yaml` (Azure/Azure-Sentinel, MIT) | `scripts/sync_asim_schemas.py` |
-| `catalogs/kql/{sentinel,defender}/` | hand-written tables and detection-critical columns with docs | — |
+| `data/catalogs/kql/azure-monitor/tables.toml` | [Azure Monitor Logs table reference](https://learn.microsoft.com/azure/azure-monitor/reference/tables/tables-category) (MicrosoftDocs/azure-monitor-docs, CC BY 4.0), plus the columns of Azure-Sentinel's KQL validation schemas (MIT) | `scripts/engine/sync_azure_monitor_tables.py` |
+| `data/catalogs/kql/asim/asim.toml` | [ASIM](https://learn.microsoft.com/azure/sentinel/normalization) schemas from `ASIM/dev/ASimTester/ASimTester.csv` and parsers from `Parsers/ASim*/Parsers/*.yaml` (Azure/Azure-Sentinel, MIT) | `scripts/engine/sync_asim_schemas.py` |
+| `data/catalogs/kql/{sentinel,defender}/` | hand-written tables and detection-critical columns with docs | — |
 
 Both generators take a checkout (`--docs`, `--sentinel`) and have `--check`. Each column is a sub-table with named keys, one per line (`[[tables.columns]]` with `name`, `type` and `description`; `[[schemas.columns]]` with `name`, `type` and `class`), so a change to a column is a one-line diff. A column's `description` is the first sentence of the reference's Description cell, kept as Markdown; it is left out where the cell is empty and for the columns that come from the validation schemas. ASIM columns have no description: Azure-Sentinel has none in machine-readable form (`ASimTester.csv` has no description field; the descriptions are prose tables in the schema articles on Microsoft Learn). The hand-written columns are merged in and never removed; where a hand-written type disagrees with the reference, the column has no type and gets no type check. Every Log Analytics table also has the [standard columns](https://learn.microsoft.com/azure/azure-monitor/logs/log-standard-columns), and any `_CF` column (a data collection rule adds those). Advanced hunting tables have `Timestamp`.
 
@@ -56,7 +56,7 @@ A query that does not parse gets no column diagnostic. Hover on a column shows i
 
 ## Type checks
 
-`kql_type_mismatch` reports only what Kusto rejects, each rule checked against Microsoft's Kusto.Language with the catalog's schemas. The KQL oracle (`scripts/oracles/README.md`) keeps it so: every column or type error the engine reports on the corpus and on `testdata/conformance/columns/` must be one Kusto.Language reports too.
+`kql_type_mismatch` reports only what Kusto rejects, each rule checked against Microsoft's Kusto.Language with the catalog's schemas. The KQL oracle (`scripts/engine/oracles/README.md`) keeps it so: every column or type error the engine reports on the corpus and on `crates/testdata/conformance/columns/` must be one Kusto.Language reports too.
 
 - a string operator (`has`, `contains`, `startswith`, `endswith`, `hasprefix`, `hassuffix` and their `!`/`_cs` forms, `=~`, `!~`, `matches regex`) or `has_any`, `has_all`, `in~` on a numeric, `datetime`, `timespan` or `bool` column;
 - `between` on a `string`, `bool` or `guid` column;

@@ -1,14 +1,14 @@
 """Build the analysis engine into the opentide wheel.
 
-The engine is Rust (``analysis/``: PyO3 bindings for the crates of
-opentidehq/language-server). This hook compiles it with cargo and puts it in
-the wheel as ``opentide/_native`` (``.abi3.so``, or ``.pyd`` on Windows), so
-``pip install opentide`` is the one install: there is no separate engine
-distribution. The extension uses the stable ABI from CPython 3.10, so the
-wheel is tagged ``cp310-abi3-<platform>``: one wheel per platform serves every
-CPython from 3.10 on. A free-threaded CPython (3.14t) or another
-implementation has no stable ABI: a wheel built there is tagged for that
-interpreter alone.
+The engine is Rust: ``analysis/``, the PyO3 bindings for the engine crates in
+``crates/``, all members of the Cargo workspace at the repository root. This
+hook compiles it with cargo and puts it in the wheel as ``opentide/_native``
+(``.abi3.so``, or ``.pyd`` on Windows), so ``pip install opentide`` is the one
+install: there is no separate engine distribution. The extension uses the
+stable ABI from CPython 3.10, so the wheel is tagged ``cp310-abi3-<platform>``:
+one wheel per platform serves every CPython from 3.10 on. A free-threaded
+CPython (3.14t) or another implementation has no stable ABI: a wheel built
+there is tagged for that interpreter alone.
 
 - A wheel builds with cargo's ``release`` profile.
 - An editable install (``uv sync``) builds the ``develop`` profile, which skips
@@ -17,15 +17,18 @@ interpreter alone.
   build ``develop`` wheels).
 
 Building needs a Rust toolchain (stable, see ``rust-version`` in
-``analysis/Cargo.toml``). On musl (Alpine, the musllinux images) cargo is told
-to link the C runtime dynamically: Rust's musl targets link it statically by
-default, and then cannot build a shared library at all. The release workflow
-publishes a wheel for each supported platform; elsewhere, pip builds from the
-sdist, which carries ``analysis/``.
+``Cargo.toml``). The library is wherever cargo reports writing it, so
+``CARGO_TARGET_DIR`` and ``CARGO_BUILD_TARGET`` are honoured. On musl (Alpine,
+the musllinux images) cargo is told to link the C runtime dynamically: Rust's
+musl targets link it statically by default, and then cannot build a shared
+library at all. The release workflow publishes a wheel for each supported
+platform; elsewhere, pip builds from the sdist, which carries the workspace's
+manifests, sources and embedded data.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -38,8 +41,10 @@ from typing import Any
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 ROOT = Path(__file__).resolve().parent
-MANIFEST = ROOT / "analysis" / "Cargo.toml"
-TARGET = ROOT / "analysis" / "target"
+MANIFEST = ROOT / "Cargo.toml"
+#: The workspace member ``analysis/``, and its ``cdylib`` target.
+PACKAGE = "opentide-native"
+LIBRARY = "_native"
 PROFILE_ENV = "OPENTIDE_ENGINE_PROFILE"
 #: The oldest CPython whose stable ABI the extension uses (``abi3-py310``).
 ABI3_FLOOR = "cp310"
@@ -87,18 +92,27 @@ def rust_host(rustc: str | None) -> str | None:
     )
 
 
-def built_library(profile: str) -> Path:
-    """What cargo writes for the ``_native`` cdylib under *profile*."""
-    directory = TARGET / ("debug" if profile == "dev" else profile)
-    # A cross build (CARGO_BUILD_TARGET) writes under target/<triple>/.
-    triple = os.environ.get("CARGO_BUILD_TARGET")
-    if triple:
-        directory = TARGET / triple / directory.name
-    if sys.platform == "win32":
-        return directory / "_native.dll"
-    if sys.platform == "darwin":
-        return directory / "lib_native.dylib"
-    return directory / "lib_native.so"
+def built_library(messages: str) -> Path:
+    """The ``_native`` library cargo reports writing, in its JSON *messages*.
+
+    Read from cargo rather than guessed, so it is right whatever the target
+    directory (``CARGO_TARGET_DIR``, a workspace's ``target/``), the profile, or a
+    cross build's ``target/<triple>/``.
+    """
+    for line in messages.splitlines():
+        try:
+            message = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(message, dict) or message.get("reason") != "compiler-artifact":
+            continue
+        target = message.get("target") or {}
+        if target.get("name") != LIBRARY or "cdylib" not in target.get("kind", []):
+            continue
+        for filename in message.get("filenames", []):
+            if Path(filename).suffix in {".so", ".dylib", ".dll"}:
+                return Path(filename)
+    raise RuntimeError(f"cargo reported no {LIBRARY} library for {PACKAGE}")
 
 
 def platform_tag() -> str:
@@ -127,10 +141,12 @@ def build_engine(profile: str) -> Path:
         # musl links its C runtime statically by default, which rules out a cdylib.
         flags = env.get("RUSTFLAGS", "")
         env["RUSTFLAGS"] = f"{flags} -C target-feature=-crt-static".strip()
-    command = [cargo, "build", "--manifest-path", str(MANIFEST), "--lib", "--locked"]
-    command += ["--profile", profile]
-    subprocess.run(command, check=True, env=env)
-    library = built_library(profile)
+    command = [cargo, "build", "--manifest-path", str(MANIFEST), "-p", PACKAGE, "--lib", "--locked"]
+    command += ["--profile", profile, "--message-format=json-render-diagnostics"]
+    # The JSON messages on stdout name the library; diagnostics and progress
+    # stay on stderr, as cargo renders them.
+    result = subprocess.run(command, check=True, env=env, stdout=subprocess.PIPE, text=True)
+    library = built_library(result.stdout)
     if not library.is_file():
         raise RuntimeError(f"cargo did not write {library}")
     return library

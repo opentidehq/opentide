@@ -55,7 +55,7 @@ TextMate scopes ([#195](https://github.com/opentidehq/language-server/issues/195
 
 `initialize` advertises these providers. The behavior below is
 `crates/opentide-lsp/src/handlers.rs`; which parts a client gets follows its
-capabilities ([skills/lsp-host](../skills/lsp-host/SKILL.md#dispatch-and-capabilities)).
+capabilities ([.agents/skills/lsp-host](../../.agents/skills/lsp-host/SKILL.md#dispatch-and-capabilities)).
 
 | Method | Behavior |
 | --- | --- |

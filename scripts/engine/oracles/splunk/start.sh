@@ -2,8 +2,8 @@
 # Start a throwaway Splunk Enterprise container for the SPL oracle on this
 # machine, and print the environment the oracle needs:
 #
-#   eval "$(bash scripts/oracles/splunk/start.sh)"
-#   bash scripts/ci-oracle.sh spl
+#   eval "$(bash scripts/engine/oracles/splunk/start.sh)"
+#   bash scripts/engine/ci-oracle.sh spl
 #
 # Running this accepts the Splunk General Terms for the container, exactly as
 # .github/workflows/oracle.yml does. The port is bound to 127.0.0.1 only.

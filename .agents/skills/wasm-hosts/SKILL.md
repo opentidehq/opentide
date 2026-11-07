@@ -39,7 +39,7 @@ Unknown language ids become `Err(JsValue)`. Invalid UTF-8 becomes `Err`. Do not 
 
 Native tests in this crate call `opentide_analysis::highlight` and `LanguageServer::handle` directly. They do not need a browser. `cargo test -p opentide-wasm` runs on the host. Do not add `wasm-bindgen-test` unless a browser harness exists.
 
-Build both artifacts with `scripts/build-wasm.sh` (CI job `wasm`, and the release). tree-sitter, the grammars, and the ES|QL comment scanner are C, so a plain `cargo build --target wasm32-unknown-unknown` fails on missing libc headers. The script pins wasi-sdk, compiles the C with its clang and wasi-libc headers, links wasi-libc's `libc.a`, and smoke-tests each artifact (`scripts/wasm-smoke.mjs`):
+Build both artifacts with `scripts/engine/build-wasm.sh` (CI job `wasm`, and the release). tree-sitter, the grammars, and the ES|QL comment scanner are C, so a plain `cargo build --target wasm32-unknown-unknown` fails on missing libc headers. The script pins wasi-sdk, compiles the C with its clang and wasi-libc headers, links wasi-libc's `libc.a`, and smoke-tests each artifact (`scripts/engine/wasm-smoke.mjs`):
 
 - browser: the module imports nothing but wasm-bindgen glue, `highlight()` works for every language through `wasm-bindgen --target nodejs`, and its `LanguageServer` answers `initialize`, diagnostics, hover and completion;
 - wasi: the CLI runs `analyze` under `node:wasi`.
@@ -47,19 +47,19 @@ Build both artifacts with `scripts/build-wasm.sh` (CI job `wasm`, and the releas
 libc's stdio and clock code can reach seven WASI syscalls. `crates/opentide-wasm/src/libc_syscalls.rs` defines their import symbols inside the module (no files, clock 0), so the browser artifact still has no WASI imports. That is libc for the C parsers, not a WASI mix-in: the rule below stands.
 
 ```bash
-bash scripts/build-wasm.sh            # both; needs node, and wasm-bindgen-cli 0.2.128 for the highlight() check
-bash scripts/build-wasm.sh browser
+bash scripts/engine/build-wasm.sh            # both; needs node, and wasm-bindgen-cli 0.2.128 for the highlight() check
+bash scripts/engine/build-wasm.sh browser
 ```
 
 Do not `cargo build -p opentide-wasm --target wasm32-wasip1`. That target must not link this crate.
 
 ## WASI
 
-`wasm32-wasip1` (the renamed `wasm32-wasi`) is for vscode.dev running the CLI-style binary. Build `opentide-lsp`, not `opentide-wasm` (`scripts/build-wasm.sh wasi`). Do not cfg-gate `#[wasm_bindgen]` into the lsp crate "so one artifact does both". Two artifacts.
+`wasm32-wasip1` (the renamed `wasm32-wasi`) is for vscode.dev running the CLI-style binary. Build `opentide-lsp`, not `opentide-wasm` (`scripts/engine/build-wasm.sh wasi`). Do not cfg-gate `#[wasm_bindgen]` into the lsp crate "so one artifact does both". Two artifacts.
 
 ## TypeScript client
 
-`packages/lsp-client` exports `createOpentideClient`. There is no `createOtideClient` except the throwing stub `scripts/check-names.sh` allows. Transports are `"stdio" | "worker" | "wasi"`.
+`packages/lsp-client` exports `createOpentideClient`. There is no `createOtideClient` except the throwing stub `scripts/engine/check-names.sh` allows. Transports are `"stdio" | "worker" | "wasi"`.
 
 - `stdio` starts `opentide-lsp --stdio` once and calls `opentide/analyze` and `opentide/highlight` over JSON-RPC. `dispose()` sends `shutdown` and `exit`.
 - `worker` with the `worker` option (a `Worker` or a `MessagePort`) speaks the same JSON-RPC as `stdio` to the language server that `serveLanguageServer` from `@opentide/lsp-worker` runs in the worker, one message as JSON text per `postMessage`. With the `module` option instead, it calls `opentide-wasm`'s `highlight(languageId, Uint8Array)` and `legend()` in the same thread (`loadHighlightModule`), and `analyze` rejects. The `workspace` option is sent on `initialize` for either JSON-RPC transport.
@@ -83,9 +83,9 @@ The client is TypeScript ESM (`"type": "module"`). Do not add a compile step or 
 
 This repository publishes no Python package. The Python bindings and the `opentide` command that wraps the server live in `opentidehq/opentide`. Do not add `pyproject.toml`, maturin, or PyO3 here.
 
-The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `package` runs `scripts/release.py vendor` and `cargo package --workspace`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
+The native binary ships on crates.io (`cargo install opentide-lsp`) and as per-target binaries on each GitHub Release. CI job `package` runs `scripts/engine/release.py vendor` and `cargo package --workspace`, which builds every crate from its packaged sources. A crate that reads a file outside `OPENTIDE_ASSETS` fails that job.
 
-Cutting a release, and the opentide pin PR that finishes one, is `skills/release/SKILL.md`.
+Cutting a release, and the opentide pin PR that finishes one, is `.agents/skills/engine-release/SKILL.md`.
 
 ## Names
 

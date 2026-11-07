@@ -36,7 +36,7 @@ Shared package metadata (`version`, `edition`, `rust-version`, `license`, `repos
 - Optional fields that must disappear from JSON use `#[serde(default, skip_serializing_if = "Option::is_none")]`.
 - Catalog TOML uses `#[serde(default)]` on vectors and flags so a missing key is empty, not a parse failure.
 - `toml::from_str` on `include_str!` data. Do not `std::fs::read_to_string` a catalog from an engine.
-- `serde_json::json!` is the LSP wire format in `opentide-lsp`. See `skills/lsp-host/SKILL.md`.
+- `serde_json::json!` is the LSP wire format in `opentide-lsp`. See `.agents/skills/lsp-host/SKILL.md`.
 - `serde_yaml` 0.9 parses Tide documents in `opentide-tide`. Keep it there.
 
 ## thiserror 2 and anyhow

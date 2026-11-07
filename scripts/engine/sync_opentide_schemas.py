@@ -6,20 +6,22 @@ is the one generator of the language server's field catalog: ``opentide generate
 schemas`` runs it to write a workspace's catalogs, and this script runs it to
 write the bundled ones. It writes:
 
-- ``catalogs/tide/generated/fields.json`` and ``deprecations.json``: one row per
+- ``data/catalogs/tide/generated/fields.json`` and ``deprecations.json``: one row per
   field per schema revision (``rule::1.0``, ``rule::1.1``), with required and
   closed (no extra keys) flags, so each object is checked against its revision;
-- ``catalogs/tide/schemas/*.schema.json``: each revision's JSON Schema, for
+- ``data/catalogs/tide/schemas/*.schema.json``: each revision's JSON Schema, for
   reference (vocabulary essays shortened), and the ``opentide.schema.json``
   router;
 - ``highlights/queries/tide/highlights.scm``: the key list of the static query.
 
-Run it with a Python that has opentide installed: a release that ships the
-generator, or an opentide checkout (``uv run --project ../opentide python
-scripts/sync_opentide_schemas.py``)::
+It reads the models of this checkout, ``src/opentide``, never an installed
+release: run it with the repository's environment (``uv sync --group dev``)::
 
-    python3 scripts/sync_opentide_schemas.py           # write
-    python3 scripts/sync_opentide_schemas.py --check   # exit 1 when anything would change
+    uv run python scripts/engine/sync_opentide_schemas.py           # write
+    uv run python scripts/engine/sync_opentide_schemas.py --check   # exit 1 when anything would change
+
+``tests/test_generation/test_bundled_tide_catalog.py`` fails when the committed
+catalog is not what the models generate.
 """
 
 from __future__ import annotations
@@ -30,19 +32,30 @@ import sys
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[2]
+PACKAGE = ROOT / "src" / "opentide"
+# This checkout's models, whatever else the interpreter has installed.
+sys.path.insert(0, str(PACKAGE.parent))
+
 try:
     import opentide
     from opentide.generation import lsp_catalog
 except ImportError as exc:  # pragma: no cover - environment
     raise SystemExit(
-        f"error: this needs opentide with opentide.generation.lsp_catalog ({exc}).\n"
-        "  help: run it with an opentide checkout: "
-        "uv run --project ../opentide python scripts/sync_opentide_schemas.py"
+        f"error: this needs opentide's dependencies ({exc}).\n"
+        "  help: run it with this checkout's environment: "
+        "uv run python scripts/engine/sync_opentide_schemas.py"
     ) from exc
 
-ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_DIR = ROOT / "catalogs" / "tide" / "schemas"
-GENERATED = ROOT / "catalogs" / "tide" / "generated"
+if Path(opentide.__file__).resolve().parent != PACKAGE:  # pragma: no cover - environment
+    raise SystemExit(
+        f"error: imported opentide from {Path(opentide.__file__).resolve().parent}, "
+        f"not this checkout's {PACKAGE}.\n"
+        "  help: uv run python scripts/engine/sync_opentide_schemas.py"
+    )
+
+SCHEMA_DIR = ROOT / "data" / "catalogs" / "tide" / "schemas"
+GENERATED = ROOT / "data" / "catalogs" / "tide" / "generated"
 HIGHLIGHTS = ROOT / "highlights" / "queries" / "tide" / "highlights.scm"
 
 # Vocabulary essays (ATT&CK, actors) dominate the reference schemas: keep every
@@ -101,7 +114,7 @@ def check(outputs: dict[Path, str]) -> int:
     }
     expected = {name: outputs[GENERATED / name] for name in found}
     for name, difference in lsp_catalog.catalog_differences(expected, found):
-        problems.append(f"catalogs/tide/generated/{name}: {difference}")
+        problems.append(f"data/catalogs/tide/generated/{name}: {difference}")
     for path, text in outputs.items():
         if path.parent == GENERATED:
             continue
@@ -117,7 +130,7 @@ def check(outputs: dict[Path, str]) -> int:
     if problems:
         print(
             f"opentide {opentide.__version__} generates different catalogs: "
-            "run python3 scripts/sync_opentide_schemas.py",
+            "run uv run python scripts/engine/sync_opentide_schemas.py",
             file=sys.stderr,
         )
         return 1

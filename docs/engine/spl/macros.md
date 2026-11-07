@@ -66,7 +66,7 @@ Exact names vary by app version; treat this table as a recognition aid for opent
 
 - Authored backticks must remain in the source (no macro expansion in the language server).
 - Grammar today folds some single-backtick spans into `comment` — that is an implementation gap (see [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md)).
-- Macro names complete from `catalogs/spl/macros.toml`.
+- Macro names complete from `data/catalogs/spl/macros.toml`.
 - Macros are not declarable in `visibility.toml` (its Splunk log sources name sourcetypes), so `spl_dataset_not_declared` never reports one. See [cim-fields.md](cim-fields.md#indexes-sourcetypes-and-macros).
 
 ## Detection examples

@@ -1,6 +1,11 @@
 //! Conformance: tide_corpus objects produce `{code, field_path, severity}` diagnostics
 //! matching CLI issue shape. Pydantic object issues are a subset of the LSP.
 //! Engine may add extra query diagnostics inside `query: |`.
+//!
+//! The Pydantic side is this repository's `opentide` package (`src/opentide`), run by
+//! the interpreter of its environment (`uv sync --group dev` creates `.venv`), never
+//! an installed release. `OPENTIDE_PYTHON` names another interpreter, which must
+//! import `opentide` from `src/opentide` too.
 
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze, index_workspace};
 use opentide_core::LanguageId;
@@ -30,7 +35,7 @@ fn load_workspace(dir: &str) -> MemoryWorkspace {
 
 #[test]
 fn tide_corpus_indexes_all_object_types() {
-    let host = load_workspace("testdata/workspaces/tide_corpus");
+    let host = load_workspace("crates/testdata/workspaces/tide_corpus");
     let idx = index_workspace(&host);
     assert!(idx.iter().any(|o| o.object_type == "rule"));
     assert!(idx.iter().any(|o| o.object_type == "objective"));
@@ -39,7 +44,7 @@ fn tide_corpus_indexes_all_object_types() {
 
 #[test]
 fn sentinel_rule_has_injected_kql_tokens_and_no_unknown_operator() {
-    let host = load_workspace("testdata/workspaces/tide_corpus");
+    let host = load_workspace("crates/testdata/workspaces/tide_corpus");
     let (uri, text) = host
         .files
         .iter()
@@ -73,7 +78,7 @@ fn sentinel_rule_has_injected_kql_tokens_and_no_unknown_operator() {
 
 #[test]
 fn splunk_rule_injects_spl_and_tokenizes_authored_text() {
-    let host = load_workspace("testdata/workspaces/tide_corpus");
+    let host = load_workspace("crates/testdata/workspaces/tide_corpus");
     let (uri, text) = host
         .files
         .iter()
@@ -101,7 +106,7 @@ fn splunk_rule_injects_spl_and_tokenizes_authored_text() {
 
 #[test]
 fn crowdstrike_is_unsupported_never_faked() {
-    let host = load_workspace("testdata/workspaces/tide_corpus");
+    let host = load_workspace("crates/testdata/workspaces/tide_corpus");
     let (uri, text) = host
         .files
         .iter()
@@ -127,7 +132,7 @@ fn crowdstrike_is_unsupported_never_faked() {
 
 #[test]
 fn diagnostics_have_code_severity_and_field_path_shape() {
-    let host = load_workspace("testdata/workspaces/tide_corpus");
+    let host = load_workspace("crates/testdata/workspaces/tide_corpus");
     let (uri, text) = host
         .files
         .iter()
@@ -151,7 +156,7 @@ fn diagnostics_have_code_severity_and_field_path_shape() {
 
 #[test]
 fn library_rule_is_analyzable() {
-    let host = load_workspace("testdata/objects");
+    let host = load_workspace("crates/testdata/objects");
     let (uri, text) = host
         .files
         .iter()
@@ -186,10 +191,59 @@ struct PydanticIssue {
     severity: String,
 }
 
+/// The interpreter of this checkout's Python environment, checked to import
+/// `opentide` from `src/opentide`.
+fn local_python() -> PathBuf {
+    let root = repo_root();
+    let python = std::env::var_os("OPENTIDE_PYTHON")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let venv = std::env::var_os("UV_PROJECT_ENVIRONMENT")
+                .map_or_else(|| root.join(".venv"), |dir| root.join(dir));
+            if cfg!(windows) {
+                venv.join("Scripts").join("python.exe")
+            } else {
+                venv.join("bin").join("python")
+            }
+        });
+    assert!(
+        python.is_file(),
+        "no Python environment at {}: run `uv sync --group dev` in {} (or set OPENTIDE_PYTHON)",
+        python.display(),
+        root.display()
+    );
+    let output = std::process::Command::new(&python)
+        .args([
+            "-c",
+            "import opentide, pathlib; print(pathlib.Path(opentide.__file__).resolve().parent)",
+        ])
+        .output()
+        .expect("python");
+    assert!(
+        output.status.success(),
+        "{} cannot import opentide: {}",
+        python.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let package = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    let local = root
+        .join("src/opentide")
+        .canonicalize()
+        .expect("src/opentide");
+    assert_eq!(
+        package,
+        local,
+        "{} imports opentide from {}, not this checkout",
+        python.display(),
+        package.display()
+    );
+    python
+}
+
 fn pydantic_issues(dir: &str) -> Vec<PydanticIssue> {
     let root = repo_root();
-    let output = std::process::Command::new("python3")
-        .arg(root.join("scripts/pydantic_object_issues.py"))
+    let output = std::process::Command::new(local_python())
+        .arg(root.join("scripts/engine/pydantic_object_issues.py"))
         .arg(root.join(dir))
         .output()
         .expect("python3");
@@ -245,9 +299,9 @@ fn lsp_covers(dir: &str, issues: &[PydanticIssue]) {
 
 #[test]
 fn pydantic_object_issues_are_subset_of_lsp() {
-    let corpus = pydantic_issues("testdata/workspaces/tide_corpus");
-    lsp_covers("testdata/workspaces/tide_corpus", &corpus);
-    let shaped = pydantic_issues("testdata/conformance/pydantic");
+    let corpus = pydantic_issues("crates/testdata/workspaces/tide_corpus");
+    lsp_covers("crates/testdata/workspaces/tide_corpus", &corpus);
+    let shaped = pydantic_issues("crates/testdata/conformance/pydantic");
     assert!(
         shaped
             .iter()
@@ -279,5 +333,5 @@ fn pydantic_object_issues_are_subset_of_lsp() {
                     || issue.field_path == ["configurations", "splunk", "advanced"])
         })
         .collect();
-    lsp_covers("testdata/conformance/pydantic", &claimed);
+    lsp_covers("crates/testdata/conformance/pydantic", &claimed);
 }

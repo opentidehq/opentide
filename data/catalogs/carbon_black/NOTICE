@@ -1,4 +1,4 @@
-catalogs/carbon_black/fields.toml lists Carbon Black Cloud process search
+data/catalogs/carbon_black/fields.toml lists Carbon Black Cloud process search
 field names, value types and values. They are facts, attested by:
 
 - carbonblack/carbon-black-cloud-sdk-python (MIT License, Copyright (c)

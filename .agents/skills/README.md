@@ -13,4 +13,4 @@ Agent procedures for working in this repository. Detection-engineering skills ar
 | `release-notes` | Writing a `CHANGELOG.md` entry or a release's notes |
 | `release` | Cutting a release, and repinning the engine in opentide |
 
-`AGENTS.md` is the index. `scripts/validate-skills.sh` checks frontmatter against the [Agent Skills specification](https://agentskills.io/specification).
+`AGENTS.md` is the index. `scripts/engine/validate-skills.sh` checks frontmatter against the [Agent Skills specification](https://agentskills.io/specification).

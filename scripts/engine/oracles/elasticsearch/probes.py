@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run the live-Elasticsearch probes and compare them with recorded verdicts.
 
-Usage: python3 scripts/oracles/elasticsearch/probes.py [--url URL] [--update] [--show]
+Usage: python3 scripts/engine/oracles/elasticsearch/probes.py [--url URL] [--update] [--show]
 
-Every file under testdata/oracles/elasticsearch/<topic>/ is one probe
+Every file under crates/testdata/oracles/elasticsearch/<topic>/ is one probe
 (`.eql`, `.esql`, `.lucene`; see run.py for `.unmapped.` and
 `.params.json`). `expected.tsv` beside the topics holds one row per probe
 and one column per release line (8.19, 9.0, ...): `OK` or `ERR`, and for
@@ -27,8 +27,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run  # noqa: E402  (sibling module)
 
-ROOT = Path(__file__).resolve().parents[3]
-PROBES = ROOT / "testdata/oracles/elasticsearch"
+ROOT = Path(__file__).resolve().parents[4]
+PROBES = ROOT / "crates/testdata/oracles/elasticsearch"
 EXPECTED = PROBES / "expected.tsv"
 
 

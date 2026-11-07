@@ -1,12 +1,12 @@
 name: Oracle
 
-# CI-only differential oracles (scripts/oracles/README.md). The engine is
+# CI-only differential oracles (scripts/engine/oracles/README.md). The engine is
 # compared with Microsoft Kusto.Language, Splunk's search parser, Falco's own
 # `falco --validate`, and the Elastic and Lucene parsers (@elastic/esql, EqlBase.g4, Kibana's kuery
 # grammar, Lucene's QueryParser). A
-# disagreement not listed in testdata/oracles/exceptions.toml is a red build,
+# disagreement not listed in crates/testdata/oracles/exceptions.toml is a red build,
 # and so is a listed one that is gone. The references never ship; release.yml
-# runs scripts/license-scan.sh on every artifact.
+# runs scripts/engine/license-scan.sh on every artifact.
 on:
   push:
     branches: [main, development]
@@ -15,15 +15,15 @@ on:
     paths:
       - "crates/**"
       - "grammars/**"
-      - "catalogs/kql/**"
-      - "catalogs/spl/**"
-      - "catalogs/esql/**"
-      - "catalogs/eql/**"
-      - "catalogs/carbon_black/**"
-      - "catalogs/falco/**"
-      - "testdata/**"
-      - "scripts/oracles/**"
-      - "scripts/ci-oracle.sh"
+      - "data/catalogs/kql/**"
+      - "data/catalogs/spl/**"
+      - "data/catalogs/esql/**"
+      - "data/catalogs/eql/**"
+      - "data/catalogs/carbon_black/**"
+      - "data/catalogs/falco/**"
+      - "crates/testdata/**"
+      - "scripts/engine/oracles/**"
+      - "scripts/engine/ci-oracle.sh"
       - ".github/workflows/oracle.yml"
   workflow_dispatch:
   schedule:
@@ -54,7 +54,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pyyaml
-      - run: bash scripts/ci-oracle.sh kql
+      - run: bash scripts/engine/ci-oracle.sh kql
 
   spl:
     name: Splunk
@@ -76,14 +76,14 @@ jobs:
       # throwaway instance, bound to 127.0.0.1, which only answers search/parser.
       - name: Splunk oracle
         run: |
-          eval "$(bash scripts/oracles/splunk/start.sh)"
-          bash scripts/ci-oracle.sh spl
+          eval "$(bash scripts/engine/oracles/splunk/start.sh)"
+          bash scripts/engine/ci-oracle.sh spl
 
   falco:
-    # Every case of testdata/oracles/falco/cases.yaml and every Falco default
+    # Every case of crates/testdata/oracles/falco/cases.yaml and every Falco default
     # rule condition (with its broken twin) through the real Falco, one
     # `falco --validate` per case, beside the engine's verdict. The pins are
-    # recorded in scripts/oracles/README.md; bump them together.
+    # recorded in scripts/engine/oracles/README.md; bump them together.
     name: Falco ${{ matrix.falco }}
     runs-on: ubuntu-latest
     strategy:
@@ -110,7 +110,7 @@ jobs:
       - run: docker pull falcosecurity/falco:${{ matrix.falco }}
       - name: Falco oracle
         run: >
-          python3 scripts/oracles/falco/oracle.py
+          python3 scripts/engine/oracles/falco/oracle.py
           --rules falco-rules
           --docker falcosecurity/falco:${{ matrix.falco }}
           --report falco-oracle-report.json
@@ -156,12 +156,12 @@ jobs:
       - name: Elastic oracles
         env:
           OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
-        run: bash scripts/ci-oracle.sh esql eql kuery lucene
+        run: bash scripts/engine/ci-oracle.sh esql eql kuery lucene
 
   elasticsearch:
     # The oldest and newest recorded release lines. probes.py fails when a
-    # verdict in testdata/oracles/elasticsearch/expected.tsv no longer holds;
-    # esql_catalog.py fails when a catalogs/esql `versions` list is wrong.
+    # verdict in crates/testdata/oracles/elasticsearch/expected.tsv no longer holds;
+    # esql_catalog.py fails when a data/catalogs/esql `versions` list is wrong.
     name: Live Elasticsearch ${{ matrix.version }}
     runs-on: ubuntu-latest
     strategy:
@@ -175,11 +175,11 @@ jobs:
           python-version: "3.12"
       - name: Start Elasticsearch
         shell: bash  # with pipefail, so a failed start fails the step
-        run: bash scripts/oracles/elasticsearch/start.sh ${{ matrix.version }} | sed "s/^export //" >> "$GITHUB_ENV"
+        run: bash scripts/engine/oracles/elasticsearch/start.sh ${{ matrix.version }} | sed "s/^export //" >> "$GITHUB_ENV"
       - name: Probes
-        run: python3 scripts/oracles/elasticsearch/probes.py
+        run: python3 scripts/engine/oracles/elasticsearch/probes.py
       - name: ES|QL catalog versions
-        run: python3 scripts/oracles/elasticsearch/esql_catalog.py
+        run: python3 scripts/engine/oracles/elasticsearch/esql_catalog.py
       - name: Stop Elasticsearch
         if: always()
         run: docker rm -f opentide-es-oracle-9200
@@ -209,4 +209,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pyyaml
-      - run: bash scripts/ci-oracle.sh carbon_black
+      - run: bash scripts/engine/ci-oracle.sh carbon_black

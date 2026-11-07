@@ -1,4 +1,4 @@
-//! libsinsp's own compiler tests (`testdata/conformance/libsinsp/compiler.json`,
+//! libsinsp's own compiler tests (`crates/testdata/conformance/libsinsp/compiler.json`,
 //! ported from falcosecurity/libs `filter_compiler.ut.cpp`): every filter libs
 //! compiles compiles here with libs' warning count, and every filter libs
 //! refuses gets an error.
@@ -21,7 +21,7 @@ const LIBSINSP_WARNINGS: &[&str] = &[
 
 fn fixtures() -> Vec<Value> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/libsinsp/compiler.json");
+        .join("../testdata/conformance/libsinsp/compiler.json");
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     doc["fixtures"].as_array().unwrap().clone()
 }

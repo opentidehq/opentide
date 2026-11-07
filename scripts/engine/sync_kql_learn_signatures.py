@@ -14,7 +14,7 @@ import re
 import tomllib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 LEARN = "https://learn.microsoft.com/kusto/query"
 
 NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*")
@@ -658,9 +658,9 @@ def main() -> None:
     args = parser.parse_args()
     index = ArticleIndex(load_articles(args.docs))
 
-    functions_path = ROOT / "catalogs/kql/core/functions.toml"
-    operators_path = ROOT / "catalogs/kql/core/operators.toml"
-    plugins_path = ROOT / "catalogs/kql/core/evaluate-plugins.toml"
+    functions_path = ROOT / "data/catalogs/kql/core/functions.toml"
+    operators_path = ROOT / "data/catalogs/kql/core/operators.toml"
+    plugins_path = ROOT / "data/catalogs/kql/core/evaluate-plugins.toml"
     functions = tomllib.loads(functions_path.read_text())["functions"]
     # These catalog names are not on the cited Learn page. The page's aliases are
     # base64_encodestring / base64_decodestring. Do not copy the neighbor signature.

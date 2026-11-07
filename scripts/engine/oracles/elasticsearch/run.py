@@ -2,12 +2,12 @@
 """Run EQL, ES|QL, or Lucene queries against a live Elasticsearch.
 
 Usage:
-  python3 scripts/oracles/elasticsearch/run.py --language eql|esql|lucene DIR
+  python3 scripts/engine/oracles/elasticsearch/run.py --language eql|esql|lucene DIR
       [--url URL] [--extra-mapping FILE] [--assume-unmapped] [--jobs N]
       [--skip-larger BYTES] [--lucene-verdict both|strict|lenient]
 
 Reads every `*.eql`, `*.esql`, or `*.lucene` file in DIR and prints one line
-per file, sorted by name, in the format of `scripts/oracles/elastic/*.cjs`:
+per file, sorted by name, in the format of `scripts/engine/oracles/elastic/*.cjs`:
 
   <file>\tOK\t[<note>]
   <file>\tERR\t<error type>: <reason>
@@ -25,7 +25,7 @@ The server is ES_URL (default http://127.0.0.1:9200); `start.sh` starts one.
 The script waits for cluster health yellow and creates the fixture indices
 (reused while their mapping is unchanged):
 
-- `opentide-ecs`, alias `o`: every ECS field in `catalogs/ecs/fields.json`
+- `opentide-ecs`, alias `o`: every ECS field in `data/catalogs/ecs/fields.json`
   with its type, plus `--extra-mapping` (a JSON object `{"field": "type"}`).
   Skipped: `object` entries (their children create the object) and `nested`
   entries (their children are mapped as plain object fields, so a query on
@@ -35,7 +35,7 @@ The script waits for cluster health yellow and creates the fixture indices
 - `opentide-unmapped`, alias `u`: no mapping. A file whose name contains
   `.unmapped.` runs against it.
 
-What counts as an error is documented in scripts/oracles/README.md ("Live
+What counts as an error is documented in scripts/engine/oracles/README.md ("Live
 Elasticsearch"). In short: parse and verification errors are ERR; problems
 that only exist because the fixture is not a real cluster (a field the
 fixture does not map, an index, enrich policy, or inference endpoint that
@@ -68,7 +68,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 ECS_INDEX, ECS_ALIAS = "opentide-ecs", "o"
 UNMAPPED_INDEX, UNMAPPED_ALIAS = "opentide-unmapped", "u"
 ASSUMED_INDEX, ASSUMED_ALIAS = "opentide-assumed-esql", "a"
@@ -116,7 +116,7 @@ def _multi_field(name: str, t: str, types: dict[str, str]) -> bool:
 
 def ecs_mapping(extra: dict[str, str]) -> tuple[dict, set[str]]:
     """Index properties for the ECS catalog, and the set of mapped names."""
-    fields = json.loads((ROOT / "catalogs/ecs/fields.json").read_text())["fields"]
+    fields = json.loads((ROOT / "data/catalogs/ecs/fields.json").read_text())["fields"]
     types = {f["name"]: f["type"] for f in fields}
     types.update(extra)
     props: dict = {}

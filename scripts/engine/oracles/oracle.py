@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Differential oracles: the opentide engine against the reference parser.
 
-    oracle.py kql     Microsoft Kusto.Language (scripts/oracles/kusto, needs dotnet)
+    oracle.py kql     Microsoft Kusto.Language (scripts/engine/oracles/kusto, needs dotnet)
     oracle.py spl     Splunk's search/parser REST endpoint (needs SPLUNK_PASSWORD)
-    oracle.py esql    @elastic/esql's parser (scripts/oracles/elastic, needs node)
+    oracle.py esql    @elastic/esql's parser (scripts/engine/oracles/elastic, needs node)
     oracle.py eql     Elasticsearch's EqlBase.g4, generated with antlr-ng (needs node)
     oracle.py kuery   Kibana's kuery grammar.peggy, compiled with peggy (needs node)
     oracle.py lucene  Lucene's classic QueryParser, the jar Elasticsearch pins (needs java)
@@ -13,7 +13,7 @@ the reference, then compare two things:
 
 - Verdicts. A query is rejected when ours reports a syntax diagnostic, or when
   the reference reports an error. Each query where the verdicts differ must be
-  listed by `paths` in testdata/oracles/exceptions.toml. A `.broken.` fixture
+  listed by `paths` in crates/testdata/oracles/exceptions.toml. A `.broken.` fixture
   the reference accepts is always an error: its injected fault breaks nothing.
 - Names. KQL functions and plugins, or SPL commands, that one side knows and
   the other does not, plus names ours flags as unknown that the reference
@@ -22,7 +22,7 @@ the reference, then compare two things:
   database built from the engine's own table, column and ASIM catalogs; every
   `kql_unknown_column` or `kql_type_mismatch` ours reports must be an error
   the reference reports too (the name it does not know, or an operator it does
-  not define for the types). Each fixture in testdata/conformance/columns/
+  not define for the types). Each fixture in crates/testdata/conformance/columns/
   must make ours report one. A query where they differ is listed by `paths`.
 
 A listed path or name that no longer disagrees is stale and also fails, so the
@@ -50,12 +50,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
-EXCEPTIONS = ROOT / "testdata/oracles/exceptions.toml"
-KUSTO = ROOT / "scripts/oracles/kusto"
-ELASTIC = ROOT / "scripts/oracles/elastic"
+ROOT = pathlib.Path(__file__).resolve().parents[3]
+EXCEPTIONS = ROOT / "crates/testdata/oracles/exceptions.toml"
+KUSTO = ROOT / "scripts/engine/oracles/kusto"
+ELASTIC = ROOT / "scripts/engine/oracles/elastic"
 ELASTIC_CACHE = ELASTIC / ".cache"
-MACROS = ROOT / "scripts/oracles/splunk/macros.toml"
+MACROS = ROOT / "scripts/engine/oracles/splunk/macros.toml"
 
 # Diagnostics that mean ours rejects the query's syntax.
 REJECT = {
@@ -134,7 +134,7 @@ class Query:
 
     @property
     def probe(self) -> bool:
-        return self.id.startswith("testdata/oracles/")
+        return self.id.startswith("crates/testdata/oracles/")
 
 
 def corpus(language: str) -> list[Query]:
@@ -142,11 +142,11 @@ def corpus(language: str) -> list[Query]:
         return carbon_black_corpus()
     files = sorted(
         [
-            *ROOT.glob(f"testdata/corpus/{language}/*.{language}"),
-            *ROOT.glob(f"testdata/conformance/external/{language}/*.{language}"),
-            *ROOT.glob(f"testdata/conformance/perf/*.{language}"),
-            *ROOT.glob(f"testdata/oracles/{language}/*.{language}"),
-            *ROOT.glob(f"testdata/conformance/columns/*.{language}"),
+            *ROOT.glob(f"crates/testdata/corpus/{language}/*.{language}"),
+            *ROOT.glob(f"crates/testdata/conformance/external/{language}/*.{language}"),
+            *ROOT.glob(f"crates/testdata/conformance/perf/*.{language}"),
+            *ROOT.glob(f"crates/testdata/oracles/{language}/*.{language}"),
+            *ROOT.glob(f"crates/testdata/conformance/columns/*.{language}"),
         ]
     )
     queries = [
@@ -161,8 +161,8 @@ def corpus(language: str) -> list[Query]:
 def verdict_tables(language: str) -> list[Query]:
     """Queries from the upstream test suites kept as verdict tables."""
     tables = {
-        "lucene": ("testdata/conformance/external/lucene-queryparser/cases.tsv", unescape_tsv),
-        "kuery": ("testdata/conformance/external/kuery-opensearch-dashboards/cases.tsv", json.loads),
+        "lucene": ("crates/testdata/conformance/external/lucene-queryparser/cases.tsv", unescape_tsv),
+        "kuery": ("crates/testdata/conformance/external/kuery-opensearch-dashboards/cases.tsv", json.loads),
     }
     if language not in tables:
         return []
@@ -195,7 +195,7 @@ def elastic_embedded(language: str) -> list[Query]:
     import yaml
 
     queries = []
-    for path in sorted(ROOT.glob("testdata/**/*.yaml")):
+    for path in sorted(ROOT.glob("crates/testdata/**/*.yaml")):
         try:
             doc = yaml.safe_load(path.read_text())
         except yaml.YAMLError:
@@ -266,7 +266,7 @@ def embedded(language: str) -> list[Query]:
     except ImportError:
         sys.exit("PyYAML is required to read Tide rules (pip install pyyaml)")
     queries = []
-    for path in sorted(ROOT.glob("testdata/**/*.yaml")):
+    for path in sorted(ROOT.glob("crates/testdata/**/*.yaml")):
         try:
             doc = yaml.safe_load(path.read_text())
         except yaml.YAMLError:
@@ -299,17 +299,17 @@ def embedded(language: str) -> list[Query]:
 def carbon_black_corpus() -> list[Query]:
     """Carbon Black Cloud queries: the converted SigmaHQ corpus with its
     twins, the probes, and every `configurations.carbon_black_cloud.query`
-    and `system: carbon_black_cloud` hunt in a Tide rule under `testdata/`."""
+    and `system: carbon_black_cloud` hunt in a Tide rule under `crates/testdata/`."""
     import yaml
 
     files = sorted(
         [
-            *ROOT.glob("testdata/conformance/external/lucene-carbon-black/*.lucene"),
-            *ROOT.glob("testdata/oracles/carbon_black/*.lucene"),
+            *ROOT.glob("crates/testdata/conformance/external/lucene-carbon-black/*.lucene"),
+            *ROOT.glob("crates/testdata/oracles/carbon_black/*.lucene"),
         ]
     )
     queries = [Query(rel(p), p.read_text(), ".broken." in p.name) for p in files]
-    for path in sorted(ROOT.glob("testdata/**/*.yaml")):
+    for path in sorted(ROOT.glob("crates/testdata/**/*.yaml")):
         try:
             doc = yaml.safe_load(path.read_text())
         except yaml.YAMLError:
@@ -466,7 +466,7 @@ def kql_reference(queries: list[Query], scratch: pathlib.Path) -> dict[str, list
 
 # Ours reports these only where Kusto rejects the query; the reference must agree.
 SEMANTIC = {"kql_unknown_column", "kql_type_mismatch"}
-COLUMN_FIXTURES = "testdata/conformance/columns/"
+COLUMN_FIXTURES = "crates/testdata/conformance/columns/"
 
 
 def kql_schema() -> dict:
@@ -474,7 +474,7 @@ def kql_schema() -> dict:
     Kusto.Language database: the Azure Monitor reference, the hand-written
     columns, the standard Log Analytics columns, `Timestamp` on the advanced
     hunting tables, and each ASIM parser returning its schema."""
-    reference = load_toml("catalogs/kql/azure-monitor/tables.toml")
+    reference = load_toml("data/catalogs/kql/azure-monitor/tables.toml")
     tables: dict[str, list[list[str]]] = {
         t["name"]: [[c["name"], c["type"]] for c in t["columns"]]
         for t in reference["tables"]
@@ -489,16 +489,16 @@ def kql_schema() -> dict:
     for columns in tables.values():
         have = {c[0] for c in columns}
         columns.extend(c for c in standard if c[0] not in have)
-    for path in ("catalogs/kql/sentinel/columns.toml", "catalogs/kql/defender/columns.toml"):
+    for path in ("data/catalogs/kql/sentinel/columns.toml", "data/catalogs/kql/defender/columns.toml"):
         for column in load_toml(path)["columns"]:
             listed = tables.setdefault(column["table"], [])
             if column["name"] not in {c[0] for c in listed}:
                 listed.append([column["name"], column.get("type") or "dynamic"])
-    for table in load_toml("catalogs/kql/defender/tables.toml")["tables"]:
+    for table in load_toml("data/catalogs/kql/defender/tables.toml")["tables"]:
         listed = tables.setdefault(table["name"], [])
         if "Timestamp" not in {c[0] for c in listed}:
             listed.append(["Timestamp", "datetime"])
-    asim = load_toml("catalogs/kql/asim/asim.toml")
+    asim = load_toml("data/catalogs/kql/asim/asim.toml")
     schemas = {s["name"]: s for s in asim["schemas"]}
     functions = {
         p["name"]: {
@@ -568,17 +568,17 @@ def kql_names(flagged: dict[str, str]) -> dict[str, str]:
         for s in json.loads(kusto("symbols"))
         if not s["name"].startswith("__")  # Kusto.Language internals
     }
-    catalog = {f["name"] for f in load_toml("catalogs/kql/core/functions.toml")["functions"]}
-    plugins = {p["name"] for p in load_toml("catalogs/kql/core/evaluate-plugins.toml")["plugins"]}
+    catalog = {f["name"] for f in load_toml("data/catalogs/kql/core/functions.toml")["functions"]}
+    plugins = {p["name"] for p in load_toml("data/catalogs/kql/core/evaluate-plugins.toml")["plugins"]}
     ours_known = catalog | plugins
     disagree = {}
     for name in sorted(ours_known - reference.keys()):
         where = "evaluate-plugins.toml" if name in plugins else "functions.toml"
-        disagree[name] = f"in catalogs/kql/core/{where}, unknown to Kusto.Language"
+        disagree[name] = f"in data/catalogs/kql/core/{where}, unknown to Kusto.Language"
     for name in sorted(reference.keys() - ours_known):
         s = reference[name]
         status = "obsolete " if s["obsolete"] else "hidden " if s["hidden"] else ""
-        disagree[name] = f"Kusto.Language {status}{s['kind']}, missing from catalogs/kql/core"
+        disagree[name] = f"Kusto.Language {status}{s['kind']}, missing from data/catalogs/kql/core"
     for name, ident in flagged.items():
         if name in reference and name in ours_known:
             disagree[name] = f"in both catalogs, but ours reports kql_unknown_function in {ident}"
@@ -681,7 +681,7 @@ class Splunk:
         description = {
             "modelName": model,
             "displayName": model,
-            "description": "opentide oracle stand-in built from catalogs/spl/datamodels.toml",
+            "description": "opentide oracle stand-in built from data/catalogs/spl/datamodels.toml",
             "editable": True,
             "objectNameList": list(datasets),
             "objects": objects,
@@ -740,7 +740,7 @@ def spl_reference(splunk: Splunk, queries: list[Query]) -> dict[str, list[str]]:
                 defined.add(name)
 
     models: dict[str, dict[str, list[str]]] = {}
-    for dm in load_toml("catalogs/spl/datamodels.toml")["datamodels"]:
+    for dm in load_toml("data/catalogs/spl/datamodels.toml")["datamodels"]:
         # One row per dataset; a root's stand-in carries its children's fields too.
         fields = models.setdefault(dm["model"], {}).setdefault(dm["prefix"], [])
         fields += [f for f in dm.get("fields", []) if f not in fields]
@@ -749,7 +749,7 @@ def spl_reference(splunk: Splunk, queries: list[Query]) -> dict[str, list[str]]:
 
     def verdict(query: Query) -> tuple[str, list[str]]:
         text = query.text.strip()
-        # Splunk runs authored text as if it began with `search` (docs/spl/README.md).
+        # Splunk runs authored text as if it began with `search` (docs/engine/spl/README.md).
         return query.id, splunk.parse(text if text.startswith("|") else f"search {text}")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
@@ -762,15 +762,15 @@ def spl_reference(splunk: Splunk, queries: list[Query]) -> dict[str, list[str]]:
 
 def spl_names(splunk: Splunk, flagged: dict[str, str]) -> dict[str, str]:
     reference = splunk.commands()
-    catalog = {c["name"] for c in load_toml("catalogs/spl/commands.toml")["commands"]}
+    catalog = {c["name"] for c in load_toml("data/catalogs/spl/commands.toml")["commands"]}
     disagree = {}
     for name in sorted(catalog - reference):
         # searchbnf does not list every alias; the parser is the authority.
         errors = splunk.parse(f"| makeresults | {name}")
         if any(e.startswith("Unknown search command") for e in errors):
-            disagree[name] = "in catalogs/spl/commands.toml, unknown to Splunk"
+            disagree[name] = "in data/catalogs/spl/commands.toml, unknown to Splunk"
     for name in sorted(reference - catalog):
-        disagree[name] = "Splunk searchbnf command, missing from catalogs/spl/commands.toml"
+        disagree[name] = "Splunk searchbnf command, missing from data/catalogs/spl/commands.toml"
     for name, ident in flagged.items():
         if name in reference and name in catalog:
             disagree[name] = f"in both catalogs, but ours reports spl_unknown_command in {ident}"
@@ -799,7 +799,7 @@ def fetch(name: str) -> pathlib.Path:
 
 
 def node_sandbox() -> pathlib.Path:
-    """scripts/oracles/elastic/node_modules from its lock file, without install scripts."""
+    """scripts/engine/oracles/elastic/node_modules from its lock file, without install scripts."""
     if not (ELASTIC / "node_modules/.package-lock.json").exists():
         subprocess.run(
             ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],

@@ -22,21 +22,21 @@ It is **not** a catalog of Azure Data Explorer management (control) commands. Co
 
 ## How this inventory maps to repo catalogs
 
-Machine-readable catalogs live under [`/workspace/catalogs/kql/`](../../catalogs/kql/):
+Machine-readable catalogs live under [`/workspace/catalogs/kql/`](../../../data/catalogs/kql/):
 
 | Catalog file | Count (2026-09-15) | This inventory |
 | --- | --- | --- |
-| `catalogs/kql/core/operators.toml` | 53 | [`operators.md`](operators.md) |
-| `catalogs/kql/core/operators-scalar.toml` | 54 | [`operators-scalar.md`](operators-scalar.md) |
-| `catalogs/kql/core/functions.toml` | 409 | [`scalar-functions.md`](scalar-functions.md) + [`aggregation-functions.md`](aggregation-functions.md) + [`scalar-functions-geo-series.md`](scalar-functions-geo-series.md) |
-| `catalogs/kql/core/types.toml` | 10 | [`types.md`](types.md) |
-| `catalogs/kql/sentinel/tables.toml` | 99 | [`sentinel-tables.md`](sentinel-tables.md) |
-| `catalogs/kql/defender/tables.toml` | 65 | [`defender-tables.md`](defender-tables.md) |
-| `catalogs/kql/sentinel/columns.toml` | Sentinel table columns (hover / `| where` completions) | [`DESIGN.md`](DESIGN.md) |
-| `catalogs/kql/defender/columns.toml` | Defender hunting columns | [`DESIGN.md`](DESIGN.md) |
-| `catalogs/kql/core/operator-options.toml` | `join kind=` and related options | [`DESIGN.md`](DESIGN.md) |
-| `catalogs/kql/azure-monitor/tables.toml` | 943 Azure Monitor Logs tables with their columns and column descriptions, generated | [`columns.md`](columns.md) |
-| `catalogs/kql/asim/asim.toml` | 14 ASIM schemas and 1019 parsers, generated | [`columns.md`](columns.md) |
+| `data/catalogs/kql/core/operators.toml` | 53 | [`operators.md`](operators.md) |
+| `data/catalogs/kql/core/operators-scalar.toml` | 54 | [`operators-scalar.md`](operators-scalar.md) |
+| `data/catalogs/kql/core/functions.toml` | 409 | [`scalar-functions.md`](scalar-functions.md) + [`aggregation-functions.md`](aggregation-functions.md) + [`scalar-functions-geo-series.md`](scalar-functions-geo-series.md) |
+| `data/catalogs/kql/core/types.toml` | 10 | [`types.md`](types.md) |
+| `data/catalogs/kql/sentinel/tables.toml` | 99 | [`sentinel-tables.md`](sentinel-tables.md) |
+| `data/catalogs/kql/defender/tables.toml` | 65 | [`defender-tables.md`](defender-tables.md) |
+| `data/catalogs/kql/sentinel/columns.toml` | Sentinel table columns (hover / `| where` completions) | [`DESIGN.md`](DESIGN.md) |
+| `data/catalogs/kql/defender/columns.toml` | Defender hunting columns | [`DESIGN.md`](DESIGN.md) |
+| `data/catalogs/kql/core/operator-options.toml` | `join kind=` and related options | [`DESIGN.md`](DESIGN.md) |
+| `data/catalogs/kql/azure-monitor/tables.toml` | 943 Azure Monitor Logs tables with their columns and column descriptions, generated | [`columns.md`](columns.md) |
+| `data/catalogs/kql/asim/asim.toml` | 14 ASIM schemas and 1019 parsers, generated | [`columns.md`](columns.md) |
 | *(design)* | — | [`DESIGN.md`](DESIGN.md) |
 
 Core tabular ops, scalar ops, types, tables, **columns**, and **operator options** are cataloged. Remaining drift is long-tail Learn names and detection-quality warnings; see [`coverage-gap.md`](coverage-gap.md) and [`DESIGN.md`](DESIGN.md).

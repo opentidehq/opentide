@@ -203,7 +203,7 @@ fn analysis_with_a_prebuilt_index_matches_analyze() {
 fn the_bundled_catalogs_are_the_files_compiled_in() {
     let bundled = opentide_analysis::bundled_catalog();
     let root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../catalogs/tide/generated");
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/catalogs/tide/generated");
     let read = |name: &str| std::fs::read_to_string(root.join(name)).expect(name);
     assert_eq!(
         bundled.fields.as_deref(),

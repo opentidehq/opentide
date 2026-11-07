@@ -1,14 +1,14 @@
 """Convert SigmaHQ rules to Carbon Black Cloud process search queries (#162).
 
-    python scripts/sigma_carbon_black_corpus.py <SigmaHQ checkout> [count]
+    python scripts/engine/sigma_carbon_black_corpus.py <SigmaHQ checkout> [count]
 
 Uses pySigma-backend-carbonblack (MIT) with its `CarbonBlack_pipeline`, the
 process search field mapping. The SigmaHQ checkout must be at the commit the
 other Sigma-derived corpora use (SOURCES.md). Writes, for the first `count`
 rules (sorted by path) that convert, in rule-category order:
 
-  testdata/conformance/external/lucene-carbon-black/<rule>.lucene
-  testdata/conformance/external/lucene-carbon-black/<rule>.broken.lucene
+  crates/testdata/conformance/external/lucene-carbon-black/<rule>.lucene
+  crates/testdata/conformance/external/lucene-carbon-black/<rule>.broken.lucene
 
 and prints the `sigma.tsv` rows and the SOURCES.md list for them. A broken
 twin is the query with one unbalanced `(` added at the front. Neither
@@ -33,7 +33,7 @@ CATEGORIES = [
     "rules/windows/network_connection",
     "rules/windows/registry/registry_set",
 ]
-OUT = pathlib.Path(__file__).resolve().parents[1] / "testdata/conformance/external/lucene-carbon-black"
+OUT = pathlib.Path(__file__).resolve().parents[2] / "crates/testdata/conformance/external/lucene-carbon-black"
 
 
 def main() -> None:

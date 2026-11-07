@@ -150,7 +150,7 @@ pub(crate) fn check_regex(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
         // What Elasticsearch's Lucene RegExp makes of it: syntax errors
         // (`a<b`, `\\b`), patterns too complex to determinize, and the
         // `index.max_regex_length` default. Checked against live clusters
-        // (testdata/oracles/elasticsearch/eql-misc).
+        // (crates/testdata/oracles/elasticsearch/eql-misc).
         for problem in opentide_lucene::regexp::elasticsearch_problems(&pattern) {
             let mut d = Diagnostic::error(codes::EQL_REGEX, problem.message, range);
             d.severity = problem.severity;

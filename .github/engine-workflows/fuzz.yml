@@ -32,7 +32,7 @@ jobs:
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
           restore-keys: fuzz-corpus-${{ matrix.target }}-
       - name: fuzz ${{ matrix.target }}
-        run: bash scripts/fuzz.sh ${{ matrix.target }} ${{ inputs.seconds || '300' }}
+        run: bash scripts/engine/fuzz.sh ${{ matrix.target }} ${{ inputs.seconds || '300' }}
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

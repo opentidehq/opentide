@@ -2,7 +2,7 @@
 //!
 //! The catalog records, per command, function, and cast type, the release
 //! branches whose own grammar and generated definitions accept it on a release
-//! build (`versions` in `catalogs/esql/*.toml`). The engine's syntax checks
+//! build (`versions` in `data/catalogs/esql/*.toml`). The engine's syntax checks
 //! use the same [`Availability`] sets. A query is checked either against the
 //! whole supported range (elastic-1.0: Kibana 8.19 and 9.x) or against one
 //! declared target ([`StackTarget`], the tenant `version` key proposed in

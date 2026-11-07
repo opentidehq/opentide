@@ -1,6 +1,6 @@
 # Scalar functions: `series_*`, `geo_*`, `convert_*`
 
-These families appear on Microsoft Learn and are named or summarized in [`scalar-functions.md`](scalar-functions.md), but are **almost entirely absent** from [`catalogs/kql/core/functions.toml`](../../catalogs/kql/core/functions.toml).
+These families appear on Microsoft Learn and are named or summarized in [`scalar-functions.md`](scalar-functions.md), but are **almost entirely absent** from [`data/catalogs/kql/core/functions.toml`](../../../data/catalogs/kql/core/functions.toml).
 
 Primary Learn hubs:
 

@@ -8,7 +8,7 @@
 //! `not` and token regexes but only space, tab, `\b`, `\r`, `\n` as blanks),
 //! the same recovery points (a list's first element, an operator modifier
 //! that turns out to be a value), the same recursion limit, and the same error
-//! messages. `testdata/conformance/libsinsp/parser.json` holds libs' own
+//! messages. `crates/testdata/conformance/libsinsp/parser.json` holds libs' own
 //! parser tests; the engine agrees with every verdict and message.
 //!
 //! The tree-sitter grammar (`grammars/tree-sitter-opentide-falco`) is for

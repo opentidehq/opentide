@@ -14,7 +14,7 @@ use opentide_core::{LanguageId, Severity};
 use std::fs;
 use std::path::PathBuf;
 
-const CASE: &str = "testdata/conformance/refs/detection-model";
+const CASE: &str = "crates/testdata/conformance/refs/detection-model";
 
 fn workspace() -> MemoryWorkspace {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -28,7 +28,7 @@ jobs:
               echo "tagged ${tag} at ${sha}"
             fi
             if ! gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-              python3 scripts/release.py notes "${version}" > notes.md
+              python3 scripts/engine/release.py notes "${version}" > notes.md
               gh release create "${tag}" --repo "${GITHUB_REPOSITORY}" --verify-tag --latest=false \
                 --title "opentide-lsp ${tag}" --notes-file notes.md
             fi

@@ -1,7 +1,7 @@
 //! The engines against recorded live-Elasticsearch verdicts.
 //!
-//! `testdata/oracles/elasticsearch/<topic>/*` are probes run against real
-//! clusters, 8.19 through 9.5 (`scripts/oracles/elasticsearch/probes.py`);
+//! `crates/testdata/oracles/elasticsearch/<topic>/*` are probes run against real
+//! clusters, 8.19 through 9.5 (`scripts/engine/oracles/elasticsearch/probes.py`);
 //! `expected.tsv` records the verdict per release line. This test needs no
 //! cluster. It holds the engines to those verdicts:
 //!
@@ -96,7 +96,7 @@ const MAPPING: &str = "depends on the tenant's field mapping";
 const NEWER: &str = "accepted by the 9.6 grammar";
 
 fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/oracles/elasticsearch")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/oracles/elasticsearch")
 }
 
 /// The engine's diagnostics; with `ecs`, plus the ECS checks a rule whose

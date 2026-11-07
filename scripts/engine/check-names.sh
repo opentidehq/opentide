@@ -3,7 +3,7 @@
 # Documentation that forbids those names, and the throwing createOtideClient
 # stub, are allowed.
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 hits="$(
   grep -RIn --exclude-dir=target --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
     -E 'createOtideClient\(|opentide-sql' "$root" \

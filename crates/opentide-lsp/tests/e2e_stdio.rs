@@ -188,7 +188,7 @@ fn unknown_spl_command_is_published() {
 #[test]
 fn tide_yaml_pull_diagnostics_and_symbols() {
     let mut lsp = Lsp::spawn();
-    let root = repo_root().join("testdata/workspaces/tide_corpus");
+    let root = repo_root().join("crates/testdata/workspaces/tide_corpus");
     lsp.request(
         "initialize",
         json!({
@@ -331,7 +331,7 @@ fn tide_yaml_pull_diagnostics_and_symbols() {
 #[test]
 fn cli_analyze_and_highlight_never_emit_jsonrpc() {
     let file = repo_root()
-        .join("testdata/workspaces/tide_corpus/objects/rules/rule-0001-sentinel-kql.yaml");
+        .join("crates/testdata/workspaces/tide_corpus/objects/rules/rule-0001-sentinel-kql.yaml");
     let analyze = Command::new(bin())
         .args(["analyze", file.to_str().unwrap()])
         .output()
@@ -377,7 +377,7 @@ fn cli_analyze_and_highlight_never_emit_jsonrpc() {
 
 #[test]
 fn highlight_html_contains_spans() {
-    let file = repo_root().join("testdata/corpus/kql/take_operator__valid.kql");
+    let file = repo_root().join("crates/testdata/corpus/kql/take_operator__valid.kql");
     let out = Command::new(bin())
         .args(["highlight", file.to_str().unwrap(), "--html"])
         .output()
@@ -1024,7 +1024,7 @@ fn cli_codes(file: &std::path::Path) -> Vec<String> {
 /// so every reference to another object was reported as unresolved.
 #[test]
 fn an_unreadable_workspace_file_does_not_break_analysis() {
-    let corpus = repo_root().join("testdata/workspaces/tide_corpus");
+    let corpus = repo_root().join("crates/testdata/workspaces/tide_corpus");
     let rule = "objects/rules/rule-0001-sentinel-kql.yaml";
     let expected = cli_codes(&corpus.join(rule));
 
@@ -1483,7 +1483,7 @@ fn an_edit_after_a_multi_byte_character_keeps_the_server_running() {
 /// client that cannot watch files, on the next request.
 #[test]
 fn objects_written_after_start_are_indexed() {
-    let source = repo_root().join("testdata/objects");
+    let source = repo_root().join("crates/testdata/objects");
     for watch in [true, false] {
         let root = std::env::temp_dir().join(format!(
             "opentide-index-cache-{}-{watch}",
@@ -1556,7 +1556,8 @@ fn only_tide_yaml_is_analysed() {
         );
     };
     let rule =
-        std::fs::read_to_string(repo_root().join("testdata/objects/rules/rule-1.0.yaml")).unwrap();
+        std::fs::read_to_string(repo_root().join("crates/testdata/objects/rules/rule-1.0.yaml"))
+            .unwrap();
     open(
         &mut lsp,
         "file:///w/.github/workflows/ci.yml",
@@ -1597,7 +1598,7 @@ fn only_tide_yaml_is_analysed() {
 /// not entered, so a link back up the tree indexes nothing twice.
 #[test]
 fn the_workspace_walk_stays_in_objects_and_ignores_symlinked_directories() {
-    let source = repo_root().join("testdata/objects");
+    let source = repo_root().join("crates/testdata/objects");
     let root = std::env::temp_dir().join(format!("opentide-walk-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let rules = root.join("objects/rules");
@@ -1730,7 +1731,8 @@ fn a_panicking_handler_fails_its_request_and_the_session_continues() {
 #[test]
 fn navigation_uses_utf16_columns_after_multi_byte_characters() {
     let objective =
-        std::fs::read_to_string(repo_root().join("testdata/objects/objective-1.0.yaml")).unwrap();
+        std::fs::read_to_string(repo_root().join("crates/testdata/objects/objective-1.0.yaml"))
+            .unwrap();
     let uuid = "00000000-0000-4000-8002-000000000001";
     assert!(objective.contains(uuid));
     let prefix = "# 😀日本é ";
@@ -1903,8 +1905,8 @@ fn a_definition_in_a_web_workspace_is_the_other_documents_own_uri() {
     );
     lsp.notify("initialized", json!({}));
     for (uri, path) in [
-        (&objective_uri, "testdata/objects/objective-1.0.yaml"),
-        (&rule_uri, "testdata/objects/rules/rule-1.0.yaml"),
+        (&objective_uri, "crates/testdata/objects/objective-1.0.yaml"),
+        (&rule_uri, "crates/testdata/objects/rules/rule-1.0.yaml"),
     ] {
         lsp.notify(
             "textDocument/didOpen",

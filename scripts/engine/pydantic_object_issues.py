@@ -65,7 +65,7 @@ def issues_for(path: Path) -> list[dict]:
                     }
                 )
     deprecations = json.loads(
-        (Path(__file__).resolve().parents[1] / "catalogs/tide/generated/deprecations.json").read_text(
+        (Path(__file__).resolve().parents[2] / "data/catalogs/tide/generated/deprecations.json").read_text(
             encoding="utf-8"
         )
     )

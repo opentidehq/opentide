@@ -1,4 +1,4 @@
-// Smoke tests for scripts/build-wasm.sh.
+// Smoke tests for scripts/engine/build-wasm.sh.
 //   imports <wasm>   the browser artifact imports only wasm-bindgen glue
 //   browser <js>     wasm-bindgen's nodejs glue: highlight() for every language
 //   wasi <wasm>      the CLI under node:wasi: analyze an ES|QL file, then an

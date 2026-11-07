@@ -6,14 +6,14 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 
 | Change | Read |
 | --- | --- |
-| Any `crates/**/*.rs`, `Cargo.toml`, `Cargo.lock` | `skills/rust-engine/SKILL.md` |
-| `grammars/`, `crates/opentide-syntax`, `highlights/queries/` | `skills/tree-sitter/SKILL.md` |
-| `crates/opentide-lsp`, `editors/`, stdio tests | `skills/lsp-host/SKILL.md` |
-| `crates/opentide-wasm`, `packages/`, packaging | `skills/wasm-hosts/SKILL.md` |
-| A `CHANGELOG.md` entry, or a release's notes | `skills/release-notes/SKILL.md` |
-| A release: `scripts/release.py`, `release.yml`, the opentide engine pin | `skills/release/SKILL.md` |
-| `catalogs/`, `highlights/spec.toml`, `testdata/conformance`, `testdata/oracles`, `scripts/oracles`, schema sync | `skills/catalogs/SKILL.md` |
-| A new query language (S1QL, Sigma, YARA) | `skills/add-language/SKILL.md` (then the rows above) |
+| Any `crates/**/*.rs`, `Cargo.toml`, `Cargo.lock` | `.agents/skills/rust-engine/SKILL.md` |
+| `grammars/`, `crates/opentide-syntax`, `highlights/queries/` | `.agents/skills/tree-sitter/SKILL.md` |
+| `crates/opentide-lsp`, `editors/`, stdio tests | `.agents/skills/lsp-host/SKILL.md` |
+| `crates/opentide-wasm`, `packages/`, packaging | `.agents/skills/wasm-hosts/SKILL.md` |
+| A `CHANGELOG.md` entry, or a release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
+| A release: `scripts/engine/release.py`, `release.yml`, the opentide engine pin | `.agents/skills/engine-release/SKILL.md` |
+| `data/catalogs/`, `highlights/spec.toml`, `crates/testdata/conformance`, `crates/testdata/oracles`, `scripts/engine/oracles`, schema sync | `.agents/skills/catalogs/SKILL.md` |
+| A new query language (S1QL, Sigma, YARA) | `.agents/skills/add-language/SKILL.md` (then the rows above) |
 
 ## Product
 
@@ -40,14 +40,14 @@ Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript pack
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-bash scripts/check-io-free.sh
-bash scripts/check-names.sh
-bash scripts/validate-skills.sh
+bash scripts/engine/check-io-free.sh
+bash scripts/engine/check-names.sh
+bash scripts/engine/validate-skills.sh
 cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/oracles/README.md`). Grammar edits also need `bash scripts/check-grammars.sh` from the repository root (CLI 0.25.10). CI sets `RUSTFLAGS=-Dwarnings`.
+Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). CI sets `RUSTFLAGS=-Dwarnings`.
 
 ## Upstream docs, not downloaded skills
 

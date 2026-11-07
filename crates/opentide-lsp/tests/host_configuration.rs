@@ -41,7 +41,7 @@ fn frames(output: &[u8]) -> Vec<Value> {
 }
 
 fn install_schemas() {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/config/schemas");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/config/schemas");
     let mut router = None;
     let mut schemas = Vec::new();
     for entry in std::fs::read_dir(&dir).unwrap() {

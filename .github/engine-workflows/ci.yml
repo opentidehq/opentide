@@ -32,17 +32,17 @@ jobs:
         with:
           python-version: "3.12"
       - name: opentide schemas
-        run: pip install -r scripts/requirements-opentide.txt
+        run: pip install -r scripts/engine/requirements-opentide.txt
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: io-free engines
-        run: bash scripts/check-io-free.sh
+        run: bash scripts/engine/check-io-free.sh
       - name: names
-        run: bash scripts/check-names.sh
+        run: bash scripts/engine/check-names.sh
       - name: skills
-        run: bash scripts/validate-skills.sh
+        run: bash scripts/engine/validate-skills.sh
       # nextest runs each test in its own process, across binaries at once
       # (.config/nextest.toml); it does not run doctests.
       - name: test
@@ -62,7 +62,7 @@ jobs:
       - name: npm packs
         run: |
           for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
-          node scripts/check-npm-packs.mjs
+          node scripts/engine/check-npm-packs.mjs
       # The TypeScript client against the debug server the test step built.
       - name: lsp-client (stdio)
         env:
@@ -108,12 +108,12 @@ jobs:
         env:
           OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
         run: |
-          pip install -r tests/clients/requirements.txt
-          cd tests/clients && python -m pytest -q
+          pip install -r scripts/engine/clients/requirements.txt
+          cd scripts/engine/clients && python -m pytest -q
       - name: Neovim headless
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q neovim
-          nvim --headless --clean -l scripts/nvim-smoke.lua target/debug/opentide-lsp
+          nvim --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
 
   # analyze() per language and hover in a 1,000-object workspace (#181).
   # The numbers go in the job summary for comparing runs; they gate nothing.
@@ -146,12 +146,12 @@ jobs:
           python-version: "3.12"
       - name: release.py tests
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
-      - run: python3 scripts/release.py vendor
+      - run: python3 scripts/engine/release.py vendor
       - run: cargo package --workspace --allow-dirty
       # The crates carry the embedded catalogs; catch an oracle reference here
       # rather than at release time.
       - name: license scan (no oracle references)
-        run: bash scripts/license-scan.sh target/package/*.crate
+        run: bash scripts/engine/license-scan.sh target/package/*.crate
 
   grammars:
     runs-on: ubuntu-latest
@@ -161,10 +161,10 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10
-      - run: bash scripts/check-grammars.sh
+      - run: bash scripts/engine/check-grammars.sh
 
   # Both WASM artifacts: the browser highlight() module and the WASI CLI.
-  # scripts/build-wasm.sh pins wasi-sdk for the C parsers and smoke-tests each.
+  # scripts/engine/build-wasm.sh pins wasi-sdk for the C parsers and smoke-tests each.
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -183,7 +183,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-bindgen@0.2.128
-      - run: bash scripts/build-wasm.sh
+      - run: bash scripts/engine/build-wasm.sh
       # The TypeScript client's worker and wasi transports on what was just
       # built, compared with the native CLI.
       - run: cargo build -p opentide-lsp

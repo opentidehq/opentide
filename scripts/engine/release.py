@@ -61,9 +61,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = ROOT / "Cargo.toml"
-CHANGELOG = ROOT / "CHANGELOG.md"
+CHANGELOG = ROOT / "crates" / "CHANGELOG.md"
 ASSET_INCLUDE = re.compile(r'env!\("OPENTIDE_ASSETS"\),\s*"/([^"]+)"')
 # Shipped in every crate: the licence the manifests name, and the third-party notices.
 LEGAL = ["LICENSE", "NOTICE"]

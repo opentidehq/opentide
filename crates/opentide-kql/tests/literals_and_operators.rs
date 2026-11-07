@@ -103,7 +103,7 @@ fn range_is_still_a_column_name() {
 fn string_is_not_a_typed_literal() {
     // Kusto's lexer reads `type(...)` as a literal only for bool, date, datetime,
     // decimal, double, guid, int, int32, int64, long, real, time and timespan;
-    // the string type has no null (docs/kql/types.md).
+    // the string type has no null (docs/engine/kql/types.md).
     let tree = lower("print x = string(null)");
     assert!(matches!(tree, Hir::Query { .. }));
     assert!(

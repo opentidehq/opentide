@@ -3,7 +3,7 @@
 //! the index mapping; on ECS indices that mapping is ECS, so the rules the
 //! engine can only hint about without one become errors here. Each rule is a
 //! verdict recorded against an ECS-mapped index on every release
-//! (`testdata/oracles/elasticsearch/eql-*`): `:`, `like`, and `regex` on a
+//! (`crates/testdata/oracles/elasticsearch/eql-*`): `:`, `like`, and `regex` on a
 //! non-string field, an `in` list of numbers on a string field, a function
 //! argument or arithmetic operand of the wrong type, and an object used as a
 //! value. `==` and `!=` convert their constant, so they are never reported.
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn rejected_on_an_ecs_mapping() {
-        // testdata/oracles/elasticsearch/eql-*: ERR on every release.
+        // crates/testdata/oracles/elasticsearch/eql-*: ERR on every release.
         for query in [
             "process where process.name + 1 == 1",
             "network where cidrMatch(source.address, \"10.0.0.0/8\")",

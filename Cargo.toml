@@ -1,5 +1,10 @@
+# One workspace: the engine crates (crates/, imported from opentidehq/language-server
+# with their history, docs/engine/IMPORT.md) and the PyO3 binding the opentide
+# package compiles in (analysis/, built by hatch_build.py). Members are listed, not
+# globbed. cargo-fuzz builds fuzz/ on nightly with its own workspace and lock file.
 [workspace]
 resolver = "2"
+exclude = ["fuzz"]
 members = [
     "crates/opentide-core",
     "crates/opentide-highlight",
@@ -16,6 +21,7 @@ members = [
     "crates/opentide-analysis",
     "crates/opentide-lsp",
     "crates/opentide-wasm",
+    "analysis",
 ]
 
 [workspace.package]
@@ -67,6 +73,15 @@ js-sys = "0.3"
 lto = true
 codegen-units = 1
 strip = "symbols"
+
+# What an editable install of opentide (`uv sync`) builds for development and CI
+# (hatch_build.py): optimised, so the engine runs at full speed in the Python test
+# suite, without the release profile's slow link-time optimisation.
+[profile.develop]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = "none"
 
 # Dependencies optimised in dev and test builds; workspace crates stay at
 # opt-level 0 with full debuginfo. The tests spend most of their time in toml,

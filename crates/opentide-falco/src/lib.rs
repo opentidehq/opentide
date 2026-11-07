@@ -5,7 +5,7 @@
 //! The verdicts follow the sources Falco itself runs, not documentation:
 //!
 //! - [`parser`] is a port of libsinsp's filter parser, step for step; libs' own
-//!   parser tests (`testdata/conformance/libsinsp/parser.json`) all agree;
+//!   parser tests (`crates/testdata/conformance/libsinsp/parser.json`) all agree;
 //! - [`compile`] is what libsinsp's filter compiler checks next: field
 //!   resolution and arguments, operator and type, values, transformers,
 //!   right-hand side fields, compile warnings; libs' compiler tests
@@ -17,7 +17,7 @@
 //!   (`LOAD_NO_EVTTYPE`, as Sysdig's backend does).
 //!
 //! What depends on the agent (fields and macros the catalogue does not know)
-//! is a warning; what Falco refuses to load is an error. See `docs/FALCO.md`.
+//! is a warning; what Falco refuses to load is an error. See `docs/engine/FALCO.md`.
 
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, LanguageId, Range, Severity, codes, span_to_range,

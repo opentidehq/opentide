@@ -30,7 +30,10 @@ fn lint_codes(codes: Vec<String>) -> Vec<String> {
 fn the_roots_lint_toml_decides_filename_and_metadata_findings() {
     let scratch = Scratch::new("lint-toml");
     let root = &scratch.0;
-    copy_dir(&repo_root().join("testdata/conformance/lint-toml"), root);
+    copy_dir(
+        &repo_root().join("crates/testdata/conformance/lint-toml"),
+        root,
+    );
     // `T-0001.yaml`: not the slug of its name, with an author and no organisation.
     let threat = root.join("objects/threats/T-0001.yaml");
     let threat_uri = file_uri(&threat);
@@ -94,7 +97,10 @@ fn replace_text(lsp: &mut Lsp, uri: &str, text: &str) {
 fn a_lint_toml_mid_edit_re_checks_no_object() {
     let scratch = Scratch::new("lint-toml-mid-edit");
     let root = &scratch.0;
-    copy_dir(&repo_root().join("testdata/conformance/lint-toml"), root);
+    copy_dir(
+        &repo_root().join("crates/testdata/conformance/lint-toml"),
+        root,
+    );
     let threat = root.join("objects/threats/T-0001.yaml");
     let threat_uri = file_uri(&threat);
     let text = std::fs::read_to_string(&threat).unwrap();
@@ -149,7 +155,8 @@ fn a_lint_toml_mid_edit_re_checks_no_object() {
 fn each_root_keeps_its_own_lint_toml() {
     let scratch = Scratch::new("lint-toml-two-roots");
     let (a, b) = (scratch.0.join("a"), scratch.0.join("b"));
-    let fixture = repo_root().join("testdata/conformance/lint-toml/objects/threats/T-0001.yaml");
+    let fixture =
+        repo_root().join("crates/testdata/conformance/lint-toml/objects/threats/T-0001.yaml");
     let text = std::fs::read_to_string(&fixture).unwrap();
     let mut uris = Vec::new();
     for root in [&a, &b] {
@@ -223,7 +230,7 @@ fn each_root_keeps_its_own_lint_toml() {
 fn an_untitled_document_gets_no_filename_finding() {
     let scratch = Scratch::new("lint-toml-untitled");
     copy_dir(
-        &repo_root().join("testdata/conformance/lint-toml"),
+        &repo_root().join("crates/testdata/conformance/lint-toml"),
         &scratch.0,
     );
     std::fs::remove_file(scratch.0.join(".opentide/configurations/lint.toml")).unwrap();
@@ -264,7 +271,10 @@ fn cli_lint_codes(dir: &std::path::Path, file: &str) -> Vec<String> {
 fn cli_analyze_follows_the_workspaces_lint_toml() {
     let scratch = Scratch::new("lint-toml-cli");
     let root = &scratch.0;
-    copy_dir(&repo_root().join("testdata/conformance/lint-toml"), root);
+    copy_dir(
+        &repo_root().join("crates/testdata/conformance/lint-toml"),
+        root,
+    );
     let threats = root.join("objects/threats");
     let threat = threats.join("T-0001.yaml");
     let path = threat.to_str().unwrap();

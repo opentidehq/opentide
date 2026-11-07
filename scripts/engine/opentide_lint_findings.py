@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Record what `opentide lint` reports for a workspace, in the engine's codes (#214).
 
-    python3 scripts/opentide_lint_findings.py DIR            # print the findings
-    python3 scripts/opentide_lint_findings.py DIR --write    # update DIR/opentide-lint.json
-    python3 scripts/opentide_lint_findings.py DIR --check    # fail if it differs
+    python3 scripts/engine/opentide_lint_findings.py DIR            # print the findings
+    python3 scripts/engine/opentide_lint_findings.py DIR --write    # update DIR/opentide-lint.json
+    python3 scripts/engine/opentide_lint_findings.py DIR --check    # fail if it differs
 
 Each record is `{file, code}` with the file relative to DIR. The CLI's codes are
 mapped to the language server's: `filename_mismatch` is `filename_slug`, and a

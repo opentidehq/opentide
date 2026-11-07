@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Changed
+
+- **The analysis engine builds from this repository** ([#800](https://github.com/opentidehq/opentide/issues/800)). Its crates moved here from opentidehq/language-server with their history, and opentide compiles them by path instead of from crates.io; the engine is still language-server 0.11.0, so no finding changes. The sdist carries them, and the wheel and sdist ship `NOTICE`, the notices of the data the engine embeds.
+
 ## [0.23.0] — 2026-11-06
 
 `opentide tui` shows each object as a page with its findings in place, and gains Visibility, Configuration and Chains tabs. Coverage counts the techniques rules inherit, and `generate explorer` can export visibility, opt-in.

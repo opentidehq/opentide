@@ -17,11 +17,11 @@ Citations:
 
 | Layer | Source of truth | Runtime |
 | --- | --- | --- |
-| Commands / eval+stats functions | `catalogs/spl/commands.toml` | hover / completions / unknown-command |
-| **CIM + default fields** | `catalogs/spl/fields.toml` | hover / completions after `by` / `where` / `table` |
-| **Data models** | `catalogs/spl/datamodels.toml` | `from datamodel=`; prefixed fields |
-| **Macros** | `catalogs/spl/macros.toml` | `` `drop_dm_object_name` `` hover + completion |
-| **Command options** | `catalogs/spl/command-options.toml` | argument completion and signature help |
+| Commands / eval+stats functions | `data/catalogs/spl/commands.toml` | hover / completions / unknown-command |
+| **CIM + default fields** | `data/catalogs/spl/fields.toml` | hover / completions after `by` / `where` / `table` |
+| **Data models** | `data/catalogs/spl/datamodels.toml` | `from datamodel=`; prefixed fields |
+| **Macros** | `data/catalogs/spl/macros.toml` | `` `drop_dm_object_name` `` hover + completion |
+| **Command options** | `data/catalogs/spl/command-options.toml` | argument completion and signature help |
 | Grammar | `grammars/tree-sitter-opentide-spl` | macros ≠ comments; dotted fields; subsearches |
 | HighlightSpec | `highlights/spec.toml` | `macro` capture (added in 0.2.0) |
 

@@ -2,7 +2,7 @@
 //! completion, and signature help for Elastic Security `esql` rules.
 //!
 //! The catalog is Elastic's generated function and command definitions
-//! (`catalogs/esql/`). Names the catalog does not know are diagnostics, not
+//! (`data/catalogs/esql/`). Names the catalog does not know are diagnostics, not
 //! parse errors: Kibana 9.4 and 9.5 drop an unknown command from a
 //! non-aggregating rule and run the rest, so the editor has to say so.
 //!
@@ -313,7 +313,7 @@ pub(crate) fn string_value(raw: &str) -> Option<String> {
 }
 
 /// `LIKE` and `RLIKE` patterns Elasticsearch fails to compile, on every
-/// release (testdata/oracles/elasticsearch/esql-functions): a `LIKE` escape
+/// release (crates/testdata/oracles/elasticsearch/esql-functions): a `LIKE` escape
 /// that is not `\*`, `\?`, or `\\`, and an `RLIKE` body Lucene's `RegExp`
 /// rejects or cannot determinize.
 fn pattern_problems(node: Node, source: &str) -> Vec<Diagnostic> {

@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut an opentide language-server release, from the version bump to crates.io, and repin the engine in opentidehq/opentide. Covers scripts/release.py, CHANGELOG.md sections, the Release workflow, proving the GitHub Release and crates.io, and the opentide analysis/Cargo.toml pin PR without which the release is not done. Use when releasing, tagging v*, bumping the workspace version, or publishing crates.
+description: Cut an opentide language-server release, from the version bump to crates.io, and repin the engine in opentidehq/opentide. Covers scripts/engine/release.py, CHANGELOG.md sections, the Release workflow, proving the GitHub Release and crates.io, and the opentide analysis/Cargo.toml pin PR without which the release is not done. Use when releasing, tagging v*, bumping the workspace version, or publishing crates.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -17,14 +17,14 @@ A release has four steps. **It is not done until step 4 is merged**: opentide co
 On a branch from `origin/main`:
 
 ```bash
-python3 scripts/release.py bump X.Y.Z     # workspace version, internal pins, Cargo.lock
-python3 scripts/release.py check vX.Y.Z   # tag, pins and CHANGELOG.md agree
+python3 scripts/engine/release.py bump X.Y.Z     # workspace version, internal pins, Cargo.lock
+python3 scripts/engine/release.py check vX.Y.Z   # tag, pins and CHANGELOG.md agree
 ```
 
 - The `Cargo.lock` diff is only the workspace crates' `version` lines. Anything else means Cargo re-resolved: restore the lock and bump again.
 - In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, keep an empty `## [Unreleased]` above it, and add `[X.Y.Z]: https://github.com/opentidehq/language-server/compare/vPREV...vX.Y.Z` to the links at the bottom.
-- The section's first paragraph is its summary: the GitHub Release and opentide.org show it above the change lists. Write one, and check the entries, as `skills/release-notes/SKILL.md` says: the parts in order (Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed, Security), a bold lead on every entry.
-- `release.py vendor` + `cargo package --workspace --allow-dirty` + `release.py vendor --clean`, then `cargo test --workspace` (with `scripts/requirements-opentide.txt` installed, or `tide_corpus` fails on the missing `opentide` module). The vendored `crates/*/assets`, `LICENSE` and `NOTICE` copies are never committed.
+- The section's first paragraph is its summary: the GitHub Release and opentide.org show it above the change lists. Write one, and check the entries, as `.agents/skills/engine-release-notes/SKILL.md` says: the parts in order (Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed, Security), a bold lead on every entry.
+- `release.py vendor` + `cargo package --workspace --allow-dirty` + `release.py vendor --clean`, then `cargo test --workspace` (with `scripts/engine/requirements-opentide.txt` installed, or `tide_corpus` fails on the missing `opentide` module). The vendored `crates/*/assets`, `LICENSE` and `NOTICE` copies are never committed.
 
 CI green on the PR, then merge it.
 
@@ -35,7 +35,7 @@ Run **Release** on `main` (Actions → Release → Run workflow, or `workflow_di
 1. `verify`: the tag, pins and changelog agree; every crate packages; the licence scan finds no oracle reference.
 2. `native` (8 targets), `wasm`, `highlights`.
 3. `assets`: the licence files (`cargo-about`) and `SHA256SUMS` for every asset (`release.py sums dist`), with no OIDC token.
-4. `attest`: each asset's build provenance (`actions/attest-build-provenance`). It downloads the assets and runs the action, nothing else: crates.io and npm trust `release.yml` as a whole, so an OIDC token minted in any of its jobs can publish, and only `attest`, `crates` and `npm` may mint one (`scripts/test_release.py` checks).
+4. `attest`: each asset's build provenance (`actions/attest-build-provenance`). It downloads the assets and runs the action, nothing else: crates.io and npm trust `release.yml` as a whole, so an OIDC token minted in any of its jobs can publish, and only `attest`, `crates` and `npm` may mint one (`scripts/engine/test_release.py` checks).
 5. `release`: opens the GitHub Release with the changelog section, creating the tag.
 6. `verify-assets`: downloads the published assets and checks `sha256sum -c`, `release.py verify-sums` (SHA256SUMS lists every asset and no other) and `gh attestation verify` on every asset, with `--cert-identity-regex` tying the signature to `release.yml` run from `main` or from the tag (`--repo` alone accepts any workflow of the repository, on any branch). It runs for `publish_only` too, so a release whose check failed is not resumed past it.
 7. `crates` and `npm`: only once `verify-assets` passed. `crates` publishes in dependency order with `cargo publish --no-verify`, so no build script runs where the OIDC and registry tokens are (`verify` built every package, without them); a re-run resumes past crates already published.
@@ -78,12 +78,12 @@ Open a PR against `opentidehq/opentide` `development`, branch `chore/engine-X.Y.
    ```bash
    uv run python scripts/build/check_engine_pin.py --release
    uv run python scripts/build/check_engine_catalog.py
-   scripts/ci-local.sh --full
+   scripts/engine/ci-local.sh --full
    ```
 4. `CHANGELOG.md` `## [Unreleased]` → `### Changed`: one entry naming the release (linked) and the fixes opentide users see, with a bold lead (opentide's `release-notes` skill). Add no blank line inside the list; `test_the_unreleased_lists_hold_no_blank_lines` fails on one.
 5. Follow opentide's PR template, drive the PR to green, and merge it.
 
-If `check_engine_catalog.py` fails, the engine's bundled Tide catalogs are behind opentide's models. Fix it here (`scripts/sync_opentide_schemas.py`, see `skills/catalogs`) and cut a patch release; never edit the catalog in opentide.
+If `check_engine_catalog.py` fails, the engine's bundled Tide catalogs are behind opentide's models. Fix it here (`scripts/engine/sync_opentide_schemas.py`, see `.agents/skills/catalogs`) and cut a patch release; never edit the catalog in opentide.
 
 opentide's own release (`release-management` there) then builds from the crates.io version.
 

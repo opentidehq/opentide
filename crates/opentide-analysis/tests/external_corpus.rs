@@ -1,6 +1,6 @@
 //! Public KQL and SPL detections, plus the same queries with one injected fault.
 //!
-//! Sources and licenses: `testdata/conformance/external/SOURCES.md`.
+//! Sources and licenses: `crates/testdata/conformance/external/SOURCES.md`.
 //! Production rules use syntax the v1 grammars do not cover yet (`summarize
 //! min =`, `between`, leading SPL macros, `stats ... BY`). The harness keeps
 //! the full rule and checks the longest prefix the grammar accepts. An
@@ -65,7 +65,7 @@ fn read_queries(dir: &Path, ext: &str) -> Vec<(String, String)> {
 
 #[test]
 fn external_kql_prefixes_catch_injected_operators() {
-    let dir = repo_root().join("testdata/conformance/external/kql");
+    let dir = repo_root().join("crates/testdata/conformance/external/kql");
     let queries = read_queries(&dir, ".kql");
     assert!(queries.len() >= 10, "expected a real KQL corpus");
     let mut caught = 0;
@@ -107,7 +107,7 @@ fn external_kql_prefixes_catch_injected_operators() {
 
 #[test]
 fn external_spl_prefixes_catch_injected_commands() {
-    let dir = repo_root().join("testdata/conformance/external/spl");
+    let dir = repo_root().join("crates/testdata/conformance/external/spl");
     let queries = read_queries(&dir, ".spl");
     assert!(queries.len() >= 10, "expected a real SPL corpus");
     let mut caught = 0;

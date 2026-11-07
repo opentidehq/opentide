@@ -1,18 +1,18 @@
-# Coverage gap: inventory vs `catalogs/spl/commands.toml`
+# Coverage gap: inventory vs `data/catalogs/spl/commands.toml`
 
 Historical inventory. The punch list is [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).
 
 Comparison of this docs inventory against the **current** catalog compiled into the engine:
 
-[`catalogs/spl/commands.toml`](../../catalogs/spl/commands.toml)
+[`data/catalogs/spl/commands.toml`](../../../data/catalogs/spl/commands.toml)
 
-The catalog is `searchbnf`-informed; opentide still owns the grammar. Unknown command tokens become `spl.unknown` / `spl_unknown_command` (`docs/LANGUAGE.md`). Catalog functions drive completions and hover.
+The catalog is `searchbnf`-informed; opentide still owns the grammar. Unknown command tokens become `spl.unknown` / `spl_unknown_command` (`docs/engine/LANGUAGE.md`). Catalog functions drive completions and hover.
 
 **Authored SPL is never rewritten with an implicit `| search`.** That prefix is a Splunk runtime default only (see [README.md](README.md)).
 
 ## Headline counts (current)
 
-| Surface | In catalog today | Documented in `docs/spl` | Remaining gap |
+| Surface | In catalog today | Documented in `docs/engine/spl` | Remaining gap |
 | --- | --- | --- | --- |
 | Commands (`[[commands]]`) | **150** | Search Reference primary names in [commands.md](commands.md) | Detection-relevant + previously missing 32 rare commands. App/SPL2-only remain out of classic scope. |
 | Eval functions (`kind = "eval"`) | **109** | **107** (93 table rows + 14 trig in prose) | Trig now in catalog. Newer portal/SPL2-only names remain out of classic scope. |

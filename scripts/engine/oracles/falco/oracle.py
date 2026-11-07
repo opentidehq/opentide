@@ -19,13 +19,13 @@ engine reports no `falco_*` or `sysdig_*` error, and when each mapped Falco warn
 warnings Falco cannot know (a field of an unknown plugin, newer syntax, a
 macro the tenant may define) are listed, not failed.
 
-Corpora: testdata/oracles/falco/cases.yaml (every row of docs/FALCO.md) and
+Corpora: crates/testdata/oracles/falco/cases.yaml (every row of docs/engine/FALCO.md) and
 the Falco default rules' syscall conditions with their broken twins
-(testdata/conformance/external/falco/syscall). Plugin sources (k8s_audit,
+(crates/testdata/conformance/external/falco/syscall). Plugin sources (k8s_audit,
 aws_cloudtrail) need their plugin libraries, which the image does not ship.
 
 Usage:
-    python scripts/oracles/falco/oracle.py --rules <falcosecurity/rules checkout> \\
+    python scripts/engine/oracles/falco/oracle.py --rules <falcosecurity/rules checkout> \\
         --docker falcosecurity/falco:0.45.2 [--report out.json]
 """
 
@@ -43,15 +43,15 @@ from typing import Any
 
 import yaml
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
-CASES = ROOT / "testdata" / "oracles" / "falco" / "cases.yaml"
-DEFAULT_CONDITIONS = ROOT / "testdata" / "conformance" / "external" / "falco" / "syscall"
+ROOT = pathlib.Path(__file__).resolve().parents[4]
+CASES = ROOT / "crates" / "testdata" / "oracles" / "falco" / "cases.yaml"
+DEFAULT_CONDITIONS = ROOT / "crates" / "testdata" / "conformance" / "external" / "falco" / "syscall"
 
 #: The Falco default rules files, in the order Falco's own configuration loads them.
 #: The engine's macro, list, and rule catalogue is built from the same files.
 DEFAULT_RULES_FILES = ("falco_rules.yaml", "falco-incubating_rules.yaml", "falco-sandbox_rules.yaml")
 
-#: Intentional, documented differences (docs/FALCO.md, "Known differences"). On a
+#: Intentional, documented differences (docs/engine/FALCO.md, "Known differences"). On a
 #: Sysdig tenant a name Falco's default rules do not define may be a macro, list,
 #: or rule Sysdig manages, so the engine warns where Falco OSS refuses to load.
 #: Each entry: (substring of the only Falco error, engine warning code).

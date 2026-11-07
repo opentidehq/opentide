@@ -224,7 +224,7 @@ Other third-party / app commands (`dbxquery`, `snowincident`, `awssnsalert`, ESC
 
 ## App commands
 
-Commands a Splunk app adds to the search head. Catalogued with `app = "<App>"` in `catalogs/spl/commands.toml` because detections use them widely; stock Splunk lacks them, so `testdata/oracles/exceptions.toml` lists them.
+Commands a Splunk app adds to the search head. Catalogued with `app = "<App>"` in `data/catalogs/spl/commands.toml` because detections use them widely; stock Splunk lacks them, so `crates/testdata/oracles/exceptions.toml` lists them.
 
 | Name | App | Kind | Short docs | Citation |
 | --- | --- | --- | --- | --- |

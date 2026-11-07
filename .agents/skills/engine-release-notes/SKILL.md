@@ -9,15 +9,15 @@ metadata:
 # Release notes: the language server
 
 How to write what integrators read about a release. The release procedure itself (version bump,
-crates.io, the opentide pin) is `skills/release/SKILL.md`.
+crates.io, the opentide pin) is `.agents/skills/engine-release/SKILL.md`.
 
 ## Where they are read
 
 - `CHANGELOG.md` is the only source. Its version section is the GitHub Release body
-  (`scripts/release.py notes X.Y.Z`, run by `release.yml`), and
+  (`scripts/engine/release.py notes X.Y.Z`, run by `release.yml`), and
   [opentide.org/releases/language-server](https://opentide.org/releases/language-server/) renders
   it, synced from `main` every hour.
-- opentide's own changelog cites the release when it repins the engine (`skills/release`, step 4),
+- opentide's own changelog cites the release when it repins the engine (`.agents/skills/engine-release`, step 4),
   so the summary is what opentide's users read about it too.
 
 ## When they are written
@@ -25,7 +25,7 @@ crates.io, the opentide pin) is `skills/release/SKILL.md`.
 - Each pull request with a user-visible change adds its entries under `## [Unreleased]`, in the
   right part.
 - The release pull request renames the section `## [X.Y.Z] - YYYY-MM-DD`, keeps an empty
-  `## [Unreleased]` above it, and writes the summary (`skills/release`, step 1).
+  `## [Unreleased]` above it, and writes the summary (`.agents/skills/engine-release`, step 1).
 - One line per list item and per paragraph, no hard wraps; nested items are indented two spaces.
 
 ## What a reader wants
@@ -150,7 +150,7 @@ nest deeper, and never group a category of a few entries.
 
 | Before | After |
 |--------|-------|
-| The ES\|QL TextMate grammar's scope is `source.opentide.esql`, as `docs/EDITORS.md` promised, not `source.esql`, the scope of Elastic's ES\|QL extension (#195). An editor that loaded both grammars kept only one. An editor that includes the grammar by scope includes `source.opentide.esql` now. The other grammars keep `source.<id>`; `docs/EDITORS.md` says why. HighlightSpec captures are unchanged. | **Breaking**: "**The ES\|QL grammar's scope is `source.opentide.esql`.** It was `source.esql`, Elastic's, so an editor with both extensions kept one grammar (#195)." **Upgrade**: "If your editor includes the ES\|QL grammar by scope, include `source.opentide.esql`." |
+| The ES\|QL TextMate grammar's scope is `source.opentide.esql`, as `docs/engine/EDITORS.md` promised, not `source.esql`, the scope of Elastic's ES\|QL extension (#195). An editor that loaded both grammars kept only one. An editor that includes the grammar by scope includes `source.opentide.esql` now. The other grammars keep `source.<id>`; `docs/engine/EDITORS.md` says why. HighlightSpec captures are unchanged. | **Breaking**: "**The ES\|QL grammar's scope is `source.opentide.esql`.** It was `source.esql`, Elastic's, so an editor with both extensions kept one grammar (#195)." **Upgrade**: "If your editor includes the ES\|QL grammar by scope, include `source.opentide.esql`." |
 | **Fixes.** `deploy` and `--changed` in a repository with no commit yet; a duplicate UUID counted as a load error by `info`; an interrupted `generate` no longer leaves an empty schema. | Three entries under **Fixed**, each with its own lead: "**`deploy` works in a repository with no commit yet.** …" |
 | React component tests in happy-dom, beside a faster unit run (#78). | Nothing: tests are not a change users see. |
 
@@ -165,7 +165,7 @@ crates.io and the packages on npm. So:
   and package exports a change touches; when there are several, in a nested list.
 - Name public API items of the published crates and packages in a nested list ("API:
   `opentide_tide::object_refs`"). Internal types and functions stay out.
-- Message shapes belong in `docs/EDITORS.md`: the entry says what changed and links there.
+- Message shapes belong in `docs/engine/EDITORS.md`: the entry says what changed and links there.
 - Breaking here includes a renamed grammar scope, a diagnostic code or default severity that
   changes, a removed setting or RPC, and a changed public API. A renamed HighlightSpec capture is
   never allowed (AGENTS.md, hard rules).

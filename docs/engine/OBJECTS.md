@@ -48,7 +48,7 @@ The four checks above follow the root's `.opentide/configurations/lint.toml` as 
 | `[metadata] required` | which of `missing_author` and `missing_organisation` apply |
 | `[filenames] severity`, `[metadata] severity` (`error`, `warning`, `info`) | the findings' severity |
 
-Without a `lint.toml` the defaults are `opentide lint`'s: slug filenames, no pattern, `author` and `organisation` required. Other keys `required` names (`reviewed`) have no engine finding. The language server reads the file of the document's root: the editor's buffer while it is open, else the file on disk, else the root's `lint.toml` among the documents a browser host supplies; editing it re-checks open documents. Another host installs it with `opentide_analysis::install_lint`. The host checks the file itself (`opentide-config`); a value of the wrong type keeps its default here. `testdata/conformance/lint-toml` is a workspace with its own conventions and `opentide-lint.json` what `opentide lint` reports for it (`scripts/opentide_lint_findings.py` records it); `crates/opentide-analysis/tests/lint_settings.rs` checks the engine reports the same.
+Without a `lint.toml` the defaults are `opentide lint`'s: slug filenames, no pattern, `author` and `organisation` required. Other keys `required` names (`reviewed`) have no engine finding. The language server reads the file of the document's root: the editor's buffer while it is open, else the file on disk, else the root's `lint.toml` among the documents a browser host supplies; editing it re-checks open documents. Another host installs it with `opentide_analysis::install_lint`. The host checks the file itself (`opentide-config`); a value of the wrong type keeps its default here. `crates/testdata/conformance/lint-toml` is a workspace with its own conventions and `opentide-lint.json` what `opentide lint` reports for it (`scripts/engine/opentide_lint_findings.py` records it); `crates/opentide-analysis/tests/lint_settings.rs` checks the engine reports the same.
 
 Query extras (the engines add these inside an injected query, and on a raw query file):
 
@@ -76,7 +76,7 @@ Query extras (the engines add these inside an injected query, and on a raw query
 - `spl_unknown_datamodel` (error: a near miss of a CIM data model or dataset, with a suggestion)
 - `spl_unknown_datamodel_field` (error: a near miss of a CIM dataset field, `Processes.proces_name`, with a suggestion)
 - `spl_dataset_not_declared` (warning: an index, sourcetype or base-search macro the workspace's Splunk log sources do not declare, when they declare that kind)
-- `ecs_type_mismatch`, `ecs_unknown_field` (Elastic queries whose indices all hold ECS documents; `docs/LANGUAGE.md`, Elastic indices and ECS)
+- `ecs_type_mismatch`, `ecs_unknown_field` (Elastic queries whose indices all hold ECS documents; `docs/engine/LANGUAGE.md`, Elastic indices and ECS)
 - `elastic_dataset_not_declared` (`configurations.elastic.index`, `threat.index`, `data_view_id`, and ES|QL `FROM`, when the workspace declares Elastic datasets)
 - `spl_search_operator`
 - `spl_empty_command`
@@ -100,14 +100,14 @@ Slow-query rules: [kql/DESIGN.md](kql/DESIGN.md#slow-query-warnings), [spl/searc
 
 ## Catalogs
 
-Snapshot from `opentide generate schemas` into `catalogs/tide/`. That is the fallback: a workspace that ran `opentide generate schemas` has its own catalogs under `.opentide/lsp/catalogs/generated/`, in the same shapes, and they replace the bundled ones when the server starts (`initialize`), in `opentide-lsp analyze`, and in the `opentide` CLI:
+Snapshot from `opentide generate schemas` into `data/catalogs/tide/`. That is the fallback: a workspace that ran `opentide generate schemas` has its own catalogs under `.opentide/lsp/catalogs/generated/`, in the same shapes, and they replace the bundled ones when the server starts (`initialize`), in `opentide-lsp analyze`, and in the `opentide` CLI:
 
-- `fields.json` replaces `catalogs/tide/generated/fields.json`: hover, completion and the enum checks follow the workspace's schemas, custom vocabulary included.
-- `deprecations.json` adds `deprecated_field` warnings on top of `catalogs/tide/generated/deprecations.json`.
+- `fields.json` replaces `data/catalogs/tide/generated/fields.json`: hover, completion and the enum checks follow the workspace's schemas, custom vocabulary included.
+- `deprecations.json` adds `deprecated_field` warnings on top of `data/catalogs/tide/generated/deprecations.json`.
 
 A file that does not parse is reported on stderr, and the bundled catalogs are used. Hosts embedding the engine call `opentide_analysis::install_catalog`, `opentide_analysis::set_default_catalog` puts the host's own catalogs where the bundled ones would be used, and `opentide_analysis::bundled_catalog` returns the bundled catalogs so a host can check they match its own models.
 
-Snippets come from the same templates `opentide generate` writes (`catalogs/tide/templates/`).
+Snippets come from the same templates `opentide generate` writes (`data/catalogs/tide/templates/`).
 
 ## UUID graph
 

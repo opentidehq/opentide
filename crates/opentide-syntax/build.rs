@@ -1,14 +1,14 @@
 //! Compiles the vendored tree-sitter parsers. The grammars, and the highlight queries
 //! `include_str!` reads through `OPENTIDE_ASSETS`, sit at the workspace root in a
-//! checkout, or else in the `assets/` copy that `scripts/release.py vendor` puts
+//! checkout, or else in the `assets/` copy that `scripts/engine/release.py vendor` puts
 //! inside a published crate. The checkout wins, so a copy left behind never shadows
 //! the real files.
 fn main() {
     let manifest = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace = manifest.join("../..");
     // A packaged crate builds under target/package/ or the registry, where ../.. has no
-    // catalogs/.
-    let root = if workspace.join("catalogs").is_dir() {
+    // data/catalogs/.
+    let root = if workspace.join("data/catalogs").is_dir() {
         workspace
     } else {
         manifest.join("assets")

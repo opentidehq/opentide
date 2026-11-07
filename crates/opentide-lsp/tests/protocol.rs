@@ -8,8 +8,8 @@ mod common;
 use common::*;
 use serde_json::{Value, json};
 
-const RULE: &str = "testdata/objects/rules/rule-1.0.yaml";
-const OBJECTIVE: &str = "testdata/objects/objective-1.0.yaml";
+const RULE: &str = "crates/testdata/objects/rules/rule-1.0.yaml";
+const OBJECTIVE: &str = "crates/testdata/objects/objective-1.0.yaml";
 
 fn fixture(path: &str) -> String {
     std::fs::read_to_string(repo_root().join(path)).unwrap()

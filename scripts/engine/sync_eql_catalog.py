@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate catalogs/eql/*.toml from an Elasticsearch checkout.
+"""Generate data/catalogs/eql/*.toml from an Elasticsearch checkout.
 
 Reads the EQL function and pipe references
 (docs/reference/query-languages/eql/eql-function-ref.md, eql-pipe-ref.md)
@@ -12,7 +12,7 @@ Facts only. Elastic's prose is not copied (the docs are AGPL/SSPL/ELv2); the
 function, parameter, and pipe summaries below are this catalog's own words.
 
 Usage:
-    python scripts/sync_eql_catalog.py --elasticsearch ../elasticsearch
+    python scripts/engine/sync_eql_catalog.py --elasticsearch ../elasticsearch
 """
 
 from __future__ import annotations
@@ -198,7 +198,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--elasticsearch", type=Path, required=True)
     parser.add_argument(
-        "--out", type=Path, default=Path(__file__).resolve().parent.parent / "catalogs/eql"
+        "--out", type=Path, default=Path(__file__).resolve().parents[2] / "data/catalogs/eql"
     )
     args = parser.parse_args()
     es = args.elasticsearch.resolve()

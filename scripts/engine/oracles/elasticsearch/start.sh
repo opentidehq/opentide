@@ -2,8 +2,8 @@
 # Start a throwaway Elasticsearch container for the live Elasticsearch
 # reference, and print the environment run.py needs:
 #
-#   eval "$(bash scripts/oracles/elasticsearch/start.sh 9.3.0)"
-#   python3 scripts/oracles/elasticsearch/run.py --language eql DIR
+#   eval "$(bash scripts/engine/oracles/elasticsearch/start.sh 9.3.0)"
+#   python3 scripts/engine/oracles/elasticsearch/run.py --language eql DIR
 #
 # The argument is an image tag (default 9.3.0). The image is the official one,
 # pulled through mirror.gcr.io because docker.elastic.co is not reachable from

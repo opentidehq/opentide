@@ -1,7 +1,7 @@
 //! Public ES|QL, EQL, and Lucene queries, plus the same queries with one
 //! injected fault.
 //!
-//! Sources and licences: `testdata/conformance/external/SOURCES.md` (SigmaHQ
+//! Sources and licences: `crates/testdata/conformance/external/SOURCES.md` (SigmaHQ
 //! rules under the Detection Rule License 1.1, converted with pySigma). Unlike
 //! the v1 KQL and SPL sets, the Elastic grammars accept every public query
 //! whole, so no prefix is taken: a public query must produce no error, and its
@@ -27,7 +27,7 @@ fn analyze(language: LanguageId, text: &str) -> Vec<Diagnostic> {
 /// Public queries that Elasticsearch itself rejects, with the error the
 /// engine must report. pySigma's EQL backend writes numbers as `field:4624`;
 /// `:` takes only strings, and every release rejects it on a keyword or
-/// numeric field (testdata/oracles/elasticsearch/eql-argument-types).
+/// numeric field (crates/testdata/oracles/elasticsearch/eql-argument-types).
 const REJECTED: &[(&str, &str)] = &[(
     "eql/win_security_access_token_abuse.eql",
     "eql_argument_type",
@@ -48,7 +48,9 @@ fn public_elastic_queries_and_fault_twins() {
         ("eql", LanguageId::Eql),
         ("lucene", LanguageId::Lucene),
     ] {
-        let dir = repo_root().join("testdata/conformance/external").join(id);
+        let dir = repo_root()
+            .join("crates/testdata/conformance/external")
+            .join(id);
         let mut checked = 0;
         for entry in fs::read_dir(&dir).unwrap() {
             let path = entry.unwrap().path();

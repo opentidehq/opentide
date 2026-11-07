@@ -1,12 +1,12 @@
 // Each npm package packs only its built JavaScript, its declarations and its
 // licence files (#167). Run after `npm ci` in each package:
-//   node scripts/check-npm-packs.mjs
+//   node scripts/engine/check-npm-packs.mjs
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const allowed = /^(package\.json|LICENSE|NOTICE|README\.md|dist\/.+\.(js|d\.ts))$/;
 for (const name of ['lsp-client', 'lsp-worker']) {
   const cwd = join(root, 'packages', name);

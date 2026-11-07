@@ -19,10 +19,10 @@ fn lock() -> MutexGuard<'static, ()> {
 const SHARING: &str = "/w/.opentide/configurations/sharing.toml";
 
 fn install_schemas() {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/config/schemas");
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/config/schemas");
     let mut router = None;
     let mut schemas = Vec::new();
-    for entry in std::fs::read_dir(&dir).expect("testdata/config/schemas") {
+    for entry in std::fs::read_dir(&dir).expect("crates/testdata/config/schemas") {
         let path = entry.expect("entry").path();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let text = std::fs::read_to_string(&path).expect("schema");

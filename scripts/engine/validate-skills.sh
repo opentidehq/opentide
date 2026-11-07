@@ -1,20 +1,32 @@
 #!/usr/bin/env bash
-# Validate skills/*/SKILL.md against the Agent Skills spec and AGENTS.md index.
+# Validate the engine's skills against the Agent Skills spec and the engine's
+# index, crates/AGENTS.md: every .agents/skills/*/SKILL.md that index links, and
+# every one with the engine's frontmatter (metadata.author: opentidehq). The
+# repository's other skills follow the root AGENTS.md
+# (tests/test_package/test_agent_skills.py).
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 fail=0
-agents="$root/AGENTS.md"
+agents="$root/crates/AGENTS.md"
 
 python3 - "$root" "$agents" <<'PY'
 import pathlib, re, sys
 root = pathlib.Path(sys.argv[1])
 agents = pathlib.Path(sys.argv[2]).read_text()
 errors = []
-skills = sorted(p.parent for p in root.joinpath("skills").glob("*/SKILL.md"))
+skills_dir = root / ".agents" / "skills"
+linked = set(re.findall(r"\.agents/skills/([^/)\s`]+)/SKILL\.md", agents))
+skills = sorted(
+    {skills_dir / name for name in linked}
+    | {p.parent for p in skills_dir.glob("*/SKILL.md") if "author: opentidehq" in p.read_text()}
+)
 if not skills:
     errors.append("no skills found")
 for folder in skills:
     name = folder.name
+    if not (folder / "SKILL.md").is_file():
+        errors.append(f"{name}: crates/AGENTS.md links a skill that does not exist")
+        continue
     text = (folder / "SKILL.md").read_text()
     if not text.startswith("---\n"):
         errors.append(f"{name}: SKILL.md must start with YAML frontmatter")
@@ -55,9 +67,9 @@ for folder in skills:
         errors.append(f"{name}: license must be EUPL-1.2")
     if "author: opentidehq" not in front:
         errors.append(f"{name}: metadata.author must be opentidehq")
-    needle = f"skills/{name}/SKILL.md"
+    needle = f".agents/skills/{name}/SKILL.md"
     if needle not in agents:
-        errors.append(f"{name}: AGENTS.md does not link {needle}")
+        errors.append(f"{name}: crates/AGENTS.md does not link {needle}")
     for ref in re.findall(r"references/([A-Za-z0-9_./-]+\.md)", body):
         path = folder / "references" / ref
         if not path.is_file():

@@ -2,7 +2,7 @@
 """Port falcosecurity/libs' filter parser and compiler unit tests to fixtures.
 
 Reads a falcosecurity/libs checkout (Apache-2.0) and writes, under
-``testdata/conformance/libsinsp/``:
+``crates/testdata/conformance/libsinsp/``:
 
 - ``parser.json``: every expression ``userspace/libsinsp/test/filter_parser.ut.cpp``
   hands to the parser, with libs' verdict: ``accept`` (``test_accept``,
@@ -19,7 +19,7 @@ Reads a falcosecurity/libs checkout (Apache-2.0) and writes, under
   the test factory mocks (``c.true``, ``c.buffer``, ...) are flagged ``mock``.
 
 Usage:
-    python scripts/sync_libsinsp_conformance.py --libs ../libs [--check]
+    python scripts/engine/sync_libsinsp_conformance.py --libs ../libs [--check]
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "testdata" / "conformance" / "libsinsp"
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / "crates" / "testdata" / "conformance" / "libsinsp"
 PARSER_TESTS = "userspace/libsinsp/test/filter_parser.ut.cpp"
 COMPILER_TESTS = "userspace/libsinsp/test/filter_compiler.ut.cpp"
 

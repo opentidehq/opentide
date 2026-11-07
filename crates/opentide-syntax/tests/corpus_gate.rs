@@ -1,5 +1,5 @@
 //! Production coverage gate: every required named grammar rule must appear
-//! in `testdata/corpus/<language>/` tagged `prod:<rule>`.
+//! in `crates/testdata/corpus/<language>/` tagged `prod:<rule>`.
 
 use opentide_core::LanguageId;
 use opentide_syntax::{has_error, parse};
@@ -82,22 +82,22 @@ const SPL_REQUIRED: &[&str] = &[
 
 #[test]
 fn kql_corpus_tags_cover_required_productions() {
-    let tags = tags_in("testdata/corpus/kql");
+    let tags = tags_in("crates/testdata/corpus/kql");
     for rule in KQL_REQUIRED {
         assert!(
             tags.contains(*rule),
-            "missing prod:{rule} in testdata/corpus/kql"
+            "missing prod:{rule} in crates/testdata/corpus/kql"
         );
     }
 }
 
 #[test]
 fn spl_corpus_tags_cover_required_productions() {
-    let tags = tags_in("testdata/corpus/spl");
+    let tags = tags_in("crates/testdata/corpus/spl");
     for rule in SPL_REQUIRED {
         assert!(
             tags.contains(*rule),
-            "missing prod:{rule} in testdata/corpus/spl"
+            "missing prod:{rule} in crates/testdata/corpus/spl"
         );
     }
 }
@@ -108,7 +108,7 @@ fn kql_named_rules_in_grammar_json_are_known() {
         fs::read_to_string(repo_root().join("grammars/tree-sitter-opentide-kql/src/grammar.json"))
             .unwrap();
     let rules = named_rules(&json);
-    let tags = tags_in("testdata/corpus/kql");
+    let tags = tags_in("crates/testdata/corpus/kql");
     let skip: BTreeSet<&str> = [
         "source_file",
         "query",
@@ -168,14 +168,14 @@ fn kql_named_rules_in_grammar_json_are_known() {
         }
         assert!(
             tags.contains(rule),
-            "named grammar rule `{rule}` is untagged in testdata/corpus/kql"
+            "named grammar rule `{rule}` is untagged in crates/testdata/corpus/kql"
         );
     }
 }
 
 #[test]
 fn kql_valid_fixtures_parse() {
-    let dir = repo_root().join("testdata/corpus/kql");
+    let dir = repo_root().join("crates/testdata/corpus/kql");
     for entry in fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap().to_string_lossy();
@@ -199,7 +199,7 @@ fn kql_valid_fixtures_parse() {
 
 #[test]
 fn kql_invalid_fixtures_exist_per_required_rule() {
-    let dir = repo_root().join("testdata/corpus/kql");
+    let dir = repo_root().join("crates/testdata/corpus/kql");
     let mut invalid = BTreeSet::new();
     for entry in fs::read_dir(dir).unwrap() {
         let name = entry.unwrap().file_name().to_string_lossy().into_owned();
@@ -217,7 +217,7 @@ fn kql_invalid_fixtures_exist_per_required_rule() {
 
 #[test]
 fn spl_valid_fixtures_parse() {
-    let dir = repo_root().join("testdata/corpus/spl");
+    let dir = repo_root().join("crates/testdata/corpus/spl");
     for entry in fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap().to_string_lossy();
@@ -263,7 +263,7 @@ fn fixture_body(text: &str) -> String {
 }
 
 fn check_gate(gate: &ElasticGate) {
-    let dir = format!("testdata/corpus/{}", gate.id);
+    let dir = format!("crates/testdata/corpus/{}", gate.id);
     let tags = tags_in(&dir);
     let json = fs::read_to_string(repo_root().join(format!(
         "grammars/tree-sitter-opentide-{}/src/grammar.json",

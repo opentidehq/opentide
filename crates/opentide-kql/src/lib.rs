@@ -18,43 +18,43 @@ use tree_sitter::Node;
 
 const OPERATORS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/core/operators.toml"
+    "/data/catalogs/kql/core/operators.toml"
 ));
 const FUNCTIONS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/core/functions.toml"
+    "/data/catalogs/kql/core/functions.toml"
 ));
 const TYPES_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/core/types.toml"
+    "/data/catalogs/kql/core/types.toml"
 ));
 const SCALAR_OPERATORS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/core/operators-scalar.toml"
+    "/data/catalogs/kql/core/operators-scalar.toml"
 ));
 const PLUGINS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/core/evaluate-plugins.toml"
+    "/data/catalogs/kql/core/evaluate-plugins.toml"
 ));
 const SENTINEL_TABLES: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/sentinel/tables.toml"
+    "/data/catalogs/kql/sentinel/tables.toml"
 ));
 const DEFENDER_TABLES: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/defender/tables.toml"
+    "/data/catalogs/kql/defender/tables.toml"
 ));
 const SENTINEL_COLUMNS: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/sentinel/columns.toml"
+    "/data/catalogs/kql/sentinel/columns.toml"
 ));
 const DEFENDER_COLUMNS: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/defender/columns.toml"
+    "/data/catalogs/kql/defender/columns.toml"
 ));
 const OPERATOR_OPTIONS: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/kql/core/operator-options.toml"
+    "/data/catalogs/kql/core/operator-options.toml"
 ));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,7 +191,7 @@ pub struct ColumnRow {
     pub docs: Option<String>,
     pub citation: Option<String>,
     /// Added from the Azure Monitor Logs reference
-    /// (`catalogs/kql/azure-monitor/tables.toml`), not the hand-written catalog.
+    /// (`data/catalogs/kql/azure-monitor/tables.toml`), not the hand-written catalog.
     #[serde(skip)]
     pub from_reference: bool,
     /// Listed in `visibility.toml` (`[[logsources.columns]]`): a column the

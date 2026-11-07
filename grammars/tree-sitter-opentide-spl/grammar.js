@@ -739,7 +739,7 @@ module.exports = grammar({
     // Arguments of a command with no rule of its own. Permissive on purpose:
     // a known command must never be a syntax error because its arguments are
     // not modelled. Command-specific checks belong in the analyzer
-    // (`catalogs/spl/command-options.toml`). `AND`, `OR` and `NOT` are
+    // (`data/catalogs/spl/command-options.toml`). `AND`, `OR` and `NOT` are
     // reserved, so a command that takes a search (`metasearch index=a OR
     // index=b`) gets them as booleans here.
     argument_list: ($) =>

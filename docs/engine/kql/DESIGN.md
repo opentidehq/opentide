@@ -19,9 +19,9 @@ Citations:
 
 | Layer | Source of truth | Runtime |
 | --- | --- | --- |
-| Names (operators, functions, types, plugins, tables) | `catalogs/kql/core/*.toml`, `catalogs/kql/{sentinel,defender}/tables.toml` | hover / completions / highlight overlay |
-| **Columns** | `catalogs/kql/{sentinel,defender}/columns.toml` | hover on `EventID`; completions after `\| where` / `project` / `by` |
-| **Operator options** | `catalogs/kql/core/operator-options.toml` | `join kind=`, `union kind=`, `parse kind=`; signature help |
+| Names (operators, functions, types, plugins, tables) | `data/catalogs/kql/core/*.toml`, `data/catalogs/kql/{sentinel,defender}/tables.toml` | hover / completions / highlight overlay |
+| **Columns** | `data/catalogs/kql/{sentinel,defender}/columns.toml` | hover on `EventID`; completions after `\| where` / `project` / `by` |
+| **Operator options** | `data/catalogs/kql/core/operator-options.toml` | `join kind=`, `union kind=`, `parse kind=`; signature help |
 | Grammar | `grammars/tree-sitter-opentide-kql` | parse / injection |
 | HighlightSpec | `highlights/spec.toml` | capture names only (no column names) |
 
@@ -90,8 +90,8 @@ Refresh function, operator, and plugin signatures from a checkout of
 (`data-explorer/kusto/query`):
 
 ```bash
-python3 scripts/sync_kql_learn_signatures.py --docs /path/to/dataexplorer-docs
-python3 scripts/sync_kql_learn_signatures.py --docs /path/to/dataexplorer-docs --write
+python3 scripts/engine/sync_kql_learn_signatures.py --docs /path/to/dataexplorer-docs
+python3 scripts/engine/sync_kql_learn_signatures.py --docs /path/to/dataexplorer-docs --write
 ```
 
 Without `--write` the script prints repaired, skipped, and suspicious rows

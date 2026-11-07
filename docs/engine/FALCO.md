@@ -7,7 +7,7 @@ The Falco language engine (`crates/opentide-falco`) checks a Sysdig Secure / Fal
 | Syntax | falcosecurity/libs `userspace/libsinsp/filter/parser.{h,cpp}`, `escaping.cpp` | `parser.rs`, a step-for-step port |
 | Compile checks | libs `filter.cpp`, `filter_compare.cpp`, `value_parser.cpp`, `sinsp_filtercheck*.cpp`, `plugin_filtercheck.cpp`, `sinsp_filter_transformers/`, `sinsp_filtercheck_multivalue_transformer.cpp`, `filter/ppm_codes.cpp` | `compile.rs` |
 | Rule loading | falcosecurity/falco `userspace/engine/rule_loader_{reader,collector,compiler}.cpp`, `filter_warning_resolver.cpp`, `falco_load_result.cpp`, `falco_common.cpp` | `lib.rs`, `exceptions.rs` |
-| Fields, events | libs field tables, `driver/event_table.c`, `driver/ppm_events_public.h`; plugin READMEs | `catalogs/falco/` (`scripts/sync_falco_catalog.py`) |
+| Fields, events | libs field tables, `driver/event_table.c`, `driver/ppm_events_public.h`; plugin READMEs | `data/catalogs/falco/` (`scripts/engine/sync_falco_catalog.py`) |
 
 Pinned revisions: libs `f13bc241815d463be433e947b90f42713df1abf9`, falco `b3c37fe82155ce58b6c4fb440b2a72559bb7453f`, plugins `9064e9d620538aebf32912fa00f6b9ef95d46a37`, rules `e7b066bfbc8d81226ca5fa3e95ffd4dee38a2428`.
 
@@ -17,9 +17,9 @@ Pinned revisions: libs `f13bc241815d463be433e947b90f42713df1abf9`, falco `b3c37f
 |-------|----------|-----------|---------|
 | libs parser tests (`filter_parser.ut.cpp`) | 571 expressions (376 accepted, each also padded, with line breaks, with tabs; 195 rejected; 4 exact messages; 7 printed ASTs) + the recursion-limit case | 100 % | `tests/libsinsp_parser.rs` |
 | libs compiler tests (`filter_compiler.ut.cpp`) | 326 filters (153 refused, 15 warnings) | 100 % | `tests/libsinsp_compiler.rs` |
-| **real Falco 0.45.2** (`falco --validate`, libs 0.26.1, the three default rules files loaded) | 364 cases: the 172 of `testdata/oracles/falco/cases.yaml` (every row of this page) and the 192 default-rule conditions and broken twins; Falco loads 208, refuses 156 | 364 / 364: 361 identical, 3 documented differences (names a Sysdig tenant may define: an undefined macro, two tunings of a rule the defaults lack), 0 disagreements | `scripts/oracles/falco/oracle.py`, `oracle.yml` → Falco |
+| **real Falco 0.45.2** (`falco --validate`, libs 0.26.1, the three default rules files loaded) | 364 cases: the 172 of `crates/testdata/oracles/falco/cases.yaml` (every row of this page) and the 192 default-rule conditions and broken twins; Falco loads 208, refuses 156 | 364 / 364: 361 identical, 3 documented differences (names a Sysdig tenant may define: an undefined macro, two tunings of a rule the defaults lack), 0 disagreements | `scripts/engine/oracles/falco/oracle.py`, `oracle.yml` → Falco |
 | Falco default rules (`falcosecurity/rules`, plugin rules) | 241 conditions across six sources, unmodified | 241 / 241 clean (no finding), every broken twin a parse error | `crates/opentide-analysis/tests/external_falco.rs` |
-| Public rules converted to opentide (`testdata/workspaces/falco/`) | 9 rules (syscall, k8s_audit, aws_cloudtrail, a tuning) | clean end to end, every injected fault reported where it is written | `crates/opentide-analysis/tests/falco_rules.rs` |
+| Public rules converted to opentide (`crates/testdata/workspaces/falco/`) | 9 rules (syscall, k8s_audit, aws_cloudtrail, a tuning) | clean end to end, every injected fault reported where it is written | `crates/opentide-analysis/tests/falco_rules.rs` |
 | tree-sitter grammar (highlighting) | the 376 accepted libs inputs | 375 / 376 (`test.op existsand macro`, below) | `tests/tree_sitter_agreement.rs` |
 
 Both harnesses were checked to fail when the engine is wrong (a reordered list-operator table, a numeric operator table that allows everything).
@@ -78,7 +78,7 @@ All proven by `compiler.json` (each operator against `CHARBUF`, `BYTEBUF`, `BOOL
 
 | Rule | Status | Proven by |
 |------|--------|-----------|
-| Catalogue from libsinsp's field tables: type, list-ness, `EPF_ARG_REQUIRED`/`ALLOWED`/`INDEX`/`KEY`, `EPF_NO_RHS`, `EPF_NO_TRANSFORMER`, `EPF_FILTER_ONLY`, `EPF_PRINT_ONLY`, `EPF_DEPRECATED` | yes | `scripts/sync_falco_catalog.py --check` |
+| Catalogue from libsinsp's field tables: type, list-ness, `EPF_ARG_REQUIRED`/`ALLOWED`/`INDEX`/`KEY`, `EPF_NO_RHS`, `EPF_NO_TRANSFORMER`, `EPF_FILTER_ONLY`, `EPF_PRINT_ONLY`, `EPF_DEPRECATED` | yes | `scripts/engine/sync_falco_catalog.py --check` |
 | Resolution class by class in libsinsp's order (`gen_event`, `event`, `thread`, `user`, `group`, `fd`, `fspath`, `utils`, `fdlist`, then plugins); the first class that knows a prefix decides, and only the whole name resolves | yes | `compile.rs` `fields_resolve_with_their_arguments` |
 | `evt.arg[N]`, `evt.arg.NAME` (longest event argument), `evt.rawarg.NAME` (the argument's type), `evt.around[N]` (`=` only), `evt.abspath[.src\|.dst]`, `evt.type.is.NAME\|N` | yes | same; compiler.json |
 | `proc.apid`, `proc.aname`, `proc.aexe`, `proc.aexepath`, `proc.acmdline`, `proc.aargs`, `proc.args` `[N]`; `proc.env`, `proc.aenv` `[KEY]`; `thread.cgroup.NAME`; `fd.types[N]` | yes | same |

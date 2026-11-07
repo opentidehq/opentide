@@ -12,7 +12,7 @@ After `| tstats … from datamodel=Model.Dataset`, fields are prefixed (`Process
 
 ## The catalog
 
-`catalogs/spl/datamodels.toml` lists every CIM data model (Alerts, Authentication, Certificates, Change, Compute_Inventory, DLP, Data_Access, Databases, Email, Endpoint, Event_Signatures, Interprocess_Messaging, Intrusion_Detection, JVM, Malware, Network_Resolution, Network_Sessions, Network_Traffic, Performance, Ticket_Management, Updates, Vulnerabilities, Web), every dataset with its lineage, and every field each dataset defines. `scripts/sync_cim_datamodels.py` generates it from `splunk/pytest-splunk-addon` (`pytest_splunk_addon/data_models`, Apache-2.0), the files Splunk uses to test add-ons for CIM compliance, and adds:
+`data/catalogs/spl/datamodels.toml` lists every CIM data model (Alerts, Authentication, Certificates, Change, Compute_Inventory, DLP, Data_Access, Databases, Email, Endpoint, Event_Signatures, Interprocess_Messaging, Intrusion_Detection, JVM, Malware, Network_Resolution, Network_Sessions, Network_Traffic, Performance, Ticket_Management, Updates, Vulnerabilities, Web), every dataset with its lineage, and every field each dataset defines. `scripts/engine/sync_cim_datamodels.py` generates it from `splunk/pytest-splunk-addon` (`pytest_splunk_addon/data_models`, Apache-2.0), the files Splunk uses to test add-ons for CIM compliance, and adds:
 
 - `_time`, `host`, `source`, `sourcetype` (the CIM base event) on every dataset;
 - `tag` and the Enterprise Security asset and identity fields (`dest_bunit`, `dest_category`, `dest_priority`, the same for `src`, `user`, `src_user`, `dvc`, and `dest_requires_av`, `dest_should_timesync`, `dest_should_update`, `dest_is_expected`) on every root dataset;

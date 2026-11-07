@@ -16,7 +16,7 @@ import pytest_lsp
 from lsprotocol import types
 from pytest_lsp import ClientServerConfig, LanguageClient, client_capabilities
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 BIN = os.environ.get("OPENTIDE_LSP_BIN", str(ROOT / "target" / "debug" / "opentide-lsp"))
 CLIENTS = ["visual_studio_code", "neovim", "emacs"]
 URI = "file:///tmp/opentide-clients/typo.kql"

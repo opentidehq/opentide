@@ -32,7 +32,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-lsp` | yes | `anyhow` | stdio host and CLI |
 | `opentide-wasm` | no (host is JS) | `JsValue` | `highlight` / `legend`, and `LanguageServer` over `opentide-lsp`'s `MessageSession` |
 
-`scripts/check-io-free.sh` greps `use std::fs` and `std::fs::` under those engine `src/` trees. `build.rs` and `tests/` may touch the filesystem. `opentide-lsp` and `main.rs` are the native host.
+`scripts/engine/check-io-free.sh` greps `use std::fs` and `std::fs::` under those engine `src/` trees. `build.rs` and `tests/` may touch the filesystem. `opentide-lsp` and `main.rs` are the native host.
 
 New engine code takes bytes or strings from the caller. It does not open paths, environment variables, or the network. Catalog text is `include_str!` at compile time. `WorkspaceHost` is how analysis sees a workspace (`MemoryWorkspace` in tests).
 
@@ -54,7 +54,7 @@ Pinned stack (do not bump in passing):
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
 
-`Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI does not pass `--locked`. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/cloud-agent-install.sh` does this restore after warming the build.
+`Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI does not pass `--locked`. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/engine/cloud-agent-install.sh` does this restore after warming the build.
 
 ## Types agents get wrong
 
@@ -95,7 +95,7 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 ## Tests
 
 - Engine unit tests sit next to the code (`#[cfg(test)]`) or in `crates/<crate>/tests/*.rs`.
-- Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `testdata/`.
+- Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `crates/testdata/`.
 - Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct unless the user asked; there is no snapshot crate.
 - `cargo test --workspace` is the default. Name the test binary when iterating: `cargo test -p opentide-kql --lib`.
 - CI runs `cargo nextest run --workspace --profile ci` (`.config/nextest.toml`) and then `cargo test --workspace --doc`, because nextest does not run doctests. Each test gets its own process, so a test cannot rely on a `OnceLock` or other static that another test filled. If you have nextest installed, `cargo nextest run --workspace` is the same check.

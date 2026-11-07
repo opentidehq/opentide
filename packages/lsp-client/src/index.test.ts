@@ -106,16 +106,16 @@ test("document selector covers every language", () => {
   }
 });
 
-// The language ids docs/EDITORS.md promises editors (#197): the first
+// The language ids docs/engine/EDITORS.md promises editors (#197): the first
 // sentence of the line that starts with `lead`.
 function editorLanguageIds(lead: string): string[] {
-  const editors = readFileSync(join(root, "docs/EDITORS.md"), "utf8");
+  const editors = readFileSync(join(root, "docs/engine/EDITORS.md"), "utf8");
   const line = editors.split(/\r?\n/).find((l) => l.startsWith(lead));
-  assert.ok(line, `docs/EDITORS.md has a line starting "${lead}"`);
+  assert.ok(line, `docs/engine/EDITORS.md has a line starting "${lead}"`);
   return [...line.slice(lead.length).split(". ")[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]);
 }
 
-test("document selector covers each language docs/EDITORS.md lists, opentide-config included", () => {
+test("document selector covers each language docs/engine/EDITORS.md lists, opentide-config included", () => {
   // The list at the top of the page and the one under VS Code.
   for (const lead of ["Languages: ", "Language ids are the server's: "]) {
     const documented = editorLanguageIds(lead);

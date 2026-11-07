@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the two WASM artifacts and smoke-test them (skills/wasm-hosts).
+# Build the two WASM artifacts and smoke-test them (.agents/skills/wasm-hosts).
 #
 #   browser   wasm32-unknown-unknown  crates/opentide-wasm (wasm-bindgen)
 #   wasi      wasm32-wasip1           crates/opentide-lsp (the CLI, for vscode.dev)
@@ -10,9 +10,9 @@
 # (crates/opentide-wasm/src/libc_syscalls.rs), so it imports nothing but
 # wasm-bindgen's glue. WASI_SDK_PATH reuses an existing install.
 #
-#   scripts/build-wasm.sh [browser] [wasi]    default: both
+#   scripts/engine/build-wasm.sh [browser] [wasi]    default: both
 set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 targets=("$@")
 [[ ${#targets[@]} -gt 0 ]] || targets=(browser wasi)
 
@@ -45,11 +45,11 @@ for target in "${targets[@]}"; do
       RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=$sysroot/lib/wasm32-wasip1/libc.a" \
         cargo build --release -p opentide-wasm --target wasm32-unknown-unknown
       wasm="$root/target/wasm32-unknown-unknown/release/opentide_wasm.wasm"
-      node "$root/scripts/wasm-smoke.mjs" imports "$wasm"
+      node "$root/scripts/engine/wasm-smoke.mjs" imports "$wasm"
       if command -v wasm-bindgen >/dev/null 2>&1; then
         out="$root/target/wasm-bindgen"
         wasm-bindgen --target nodejs --out-dir "$out" "$wasm"
-        node "$root/scripts/wasm-smoke.mjs" browser "$out/opentide_wasm.js"
+        node "$root/scripts/engine/wasm-smoke.mjs" browser "$out/opentide_wasm.js"
       else
         echo "wasm-bindgen not installed; highlight() not exercised"
       fi ;;
@@ -59,7 +59,7 @@ for target in "${targets[@]}"; do
       AR_wasm32_wasip1="$WASI_SDK_PATH/bin/llvm-ar" \
       CFLAGS_wasm32_wasip1="--sysroot=$sysroot" \
         cargo build --release -p opentide-lsp --target wasm32-wasip1
-      node "$root/scripts/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
+      node "$root/scripts/engine/wasm-smoke.mjs" wasi "$root/target/wasm32-wasip1/release/opentide-lsp.wasm" ;;
     *)
       echo "unknown target: $target (browser or wasi)"
       exit 2 ;;

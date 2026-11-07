@@ -1,7 +1,7 @@
 //! KQL query strings from OpenSearch Dashboards' kuery tests (Apache-2.0,
 //! forked from Kibana 7.10.2), with the verdict each test expects. Kibana's
 //! current grammar agrees on every one. Source, pin, and licence:
-//! `testdata/conformance/external/SOURCES.md`.
+//! `crates/testdata/conformance/external/SOURCES.md`.
 //!
 //! An accepted query must produce no engine error and a rejected one must
 //! produce one. Each accepted query with a `:` outside quotes also gets a
@@ -59,7 +59,7 @@ fn fault_twin(query: &str) -> Option<String> {
 #[test]
 fn opensearch_dashboards_kuery_tests() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/external/kuery-opensearch-dashboards/cases.tsv");
+        .join("../testdata/conformance/external/kuery-opensearch-dashboards/cases.tsv");
     let text = std::fs::read_to_string(path).expect("cases.tsv");
     let (mut checked, mut twins) = (0, 0);
     let mut wrong = Vec::new();

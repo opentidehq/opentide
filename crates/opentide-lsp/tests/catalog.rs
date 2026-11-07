@@ -7,8 +7,8 @@ mod common;
 use common::*;
 use serde_json::{Value, json};
 
-const RULE: &str = "testdata/objects/rules/rule-1.0.yaml";
-const OBJECTIVE: &str = "testdata/objects/objective-1.0.yaml";
+const RULE: &str = "crates/testdata/objects/rules/rule-1.0.yaml";
+const OBJECTIVE: &str = "crates/testdata/objects/objective-1.0.yaml";
 const MODEL: &str = "00000000-0000-4000-8002-000000000001";
 const DANGLING: &str = "00000000-0000-4000-8002-0000000000ff";
 

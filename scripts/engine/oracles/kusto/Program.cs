@@ -1,4 +1,4 @@
-// Kusto.Language side of scripts/oracles/oracle.py. Three modes, JSON on stdout:
+// Kusto.Language side of scripts/engine/oracles/oracle.py. Three modes, JSON on stdout:
 //   parse <file>...                    one object per file: syntax errors from KustoCode.Parse
 //   semantic <schema.json> <file>...   one object per file: errors from KustoCode.ParseAndAnalyze
 //                                      against a database of the engine's catalog tables

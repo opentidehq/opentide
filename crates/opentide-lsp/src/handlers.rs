@@ -1479,7 +1479,7 @@ fn handle_document_link(
 }
 
 /// The command a reference lens runs: a client shows the locations it is
-/// given (`opentide.showReferences`, see docs/EDITORS.md).
+/// given (`opentide.showReferences`, see docs/engine/EDITORS.md).
 pub const SHOW_REFERENCES: &str = "opentide.showReferences";
 
 /// "N rules use this objective" on an object's UUID, from the cached index

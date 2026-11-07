@@ -1,7 +1,7 @@
 //! Conformance (#214): the Tide checks follow `.opentide/configurations/lint.toml`
-//! as `opentide lint` does. `testdata/conformance/lint-toml/opentide-lint.json`
+//! as `opentide lint` does. `crates/testdata/conformance/lint-toml/opentide-lint.json`
 //! is what `opentide lint` reports for that workspace, in the engine's codes
-//! (`scripts/opentide_lint_findings.py` records it); the engine, given the same
+//! (`scripts/engine/opentide_lint_findings.py` records it); the engine, given the same
 //! `lint.toml`, must report exactly those filename and metadata findings.
 //!
 //! The lint settings are process-wide, as the declared datasets are, so the
@@ -14,7 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-const CASE: &str = "testdata/conformance/lint-toml";
+const CASE: &str = "crates/testdata/conformance/lint-toml";
 const CODES: [&str; 4] = [
     "filename_slug",
     "filename_pattern",

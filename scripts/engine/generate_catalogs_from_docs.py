@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generate machine-readable catalogs from docs/kql and docs/spl inventories."""
+"""Generate machine-readable catalogs from docs/engine/kql and docs/engine/spl inventories."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def extract_backtick_names(cell: str) -> list[str]:
@@ -105,7 +105,7 @@ def alias_call_signature(alias: str, primary: str, signature: str) -> str:
 
 
 def write_kql_operators() -> None:
-    rows = parse_md_tables(ROOT / "docs/kql/operators.md")
+    rows = parse_md_tables(ROOT / "docs/engine/kql/operators.md")
     seen: set[str] = set()
     chunks = [
         "# KQL tabular operators. Generated from docs/kql/operators.md — edit the inventory, then re-run",
@@ -157,7 +157,7 @@ def write_kql_operators() -> None:
             chunks.append(f'docs = "Alias of {name}."')
             chunks.append(f'alias_of = "{name}"')
             chunks.append("")
-    (ROOT / "catalogs/kql/core/operators.toml").write_text("\n".join(chunks).rstrip() + "\n")
+    (ROOT / "data/catalogs/kql/core/operators.toml").write_text("\n".join(chunks).rstrip() + "\n")
     print(f"kql operators: {len(seen)}")
 
 
@@ -187,8 +187,8 @@ def write_kql_functions() -> None:
         chunks.append("")
 
     for path, kind in [
-        (ROOT / "docs/kql/scalar-functions.md", "scalar"),
-        (ROOT / "docs/kql/aggregation-functions.md", "aggregate"),
+        (ROOT / "docs/engine/kql/scalar-functions.md", "scalar"),
+        (ROOT / "docs/engine/kql/aggregation-functions.md", "aggregate"),
     ]:
         for row in parse_md_tables(path):
             name_cell = row.get("name") or row.get("function") or ""
@@ -207,12 +207,12 @@ def write_kql_functions() -> None:
                     n = n.split("(")[0]
                 add(n, signature, docs, citation, kind)
 
-    (ROOT / "catalogs/kql/core/functions.toml").write_text("\n".join(chunks).rstrip() + "\n")
+    (ROOT / "data/catalogs/kql/core/functions.toml").write_text("\n".join(chunks).rstrip() + "\n")
     print(f"kql functions: {len(seen)}")
 
 
 def write_kql_scalar_ops() -> None:
-    rows = parse_md_tables(ROOT / "docs/kql/operators-scalar.md")
+    rows = parse_md_tables(ROOT / "docs/engine/kql/operators-scalar.md")
     chunks = ["# KQL scalar/comparison operators. Generated from docs/kql/operators-scalar.md", ""]
     seen: set[str] = set()
     for row in rows:
@@ -241,7 +241,7 @@ def write_kql_scalar_ops() -> None:
             if citation:
                 chunks.append(f'citation = "{toml_escape(citation)}"')
             chunks.append("")
-    (ROOT / "catalogs/kql/core/operators-scalar.toml").write_text("\n".join(chunks).rstrip() + "\n")
+    (ROOT / "data/catalogs/kql/core/operators-scalar.toml").write_text("\n".join(chunks).rstrip() + "\n")
     print(f"kql scalar operators: {len(seen)}")
 
 
@@ -282,9 +282,9 @@ def write_tables(src: Path, dest: Path, profile: str) -> None:
 
 
 def write_spl() -> None:
-    cmd_rows = parse_md_tables(ROOT / "docs/spl/commands.md")
-    eval_rows = parse_md_tables(ROOT / "docs/spl/eval-functions.md")
-    stats_rows = parse_md_tables(ROOT / "docs/spl/stats-functions.md")
+    cmd_rows = parse_md_tables(ROOT / "docs/engine/spl/commands.md")
+    eval_rows = parse_md_tables(ROOT / "docs/engine/spl/eval-functions.md")
+    stats_rows = parse_md_tables(ROOT / "docs/engine/spl/stats-functions.md")
     chunks = [
         "# Splunk search commands and functions. Generated from docs/spl/ — authored SPL is not rewritten.",
         "",
@@ -367,11 +367,11 @@ def write_spl() -> None:
                         citation,
                     )
     print(f"spl functions: {len(fn_seen)}")
-    (ROOT / "catalogs/spl/commands.toml").write_text("\n".join(chunks).rstrip() + "\n")
+    (ROOT / "data/catalogs/spl/commands.toml").write_text("\n".join(chunks).rstrip() + "\n")
 
 
 def write_types() -> None:
-    (ROOT / "catalogs/kql/core/types.toml").write_text(
+    (ROOT / "data/catalogs/kql/core/types.toml").write_text(
         """# KQL scalar types. Generated from docs/kql/types.md
 
 [[types]]
@@ -412,13 +412,13 @@ def main() -> None:
     write_kql_functions()
     write_kql_scalar_ops()
     write_tables(
-        ROOT / "docs/kql/sentinel-tables.md",
-        ROOT / "catalogs/kql/sentinel/tables.toml",
+        ROOT / "docs/engine/kql/sentinel-tables.md",
+        ROOT / "data/catalogs/kql/sentinel/tables.toml",
         "sentinel",
     )
     write_tables(
-        ROOT / "docs/kql/defender-tables.md",
-        ROOT / "catalogs/kql/defender/tables.toml",
+        ROOT / "docs/engine/kql/defender-tables.md",
+        ROOT / "data/catalogs/kql/defender/tables.toml",
         "defender",
     )
     write_spl()

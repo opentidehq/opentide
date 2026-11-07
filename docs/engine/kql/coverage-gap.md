@@ -1,8 +1,8 @@
-# Coverage gap: `catalogs/kql` vs Microsoft Learn inventory
+# Coverage gap: `data/catalogs/kql` vs Microsoft Learn inventory
 
 Historical inventory (2026-09-15). The punch list is [IMPLEMENTATION-GAPS.md](IMPLEMENTATION-GAPS.md).
 
-This file compares the machine-readable catalogs under [`/workspace/catalogs/kql/`](../../catalogs/kql/) with the Microsoft Learn–backed inventory in [`/workspace/docs/kql/`](./), plus grammar / highlights / LSP surface gaps.
+This file compares the machine-readable catalogs under [`/workspace/catalogs/kql/`](../../../data/catalogs/kql/) with the Microsoft Learn–backed inventory in [`/workspace/docs/kql/`](./), plus grammar / highlights / LSP surface gaps.
 
 **Snapshot date:** 2026-09-15 (catalogs already expanded; replaces the stale “16 operators / 8 functions” counts).
 
@@ -10,13 +10,13 @@ This file compares the machine-readable catalogs under [`/workspace/catalogs/kql
 
 | Catalog file | Count | Notes |
 | --- | --- | --- |
-| [`core/operators.toml`](../../catalogs/kql/core/operators.toml) | **53** | Tabular ops + aliases (`filter`, `limit`, `order`, `mvexpand`) |
-| [`core/operators-scalar.toml`](../../catalogs/kql/core/operators-scalar.toml) | **54** | Includes `between`, `!between`, `-`, `*` |
-| [`core/functions.toml`](../../catalogs/kql/core/functions.toml) | **409** | 364 `scalar` + 45 `aggregate` (includes `series_*` / `geo_*` / `convert_*`) |
-| [`core/types.toml`](../../catalogs/kql/core/types.toml) | **10** | Full scalar type set |
-| [`core/evaluate-plugins.toml`](../../catalogs/kql/core/evaluate-plugins.toml) | **22** | `evaluate` plugin names + AM-no warnings |
-| [`sentinel/tables.toml`](../../catalogs/kql/sentinel/tables.toml) | **99** | Common first-party + selected connectors |
-| [`defender/tables.toml`](../../catalogs/kql/defender/tables.toml) | **65** | Advanced hunting schema tables |
+| [`core/operators.toml`](../../../data/catalogs/kql/core/operators.toml) | **53** | Tabular ops + aliases (`filter`, `limit`, `order`, `mvexpand`) |
+| [`core/operators-scalar.toml`](../../../data/catalogs/kql/core/operators-scalar.toml) | **54** | Includes `between`, `!between`, `-`, `*` |
+| [`core/functions.toml`](../../../data/catalogs/kql/core/functions.toml) | **409** | 364 `scalar` + 45 `aggregate` (includes `series_*` / `geo_*` / `convert_*`) |
+| [`core/types.toml`](../../../data/catalogs/kql/core/types.toml) | **10** | Full scalar type set |
+| [`core/evaluate-plugins.toml`](../../../data/catalogs/kql/core/evaluate-plugins.toml) | **22** | `evaluate` plugin names + AM-no warnings |
+| [`sentinel/tables.toml`](../../../data/catalogs/kql/sentinel/tables.toml) | **99** | Common first-party + selected connectors |
+| [`defender/tables.toml`](../../../data/catalogs/kql/defender/tables.toml) | **65** | Advanced hunting schema tables |
 
 **Still no catalog file for:** control/management commands (parsed + diagnosed as unsupported), syntax constructs.
 
@@ -67,7 +67,7 @@ Parsed today: equality, `has`/`contains`/`startswith`/`endswith` (+ many `_cs` /
 
 ### Highlights
 
-Canonical: [`highlights/queries/kql/highlights.scm`](../../highlights/queries/kql/highlights.scm) (synced to grammar `queries/`).
+Canonical: [`highlights/queries/kql/highlights.scm`](../../../highlights/queries/kql/highlights.scm) (synced to grammar `queries/`).
 
 Literal `@operator` rules include `startswith_cs` / `endswith_cs` / `hasprefix*` / `hassuffix*` / `has_ipv4*`. Rules for tokens absent from the grammar will not match until `grammar.js` + generated parser are updated.
 
@@ -125,7 +125,7 @@ Catalog (**65**). `DEFENDER_TABLES_MAP` in `opentide-kql` still hard-codes ~18 n
 
 ## Completions / hover / diagnostics
 
-From [`crates/opentide-kql/src/lib.rs`](../../crates/opentide-kql/src/lib.rs):
+From [`crates/opentide-kql/src/lib.rs`](../../../crates/opentide-kql/src/lib.rs):
 
 | Feature | Uses |
 | --- | --- |
@@ -144,7 +144,7 @@ From [`crates/opentide-kql/src/lib.rs`](../../crates/opentide-kql/src/lib.rs):
 
 1. Grammar tokens for `hasprefix*` / `hassuffix*` / `has_ipv4*` / `!between` + regenerate parser.
 2. Catalog `functions.toml`: all `series_*`, then `geo_*`, then `convert_*`.
-3. New `catalogs/kql/core/evaluate-plugins.toml`; wire completions after `evaluate`.
+3. New `data/catalogs/kql/core/evaluate-plugins.toml`; wire completions after `evaluate`.
 4. Fix `hll_merge` kind; expand operator validity flags.
 5. Drive Defender required-column map from `defender/tables.toml`.
 6. Optional: control-command catalog; type name completions.

@@ -28,9 +28,12 @@ use tree_sitter::Node;
 
 const FUNCTIONS_TOML: &str = include_str!(concat!(
     env!("OPENTIDE_ASSETS"),
-    "/catalogs/eql/functions.toml"
+    "/data/catalogs/eql/functions.toml"
 ));
-const PIPES_TOML: &str = include_str!(concat!(env!("OPENTIDE_ASSETS"), "/catalogs/eql/pipes.toml"));
+const PIPES_TOML: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/data/catalogs/eql/pipes.toml"
+));
 
 const SYNTAX_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/eql/eql-syntax";
 

@@ -2,7 +2,7 @@
 //! `QueryParserTestBase`, Apache-2.0), with the verdict the Lucene 10.5.2
 //! classic parser gives each one (leading wildcards allowed, as
 //! Elasticsearch allows them). Source, pin, and licence:
-//! `testdata/conformance/external/SOURCES.md`.
+//! `crates/testdata/conformance/external/SOURCES.md`.
 //!
 //! An accepted query must produce no engine error, and a rejected one must
 //! produce one, except for the cases listed below with the reason.
@@ -43,7 +43,7 @@ fn unescape(s: &str) -> String {
 #[test]
 fn lucene_parser_test_queries() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/conformance/external/lucene-queryparser/cases.tsv");
+        .join("../testdata/conformance/external/lucene-queryparser/cases.tsv");
     let text = std::fs::read_to_string(path).expect("cases.tsv");
     let mut checked = 0;
     let mut wrong = Vec::new();

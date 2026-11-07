@@ -207,7 +207,7 @@ fn a_query_that_does_not_parse_gets_no_column_diagnostic() {
 
 #[test]
 fn summarize_names_its_columns_as_kusto_does() {
-    // Verified against the KQL oracle (scripts/oracles).
+    // Verified against the KQL oracle (scripts/engine/oracles).
     assert_eq!(
         output(
             "SecurityEvent | summarize count(), dcount(Account), make_set(Account), make_list(Account), sum(EventID), countif(EventID == 1), take_any(Activity), make_set(Account, 10) by Computer"
@@ -457,7 +457,7 @@ fn the_pass_says_which_operator_made_the_columns_a_predicate_reads() {
 
 #[test]
 fn operators_kusto_does_not_define_for_a_type_are_errors() {
-    // Each verified against the KQL oracle (scripts/oracles): KS106 or KS107.
+    // Each verified against the KQL oracle (scripts/engine/oracles): KS106 or KS107.
     for src in [
         "SecurityEvent | where EventID has '46'",
         "SecurityEvent | where EventID contains '46'",

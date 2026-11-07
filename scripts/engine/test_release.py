@@ -1,5 +1,5 @@
-"""Tests for scripts/release.py's release-asset checksums and for the shape
-of .github/workflows/release.yml (#196).
+"""Tests for scripts/engine/release.py's release-asset checksums and for the shape
+of .github/engine-workflows/release.yml (#196).
 
     python3 -m unittest discover -s scripts -p 'test_*.py'
 """
@@ -199,7 +199,7 @@ class PublishTest(unittest.TestCase):
             self.assertIn("--no-verify", command)
 
 
-WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release.yml"
+WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "engine-workflows" / "release.yml"
 
 
 def workflow_jobs() -> dict[str, str]:
@@ -279,11 +279,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
         verify = jobs["verify"]
         push = verify.index('if [ "${GITHUB_EVENT_NAME}" = "push" ]; then')
         dispatch = verify.index("else", push)
-        self.assertIn('python3 scripts/release.py unpublished "${tag}"', verify[push:dispatch])
+        self.assertIn('python3 scripts/engine/release.py unpublished "${tag}"', verify[push:dispatch])
         # And the release job checks again before it replaces anything: a
         # single job can be re-run on its own.
         attach = jobs["release"]
-        guard = attach.index('python3 scripts/release.py unpublished "${TAG}"')
+        guard = attach.index('python3 scripts/engine/release.py unpublished "${TAG}"')
         self.assertLess(attach.index("gh release create"), guard)
         self.assertLess(guard, attach.index("gh release upload"))
         self.assertNotIn("--clobber", attach)
@@ -300,11 +300,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_the_published_assets_are_checked_against_every_line_of_the_sums(self) -> None:
         verify_assets = workflow_jobs()["verify-assets"]
-        self.assertIn("python3 scripts/release.py verify-sums published", verify_assets)
+        self.assertIn("python3 scripts/engine/release.py verify-sums published", verify_assets)
 
     def test_every_attestation_check_names_the_release_workflow_and_its_ref(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        readme = (WORKFLOW.parents[2] / "README.md").read_text(encoding="utf-8")
+        readme = (WORKFLOW.parents[2] / "crates" / "opentide-lsp" / "README.md").read_text(encoding="utf-8")
         for source in [text, readme]:
             checks = re.findall(r"gh attestation verify (?:[^\n]*\\\n)*[^\n]*", source)
             self.assertTrue(checks)
@@ -326,7 +326,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             ["bash", "-c", script], capture_output=True, text=True, env=env, check=True
         )
         identity = re.compile(done.stdout)
-        readme = (WORKFLOW.parents[2] / "README.md").read_text(encoding="utf-8")
+        readme = (WORKFLOW.parents[2] / "crates" / "opentide-lsp" / "README.md").read_text(encoding="utf-8")
         found = re.search(r"--cert-identity-regex '([^']+)'", readme)
         assert found is not None, "README.md documents the identity"
         documented = re.compile(found.group(1).replace(r"vX\.Y\.Z", r"v1\.2\.3"))
