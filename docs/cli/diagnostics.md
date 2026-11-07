@@ -33,14 +33,18 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`configuration`](#configuration) | The workspace configuration files under `.opentide/configurations/` load. |
 | [`cql_assignment_as`](#cql_assignment_as) | A CQL assignment names the output field and the function's as= parameter names it again. |
 | [`cql_correlate_aggregate`](#cql_correlate_aggregate) | A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow. |
+| [`cql_correlate_placement`](#cql_correlate_placement) | CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries. |
 | [`cql_deprecated_function`](#cql_deprecated_function) | CrowdStrike's reference marks the CQL function deprecated. |
 | [`cql_duplicate_parameter`](#cql_duplicate_parameter) | A CQL function parameter is given more than once. |
+| [`cql_event_function_after_aggregate`](#cql_event_function_after_aggregate) | A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190. |
 | [`cql_free_text_after_aggregate`](#cql_free_text_after_aggregate) | A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190. |
 | [`cql_link_outside_correlate`](#cql_link_outside_correlate) | The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields. |
+| [`cql_match_guard`](#cql_match_guard) | A CQL match guard is an aggregate function; a guard must be a filter. |
 | [`cql_missing_parameter`](#cql_missing_parameter) | A CQL function call leaves out a required parameter. |
 | [`cql_parameter_value`](#cql_parameter_value) | A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds. |
 | [`cql_parse_error`](#cql_parse_error) | The CrowdStrike Query Language (CQL) query does not parse. |
 | [`cql_regex_flag`](#cql_regex_flag) | A CQL regex literal has a flag other than d, g, i, m or F. |
+| [`cql_regex_group_under_or`](#cql_regex_group_under_or) | A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields. |
 | [`cql_removed_function`](#cql_removed_function) | The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it. |
 | [`cql_string_escape`](#cql_string_escape) | A CQL string has an escape LogScale does not translate; it keeps the backslash and the character. |
 | [`cql_unknown_event`](#cql_unknown_event) | The #event_simpleName value is not a Falcon sensor event the engine knows. |
@@ -614,6 +618,22 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
+## cql_correlate_placement
+
+CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries.
+
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
+
 ## cql_deprecated_function
 
 CrowdStrike's reference marks the CQL function deprecated.
@@ -646,6 +666,22 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
+## cql_event_function_after_aggregate
+
+A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190.
+
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
+
 ## cql_free_text_after_aggregate
 
 A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190.
@@ -665,6 +701,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 ## cql_link_outside_correlate
 
 The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.
+
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
+
+## cql_match_guard
+
+A CQL match guard is an aggregate function; a guard must be a filter.
 
 Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -729,6 +781,22 @@ Change the query where the frame points, then run `opentide validate query` (`--
 ## cql_regex_flag
 
 A CQL regex literal has a flag other than d, g, i, m or F.
+
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+
+### Example
+
+```text
+opentide validate query
+```
+
+### How to fix
+
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
+
+## cql_regex_group_under_or
+
+A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields.
 
 Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 

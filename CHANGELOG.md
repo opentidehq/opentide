@@ -12,14 +12,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Breaking
 
-- **CrowdStrike queries are checked as CQL, and `crowdstrike_unsupported` is gone.** `configurations.crowdstrike.query` was never checked, and the editor showed one `crowdstrike_unsupported` warning on it; `opentide validate` now fails a rule whose query Next-Gen SIEM would refuse, with the `cql_*` codes ([opentidehq/language-server@79c8962](https://github.com/opentidehq/language-server/commit/79c8962197ba3386f3f33259cad9dc43b34ec245)). `validate query --platform crowdstrike` checks offline where it reported `supported: false`; `--live` still reports `supported: false`.
+- **CrowdStrike queries are checked as CQL, and `crowdstrike_unsupported` is gone.** `configurations.crowdstrike.query` was never checked, and the editor showed one `crowdstrike_unsupported` warning on it; `opentide validate` now fails a rule whose query Next-Gen SIEM would refuse, with the `cql_*` codes ([opentidehq/language-server@de14771](https://github.com/opentidehq/language-server/commit/de14771f8d2147c8183f497ef5a7f8dd5db10173)). `validate query --platform crowdstrike` checks offline where it reported `supported: false`; `--live` still reports `supported: false`.
 
 ### Added
 
 - **CrowdStrike Next-Gen SIEM queries are checked offline, as CQL.** The analysis engine gains the CrowdStrike Query Language: `opentide validate`, `validate query --platform crowdstrike`, `lint`, `opentide lsp` and MCP `validate_query` parse a CrowdStrike block's `query`, a hunt's query with `system: crowdstrike` and a `.cql` file, against CrowdStrike's grammar and function reference ([Platforms](docs/usage/concepts/platforms.md#crowdstrike-the-offline-cql-checks)).
-  - Errors: `cql_parse_error`, `cql_unknown_function` (with the nearest name), `cql_removed_function`, `cql_unknown_parameter`, `cql_duplicate_parameter`, `cql_unnamed_argument`, `cql_missing_parameter`, `cql_parameter_value`, `cql_regex_flag`, `cql_free_text_after_aggregate`, `cql_assignment_as`, `cql_link_outside_correlate`
+  - Errors: `cql_parse_error`, `cql_unknown_function` (with the nearest name), `cql_removed_function`, `cql_unknown_parameter`, `cql_duplicate_parameter`, `cql_unnamed_argument`, `cql_missing_parameter`, `cql_parameter_value`, `cql_regex_flag`, `cql_free_text_after_aggregate`, `cql_event_function_after_aggregate`, `cql_assignment_as`, `cql_link_outside_correlate`, `cql_correlate_placement`, `cql_match_guard`
   - Correlation rules: `cql_correlate_aggregate`, `correlate()` combined with another aggregate
-  - Warnings: `cql_deprecated_function`, `cql_string_escape`, `cql_unknown_event` (a `#event_simpleName` no Falcon event has)
+  - Warnings: `cql_deprecated_function`, `cql_string_escape`, `cql_unknown_event` (a `#event_simpleName` no Falcon event has), `cql_regex_group_under_or`
   - Fields, saved searches, lookup files and repositories live in the tenant and are never reported unknown
   - The engine is pinned to a language-server revision until its next release
 
