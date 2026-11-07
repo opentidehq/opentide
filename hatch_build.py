@@ -144,8 +144,11 @@ def build_engine(profile: str) -> Path:
     command = [cargo, "build", "--manifest-path", str(MANIFEST), "-p", PACKAGE, "--lib", "--locked"]
     command += ["--profile", profile, "--message-format=json-render-diagnostics"]
     # The JSON messages on stdout name the library; diagnostics and progress
-    # stay on stderr, as cargo renders them.
-    result = subprocess.run(command, check=True, env=env, stdout=subprocess.PIPE, text=True)
+    # stay on stderr, as cargo renders them. cargo writes them in UTF-8; the
+    # locale's encoding (Windows' ANSI code page) would garble a non-ASCII path.
+    result = subprocess.run(
+        command, check=True, env=env, stdout=subprocess.PIPE, text=True, encoding="utf-8"
+    )
     library = built_library(result.stdout)
     if not library.is_file():
         raise RuntimeError(f"cargo did not write {library}")

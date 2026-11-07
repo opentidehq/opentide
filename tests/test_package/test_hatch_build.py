@@ -204,3 +204,28 @@ def test_the_build_asks_cargo_for_the_workspace_member_and_its_messages(
     assert command[command.index("-p") + 1] == "opentide-native"
     assert "--locked" in command
     assert "--message-format=json-render-diagnostics" in command
+
+
+def test_cargos_messages_are_read_as_utf8_whatever_the_locale(
+    hook: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """cargo writes its JSON in UTF-8, unescaped. Text mode without an encoding
+    decodes it with the locale's: Windows' ANSI code page turns a build under
+    C:\\Users\\Zoë into ZoÃ«, a library that does not exist."""
+    library = tmp_path / "Zoë" / "release" / "_native.dll"
+    library.parent.mkdir(parents=True)
+    library.write_bytes(b"MZ")
+
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        target = {"name": "_native", "kind": ["cdylib"]}
+        message = {"reason": "compiler-artifact", "target": target, "filenames": [str(library)]}
+        raw = json.dumps(message, ensure_ascii=False).encode("utf-8")
+        assert kwargs.get("text") or kwargs.get("encoding"), "cargo's messages are text"
+        # What subprocess does with text=True: the given encoding, else the locale's.
+        encoding = kwargs.get("encoding") or "cp1252"
+        assert isinstance(encoding, str)
+        return subprocess.CompletedProcess(command, 0, stdout=raw.decode(encoding))
+
+    monkeypatch.setattr(hook.shutil, "which", lambda name: name if name == "cargo" else None)
+    monkeypatch.setattr(hook.subprocess, "run", run)
+    assert hook.build_engine("release") == library
