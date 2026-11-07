@@ -5,8 +5,11 @@ from __future__ import annotations
 import importlib.util
 import re
 import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 from opentide.core.files import tomllib
 
@@ -136,6 +139,16 @@ def test_gitignore_keeps_every_file_cargo_package_needs() -> None:
             ]
     assert len(vendored) > 100
     assert sorted(_ignored(vendored)) == []
+
+
+def test_engine_release_script_loads_without_tomllib(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The test above loads release.py on every Python opentide supports, 3.10
+    included, which has no tomllib: the script falls back to tomli there."""
+    monkeypatch.setitem(sys.modules, "tomllib", None)  # `import tomllib` fails, as on 3.10
+    release = _engine_release_script()
+    assert release.tomllib.__name__ == "tomli"
+    workspace = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    assert release.workspace_version() == workspace["workspace"]["package"]["version"]
 
 
 def test_gitignore_hides_no_tracked_file() -> None:

@@ -60,7 +60,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10, which opentide's tests also run on
+    import tomli as tomllib  # an opentide dependency there
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = ROOT / "Cargo.toml"
