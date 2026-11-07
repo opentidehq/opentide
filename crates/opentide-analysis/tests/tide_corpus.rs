@@ -10,7 +10,7 @@
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze, index_workspace};
 use opentide_core::LanguageId;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -212,8 +212,11 @@ fn local_python() -> PathBuf {
         python.display(),
         root.display()
     );
+    // `-X utf8`: the path is printed in UTF-8, not in the locale's encoding.
     let output = std::process::Command::new(&python)
         .args([
+            "-X",
+            "utf8",
             "-c",
             "import opentide, pathlib; print(pathlib.Path(opentide.__file__).resolve().parent)",
         ])
@@ -225,19 +228,40 @@ fn local_python() -> PathBuf {
         python.display(),
         String::from_utf8_lossy(&output.stderr)
     );
-    let package = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
-    let local = root
-        .join("src/opentide")
-        .canonicalize()
-        .expect("src/opentide");
-    assert_eq!(
-        package,
-        local,
+    let package = String::from_utf8(output.stdout).expect("a UTF-8 path");
+    let package = Path::new(package.trim());
+    let local = root.join("src/opentide");
+    assert!(
+        same_directory(package, &local),
         "{} imports opentide from {}, not this checkout",
         python.display(),
         package.display()
     );
     python
+}
+
+/// Whether two spellings name one directory. Each side is canonicalized: Python's
+/// `resolve()` and Rust's `canonicalize()` spell the same directory differently on
+/// Windows (`C:\...` and `\\?\C:\...`).
+fn same_directory(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+#[test]
+fn a_directory_is_the_same_however_it_is_spelled() {
+    let dir = std::env::temp_dir().join(format!("opentide-same-directory-{}", std::process::id()));
+    let real = dir.join("real");
+    fs::create_dir_all(real.join("sub")).unwrap();
+    // Another spelling of `real`, as Python on Windows prints one.
+    let other = real.join("sub").join("..");
+    assert_ne!(other, real.canonicalize().unwrap());
+    assert!(same_directory(&other, &real));
+    assert!(!same_directory(&real.join("sub"), &real));
+    assert!(!same_directory(&dir.join("missing"), &real));
+    fs::remove_dir_all(&dir).unwrap();
 }
 
 fn pydantic_issues(dir: &str) -> Vec<PydanticIssue> {
