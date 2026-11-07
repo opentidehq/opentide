@@ -353,9 +353,9 @@ def target(name: str, mapped: set[str]) -> tuple[str, set[str]]:
     return (UNMAPPED_ALIAS, set()) if ".unmapped." in name else (ECS_ALIAS, mapped)
 
 
-EQL_TOKEN = re.compile(
-    r'"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"|`(?:``|[^`])*`|[A-Za-z_@][\w.@]*', re.DOTALL
-)
+# `.` matches a newline under DOTALL: `(?:.|\n)*?` would match each one two
+# ways and backtrack exponentially over an unterminated `"""`.
+EQL_TOKEN = re.compile(r'""".*?"""|"(?:\\.|[^"\\\n])*"|`(?:``|[^`])*`|[A-Za-z_@][\w.@]*', re.DOTALL)
 
 
 def make_optional(text: str, names: set[str]) -> str:
@@ -457,7 +457,7 @@ def run_lucene(url: str, name: str, text: str, mapped: set[str], assume: bool) -
 
 TOKEN = re.compile(
     r"(?P<comment>//[^\n]*|/\*.*?(?:\*/|\Z))"
-    r'|(?P<string>"""(?:.|\n)*?(?:"""|\Z)|"(?:\\.|[^"\\\n])*(?:"|$))'
+    r'|(?P<string>""".*?(?:"""|\Z)|"(?:\\.|[^"\\\n])*(?:"|$))'
     r"|(?P<punct>[|()\[\],])"
     r"|(?P<space>\s+)"
     r"|(?P<word>[^\s|()\[\],\"/]+|/)",
