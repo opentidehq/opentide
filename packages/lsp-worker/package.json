@@ -19,7 +19,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/opentidehq/language-server.git",
+    "url": "git+https://github.com/opentidehq/opentide.git",
     "directory": "packages/lsp-worker"
   },
   "publishConfig": {
