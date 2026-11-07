@@ -1,0 +1,3 @@
+// prod:ts_collapse_command invalid
+PROMQL index=metrics-* (up)
+| TS_COLLAPSE (

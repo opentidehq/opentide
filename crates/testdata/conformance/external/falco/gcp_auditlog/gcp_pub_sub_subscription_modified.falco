@@ -1,0 +1,1 @@
+is_pubsub_service and (gcp.methodName="google.pubsub.v1.Subscriber.UpdateSubscription")

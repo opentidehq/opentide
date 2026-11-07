@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_kuery",
+      "camelcase": "OpentideKuery",
+      "scope": "source.kuery",
+      "file-types": ["kuery"],
+      "highlights": "../../highlights/queries/kuery/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

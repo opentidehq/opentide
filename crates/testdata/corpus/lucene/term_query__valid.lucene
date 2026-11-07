@@ -1,0 +1,2 @@
+# prod:term_query valid
+process.name:cmd.exe AND _exists_:host.name

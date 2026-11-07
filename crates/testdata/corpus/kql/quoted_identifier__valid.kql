@@ -1,0 +1,2 @@
+// prod:quoted_identifier valid
+SigninLogs | project ['User Name'] = UserPrincipalName | where ['User Name'] != ""

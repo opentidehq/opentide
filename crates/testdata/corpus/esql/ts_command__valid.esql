@@ -1,0 +1,2 @@
+// prod:ts_command valid
+TS metrics-* | STATS max(cpu) BY host.name

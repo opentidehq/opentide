@@ -1,0 +1,2 @@
+// prod:from_command invalid
+FROM | LIMIT 10

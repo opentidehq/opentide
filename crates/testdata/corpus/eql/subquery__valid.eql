@@ -1,0 +1,4 @@
+// prod:subquery valid
+sequence with maxspan=5m
+  [process where true]
+  ![file where true]

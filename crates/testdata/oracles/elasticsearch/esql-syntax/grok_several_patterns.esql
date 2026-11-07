@@ -1,0 +1,1 @@
+FROM logs-* | GROK process.name "%{WORD:a}", "%{NUMBER:b}"

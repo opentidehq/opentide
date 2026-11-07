@@ -1,0 +1,3 @@
+// prod:dissect_command valid
+FROM logs-* METADATA _id
+| DISSECT message "%{date} - %{msg}" APPEND_SEPARATOR = " "

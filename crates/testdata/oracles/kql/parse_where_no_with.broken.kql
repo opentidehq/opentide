@@ -1,0 +1,1 @@
+Syslog | parse-where SyslogMessage * "user=" User

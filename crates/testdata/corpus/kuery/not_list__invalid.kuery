@@ -1,0 +1,2 @@
+# prod:not_list invalid
+host.os.type:(not )

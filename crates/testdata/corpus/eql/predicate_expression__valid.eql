@@ -1,0 +1,2 @@
+// prod:predicate_expression valid
+process where process.name in~ ("a", "b") and file.path like~ "*.dll" and x regex "a+"

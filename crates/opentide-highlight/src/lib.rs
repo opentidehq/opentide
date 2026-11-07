@@ -1,0 +1,1491 @@
+//! Frozen HighlightSpec and semantic-token encoding.
+//!
+//! Capture rename in `highlights/spec.toml` is a **major** (breaking) change.
+//! Adding captures is a minor.
+
+mod markdown;
+
+use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Mutex, OnceLock, RwLock};
+use thiserror::Error;
+
+pub use markdown::highlight_markdown_line;
+
+pub const SPEC_TOML: &str = include_str!(concat!(env!("OPENTIDE_ASSETS"), "/highlights/spec.toml"));
+/// Tide field catalog generated from opentide JSON Schema (`scripts/sync_opentide_schemas.py`).
+pub const TIDE_FIELDS_JSON: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/catalogs/tide/generated/fields.json"
+));
+pub const KQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/kql/highlights.scm"
+));
+pub const SPL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/spl/highlights.scm"
+));
+pub const TIDE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/tide/highlights.scm"
+));
+pub const ESQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/esql/highlights.scm"
+));
+pub const EQL_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/eql/highlights.scm"
+));
+pub const KUERY_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/kuery/highlights.scm"
+));
+pub const LUCENE_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/lucene/highlights.scm"
+));
+pub const FALCO_HIGHLIGHTS_SCM: &str = include_str!(concat!(
+    env!("OPENTIDE_ASSETS"),
+    "/highlights/queries/falco/highlights.scm"
+));
+
+/// The tree-sitter highlight query for a language. Configuration TOML has
+/// none: the editor's TOML grammar highlights it.
+pub fn highlights_scm(language: LanguageId) -> &'static str {
+    match language {
+        LanguageId::Kql => KQL_HIGHLIGHTS_SCM,
+        LanguageId::Spl => SPL_HIGHLIGHTS_SCM,
+        LanguageId::TideYaml => TIDE_HIGHLIGHTS_SCM,
+        LanguageId::Esql => ESQL_HIGHLIGHTS_SCM,
+        LanguageId::Eql => EQL_HIGHLIGHTS_SCM,
+        LanguageId::Kuery => KUERY_HIGHLIGHTS_SCM,
+        LanguageId::Lucene => LUCENE_HIGHLIGHTS_SCM,
+        LanguageId::Config => "",
+        LanguageId::Falco => FALCO_HIGHLIGHTS_SCM,
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum HighlightError {
+    #[error("highlight spec: {0}")]
+    Spec(String),
+    #[error("unknown capture '{0}' (not in highlights/spec.toml)")]
+    UnknownCapture(String),
+    #[error("tide field catalog: {0}")]
+    Catalog(String),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SpecFile {
+    meta: SpecMeta,
+    captures: BTreeMap<String, CaptureMaps>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SpecMeta {
+    id: String,
+    version: String,
+    legend: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CaptureMaps {
+    pub tm: String,
+    pub monaco: String,
+    pub helix: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct HighlightSpec {
+    pub id: String,
+    pub version: String,
+    pub legend: Vec<String>,
+    pub captures: BTreeMap<String, CaptureMaps>,
+}
+
+impl HighlightSpec {
+    pub fn load() -> Result<Self, HighlightError> {
+        static SPEC: OnceLock<HighlightSpec> = OnceLock::new();
+        if let Some(spec) = SPEC.get() {
+            return Ok(spec.clone());
+        }
+        let file: SpecFile =
+            toml::from_str(SPEC_TOML).map_err(|e| HighlightError::Spec(e.to_string()))?;
+        if file.meta.legend.is_empty() {
+            return Err(HighlightError::Spec("empty legend".into()));
+        }
+        for name in &file.meta.legend {
+            if !file.captures.contains_key(name) {
+                return Err(HighlightError::Spec(format!(
+                    "legend entry '{name}' has no [captures] maps"
+                )));
+            }
+        }
+        let spec = Self {
+            id: file.meta.id,
+            version: file.meta.version,
+            legend: file.meta.legend,
+            captures: file.captures,
+        };
+        Ok(SPEC.get_or_init(|| spec.clone()).clone())
+    }
+
+    pub fn token_index(&self, capture: &str) -> Result<u32, HighlightError> {
+        self.legend
+            .iter()
+            .position(|n| n == capture)
+            .map(|i| i as u32)
+            .ok_or_else(|| HighlightError::UnknownCapture(capture.to_string()))
+    }
+
+    pub fn contains_capture(&self, capture: &str) -> bool {
+        self.captures.contains_key(capture)
+    }
+}
+
+/// One opentide schema node, keyed by `(schema id, YAML path)`: `rule::1.0`
+/// and `rule::1.1` each have their own rows. A catalog from an older
+/// `opentide generate schemas` keys rows by family (`rule`); such a row
+/// applies to every revision of the family.
+///
+/// Generated by opentide (`python -m opentide.generation.lsp_catalog`) from
+/// its models. Titles, types, required, enums, and consts come from JSON Schema.
+/// `markdown` / `hidden` come from Pydantic `json_schema_extra` flags the schema
+/// emitter drops. `capture` is a HighlightSpec presentation choice.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TideField {
+    pub schema: String,
+    pub path: String,
+    pub name: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default, rename = "type")]
+    pub type_name: String,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default)]
+    pub markdown: bool,
+    #[serde(default)]
+    pub hidden: bool,
+    #[serde(default = "default_tide_capture")]
+    pub capture: String,
+    #[serde(default, rename = "enum")]
+    pub enum_values: Vec<String>,
+    #[serde(default)]
+    pub enum_docs: Vec<String>,
+    #[serde(default, rename = "ref")]
+    pub ref_kind: Option<String>,
+    #[serde(default, rename = "const")]
+    pub const_value: Option<String>,
+    #[serde(default)]
+    pub array: bool,
+    /// Pydantic string default (`status = "STAGING"`). Not a vocabulary.
+    /// Omitted when the default is outside a non-empty schema enum.
+    #[serde(default, rename = "default")]
+    pub default_value: Option<String>,
+    /// JSON Schema `minItems`, when the field is an array.
+    #[serde(default)]
+    pub min_items: Option<u32>,
+    /// The templates ask for it, validation does not require it: a warning
+    /// when it is missing, where a `required` field is an error.
+    #[serde(default)]
+    pub recommended: bool,
+    /// An object (or the items of an array of objects) that forbids keys it
+    /// does not define: JSON Schema `additionalProperties: false`.
+    #[serde(default)]
+    pub closed: bool,
+    /// Keys this mapping also accepts, though no schema lists them: a legacy
+    /// spelling opentide's validation rewrites, and the field it fills
+    /// (`search` → `query`), or `None` when it is dropped.
+    #[serde(default)]
+    pub legacy: BTreeMap<String, Option<String>>,
+}
+
+/// One revision's document root, from `fields.json`'s `schemas` map.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct TideSchemaRoot {
+    #[serde(default)]
+    pub family: String,
+    /// The root forbids keys the revision does not define.
+    #[serde(default)]
+    pub closed: bool,
+    /// Legacy root keys, as on [`TideField::legacy`].
+    #[serde(default)]
+    pub legacy: BTreeMap<String, Option<String>>,
+}
+
+fn default_tide_capture() -> String {
+    "tide.property".into()
+}
+
+#[derive(Debug, Deserialize)]
+struct TideFieldsFile {
+    opentide: String,
+    #[serde(default)]
+    schemas: BTreeMap<String, TideSchemaRoot>,
+    fields: Vec<TideField>,
+}
+
+struct TideCatalog {
+    opentide: String,
+    fields: Vec<TideField>,
+    schemas: BTreeMap<String, TideSchemaRoot>,
+    by_path: BTreeMap<String, BTreeMap<String, usize>>,
+    children: BTreeMap<String, BTreeMap<String, Vec<usize>>>,
+    /// Family → its newest schema id in the catalog.
+    newest: BTreeMap<String, String>,
+}
+
+impl TideCatalog {
+    /// The catalog key for `schema`: the schema id itself when the catalog
+    /// has it; a family key (older catalogs); else the family's newest
+    /// revision, so an unknown revision or a bare family still resolves.
+    fn resolve<'a>(&'a self, schema: &'a str) -> Option<&'a str> {
+        if self.by_path.contains_key(schema) {
+            return Some(schema);
+        }
+        let family = schema.split("::").next().unwrap_or(schema);
+        if self.by_path.contains_key(family) {
+            return Some(family);
+        }
+        self.newest.get(family).map(String::as_str)
+    }
+}
+
+fn revision_key(schema_id: &str) -> Vec<u32> {
+    schema_id
+        .split_once("::")
+        .map(|(_, revision)| {
+            revision
+                .split('.')
+                .map(|part| part.parse().unwrap_or(0))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn build_tide_catalog(json: &str) -> Result<TideCatalog, String> {
+    let file: TideFieldsFile = serde_json::from_str(json).map_err(|err| err.to_string())?;
+    let mut by_path: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+    let mut children: BTreeMap<String, BTreeMap<String, Vec<usize>>> = BTreeMap::new();
+    for (i, field) in file.fields.iter().enumerate() {
+        by_path
+            .entry(field.schema.clone())
+            .or_default()
+            .insert(field.path.clone(), i);
+        let parent = match field.path.rsplit_once('.') {
+            Some((parent, _)) => parent.to_string(),
+            None => String::new(),
+        };
+        children
+            .entry(field.schema.clone())
+            .or_default()
+            .entry(parent)
+            .or_default()
+            .push(i);
+    }
+    let mut newest: BTreeMap<String, String> = BTreeMap::new();
+    for schema in by_path.keys() {
+        let Some((family, _)) = schema.split_once("::") else {
+            continue;
+        };
+        let replace = newest
+            .get(family)
+            .is_none_or(|current| revision_key(schema) > revision_key(current));
+        if replace {
+            newest.insert(family.to_string(), schema.clone());
+        }
+    }
+    Ok(TideCatalog {
+        opentide: file.opentide,
+        fields: file.fields,
+        schemas: file.schemas,
+        by_path,
+        children,
+        newest,
+    })
+}
+
+fn bundled_tide_catalog() -> &'static TideCatalog {
+    static CATALOG: OnceLock<TideCatalog> = OnceLock::new();
+    CATALOG.get_or_init(|| build_tide_catalog(TIDE_FIELDS_JSON).expect("generated fields.json"))
+}
+
+/// The workspace catalog a host installed, and the text it was built from.
+type InstalledCatalog = Option<(&'static TideCatalog, u64)>;
+
+fn installed_tide_catalog() -> &'static RwLock<InstalledCatalog> {
+    static INSTALLED: OnceLock<RwLock<InstalledCatalog>> = OnceLock::new();
+    INSTALLED.get_or_init(|| RwLock::new(None))
+}
+
+/// The catalog a host set in place of the bundled one ([`set_default_tide_fields`]).
+fn default_tide_catalog() -> &'static RwLock<Option<&'static TideCatalog>> {
+    static DEFAULT: OnceLock<RwLock<Option<&'static TideCatalog>>> = OnceLock::new();
+    DEFAULT.get_or_init(|| RwLock::new(None))
+}
+
+fn tide_catalog() -> &'static TideCatalog {
+    let installed = installed_tide_catalog()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((catalog, _)) = *installed {
+        return catalog;
+    }
+    let default = default_tide_catalog()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    default.unwrap_or_else(bundled_tide_catalog)
+}
+
+fn text_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Replace the bundled Tide field catalog with a workspace one: a
+/// `fields.json` in the shape of `catalogs/tide/generated/fields.json`, as
+/// `opentide generate schemas` writes it to `.opentide/lsp/catalogs/generated/`.
+/// `None` goes back to the bundled catalog. Process-wide: every thread sees it.
+///
+/// Fields are handed out as `&'static`, so each distinct catalog is kept for
+/// the life of the process. A catalog is built once per distinct text, so a
+/// host may install on every workspace load without growing memory.
+pub fn install_tide_fields(json: Option<&str>) -> Result<(), HighlightError> {
+    let mut installed = installed_tide_catalog()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Some(json) = json else {
+        *installed = None;
+        return Ok(());
+    };
+    let hash = text_hash(json);
+    *installed = Some((built_tide_catalog(json)?, hash));
+    Ok(())
+}
+
+/// The catalog built from `json`, built once per distinct text and kept for
+/// the life of the process (its fields are handed out as `&'static`).
+fn built_tide_catalog(json: &str) -> Result<&'static TideCatalog, HighlightError> {
+    let hash = text_hash(json);
+    static BUILT: OnceLock<Mutex<Vec<(u64, &'static TideCatalog)>>> = OnceLock::new();
+    let mut built = BUILT
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, catalog)) = built.iter().find(|(seen, _)| *seen == hash) {
+        return Ok(catalog);
+    }
+    let catalog = build_tide_catalog(json).map_err(HighlightError::Catalog)?;
+    if catalog.fields.is_empty() {
+        return Err(HighlightError::Catalog(
+            "fields.json lists no fields".into(),
+        ));
+    }
+    let catalog: &'static TideCatalog = Box::leak(Box::new(catalog));
+    built.push((hash, catalog));
+    Ok(catalog)
+}
+
+/// Use `json` instead of the bundled catalog whenever no workspace catalog is
+/// installed ([`install_tide_fields`]): a host that generates the catalog
+/// from its own models (opentide) is never behind the snapshot compiled in.
+/// `None` goes back to the bundled catalog. Process-wide.
+pub fn set_default_tide_fields(json: Option<&str>) -> Result<(), HighlightError> {
+    let catalog = json.map(built_tide_catalog).transpose()?;
+    *default_tide_catalog()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = catalog;
+    Ok(())
+}
+
+/// Whether the Tide field catalog in use is a workspace one
+/// ([`install_tide_fields`]) rather than the bundled snapshot.
+pub fn tide_catalog_is_workspace() -> bool {
+    installed_tide_catalog()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .is_some()
+}
+
+pub fn tide_catalog_version() -> &'static str {
+    tide_catalog().opentide.as_str()
+}
+
+pub fn load_tide_fields() -> Vec<&'static TideField> {
+    tide_catalog().fields.iter().collect()
+}
+
+/// Field at `schema` and dotted YAML path. `schema` is the object's schema
+/// id (`rule::1.0`), or a family (`rule`) for its newest revision.
+pub fn tide_field_at(schema: &str, path: &str) -> Option<&'static TideField> {
+    let catalog = tide_catalog();
+    let key = catalog.resolve(schema)?;
+    let index = *catalog.by_path.get(key)?.get(path)?;
+    catalog.fields.get(index)
+}
+
+/// Every field of `schema`'s revision (see [`tide_field_at`]), in catalog order.
+pub fn tide_fields_of(schema: &str) -> Vec<&'static TideField> {
+    let catalog = tide_catalog();
+    let Some(key) = catalog.resolve(schema) else {
+        return Vec::new();
+    };
+    let mut indexes: Vec<usize> = catalog
+        .by_path
+        .get(key)
+        .map(|paths| paths.values().copied().collect())
+        .unwrap_or_default();
+    indexes.sort_unstable();
+    indexes
+        .into_iter()
+        .filter_map(|index| catalog.fields.get(index))
+        .collect()
+}
+
+/// The catalog revision `schema` resolves to (`rule::1.1` for `rule`), and
+/// its document root: whether it forbids keys it does not define, and the
+/// legacy keys it accepts. A catalog without a `schemas` map (an older
+/// `opentide generate schemas`) gives an open root. `None` when no revision
+/// of the family is in the catalog.
+pub fn tide_schema_root(schema: &str) -> Option<(&'static str, &'static TideSchemaRoot)> {
+    static OPEN: OnceLock<TideSchemaRoot> = OnceLock::new();
+    let catalog = tide_catalog();
+    let (key, _) = catalog.by_path.get_key_value(catalog.resolve(schema)?)?;
+    let root = catalog
+        .schemas
+        .get(key)
+        .unwrap_or_else(|| OPEN.get_or_init(TideSchemaRoot::default));
+    Some((key.as_str(), root))
+}
+
+/// Direct children of `parent_path` (empty string = document root).
+pub fn tide_children(schema: &str, parent_path: &str) -> Vec<&'static TideField> {
+    let catalog = tide_catalog();
+    let Some(key) = catalog.resolve(schema) else {
+        return Vec::new();
+    };
+    catalog
+        .children
+        .get(key)
+        .and_then(|by_parent| by_parent.get(parent_path))
+        .map(|indexes| {
+            indexes
+                .iter()
+                .filter_map(|index| catalog.fields.get(*index))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn static_capture(capture: Option<&str>) -> &'static str {
+    match capture {
+        Some("tide.keyword") => "tide.keyword",
+        Some("tide.property") => "tide.property",
+        Some("tide.schema") => "tide.schema",
+        Some("property") => "property",
+        _ => "property",
+    }
+}
+
+/// HighlightSpec capture for a path inside a known object family.
+pub fn tide_key_capture_at(schema: &str, path: &str) -> &'static str {
+    static_capture(tide_field_at(schema, path).map(|field| field.capture.as_str()))
+}
+
+/// Name-only capture. Root keys win when the same name is also a nested property.
+pub fn tide_key_capture(key: &str) -> &'static str {
+    let catalog = tide_catalog();
+    if catalog.fields.iter().any(|field| {
+        field.name == key && !field.path.contains('.') && field.capture == "tide.keyword"
+    }) {
+        return "tide.keyword";
+    }
+    if catalog
+        .fields
+        .iter()
+        .any(|field| field.name == key && field.capture == "tide.property")
+    {
+        return "tide.property";
+    }
+    if catalog
+        .fields
+        .iter()
+        .any(|field| field.name == key && field.capture == "tide.keyword")
+    {
+        return "tide.keyword";
+    }
+    "property"
+}
+
+pub fn tide_field_is_markdown_at(schema: &str, path: &str) -> bool {
+    tide_field_at(schema, path).is_some_and(|field| field.markdown)
+}
+
+pub fn tide_keys_for_capture(capture: &str) -> Vec<String> {
+    let mut names = BTreeSet::new();
+    for field in &tide_catalog().fields {
+        if field.capture == capture {
+            names.insert(field.name.clone());
+        }
+    }
+    names.into_iter().collect()
+}
+
+/// Extract `@capture` names from a tree-sitter highlights.scm file.
+pub fn scm_captures(scm: &str) -> BTreeSet<String> {
+    let re = Regex::new(r"@([A-Za-z][A-Za-z0-9_.]*)").expect("regex");
+    re.captures_iter(scm)
+        .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+        .collect()
+}
+
+pub fn assert_scm_subset_of_spec(spec: &HighlightSpec, scm: &str) -> Result<(), HighlightError> {
+    for capture in scm_captures(scm) {
+        if !spec.contains_capture(&capture) {
+            return Err(HighlightError::UnknownCapture(capture));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HighlightToken {
+    pub span: ByteSpan,
+    pub range: Range,
+    pub capture: String,
+    pub token_type: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HighlightResult {
+    pub language_id: String,
+    pub tokens: Vec<HighlightToken>,
+    pub legend: Vec<String>,
+}
+
+/// LSP semantic tokens (delta-encoded).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticTokens {
+    pub data: Vec<u32>,
+    pub legend: Vec<String>,
+}
+
+/// Standard LSP / VS Code semantic token types. Capture names such as
+/// `operator.pipe` are **not** styled by default themes, so encoding uses
+/// this legend instead of `HighlightSpec.legend`.
+pub const LSP_TOKEN_TYPES: &[&str] = &[
+    "namespace",
+    "type",
+    "class",
+    "enum",
+    "interface",
+    "struct",
+    "typeParameter",
+    "parameter",
+    "variable",
+    "property",
+    "enumMember",
+    "event",
+    "function",
+    "method",
+    "macro",
+    "keyword",
+    "modifier",
+    "comment",
+    "string",
+    "number",
+    "regexp",
+    "operator",
+    "decorator",
+];
+
+pub fn lsp_token_type_index(capture: &str) -> u32 {
+    let name = match capture {
+        "comment" => "comment",
+        "keyword" | "tide.keyword" => "keyword",
+        "operator"
+        | "operator.pipe"
+        | "punctuation"
+        | "punctuation.bracket"
+        | "punctuation.delimiter" => "operator",
+        "function" | "function.builtin" => "function",
+        "type" | "tide.schema" => "type",
+        "variable" => "variable",
+        "property" | "tide.property" => "property",
+        "string" => "string",
+        "number" | "tide.uuid" => "number",
+        "boolean" | "constant" => "enumMember",
+        "error" => "macro",
+        "markdown.heading" => "type",
+        "markdown.strong" => "keyword",
+        "markdown.emphasis" => "variable",
+        "markdown.code" => "regexp",
+        "markdown.link" => "decorator",
+        "markdown.list" => "operator",
+        "markdown.quote" => "comment",
+        "macro" => "macro",
+        _ => "variable",
+    };
+    LSP_TOKEN_TYPES.iter().position(|n| *n == name).unwrap_or(8) as u32
+}
+
+pub fn encode_semantic_tokens(tokens: &[HighlightToken]) -> Vec<u32> {
+    encode_semantic_tokens_with(tokens, |t| t.token_type)
+}
+
+/// Encode using the standard LSP legend so VS Code / Monaco actually color
+/// pipes, builtins, Tide keys, and punctuation.
+pub fn encode_lsp_semantic_tokens(tokens: &[HighlightToken]) -> Vec<u32> {
+    encode_semantic_tokens_with(tokens, |t| lsp_token_type_index(&t.capture))
+}
+
+fn encode_semantic_tokens_with(
+    tokens: &[HighlightToken],
+    token_type: impl Fn(&HighlightToken) -> u32,
+) -> Vec<u32> {
+    let mut data = Vec::with_capacity(tokens.len() * 5);
+    let mut prev_line = 0u32;
+    let mut prev_char = 0u32;
+    for token in tokens {
+        let line = token.range.start.line;
+        let character = token.range.start.character;
+        let delta_line = line.saturating_sub(prev_line);
+        let delta_char = if delta_line == 0 {
+            character.saturating_sub(prev_char)
+        } else {
+            character
+        };
+        let length = token
+            .range
+            .end
+            .character
+            .saturating_sub(token.range.start.character)
+            .max(1);
+        data.extend_from_slice(&[delta_line, delta_char, length, token_type(token), 0]);
+        prev_line = line;
+        prev_char = character;
+    }
+    data
+}
+
+/// High-contrast HTML for `opentide-lsp highlight --html` and tests.
+pub fn tokens_to_html(source: &str, tokens: &[HighlightToken]) -> String {
+    let mut html = String::from(
+        r#"<!doctype html><meta charset=utf-8>
+<title>opentide highlight</title>
+<style>
+body{font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#1e1e1e;color:#d4d4d4;padding:24px;margin:0}
+pre{margin:0;white-space:pre-wrap}
+.keyword{color:#c586c0;font-weight:700}
+.function,.function-builtin{color:#dcdcaa;font-weight:600}
+.string{color:#ce9178}
+.number{color:#b5cea8}
+.comment{color:#6a9955;font-style:italic}
+.type{color:#4ec9b0;font-weight:700}
+.property{color:#9cdcfe}
+.operator{color:#d7ba7d;font-weight:600}
+.operator-pipe{color:#ff79c6;font-weight:800}
+.error{color:#f44747;text-decoration:underline}
+.boolean,.constant{color:#569cd6;font-weight:600}
+.punctuation,.punctuation-bracket,.punctuation-delimiter{color:#c8c8c8}
+.tide-keyword{color:#c586c0;font-weight:700}
+.tide-property{color:#9cdcfe}
+.tide-uuid{color:#b5cea8}
+.tide-schema{color:#4ec9b0}
+.variable{color:#9cdcfe}
+.markdown-heading{color:#4fc1ff;font-weight:800}
+.markdown-emphasis{color:#d4d4d4;font-style:italic}
+.markdown-strong{color:#dcdcaa;font-weight:800}
+.markdown-code{color:#e6c07b;background:#2d2d2d}
+.markdown-link{color:#4ec9b0;text-decoration:underline}
+.markdown-list{color:#c586c0;font-weight:800}
+.markdown-quote{color:#6a9955;font-style:italic}
+.macro{color:#56b6c2;font-weight:700;font-style:italic}
+</style><pre>"#,
+    );
+    let mut last = 0usize;
+    let mut ordered = tokens.to_vec();
+    ordered.sort_by_key(|t| (t.span.start, t.span.end));
+    for t in &ordered {
+        if t.span.start < last {
+            continue;
+        }
+        let start = t.span.start.min(source.len());
+        let end = t.span.end.min(source.len());
+        html.push_str(&html_escape(&source[last..start]));
+        let class = t.capture.replace('.', "-");
+        html.push_str(&format!("<span class=\"{class}\">"));
+        html.push_str(&html_escape(&source[start..end]));
+        html.push_str("</span>");
+        last = end;
+    }
+    html.push_str(&html_escape(&source[last..]));
+    html.push_str("</pre>");
+    html
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+pub fn tokens_from_spans(
+    spec: &HighlightSpec,
+    source: &str,
+    spans: &[(ByteSpan, &str)],
+) -> Result<Vec<HighlightToken>, HighlightError> {
+    let lines = LineIndex::new(source);
+    let mut out = Vec::with_capacity(spans.len());
+    for (span, capture) in spans {
+        let token_type = spec.token_index(capture)?;
+        out.push(HighlightToken {
+            span: *span,
+            range: lines.range(*span),
+            capture: (*capture).to_string(),
+            token_type,
+        });
+    }
+    out.sort_by_key(|t| (t.span.start, t.token_type));
+    Ok(out)
+}
+
+/// The TextMate `scopeName` of `language`'s generated grammar (#195).
+///
+/// ES|QL is `source.opentide.esql`: `source.esql` is the scope of Elastic's own
+/// ES|QL extension, which registers the same `esql` language id, and two
+/// grammars with one scope replace each other. The other grammars keep
+/// `source.<id>`: no known extension owns those scopes (`docs/EDITORS.md`).
+/// This is not a HighlightSpec capture, so the rename does not bump
+/// `highlights/spec.toml`.
+pub fn tm_scope_name(language: LanguageId) -> String {
+    match language {
+        LanguageId::Esql => "source.opentide.esql".to_string(),
+        other => format!("source.{}", other.as_str()),
+    }
+}
+
+/// Generate TextMate / Monaco / Helix maps from the frozen spec.
+pub fn generate_tm_language(language: LanguageId, spec: &HighlightSpec) -> serde_json::Value {
+    let scm = highlights_scm(language);
+    let mut patterns: Vec<serde_json::Value> = Vec::new();
+    let comment_tm = spec
+        .captures
+        .get("comment")
+        .map(|m| m.tm.as_str())
+        .unwrap_or("comment");
+    let string_tm = spec
+        .captures
+        .get("string")
+        .map(|m| m.tm.as_str())
+        .unwrap_or("string");
+    let number_tm = spec
+        .captures
+        .get("number")
+        .map(|m| m.tm.as_str())
+        .unwrap_or("constant.numeric");
+    let comment_match = match language {
+        LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
+        LanguageId::Kql | LanguageId::Esql | LanguageId::Eql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
+        LanguageId::Spl => Some("```[^`]*```"),
+        // Kibana KQL, Lucene, and Falco conditions have no comment syntax.
+        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco => None,
+        LanguageId::Config => Some("(?m)^\\s*#.*$"),
+    };
+    if let Some(comment_match) = comment_match {
+        patterns.push(serde_json::json!({
+            "name": comment_tm,
+            "match": comment_match,
+            "comment": "capture:comment",
+        }));
+    }
+    if language == LanguageId::Spl {
+        if let Some(maps) = spec.captures.get("macro") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "`[A-Za-z_][A-Za-z0-9_]*(?:\\([^)`]*\\))?`",
+                "comment": "capture:macro",
+            }));
+        }
+    }
+    patterns.push(serde_json::json!({
+        "name": string_tm,
+        "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+        "comment": "capture:string",
+    }));
+    patterns.push(serde_json::json!({
+        "name": number_tm,
+        "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+        "comment": "capture:number",
+    }));
+    if language == LanguageId::TideYaml {
+        for capture in ["tide.property", "tide.keyword"] {
+            let keys = tide_keys_for_capture(capture);
+            if keys.is_empty() {
+                continue;
+            }
+            if let Some(maps) = spec.captures.get(capture) {
+                let joined = keys
+                    .iter()
+                    .map(|k| regex::escape(k))
+                    .collect::<Vec<_>>()
+                    .join("|");
+                patterns.push(serde_json::json!({
+                    "name": maps.tm,
+                    "match": format!("(?m)^\\s*(?:{joined})\\s*:"),
+                    "comment": format!("capture:{capture}"),
+                }));
+            }
+        }
+        if let Some(maps) = spec.captures.get("markdown.heading") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "(?m)^\\s*#{1,6}\\s+.*$",
+                "comment": "capture:markdown.heading",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("markdown.code") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "`[^`]+`",
+                "comment": "capture:markdown.code",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("markdown.list") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "(?m)^\\s*(?:[-*+]|\\d+\\.)\\s+",
+                "comment": "capture:markdown.list",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("tide.uuid") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                "comment": "capture:tide.uuid",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("tide.schema") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "\\b[A-Za-z][A-Za-z0-9_]*::[0-9.]+",
+                "comment": "capture:tide.schema",
+            }));
+        }
+        if let Some(maps) = spec.captures.get("boolean") {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": "(?<![A-Za-z0-9_])(?:true|false)(?![A-Za-z0-9_])",
+                "comment": "capture:boolean",
+            }));
+        }
+    }
+    let mut by_capture: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let re = Regex::new(r#""([^"\\]+)"\s+@([A-Za-z0-9_.]+)"#).expect("regex");
+    for cap in re.captures_iter(scm) {
+        by_capture
+            .entry(cap[2].to_string())
+            .or_default()
+            .insert(cap[1].to_string());
+    }
+    for (capture, tokens) in &by_capture {
+        let Some(maps) = spec.captures.get(capture) else {
+            continue;
+        };
+        let mut words = Vec::new();
+        let mut punct = Vec::new();
+        for token in tokens {
+            if token
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            {
+                words.push(regex::escape(token));
+            } else {
+                punct.push(regex::escape(token));
+            }
+        }
+        if !words.is_empty() {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": format!("(?i)(?<![A-Za-z0-9_])(?:{})(?![A-Za-z0-9_])", words.join("|")),
+                "comment": format!("capture:{capture}"),
+            }));
+        }
+        for p in punct {
+            patterns.push(serde_json::json!({
+                "name": maps.tm,
+                "match": p,
+                "comment": format!("capture:{capture}"),
+            }));
+        }
+    }
+    if language == LanguageId::TideYaml {
+        // First, so a query block is the embedded language, not YAML.
+        patterns.insert(0, tide_embedded_queries(spec));
+    }
+    serde_json::json!({
+        "scopeName": tm_scope_name(language),
+        "name": format!("opentide {}", language),
+        "patterns": patterns,
+        "opentideHighlightSpec": spec.version,
+    })
+}
+
+/// The query fields whose path alone fixes their language, as
+/// `docs/ARCHITECTURE.md`'s injection table lists them: each platform block
+/// under `configurations`, its query keys, and the language. Elastic is not
+/// here: its language follows the block's `type` and `language` keys, which
+/// a TextMate grammar cannot read reliably, so its queries are coloured by
+/// semantic tokens only.
+pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
+    (
+        &["sentinel", "defender_for_endpoint"],
+        &["query"],
+        LanguageId::Kql,
+    ),
+    (&["splunk"], &["query", "search"], LanguageId::Spl),
+    (&["carbon_black_cloud"], &["query"], LanguageId::Lucene),
+    // The rule's condition; a macro's (`macros[].condition`) is a level
+    // deeper and is left to semantic tokens.
+    (&["sysdig"], &["condition"], LanguageId::Falco),
+];
+
+/// The embedded region a query of `language` gets: `meta.embedded.block.<id>`.
+pub fn embedded_scope(language: LanguageId) -> String {
+    format!("meta.embedded.block.{}", language.as_str())
+}
+
+/// The top-level `configurations` block, with each fixed-language query in
+/// it as an embedded region of its language's grammar (#171): a block scalar
+/// (`query: |`) until the indentation returns, or a value on the key's line.
+fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
+    let key = spec
+        .captures
+        .get("tide.property")
+        .map(|m| m.tm.clone())
+        .unwrap_or_else(|| "entity.name.tag.yaml".to_string());
+    // A line that is neither more indented than the key nor blank ends it.
+    let until_dedent = "^(?!\\1\\s+\\S|\\s*$)";
+    let platforms: Vec<serde_json::Value> = EMBEDDED_QUERIES
+        .iter()
+        .map(|(platforms, keys, language)| {
+            let scope = embedded_scope(*language);
+            let include = tm_scope_name(*language);
+            let keys = keys.join("|");
+            serde_json::json!({
+                "comment": format!("configurations.{{{}}}: {} queries (#171)", platforms.join(","), language.as_str()),
+                "begin": format!("^(\\s+)({})\\s*:\\s*(?:#.*)?$", platforms.join("|")),
+                "beginCaptures": { "2": { "name": key } },
+                "end": until_dedent,
+                "patterns": [
+                    {
+                        "begin": format!("^(\\s+)({keys})\\s*:\\s*[|>][-+0-9]*\\s*(?:#.*)?$"),
+                        "beginCaptures": { "2": { "name": key } },
+                        "end": until_dedent,
+                        "contentName": scope,
+                        "patterns": [{ "include": include }],
+                    },
+                    {
+                        "match": format!("^(\\s+)({keys})\\s*:\\s+(?![|>])(.+)$"),
+                        "captures": {
+                            "2": { "name": key },
+                            "3": { "name": scope, "patterns": [{ "include": include }] },
+                        },
+                    },
+                    { "include": "$self" },
+                ],
+            })
+        })
+        .collect();
+    let mut patterns = platforms;
+    patterns.push(serde_json::json!({ "include": "$self" }));
+    serde_json::json!({
+        "comment": "configurations: the queries whose path fixes their language are embedded regions (#171); Elastic queries are left to semantic tokens",
+        "begin": "^(configurations)\\s*:\\s*(?:#.*)?$",
+        "beginCaptures": { "1": { "name": key } },
+        "end": "^(?=\\S)",
+        "patterns": patterns,
+    })
+}
+
+/// The `contributes` fragment an editor extension copies for the Tide
+/// grammar: its scope and the language id of each embedded region (#171).
+pub fn generate_package_contributions() -> serde_json::Value {
+    let embedded: serde_json::Map<String, serde_json::Value> = EMBEDDED_QUERIES
+        .iter()
+        .map(|(_, _, language)| {
+            (
+                embedded_scope(*language),
+                serde_json::Value::String(language.as_str().to_string()),
+            )
+        })
+        .collect();
+    serde_json::json!({
+        "contributes": {
+            "grammars": [{
+                "language": LanguageId::TideYaml.as_str(),
+                "scopeName": tm_scope_name(LanguageId::TideYaml),
+                "path": "./tide.tmLanguage.json",
+                "embeddedLanguages": embedded,
+            }]
+        }
+    })
+}
+
+pub fn generate_monaco(spec: &HighlightSpec) -> serde_json::Value {
+    let token_map: BTreeMap<&String, &String> =
+        spec.captures.iter().map(|(k, v)| (k, &v.monaco)).collect();
+    serde_json::json!({
+        "tokenLegend": spec.legend,
+        "tokenMap": token_map,
+    })
+}
+
+pub fn generate_helix(spec: &HighlightSpec) -> String {
+    let mut out = String::from("# Generated from highlights/spec.toml — do not edit.\n");
+    for (name, maps) in &spec.captures {
+        out.push_str(&format!("\"{name}\" = \"{}\"\n", maps.helix));
+    }
+    out
+}
+
+pub fn generated_artifacts_stale(
+    spec: &HighlightSpec,
+    tm: &str,
+    monaco: &str,
+    helix: &str,
+) -> Result<(), String> {
+    generated_artifacts_stale_for(spec, LanguageId::Kql, tm, monaco, helix)
+}
+
+pub fn generated_artifacts_stale_for(
+    spec: &HighlightSpec,
+    language: LanguageId,
+    tm: &str,
+    monaco: &str,
+    helix: &str,
+) -> Result<(), String> {
+    let expected_tm = serde_json::to_string_pretty(&generate_tm_language(language, spec))
+        .map_err(|e| e.to_string())?;
+    let expected_monaco =
+        serde_json::to_string_pretty(&generate_monaco(spec)).map_err(|e| e.to_string())?;
+    let expected_helix = generate_helix(spec);
+    if tm.trim() != expected_tm.trim() {
+        return Err(format!(
+            "generated {language} tmLanguage is stale; run opentide-lsp generate-highlights"
+        ));
+    }
+    if monaco.trim() != expected_monaco.trim() {
+        return Err("generated monaco map is stale; run opentide-lsp generate-highlights".into());
+    }
+    if helix.trim() != expected_helix.trim() {
+        return Err("generated helix map is stale; run opentide-lsp generate-highlights".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spec_loads_and_legend_matches_captures() {
+        let spec = HighlightSpec::load().expect("spec");
+        assert!(spec.legend.contains(&"keyword".to_string()));
+        assert!(spec.contains_capture("tide.keyword"));
+        assert!(spec.contains_capture("markdown.heading"));
+        assert!(spec.contains_capture("macro"));
+        assert!(spec.token_index("keyword").is_ok());
+        assert!(!load_tide_fields().is_empty());
+        let bundled: serde_json::Value =
+            serde_json::from_str(TIDE_FIELDS_JSON).expect("fields.json");
+        assert_eq!(Some(tide_catalog_version()), bundled["opentide"].as_str());
+        assert_eq!(tide_key_capture("description"), "tide.property");
+        assert_eq!(tide_key_capture("alert"), "tide.property");
+        assert_eq!(tide_key_capture("response"), "tide.property");
+        assert_eq!(tide_key_capture_at("rule", "description"), "tide.property");
+        assert_eq!(
+            tide_key_capture_at("rule", "response.alert_severity"),
+            "tide.property"
+        );
+        assert_eq!(
+            tide_key_capture_at("rule", "configurations.sentinel.alert"),
+            "tide.property"
+        );
+        assert!(
+            load_tide_fields()
+                .iter()
+                .all(|field| field.capture == "tide.property"),
+            "YAML keys share one capture; nesting must not recolor them"
+        );
+        assert!(tide_field_is_markdown_at("rule", "description"));
+        assert!(tide_field_is_markdown_at(
+            "rule",
+            "configurations.sentinel.query"
+        ));
+        assert!(!tide_field_is_markdown_at(
+            "rule",
+            "configurations.sentinel.alert.description"
+        ));
+        let detection = tide_field_at("rule", "detection_model").expect("detection_model");
+        assert!(!detection.required);
+        assert_eq!(detection.ref_kind.as_deref(), Some("objective"));
+        assert!(detection.enum_values.is_empty());
+        let impact = tide_field_at("threat", "threat.impact").expect("impact");
+        assert!(impact.array);
+        assert!(impact.required);
+        assert!(impact.enum_values.len() > 1);
+    }
+
+    #[test]
+    fn scm_captures_are_subset_of_spec() {
+        let spec = HighlightSpec::load().unwrap();
+        for language in LanguageId::QUERY_LANGUAGES
+            .into_iter()
+            .chain([LanguageId::TideYaml])
+        {
+            assert_scm_subset_of_spec(&spec, highlights_scm(language))
+                .unwrap_or_else(|e| panic!("{language}: {e}"));
+        }
+    }
+
+    /// Each grammar ships a copy of its highlight query for tree-sitter
+    /// tooling; it must match the one the engine compiles.
+    #[test]
+    fn grammar_query_copies_match_highlight_queries() {
+        let copies = [
+            (
+                LanguageId::Kql,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-kql/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Spl,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-spl/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Esql,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-esql/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Eql,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-eql/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Kuery,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-kuery/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Lucene,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-lucene/queries/highlights.scm"
+                )),
+            ),
+            (
+                LanguageId::Falco,
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/grammars/tree-sitter-opentide-falco/queries/highlights.scm"
+                )),
+            ),
+        ];
+        for (language, copy) in copies {
+            assert_eq!(
+                copy,
+                highlights_scm(language),
+                "grammars/tree-sitter-opentide-{language}/queries/highlights.scm is stale"
+            );
+        }
+    }
+
+    #[test]
+    fn tide_highlights_scm_lists_every_field_catalog_key() {
+        let re = Regex::new(r#"\^\(([^)]+)\)\$"#).unwrap();
+        let mut scm_keys = std::collections::BTreeSet::new();
+        for cap in re.captures_iter(TIDE_HIGHLIGHTS_SCM) {
+            for part in cap[1].split('|') {
+                scm_keys.insert(part.to_string());
+            }
+        }
+        let catalog: std::collections::BTreeSet<String> = load_tide_fields()
+            .into_iter()
+            .map(|f| f.name.clone())
+            .collect();
+        let missing: Vec<_> = catalog.difference(&scm_keys).cloned().collect();
+        assert!(
+            missing.is_empty(),
+            "highlights.scm missing generated field names: {missing:?}"
+        );
+    }
+
+    #[test]
+    fn unknown_scm_capture_fails() {
+        let spec = HighlightSpec::load().unwrap();
+        let err = assert_scm_subset_of_spec(&spec, "(identifier) @not_a_real_capture").unwrap_err();
+        match err {
+            HighlightError::UnknownCapture(name) => assert_eq!(name, "not_a_real_capture"),
+            other => panic!("{other}"),
+        }
+    }
+
+    #[test]
+    fn semantic_token_encoding_is_delta() {
+        let spec = HighlightSpec::load().unwrap();
+        let src = "where x";
+        let tokens = tokens_from_spans(
+            &spec,
+            src,
+            &[
+                (ByteSpan::new(0, 5), "keyword"),
+                (ByteSpan::new(6, 7), "variable"),
+            ],
+        )
+        .unwrap();
+        let data = encode_semantic_tokens(&tokens);
+        assert_eq!(data.len(), 10);
+        assert_eq!(data[0], 0);
+        assert_eq!(data[5], 0); // same line
+    }
+
+    #[test]
+    fn lsp_semantic_token_length_is_utf16_units() {
+        let spec = HighlightSpec::load().unwrap();
+        let src = "é\n😀";
+        let emoji_start = src.len() - "😀".len();
+        let tokens = tokens_from_spans(
+            &spec,
+            src,
+            &[
+                (ByteSpan::new(0, "é".len()), "keyword"),
+                (ByteSpan::new(emoji_start, src.len()), "string"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(tokens[0].range.end.character, 1);
+        assert_eq!(tokens[1].range.start, opentide_core::Position::new(1, 0));
+        assert_eq!(tokens[1].range.end.character, 2);
+        let data = encode_lsp_semantic_tokens(&tokens);
+        assert_eq!(&data[0..5], &[0, 0, 1, lsp_token_type_index("keyword"), 0]);
+        assert_eq!(&data[5..10], &[1, 0, 2, lsp_token_type_index("string"), 0]);
+    }
+
+    #[test]
+    fn lsp_legend_maps_dotted_captures_to_standard_types() {
+        assert_eq!(
+            LSP_TOKEN_TYPES[lsp_token_type_index("keyword") as usize],
+            "keyword"
+        );
+        assert_eq!(
+            LSP_TOKEN_TYPES[lsp_token_type_index("operator.pipe") as usize],
+            "operator"
+        );
+        assert_eq!(
+            LSP_TOKEN_TYPES[lsp_token_type_index("function.builtin") as usize],
+            "function"
+        );
+        assert_eq!(
+            LSP_TOKEN_TYPES[lsp_token_type_index("tide.keyword") as usize],
+            "keyword"
+        );
+    }
+
+    #[test]
+    fn html_stylesheet_colors_keywords_and_pipes() {
+        let spec = HighlightSpec::load().unwrap();
+        let src = "SecurityEvent | where x == 1";
+        let tokens = tokens_from_spans(
+            &spec,
+            src,
+            &[
+                (ByteSpan::new(0, 13), "type"),
+                (ByteSpan::new(14, 15), "operator.pipe"),
+                (ByteSpan::new(16, 21), "keyword"),
+            ],
+        )
+        .unwrap();
+        let html = tokens_to_html(src, &tokens);
+        assert!(html.contains("class=\"keyword\""));
+        assert!(html.contains("class=\"operator-pipe\""));
+        assert!(html.contains("#c586c0"));
+        assert!(html.contains("#ff79c6"));
+        assert!(html.contains("#4fc1ff"));
+        assert!(html.contains(".markdown-heading"));
+        assert!(html.contains(".macro"));
+    }
+
+    #[test]
+    fn each_revision_has_its_own_fields() {
+        // metadata.reviewed is a rule::1.1 field.
+        assert!(tide_field_at("rule::1.1", "metadata.reviewed").is_some());
+        assert!(tide_field_at("rule::1.0", "metadata.reviewed").is_none());
+        // A bare family, and a revision the catalog does not know, take the newest.
+        assert!(tide_field_at("rule", "metadata.reviewed").is_some());
+        assert!(tide_field_at("rule::9.9", "metadata.reviewed").is_some());
+        let root = |schema| tide_schema_root(schema).map(|(key, root)| (key, root.closed));
+        assert_eq!(root("rule"), Some(("rule::1.1", true)));
+        assert_eq!(root("rule::1.0"), Some(("rule::1.0", true)));
+        assert_eq!(root("unknown::1.0"), None);
+        // opentide#745 retired the objective's root `composition` and the
+        // splunk::2.x `search`: no legacy table accepts them any more.
+        let (_, objective) = tide_schema_root("objective::1.0").expect("objective");
+        assert_eq!(objective.legacy.get("composition"), None);
+        let splunk = tide_field_at("rule::1.1", "configurations.splunk").expect("splunk");
+        assert_eq!(splunk.legacy.get("search"), None);
+        assert!(tide_field_at("rule::1.0", "metadata").is_some_and(|f| f.closed));
+        assert!(tide_field_at("rule::1.0", "references.internal").is_some_and(|f| !f.closed));
+        let fields = tide_fields_of("rule::1.0");
+        assert!(fields.iter().all(|field| field.schema == "rule::1.0"));
+        assert!(
+            fields
+                .iter()
+                .any(|field| field.path == "description" && field.required)
+        );
+    }
+}
+
+#[cfg(test)]
+mod tm_language_stub_bug {
+    #[test]
+    fn generated_kql_tm_language_has_executable_match_rules() {
+        let tm = include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/highlights/generated/kql.tmLanguage.json"
+        ));
+        let v: serde_json::Value = serde_json::from_str(tm).expect("json");
+        let patterns = v["patterns"].as_array().expect("patterns");
+        let has_match = patterns
+            .iter()
+            .any(|p| p.get("match").is_some() || p.get("begin").is_some());
+        assert!(
+            has_match,
+            "kql.tmLanguage.json patterns are name-only stubs with no match/begin — TextMate-only editors render uncolored source"
+        );
+    }
+
+    #[test]
+    fn generated_tide_tm_language_does_not_over_escape_whitespace() {
+        let spec = crate::HighlightSpec::load().unwrap();
+        let tm = crate::generate_tm_language(opentide_core::LanguageId::TideYaml, &spec);
+        let patterns = tm["patterns"].as_array().unwrap();
+        let key = patterns
+            .iter()
+            .find(|p| p["comment"] == "capture:tide.property")
+            .unwrap();
+        let m = key["match"].as_str().unwrap();
+        assert!(
+            m.contains(r"^\s*"),
+            "expected real whitespace class, got {m}"
+        );
+        assert!(
+            !m.contains(r"\\s"),
+            "over-escaped whitespace in Tide TextMate match: {m}"
+        );
+        assert!(
+            patterns.iter().any(|p| p["comment"] == "capture:tide.uuid"
+                && p["match"].as_str().unwrap().contains("8}-")),
+            "{tm}"
+        );
+        let comment = patterns
+            .iter()
+            .find(|p| p["comment"] == "capture:comment")
+            .unwrap();
+        assert_eq!(comment["match"], "(?m)^\\s*#.*$");
+        // The embedded query regions come first (#171).
+        assert_eq!(
+            tm["patterns"][0]["begin"],
+            "^(configurations)\\s*:\\s*(?:#.*)?$"
+        );
+    }
+
+    /// #171: the regions cover the paths with a fixed language, never Elastic.
+    #[test]
+    fn embedded_regions_name_their_languages_and_leave_elastic_out() {
+        let platforms: Vec<&str> = super::EMBEDDED_QUERIES
+            .iter()
+            .flat_map(|(p, _, _)| p.iter().copied())
+            .collect();
+        assert!(!platforms.contains(&"elastic"));
+        let contributions = super::generate_package_contributions();
+        let embedded = &contributions["contributes"]["grammars"][0]["embeddedLanguages"];
+        assert_eq!(embedded["meta.embedded.block.kql"], "kql");
+        assert_eq!(embedded["meta.embedded.block.spl"], "spl");
+        assert_eq!(embedded["meta.embedded.block.lucene"], "lucene");
+        assert_eq!(embedded["meta.embedded.block.falco"], "falco");
+    }
+
+    /// #195: ES|QL's grammar must not take Elastic's `source.esql` scope.
+    #[test]
+    fn esql_grammar_scope_is_opentide_not_elastic() {
+        let spec = crate::HighlightSpec::load().unwrap();
+        let tm = crate::generate_tm_language(opentide_core::LanguageId::Esql, &spec);
+        assert_eq!(tm["scopeName"], "source.opentide.esql");
+        let esql = include_str!(concat!(
+            env!("OPENTIDE_ASSETS"),
+            "/highlights/generated/esql.tmLanguage.json"
+        ));
+        let v: serde_json::Value = serde_json::from_str(esql).expect("json");
+        assert_eq!(v["scopeName"], "source.opentide.esql");
+        let generated = [
+            ("esql.tmLanguage.json", esql),
+            (
+                "tide.tmLanguage.json",
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/highlights/generated/tide.tmLanguage.json"
+                )),
+            ),
+            (
+                "package-contributions.json",
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/highlights/generated/package-contributions.json"
+                )),
+            ),
+            (
+                "monaco.json",
+                include_str!(concat!(
+                    env!("OPENTIDE_ASSETS"),
+                    "/highlights/generated/monaco.json"
+                )),
+            ),
+        ];
+        for (name, text) in generated {
+            assert!(
+                !text.contains("\"source.esql\""),
+                "{name} still names Elastic's source.esql scope"
+            );
+        }
+        assert_eq!(
+            crate::tm_scope_name(opentide_core::LanguageId::Kql),
+            "source.kql"
+        );
+        assert_eq!(
+            crate::tm_scope_name(opentide_core::LanguageId::TideYaml),
+            "source.opentide-yaml"
+        );
+    }
+}

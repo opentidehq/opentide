@@ -1,0 +1,3 @@
+// prod:source_subquery valid
+FROM logs-*, (FROM archive-* | WHERE x > 1) METADATA _id
+| LIMIT 1

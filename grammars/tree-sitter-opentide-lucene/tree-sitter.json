@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_lucene",
+      "camelcase": "OpentideLucene",
+      "scope": "source.lucene",
+      "file-types": ["lucene"],
+      "highlights": "../../highlights/queries/lucene/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

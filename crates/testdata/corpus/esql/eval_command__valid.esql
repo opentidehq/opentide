@@ -1,0 +1,3 @@
+// prod:eval_command valid
+FROM logs-* METADATA _id
+| EVAL lower_name = TO_LOWER(process.name), n = 1 + 2 * 3

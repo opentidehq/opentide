@@ -1,0 +1,13 @@
+{
+  "name": "opentide-highlights-test",
+  "private": true,
+  "description": "Opens the generated TextMate grammars with vscode-textmate, as VS Code does (#171). Not published.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test embedded.test.mjs"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
+  }
+}

@@ -1,0 +1,2 @@
+// prod:search_source valid
+search in (SecurityEvent) "mimikatz" | take 10

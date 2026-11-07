@@ -1,0 +1,1 @@
+(device_os:WINDOWS (filemod_name:\\AppData\\Roaming\\AnyDesk\\user.conf* OR filemod_name:\\AppData\\Roaming\\AnyDesk\\system.conf*)

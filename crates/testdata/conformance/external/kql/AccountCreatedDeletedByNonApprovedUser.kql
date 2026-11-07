@@ -1,0 +1,14 @@
+// Add non-approved user principal names or apps to the list below to search for their account creation/deletion activity
+// ex: dynamic(["UPN1", "upn123"])
+let nonapproved_users = dynamic([]);
+let nonapproved_apps = dynamic([]);
+AuditLogs
+| where OperationName =~ "Add user" or OperationName =~ "Delete user"
+| where Result =~ "success"
+| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+| where InitiatingUserPrincipalName has_any (nonapproved_users) or InitiatingAppName has_any (nonapproved_apps)
+| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])

@@ -1,0 +1,3 @@
+// prod:metadata valid
+FROM logs-* METADATA _id
+| WHERE event.category == "process"

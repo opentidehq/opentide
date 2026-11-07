@@ -1,0 +1,2 @@
+``` prod:foreach_command invalid
+index=main | foreach * [ eval <<FIELD>>=1

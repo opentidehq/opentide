@@ -1,0 +1,53 @@
+{
+  "name": "opentide",
+  "languages": {
+    "opentide-yaml": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["yaml", "yml"]
+    },
+    "kql": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["kql"]
+    },
+    "spl": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["spl"]
+    },
+    "esql": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["esql"]
+    },
+    "eql": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["eql"]
+    },
+    "kuery": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["kuery"]
+    },
+    "lucene": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["lucene"]
+    },
+    "falco": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["falco"]
+    },
+    "opentide-config": {
+      "language_servers": ["opentide"],
+      "path_globs": [".opentide/configurations/**/*.toml"],
+      "grammar": "toml"
+    }
+  },
+  "lsp": {
+    "opentide-lsp": {
+      "command": "opentide-lsp",
+      "args": ["--stdio"]
+    },
+    "opentide": {
+      "command": "opentide",
+      "args": ["lsp", "start"]
+    }
+  },
+  "notes": "Disable yamlls on objects/** and generic TOML servers on .opentide/configurations/**. Configuration checks need `opentide lsp start`. Copy TextMate from highlights-v*.zip, never hand-author."
+}

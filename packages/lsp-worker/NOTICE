@@ -1,0 +1,6 @@
+@opentide/lsp-worker is MIT-licensed (LICENSE). It loads, and does not
+contain, the opentide engine's WebAssembly module (`opentide_wasm.wasm` and
+its wasm-bindgen glue), which is licensed under the EUPL-1.2. The module is
+published with the language-server release (`opentide-wasm-web-<version>.zip`)
+together with its LICENSE, NOTICE and THIRD-PARTY-LICENSES.html; whoever
+serves the module to users ships those with it.

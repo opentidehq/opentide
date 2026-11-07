@@ -1,0 +1,3 @@
+// prod:grok_command valid
+FROM logs-* METADATA _id
+| GROK message "%{IP:client} %{WORD:method}"

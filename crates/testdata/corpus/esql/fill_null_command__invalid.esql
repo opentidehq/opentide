@@ -1,0 +1,3 @@
+// prod:fill_null_command invalid
+FROM logs-* METADATA _id
+| FILLNULL ON bytes

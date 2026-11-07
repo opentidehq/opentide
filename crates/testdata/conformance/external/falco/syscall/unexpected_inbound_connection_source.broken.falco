@@ -1,0 +1,3 @@
+inbound and proc.name in (oops and not ((fd.cip in (allowed_inbound_source_ipaddrs)) or
+         (fd.cnet in (allowed_inbound_source_networks)) or
+         (fd.cip.name in (allowed_inbound_source_domains)))

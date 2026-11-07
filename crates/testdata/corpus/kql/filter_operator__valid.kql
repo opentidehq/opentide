@@ -1,0 +1,2 @@
+// prod:filter_operator valid
+SecurityEvent | filter EventID == 4688

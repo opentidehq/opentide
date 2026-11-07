@@ -1,0 +1,2 @@
+let Servers = (SecurityEvent | distinct Computer);
+Servers

@@ -1,0 +1,1 @@
+spawned_process and container and proc.vpid=1 and user.uid=0 and not user_known_run_as_root_container

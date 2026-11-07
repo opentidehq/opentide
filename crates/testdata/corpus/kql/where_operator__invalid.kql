@@ -1,0 +1,2 @@
+// prod:where_operator invalid
+SecurityEvent | where

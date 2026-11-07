@@ -1,0 +1,2 @@
+# prod:range_query valid
+bytes:[100 TO 200} AND @timestamp:[now-1d/d TO now]

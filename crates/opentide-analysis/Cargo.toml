@@ -1,0 +1,38 @@
+[package]
+name = "opentide-analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "The opentide engine: I/O-free analysis of KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, and Tide YAML"
+readme = "README.md"
+keywords = ["kql", "spl", "esql", "detection", "siem"]
+categories = ["parser-implementations", "development-tools"]
+
+[dependencies]
+opentide-core.workspace = true
+opentide-highlight.workspace = true
+opentide-kql.workspace = true
+opentide-spl.workspace = true
+opentide-esql.workspace = true
+opentide-eql.workspace = true
+opentide-kuery.workspace = true
+opentide-lucene.workspace = true
+opentide-falco.workspace = true
+opentide-ecs.workspace = true
+opentide-tide.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+toml_edit.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+toml.workspace = true
+
+[[bench]]
+name = "analyze"
+harness = false

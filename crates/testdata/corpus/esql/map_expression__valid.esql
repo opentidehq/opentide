@@ -1,0 +1,3 @@
+// prod:map_expression valid
+FROM logs-* METADATA _id
+| WHERE MATCH(message, "x", { "fuzziness": 1 })

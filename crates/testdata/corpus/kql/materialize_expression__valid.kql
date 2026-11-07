@@ -1,0 +1,3 @@
+// prod:materialize_expression valid
+let Logons = materialize(SecurityEvent | where EventID == 4624);
+Logons | take 1

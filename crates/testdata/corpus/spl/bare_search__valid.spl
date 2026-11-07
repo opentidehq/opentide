@@ -1,0 +1,2 @@
+``` prod:bare_search valid
+index=main sourcetype=foo

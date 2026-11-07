@@ -1,0 +1,3 @@
+// prod:from_command valid
+FROM logs-endpoint.events.process-*, remote:logs-* METADATA _id, _version, _index
+| LIMIT 10

@@ -103,3 +103,26 @@ src/opentide/_native.*.so
 src/opentide/_native.pyd
 src/opentide/_native.*.pyd
 src/opentide/_native.so
+
+# language-server (imported with its history)
+/target
+/node_modules
+/packages/*/node_modules
+/packages/*/dist
+**/*.wasm
+.idea
+.vscode
+*.swp
+.DS_Store
+grammars/*/build
+grammars/*/node_modules
+*.profraw
+coverage
+lcov.info
+/tmp
+scripts/oracles/kusto/bin
+scripts/oracles/kusto/obj
+__pycache__/
+scripts/oracles/elastic/node_modules
+scripts/oracles/elastic/.cache
+highlights/test/node_modules

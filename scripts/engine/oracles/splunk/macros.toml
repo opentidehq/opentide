@@ -1,0 +1,62 @@
+# Search macros the Splunk oracle defines before it parses the SPL corpus.
+# The parser expands macros, so an undefined one is a setup error, not a verdict.
+#
+# Definitions marked security_content are copied verbatim from
+# https://github.com/splunk/security_content/tree/develop/macros (Apache-2.0).
+# The others are one-line stand-ins written here; the real CIM macros ship
+# in Splunk_SA_CIM and are not vendored.
+#
+# Any macro named `<detection>_filter` with no arguments is defined as
+# `search *`, which is what security_content generates for each detection.
+
+[[macros]]
+name = "security_content_summariesonly"
+definition = "summariesonly=`summariesonly_config` allow_old_summaries=`oldsummaries_config` fillnull_value=`fillnull_config`"
+source = "security_content"
+
+[[macros]]
+name = "summariesonly_config"
+definition = "false"
+source = "security_content"
+
+[[macros]]
+name = "oldsummaries_config"
+definition = "true"
+source = "security_content"
+
+[[macros]]
+name = "fillnull_config"
+definition = "null"
+source = "security_content"
+
+[[macros]]
+name = "security_content_ctime"
+args = ["field"]
+definition = 'convert timeformat="%Y-%m-%dT%H:%M:%S" ctime($field$)'
+source = "security_content"
+
+[[macros]]
+name = "process_netsh"
+definition = "(Processes.process_name=netsh.exe OR Processes.original_file_name=netsh.exe)"
+source = "security_content"
+
+[[macros]]
+name = "powershell"
+definition = '(source=WinEventLog:Microsoft-Windows-PowerShell/Operational OR source="XmlWinEventLog:Microsoft-Windows-PowerShell/Operational" OR source=WinEventLog:PowerShellCore/Operational OR source="XmlWinEventLog:PowerShellCore/Operational")'
+source = "security_content"
+
+[[macros]]
+name = "sysmon"
+definition = "(source=WinEventLog:Microsoft-Windows-Sysmon/Operational OR source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational OR source=Syslog:Linux-Sysmon/Operational)"
+source = "security_content"
+
+[[macros]]
+name = "drop_dm_object_name"
+args = ["object"]
+definition = "rename $object$.* AS *"
+source = "stand-in for Splunk_SA_CIM"
+
+[[macros]]
+name = "probe_field"
+definition = "host"
+source = "stand-in for a macro that names a field (testdata/oracles/spl/*_macro.spl)"

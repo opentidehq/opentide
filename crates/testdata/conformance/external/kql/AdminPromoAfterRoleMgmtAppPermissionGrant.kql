@@ -1,0 +1,66 @@
+let query_frequency = 1h;
+let query_period = 2h;
+AuditLogs
+| where TimeGenerated > ago(query_period)
+| where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory"
+| where OperationName =~ "Add app role assignment to service principal"
+| mv-expand TargetResource = TargetResources
+| mv-expand modifiedProperty = TargetResource["modifiedProperties"]
+| where tostring(modifiedProperty["displayName"]) == "AppRole.Value"
+| extend PermissionGrant = tostring(modifiedProperty["newValue"])
+| where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+| mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
+    summarize modifiedProperties = make_bag(
+        bag_pack(tostring(modifiedProperty["displayName"]),
+            bag_pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
+                "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))), 100)
+)
+| project
+    PermissionGrant_TimeGenerated = TimeGenerated,
+    PermissionGrant_OperationName = OperationName,
+    PermissionGrant_Result = Result,
+    PermissionGrant,
+    AppDisplayName = tostring(modifiedProperties["ServicePrincipal.DisplayName"]["newValue"]),
+    AppServicePrincipalId = tostring(modifiedProperties["ServicePrincipal.ObjectID"]["newValue"]),
+    PermissionGrant_InitiatedBy = InitiatedBy,
+    PermissionGrant_TargetResources = TargetResources,
+    PermissionGrant_AdditionalDetails = AdditionalDetails,
+    PermissionGrant_CorrelationId = CorrelationId
+| join kind=inner (
+    AuditLogs
+    | where TimeGenerated > ago(query_frequency)
+    | where Category =~ "RoleManagement" and LoggedByService =~ "Core Directory" and AADOperationType =~ "Assign"
+    | where isnotempty(InitiatedBy["app"])
+    | mv-expand TargetResource = TargetResources
+    | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
+    | where tostring(modifiedProperty["displayName"]) in ("Role.DisplayName", "RoleDefinition.DisplayName")
+    | extend RoleAssignment = tostring(modifiedProperty["newValue"])
+    | where RoleAssignment contains "Admin"
+    | project
+        RoleAssignment_TimeGenerated = TimeGenerated,
+        RoleAssignment_OperationName = OperationName,
+        RoleAssignment_Result = Result,
+        RoleAssignment,
+        TargetType = tostring(TargetResources[0]["type"]),
+        Target = iff(isnotempty(TargetResources[0]["displayName"]), tostring(TargetResources[0]["displayName"]), tolower(TargetResources[0]["userPrincipalName"])),
+        TargetId = tostring(TargetResources[0]["id"]),
+        RoleAssignment_InitiatedBy = InitiatedBy,
+        RoleAssignment_TargetResources = TargetResources,
+        RoleAssignment_AdditionalDetails = AdditionalDetails,
+        RoleAssignment_CorrelationId = CorrelationId,
+        AppServicePrincipalId = tostring(InitiatedBy["app"]["servicePrincipalId"])
+    ) on AppServicePrincipalId
+| where PermissionGrant_TimeGenerated < RoleAssignment_TimeGenerated
+| extend
+    TargetName = tostring(split(Target, "@")[0]),
+    TargetUPNSuffix = tostring(split(Target, "@")[1])
+| project PermissionGrant_TimeGenerated, PermissionGrant_OperationName, PermissionGrant_Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, PermissionGrant_InitiatedBy, PermissionGrant_TargetResources, PermissionGrant_AdditionalDetails, PermissionGrant_CorrelationId, 
+RoleAssignment_TimeGenerated, RoleAssignment_OperationName, RoleAssignment_Result, RoleAssignment, TargetType, Target, TargetName, TargetUPNSuffix, TargetId, RoleAssignment_InitiatedBy, RoleAssignment_TargetResources, RoleAssignment_AdditionalDetails, RoleAssignment_CorrelationId
+| extend PermissionGrant_InitiatingUserPrincipalName = tostring(PermissionGrant_InitiatedBy.user.userPrincipalName)
+| extend PermissionGrant_InitiatingAadUserId = tostring(PermissionGrant_InitiatedBy.user.id)
+| extend PermissionGrant_InitiatingIpAddress = tostring(iff(isnotempty(PermissionGrant_InitiatedBy.user.ipAddress), PermissionGrant_InitiatedBy.user.ipAddress, PermissionGrant_InitiatedBy.app.ipAddress))
+| extend PermissionGrant_InitiatingAccountName = tostring(split(PermissionGrant_InitiatingUserPrincipalName, "@")[0]), PermissionGrant_InitiatingAccountUPNSuffix = tostring(split(PermissionGrant_InitiatingUserPrincipalName, "@")[1])
+| extend RoleAssignment_InitiatingUserPrincipalName = tostring(RoleAssignment_InitiatedBy.user.userPrincipalName)
+| extend RoleAssignment_InitiatingAadUserId = tostring(RoleAssignment_InitiatedBy.user.id)
+| extend RoleAssignment_InitiatingIpAddress = tostring(iff(isnotempty(RoleAssignment_InitiatedBy.user.ipAddress), RoleAssignment_InitiatedBy.user.ipAddress, RoleAssignment_InitiatedBy.app.ipAddress))
+| extend RoleAssignment_InitiatingAccountName = tostring(split(RoleAssignment_InitiatingUserPrincipalName, "@")[0]),  RoleAssignment_InitiatingAccountUPNSuffix = tostring(split(RoleAssignment_InitiatingUserPrincipalName, "@")[1])

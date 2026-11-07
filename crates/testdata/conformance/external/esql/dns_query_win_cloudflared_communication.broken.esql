@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | frobnicate ends_with(QueryName, ".v2.argotunnel.com") or ends_with(QueryName, "protocol-v2.argotunnel.com") or ends_with(QueryName, "trycloudflare.com") or ends_with(QueryName, "update.argotunnel.com")

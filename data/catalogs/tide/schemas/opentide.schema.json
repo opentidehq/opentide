@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opentide.dev/schemas/opentide.schema.json",
+  "title": "opentide Object Router",
+  "description": "Generated from opentide 0.1.dev241+gefb99419b.",
+  "oneOf": [
+    {
+      "if": {
+        "properties": {
+          "metadata": {
+            "properties": {
+              "schema": {
+                "const": "objective::1.0"
+              }
+            },
+            "required": [
+              "schema"
+            ]
+          }
+        },
+        "required": [
+          "metadata"
+        ]
+      },
+      "then": {
+        "$ref": "./objective.1.0.schema.json"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "metadata": {
+            "properties": {
+              "schema": {
+                "const": "rule::1.0"
+              }
+            },
+            "required": [
+              "schema"
+            ]
+          }
+        },
+        "required": [
+          "metadata"
+        ]
+      },
+      "then": {
+        "$ref": "./rule.1.0.schema.json"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "metadata": {
+            "properties": {
+              "schema": {
+                "const": "rule::1.1"
+              }
+            },
+            "required": [
+              "schema"
+            ]
+          }
+        },
+        "required": [
+          "metadata"
+        ]
+      },
+      "then": {
+        "$ref": "./rule.1.1.schema.json"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "metadata": {
+            "properties": {
+              "schema": {
+                "const": "threat::1.0"
+              }
+            },
+            "required": [
+              "schema"
+            ]
+          }
+        },
+        "required": [
+          "metadata"
+        ]
+      },
+      "then": {
+        "$ref": "./threat.1.0.schema.json"
+      }
+    }
+  ]
+}

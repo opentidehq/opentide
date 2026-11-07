@@ -1,0 +1,159 @@
+use opentide_analysis::highlight;
+use opentide_core::LanguageId;
+use serde_json::Value;
+use std::fs;
+use std::path::PathBuf;
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn golden(dir: &str, name: &str, language: LanguageId, src: &str) {
+    let result = highlight(language, src);
+    let captures: Vec<&str> = result.tokens.iter().map(|t| t.capture.as_str()).collect();
+    let path = repo_root()
+        .join("testdata/highlight")
+        .join(dir)
+        .join(format!("{name}.json"));
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    if std::env::var("UPDATE_GOLDENS").ok().as_deref() == Some("1") || !path.exists() {
+        fs::write(&path, serde_json::to_string_pretty(&result).unwrap()).unwrap();
+    }
+    let expected: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    let expected_captures: Vec<&str> = expected["tokens"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["capture"].as_str().unwrap())
+        .collect();
+    for cap in &expected_captures {
+        assert!(
+            captures.contains(cap),
+            "{dir}/{name}: missing capture {cap} in {captures:?}"
+        );
+    }
+}
+
+#[test]
+fn kql_golden() {
+    golden(
+        "kql",
+        "pipeline",
+        LanguageId::Kql,
+        "SecurityEvent | where EventID == 4688 | take 1",
+    );
+}
+
+#[test]
+fn spl_golden() {
+    golden(
+        "spl",
+        "pipeline",
+        LanguageId::Spl,
+        "index=main | stats count by host | head 1",
+    );
+}
+
+#[test]
+fn tide_golden_includes_host_and_injected_captures() {
+    let src = r#"
+name: Sentinel KQL Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000001
+  schema: rule::1.0
+configurations:
+  sentinel:
+    query: |
+      SecurityEvent
+      | where EventID == 4688
+"#;
+    golden("tide", "sentinel_injection", LanguageId::TideYaml, src);
+    let result = highlight(LanguageId::TideYaml, src);
+    assert!(result.tokens.iter().any(|t| t.capture == "tide.property"));
+    assert!(
+        result
+            .tokens
+            .iter()
+            .any(|t| t.capture == "keyword" || t.capture == "type" || t.capture == "operator.pipe")
+    );
+}
+
+/// Elastic goldens compare every token (span and capture), not only the set
+/// of captures. `UPDATE_GOLDENS=1` rewrites them after an intended change.
+fn exact_golden(dir: &str, name: &str, language: LanguageId, src: &str) {
+    golden(dir, name, language, src);
+    let result = highlight(language, src);
+    let path = repo_root()
+        .join("testdata/highlight")
+        .join(dir)
+        .join(format!("{name}.json"));
+    let expected: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    let triples = |tokens: &[Value]| -> Vec<(u64, u64, String)> {
+        tokens
+            .iter()
+            .map(|t| {
+                (
+                    t["span"]["start"].as_u64().unwrap(),
+                    t["span"]["end"].as_u64().unwrap(),
+                    t["capture"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    };
+    let actual: Value = serde_json::to_value(&result).unwrap();
+    assert_eq!(
+        triples(actual["tokens"].as_array().unwrap()),
+        triples(expected["tokens"].as_array().unwrap()),
+        "{dir}/{name}: tokens differ from the golden (UPDATE_GOLDENS=1 to accept)"
+    );
+}
+
+#[test]
+fn esql_golden() {
+    exact_golden(
+        "esql",
+        "pipeline",
+        LanguageId::Esql,
+        "// rare parents\nFROM logs-endpoint.events.process-* METADATA _id\n| WHERE event.type == \"start\" AND process.name LIKE \"*.exe\"\n| STATS c = COUNT(*) BY process.parent.name\n| WHERE c < 5 | LIMIT 10",
+    );
+}
+
+#[test]
+fn eql_golden() {
+    exact_golden(
+        "eql",
+        "sequence",
+        LanguageId::Eql,
+        "sequence by host.id with maxspan=30s\n  [process where process.name : \"cmd.exe\" and startsWith~(process.args, \"/c\")]\n  [network where destination.port in (443, 8443)]\n| head 5",
+    );
+}
+
+#[test]
+fn kuery_golden() {
+    exact_golden(
+        "kuery",
+        "query",
+        LanguageId::Kuery,
+        "event.category:process and not process.name:(\"cmd.exe\" or powershell*) and source.port >= 1024",
+    );
+}
+
+#[test]
+fn lucene_golden() {
+    exact_golden(
+        "lucene",
+        "query",
+        LanguageId::Lucene,
+        "event.category:process AND NOT process.name:(cmd.exe OR /power.*/) AND source.port:[1024 TO *]^2",
+    );
+}
+
+#[test]
+fn falco_golden() {
+    exact_golden(
+        "falco",
+        "condition",
+        LanguageId::Falco,
+        "spawned_process and container and not proc.name in (shell_binaries, \"sh -c\") and proc.aname[2] = sshd and tolower(fd.name) startswith /etc and fd.sport > 1024",
+    );
+}

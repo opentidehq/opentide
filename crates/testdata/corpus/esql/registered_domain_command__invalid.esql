@@ -1,0 +1,3 @@
+// prod:registered_domain_command invalid
+FROM logs-* METADATA _id
+| REGISTERED_DOMAIN d =

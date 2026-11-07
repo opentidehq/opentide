@@ -1,0 +1,3 @@
+((open_write and fd.name startswith /etc/cron) or
+ (spawned_process and proc.name = "crontab"))
+and not user_known_cron_jobs

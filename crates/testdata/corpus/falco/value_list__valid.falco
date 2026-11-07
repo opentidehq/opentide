@@ -1,0 +1,2 @@
+# prod:value_list valid
+proc.name in (bash, "sh", 'zsh', 1, in.proftpd, "sh -c uname -p 2> /dev/null")

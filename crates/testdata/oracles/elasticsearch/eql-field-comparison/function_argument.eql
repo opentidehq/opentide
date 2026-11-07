@@ -1,0 +1,1 @@
+process where stringContains(string(process.pid == process.parent.pid), "true")

@@ -1,0 +1,2577 @@
+# Defender XDR advanced-hunting columns. Detection-critical subset with Learn citations.
+# Event time is Timestamp (TimeGenerated appears when streamed to Sentinel).
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time (Defender hunting time column)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id. Required for isolate/scan custom detections."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Per-event report id. Required with Timestamp for process tree."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Operation discriminator."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "Account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessFolderPath"
+type = "string"
+docs = "Actor folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessId"
+type = "long"
+docs = "Actor PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessSHA1"
+type = "string"
+docs = "Actor SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessSHA256"
+type = "string"
+docs = "Actor SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessAccountName"
+type = "string"
+docs = "Actor account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessAccountDomain"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessAccountSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessAccountUpn"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessAccountObjectId"
+type = "string"
+docs = "Entra object id of actor."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "AppGuardContainerId"
+type = "string"
+docs = "Application Guard container."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "AdditionalFields"
+type = "dynamic"
+docs = "Extra JSON payload."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "FileName"
+type = "string"
+docs = "Created process image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "FolderPath"
+type = "string"
+docs = "Created process folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ProcessId"
+type = "long"
+docs = "Created PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ProcessCommandLine"
+type = "string"
+docs = "Created process command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ProcessCreationTime"
+type = "datetime"
+docs = "Created process start."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ProcessTokenElevation"
+type = "string"
+docs = "Token elevation."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "SHA1"
+type = "string"
+docs = "Image SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "SHA256"
+type = "string"
+docs = "Image SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "MD5"
+type = "string"
+docs = "Image MD5."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "FileSize"
+type = "long"
+docs = "Image size."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ProcessIntegrityLevel"
+type = "string"
+docs = "Integrity level."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "ProcessUniqueId"
+type = "string"
+docs = "Process unique id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessUniqueId"
+type = "string"
+docs = "Parent unique id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessLogonId"
+type = "long"
+docs = "Logon session."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessIntegrityLevel"
+type = "string"
+docs = "Parent integrity."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessVersionInfoOriginalFileName"
+type = "string"
+docs = "PE OriginalFilename (lolbin)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessVersionInfoFileDescription"
+type = "string"
+docs = "PE description."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessVersionInfoProductName"
+type = "string"
+docs = "PE product."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceProcessEvents"
+profile = "defender"
+name = "InitiatingProcessVersionInfoCompanyName"
+type = "string"
+docs = "PE company."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time (Defender hunting time column)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id. Required for isolate/scan custom detections."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Per-event report id. Required with Timestamp for process tree."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Operation discriminator."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "Account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessFolderPath"
+type = "string"
+docs = "Actor folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessId"
+type = "long"
+docs = "Actor PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessSHA1"
+type = "string"
+docs = "Actor SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessSHA256"
+type = "string"
+docs = "Actor SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessAccountName"
+type = "string"
+docs = "Actor account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessAccountDomain"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessAccountSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessAccountUpn"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "InitiatingProcessAccountObjectId"
+type = "string"
+docs = "Entra object id of actor."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "AppGuardContainerId"
+type = "string"
+docs = "Application Guard container."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "AdditionalFields"
+type = "dynamic"
+docs = "Extra JSON payload."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "FileName"
+type = "string"
+docs = "File name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "FolderPath"
+type = "string"
+docs = "Directory."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "SHA1"
+type = "string"
+docs = "File SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "SHA256"
+type = "string"
+docs = "File SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "MD5"
+type = "string"
+docs = "File MD5."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "FileSize"
+type = "long"
+docs = "Size."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "FileOriginUrl"
+type = "string"
+docs = "Mark-of-the-Web URL."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "FileOriginIP"
+type = "string"
+docs = "MotW IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "FileOriginReferrerUrl"
+type = "string"
+docs = "MotW referrer."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "RequestAccountName"
+type = "string"
+docs = "Account that accessed the file."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "RequestAccountDomain"
+type = "string"
+docs = "Request account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "RequestAccountSid"
+type = "string"
+docs = "Request account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "ShareName"
+type = "string"
+docs = "SMB share."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "IsAzureInfoProtectionEncryptedFile"
+type = "bool"
+docs = "AIP encrypted."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "SensitivityLabel"
+type = "string"
+docs = "MIP label."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceFileEvents"
+profile = "defender"
+name = "SensitivitySubLabel"
+type = "string"
+docs = "MIP sublabel."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time (Defender hunting time column)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id. Required for isolate/scan custom detections."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Per-event report id. Required with Timestamp for process tree."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Operation discriminator."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "Account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessFolderPath"
+type = "string"
+docs = "Actor folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessId"
+type = "long"
+docs = "Actor PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessSHA1"
+type = "string"
+docs = "Actor SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessSHA256"
+type = "string"
+docs = "Actor SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessAccountName"
+type = "string"
+docs = "Actor account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessAccountDomain"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessAccountSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessAccountUpn"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessAccountObjectId"
+type = "string"
+docs = "Entra object id of actor."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "AppGuardContainerId"
+type = "string"
+docs = "Application Guard container."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "AdditionalFields"
+type = "dynamic"
+docs = "Extra JSON payload."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "RemoteIP"
+type = "string"
+docs = "Remote IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "RemotePort"
+type = "int"
+docs = "Remote port."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "RemoteUrl"
+type = "string"
+docs = "Remote URL or hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "LocalIP"
+type = "string"
+docs = "Local IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "LocalPort"
+type = "int"
+docs = "Local port."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "Protocol"
+type = "string"
+docs = "Tcp / Udp."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "RemoteIPType"
+type = "string"
+docs = "Public / Private / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "InitiatingProcessFileSize"
+type = "long"
+docs = "Actor file size."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceNetworkEvents"
+profile = "defender"
+name = "LocalIPType"
+type = "string"
+docs = "Local address class."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time (Defender hunting time column)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id. Required for isolate/scan custom detections."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Per-event report id. Required with Timestamp for process tree."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Operation discriminator."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "Account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessFolderPath"
+type = "string"
+docs = "Actor folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessId"
+type = "long"
+docs = "Actor PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessSHA1"
+type = "string"
+docs = "Actor SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessSHA256"
+type = "string"
+docs = "Actor SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessAccountName"
+type = "string"
+docs = "Actor account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessAccountDomain"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessAccountSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessAccountUpn"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "InitiatingProcessAccountObjectId"
+type = "string"
+docs = "Entra object id of actor."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "AppGuardContainerId"
+type = "string"
+docs = "Application Guard container."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "AdditionalFields"
+type = "dynamic"
+docs = "Extra JSON payload."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "RegistryKey"
+type = "string"
+docs = "Registry key path."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "RegistryValueName"
+type = "string"
+docs = "Value name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "RegistryValueData"
+type = "string"
+docs = "Value data."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "PreviousRegistryKey"
+type = "string"
+docs = "Previous key (renames)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "PreviousRegistryValueName"
+type = "string"
+docs = "Previous value name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "PreviousRegistryValueData"
+type = "string"
+docs = "Previous data."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceRegistryEvents"
+profile = "defender"
+name = "RegistryValueType"
+type = "string"
+docs = "REG_SZ / REG_DWORD / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time (Defender hunting time column)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id. Required for isolate/scan custom detections."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Per-event report id. Required with Timestamp for process tree."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Operation discriminator."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "Account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessFolderPath"
+type = "string"
+docs = "Actor folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessId"
+type = "long"
+docs = "Actor PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessSHA1"
+type = "string"
+docs = "Actor SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessSHA256"
+type = "string"
+docs = "Actor SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessAccountName"
+type = "string"
+docs = "Actor account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessAccountDomain"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessAccountSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessAccountUpn"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "InitiatingProcessAccountObjectId"
+type = "string"
+docs = "Entra object id of actor."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "AppGuardContainerId"
+type = "string"
+docs = "Application Guard container."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "AdditionalFields"
+type = "dynamic"
+docs = "Extra JSON payload."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "LogonType"
+type = "string"
+docs = "Interactive / Network / RemoteInteractive / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Logon account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "FailureReason"
+type = "string"
+docs = "Failure reason."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "RemoteIP"
+type = "string"
+docs = "Source IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "RemoteDeviceName"
+type = "string"
+docs = "Source device."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "Protocol"
+type = "string"
+docs = "Logon protocol."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "IsLocalAdmin"
+type = "bool"
+docs = "Target is local admin."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceLogonEvents"
+profile = "defender"
+name = "TargetDeviceName"
+type = "string"
+docs = "Destination device."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelogonevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time (Defender hunting time column)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id. Required for isolate/scan custom detections."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Per-event report id. Required with Timestamp for process tree."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Operation discriminator."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "Account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessFolderPath"
+type = "string"
+docs = "Actor folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessId"
+type = "long"
+docs = "Actor PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessSHA1"
+type = "string"
+docs = "Actor SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessSHA256"
+type = "string"
+docs = "Actor SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessAccountName"
+type = "string"
+docs = "Actor account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessAccountDomain"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessAccountSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessAccountUpn"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "InitiatingProcessAccountObjectId"
+type = "string"
+docs = "Entra object id of actor."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "AppGuardContainerId"
+type = "string"
+docs = "Application Guard container."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "AdditionalFields"
+type = "dynamic"
+docs = "Extra JSON payload."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "FileName"
+type = "string"
+docs = "Related file."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "FolderPath"
+type = "string"
+docs = "Related path."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "SHA1"
+type = "string"
+docs = "Related SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "RemoteIP"
+type = "string"
+docs = "Related IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "RemoteUrl"
+type = "string"
+docs = "Related URL."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceEvents"
+profile = "defender"
+name = "FileOriginUrl"
+type = "string"
+docs = "Origin URL."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Event time (Defender hunting time column)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id. Required for isolate/scan custom detections."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Device hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Per-event report id. Required with Timestamp for process tree."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Operation discriminator."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Account domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "Account SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessFileName"
+type = "string"
+docs = "Actor image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessFolderPath"
+type = "string"
+docs = "Actor folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessId"
+type = "long"
+docs = "Actor PID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessCommandLine"
+type = "string"
+docs = "Actor command line."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessParentFileName"
+type = "string"
+docs = "Grandparent image."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessSHA1"
+type = "string"
+docs = "Actor SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessSHA256"
+type = "string"
+docs = "Actor SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessAccountName"
+type = "string"
+docs = "Actor account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessAccountDomain"
+type = "string"
+docs = "Actor domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessAccountSid"
+type = "string"
+docs = "Actor SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessAccountUpn"
+type = "string"
+docs = "Actor UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "InitiatingProcessAccountObjectId"
+type = "string"
+docs = "Entra object id of actor."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "AppGuardContainerId"
+type = "string"
+docs = "Application Guard container."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "AdditionalFields"
+type = "dynamic"
+docs = "Extra JSON payload."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "FileName"
+type = "string"
+docs = "Loaded image name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "FolderPath"
+type = "string"
+docs = "Loaded image folder."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "SHA1"
+type = "string"
+docs = "Loaded SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "SHA256"
+type = "string"
+docs = "Loaded SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "MD5"
+type = "string"
+docs = "Loaded MD5."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceImageLoadEvents"
+profile = "defender"
+name = "FileSize"
+type = "long"
+docs = "Loaded size."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Snapshot time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "MDE device id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "OSPlatform"
+type = "string"
+docs = "Windows / Linux / macOS."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "OSBuild"
+type = "string"
+docs = "Build."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "OSVersion"
+type = "string"
+docs = "Version string."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "PublicIP"
+type = "string"
+docs = "Last public IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "LoggedOnUsers"
+type = "dynamic"
+docs = "Logged-on users."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "MachineGroup"
+type = "string"
+docs = "Device group."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "RegistryDeviceTag"
+type = "string"
+docs = "Device tag."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "ReportId"
+type = "long"
+docs = "Report id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "IsAzureADJoined"
+type = "bool"
+docs = "Entra joined."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "AadDeviceId"
+type = "string"
+docs = "Entra device id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "DeviceInfo"
+profile = "defender"
+name = "ClientVersion"
+type = "string"
+docs = "MDE agent version."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Email event time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "NetworkMessageId"
+type = "string"
+docs = "Exchange network message id (pair with RecipientEmailAddress)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "RecipientEmailAddress"
+type = "string"
+docs = "Recipient."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "RecipientObjectId"
+type = "string"
+docs = "Recipient Entra id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "SenderFromAddress"
+type = "string"
+docs = "Header From."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "SenderMailFromAddress"
+type = "string"
+docs = "Envelope from / return-path."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "SenderObjectId"
+type = "string"
+docs = "Sender Entra id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "Subject"
+type = "string"
+docs = "Subject."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "EmailDirection"
+type = "string"
+docs = "Inbound / Outbound / Intra-org."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "DeliveryAction"
+type = "string"
+docs = "Delivered / Junked / Blocked / Replaced."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "DeliveryLocation"
+type = "string"
+docs = "Inbox / Quarantine / Failed / Dropped."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "ThreatTypes"
+type = "string"
+docs = "Phish / Malware / Spam / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "DetectionMethods"
+type = "dynamic"
+docs = "Detectors."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "ConfidenceLevel"
+type = "string"
+docs = "Confidence."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "AttachmentCount"
+type = "int"
+docs = "Attachments."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "UrlCount"
+type = "int"
+docs = "URLs."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "InternetMessageId"
+type = "string"
+docs = "RFC message-id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "EmailEvents"
+profile = "defender"
+name = "ReportId"
+type = "string"
+docs = "Report id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Identity logon time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "LogonSuccess / LogonFailed / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "AccountDomain"
+type = "string"
+docs = "Domain."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "AccountObjectId"
+type = "string"
+docs = "Entra object id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "AccountUpn"
+type = "string"
+docs = "UPN."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Source device."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "IPAddress"
+type = "string"
+docs = "Source IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "ISP"
+type = "string"
+docs = "ISP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "Location"
+type = "string"
+docs = "Geo."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "FailureReason"
+type = "string"
+docs = "Failure."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "LogonType"
+type = "string"
+docs = "Logon type."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "TargetDeviceName"
+type = "string"
+docs = "Target."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "ReportId"
+type = "string"
+docs = "Report id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "IdentityLogonEvents"
+profile = "defender"
+name = "Application"
+type = "string"
+docs = "Application."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Defender for Cloud Apps activity time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "Activity type."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "Application"
+type = "string"
+docs = "SaaS app name."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "AccountObjectId"
+type = "string"
+docs = "Entra object id (SaaS governance actions)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "AccountDisplayName"
+type = "string"
+docs = "Account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "IPAddress"
+type = "string"
+docs = "Client IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "UserAgent"
+type = "string"
+docs = "User agent."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "ActivityType"
+type = "string"
+docs = "Activity class."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "IsAnonymousProxy"
+type = "bool"
+docs = "Anonymous proxy."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "CountryCode"
+type = "string"
+docs = "Country."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "City"
+type = "string"
+docs = "City."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "RawEventData"
+type = "dynamic"
+docs = "Raw app event."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "ReportId"
+type = "string"
+docs = "Report id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "InstanceId"
+type = "string"
+docs = "App instance (SaaS governance)."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "ApplicationId"
+type = "int"
+docs = "App id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "CloudAppEvents"
+profile = "defender"
+name = "AppInstanceId"
+type = "int"
+docs = "App instance id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Alert time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "AlertId"
+type = "string"
+docs = "Alert id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "Title"
+type = "string"
+docs = "Alert title."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "Category"
+type = "string"
+docs = "MITRE-ish category."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "Severity"
+type = "string"
+docs = "Severity."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "ServiceSource"
+type = "string"
+docs = "MicrosoftDefenderForEndpoint / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "DetectionSource"
+type = "string"
+docs = "EDR / Antivirus / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertInfo"
+profile = "defender"
+name = "AttackTechniques"
+type = "string"
+docs = "ATT&CK techniques."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Evidence time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "AlertId"
+type = "string"
+docs = "Parent alert."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "Title"
+type = "string"
+docs = "Alert title."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "EntityType"
+type = "string"
+docs = "User / Process / File / Ip / Url / CloudLogonSession / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "EvidenceRole"
+type = "string"
+docs = "Related / Impacted."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "SHA1"
+type = "string"
+docs = "File SHA1."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "SHA256"
+type = "string"
+docs = "File SHA256."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "FileName"
+type = "string"
+docs = "File."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "FolderPath"
+type = "string"
+docs = "Path."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "AccountName"
+type = "string"
+docs = "Account."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "AccountSid"
+type = "string"
+docs = "SID."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "AccountObjectId"
+type = "string"
+docs = "Entra id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "DeviceId"
+type = "string"
+docs = "Device."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "DeviceName"
+type = "string"
+docs = "Hostname."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "RemoteIP"
+type = "string"
+docs = "IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "AlertEvidence"
+profile = "defender"
+name = "RemoteUrl"
+type = "string"
+docs = "URL."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "Timestamp"
+type = "datetime"
+docs = "Safe Links click time."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "Url"
+type = "string"
+docs = "Clicked URL."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "ActionType"
+type = "string"
+docs = "ClickAllowed / ClickBlocked / …"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "AccountUpn"
+type = "string"
+docs = "Clicker."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "NetworkMessageId"
+type = "string"
+docs = "Related email."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "IPAddress"
+type = "string"
+docs = "Client IP."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "ThreatTypes"
+type = "string"
+docs = "Threat types."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "DetectionMethods"
+type = "dynamic"
+docs = "Detectors."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[columns]]
+table = "UrlClickEvents"
+profile = "defender"
+name = "ReportId"
+type = "string"
+docs = "Report id."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"

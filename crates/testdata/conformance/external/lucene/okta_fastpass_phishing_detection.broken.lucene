@@ -1,0 +1,1 @@
+(outcome.reason:"FastPass declined phishing attempt" AND outcome.result:FAILURE AND eventType:user.authentication.auth_via_mfa

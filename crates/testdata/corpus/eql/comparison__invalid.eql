@@ -1,0 +1,2 @@
+// prod:comparison invalid
+process where process.pid = 4

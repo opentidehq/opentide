@@ -1,0 +1,3 @@
+// prod:partition_operator valid
+SecurityEvent
+| partition hint.strategy=native by Account (top 1 by TimeGenerated desc)

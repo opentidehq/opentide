@@ -1,0 +1,79 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/opentide-core",
+    "crates/opentide-highlight",
+    "crates/opentide-syntax",
+    "crates/opentide-kql",
+    "crates/opentide-spl",
+    "crates/opentide-esql",
+    "crates/opentide-eql",
+    "crates/opentide-kuery",
+    "crates/opentide-lucene",
+    "crates/opentide-falco",
+    "crates/opentide-ecs",
+    "crates/opentide-tide",
+    "crates/opentide-analysis",
+    "crates/opentide-lsp",
+    "crates/opentide-wasm",
+]
+
+[workspace.package]
+version = "0.11.0"
+edition = "2024"
+rust-version = "1.85"
+license = "EUPL-1.2"
+repository = "https://github.com/opentidehq/language-server"
+homepage = "https://opentide.org"
+authors = ["opentide"]
+
+[workspace.dependencies]
+opentide-core = { path = "crates/opentide-core", version = "=0.11.0" }
+opentide-highlight = { path = "crates/opentide-highlight", version = "=0.11.0" }
+opentide-syntax = { path = "crates/opentide-syntax", version = "=0.11.0" }
+opentide-kql = { path = "crates/opentide-kql", version = "=0.11.0" }
+opentide-spl = { path = "crates/opentide-spl", version = "=0.11.0" }
+opentide-esql = { path = "crates/opentide-esql", version = "=0.11.0" }
+opentide-eql = { path = "crates/opentide-eql", version = "=0.11.0" }
+opentide-kuery = { path = "crates/opentide-kuery", version = "=0.11.0" }
+opentide-lucene = { path = "crates/opentide-lucene", version = "=0.11.0" }
+opentide-falco = { path = "crates/opentide-falco", version = "=0.11.0" }
+opentide-ecs = { path = "crates/opentide-ecs", version = "=0.11.0" }
+opentide-tide = { path = "crates/opentide-tide", version = "=0.11.0" }
+opentide-analysis = { path = "crates/opentide-analysis", version = "=0.11.0" }
+opentide-lsp = { path = "crates/opentide-lsp", version = "=0.11.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+# Spans of configuration TOML keys (opentide-analysis `config`). The version
+# `toml` 0.8 already locks.
+toml_edit = { version = "0.22", default-features = false, features = ["parse"] }
+thiserror = "2"
+anyhow = "1"
+# The LSP host (#90, #185): framing, typed messages, file URIs.
+lsp-server = "0.10"
+lsp-types = "0.97"
+url = "2.5"
+regex = "1"
+serde_yaml = "0.9"
+clap = { version = "4", features = ["derive"] }
+tree-sitter = "0.25"
+cc = "1"
+uuid = "1"
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
+
+# Dependencies optimised in dev and test builds; workspace crates stay at
+# opt-level 0 with full debuginfo. The tests spend most of their time in toml,
+# serde, regex and tree-sitter: opt-level 1 cuts the suite from ~100s to ~26s of
+# test time on 4 cores, as fast as 2 for less compile time. Line tables keep
+# file:line in a dependency's backtrace frames at a third less target/ than full
+# debuginfo. CI caches the dependencies (Swatinem/rust-cache).
+[profile.dev.package."*"]
+opt-level = 1
+debug = "line-tables-only"

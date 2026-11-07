@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | frobnicate ends_with(Image, "/osascript") and (CommandLine like "* -e *" or CommandLine like "*.scpt*" or CommandLine like "*.js*") and not (ends_with(ParentImage, "opencode") and CommandLine like "*osascript*" and CommandLine like "* -e *" and CommandLine like "*set imageData to the clipboard*" and CommandLine like "*set fileRef*")

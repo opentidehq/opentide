@@ -1,0 +1,2 @@
+// prod:source_subquery invalid
+FROM logs-*, (FROM archive-* | WHERE ) METADATA _id

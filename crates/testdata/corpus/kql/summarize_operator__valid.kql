@@ -1,0 +1,2 @@
+// prod:summarize_operator valid
+SecurityEvent | summarize count() by Computer

@@ -1,0 +1,7 @@
+(open_read or open_write) and container and (fd.name startswith /dev/sd or
+     fd.name startswith /dev/nvme or
+     fd.name startswith /dev/vd or
+     fd.name startswith /dev/xvd or
+     fd.name = /dev/mem or
+     fd.name = /dev/kmem)
+and not user_known_privileged_device_access

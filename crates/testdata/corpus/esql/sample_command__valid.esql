@@ -1,0 +1,3 @@
+// prod:sample_command valid
+FROM logs-* METADATA _id
+| SAMPLE 0.1

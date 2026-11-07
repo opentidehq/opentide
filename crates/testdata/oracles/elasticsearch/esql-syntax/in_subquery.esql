@@ -1,0 +1,1 @@
+FROM logs-* | WHERE process.name IN (FROM logs-* | KEEP process.name) | LIMIT 1

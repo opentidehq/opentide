@@ -1,0 +1,2 @@
+// prod:range valid
+SecurityEvent | where TimeGenerated between (ago(1d) .. now())

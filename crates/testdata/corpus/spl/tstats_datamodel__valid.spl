@@ -1,0 +1,2 @@
+``` prod:tstats_command valid
+| tstats summariesonly=true count min(_time) as firstTime from datamodel=Endpoint.Processes where Processes.process_name IN ("cmd.exe","powershell.exe") by Processes.dest, Processes.user

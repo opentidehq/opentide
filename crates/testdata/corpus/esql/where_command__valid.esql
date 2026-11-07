@@ -1,0 +1,3 @@
+// prod:where_command valid
+FROM logs-* METADATA _id
+| WHERE process.name == "cmd.exe" AND NOT host.os.type == "linux"

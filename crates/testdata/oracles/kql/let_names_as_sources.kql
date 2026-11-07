@@ -1,0 +1,3 @@
+let Logons = (SecurityEvent | where EventID == 4624);
+let Recent = (t: timespan) { Logons | where TimeGenerated > ago(t) };
+Recent(1d) | join kind=inner (Logons) on Computer

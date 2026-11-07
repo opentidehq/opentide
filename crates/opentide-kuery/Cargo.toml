@@ -1,0 +1,19 @@
+[package]
+name = "opentide-kuery"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: I/O-free Kibana Query Language (kuery) engine. Depend on opentide-analysis."
+readme = "../COMPONENT.md"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-ecs.workspace = true
+opentide-syntax.workspace = true
+opentide-highlight.workspace = true
+tree-sitter.workspace = true
+regex.workspace = true

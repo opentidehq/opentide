@@ -1,0 +1,3 @@
+// prod:inline_cast valid
+FROM logs-* METADATA _id
+| EVAL port = destination.port::integer
