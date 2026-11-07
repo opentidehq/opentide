@@ -30,6 +30,12 @@
 //                     would read `//` there as a line comment (`/a//b/` is two
 //                     regexes), because comments are valid everywhere and the
 //                     longest token wins; the scanner runs first.
+//   _assign_field     a field name followed by `:=`, with blanks allowed
+//                     between (`payload := ...`, `@display := x`, `a.b := 1`).
+//                     A step may follow another without a pipe, and after a
+//                     filter a plain word could be more free text or the start
+//                     of an assignment; only the `:=` after it tells, which is
+//                     one token further than the parser looks.
 //   _pattern_error    a pattern that ends in `//` (`https://`, `ERROR// x`),
 //                     which the grammar subset forbids. No rule accepts it, so
 //                     the parser reports an error at that token. It is
@@ -46,7 +52,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-enum TokenType { FUNCTION_NAME, UNQUOTED_PATTERN, VALUE_PATTERN, REGEX_END, PATTERN_ERROR };
+enum TokenType {
+  FUNCTION_NAME,
+  UNQUOTED_PATTERN,
+  VALUE_PATTERN,
+  REGEX_END,
+  PATTERN_ERROR,
+  ASSIGN_FIELD,
+};
 
 static bool is_space(int32_t c) {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
@@ -119,7 +132,8 @@ bool tree_sitter_opentide_cql_external_scanner_scan(void *payload, TSLexer *lexe
   bool free_text = valid_symbols[UNQUOTED_PATTERN];
   bool want_pattern = free_text || valid_symbols[VALUE_PATTERN];
   bool want_function = valid_symbols[FUNCTION_NAME] || free_text;
-  if (!want_function && !want_pattern) {
+  bool want_assign = valid_symbols[ASSIGN_FIELD] && !recovering;
+  if (!want_function && !want_pattern && !want_assign) {
     return false;
   }
   while (is_space(lexer->lookahead)) {
@@ -130,7 +144,7 @@ bool tree_sitter_opentide_cql_external_scanner_scan(void *payload, TSLexer *lexe
     if (first == '/' || !(is_field_char(first) || is_pattern_only_char(first) || first == ':')) {
       return false;
     }
-  } else if (!is_alpha(first)) {
+  } else if (!is_alpha(first) && !(want_assign && first != '#' && is_field_char(first))) {
     return false;
   }
 
@@ -152,14 +166,14 @@ bool tree_sitter_opentide_cql_external_scanner_scan(void *payload, TSLexer *lexe
         break;
       }
       shape = shape == IDENT1 ? COLON : OTHER;
-      if (!want_pattern && shape == OTHER) {
+      if (!want_pattern && !want_assign && shape == OTHER) {
         break;
       }
       has_pattern_char = true;
     } else if (is_field_char(c) || (want_pattern && is_pattern_only_char(c))) {
       if (!is_ident_char(c)) {
         shape = OTHER;
-        if (!want_pattern) {
+        if (!want_pattern && !want_assign) {
           break;
         }
       } else if (shape == COLON) {
@@ -183,9 +197,29 @@ bool tree_sitter_opentide_cql_external_scanner_scan(void *payload, TSLexer *lexe
   if (length == 0) {
     return false;
   }
+  // What directly follows the word, before any look past blanks below.
+  int32_t after_word = lexer->lookahead;
+
+  if (want_assign && !has_pattern_char) {
+    // `name :=`: blanks may stand between the name and `:=`. The token
+    // already ends after the name (mark_end), so looking on costs nothing.
+    if (!before_assign) {
+      while (is_space(lexer->lookahead)) {
+        lexer->advance(lexer, false);
+      }
+      if (lexer->lookahead == ':') {
+        lexer->advance(lexer, false);
+        before_assign = lexer->lookahead == '=';
+      }
+    }
+    if (before_assign) {
+      lexer->result_symbol = ASSIGN_FIELD;
+      return true;
+    }
+  }
 
   if (want_function && !before_assign && (shape == IDENT1 || shape == IDENT2) &&
-      lexer->lookahead == '(') {
+      after_word == '(') {
     bool keyword = (length == 3 && ((word[0] == 'a' && word[1] == 'n' && word[2] == 'd') ||
                                     (word[0] == 'n' && word[1] == 'o' && word[2] == 't'))) ||
                    (length == 2 && word[0] == 'o' && word[1] == 'r');

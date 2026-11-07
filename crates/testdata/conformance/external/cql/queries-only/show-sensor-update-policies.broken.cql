@@ -1,7 +1,7 @@
 defineTable(
     query={
         #repo="sensor_metadata" #data_source_name="policyinfo" #data_source_group="sensor-update"
-        | groupBy(id, ComputerName, function=selectFromMax(field="@timestamp", include=[release_id]))
+        | groupBy(id, function=selectFromMax(field="@timestamp", include=[release_id]))
         | rename(field="id", as="sensor_update_policy_id")
     }
     , include=[sensor_update_policy_id, release_id]
@@ -35,7 +35,7 @@ defineTable(
     , start=1d //aid-policy is currently updated once per day
 )
 | readFile("aid_master_main.csv")
-| in(field="ProductType", values=[1,2,3])
+| in("ProductType", "ProductName", values=[1,2,3])
 | match(file="aid_to_policy", field=aid, include=sensor_update_policy_id)
 | match(file="policy_to_release", field=sensor_update_policy_id, include=release_id, strict=false)
 | match(file="release_type_lookup", field=[release_id], include=release.type, strict=false)

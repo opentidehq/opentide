@@ -2532,7 +2532,7 @@ default = "_getField"
 name = "source"
 type = "expression"
 required = true
-unnamed = false
+unnamed = true
 multi = false
 query = false
 
@@ -3848,7 +3848,7 @@ default = "_cosh"
 name = "field"
 type = "field"
 required = true
-unnamed = false
+unnamed = true
 multi = false
 query = false
 
@@ -5603,7 +5603,7 @@ aliases = []
 category = ["aggregate"]
 kind = ["filter"]
 aggregate = false
-signature = "remoteTable(connection, include, name, [end], [start])"
+signature = "remoteTable(connection, name, query, [end], [include], [start])"
 docs = "Next-Gen SIEM: runs a federated search on an external source and keeps the result as an ad-hoc table."
 citation = "https://library.humio.com/crowdstrike-query-language/functions-remotetable.html"
 contexts = [
@@ -5634,7 +5634,7 @@ query = false
 [[functions.parameters]]
 name = "include"
 type = "array<string>"
-required = true
+required = false
 unnamed = false
 multi = true
 query = false
@@ -5646,6 +5646,14 @@ required = true
 unnamed = false
 multi = false
 query = false
+
+[[functions.parameters]]
+name = "query"
+type = "query"
+required = true
+unnamed = false
+multi = false
+query = true
 
 [[functions.parameters]]
 name = "start"
@@ -6480,6 +6488,7 @@ multi = true
 query = false
 default = "desc"
 values = ["asc", "desc"]
+deprecated_values = ["des", "asce", "ascending", "descending"]
 
 [[functions.parameters]]
 name = "reverse"
@@ -6769,7 +6778,7 @@ aliases = []
 category = ["aggregate", "widget"]
 kind = ["aggregate"]
 aggregate = true
-signature = "table(fields, [limit], [order], [reverse], [sortby], [type])"
+signature = "table(fields, [limit], [order], [sortby], [type])"
 docs = "Aggregate: a table of the listed fields for up to N events, sorted by a field."
 citation = "https://library.humio.com/crowdstrike-query-language/functions-table.html"
 contexts = ["query", "live-query", "legacy-alert"]
@@ -6806,6 +6815,7 @@ multi = true
 query = false
 default = "desc"
 values = ["asc", "desc"]
+deprecated_values = ["des", "asce", "ascending", "descending"]
 
 [[functions.parameters]]
 name = "reverse"
@@ -6814,6 +6824,7 @@ required = false
 unnamed = false
 multi = false
 query = false
+deprecated = true
 
 [[functions.parameters]]
 name = "sortby"

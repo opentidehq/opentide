@@ -603,6 +603,32 @@ PARAM_FIXES: dict[tuple[str, str], dict[str, Any]] = {
     # with it (logscale-community-content: the PAN-Firewall summary dashboard,
     # Helpful-CQL-Queries "Decode Base64"). Accepted, not offered.
     ("sort", "type"): {"deprecated_values": ["any"]},
+    # The table has no "can be omitted" note, but the page's eight examples and
+    # the Expressions page call getField("host-name") without the name.
+    ("getField", "source"): {"unnamed": True},
+    # Its own page's example is `math:cosh(x, as=result)`; every other math:
+    # function marks `field` omittable.
+    ("math:cosh", "field"): {"unnamed": True},
+    # The page's prose gives two forms, `remoteTable(connection, [end], include,
+    # name, query, [start])` and `remoteTable(connection, name, query)`.
+    ("remoteTable", "include"): {"required": False},
+    # "Deprecated: prefer order instead" in the parameter's description.
+    ("table", "reverse"): {"deprecated": True},
+    # CrowdStrike's own dashboards write these (logscale-community-content:
+    # `order=des` six times, `ascending`, `descending`, `asce`). Accepted as
+    # written there, not offered; anything else is refused.
+    ("sort", "order"): {"deprecated_values": ["des", "asce", "ascending", "descending"]},
+    ("table", "order"): {"deprecated_values": ["des", "asce", "ascending", "descending"]},
+}
+# Parameters a page's prose documents that its table leaves out.
+EXTRA_PARAMS: dict[str, list[Param]] = {
+    # Both forms on the remoteTable page take `query` (`query="show tables"`,
+    # `query={*}`).
+    "remoteTable": [
+        Param(
+            name="query", type="query", required=True, default=None, unnamed=False, multi=False, query=True
+        )
+    ],
 }
 FUNCTION_FIXES: dict[str, dict[str, Any]] = {
     # The page lists every context, but says it "can only be used within the
@@ -627,6 +653,11 @@ def read_functions(cache: Path) -> list[Function]:
         for p in fn.params:
             for key, value in PARAM_FIXES.get((fn.name, p.name), {}).items():
                 setattr(p, key, value)
+        for extra in EXTRA_PARAMS.get(fn.name, []):
+            if any(p.name == extra.name for p in fn.params):
+                raise SystemExit(f"EXTRA_PARAMS {fn.name}.{extra.name} is on the page now: drop it")
+            fn.params.append(extra)
+        fn.params.sort(key=lambda p: p.name.lower())
         functions.append(fn)
     unlisted = set(index) - {f.page for f in functions}
     if unlisted:
@@ -1505,7 +1536,7 @@ def check_text(functions: list[Function]) -> None:
         extra = sorted(set(table) - names)
         if extra:
             raise SystemExit(f"hand-written text for functions the reference lacks: {extra}")
-    for name in FUNCTION_FIXES:
+    for name in [*FUNCTION_FIXES, *EXTRA_PARAMS]:
         if name not in names:
             raise SystemExit(f"FUNCTION_FIXES entry {name} matches no function: drop it")
     for fix in PARAM_FIXES:

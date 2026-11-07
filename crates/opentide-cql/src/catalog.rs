@@ -291,7 +291,9 @@ impl Catalog {
         {
             return Some(e.name.as_str());
         }
-        closest(self.events.iter().map(|e| e.name.as_str()), name, 2)
+        // One edit only: event names are long and alike, so two edits suggest
+        // a different event (`XzFileWritten` is not `DxfFileWritten`).
+        closest(self.events.iter().map(|e| e.name.as_str()), name, 1)
     }
 
     pub fn suggest_parameter<'f>(&self, function: &'f Function, name: &str) -> Option<&'f str> {

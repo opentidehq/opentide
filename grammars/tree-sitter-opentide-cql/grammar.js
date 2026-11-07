@@ -93,12 +93,26 @@ function caseVariants(word) {
 }
 
 /** `|`? step (`|` step)*, spliced into both pipeline rules. */
+// Steps are separated by `|`, which may be left out: `A B` is shorthand for
+// `A | B`. Since 1.224 a word directly followed by `(` is a call, so `ERROR`
+// then `groupBy(host)` on the next line is a filter and a call (grammar
+// subset, Appendix A), and CrowdStrike's own function examples write
+// `x := 1.0` then `y := 1.0`, `groupBy(...)` then `_count < 5`, and a filter
+// then `payload := ...`, with no pipe. Without a pipe an assignment is
+// followed only by another assignment or a call: a filter there would make
+// `x := a - 1` read as `x := a` and the free text `- 1`. Two filters side by
+// side stay one implicit AND: joining them binds tighter (`PREC.and`) than
+// ending a step.
 function pipelineSteps($) {
-  return [
-    optional("|"),
-    field("step", $._step),
-    repeat(seq("|", field("step", $._step))),
-  ];
+  const step = (rule) => field("step", rule);
+  // Steps with no pipe between them: ((filter | call) | assignment+ call)*
+  // assignment*.
+  const run = seq(
+    repeat1(choice(step($._filter), step($._call_step), seq(repeat1(step($.assignment)), step($._call_step)))),
+    repeat(step($.assignment)),
+  );
+  const runOrAssignments = choice(run, repeat1(step($.assignment)));
+  return [optional("|"), runOrAssignments, repeat(seq("|", runOrAssignments))];
 }
 
 function commaSep1(rule) {
@@ -116,6 +130,7 @@ module.exports = grammar({
     $._value_pattern,
     $._regex_end,
     $._pattern_error,
+    $._assign_field,
   ],
 
   word: ($) => $._word,
@@ -143,12 +158,11 @@ module.exports = grammar({
     // subquery since 1.230 (RN-230).
     pipeline: ($) => seq(...pipelineSteps($)),
 
-    _step: ($) =>
+    // Every step but a filter and an assignment.
+    _call_step: ($) =>
       choice(
-        $._filter,
         $.function_call,
         $.negated_function_call,
-        $.assignment,
         $.field_shorthand,
         $.stats_shorthand,
         $.case_statement,
@@ -255,8 +269,14 @@ module.exports = grammar({
       seq(field("operator", choice($.not, "!")), field("function", $.function_call)),
 
     // `field := expression`; `field := f(...)` is the eval-function shorthand.
+    // No `name: value` attributes here (they belong to correlate()'s
+    // arguments): `x := 1.0` then `y := 2` on the next line is two steps.
     assignment: ($) =>
-      seq(field("field", $._field), ":=", field("value", $._expression)),
+      seq(
+        field("field", choice(alias($._assign_field, $.field_name), $._field)),
+        ":=",
+        field("value", $._comparative_expression),
+      ),
 
     // `field =~ f(...)` passes `field=` to f.
     field_shorthand: ($) =>
@@ -518,7 +538,12 @@ module.exports = grammar({
 
     tag: (_) => token(new RegExp(String.raw`#[${FIELD_CHAR}]*${INDEX}`)),
 
-    _expression_pattern: (_) => token(new RegExp(String.raw`\*[${FIELD_CHAR}*+\-:/]*`)),
+    // A bare word that cannot start a field name is a pattern (the grammar
+    // subset's "Bare Words"): `*h*rse*`, and a sign followed by more
+    // (`-1h`, `+1`), which beats the number `-1` by being longer. A lone `-`
+    // stays the unary operator, so `-(a + b)` still parses.
+    _expression_pattern: (_) =>
+      token(new RegExp(String.raw`(\*[${FIELD_CHAR}*+\-:/]*|[+\-][${FIELD_CHAR}*+\-:/]+)`)),
 
     _word: (_) => token(new RegExp(String.raw`[${FIELD_CHAR_NO_HASH}][${FIELD_CHAR}]*${INDEX}`)),
 

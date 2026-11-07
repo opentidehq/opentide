@@ -1,9 +1,9 @@
 #Vendor = corelight and #event.module = ndr
 | in(field=#event.dataset, values= ["ndr.ssl", "ndr.ssl_red"])
 | in(field=observer.hostname, values=[?sensor_name])
-| is_dest_internal_ip:=if(cidr("destination.ip", subnet=["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]), then="true", else="false")
+| is_dest_internal_ip:=if(cidr("destination.ip", "source.ip", subnet=["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]), then="true", else="false")
 | is_dest_internal_ip = "true"
-| array:reduceAll(array="Vendor.cert_chain_fps[]", function=[groupBy(fingerprint, ComputerName, function=tail(limit=max), limit=max)], var="fingerprint")
+| array:reduceAll(array="Vendor.cert_chain_fps[]", function=[groupBy(fingerprint, function=tail(limit=max), limit=max)], var="fingerprint")
 | join(query={
         #Vendor = corelight and #event.module = ndr
         | in(field=#event.dataset, values= ["ndr.x509", "ndr.x509_red"])

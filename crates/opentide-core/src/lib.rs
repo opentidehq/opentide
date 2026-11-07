@@ -610,6 +610,10 @@ pub mod codes {
     pub const CQL_ASSIGNMENT_AS: &str = "cql_assignment_as";
     pub const CQL_LINK_OUTSIDE_CORRELATE: &str = "cql_link_outside_correlate";
     pub const CQL_UNKNOWN_EVENT: &str = "cql_unknown_event";
+    pub const CQL_EVENT_FUNCTION_AFTER_AGGREGATE: &str = "cql_event_function_after_aggregate";
+    pub const CQL_CORRELATE_PLACEMENT: &str = "cql_correlate_placement";
+    pub const CQL_MATCH_GUARD: &str = "cql_match_guard";
+    pub const CQL_REGEX_GROUP_UNDER_OR: &str = "cql_regex_group_under_or";
     pub const CQL_CORRELATE_AGGREGATE: &str = "cql_correlate_aggregate";
 
     /// Every code above, in declaration order.
@@ -760,6 +764,10 @@ pub mod codes {
         CQL_ASSIGNMENT_AS,
         CQL_LINK_OUTSIDE_CORRELATE,
         CQL_UNKNOWN_EVENT,
+        CQL_EVENT_FUNCTION_AFTER_AGGREGATE,
+        CQL_CORRELATE_PLACEMENT,
+        CQL_MATCH_GUARD,
+        CQL_REGEX_GROUP_UNDER_OR,
         CQL_CORRELATE_AGGREGATE,
     ];
 
@@ -1101,6 +1109,18 @@ pub mod codes {
             }
             CQL_CORRELATE_AGGREGATE => {
                 "A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow."
+            }
+            CQL_EVENT_FUNCTION_AFTER_AGGREGATE => {
+                "A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190."
+            }
+            CQL_CORRELATE_PLACEMENT => {
+                "CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries."
+            }
+            CQL_MATCH_GUARD => {
+                "A CQL match guard is an aggregate function; a guard must be a filter."
+            }
+            CQL_REGEX_GROUP_UNDER_OR => {
+                "A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields."
             }
             _ => return None,
         })

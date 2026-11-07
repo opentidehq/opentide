@@ -286,10 +286,6 @@
             "named": true
           },
           {
-            "type": "attributed_expression",
-            "named": true
-          },
-          {
             "type": "binary_expression",
             "named": true
           },

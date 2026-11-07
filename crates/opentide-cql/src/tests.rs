@@ -93,7 +93,11 @@ fn unknown_parameter() {
 
 #[test]
 fn unnamed_arguments() {
-    only("groupBy(aid, ComputerName)", codes::CQL_UNNAMED_ARGUMENT);
+    only("count(aid, cid)", codes::CQL_UNNAMED_ARGUMENT);
+    // An array parameter gathers several, as CrowdStrike's examples write it.
+    clean("groupBy(aid, ComputerName)");
+    clean("readFile(\"users_2024.csv\", \"users_2025.csv\")");
+    clean("table(@timestamp, aid)");
     // `count` has an omittable parameter; `now` has none to take one.
     clean("count(aid)");
     only("eventSize(@rawstring)", codes::CQL_UNNAMED_ARGUMENT);
@@ -365,4 +369,97 @@ fn a_non_breaking_space_is_blamed_only_where_parsing_stopped() {
     let d = analyze("x=\"a\u{a0}b\" | groupBy(").diagnostics;
     assert_eq!(d[0].code, codes::CQL_PARSE_ERROR);
     assert!(!d[0].message.contains("U+00A0"), "{}", d[0].message);
+}
+
+// Adversarial review (spec audit and held-out corpora): each failed before.
+
+#[test]
+fn documented_forms_the_tables_left_out() {
+    clean("coalesce([host, getField(\"host-name\")])");
+    clean("x := 1.0 | math:cosh(x, as=result)");
+    clean("remoteTable(name=\"t\", connection=\"c\", query=\"show tables\") | readFile(\"t\")");
+    clean("defineTable(query={action=login}, name=B, include=[user], start=30d, end=-1h)");
+    clean("x := -1h");
+    clean("x := +1");
+    clean("message := \"\\x1b[93;41mColor\" | stripAnsiCodes(message)");
+    clean("x := \"caf\\u00e9\"");
+}
+
+#[test]
+fn steps_may_follow_without_a_pipe() {
+    // Verbatim from CrowdStrike's math:arctan2() page.
+    clean("x := 1.0\ny := 1.0\n| math:arctan2(y=y, x=x, as=angle)");
+    clean("ERROR // errors\ngroupBy(host)");
+    clean("correlate(query=A: { a=1 }, B: { b=1 | aid <=> A.aid }, within=5m)");
+}
+
+#[test]
+fn release_note_and_reference_rules() {
+    only(
+        "tail(200) | /(abra|kadabra)/",
+        codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
+    );
+    only(
+        "tail(200) | wildcard(pattern=\"*abra*\")",
+        codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
+    );
+    clean("tail(200) | wildcard(field=x, pattern=\"*abra*\")");
+    clean("tail(200) | myField=/(abra|kadabra)/");
+    only(
+        "groupBy(class) | eventSize()",
+        codes::CQL_EVENT_FUNCTION_AFTER_AGGREGATE,
+    );
+    only(
+        "correlate(A: { a=1 | count() }, B: { b=1 | x <=> A.x }, within=5m)",
+        codes::CQL_CORRELATE_PLACEMENT,
+    );
+    only(
+        "groupBy(x) | correlate(A: { a=1 }, B: { b=1 | x <=> A.x }, within=5m)",
+        codes::CQL_CORRELATE_PLACEMENT,
+    );
+    only(
+        "readFile(\"x.csv\") | correlate(A: { a=1 }, B: { b=1 | x <=> A.x }, within=5m)",
+        codes::CQL_CORRELATE_PLACEMENT,
+    );
+    assert!(
+        codes_of("groupBy(x, function=correlate(A: { a=1 }, B: { b=1 | x <=> A.x }, within=5m))")
+            .contains(&codes::CQL_CORRELATE_PLACEMENT.to_string())
+    );
+    clean(
+        "defineTable(query={correlate(A: { a=1 }, B: { b=1 | x <=> A.x }, within=5m)}, name=t, include=[x])",
+    );
+    only("x match { count() => * }", codes::CQL_MATCH_GUARD);
+    let warnings = analyze("type=FOO or /disk_free=(?<space>[0-9]+)/").diagnostics;
+    assert_eq!(warnings.len(), 1, "{warnings:#?}");
+    assert_eq!(warnings[0].code, codes::CQL_REGEX_GROUP_UNDER_OR);
+}
+
+#[test]
+fn values_are_exact() {
+    only(
+        "sort(x, order=descending_by_time)",
+        codes::CQL_PARAMETER_VALUE,
+    );
+    only(
+        "ioc:lookup(field=x, type=domainname)",
+        codes::CQL_PARAMETER_VALUE,
+    );
+    only("sort(x, type=numberwang)", codes::CQL_PARAMETER_VALUE);
+    only("regex(\"x\", repeat=maybe)", codes::CQL_PARAMETER_VALUE);
+    // As CrowdStrike's dashboards write them (recorded in the catalog).
+    clean("sort(x, order=des)");
+    clean("table([a], order=ascending)");
+}
+
+#[test]
+fn a_syntax_error_does_not_cascade() {
+    let d = analyze("groupBy(x) | foo(( | bar baz").diagnostics;
+    assert!(d.iter().all(|d| d.code == codes::CQL_PARSE_ERROR), "{d:#?}");
+}
+
+#[test]
+fn event_suggestions_need_one_edit() {
+    let d = analyze("#event_simpleName=XzFileWritten").diagnostics;
+    assert_eq!(d[0].code, codes::CQL_UNKNOWN_EVENT);
+    assert_eq!(d[0].suggestion, None, "{d:#?}");
 }

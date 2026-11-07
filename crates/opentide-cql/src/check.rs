@@ -13,8 +13,10 @@ use tree_sitter::Node;
 /// Regex flags CQL accepts (`d` dot-all, `g`, `i`, `m`, `F` regex engine v2).
 pub const REGEX_FLAGS: &str = "dgimF";
 
-/// String escapes LogScale translates. Any other `\x` is kept verbatim.
-const STRING_ESCAPES: &[char] = &['"', '\\', 'n', 't'];
+/// String escapes CrowdStrike documents: `\"`, `\\`, `\n` (the grammar subset),
+/// `\t` and `\uXXXX` (createEvents()), and `\xHH`, which the stripAnsiCodes()
+/// example relies on (`"\x1b[93;41mColor"` becomes `Color`).
+const STRING_ESCAPES: &[char] = &['"', '\\', 'n', 't', 'u', 'x'];
 
 pub(crate) fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagnostic> {
     let catalog = Catalog::cached();
@@ -25,16 +27,34 @@ pub(crate) fn diagnostics(root: Node, source: &str, ctx: &Context) -> Vec<Diagno
         if node.is_error() || node.is_missing() {
             return;
         }
+        const CHECKED: &[&str] = &[
+            "function_call",
+            "regex",
+            "string",
+            "link_constraint",
+            "field_filter",
+            "or_filter",
+        ];
+        // Inside a syntax error the tree is a guess: its first error is the
+        // finding, not what the guess looks like.
+        if CHECKED.contains(&node.kind()) && ancestors.iter().any(|a| a.is_error()) {
+            return;
+        }
         match node.kind() {
             "function_call" => function_call(node, ancestors, source, catalog, &mut out),
             "regex" => regex(node, source, &mut out),
             "string" => string(node, ancestors, source, &mut out),
             "link_constraint" => link_constraint(node, ancestors, source, &mut out),
             "field_filter" => event_name(node, source, catalog, &mut out),
+            "or_filter" => regex_group_under_or(node, source, &mut out),
             _ => {}
         }
     });
-    free_text_after_aggregate(root, source, catalog, &mut out);
+    // Step order is only known in a tree without errors: after recovery the
+    // text past a syntax error is a guess at steps, not what was written.
+    if !root.has_error() {
+        free_text_after_aggregate(root, source, catalog, &mut out);
+    }
     if ctx.correlation_rule {
         correlation_rule(root, source, catalog, &mut out);
     }
@@ -130,8 +150,82 @@ fn function_call(
             name_range(),
         ));
     }
+    placement(call, function, ancestors, source, out);
     let implied = implied_parameters(call, ancestors);
     arguments(call, function, implied, source, catalog, out);
+}
+
+/// Where a call may stand: correlate() not inside another function's
+/// arguments (a defineTable() subquery runs on its own and may hold it), no
+/// aggregate in correlate()'s queries (its `aggregation=` takes them), and no
+/// aggregate as a `match` guard, which must be a filter.
+fn placement(
+    call: Node,
+    function: &Function,
+    ancestors: &[Node],
+    source: &str,
+    out: &mut Vec<Diagnostic>,
+) {
+    let at = || {
+        call.child_by_field_name("name")
+            .map(|n| range(source, n))
+            .unwrap_or_else(|| range(source, call))
+    };
+    let calls = || {
+        ancestors
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|(_, a)| a.kind() == "function_call")
+    };
+    if function.name == "correlate" {
+        if let Some((_, outer)) = calls().next() {
+            let outer_name = call_name(*outer, source);
+            if !outer_name.eq_ignore_ascii_case("defineTable") {
+                out.push(Diagnostic::error(
+                    codes::CQL_CORRELATE_PLACEMENT,
+                    format!("correlate() cannot be an argument of {outer_name}()"),
+                    at(),
+                ));
+            }
+        }
+    }
+    if function.aggregate {
+        // The nearest enclosing correlate(), and the argument of it we are in.
+        if let Some((i, _)) = calls().find(|(_, a)| is_correlate(**a, source)) {
+            let in_aggregation = ancestors.get(i + 2).is_some_and(|arg| {
+                arg.kind() == "named_argument"
+                    && arg
+                        .child_by_field_name("name")
+                        .is_some_and(|n| name_text(n, source).eq_ignore_ascii_case("aggregation"))
+            });
+            if !in_aggregation {
+                out.push(Diagnostic::error(
+                    codes::CQL_CORRELATE_PLACEMENT,
+                    format!(
+                        "correlate()'s queries take filters only, not the aggregate `{}`",
+                        function.name
+                    ),
+                    at(),
+                ));
+            }
+        }
+        let parent = ancestors.last();
+        let guard = parent.is_some_and(|p| {
+            p.kind() == "match_branch"
+                && p.child_by_field_name("guard").map(|g| g.id()) == Some(call.id())
+        });
+        if guard {
+            out.push(Diagnostic::error(
+                codes::CQL_MATCH_GUARD,
+                format!(
+                    "a match guard must be a filter, not the aggregate `{}`",
+                    function.name
+                ),
+                at(),
+            ));
+        }
+    }
 }
 
 /// What the call's position supplies without an argument: `x =~ f()` gives
@@ -203,7 +297,11 @@ fn arguments(
             None => {
                 // `correlate(A: {...}, B: {...})`: every named subquery binds `query`.
                 let named_subquery = value.is_some_and(is_named_subquery);
-                if named_subquery && unnamed_seen {
+                let query_given = function
+                    .unnamed_parameter()
+                    .is_some_and(|p| given.contains(&p.name.as_str()));
+                // `correlate(query=A: {...}, B: {...})` is `correlate(A: {...}, B: {...})`.
+                if named_subquery && (unnamed_seen || query_given) {
                     continue;
                 }
                 let at = || {
@@ -223,6 +321,10 @@ fn arguments(
                         ));
                         None
                     }
+                    // An array parameter gathers several (`readFile("a.csv",
+                    // "b.csv")`, `table(a, b)`, as CrowdStrike's examples
+                    // write them); any other takes one.
+                    Some(p) if unnamed_seen && p.multi => continue,
                     Some(_) if unnamed_seen => {
                         out.push(Diagnostic::error(
                             codes::CQL_UNNAMED_ARGUMENT,
@@ -325,7 +427,11 @@ fn parameter_value(
     source: &str,
     out: &mut Vec<Diagnostic>,
 ) {
-    if parameter.values.is_empty() && parameter.min.is_none() && parameter.max.is_none() {
+    if parameter.values.is_empty()
+        && parameter.min.is_none()
+        && parameter.max.is_none()
+        && parameter.ty != "boolean"
+    {
         return;
     }
     let mut values: Vec<Node> = Vec::new();
@@ -354,6 +460,13 @@ fn parameter_value(
 
 /// Why `lit` is not a value `parameter` takes, or `None` when it is.
 fn value_problem(parameter: &Parameter, lit: &str) -> Option<String> {
+    // Booleans are `true` or `false`. The data-types page says "strictly in
+    // lowercase", but CrowdStrike's own function examples write
+    // `count(..., distinct=True)`, so case is not judged.
+    if parameter.ty == "boolean" {
+        let ok = lit.eq_ignore_ascii_case("true") || lit.eq_ignore_ascii_case("false");
+        return (!ok).then(|| format!("is `true` or `false`, not `{lit}`"));
+    }
     let number = lit.parse::<f64>().ok();
     let integer_param = matches!(parameter.ty.as_str(), "integer" | "number");
     if let Some(n) = number.filter(|_| integer_param || parameter.values_open) {
@@ -377,22 +490,13 @@ fn value_problem(parameter: &Parameter, lit: &str) -> Option<String> {
     if lit.is_empty() || lit.contains('*') {
         return None;
     }
-    // CrowdStrike's own content writes `order=des`, `asce`, `ascending`: LogScale
-    // reads these values more loosely than the reference lists them. Accepted:
-    // an abbreviation of three or more letters, or a value of three or more
-    // letters written out longer. `from=minutes` (values `m`, `h`, ...) and
-    // `type=ip` (`ip_address`) are still refused.
-    let lower = lit.to_ascii_lowercase();
+    // Exact, ignoring case. Spellings CrowdStrike's own content uses beyond the
+    // reference (`order=des`) are listed in the catalog's `deprecated_values`.
     let known = parameter
         .values
         .iter()
         .chain(&parameter.deprecated_values)
-        .map(|v| v.to_ascii_lowercase())
-        .any(|v| {
-            v == lower
-                || (lower.len() >= 3 && v.starts_with(&lower))
-                || (v.len() >= 3 && lower.starts_with(&v))
-        });
+        .any(|v| v.eq_ignore_ascii_case(lit));
     if known {
         return None;
     }
@@ -476,7 +580,7 @@ fn string(node: Node, ancestors: &[Node], source: &str, out: &mut Vec<Diagnostic
             out.push(Diagnostic::warning(
                 codes::CQL_STRING_ESCAPE,
                 format!(
-                    "`\\{next}` is not a CQL string escape, so LogScale keeps the backslash; write `\\\\` for a literal backslash"
+                    "`\\{next}` is not a string escape CrowdStrike documents (`\\\"`, `\\\\`, `\\n`, `\\t`, `\\u`, `\\x`); write `\\\\` for a literal backslash"
                 ),
                 opentide_core::span_to_range(source, span),
             ));
@@ -531,6 +635,7 @@ fn free_text_after_aggregate(
     );
     while let Some((pipeline, inherited)) = queue.pop() {
         let mut aggregated = inherited;
+        let mut after_source = false;
         let mut steps = pipeline.walk();
         for step in pipeline.children_by_field_name("step", &mut steps) {
             let mut c = step.walk();
@@ -538,18 +643,18 @@ fn free_text_after_aggregate(
             let mut above: Vec<&str> = Vec::new();
             'walk: loop {
                 let n = c.node();
-                let mut descend = true;
+                let mut descend = !n.is_error();
                 if n.kind() == "pipeline" {
                     let body = matches!(above.last(), Some(&("case_branch" | "match_branch")));
                     queue.push((n, aggregated && body));
                     descend = false;
                 } else if aggregated && n.kind() == "free_text" {
-                    // A bare regex searches fields, and `*` (a `case` branch
-                    // that takes every event) matches all: neither is text search.
+                    // A bare regex is free text too ("Regex literals that are not
+                    // particular to a field ... are also free-text-searches"); `*`
+                    // (a `case` branch that takes every event) is no search.
                     let value = n.child_by_field_name("value");
-                    let regex = value.is_some_and(|v| v.kind() == "regex");
                     let everything = value.is_some_and(|v| text(v, source) == "*");
-                    if !regex && !everything {
+                    if !everything {
                         out.push(Diagnostic::error(
                             codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
                             "free-text search cannot follow an aggregate function: filter on a field, or move it before the aggregate",
@@ -574,9 +679,116 @@ fn free_text_after_aggregate(
                     above.pop();
                 }
             }
+            if let Some(call) = step_call(step) {
+                let name = call_name(call, source);
+                order_checks(call, name, aggregated, after_source, source, out);
+                if catalog
+                    .function(name)
+                    .is_some_and(|f| f.kind.iter().any(|k| k == "source"))
+                {
+                    after_source = true;
+                }
+            }
             if aggregates(step, source, catalog) {
                 aggregated = true;
             }
+        }
+    }
+}
+
+/// The call a step makes, negated or not.
+fn step_call(step: Node) -> Option<Node> {
+    match step.kind() {
+        "function_call" => Some(step),
+        "negated_function_call" => step.child_by_field_name("function"),
+        _ => None,
+    }
+}
+
+/// What a call may not do after an aggregate or a source function, as the
+/// 1.188/1.190 release notes and the correlate() page say.
+fn order_checks(
+    call: Node,
+    name: &str,
+    aggregated: bool,
+    after_source: bool,
+    source: &str,
+    out: &mut Vec<Diagnostic>,
+) {
+    let at = || {
+        call.child_by_field_name("name")
+            .map(|n| range(source, n))
+            .unwrap_or_else(|| range(source, call))
+    };
+    let lower = name.to_ascii_lowercase();
+    if aggregated && lower == "wildcard" && !call_has_parameter(call, "field", source) {
+        out.push(Diagnostic::error(
+            codes::CQL_FREE_TEXT_AFTER_AGGREGATE,
+            "wildcard() without `field` searches the raw event, which cannot follow an aggregate function",
+            at(),
+        ));
+    }
+    if aggregated
+        && matches!(
+            lower.as_str(),
+            "eventsize" | "eventinternals" | "eventfieldcount"
+        )
+    {
+        out.push(Diagnostic::error(
+            codes::CQL_EVENT_FUNCTION_AFTER_AGGREGATE,
+            format!(
+                "{name}() reads the raw event, which is gone after the first aggregate function"
+            ),
+            at(),
+        ));
+    }
+    if lower == "correlate" && (aggregated || after_source) {
+        let what = if aggregated {
+            "an aggregate function"
+        } else {
+            "a source function (readFile(), createEvents())"
+        };
+        out.push(Diagnostic::error(
+            codes::CQL_CORRELATE_PLACEMENT,
+            format!("correlate() cannot follow {what}"),
+            at(),
+        ));
+    }
+}
+
+/// Whether `call` names `parameter` among its arguments.
+fn call_has_parameter(call: Node, parameter: &str, source: &str) -> bool {
+    call_arguments(call)
+        .into_iter()
+        .any(|(n, _)| n.is_some_and(|n| name_text(n, source).eq_ignore_ascii_case(parameter)))
+}
+
+/// A regex with named groups under `or` extracts nothing: the grammar subset
+/// says an OR operand "cannot be a Regex with named groups", and the field
+/// page shows `type=FOO or /disk_free=(?<space>[0-9]+)/` as one that does not
+/// work.
+fn regex_group_under_or(node: Node, source: &str, out: &mut Vec<Diagnostic>) {
+    let mut cursor = node.walk();
+    for side in node.named_children(&mut cursor) {
+        if side.kind() != "free_text" {
+            continue;
+        }
+        let Some(regex) = side
+            .child_by_field_name("value")
+            .filter(|v| v.kind() == "regex")
+        else {
+            continue;
+        };
+        let pattern = regex
+            .child_by_field_name("pattern")
+            .map(|p| text(p, source))
+            .unwrap_or("");
+        if pattern.contains("(?<") || pattern.contains("(?P<") {
+            out.push(Diagnostic::warning(
+                codes::CQL_REGEX_GROUP_UNDER_OR,
+                "a regex under `or` extracts no fields: its named groups are ignored; run it as its own step",
+                range(source, regex),
+            ));
         }
     }
 }
@@ -721,9 +933,18 @@ mod tests {
         let order = param("enum", &["asc", "desc"], false, None, None);
         assert_eq!(value_problem(&order, "desc"), None);
         assert_eq!(value_problem(&order, "DESC"), None);
-        // As CrowdStrike's own content writes them.
-        assert_eq!(value_problem(&order, "des"), None);
-        assert_eq!(value_problem(&order, "ascending"), None);
+        // No loose matching: a spelling beyond the reference must be recorded
+        // (the catalog lists `des` for sort/table order, as CrowdStrike's
+        // dashboards write it).
+        assert!(value_problem(&order, "des").is_some());
+        let mut recorded = param("enum", &["asc", "desc"], false, None, None);
+        recorded.deprecated_values = vec!["des".into()];
+        assert_eq!(value_problem(&recorded, "des"), None);
+        assert!(value_problem(&recorded, "descending_by_time").is_some());
+        let boolean = param("boolean", &[], false, None, None);
+        assert_eq!(value_problem(&boolean, "true"), None);
+        assert_eq!(value_problem(&boolean, "True"), None);
+        assert!(value_problem(&boolean, "maybe").is_some());
         // A string parameter's values are keywords beside free text.
         let format = param("string", &["seconds", "millis"], false, None, None);
         assert_eq!(value_problem(&format, "yyyy-MM-dd"), None);

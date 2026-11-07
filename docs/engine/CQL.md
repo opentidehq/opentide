@@ -17,13 +17,24 @@ CrowdStrike's grammar text is cited, not copied: the grammar is re-derived in `g
 
 | Suite | Queries | Agreement | Harness |
 |-------|---------|-----------|---------|
-| CrowdStrike/logscale-community-content@77cfc4e3 (searches, saved searches, dashboards, parsers; measured, not vendored) | 2,812 blocks labelled CQL | 2,782 parse; the 30 that do not are not CQL: 11 non-breaking spaces pasted from the web, 4 files with two alternative queries, 5 prose or input lists, 2 SPL, 4 YAML leftovers, 4 author errors | `cql_parse_error` |
+| CrowdStrike/logscale-community-content@77cfc4e3 (searches, saved searches, dashboards, parsers; measured, not vendored) | 2,812 blocks labelled CQL | 2,786 parse; the 26 that do not are not CQL: non-breaking spaces pasted from the web, prose or input lists, SPL, YAML leftovers, author errors | `cql_parse_error` |
 | The same, every check | 2,812 | no false positive found: every finding is a removed function (`rdns`, `lookup`), a deprecated one (`lowercase`), a genuine mistake in the published query (`bucket(span=1day,(field="Tactic"))`, `worldMap(brokenWidget)`), SPL, or an event the catalog lacks (warning) | `opentide_cql::analyze` |
 | Public queries, vendored (`testdata/conformance/external/cql/`, Unlicense parts only, unmodified) | 45, each with a `.broken.cql` twin | 45 / 45 clean; every twin reports the code `FAULTS.toml` names (14 fault kinds) | `crates/opentide-analysis/tests/external_cql.rs` |
+| CrowdStrike's function and example pages (library.humio.com, every `Query` block, fetched 2026-11-07; measured, not vendored) | 490 | 475 clean; the 15 flagged are argument templates (`correlate()` fragments, `query={...}`), documentation typos (`join(suffix=)`, an unbalanced parenthesis, an empty `match` guard, `<REPO_NAME>`), and `math:mod(x, 3, as=...)` (two arguments without a name for one parameter, which the grammar subset forbids) | adversarial review, `opentide-lsp analyze` |
+| Other public CQL on GitHub (12 repositories, among them CrowdStrike/fal.con.2026, fusion-skills, terraform-provider-crowdstrike, corelight/CorelightForCrowdStrike; measured, not vendored) | 1,622 | every error a reviewer traced to the source: placeholders, invented parameters (`defineTable(lookbackDays=)`), `test(Field="x")` for `==`, aggregates inside `correlate()`, missing commas | adversarial review |
 | Grammar productions | 35 rules, one valid and one invalid fixture each | 35 / 35 | `crates/opentide-syntax/tests/corpus_gate.rs` |
 | CrowdStrike's own reference examples (the grammar subset, operators, filters, conditionals, comments, regex pages) | 105, valid and invalid | 83 valid parse; the invalid ones are parse errors or, where the grammar accepts them (an unknown function, two unnamed arguments, `:=` with `as=`, free text after an aggregate, `<=>` outside `correlate()`, regex flags), the matching check | `crates/opentide-cql/src/tests.rs` (one test per code) |
 
-Where CrowdStrike's published content and its reference disagree, the content wins, as a query a tenant runs is the stronger evidence: `order=des`, `asce` and `ascending` are accepted for `asc`/`desc` (an allowed value is matched by prefix), `sort(type=any)` is accepted, a parameter the reference calls required but gives a default (`time:dayOfWeek(field=@timestamp)`) may be left out, and strings may span lines.
+Where CrowdStrike's published content and its reference disagree, the content wins, as a query a tenant runs is the stronger evidence. Each such case is recorded where it is decided (the catalog generator's `PARAM_FIXES` and `EXTRA_PARAMS`, or a comment in the grammar or check), with its source:
+
+- a page's examples over its parameter table: `getField("x")` and `math:cosh(x, ...)` take their first argument without a name, and `remoteTable()` takes `query` with `include` optional;
+- `order=des`, `asce`, `ascending` and `descending` (CrowdStrike's dashboards) and `sort(type=any)` are accepted; other values must match exactly;
+- `distinct=True`: booleans are matched without regard to case (the data-types page says lower case; the function examples do not);
+- several arguments without a name fill an array parameter (`readFile("a.csv", "b.csv")`, `table(a, b)`), though the grammar subset allows one;
+- steps may be written without a pipe (below), and strings may span lines;
+- a parameter the reference calls required but gives a default (`time:dayOfWeek(field=@timestamp)`) may be left out.
+
+Two adversarial reviews (opentidehq/language-server#221) audited this model against CrowdStrike's pages and against queries the engine had never seen; every defect they confirmed is fixed with a regression test in `crates/opentide-cql/src/tests.rs`.
 
 ## Language
 
@@ -87,16 +98,18 @@ A bare word in an expression is a field reference (or a number); a quoted string
 | saved search | `$falcon/helper:enrich(field=UserIsAdmin)`, `$"name with spaces"()` |
 | parameter | `ComputerName=?host`, `?{host=*}` |
 
-A function name must be followed immediately by `(` (`rdns (ip)` is free text `rdns` and a parenthesised filter). Since 1.224 function names are not reserved words. Function names are matched without regard to case (`groupby(` is common in CrowdStrike's own packages). A function takes named arguments `name=value` in any order and at most one argument without a name, which binds the function's omittable parameter. Arguments can be arrays, nested calls, subqueries `{ ... }`, bare function names (`function=count`) and parameters.
+A function name must be followed immediately by `(` (`rdns (ip)` is free text `rdns` and a parenthesised filter). Since 1.224 function names are not reserved words. Function names are matched without regard to case: no page says so, but CrowdStrike's own examples and packages write `groupby(`, `timechart(`, `selectlast(`. A function takes named arguments `name=value` in any order and one argument without a name, which binds the function's omittable parameter; when that parameter takes an array, several arguments without a name fill it. Arguments can be arrays, nested calls, subqueries `{ ... }`, bare function names (`function=count`) and parameters.
+
+The pipe between steps may be left out, as `A B` is shorthand for `A | B`: a call after a filter (`ERROR` then `groupBy(host)`, the grammar subset's Appendix A), a filter after a call (`groupBy(...)` then `_count < 5`), and an assignment after anything (`x := 1.0` then `y := 1.0`), as CrowdStrike's function examples write them. Two filters side by side stay one AND, and a filter directly after an assignment needs a pipe: otherwise `x := a - 1` would read as `x := a` followed by the free text `- 1`.
 
 ### Lexical
 
 - Comments: `//` to end of line and `/* ... */`, wherever a token may start.
-- Strings: `"..."` on one line; `\"`, `\\`, `\n`, `\t` are escapes. LogScale keeps other `\x` sequences verbatim (they reach regex arguments) and warns about them.
+- Strings: `"..."`; `\"`, `\\`, `\n` (the grammar subset), `\t` and `\uXXXX` (createEvents()) and `\xHH` (the stripAnsiCodes() example) are escapes. Another `\` sequence gets a warning; a string bound to a regex parameter is passed to the regex engine as written.
 - Regex literals: `/.../flags` with flags `d` (dot matches newline), `g`, `i`, `m`, `F` (regex engine v2), in any order. `\/` escapes a slash. The body goes to the regex engine and is not CQL.
 - Field names: letters, digits, `#` `%` `&` `.` `@` `\` `^` `_` `~`, Latin-1 letters, and JSON array indexes (`users[0].name`). Tags are field names starting with `#` (`#repo`, `#event_simpleName`). `host-name` is not a field name; quote it.
 - Unquoted patterns add `*` `+` `-` `:` `/`.
-- Numbers: integers, decimals, scientific notation. No hex. `true`/`false` lower case.
+- Numbers: integers, decimals, scientific notation. No hex. In an expression, a bare word may start with `+` or `-` (`end=-1h`, `x := +1`).
 
 ## Diagnostics
 
@@ -114,12 +127,16 @@ Every diagnostic has a stable code (`opentide_core::codes`) and a test that fail
 | `cql_missing_parameter` | error | a required parameter is missing |
 | `cql_parameter_value` | error | a literal argument is not one of the parameter's allowed values, or is outside its bounds |
 | `cql_regex_flag` | error | a regex literal has a flag other than `d`, `g`, `i`, `m`, `F` |
-| `cql_string_escape` | warning | a string has an escape other than `\"`, `\\`, `\n`, `\t`; LogScale keeps it verbatim |
-| `cql_free_text_after_aggregate` | error | free text after the first aggregate function (an error since 1.190) |
+| `cql_string_escape` | warning | a string has an escape CrowdStrike does not document (anything but `\"`, `\\`, `\n`, `\t`, `\u`, `\x`) |
+| `cql_free_text_after_aggregate` | error | free text after the first aggregate function, also inside a `case` or `match` body: text, a bare regex, or `wildcard()` without `field` (release notes 1.188, 1.190) |
+| `cql_event_function_after_aggregate` | error | `eventSize()`, `eventInternals()` or `eventFieldCount()` after the first aggregate function (release note 1.190) |
 | `cql_assignment_as` | error | `x := f(..., as=y)`: the assignment already names the output |
 | `cql_link_outside_correlate` | error | `a <=> B.b` outside the queries of `correlate()`, the only place it links fields |
+| `cql_correlate_placement` | error | `correlate()` after an aggregate or a source function (`readFile()`, `createEvents()`), inside another function's arguments (a `defineTable()` subquery excepted), or with an aggregate in its queries (its "Placement restrictions" and "The query cannot contain aggregate query functions") |
+| `cql_match_guard` | error | an aggregate function as a `match` guard, which must be a filter |
+| `cql_regex_group_under_or` | warning | a regex with named groups under `or`, where its fields are not extracted (the grammar subset; the fields page's "DOES NOT WORK" example) |
 | `cql_unknown_event` | warning | `#event_simpleName` compared with a literal no Falcon event has; a near match is suggested |
-| `cql_correlate_aggregate` | error | a Next-Gen SIEM correlation rule combines `correlate()` with another aggregate function |
+| `cql_correlate_aggregate` | error | a Next-Gen SIEM correlation rule combines `correlate()` with another aggregate function (developer.crowdstrike.com, Next-Gen SIEM correlation rules) |
 
 Not checked, on purpose:
 
@@ -157,4 +174,7 @@ Diagnostics map back onto the YAML (block scalar indent stripped), with `field_p
 - Mixed-case `case`, `match` and `like` (`CASE {`) are not documented anywhere and parse as errors; `and`, `or` and `not` are reserved in any case.
 - Trailing commas, empty pipeline steps and empty `match` guards are errors; a trailing `|` at the end of the whole query is accepted, as CrowdStrike's content writes it. Block comments do not nest.
 - A string bound to a regex parameter (`regex("\d+")`) is passed to the regex engine as written, so it gets no `cql_string_escape`.
-- Two queries written into one file report a parse error where the grammar first fails, which can be a line before the second query starts.
+- Two queries written into one file report a parse error where the grammar first fails, which can be a line before the second query starts. After a syntax error the order checks (free text, event functions and `correlate()` after an aggregate) are skipped: past the error the steps are the parser's guess.
+- A lone `-` or `+` as a value (`replace("a", with=-)`) is read as an operator; quote it. Making it a pattern would break `-(a + b)`.
+- Not checked, though documented: relative-time and time-zone values, a non-aggregate passed as `function=`, a `correlate()` link to a query name that does not exist, a `!=` link, query names that are not identifiers, an aggregate inside a `case` branch making later steps aggregated, and `a[0]` used as a value. Each is a miss, never a false finding.
+- No public CrowdStrike source confirms: function and parameter names matching without regard to case (the content does it), which `\` escapes beyond the documented ones LogScale translates, the exemption of the catch-all `*` branch from the free-text rule, and the uppercase `CASE`/`MATCH`/`LIKE` and `!$saved()` errors.
