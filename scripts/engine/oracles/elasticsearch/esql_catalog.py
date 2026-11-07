@@ -260,12 +260,15 @@ def main() -> int:
         if listed != seen:
             bad += 1
         if args.all or listed != seen:
-            yn = lambda b: "yes" if b else "no"  # noqa: E731
             print(
-                f"{line}\t{kind}\t{name}\tcatalog:{yn(listed)}\tobserved:{yn(seen)}\t{run.one_line(detail)[:400]}"
+                f"{line}\t{kind}\t{name}\tcatalog:{_yes_no(listed)}\tobserved:{_yes_no(seen)}\t{run.one_line(detail)[:400]}"
             )
     print(f"# {line}: {len(rows)} names, {bad} disagree with the catalog", file=sys.stderr)
     return 1 if bad else 0
+
+
+def _yes_no(flag: bool) -> str:
+    return "yes" if flag else "no"
 
 
 if __name__ == "__main__":

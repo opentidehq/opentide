@@ -44,9 +44,12 @@ def read_expected() -> tuple[list[str], dict[str, dict[str, str]]]:
     return header, rows
 
 
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in version.split("."))
+
+
 def write_expected(header: list[str], rows: dict[str, dict[str, str]]) -> None:
-    key = lambda v: tuple(int(x) for x in v.split("."))  # noqa: E731
-    header = sorted(set(header), key=key)
+    header = sorted(set(header), key=_version_key)
     out = ["probe\t" + "\t".join(header)]
     for path in sorted(rows):
         out.append(path + "\t" + "\t".join(rows[path].get(v, "") for v in header))
