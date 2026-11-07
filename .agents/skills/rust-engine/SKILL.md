@@ -1,6 +1,6 @@
 ---
 name: rust-engine
-description: Change the opentide Rust workspace (edition 2024, rust-version 1.85). Covers I/O-free engine crates, thiserror 2 versus anyhow, serde, toml 0.8, uuid, regex, OnceLock catalogs, clippy -D warnings, and the Cargo.lock that must not be pruned. Use when editing crates/, Cargo.toml, Cargo.lock, or any Rust test.
+description: Change the opentide Rust workspace (edition 2024, rust-version 1.85). Covers I/O-free engine crates, thiserror 2 versus anyhow, serde, toml 0.8, uuid, regex, OnceLock catalogs, clippy -D warnings, and the Cargo.lock CI builds with --locked. Use when editing crates/, Cargo.toml, Cargo.lock, or any Rust test.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -54,7 +54,7 @@ Pinned stack (do not bump in passing):
 | `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
 | `tree-sitter` | 0.25.10 | `opentide-syntax` and the query engines. See `tree-sitter` |
 
-`Cargo.lock` deliberately keeps crates that are not all referenced by the current graph. `cargo build` / `cargo test` rewrite the lock and drop those entries. CI passes `--locked`, so a lock that needs rewriting fails it. If a command rewrites `Cargo.lock`, restore the committed file (`git checkout -- Cargo.lock`) unless the change intentionally adds a dependency. `scripts/engine/cloud-agent-install.sh` does this restore after warming the build.
+`Cargo.lock` is exactly what cargo resolves for the workspace: CI passes `--locked` (`ci.yml`, job `engine`; `engine-ci.yml`), so a lock that needs rewriting fails it. Commit a re-resolved lock only with a change that means to change dependencies, and check with `cargo tree` that nothing else moved. If a command rewrites `Cargo.lock` for any other change, restore the committed file (`git checkout -- Cargo.lock`). `scripts/engine/cloud-agent-install.sh` restores it after warming the build. `fuzz/` keeps its own lock.
 
 ## Types agents get wrong
 

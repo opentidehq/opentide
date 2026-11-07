@@ -27,9 +27,9 @@ tree-sitter --version
 # explicit toolchain install is needed. Warm the dependency cache and target
 # directory so the first `cargo test` in the agent is fast.
 #
-# The committed Cargo.lock deliberately carries entries for crates that are not
-# yet part of the workspace, so cargo prunes the lock during resolution (CI also
-# builds without --locked). Restore the committed lock afterward to keep the
+# The committed Cargo.lock is what cargo resolves, and CI builds with --locked.
+# The build runs without it so that a checkout whose manifests are ahead of its
+# lock still warms; the committed lock is restored afterwards to keep the
 # working tree clean for the agent.
 # ---------------------------------------------------------------------------
 lock_backup="$(mktemp)"

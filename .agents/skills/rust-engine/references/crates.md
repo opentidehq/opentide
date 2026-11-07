@@ -25,7 +25,7 @@ Shared package metadata (`version`, `edition`, `rust-version`, `license`, `repos
 1. Put `name = { version = "...", features = [...] }` in `[workspace.dependencies]`.
 2. Depend with `name.workspace = true` in the member.
 3. Use the crate from the member that needs it, not from every crate.
-4. Run the compile you need, then `git checkout -- Cargo.lock` if the only lock diff is a prune of unrelated packages. If you added a real crate, keep the new `[[package]]` blocks and the root package's `dependencies` update, and restore any deleted packages that were not yours.
+4. Run the compile you need and commit the lock it writes: the new `[[package]]` blocks and the member's `dependencies` update. `cargo tree` before and after shows that no other crate moved; CI builds with `--locked`, so the committed lock must be exactly what Cargo resolves.
 
 `cc` is a build-dependency of `opentide-syntax` only. `wasm-bindgen` and `js-sys` are dependencies of `opentide-wasm` only. `clap` and `anyhow` are dependencies of `opentide-lsp` only.
 
