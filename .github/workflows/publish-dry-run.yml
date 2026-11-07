@@ -1,0 +1,225 @@
+# Rehearses every publish this repository makes, without publishing anything:
+# the opentide crate placeholder (crates.io), the @opentide/opentide and
+# opentide placeholders (npm), and the wheels and sdist (PyPI), built the way
+# publish-pypi.yml builds them.
+#
+# Nothing here can publish. The token is read-only (contents: read), no job may
+# mint an OIDC token (no id-token: write), which trusted publishing on all
+# three registries needs, no secret is read, and every publish command runs
+# with --dry-run. tests/test_ci/test_publish_dry_run_workflow.py keeps it so.
+#
+# docs/internal/publishing.md lists every name, owner and trusted publisher,
+# and the steps a maintainer takes to publish the placeholders.
+name: Publish dry run
+
+on:
+  pull_request:
+    paths:
+      - "publishing/**"
+      - ".github/workflows/publish-dry-run.yml"
+      - "pyproject.toml"
+      - "hatch_build.py"
+      - "analysis/**"
+      # The packages' long descriptions and licence (twine check, the placeholders' copies).
+      - "README.md"
+      - "LICENSE"
+      # The version a release builds.
+      - "scripts/build/release.py"
+  push:
+    branches: [development]
+    paths:
+      - "publishing/**"
+      - ".github/workflows/publish-dry-run.yml"
+      - "pyproject.toml"
+      - "hatch_build.py"
+      - "analysis/**"
+      - "README.md"
+      - "LICENSE"
+      - "scripts/build/release.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A dry run publishes nothing, so a newer push may cancel a stale run.
+concurrency:
+  group: publish-dry-run-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Once UC-5.1 puts the real facade crate in the Cargo workspace, this becomes
+  # `cargo publish --dry-run -p opentide` and the placeholder goes.
+  crate:
+    name: crates.io (opentide)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MANIFEST: publishing/placeholders/crates/opentide/Cargo.toml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+          rustup component add rustfmt clippy
+
+      # docs.rs renders the crate documentation from the published package.
+      - name: Format, lints and documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          set -euo pipefail
+          cargo fmt --manifest-path "${MANIFEST}" -- --check
+          cargo clippy --manifest-path "${MANIFEST}" --locked --all-targets -- -D warnings
+          cargo doc --manifest-path "${MANIFEST}" --locked --no-deps
+
+      # Packages the crate, builds the package and stops before the upload. A
+      # version crates.io already has is a warning in a dry run, not an error.
+      - name: cargo publish --dry-run
+        run: |
+          set -euo pipefail
+          cargo package --manifest-path "${MANIFEST}" --locked --list
+          cargo publish --manifest-path "${MANIFEST}" --locked --dry-run
+
+  npm:
+    name: npm (@opentide/opentide, opentide)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Trusted publishing needs Node 22.14.0 or later and npm 11.5.1 or later.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: npm 11.5.1 or later
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.21.1
+          version="$(npm --version)"
+          echo "npm ${version}"
+          node -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            const ok = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
+            if (!ok) {
+              console.error(`::error::npm ${process.argv[1]} is older than 11.5.1, which trusted publishing needs`);
+              process.exit(1);
+            }
+          ' "${version}"
+
+      - name: npm publish --dry-run
+        run: |
+          set -euo pipefail
+          for dir in publishing/placeholders/npm/opentide-scoped publishing/placeholders/npm/opentide; do
+            name="$(node -p "require('./${dir}/package.json').name")"
+            version="$(node -p "require('./${dir}/package.json').version")"
+            echo "::group::${name}@${version}"
+            # What npm would upload: the manifest, the README and the licence.
+            (cd "${dir}" && npm pack --dry-run --json) > "${RUNNER_TEMP}/pack.json"
+            node -e '
+              const files = require(process.argv[1])[0].files.map((file) => file.path).sort();
+              const expected = ["LICENSE", "README.md", "package.json"];
+              if (JSON.stringify(files) !== JSON.stringify(expected)) {
+                console.error(`::error::packs ${files.join(", ")}; expected ${expected.join(", ")}`);
+                process.exit(1);
+              }
+              console.log(`packs ${files.join(", ")}`);
+            ' "${RUNNER_TEMP}/pack.json"
+            # npm refuses a version it already has, in a dry run too: once a
+            # maintainer has published the placeholder, the name is reserved
+            # and the pack above is all there is left to check.
+            if [[ "$(npm view "${name}@${version}" version 2>/dev/null || true)" == "${version}" ]]; then
+              echo "::notice title=${name}@${version} is on npm::The name is reserved. npm publishes a version once, so only the pack is checked."
+            else
+              (cd "${dir}" && npm publish --dry-run)
+            fi
+            echo "::endgroup::"
+          done
+
+  # The artifacts publish-pypi.yml uploads, built the same way: cibuildwheel
+  # (hatchling and hatch_build.py, which compiles analysis/) at the version the
+  # release guard reads from CHANGELOG.md, and `uv build --sdist`. One runner:
+  # the Linux x86_64 wheels (manylinux and musllinux) and the sdist. The
+  # release builds the other platforms itself and refuses to publish when one
+  # is missing. maturin replaces this build in UC-5.5.
+  pypi:
+    name: PyPI (wheels and sdist)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: The version a release from this commit builds
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(python scripts/build/release.py version)"
+          echo "Building ${version}, the newest dated version in CHANGELOG.md"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      # The Linux containers build from a copy of the checkout, hence the version.
+      - name: Build wheels
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python -m pip install cibuildwheel==4.3.5
+          python -m cibuildwheel --output-dir dist
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Build sdist
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
+        run: uv build --sdist
+
+      - name: Twine check
+        run: |
+          python -m pip install twine
+          python -m twine check dist/*
+
+      # The publish job's own checks, for the platforms built here.
+      - name: One version, cp310-abi3 wheels, one sdist
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          python3 - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
+          wheels = [name for name in built if name.endswith(".whl")]
+          sdists = [name for name in built if name.endswith(".tar.gz")]
+          versions = {name.split("-")[1] for name in wheels} | {
+              name.removesuffix(".tar.gz").rsplit("-", 1)[1] for name in sdists
+          }
+          problems = []
+          if len(sdists) != 1:
+              problems.append(f"expected one sdist, found {sdists}")
+          if versions != {os.environ["EXPECTED_VERSION"]}:
+              problems.append(f"built {sorted(versions)}, expected {os.environ['EXPECTED_VERSION']}")
+          for platform in ("manylinux", "musllinux"):
+              if not any(platform in name for name in wheels):
+                  problems.append(f"no {platform} wheel")
+          if not all("-cp310-abi3-" in name for name in wheels):
+              problems.append(f"a wheel is not cp310-abi3: {wheels}")
+          for problem in problems:
+              print(f"::error::{problem}")
+          sys.exit(1 if problems else 0)
+          PY
