@@ -36,7 +36,10 @@ on:
       # The packages' long descriptions and licence (twine check, the placeholders' copies).
       - "README.md"
       - "LICENSE"
-      # The version a release builds, and the script that reads it.
+      # The version a release builds, and the script that reads it. The filter
+      # cannot tell a release notes pull request from an [Unreleased] entry, so
+      # CHANGELOG.md about doubles how often this runs: decision 7 in
+      # docs/internal/publishing.md.
       - "CHANGELOG.md"
       - "scripts/build/release.py"
   push:

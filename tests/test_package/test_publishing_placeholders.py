@@ -33,8 +33,12 @@ PAGE = ROOT / "docs" / "internal" / "publishing.md"
 REPOSITORY = "https://github.com/opentidehq/opentide"
 LICENCE = "EUPL-1.2"
 VERSION = "0.0.0"
-#: A fenced shell block in the page, and a URL in it that is not quoted.
-_SHELL_BLOCK = re.compile(r"^```(?:bash|sh|shell)\n(.*?)^```", flags=re.MULTILINE | re.DOTALL)
+#: A fenced shell block in the page, at the margin or indented in a numbered
+#: step, its opening fence alone, and a URL in it that is not quoted.
+_SHELL_BLOCK = re.compile(
+    r"^[ \t]*```(?:bash|sh|shell)\n(.*?)^[ \t]*```", flags=re.MULTILINE | re.DOTALL
+)
+_SHELL_FENCE = re.compile(r"^[ \t]*```(?:bash|sh|shell)$", flags=re.MULTILINE)
 _BARE_URL = re.compile(r"(?<![\"'])\bhttps?://[^\s\"']+")
 
 
@@ -168,7 +172,9 @@ def test_publishing_page_quotes_every_url_a_shell_would_expand() -> None:
     # The maintainer pastes these commands. zsh, macOS's default shell, aborts
     # on an unquoted `?` or `*` it cannot match ("no matches found"), and bash
     # expands one that matches a file.
-    blocks = _SHELL_BLOCK.findall(PAGE.read_text(encoding="utf-8"))
-    assert blocks
+    page = PAGE.read_text(encoding="utf-8")
+    blocks = _SHELL_BLOCK.findall(page)
+    # Every shell block is read, the ones indented under a numbered step too.
+    assert len(blocks) == len(_SHELL_FENCE.findall(page)) > 0
     bare = [url for block in blocks for url in _BARE_URL.findall(block) if set(url) & set("?*[]{}")]
     assert bare == []

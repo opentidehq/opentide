@@ -75,7 +75,12 @@ PUBLISHED_FROM = {
     "CHANGELOG.md",
     "scripts/build/release.py",
 }
-_PUBLISH = re.compile(r"\b(cargo|npm) publish\b")
+#: One publish command: from `cargo publish` or `npm publish` to the end of
+#: that shell command (`;`, `&&`, `||`, a pipe, a closing subshell or the line).
+_PUBLISH = re.compile(r"\b(?:cargo|npm) publish\b[^;&|)\n]*")
+#: `--dry-run` as a flag of its own: not `--dry-run=false`, not `--no-dry-run`.
+_DRY_RUN = re.compile(r"(?<!\S)--dry-run(?!\S)")
+_NOT_DRY_RUN = re.compile(r"--dry-run=|--no-dry-run\b")
 _EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", flags=re.DOTALL)
 _SECRETS = re.compile(r"\bsecrets\b")
 _PINNED = re.compile(r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}$")
@@ -165,14 +170,19 @@ def test_every_job_runs_its_own_steps(workflow: dict[Any, Any]) -> None:
 
 
 def test_every_publish_command_is_a_dry_run(workflow: dict[Any, Any]) -> None:
+    # Each command, not each line: `npm publish --dry-run && npm publish` is one
+    # line and two publishes. A continued line is joined to the next first.
     publishes = [
-        line.strip()
+        command.strip()
         for run in _runs(workflow)
-        for line in run.splitlines()
-        if _PUBLISH.search(line)
+        for command in _PUBLISH.findall(run.replace("\\\n", " "))
     ]
     assert publishes, "the workflow rehearses no publish"
-    assert [line for line in publishes if "--dry-run" not in line] == []
+    assert [
+        command
+        for command in publishes
+        if not _DRY_RUN.search(command) or _NOT_DRY_RUN.search(command)
+    ] == []
 
 
 def test_nothing_logs_in_uploads_or_changes_owners(workflow: dict[Any, Any]) -> None:

@@ -71,10 +71,16 @@ No publisher is registered before the workflow it names is on `development`. A p
 What each registry requires, from its documentation (read 2026-11-07, [Sources](#sources)):
 
 - **crates.io.** The crate must exist: the first publish needs an API token, and trusted publishing cannot create a crate. Only an owner with a verified email address adds a publisher. The form checks the workflow file on the repository's default branch (`development`): it shows **Workflow file found**, or the warning **Workflow file not found**, and saves the publisher either way. A crate takes up to five GitHub publishers, so a new one can be added before the old one is removed. A configuration does not expire. The crate's **Require trusted publishing for all new versions** setting rejects API tokens. It appears once the crate has a publisher.
-- **npm.** The package must exist. The publishing job needs npm 11.5.1 or later on Node 22.14.0 or later, GitHub-hosted runners, `id-token: write`, and a `repository.url` in `package.json` that matches the repository exactly. The workflow file must exist in `.github/workflows/`, and every field is matched exactly, case included, but npm does not check them when a configuration is saved. **A configuration that has not completed a publish within two days expires** and has to be deleted and created again, so a package's publisher is registered only shortly before the workflow that publishes it runs. A package takes up to ten configurations. A configuration cannot be edited, only deleted and created again. Publishes through trusted publishing carry provenance by default. When `workflow_dispatch` or `workflow_call` starts the publish, npm checks the name of the calling workflow.
+- **npm.** The package must exist. The publishing job needs npm 11.5.1 or later on Node 22.14.0 or later, GitHub-hosted runners, `id-token: write`, and a `repository.url` in `package.json` that matches the repository exactly. The workflow file must exist in `.github/workflows/`, and every field is matched exactly, case included, but npm does not check them when a configuration is saved. **A configuration that has not completed a publish within two days expires** and has to be deleted and created again, so a package's publisher is registered only shortly before the workflow that publishes it runs. npm's documentation describes two setups, and which one applies depends on what the package's settings page offers. In one, a package takes up to ten configurations, which cannot be edited, only deleted and created again. In the other, it takes one, which can be edited. The CLI creates a configuration only for a package that has none (`npm trust` "will result in an error" otherwise). Publishes through trusted publishing carry provenance by default. When `workflow_dispatch` or `workflow_call` starts the publish, npm checks the name of the calling workflow.
 - **PyPI.** `opentide` exists, so a new publisher is added to the project (Manage, Publishing). A *pending* publisher is only for creating a project that does not exist yet; it does not apply here. An environment is optional and strongly recommended. [PyPI trusted publishing](./pypi-trusted-publishing.md) covers how `publish-pypi.yml` releases with it today.
 
-A trusted publisher with no environment trusts the workflow file on any branch: anyone who can push a branch with a workflow of that name can publish. An environment whose deployment rules allow only `development` and release tags closes that gap; [Decisions](#decisions-for-the-maintainer) proposes one per registry.
+A trusted publisher with no environment trusts the workflow file on any branch: anyone who can push a branch with a workflow of that name can publish. An environment narrows that, but only as far as the refs it admits:
+
+- GitHub matches an environment's deployment branch and tag rules against the run's `GITHUB_REF`: the ref the run is on, not who created it. A rule for the branch `development` refuses a run from any other branch.
+- A tag rule admits a run on any commit with a matching tag. Anyone with write access can push a tag, the engine's `engine-v*` ([#801](https://github.com/opentidehq/opentide/issues/801)) included, on an unreviewed commit. A tag rule therefore needs a tag ruleset first, one that lets only the people who release create, move or delete those tags ([step 7](#7-github-environments-if-you-decide-on-them)).
+- `development` itself has no branch protection and no active ruleset (`GET /repos/opentidehq/opentide/branches/development` reads `"protected":false`, and `/rules/branches/development` reads `[]`, on 2026-11-07). Anyone with write access can push a changed workflow to it and run it there. UC-0.3 adds branch protection with required checks (#801), which does not by itself require a pull request. Required reviewers on the environment, or pull requests required on `development`, close that gap.
+
+[Decision 3](#decisions-for-the-maintainer) proposes an environment per registry.
 
 ## The placeholders
 
@@ -93,6 +99,8 @@ Each placeholder carries a copy of the repository's `LICENSE`: the EUPL asks for
 ## Dry run
 
 [`.github/workflows/publish-dry-run.yml`](../../.github/workflows/publish-dry-run.yml) rehearses every publish on pull requests that change what is published (the placeholders, the workflow, `pyproject.toml`, `hatch_build.py`, `analysis/`, and from UC-0.2 `crates/`, the root `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml`; `README.md`, `LICENSE`, `CHANGELOG.md` and `scripts/build/release.py`), on pushes to `development` that change them, and on **Run workflow**.
+
+`CHANGELOG.md` is in the filter because a release notes pull request changes the version the next release builds, and that pull request is the one whose rehearsal matters most. The filter cannot tell it from an `[Unreleased]` entry, so the file about doubles how often the PyPI job runs, at about nine minutes a run: 102 of the 161 first-parent commits on `development` from 2026-10-07 to 2026-11-07 would have run it, against 52 without the file. Without it in the `pull_request` paths, a new version is first built by the run after the merge ([decision 7](#decisions-for-the-maintainer)).
 
 | Job | Does |
 |-----|------|
@@ -145,20 +153,21 @@ Work from a clean checkout of `development` that contains this page (`git status
 
 ### 2. crates.io: a second owner on every crate
 
-1. With the token of step 1 still logged in:
+1. **Before you start**, the second person signs in to [crates.io](https://crates.io) once with GitHub. crates.io invites only a login that has signed in before, and answers any other with `could not find user with login`.
+2. With the token of step 1 still logged in:
 
    ```bash
    for crate in opentide opentide-core opentide-highlight opentide-syntax opentide-kql opentide-spl \
        opentide-esql opentide-eql opentide-kuery opentide-lucene opentide-falco opentide-ecs \
        opentide-tide opentide-analysis opentide-lsp; do
-     cargo owner --add <second-github-login> "$crate"
+     cargo owner --add <second-github-login> "$crate" || { echo "stopped at $crate"; break; }
    done
-   cargo logout
    ```
 
-2. The second owner must have signed in to crates.io once, then accepts each invitation at [Pending invites](https://crates.io/me/pending-invites).
-3. Revoke the token on [API Tokens](https://crates.io/settings/tokens).
-4. **Verify:** every crate lists two people.
+   Each crate prints `Owner Crates.io user <login> has been invited to be an owner of crate <crate>`. The loop stops at the first error and stays logged in. Fix the cause and run it again: a crate that already has the invitation prints `already has a pending invitation` and the loop goes on.
+3. Once all 15 crates have printed that, run `cargo logout` and revoke the token on [API Tokens](https://crates.io/settings/tokens).
+4. The second owner accepts each invitation at [Pending invites](https://crates.io/me/pending-invites).
+5. **Verify:** every crate lists two people.
 
    ```bash
    for crate in opentide opentide-core opentide-highlight opentide-syntax opentide-kql opentide-spl \
@@ -178,13 +187,22 @@ Work from a clean checkout of `development` that contains this page (`git status
 1. Sign in on [npmjs.com](https://www.npmjs.com/login) and open `https://www.npmjs.com/settings/opentide/members`. The organisation exists ([npm](#npm)); if npm says you have no access to it, a member has to invite you first. `behemothsecurity` is one: it published `@opentide/explorer` into the scope.
 2. **Invite Members**: the second person's npm username, team `developers`, **Invite**. Once they accept, click **owner** in their row, so that the organisation has two owners.
 3. Before the next click, read the members page's two-factor authentication column. Enforcing 2FA removes every member who does not use it from the organisation, and with it their access to every package in the scope, `@opentide/explorer` included. Then **Enable 2FA Enforcement**, and confirm.
-4. **Verify:** `npm org ls opentide` (signed in as a member) lists both people with the role `owner`.
+4. **Verify:** on the members page, both people have the role **Owner**. From the command line, sign in first: signed out, `npm org ls` prints nothing and still exits 0, which looks like an empty organisation.
+
+   ```bash
+   npm install --global npm@11.21.1        # 11.5.1 or later
+   npm login                               # in the browser, with two-factor authentication; stay signed in for steps 4 and 5
+   npm whoami                              # your npm username; signed out, it fails with ENEEDAUTH
+   npm org ls opentide
+   ```
+
+   Expected: one line per member, `<username> - owner` for both people. Today, signed out: no output.
 
 ### 4. npm: publish the two placeholders
 
+Still signed in from step 3 (`npm whoami` prints your username):
+
 ```bash
-npm install --global npm@11.21.1        # 11.5.1 or later
-npm login                               # in the browser, with two-factor authentication; stay signed in for step 5
 cd publishing/placeholders/npm/opentide-scoped
 npm publish --provenance=false          # npm asks for the second factor
 cd ../opentide
@@ -237,8 +255,14 @@ The publisher, `publish-pypi.yml` with environment `pypi`, is already in place; 
 Create each environment before any workflow names it: a workflow that names a missing environment creates it with no protection rules.
 
 1. Repository **Settings**, **Environments**, **New environment**: name `crates-io` (then `npm`), **Configure environment**.
-2. **Deployment branches and tags**: **Selected branches and tags**; **Add deployment branch or tag rule**: branch `development`; tag `engine-v*` (and `v*` for `publish.yml`). Optionally **Required reviewers**.
-3. Name the environment in the registry's publisher configuration and on the publishing job (`environment: crates-io`), in the same change: a publisher with an environment rejects a job without one.
+2. **Deployment branches and tags**: **Selected branches and tags**; **Add deployment branch or tag rule**, **Ref type** Branch, name pattern `development`. That is the only rule a workflow needs when it publishes from **Run workflow** on `development`, as `publish.yml` will ([#840](https://github.com/opentidehq/opentide/issues/840)).
+3. **Required reviewers** ([decision 3](#decisions-for-the-maintainer)): the owners, then **Save protection rules**. A publishing job then waits until one of them approves it, and with **Prevent self-review** that cannot be the person who started the run. While `development` is unprotected ([Trusted publishers](#trusted-publishers)), reviewers are what stop a workflow change pushed to `development` from publishing unseen.
+4. **Tags.** #801 prefixes engine tags `engine-v0.x.y`, so that they do not collide with opentide's `v*`. language-server's `release.yml` releases either from a pushed tag or from **Run workflow** on its default branch, which then creates the tag itself. A **Run workflow** release runs with the branch as its `GITHUB_REF`, so the rule of 7.2 admits it, and the environment refuses a run on a pushed tag. That is the safe default: engine releases go through **Run workflow** on `development`.
+
+   To publish from pushed tags as well, protect them before adding a tag rule, because a tag rule admits any commit with a matching tag. **Settings**, **Rulesets**, **New ruleset**, **New tag ruleset**. Give it a name and set **Enforcement status** to Active. Under **Bypass list**, **Add bypass**: Repository admin, or a team of the people who release (not the write role, which every writer has). Under **Target tags**, **Add a target**, **Include by pattern**: `engine-v*`. Under **Tag protections**: **Restrict creations**, **Restrict updates** and **Restrict deletions**. Then **Create**. Only then add the environment rule: **Ref type** Tag, `engine-v*`. The ruleset applies to every actor not on its bypass list, workflows included, and the **Run workflow** path creates its tag with `GITHUB_TOKEN` (`gh release create` in language-server's `release.yml`). Once the ruleset is active, try that path again with a release candidate tag, as #801 asks for anyway.
+
+   The same applies to `v*`, opentide's release tags, for a workflow that publishes on them. `publish.yml` will not: it runs from **Run workflow** on `development`. `publish-pypi.yml` does, through `release: published`, so the `pypi` environment admits a tag if it has rules at all. This page could not read them ([decision 3](#decisions-for-the-maintainer)).
+5. Name the environment in the registry's publisher configuration and on the publishing job (`environment: crates-io`), in the same change: a publisher with an environment rejects a job without one.
 
 ### 8. Record the result on this page
 
@@ -270,7 +294,7 @@ Expected after the switch: `"repository":"opentidehq/opentide"`. Today: `{"num":
 
 1. On the package's page, **Settings**, **Trusted publishing** (**Trusted Publisher**, **Select your publisher**): **GitHub Actions**.
 2. **Organization or user** `opentidehq`; **Repository** `opentide`; **Workflow filename** the workflow's file name (the name only, with `.yml`); **Environment name** empty, or `npm` if you created it in step 7; **Allowed actions**: `npm publish`. Save.
-3. The same from the command line (npm 11.15.0 or later, two-factor authentication):
+3. Or the same from the command line (npm 11.15.0 or later, two-factor authentication). It works here because the package has no configuration yet: `npm trust github` refuses to add one to a package that already has one.
 
    ```bash
    npm trust github @opentide/lsp-client --repo opentidehq/opentide --file <workflow-file.yml> --allow-publish
@@ -286,7 +310,12 @@ Then record it (step 8).
 UC-5.5 ([#840](https://github.com/opentidehq/opentide/issues/840)) publishes everything from `publish.yml`, which replaces `publish-pypi.yml` and the engine release workflow. Once `publish.yml` is on `development`, and before its first release:
 
 1. **crates.io:** add the publisher `opentidehq` / `opentide` / `publish.yml` to `opentide` (its first publisher) and to the 14 engine crates, as in step 9. After the first release, remove the engine release workflow's publisher from the engine crates, and tick **Require trusted publishing for all new versions** on `opentide`.
-2. **npm:** within two days before that release, register `publish.yml` on `@opentide/opentide` and `opentide`, and on the lsp packages, as in step 9 (`npm trust github @opentide/opentide --repo opentidehq/opentide --file publish.yml --allow-publish`). A package takes up to ten publishers; remove the engine release workflow's from the lsp packages after the release. A new package in the scope (`@opentide/wasm`, `@opentide/<platform>`) needs a first publish by hand before it can have a publisher.
+2. **npm:** within two days before that release:
+   - On `@opentide/opentide` and `opentide`, which have no publisher yet, register `publish.yml` as in step 9, on the website or with `npm trust github @opentide/opentide --repo opentidehq/opentide --file publish.yml --allow-publish`.
+   - On `@opentide/lsp-client` and `@opentide/lsp-worker`, which already have the engine release workflow's publisher, use the website: **Settings**, **Trusted publishing**, **Add trusted publisher**, then the fields of step 9 with `publish.yml`. The CLI refuses a second configuration. Remove the engine release workflow's publisher after the release.
+   - If the page offers no **Add trusted publisher** (npm's single-publisher setup), replace the configuration instead, after the last engine release and before the first release from `publish.yml`. Run `npm trust list <package>` for its ID and `npm trust revoke <package> --id=<id>`, then register `publish.yml`.
+
+   A new package in the scope (`@opentide/wasm`, `@opentide/<platform>`) needs a first publish by hand before it can have a publisher.
 3. **PyPI:** **Manage**, **Publishing**, GitHub: **Owner** `opentidehq`, **Repository name** `opentide`, **Workflow name** `publish.yml`, **Environment name** `pypi`, **Add**. Remove the `publish-pypi.yml` publisher after that release.
 4. **Verify** PyPI's publisher from a release's provenance:
 
@@ -327,19 +356,23 @@ After steps 1 to 6: the owners endpoint lists two logins, and the two `npm view`
 
 1. **Second owners.** Who is the second person on crates.io, on npm (organisation owner) and on PyPI?
 2. **The engine release workflow's file name.** #801 says language-server's `release.yml` is imported, not under which name. This page proposes `engine-release.yml`, so that it cannot be mistaken for opentide's own release (`publish-pypi.yml`, then `publish.yml`). Whatever the name, record it on #801 so that UC-0.3 merges it under that name, and register publishers only once it is on `development` (step 9).
-3. **GitHub environments.** `crates-io` and `npm`, restricted to `development` and the release tags, as `pypi` is for PyPI? They must exist before the engine release workflow (UC-0.3) names them, and the publisher configurations must name them too.
+3. **GitHub environments.** `crates-io` and `npm`, each limited to the branch `development` ([step 7](#7-github-environments-if-you-decide-on-them))? They must exist before the engine release workflow (UC-0.3) names them, and the publisher configurations must name them too. Three choices go with them:
+   - **Required reviewers** on each environment, including `pypi`, whose settings this page could not read.
+   - **A ruleset on `development`** that requires pull requests. Today anyone with write access can push to `development` directly, and a branch rule then admits that push.
+   - **Engine releases from pushed `engine-v*` tags**, or from **Run workflow** on `development` only. Pushed tags need a tag rule, and a tag ruleset before it (step 7.4). **Run workflow** needs neither.
 4. **maturin.** The dry run builds the wheel the way a release does today (cibuildwheel, hatchling, `hatch_build.py`). Is that the acceptable reading of the issue's `maturin build` until UC-5.5?
 5. **Acceptance criterion 2 of #799.** It asks for trusted publishing on crates.io (every crate), npm (both packages) and PyPI. In UC-0.1, only PyPI's can be in place: the workflows that will publish the other names (the engine release workflow, `publish.yml`) do not exist yet, and an npm publisher expires within two days. Either amend the criterion to "every name's publisher is recorded on this page and is registered before the first workflow that publishes it runs", and move the registrations (steps 9 and 10) into #801 and #840 so that #799 closes after steps 1 to 8. Or keep #799 open until UC-5.5. #840 depends on #799, though, so the second choice blocks UC-5.5 on itself.
 6. **The plan's other crate names.** Publish `opentide-schema` and the other new crates only when they have content (crates.io's policy on name reservation), or reserve them now?
+7. **`CHANGELOG.md` as a pull request trigger.** Keep it, so that the release notes pull request rehearses the version it sets, or drop it from the `pull_request` paths (it stays on `push`) to halve the PyPI job's runs ([Dry run](#dry-run))?
 
 ## Sources
 
 Read on 2026-11-07, from each documentation site's published source:
 
-- crates.io: [Trusted Publishing](https://crates.io/docs/trusted-publishing), [usage policies](https://crates.io/policies), the crate settings, new trusted publisher and API token pages, and the workflow file check (`svelte/src/lib/components/WorkflowVerification.svelte`) (`rust-lang/crates.io` at `35c0e87`); [`rust-lang/crates-io-auth-action`](https://github.com/rust-lang/crates-io-auth-action).
-- Cargo: [Publishing on crates.io](https://doc.rust-lang.org/cargo/reference/publishing.html), [`cargo owner`](https://doc.rust-lang.org/cargo/commands/cargo-owner.html) (`rust-lang/cargo` at `c07ac2c`).
+- crates.io: [Trusted Publishing](https://crates.io/docs/trusted-publishing), [usage policies](https://crates.io/policies), the crate settings, new trusted publisher and API token pages, the workflow file check (`svelte/src/lib/components/WorkflowVerification.svelte`), and the owner invitation (`src/controllers/krate/owners.rs`) (`rust-lang/crates.io` at `35c0e87`); [`rust-lang/crates-io-auth-action`](https://github.com/rust-lang/crates-io-auth-action).
+- Cargo: [Publishing on crates.io](https://doc.rust-lang.org/cargo/reference/publishing.html), [`cargo owner`](https://doc.rust-lang.org/cargo/commands/cargo-owner.html) (`rust-lang/cargo` at `c07ac2c`), and what `cargo owner --add` prints (`src/ops/registry/cargo_owner.rs` at `c82e769`).
 - npm (`npm/documentation` at `b5bd802`): [Trusted publishing](https://docs.npmjs.com/trusted-publishers), [Staged publishing](https://docs.npmjs.com/staged-publishing), [Creating an organization](https://docs.npmjs.com/creating-an-organization), [Adding members](https://docs.npmjs.com/adding-members-to-your-organization), [Organization roles](https://docs.npmjs.com/organization-roles-and-permissions), [Managing permissions](https://docs.npmjs.com/managing-organization-permissions), [Requiring 2FA in an organization](https://docs.npmjs.com/requiring-two-factor-authentication-in-your-organization), [About the developers team](https://docs.npmjs.com/about-developers-team), [Team access to packages](https://docs.npmjs.com/managing-team-access-to-organization-packages), [Requiring 2FA to publish](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification), [`npm trust`](https://docs.npmjs.com/cli/v11/commands/npm-trust), [`npm owner`](https://docs.npmjs.com/cli/v11/commands/npm-owner), [`npm access`](https://docs.npmjs.com/cli/v11/commands/npm-access), [`npm publish`](https://docs.npmjs.com/cli/v11/commands/npm-publish).
 - PyPI (`pypi/warehouse` at `a7d67c0`): [Adding a Trusted Publisher to an existing project](https://docs.pypi.org/trusted-publishers/adding-a-publisher/), [Managing project collaborators](https://docs.pypi.org/project-management/managing-collaborators/).
-- GitHub: [Managing environments for deployment](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+- GitHub (`github/docs` at `8cd1075`): [Managing environments for deployment](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments), [Deployments and environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments) (deployment rules match `GITHUB_REF`), [Creating rulesets for a repository](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository), [Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). The state of `development` from the REST API's [branch](https://docs.github.com/en/rest/branches/branches#get-a-branch) and [rules for a branch](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch) endpoints.
 
-The npm CLI's behaviour behind the dry-run job (a dry run checks the registry for the version; a workstation publish with provenance fails) was read from npm 11.21.1's `lib/commands/publish.js` and `libnpmpublish`. The npm organisation's existence was read from the registry's `/-/org/<scope>/user` and `/-/org/<scope>/team` endpoints, compared for `opentide`, the organisation `babel` and the users `behemothsecurity`, `sindresorhus` and `isaacs`.
+The npm CLI's behaviour behind the dry-run job (a dry run checks the registry for the version; a workstation publish with provenance fails) was read from npm 11.21.1's `lib/commands/publish.js` and `libnpmpublish`; `npm trust`'s one configuration per package from its `docs/content/commands/npm-trust.md`, and `npm org ls` signed out (no output, exit 0) by running it. The npm organisation's existence was read from the registry's `/-/org/<scope>/user` and `/-/org/<scope>/team` endpoints, compared for `opentide`, the organisation `babel` and the users `behemothsecurity`, `sindresorhus` and `isaacs`.
