@@ -83,8 +83,14 @@ PAGES = {
 # Datasets the files place under another parent than the CIM manual does:
 # (model, lineage in the file) -> lineage in CIM.
 MOVES = {
-    ("Network_Traffic", "All_Traffic.Allowed_Traffic"): "All_Traffic.Traffic_By_Action.Allowed_Traffic",
-    ("Network_Traffic", "All_Traffic.Blocked_Traffic"): "All_Traffic.Traffic_By_Action.Blocked_Traffic",
+    (
+        "Network_Traffic",
+        "All_Traffic.Allowed_Traffic",
+    ): "All_Traffic.Traffic_By_Action.Allowed_Traffic",
+    (
+        "Network_Traffic",
+        "All_Traffic.Blocked_Traffic",
+    ): "All_Traffic.Traffic_By_Action.Blocked_Traffic",
 }
 # Datasets the files leave out, added with no fields of their own.
 EXTRA_DATASETS = {
@@ -178,7 +184,11 @@ def object_name(model: str, name: str) -> str:
 
 def walk(model: str, objects: list[dict], parent: str, out: dict[str, dict]) -> None:
     for obj in objects:
-        lineage = f"{parent}.{object_name(model, obj['name'])}" if parent else object_name(model, obj["name"])
+        lineage = (
+            f"{parent}.{object_name(model, obj['name'])}"
+            if parent
+            else object_name(model, obj["name"])
+        )
         fields = [f["name"] for f in obj.get("fields", [])]
         values = {
             f["name"]: [str(v) for v in f["expected_values"]]
@@ -192,7 +202,7 @@ def walk(model: str, objects: list[dict], parent: str, out: dict[str, dict]) -> 
 def enrich(fields: list[str], root: bool) -> list[str]:
     extra = []
     if root:
-        extra = list(BASE_FIELDS) + ["tag"]
+        extra = [*list(BASE_FIELDS), "tag"]
         for base in ENRICHED:
             extra += [base + s for s in ENRICHMENT_SUFFIXES]
         extra += DEST_ENRICHMENT
@@ -223,7 +233,7 @@ def load(source: Path) -> list[dict]:
             parts = lineage.split(".")
             for i in range(1, len(parts)):
                 datasets.setdefault(".".join(parts[:i]), {"fields": [], "values": {}})
-        for lineage in sorted(datasets, key=lambda l: (l.split(".")[0], l.count("."), l)):
+        for lineage in sorted(datasets, key=lambda d: (d.split(".")[0], d.count("."), d)):
             data = datasets[lineage]
             name = lineage.split(".")[-1]
             row = {
@@ -310,10 +320,17 @@ def main() -> None:
     text = render(rows, f"splunk/pytest-splunk-addon@{commit}")
     if args.check:
         current = OUT.read_text()
+
         # The commit line changes with every checkout; compare the rows.
-        strip = lambda t: "\n".join(l for l in t.splitlines() if not l.startswith("# splunk/"))
+        def strip(document: str) -> str:
+            return "\n".join(
+                line for line in document.splitlines() if not line.startswith("# splunk/")
+            )
+
         if strip(current) != strip(text):
-            sys.exit(f"{OUT.relative_to(ROOT)} is stale: rerun scripts/engine/sync_cim_datamodels.py")
+            sys.exit(
+                f"{OUT.relative_to(ROOT)} is stale: rerun scripts/engine/sync_cim_datamodels.py"
+            )
         print(f"{OUT.relative_to(ROOT)} is current")
         return
     OUT.write_text(text)

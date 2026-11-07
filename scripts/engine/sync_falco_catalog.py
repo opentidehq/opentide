@@ -85,7 +85,11 @@ PLUGIN_SOURCES: dict[str, list[str]] = {
 }
 
 SOURCES: list[tuple[str, str, str]] = [
-    ("syscall", "libsinsp", "Linux system calls, captured by the Falco kernel driver or eBPF probe."),
+    (
+        "syscall",
+        "libsinsp",
+        "Linux system calls, captured by the Falco kernel driver or eBPF probe.",
+    ),
     ("k8s_audit", "k8saudit", "Kubernetes audit events (k8saudit and k8saudit-eks plugins)."),
     ("aws_cloudtrail", "cloudtrail", "AWS CloudTrail events (cloudtrail plugin)."),
     ("okta", "okta", "Okta System Log events (okta plugin)."),
@@ -108,9 +112,29 @@ RULE_FILES: list[tuple[str, str, str]] = [
 
 STRING_TYPES = {"CHARBUF", "FSPATH", "FSRELPATH", "string", "BYTEBUF", "DYNAMIC"}
 NUMBER_TYPES = {
-    "UINT8", "UINT16", "UINT32", "UINT64", "INT8", "INT16", "INT32", "INT64",
-    "RELTIME", "ABSTIME", "DOUBLE", "PORT", "ERRNO", "PID", "FD", "SYSCALLID",
-    "SIGTYPE", "uint64", "reltime", "abstime", "MODE", "UID", "GID",
+    "UINT8",
+    "UINT16",
+    "UINT32",
+    "UINT64",
+    "INT8",
+    "INT16",
+    "INT32",
+    "INT64",
+    "RELTIME",
+    "ABSTIME",
+    "DOUBLE",
+    "PORT",
+    "ERRNO",
+    "PID",
+    "FD",
+    "SYSCALLID",
+    "SIGTYPE",
+    "uint64",
+    "reltime",
+    "abstime",
+    "MODE",
+    "UID",
+    "GID",
 }
 BOOL_TYPES = {"BOOL", "bool"}
 IP_TYPES = {"IPV4ADDR", "IPV6ADDR", "IPADDR", "IPNET", "IPV4NET", "IPV6NET", "ipaddr", "ipnet"}
@@ -134,10 +158,22 @@ def clean(text: str) -> str:
 
 
 FLAG_NAMES = {
-    "EPF_ARG_REQUIRED", "EPF_ARG_ALLOWED", "EPF_ARG_INDEX", "EPF_ARG_KEY", "EPF_IS_LIST",
-    "EPF_NO_TRANSFORMER", "EPF_NO_RHS", "EPF_FILTER_ONLY", "EPF_PRINT_ONLY", "EPF_DEPRECATED",
-    "EPF_TABLE_ONLY", "EPF_INFO", "EPF_CONVERSATION", "EPF_NO_PTR_STABILITY",
-    "EPF_FORMAT_SUGGESTED", "EPF_NONE",
+    "EPF_ARG_REQUIRED",
+    "EPF_ARG_ALLOWED",
+    "EPF_ARG_INDEX",
+    "EPF_ARG_KEY",
+    "EPF_IS_LIST",
+    "EPF_NO_TRANSFORMER",
+    "EPF_NO_RHS",
+    "EPF_FILTER_ONLY",
+    "EPF_PRINT_ONLY",
+    "EPF_DEPRECATED",
+    "EPF_TABLE_ONLY",
+    "EPF_INFO",
+    "EPF_CONVERSATION",
+    "EPF_NO_PTR_STABILITY",
+    "EPF_FORMAT_SUGGESTED",
+    "EPF_NONE",
 }
 
 
@@ -225,9 +261,13 @@ def enumerated_values(libs: Path) -> dict[str, list[str]]:
     event = (base / "sinsp_filtercheck_event.cpp").read_text(encoding="utf-8")
     dir_block = _block(event, "case TYPE_DIR:", "case TYPE_TYPE")
     return {
-        "fd.type": strings(_block(fdinfo, "sinsp_fdinfo::get_typestring", "default:"), r'return "([^"]+)"'),
+        "fd.type": strings(
+            _block(fdinfo, "sinsp_fdinfo::get_typestring", "default:"), r'return "([^"]+)"'
+        ),
         "fd.l4proto": strings(_block(fd, "get_l4proto();", "default:"), r'm_tstr = "([^"]+)"'),
-        "evt.category": strings(_block(event, "case TYPE_CATEGORY:", "case TYPE_CPU:"), r'm_strstorage = "([^"]+)"'),
+        "evt.category": strings(
+            _block(event, "case TYPE_CATEGORY:", "case TYPE_CPU:"), r'm_strstorage = "([^"]+)"'
+        ),
         "evt.dir": strings(dir_block, r'"([<>])"'),
     }
 
@@ -241,8 +281,10 @@ def libs_fields(libs: Path, deprecated: set[str]) -> list[dict]:
             flags = set(re.findall(r"EPF_[A-Z_]+", entry[1])) & FLAG_NAMES
             name = c_strings(entry[3])
             arg = (
-                "required" if "EPF_ARG_REQUIRED" in flags
-                else "allowed" if "EPF_ARG_ALLOWED" in flags
+                "required"
+                if "EPF_ARG_REQUIRED" in flags
+                else "allowed"
+                if "EPF_ARG_ALLOWED" in flags
                 else "none"
             )
             rows.append(
@@ -275,13 +317,18 @@ def libs_fields(libs: Path, deprecated: set[str]) -> list[dict]:
 def falco_deprecated(falco: Path) -> set[str]:
     """`deprecated_fields[]` of Falco's rule loader (`falco_load_result.cpp`)."""
     text = (falco / FALCO_LOAD_RESULT).read_text(encoding="utf-8")
-    m = re.search(r"deprecated_fields\[\]\s*=\s*\{(.*?)\};", text, re.S)
+    m = re.search(r"deprecated_fields\[\]\s*=\s*\{(.*?)\};", text, re.DOTALL)
     return set(re.findall(r'"([^"]+)"', m.group(1))) if m else set()
 
 
 PLUGIN_TYPES = {
-    "string": "CHARBUF", "uint64": "UINT64", "bool": "BOOL", "reltime": "RELTIME",
-    "abstime": "ABSTIME", "ipaddr": "IPADDR", "ipnet": "IPNET",
+    "string": "CHARBUF",
+    "uint64": "UINT64",
+    "bool": "BOOL",
+    "reltime": "RELTIME",
+    "abstime": "ABSTIME",
+    "ipaddr": "IPADDR",
+    "ipnet": "IPNET",
 }
 
 
@@ -378,7 +425,12 @@ def defaults(rules: Path, plugins: Path) -> tuple[list[dict], list[dict], list[d
             # (stable, then incubating, then sandbox): what a Falco or Sysdig
             # deployment loads by default. Later definitions are recorded as
             # `also` when their body differs.
-            if "macro" in item and "condition" in item and "append" not in item and "override" not in item:
+            if (
+                "macro" in item
+                and "condition" in item
+                and "append" not in item
+                and "override" not in item
+            ):
                 row = {
                     "name": item["macro"],
                     "condition": " ".join(str(item["condition"]).split()),
@@ -389,7 +441,12 @@ def defaults(rules: Path, plugins: Path) -> tuple[list[dict], list[dict], list[d
                 first = macros.setdefault(item["macro"], row)
                 if first is not row and first["condition"] != row["condition"]:
                     first["also"].append(f"{origin}: {row['condition']}")
-            elif "list" in item and "items" in item and "append" not in item and "override" not in item:
+            elif (
+                "list" in item
+                and "items" in item
+                and "append" not in item
+                and "override" not in item
+            ):
                 row = {
                     "name": item["list"],
                     "items": [str(i) for i in item.get("items") or []],
@@ -399,7 +456,12 @@ def defaults(rules: Path, plugins: Path) -> tuple[list[dict], list[dict], list[d
                 first = lists.setdefault(item["list"], row)
                 if first is not row and first["items"] != row["items"]:
                     first["also"].append(f"{origin}: [{', '.join(row['items'])}]")
-            elif "rule" in item and "condition" in item and "append" not in item and "override" not in item:
+            elif (
+                "rule" in item
+                and "condition" in item
+                and "append" not in item
+                and "override" not in item
+            ):
                 rule_rows.append(
                     {
                         "name": item["rule"],
@@ -443,7 +505,10 @@ def write_fields(rows: list[dict], header: str) -> str:
             f"description = {toml_str(desc)}\n"
         )
     for row in rows:
-        b = lambda k: "true" if row[k] else "false"  # noqa: E731
+
+        def b(k: str, row: dict = row) -> str:
+            return "true" if row[k] else "false"
+
         out.append(
             "[[fields]]\n"
             f"name = {toml_str(row['name'])}\n"
@@ -467,8 +532,13 @@ def write_fields(rows: list[dict], header: str) -> str:
     return "\n".join(out)
 
 
-def write_defaults(macros: list[dict], lists: list[dict], rule_rows: list[dict], header: str) -> str:
-    out = [header, "# Falco default rules (falcosecurity/rules, falcosecurity/plugins): Apache-2.0.\n"]
+def write_defaults(
+    macros: list[dict], lists: list[dict], rule_rows: list[dict], header: str
+) -> str:
+    out = [
+        header,
+        "# Falco default rules (falcosecurity/rules, falcosecurity/plugins): Apache-2.0.\n",
+    ]
     for row in macros:
         out.append(
             "[[macros]]\n"

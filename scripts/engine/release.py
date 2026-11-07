@@ -56,10 +56,11 @@ import shutil
 import subprocess
 import sys
 import time
-import tomllib
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKSPACE = ROOT / "Cargo.toml"
@@ -88,7 +89,7 @@ def changelog_section(version: str) -> str | None:
     match = re.search(
         rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## |^\[[^\]]+\]: |\Z)",
         text,
-        re.M | re.S,
+        re.MULTILINE | re.DOTALL,
     )
     return match.group(1).strip() if match else None
 
@@ -110,9 +111,7 @@ def bump(version: str) -> None:
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         sys.exit(f"not a version: {version}")
     text = WORKSPACE.read_text()
-    text = re.sub(
-        r'(\[workspace\.package\]\nversion = )"[^"]+"', rf'\1"{version}"', text, count=1
-    )
+    text = re.sub(r'(\[workspace\.package\]\nversion = )"[^"]+"', rf'\1"{version}"', text, count=1)
     text = re.sub(
         r'(opentide-[a-z]+ = \{ path = "[^"]+", version = )"=[^"]+"', rf'\1"={version}"', text
     )
@@ -248,6 +247,7 @@ def publish() -> None:
                 capture_output=True,
                 text=True,
                 env=env,
+                check=False,
             )
             sys.stdout.write(result.stdout)
             sys.stderr.write(result.stderr)

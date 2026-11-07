@@ -19,7 +19,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import release  # noqa: E402  (the script sits next to this test)
+import release
 
 
 class Sha256SumsTest(unittest.TestCase):
@@ -148,7 +148,9 @@ class UnpublishedTest(unittest.TestCase):
 
     def test_a_release_with_assets_is_published(self) -> None:
         with self.gh(0, self.release_json(["SHA256SUMS", "highlights-v1.0.0.zip"])) as run:
-            self.assertEqual(release.published_assets("v1.0.0", "o/r"), ["SHA256SUMS", "highlights-v1.0.0.zip"])
+            self.assertEqual(
+                release.published_assets("v1.0.0", "o/r"), ["SHA256SUMS", "highlights-v1.0.0.zip"]
+            )
         args = run.call_args.args[0]
         self.assertEqual(args[:4], ["gh", "release", "view", "v1.0.0"])
         self.assertIn("o/r", args)
@@ -169,9 +171,12 @@ class UnpublishedTest(unittest.TestCase):
 
     def test_the_cli_refuses_a_released_tag(self) -> None:
         env = {"GITHUB_REPOSITORY": "o/r"}
-        with mock.patch.dict(release.os.environ, env), self.gh(0, self.release_json(["SHA256SUMS"])):
-            with self.assertRaises(SystemExit) as refused:
-                release.main(["unpublished", "v1.0.0"])
+        with (
+            mock.patch.dict(release.os.environ, env),
+            self.gh(0, self.release_json(["SHA256SUMS"])),
+            self.assertRaises(SystemExit) as refused,
+        ):
+            release.main(["unpublished", "v1.0.0"])
         self.assertIn("publish_only", str(refused.exception.code))
         with mock.patch.dict(release.os.environ, env), self.gh(1, stderr="release not found"):
             release.main(["unpublished", "v1.0.0"])
@@ -263,7 +268,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # It runs for publish_only too, when the release job is skipped.
         self.assertIn("inputs.publish_only && needs.release.result == 'skipped'", verify_assets)
         for job in ["crates", "npm"]:
-            needs = re.search(r"^    needs: \[(.*)\]$", jobs[job], re.M)
+            needs = re.search(r"^    needs: \[(.*)\]$", jobs[job], re.MULTILINE)
             self.assertIsNotNone(needs, job)
             self.assertIn("verify-assets", needs.group(1).split(", "), job)
         # crates runs under always() for publish_only: it must ask for the check itself.
@@ -279,7 +284,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         verify = jobs["verify"]
         push = verify.index('if [ "${GITHUB_EVENT_NAME}" = "push" ]; then')
         dispatch = verify.index("else", push)
-        self.assertIn('python3 scripts/engine/release.py unpublished "${tag}"', verify[push:dispatch])
+        self.assertIn(
+            'python3 scripts/engine/release.py unpublished "${tag}"', verify[push:dispatch]
+        )
         # And the release job checks again before it replaces anything: a
         # single job can be re-run on its own.
         attach = jobs["release"]
@@ -291,7 +298,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_verify_assets_may_read_the_attestations_and_write_nothing(self) -> None:
         verify_assets = workflow_jobs()["verify-assets"]
-        permissions = re.search(r"^    permissions:\n((?:      .*\n)+)", verify_assets + "\n", re.M)
+        permissions = re.search(
+            r"^    permissions:\n((?:      .*\n)+)", verify_assets + "\n", re.MULTILINE
+        )
         assert permissions is not None, "verify-assets states its permissions"
         self.assertEqual(
             sorted(permissions.group(1).split()),
@@ -304,7 +313,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_every_attestation_check_names_the_release_workflow_and_its_ref(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        readme = (WORKFLOW.parents[2] / "crates" / "opentide-lsp" / "README.md").read_text(encoding="utf-8")
+        readme = (WORKFLOW.parents[2] / "crates" / "opentide-lsp" / "README.md").read_text(
+            encoding="utf-8"
+        )
         for source in [text, readme]:
             checks = re.findall(r"gh attestation verify (?:[^\n]*\\\n)*[^\n]*", source)
             self.assertTrue(checks)
@@ -326,7 +337,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
             ["bash", "-c", script], capture_output=True, text=True, env=env, check=True
         )
         identity = re.compile(done.stdout)
-        readme = (WORKFLOW.parents[2] / "crates" / "opentide-lsp" / "README.md").read_text(encoding="utf-8")
+        readme = (WORKFLOW.parents[2] / "crates" / "opentide-lsp" / "README.md").read_text(
+            encoding="utf-8"
+        )
         found = re.search(r"--cert-identity-regex '([^']+)'", readme)
         assert found is not None, "README.md documents the identity"
         documented = re.compile(found.group(1).replace(r"vX\.Y\.Z", r"v1\.2\.3"))

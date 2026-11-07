@@ -78,21 +78,75 @@ BRANCH_CAST_GLOBS = [
 # "Unknown data type named [date]" (scripts/engine/oracles/elasticsearch/esql_catalog.py).
 CASTS_WITHOUT_JSON = {
     "9.0": [
-        "bool", "boolean", "cartesian_point", "cartesian_shape", "date_nanos",
-        "date_period", "datetime", "double", "geo_point", "geo_shape", "int", "integer",
-        "ip", "keyword", "long", "string", "time_duration", "unsigned_long", "version",
+        "bool",
+        "boolean",
+        "cartesian_point",
+        "cartesian_shape",
+        "date_nanos",
+        "date_period",
+        "datetime",
+        "double",
+        "geo_point",
+        "geo_shape",
+        "int",
+        "integer",
+        "ip",
+        "keyword",
+        "long",
+        "string",
+        "time_duration",
+        "unsigned_long",
+        "version",
     ],
     "9.1": [
-        "aggregate_metric_double", "bool", "boolean", "cartesian_point", "cartesian_shape",
-        "date", "date_nanos", "date_period", "datetime", "double", "geo_point", "geo_shape",
-        "int", "integer", "ip", "keyword", "long", "string", "time_duration",
-        "unsigned_long", "version",
+        "aggregate_metric_double",
+        "bool",
+        "boolean",
+        "cartesian_point",
+        "cartesian_shape",
+        "date",
+        "date_nanos",
+        "date_period",
+        "datetime",
+        "double",
+        "geo_point",
+        "geo_shape",
+        "int",
+        "integer",
+        "ip",
+        "keyword",
+        "long",
+        "string",
+        "time_duration",
+        "unsigned_long",
+        "version",
     ],
     "9.2": [
-        "aggregate_metric_double", "bool", "boolean", "cartesian_point", "cartesian_shape",
-        "date", "date_nanos", "date_period", "datetime", "dense_vector", "double",
-        "geo_point", "geo_shape", "geohash", "geohex", "geotile", "int", "integer", "ip",
-        "keyword", "long", "string", "time_duration", "unsigned_long", "version",
+        "aggregate_metric_double",
+        "bool",
+        "boolean",
+        "cartesian_point",
+        "cartesian_shape",
+        "date",
+        "date_nanos",
+        "date_period",
+        "datetime",
+        "dense_vector",
+        "double",
+        "geo_point",
+        "geo_shape",
+        "geohash",
+        "geohex",
+        "geotile",
+        "int",
+        "integer",
+        "ip",
+        "keyword",
+        "long",
+        "string",
+        "time_duration",
+        "unsigned_long",
+        "version",
     ],
 }
 
@@ -107,15 +161,32 @@ def since(version: str) -> list[str]:
 # each branch's x-pack/plugin/esql/src/main/antlr lexer (a `DEV_` token is
 # snapshot-only) plus the runtime gates noted.
 COMMAND_VERSIONS = {
-    **{name: BRANCHES for name in [
-        "from", "row", "show", "where", "eval", "stats", "keep", "drop", "rename",
-        "sort", "limit", "dissect", "grok", "enrich", "mv_expand", "lookup join",
-    ]},
+    **dict.fromkeys(
+        [
+            "from",
+            "row",
+            "show",
+            "where",
+            "eval",
+            "stats",
+            "keep",
+            "drop",
+            "rename",
+            "sort",
+            "limit",
+            "dissect",
+            "grok",
+            "enrich",
+            "mv_expand",
+            "lookup join",
+        ],
+        BRANCHES,
+    ),
     # 8.19 and 9.1 have ungated tokens; 9.0 has DEV_CHANGE_POINT and no
     # COMPLETION or SAMPLE token.
-    "change_point": ["8.19"] + since("9.1"),
-    "completion": ["8.19"] + since("9.1"),
-    "sample": ["8.19"] + since("9.1"),
+    "change_point": ["8.19", *since("9.1")],
+    "completion": ["8.19", *since("9.1")],
+    "sample": ["8.19", *since("9.1")],
     "fork": since("9.1"),
     # TS: DEV_TIME_SERIES and a snapshot check in LogicalPlanBuilder on 9.1.
     "ts": since("9.2"),
@@ -151,80 +222,209 @@ COMMAND_VERSIONS = {
 # pages are the elastic.co URLs; layout files are named a little differently.
 # Summaries are this catalog's own words.
 COMMANDS = {
-    "from.md": ("from", "source", "commands/from",
-        "Reads rows from indices, data streams, or aliases. `METADATA` adds metadata fields such as `_id`."),
-    "ts.md": ("ts", "source", "commands/ts",
-        "Reads time series indices and enables the time series aggregation functions."),
-    "row.md": ("row", "source", "commands/row",
-        "Produces a single row from literal values."),
-    "show.md": ("show", "source", "commands/show",
-        "Returns information about the deployment (`SHOW INFO`)."),
-    "promql.md": ("promql", "source", "commands/promql",
-        "Runs a PromQL expression over time series indices."),
-    "set.md": ("set", "directive", "directives/set",
-        "Sets a query setting before the query: `SET name = value;`."),
-    "change_point.md": ("change_point", "processing", "commands/change-point",
-        "Finds spikes, dips, and change points in a numeric column."),
-    "completion.md": ("completion", "processing", "commands/completion",
-        "Sends a prompt to an inference endpoint and stores the reply in a column."),
-    "dedup.md": ("dedup", "processing", "commands/dedup",
-        "Removes duplicate rows, keeping one row per distinct combination of values."),
-    "dense_vector.md": ("dense_vector", "processing", "commands/dense-vector",
-        "Computes vector embeddings for text columns through an inference endpoint."),
-    "dissect.md": ("dissect", "processing", "commands/dissect",
-        "Extracts columns from a string with a delimiter pattern."),
-    "drop.md": ("drop", "processing", "commands/drop",
-        "Removes columns."),
-    "enrich.md": ("enrich", "processing", "commands/enrich",
-        "Adds columns from an enrich policy, matched on a field."),
-    "eval.md": ("eval", "processing", "commands/eval",
-        "Adds or replaces columns computed from expressions."),
-    "fork.md": ("fork", "processing", "commands/fork",
-        "Runs several processing branches over the same rows and combines their output, tagged by `_fork`."),
-    "fuse.md": ("fuse", "processing", "commands/fuse",
-        "Merges rows from several result sets and scores them again."),
-    "grok.md": ("grok", "processing", "commands/grok",
-        "Extracts columns from a string with a grok pattern."),
-    "highlight.md": ("highlight", "processing", "commands/highlight",
-        "Adds snippets of the text that matched a full-text query, with the matches tagged."),
-    "inlinestats-by.md": ("inline stats", "processing", "commands/inlinestats-by",
-        "Computes aggregates per group and appends them to every input row; the rows are kept."),
-    "ip_location.md": ("ip_location", "processing", "commands/ip-location",
-        "Adds geolocation columns for an IP address."),
-    "keep.md": ("keep", "processing", "commands/keep",
-        "Keeps only the named columns, in that order."),
-    "limit.md": ("limit", "processing", "commands/limit",
-        "Caps the number of rows returned."),
-    "lookup-join.md": ("lookup join", "processing", "commands/lookup-join",
-        "Adds columns from a lookup-mode index for rows where the join condition matches."),
-    "metrics-info.md": ("metrics_info", "processing", "commands/metrics-info",
-        "Lists the metrics in the time series data streams the query reads."),
-    "mmr.md": ("mmr", "processing", "commands/mmr",
-        "Keeps a diverse subset of rows by maximal marginal relevance."),
-    "mv_expand.md": ("mv_expand", "processing", "commands/mv_expand",
-        "Turns a multivalued column into one row per value."),
-    "registered_domain.md": ("registered_domain", "processing", "commands/registered-domain",
-        "Splits a domain name into registered domain, subdomain, and suffix columns."),
-    "rename.md": ("rename", "processing", "commands/rename",
-        "Renames columns."),
-    "rerank.md": ("rerank", "processing", "commands/rerank",
-        "Scores rows again with an inference model against a query text."),
-    "sample.md": ("sample", "processing", "commands/sample",
-        "Keeps a random fraction of the rows."),
-    "sort.md": ("sort", "processing", "commands/sort",
-        "Orders rows by one or more expressions."),
-    "stats-by.md": ("stats", "processing", "commands/stats-by",
-        "Aggregates rows, optionally per group (`BY`); the output has one row per group."),
-    "ts-info.md": ("ts_info", "processing", "commands/ts-info",
-        "Lists the individual time series in the data streams the query reads."),
-    "ts_collapse.md": ("ts_collapse", "processing", "commands/ts_collapse",
-        "Collapses the per-step rows of PROMQL into one row per time series."),
-    "uri_parts.md": ("uri_parts", "processing", "commands/uri-parts",
-        "Splits a URI into scheme, host, path, query, and other columns."),
-    "user_agent.md": ("user_agent", "processing", "commands/user-agent",
-        "Parses a user-agent string into browser, operating system, and device columns."),
-    "where.md": ("where", "processing", "commands/where",
-        "Keeps the rows where a boolean expression is true."),
+    "from.md": (
+        "from",
+        "source",
+        "commands/from",
+        (
+            "Reads rows from indices, data streams, or aliases. `METADATA` adds metadata "
+            "fields such as `_id`."
+        ),
+    ),
+    "ts.md": (
+        "ts",
+        "source",
+        "commands/ts",
+        "Reads time series indices and enables the time series aggregation functions.",
+    ),
+    "row.md": ("row", "source", "commands/row", "Produces a single row from literal values."),
+    "show.md": (
+        "show",
+        "source",
+        "commands/show",
+        "Returns information about the deployment (`SHOW INFO`).",
+    ),
+    "promql.md": (
+        "promql",
+        "source",
+        "commands/promql",
+        "Runs a PromQL expression over time series indices.",
+    ),
+    "set.md": (
+        "set",
+        "directive",
+        "directives/set",
+        "Sets a query setting before the query: `SET name = value;`.",
+    ),
+    "change_point.md": (
+        "change_point",
+        "processing",
+        "commands/change-point",
+        "Finds spikes, dips, and change points in a numeric column.",
+    ),
+    "completion.md": (
+        "completion",
+        "processing",
+        "commands/completion",
+        "Sends a prompt to an inference endpoint and stores the reply in a column.",
+    ),
+    "dedup.md": (
+        "dedup",
+        "processing",
+        "commands/dedup",
+        "Removes duplicate rows, keeping one row per distinct combination of values.",
+    ),
+    "dense_vector.md": (
+        "dense_vector",
+        "processing",
+        "commands/dense-vector",
+        "Computes vector embeddings for text columns through an inference endpoint.",
+    ),
+    "dissect.md": (
+        "dissect",
+        "processing",
+        "commands/dissect",
+        "Extracts columns from a string with a delimiter pattern.",
+    ),
+    "drop.md": ("drop", "processing", "commands/drop", "Removes columns."),
+    "enrich.md": (
+        "enrich",
+        "processing",
+        "commands/enrich",
+        "Adds columns from an enrich policy, matched on a field.",
+    ),
+    "eval.md": (
+        "eval",
+        "processing",
+        "commands/eval",
+        "Adds or replaces columns computed from expressions.",
+    ),
+    "fork.md": (
+        "fork",
+        "processing",
+        "commands/fork",
+        (
+            "Runs several processing branches over the same rows and combines their output, "
+            "tagged by `_fork`."
+        ),
+    ),
+    "fuse.md": (
+        "fuse",
+        "processing",
+        "commands/fuse",
+        "Merges rows from several result sets and scores them again.",
+    ),
+    "grok.md": (
+        "grok",
+        "processing",
+        "commands/grok",
+        "Extracts columns from a string with a grok pattern.",
+    ),
+    "highlight.md": (
+        "highlight",
+        "processing",
+        "commands/highlight",
+        "Adds snippets of the text that matched a full-text query, with the matches tagged.",
+    ),
+    "inlinestats-by.md": (
+        "inline stats",
+        "processing",
+        "commands/inlinestats-by",
+        "Computes aggregates per group and appends them to every input row; the rows are kept.",
+    ),
+    "ip_location.md": (
+        "ip_location",
+        "processing",
+        "commands/ip-location",
+        "Adds geolocation columns for an IP address.",
+    ),
+    "keep.md": (
+        "keep",
+        "processing",
+        "commands/keep",
+        "Keeps only the named columns, in that order.",
+    ),
+    "limit.md": ("limit", "processing", "commands/limit", "Caps the number of rows returned."),
+    "lookup-join.md": (
+        "lookup join",
+        "processing",
+        "commands/lookup-join",
+        "Adds columns from a lookup-mode index for rows where the join condition matches.",
+    ),
+    "metrics-info.md": (
+        "metrics_info",
+        "processing",
+        "commands/metrics-info",
+        "Lists the metrics in the time series data streams the query reads.",
+    ),
+    "mmr.md": (
+        "mmr",
+        "processing",
+        "commands/mmr",
+        "Keeps a diverse subset of rows by maximal marginal relevance.",
+    ),
+    "mv_expand.md": (
+        "mv_expand",
+        "processing",
+        "commands/mv_expand",
+        "Turns a multivalued column into one row per value.",
+    ),
+    "registered_domain.md": (
+        "registered_domain",
+        "processing",
+        "commands/registered-domain",
+        "Splits a domain name into registered domain, subdomain, and suffix columns.",
+    ),
+    "rename.md": ("rename", "processing", "commands/rename", "Renames columns."),
+    "rerank.md": (
+        "rerank",
+        "processing",
+        "commands/rerank",
+        "Scores rows again with an inference model against a query text.",
+    ),
+    "sample.md": (
+        "sample",
+        "processing",
+        "commands/sample",
+        "Keeps a random fraction of the rows.",
+    ),
+    "sort.md": ("sort", "processing", "commands/sort", "Orders rows by one or more expressions."),
+    "stats-by.md": (
+        "stats",
+        "processing",
+        "commands/stats-by",
+        "Aggregates rows, optionally per group (`BY`); the output has one row per group.",
+    ),
+    "ts-info.md": (
+        "ts_info",
+        "processing",
+        "commands/ts-info",
+        "Lists the individual time series in the data streams the query reads.",
+    ),
+    "ts_collapse.md": (
+        "ts_collapse",
+        "processing",
+        "commands/ts_collapse",
+        "Collapses the per-step rows of PROMQL into one row per time series.",
+    ),
+    "uri_parts.md": (
+        "uri_parts",
+        "processing",
+        "commands/uri-parts",
+        "Splits a URI into scheme, host, path, query, and other columns.",
+    ),
+    "user_agent.md": (
+        "user_agent",
+        "processing",
+        "commands/user-agent",
+        "Parses a user-agent string into browser, operating system, and device columns.",
+    ),
+    "where.md": (
+        "where",
+        "processing",
+        "commands/where",
+        "Keeps the rows where a boolean expression is true.",
+    ),
 }
 
 # Commands the grammar accepts that have no docs page: snapshot builds only
@@ -274,7 +474,10 @@ UNDOCUMENTED = [
         "name": "inlinestats",
         "kind": "processing",
         "syntax": "INLINESTATS aggregates [BY groups]",
-        "docs": "Earlier spelling of INLINE STATS, accepted while INLINE STATS was in technical preview.",
+        "docs": (
+            "Earlier spelling of INLINE STATS, accepted while INLINE STATS was in "
+            "technical preview."
+        ),
         "stack": "preview 9.2",
         "snapshot_only": False,
         "alias_of": "inline stats",
@@ -297,7 +500,7 @@ ALIASES = {
     "to_version": ["to_ver"],
 }
 
-APPLIES = re.compile(r"```(?:yaml )?\{applies_to\}\n(.*?)```", re.S)
+APPLIES = re.compile(r"```(?:yaml )?\{applies_to\}\n(.*?)```", re.DOTALL)
 
 
 def toml_str(value: str) -> str:
@@ -316,7 +519,7 @@ def stack_lifecycle(text: str) -> str:
 
 
 def syntax_block(text: str) -> str:
-    match = re.search(r"## Syntax.*?```esql\n(.*?)```", text, re.S)
+    match = re.search(r"## Syntax.*?```esql\n(.*?)```", text, re.DOTALL)
     return match.group(1).strip() if match else ""
 
 
@@ -357,7 +560,8 @@ LIVE_FUNCTION_RELEASES = {
 def released_on(per_branch: dict[str, dict[str, dict]], name: str) -> list[str]:
     live = LIVE_FUNCTION_RELEASES.get(name, [])
     return [
-        b for b in BRANCHES
+        b
+        for b in BRANCHES
         if b in live or (name in per_branch[b] and not per_branch[b][name].get("snapshot_only"))
     ]
 
@@ -373,7 +577,7 @@ def branch_casts(branches: Path) -> dict[str, dict[str, str]]:
         if not casts:
             if branch not in CASTS_WITHOUT_JSON:
                 raise SystemExit(f"no inline_cast.json for {branch} and no fallback list")
-            casts = {name: "" for name in CASTS_WITHOUT_JSON[branch]}
+            casts = dict.fromkeys(CASTS_WITHOUT_JSON[branch], "")
         found[branch] = casts
     return found
 
@@ -417,7 +621,9 @@ def merge_parameters(signatures: list[dict]) -> list[dict]:
 
 
 def longest_signature(signatures: list[dict]) -> dict:
-    return max(signatures, key=lambda s: len(s["params"]), default={"params": [], "variadic": False})
+    return max(
+        signatures, key=lambda s: len(s["params"]), default={"params": [], "variadic": False}
+    )
 
 
 def write_functions(es: Path, branches: Path, out: Path, commit: str) -> int:
@@ -454,11 +660,12 @@ def write_functions(es: Path, branches: Path, out: Path, commit: str) -> int:
         widest = longest_signature(signatures)
         returns = sorted({s.get("returnType", "") for s in signatures if s.get("returnType")})
         kind = "scalar" if data["type"] == "eval" else data["type"]
+        signature = signature_label(name, widest["params"], widest.get("variadic", False))
         lines += [
             "[[functions]]",
             f"name = {toml_str(name)}",
             f"kind = {toml_str(kind)}",
-            f"signature = {toml_str(signature_label(name, widest['params'], widest.get('variadic', False)))}",
+            f"signature = {toml_str(signature)}",
             f"docs = {toml_str(FUNCTION_SUMMARIES[name])}",
             f"returns = {json.dumps(returns)}",
             f"aliases = {json.dumps(ALIASES.get(name, []))}",
@@ -500,7 +707,9 @@ FUNCTION_SUMMARIES = {
     "avg": "Mean of a numeric expression.",
     "avg_over_time": "Per time series, the mean of a numeric field over the time window.",
     "bit_length": "Length of a string in bits.",
-    "bucket": "Groups dates or numbers into fixed-size buckets, given a size or a target count and range.",
+    "bucket": (
+        "Groups dates or numbers into fixed-size buckets, given a size or a target count and range."
+    ),
     "byte_length": "Length of a string in bytes (UTF-8).",
     "case": "Returns the value paired with the first true condition, or the trailing default.",
     "categorize": "Groups text values into categories of similar messages.",
@@ -519,7 +728,9 @@ FUNCTION_SUMMARIES = {
     "cosh": "Hyperbolic cosine.",
     "count": "Number of non-null values; `COUNT(*)` or `COUNT()` counts rows.",
     "count_distinct": "Approximate number of distinct values, with optional precision.",
-    "count_distinct_over_time": "Per time series, approximate distinct values of a field over the time window.",
+    "count_distinct_over_time": (
+        "Per time series, approximate distinct values of a field over the time window."
+    ),
     "count_over_time": "Per time series, number of values of a field over the time window.",
     "date_diff": "Difference between two dates in a given unit (end minus start).",
     "date_extract": "One component of a date, such as the year or the hour of day.",
@@ -593,7 +804,9 @@ FUNCTION_SUMMARIES = {
     "mv_like": "True when any value matches a LIKE wildcard pattern.",
     "mv_max": "Largest value of a multivalued expression.",
     "mv_median": "Median of the values of a multivalued number.",
-    "mv_median_absolute_deviation": "Median absolute deviation of the values of a multivalued number.",
+    "mv_median_absolute_deviation": (
+        "Median absolute deviation of the values of a multivalued number."
+    ),
     "mv_min": "Smallest value of a multivalued expression.",
     "mv_percentile": "Percentile of the values of a multivalued number.",
     "mv_pseries_weighted_sum": "Sum of the values weighted by a p-series (value i divided by i^p).",
@@ -603,7 +816,10 @@ FUNCTION_SUMMARIES = {
     "mv_sum": "Sum of the values of a multivalued number.",
     "mv_union": "Distinct values from either multivalued expression.",
     "mv_zip": "Pairs the values of two multivalued strings, joining each pair with a separator.",
-    "network_direction": "Traffic direction (inbound, outbound, internal, external) from two IPs and the internal networks.",
+    "network_direction": (
+        "Traffic direction (inbound, outbound, internal, external) "
+        "from two IPs and the internal networks."
+    ),
     "now": "Current date and time.",
     "percentile": "Value below which a given percentage of values fall, approximate.",
     "percentile_over_time": "Per time series, a percentile of a field over the time window.",
@@ -617,7 +833,10 @@ FUNCTION_SUMMARIES = {
     "range_max": "Upper (exclusive) bound of a range.",
     "range_min": "Lower (inclusive) bound of a range.",
     "range_within": "True when the first value or range lies inside the second range.",
-    "rate": "Per time series, the per-second rate of a counter over the time window, allowing for resets.",
+    "rate": (
+        "Per time series, the per-second rate of a counter over the time window, "
+        "allowing for resets."
+    ),
     "repeat": "A string repeated N times.",
     "replace": "Replaces every match of a regular expression in a string.",
     "reverse": "A string with its characters in reverse order.",
@@ -655,7 +874,9 @@ FUNCTION_SUMMARIES = {
     "st_isempty": "True when a geometry has no points.",
     "st_npoints": "Number of points in a geometry.",
     "st_simplify": "Geometry simplified with the Douglas-Peucker algorithm at a tolerance.",
-    "st_simplifypreservetopology": "Geometry simplified at a tolerance without breaking its topology.",
+    "st_simplifypreservetopology": (
+        "Geometry simplified at a tolerance without breaking its topology."
+    ),
     "st_symdifference": "Parts of two geometries that are not shared.",
     "st_union": "Geometry covering both inputs.",
     "st_within": "True when the first geometry lies within the second.",
@@ -667,7 +888,9 @@ FUNCTION_SUMMARIES = {
     "st_ymin": "Smallest y coordinate (latitude for geo) of a geometry.",
     "starts_with": "True when a string starts with a prefix.",
     "std_dev": "Population standard deviation of a numeric expression.",
-    "stddev_over_time": "Per time series, the population standard deviation of a field over the time window.",
+    "stddev_over_time": (
+        "Per time series, the population standard deviation of a field over the time window."
+    ),
     "substring": "Part of a string from a 1-based start position, with an optional length.",
     "sum": "Sum of a numeric expression.",
     "sum_over_time": "Per time series, the sum of a field over the time window.",
@@ -726,7 +949,9 @@ FUNCTION_SUMMARIES = {
     "v_magnitude": "Magnitude (length) of a dense vector.",
     "values": "All distinct values in the group, as a multivalued field in no fixed order.",
     "variance": "Population variance of a numeric expression.",
-    "variance_over_time": "Per time series, the population variance of a field over the time window.",
+    "variance_over_time": (
+        "Per time series, the population variance of a field over the time window."
+    ),
     "weighted_avg": "Weighted mean of a numeric expression.",
     "without": "Groups time series by every dimension except the named ones.",
     "year": "Year of a date, in the query time zone.",
@@ -746,7 +971,7 @@ OPERATOR_SUMMARIES = {
     "less_than": "Less than.",
     "less_than_or_equal": "Less than or equal.",
     "like": "Wildcard match: `*` is any characters, `?` is one character.",
-    "match_operator": "Full-text match of a field against a query string: `field:\"text\"`.",
+    "match_operator": 'Full-text match of a field against a query string: `field:"text"`.',
     "mod": "Remainder of a division.",
     "mul": "Multiplication.",
     "neg": "Negation.",
@@ -786,7 +1011,8 @@ def write_commands(es: Path, out: Path, commit: str) -> int:
     lines = [
         "# ES|QL commands, generated by scripts/sync_esql_catalog.py. Do not edit.",
         f"# Source: elastic/elasticsearch@{commit} {COMMAND_LAYOUTS}/*.md",
-        "# Rows without a citation are snapshot-only or retired spellings the grammar still parses.",
+        "# Rows without a citation are snapshot-only or retired spellings the grammar still "
+        "parses.",
         "# `versions`: release branches whose grammar accepts the command on a release build.",
         "",
         f"branches = {toml_list(BRANCHES)}",
@@ -862,7 +1088,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--elasticsearch", type=Path, required=True)
     parser.add_argument(
-        "--branches", type=Path, required=True,
+        "--branches",
+        type=Path,
+        required=True,
         help="directory with one docs checkout per release branch (8.19/, 9.0/, ...)",
     )
     parser.add_argument(

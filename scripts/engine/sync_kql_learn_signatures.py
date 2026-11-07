@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import argparse
 import re
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 LEARN = "https://learn.microsoft.com/kusto/query"
@@ -31,7 +32,7 @@ def strip_front_matter(text: str) -> str:
 
 def strip_docfx(text: str) -> str:
     text = re.sub(r":::no-loc text=\"([^\"]*)\":::", r"\1", text)
-    text = re.sub(r":::.*?:::", "", text, flags=re.S)
+    text = re.sub(r":::.*?:::", "", text, flags=re.DOTALL)
     return text
 
 
@@ -42,7 +43,7 @@ def md_inline_to_text(text: str) -> str:
     text = text.replace(r"\*", "\u0001")
     text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
     text = text.replace("`", "")
-    text = re.sub(r"<br\s*/?>", " ", text, flags=re.I)
+    text = re.sub(r"<br\s*/?>", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", " ", text)
     text = text.replace("*", "")
     text = text.replace("\u0001", "*")
@@ -64,11 +65,11 @@ def first_sentence(text: str) -> str:
 
 
 def section_until(body: str, heading: str) -> str:
-    match = re.search(rf"^## {re.escape(heading)}\s*$", body, re.M)
+    match = re.search(rf"^## {re.escape(heading)}\s*$", body, re.MULTILINE)
     if not match:
         return ""
     rest = body[match.end() :]
-    end = re.search(r"^## ", rest, re.M)
+    end = re.search(r"^## ", rest, re.MULTILINE)
     return rest[: end.start()] if end else rest
 
 
@@ -98,7 +99,7 @@ def clean_syntax_lines(section: str) -> str:
     lines: list[str] = []
     for line in section.splitlines():
         stripped = line.strip()
-        if stripped.startswith("[!INCLUDE") or stripped.startswith(":::"):
+        if stripped.startswith(("[!INCLUDE", ":::")):
             continue
         if stripped.startswith(">"):
             continue
@@ -111,7 +112,7 @@ def syntax_plain(body: str, name: str | None = None) -> str:
     if not section:
         section = body
     section = prefer_sentinel(section)
-    parts = re.split(r"(?=^### )", section, flags=re.M)
+    parts = re.split(r"(?=^### )", section, flags=re.MULTILINE)
     chosen = None
     if name:
         for part in parts:
@@ -154,13 +155,7 @@ def intro_sentence(body: str) -> str:
             continue
         if not seen_title:
             continue
-        if (
-            not stripped
-            or stripped.startswith(">")
-            or stripped.startswith("[!")
-            or stripped.startswith(":::")
-            or stripped.startswith("---")
-        ):
+        if not stripped or stripped.startswith((">", "[!", ":::", "---")):
             if lines:
                 break
             continue
@@ -259,10 +254,8 @@ def operator_signature(name: str, plain: str) -> str | None:
 
 def split_row(line: str) -> list[str]:
     line = line.strip()
-    if line.startswith("|"):
-        line = line[1:]
-    if line.endswith("|"):
-        line = line[:-1]
+    line = line.removeprefix("|")
+    line = line.removesuffix("|")
     return [cell.replace(r"\|", "|").strip() for cell in re.split(r"(?<!\\)\|", line)]
 
 
@@ -274,7 +267,7 @@ def parse_parameters(body: str) -> list[dict[str, object]]:
     rows: list[list[str]] = []
     for line in section.splitlines():
         stripped = line.strip()
-        if stripped.startswith("###") or stripped.startswith(">"):
+        if stripped.startswith(("###", ">")):
             if rows:
                 break
             continue
@@ -309,7 +302,7 @@ def parse_parameters(body: str) -> list[dict[str, object]]:
         raw_name = md_inline_to_text(cells[name_i])
         raw_name = raw_name.replace(" or ", " | ")
         raw_name = re.sub(r"\s+", " ", raw_name).strip(" *")
-        if not raw_name or raw_name.lower() in {"name"}:
+        if not raw_name or raw_name.lower() == "name":
             continue
         # Piped input is not an argument the author types after the operator.
         if raw_name in {"T", "LeftTable", "Edges", "G"}:
@@ -333,7 +326,7 @@ def load_articles(docs: Path) -> list[tuple[Path, str, str]]:
     for path in sorted(docs.glob("*.md")):
         text = path.read_text(errors="replace")
         body = strip_front_matter(text)
-        titled = bool(re.search(r"^# .+\(\)\s*$", body, re.M))
+        titled = bool(re.search(r"^# .+\(\)\s*$", body, re.MULTILINE))
         if not (
             path.name.endswith("-function.md")
             or path.name.endswith("-operator.md")
@@ -358,7 +351,7 @@ class ArticleIndex:
                 primaries.add(path.name[: -len("-plugin.md")])
             for line in body.splitlines():
                 stripped = line.strip()
-                if "`" not in stripped or "(" not in stripped or stripped.startswith("```") or stripped.startswith("|"):
+                if "`" not in stripped or "(" not in stripped or stripped.startswith(("```", "|")):
                     continue
                 primaries.update(CALL_RE.findall(md_inline_to_text(stripped)))
             # Operators are not always written as calls.
@@ -396,7 +389,9 @@ class ArticleIndex:
                 return path, body, plain, "primary"
             return None
         aliases = self.by_alias.get(key, [])
-        chosen = pick_filename(aliases, name) or (aliases[0] if len(aliases) == 1 else pick_citation(aliases, citation))
+        chosen = pick_filename(aliases, name) or (
+            aliases[0] if len(aliases) == 1 else pick_citation(aliases, citation)
+        )
         if chosen:
             path, body, plain = chosen
             return path, body, plain, "alias"
@@ -423,9 +418,7 @@ def article_slug(path: Path) -> str:
     return stem
 
 
-def pick_filename(
-    rows: list[tuple[Path, str, str]], name: str
-) -> tuple[Path, str, str] | None:
+def pick_filename(rows: list[tuple[Path, str, str]], name: str) -> tuple[Path, str, str] | None:
     kebab = name.replace("_", "-").lower()
     matches = [row for row in rows if article_slug(row[0]) == kebab]
     if len(matches) == 1:
@@ -438,10 +431,13 @@ def plain_for(body: str, name: str) -> str:
     call = extract_call(name, plain)
     if call and not re.fullmatch(rf"(?i){re.escape(name)}\(\)", call):
         return plain
-    if re.search(rf"(?i)(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])", plain) and "(" not in plain[plain.lower().find(name.lower()) :]:
-        # Pipe syntax (`T | where Predicate`) with no call. Keep it.
-        if "|" in plain or not call:
-            return plain
+    # Pipe syntax (`T | where Predicate`) with no call. Keep it.
+    if (
+        re.search(rf"(?i)(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])", plain)
+        and "(" not in plain[plain.lower().find(name.lower()) :]
+        and ("|" in plain or not call)
+    ):
+        return plain
     variant = None
     if name.startswith("percentile_"):
         variant = "percentiles_" + name[len("percentile_") :]
@@ -468,7 +464,7 @@ def parameters_for(body: str, name: str) -> list[dict[str, object]]:
         idx = lower.find(f"`{variant}")
     if idx >= 0:
         window = body[idx : idx + 5000]
-        marker = re.search(r"^### Parameters\s*$", window, re.M)
+        marker = re.search(r"^### Parameters\s*$", window, re.MULTILINE)
         if marker:
             params = parse_parameters("## Parameters\n" + window[marker.end() :])
             if params:
@@ -520,7 +516,8 @@ def toml_escape(value: str) -> str:
 def write_functions(path: Path, rows: list[dict], skipped: list[str]) -> None:
     chunks = [
         "# KQL scalar and aggregate functions.",
-        "# Signatures and parameter docs are taken from each function's own Microsoft Learn article",
+        "# Signatures and parameter docs are taken from each function's own Microsoft Learn "
+        "article",
         "# (MicrosoftDocs/dataexplorer-docs data-explorer/kusto/query). Do not regenerate by",
         "# splitting those signatures on '|'.",
         "",
@@ -544,7 +541,7 @@ def write_functions(path: Path, rows: list[dict], skipped: list[str]) -> None:
             chunks.append(f'name = "{toml_escape(param["name"])}"')
             if param.get("docs"):
                 chunks.append(f'docs = "{toml_escape(param["docs"])}"')
-            chunks.append(f'required = {"true" if param.get("required") else "false"}')
+            chunks.append(f"required = {'true' if param.get('required') else 'false'}")
             chunks.append("")
     if skipped:
         chunks.append("# Skipped (Learn article not resolved):")
@@ -557,8 +554,14 @@ def write_functions(path: Path, rows: list[dict], skipped: list[str]) -> None:
 def write_operators(path: Path, rows: list[dict]) -> None:
     chunks = [
         "# KQL tabular operators.",
-        "# Signatures are the Learn syntax, wrapped as name(...) so signature help has an argument list.",
-        "# Blurbs are the article's opening sentence (pipe characters inside signatures are not split).",
+        (
+            "# Signatures are the Learn syntax, wrapped as name(...) so signature help has "
+            "an argument list."
+        ),
+        (
+            "# Blurbs are the article's opening sentence (pipe characters inside signatures "
+            "are not split)."
+        ),
         "",
     ]
     for row in rows:
@@ -581,7 +584,7 @@ def write_operators(path: Path, rows: list[dict]) -> None:
             chunks.append(f'name = "{toml_escape(param["name"])}"')
             if param.get("docs"):
                 chunks.append(f'docs = "{toml_escape(param["docs"])}"')
-            chunks.append(f'required = {"true" if param.get("required") else "false"}')
+            chunks.append(f"required = {'true' if param.get('required') else 'false'}")
             chunks.append("")
     path.write_text("\n".join(chunks).rstrip() + "\n")
 
@@ -609,7 +612,7 @@ def write_plugins(path: Path, rows: list[dict]) -> None:
             chunks.append(f'name = "{toml_escape(param["name"])}"')
             if param.get("docs"):
                 chunks.append(f'docs = "{toml_escape(param["docs"])}"')
-            chunks.append(f'required = {"true" if param.get("required") else "false"}')
+            chunks.append(f"required = {'true' if param.get('required') else 'false'}")
             chunks.append("")
     path.write_text("\n".join(chunks).rstrip() + "\n")
 
@@ -634,10 +637,19 @@ def apply_article(
         signature = alias_signature(name, plain, body, path)
     else:
         plain = plain_for(body, name)
-        signature = operator_signature(name, plain) if (operator or path.name.endswith(("-operator.md", "-plugin.md"))) else None
+        signature = (
+            operator_signature(name, plain)
+            if (operator or path.name.endswith(("-operator.md", "-plugin.md")))
+            else None
+        )
         if signature is None:
             signature = signature_for(name, plain, "primary")
-    if not signature or name.lower() not in signature.lower() or "(" not in signature or ")" not in signature:
+    if (
+        not signature
+        or name.lower() not in signature.lower()
+        or "(" not in signature
+        or ")" not in signature
+    ):
         return None, f"unusable syntax in {path.name}"
     params = parameters_for(body, name)
     docs = intro_sentence(body)
@@ -678,7 +690,7 @@ def main() -> None:
             continue  # signature follows the replacement it names
         applied, reason = apply_article(row["name"], row.get("citation"), index, operator=False)
         if not applied:
-            skipped.append(f'{row["name"]}: {reason}')
+            skipped.append(f"{row['name']}: {reason}")
             continue
         row["signature"] = applied["signature"]
         if applied["docs"]:
@@ -709,11 +721,11 @@ def main() -> None:
     for row in operators:
         applied, reason = apply_article(row["name"], row.get("citation"), index, operator=True)
         if not applied:
-            op_skipped.append(f'{row["name"]}: {reason}')
+            op_skipped.append(f"{row['name']}: {reason}")
             continue
         row["signature"] = applied["signature"]
         if row.get("alias_of"):
-            row["docs"] = row.get("docs") or f'Alias of {row["alias_of"]}.'
+            row["docs"] = row.get("docs") or f"Alias of {row['alias_of']}."
         elif applied["docs"]:
             row["docs"] = applied["docs"]
         row["citation"] = applied["citation"]
@@ -739,7 +751,7 @@ def main() -> None:
     for row in plugins:
         applied, reason = apply_article(row["name"], row.get("citation"), index, operator=False)
         if not applied:
-            plugin_skipped.append(f'{row["name"]}: {reason}')
+            plugin_skipped.append(f"{row['name']}: {reason}")
             continue
         row["signature"] = applied["signature"]
         if applied["docs"]:
@@ -792,7 +804,12 @@ def main() -> None:
     print("--- suspicious functions ---")
     for row in functions:
         sig = row.get("signature") or ""
-        if row["name"].lower() not in sig.lower() or "(" not in sig or ")" not in sig or sig.endswith("()"):
+        if (
+            row["name"].lower() not in sig.lower()
+            or "(" not in sig
+            or ")" not in sig
+            or sig.endswith("()")
+        ):
             print(f"  {row['name']}: {sig}")
     print("--- suspicious operators ---")
     for row in operators:
@@ -808,7 +825,20 @@ def main() -> None:
             print(f"  ok {row['name']}: {sig[:140]}")
     print("--- operators ---")
     for row in operators:
-        if row["name"] in {"top", "sort", "lookup", "parse", "invoke", "join", "where", "project-by-names", "render", "make-series", "filter", "mvexpand"}:
+        if row["name"] in {
+            "top",
+            "sort",
+            "lookup",
+            "parse",
+            "invoke",
+            "join",
+            "where",
+            "project-by-names",
+            "render",
+            "make-series",
+            "filter",
+            "mvexpand",
+        }:
             print(f"{row['name']}: {row.get('signature')} || {row.get('docs')}")
 
     if args.write:

@@ -45,10 +45,11 @@ import subprocess
 import sys
 import tempfile
 import time
-import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
+
+import tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 EXCEPTIONS = ROOT / "crates/testdata/oracles/exceptions.toml"
@@ -154,15 +155,26 @@ def corpus(language: str) -> list[Query]:
         for p in files
     ]
     if language in ELASTIC_LANGUAGES:
-        return queries + verdict_tables(language) + elastic_embedded(language) + detection_rules(language)
+        return (
+            queries
+            + verdict_tables(language)
+            + elastic_embedded(language)
+            + detection_rules(language)
+        )
     return queries + embedded(language)
 
 
 def verdict_tables(language: str) -> list[Query]:
     """Queries from the upstream test suites kept as verdict tables."""
     tables = {
-        "lucene": ("crates/testdata/conformance/external/lucene-queryparser/cases.tsv", unescape_tsv),
-        "kuery": ("crates/testdata/conformance/external/kuery-opensearch-dashboards/cases.tsv", json.loads),
+        "lucene": (
+            "crates/testdata/conformance/external/lucene-queryparser/cases.tsv",
+            unescape_tsv,
+        ),
+        "kuery": (
+            "crates/testdata/conformance/external/kuery-opensearch-dashboards/cases.tsv",
+            json.loads,
+        ),
     }
     if language not in tables:
         return []
@@ -177,7 +189,9 @@ def verdict_tables(language: str) -> list[Query]:
 
 
 def unescape_tsv(text: str) -> str:
-    return re.sub(r"\\([tnr\\])", lambda m: {"t": "\t", "n": "\n", "r": "\r", "\\": "\\"}[m.group(1)], text)
+    return re.sub(
+        r"\\([tnr\\])", lambda m: {"t": "\t", "n": "\n", "r": "\r", "\\": "\\"}[m.group(1)], text
+    )
 
 
 def elastic_language(rule_type: object, language: object) -> str | None:
@@ -204,8 +218,12 @@ def elastic_embedded(language: str) -> list[Query]:
             continue
         block = (doc.get("configurations") or {}).get("elastic")
         if isinstance(block, dict):
-            if elastic_language(block.get("type"), block.get("language")) == language and isinstance(block.get("query"), str):
-                queries.append(Query(f"{rel(path)}#configurations.elastic.query", block["query"], False))
+            if elastic_language(
+                block.get("type"), block.get("language")
+            ) == language and isinstance(block.get("query"), str):
+                queries.append(
+                    Query(f"{rel(path)}#configurations.elastic.query", block["query"], False)
+                )
             threat = block.get("threat")
             if (
                 block.get("type") == "threat_match"
@@ -213,7 +231,11 @@ def elastic_embedded(language: str) -> list[Query]:
                 and elastic_language("threat_match", threat.get("language")) == language
                 and isinstance(threat.get("query"), str)
             ):
-                queries.append(Query(f"{rel(path)}#configurations.elastic.threat.query", threat["query"], False))
+                queries.append(
+                    Query(
+                        f"{rel(path)}#configurations.elastic.threat.query", threat["query"], False
+                    )
+                )
         searches = ((doc.get("response") or {}).get("procedure") or {}).get("searches") or []
         for n, search in enumerate(searches if isinstance(searches, list) else []):
             if (
@@ -222,7 +244,11 @@ def elastic_embedded(language: str) -> list[Query]:
                 and search.get("language") == language
                 and isinstance(search.get("query"), str)
             ):
-                queries.append(Query(f"{rel(path)}#response.procedure.searches.{n}.query", search["query"], False))
+                queries.append(
+                    Query(
+                        f"{rel(path)}#response.procedure.searches.{n}.query", search["query"], False
+                    )
+                )
     return queries
 
 
@@ -235,7 +261,9 @@ def detection_rules(language: str) -> list[Query]:
         return []
     base = pathlib.Path(root)
     queries = []
-    files = sorted(p for d in ("rules", "rules_building_block", "hunting") for p in (base / d).rglob("*.toml"))
+    files = sorted(
+        p for d in ("rules", "rules_building_block", "hunting") for p in (base / d).rglob("*.toml")
+    )
     for path in files:
         try:
             doc = tomllib.loads(path.read_text())
@@ -243,7 +271,9 @@ def detection_rules(language: str) -> list[Query]:
             continue
         ident = f"detection-rules:{path.relative_to(base).as_posix()}"
         rule = doc.get("rule") or {}
-        if elastic_language(rule.get("type"), rule.get("language")) == language and isinstance(rule.get("query"), str):
+        if elastic_language(rule.get("type"), rule.get("language")) == language and isinstance(
+            rule.get("query"), str
+        ):
             queries.append(Query(f"{ident}#query", rule["query"].rstrip(), False))
         if (
             rule.get("type") == "threat_match"
@@ -320,10 +350,16 @@ def carbon_black_corpus() -> list[Query]:
         if isinstance(config, dict) and isinstance(config.get("query"), str):
             # Deploy joins the lines with spaces.
             text = " ".join(config["query"].splitlines())
-            queries.append(Query(f"{rel(path)}#configurations.carbon_black_cloud.query", text, False))
+            queries.append(
+                Query(f"{rel(path)}#configurations.carbon_black_cloud.query", text, False)
+            )
         searches = ((doc.get("response") or {}).get("procedure") or {}).get("searches") or []
         for n, search in enumerate(searches if isinstance(searches, list) else []):
-            if isinstance(search, dict) and search.get("system") == "carbon_black_cloud" and isinstance(search.get("query"), str):
+            if (
+                isinstance(search, dict)
+                and search.get("system") == "carbon_black_cloud"
+                and isinstance(search.get("query"), str)
+            ):
                 ident = f"{rel(path)}#response.procedure.searches.{n}.query"
                 queries.append(Query(ident, " ".join(search["query"].splitlines()), False))
     return queries
@@ -388,6 +424,7 @@ def ours(language: str, queries: list[Query], scratch: pathlib.Path) -> dict[str
             [str(exe), "analyze", *args, str(path)],
             capture_output=True,
             text=True,
+            check=False,
         )
         if run.returncode != 0:
             sys.exit(f"opentide-lsp analyze failed on {query.id}: {run.stderr.strip()}")
@@ -481,15 +518,24 @@ def kql_schema() -> dict:
         if t.get("columns")
     }
     standard = [
-        ["TenantId", "string"], ["TimeGenerated", "datetime"], ["Type", "string"],
-        ["SourceSystem", "string"], ["_ResourceId", "string"], ["_SubscriptionId", "string"],
-        ["_BilledSize", "real"], ["_IsBillable", "string"], ["_ItemId", "string"],
+        ["TenantId", "string"],
+        ["TimeGenerated", "datetime"],
+        ["Type", "string"],
+        ["SourceSystem", "string"],
+        ["_ResourceId", "string"],
+        ["_SubscriptionId", "string"],
+        ["_BilledSize", "real"],
+        ["_IsBillable", "string"],
+        ["_ItemId", "string"],
         ["_TimeReceived", "datetime"],
     ]
     for columns in tables.values():
         have = {c[0] for c in columns}
         columns.extend(c for c in standard if c[0] not in have)
-    for path in ("data/catalogs/kql/sentinel/columns.toml", "data/catalogs/kql/defender/columns.toml"):
+    for path in (
+        "data/catalogs/kql/sentinel/columns.toml",
+        "data/catalogs/kql/defender/columns.toml",
+    ):
         for column in load_toml(path)["columns"]:
             listed = tables.setdefault(column["table"], [])
             if column["name"] not in {c[0] for c in listed}:
@@ -539,7 +585,10 @@ def kql_columns(
             d for d in diagnostics[query.id] if d["code"] in SEMANTIC and d["severity"] == "error"
         ]
         if query.id.startswith(COLUMN_FIXTURES) and not reported:
-            errors.append(f"{query.id}: ours reports no kql_unknown_column or kql_type_mismatch on this fixture")
+            errors.append(
+                f"{query.id}: ours reports no kql_unknown_column or kql_type_mismatch "
+                f"on this fixture"
+            )
         theirs = semantic.get(query.id, [])
         for d in reported:
             checked += 1
@@ -558,7 +607,10 @@ def kql_columns(
                 print(f"known  {query.id} [{ident}]: {side}")
             else:
                 errors.append(f"{query.id}: {side}")
-    print(f"Kusto.Language semantics: {checked} column and type errors from ours, {confirmed} confirmed, {listed} listed")
+    print(
+        f"Kusto.Language semantics: {checked} column and type errors from ours, "
+        f"{confirmed} confirmed, {listed} listed"
+    )
 
 
 def kql_names(flagged: dict[str, str]) -> dict[str, str]:
@@ -569,7 +621,9 @@ def kql_names(flagged: dict[str, str]) -> dict[str, str]:
         if not s["name"].startswith("__")  # Kusto.Language internals
     }
     catalog = {f["name"] for f in load_toml("data/catalogs/kql/core/functions.toml")["functions"]}
-    plugins = {p["name"] for p in load_toml("data/catalogs/kql/core/evaluate-plugins.toml")["plugins"]}
+    plugins = {
+        p["name"] for p in load_toml("data/catalogs/kql/core/evaluate-plugins.toml")["plugins"]
+    }
     ours_known = catalog | plugins
     disagree = {}
     for name in sorted(ours_known - reference.keys()):
@@ -617,7 +671,9 @@ class Splunk:
                 try:
                     return err.code, json.loads(raw or b"{}")
                 except json.JSONDecodeError:
-                    return err.code, {"messages": [{"type": "ERROR", "text": raw.decode(errors="replace")}]}
+                    return err.code, {
+                        "messages": [{"type": "ERROR", "text": raw.decode(errors="replace")}]
+                    }
             except (urllib.error.URLError, OSError):
                 # splunkd restarts once while the container finishes provisioning.
                 if attempt == 2:
@@ -642,11 +698,17 @@ class Splunk:
 
     def define_macro(self, name: str, args: list[str], definition: str) -> None:
         stanza = f"{name}({len(args)})" if args else name
-        data = {"definition": definition, "args": ",".join(args)} if args else {"definition": definition}
+        data = (
+            {"definition": definition, "args": ",".join(args)}
+            if args
+            else {"definition": definition}
+        )
         base = "/servicesNS/nobody/search/configs/conf-macros"
         status, body = self.request("POST", base, {"name": stanza, **data})
         if status == 409:
-            status, body = self.request("POST", f"{base}/{urllib.parse.quote(stanza, safe='')}", data)
+            status, body = self.request(
+                "POST", f"{base}/{urllib.parse.quote(stanza, safe='')}", data
+            )
         if status >= 300:
             sys.exit(f"could not define macro {stanza}: {status} {body}")
 
@@ -688,7 +750,9 @@ class Splunk:
         }
         base = "/servicesNS/nobody/search/datamodel/model"
         self.request("DELETE", f"{base}/{model}")
-        status, body = self.request("POST", base, {"name": model, "description": json.dumps(description)})
+        status, body = self.request(
+            "POST", base, {"name": model, "description": json.dumps(description)}
+        )
         if status >= 300:
             sys.exit(f"could not define data model {model}: {status} {body}")
 
@@ -754,7 +818,9 @@ def spl_reference(splunk: Splunk, queries: list[Query]) -> dict[str, list[str]]:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         verdicts = dict(pool.map(verdict, queries))
-    missing = sorted({m for errors in verdicts.values() for e in errors for m in MISSING_MACRO.findall(e)})
+    missing = sorted(
+        {m for errors in verdicts.values() for e in errors for m in MISSING_MACRO.findall(e)}
+    )
     if missing:
         sys.exit(f"define these macros in {rel(MACROS)}: {', '.join(missing)}")
     return verdicts
@@ -822,7 +888,13 @@ def elastic_runner(language: str) -> list[str]:
         gen = ELASTIC_CACHE / "eql"
         if not (gen / "EqlBaseParser.js").exists():
             subprocess.run(
-                [str(modules / ".bin/antlr-ng"), "-Dlanguage=JavaScript", "-o", str(gen), str(fetch("EqlBase.g4"))],
+                [
+                    str(modules / ".bin/antlr-ng"),
+                    "-Dlanguage=JavaScript",
+                    "-o",
+                    str(gen),
+                    str(fetch("EqlBase.g4")),
+                ],
                 check=True,
                 stdout=sys.stderr,
             )
@@ -831,15 +903,25 @@ def elastic_runner(language: str) -> list[str]:
     parser = ELASTIC_CACHE / "kuery.cjs"
     if not parser.exists():
         subprocess.run(
-            [str(modules / ".bin/peggy"), "--format", "commonjs", "--allowed-start-rules", "start",
-             "-o", str(parser), str(fetch("grammar.peggy"))],
+            [
+                str(modules / ".bin/peggy"),
+                "--format",
+                "commonjs",
+                "--allowed-start-rules",
+                "start",
+                "-o",
+                str(parser),
+                str(fetch("grammar.peggy")),
+            ],
             check=True,
             stdout=sys.stderr,
         )
     return ["node", str(ELASTIC / "kuery.cjs"), str(parser)]
 
 
-def elastic_reference(language: str, queries: list[Query], scratch: pathlib.Path) -> dict[str, list[str]]:
+def elastic_reference(
+    language: str, queries: list[Query], scratch: pathlib.Path
+) -> dict[str, list[str]]:
     folder = scratch / f"reference-{language}"
     folder.mkdir()
     files = {}
@@ -847,12 +929,14 @@ def elastic_reference(language: str, queries: list[Query], scratch: pathlib.Path
         name = f"q{n:06}.{language}"
         (folder / name).write_text(query.text)
         files[name] = query.id
-    run = subprocess.run([*elastic_runner(language), str(folder)], capture_output=True, text=True)
+    run = subprocess.run(
+        [*elastic_runner(language), str(folder)], capture_output=True, text=True, check=False
+    )
     if run.returncode != 0:
         sys.exit(f"{REFERENCE[language]} runner failed: {run.stderr.strip()[-2000:]}")
     verdicts = {}
     for line in run.stdout.splitlines():
-        name, verdict, message = (line.split("\t", 2) + ["", ""])[:3]
+        name, verdict, message = ([*line.split("\t", 2), "", ""])[:3]
         if name in files:
             verdicts[files[name]] = [message or "error"] if verdict == "ERR" else []
     return verdicts
@@ -880,18 +964,26 @@ def ledger(language: str, ids: set[str], errors: list[str]) -> Ledger:
             errors.append(f"[[{language}]] exception {ident!r} needs an id and a reason")
             continue
         if ("paths" in entry) == ("names" in entry):
-            errors.append(f"[[{language}]] exception {ident}: give exactly one of `paths` or `names`")
+            errors.append(
+                f"[[{language}]] exception {ident}: give exactly one of `paths` or `names`"
+            )
             continue
         for path in entry.get("paths", []):
             if path not in ids:
-                errors.append(f"[[{language}]] exception {ident}: {path} is not in the {language} corpus")
+                errors.append(
+                    f"[[{language}]] exception {ident}: {path} is not in the {language} corpus"
+                )
             elif path in paths:
-                errors.append(f"[[{language}]] exception {ident}: {path} is already listed by {paths[path]}")
+                errors.append(
+                    f"[[{language}]] exception {ident}: {path} is already listed by {paths[path]}"
+                )
             else:
                 paths[path] = ident
         for name in entry.get("names", []):
             if name in names:
-                errors.append(f"[[{language}]] exception {ident}: {name} is already listed by {names[name]}")
+                errors.append(
+                    f"[[{language}]] exception {ident}: {name} is already listed by {names[name]}"
+                )
             else:
                 names[name] = ident
     return Ledger(paths, names)
@@ -916,17 +1008,24 @@ def compare(
             errors.append(f"{query.id}: {oracle} returned no verdict")
             continue
         if query.broken and not theirs:
-            errors.append(f"{query.id}: {oracle} accepts this .broken. fixture; move its fault out of comments and strings")
+            errors.append(
+                f"{query.id}: {oracle} accepts this .broken. fixture; move its fault "
+                f"out of comments and strings"
+            )
         if query.probe:
             # A probe is a valid detection form: no error from ours at all, not
             # only no syntax error (unknown table, unknown function, ...).
             for d in diagnostics[query.id]:
                 if d["severity"] == "error" and d["code"] not in REJECT[language]:
-                    errors.append(f"{query.id}: ours reports {d['code']} on a probe: {d['message']}")
+                    errors.append(
+                        f"{query.id}: ours reports {d['code']} on a probe: {d['message']}"
+                    )
         ident = known.paths.get(query.id)
         if bool(ours_errors) == bool(theirs):
             if ident:
-                errors.append(f"{query.id}: ours and {oracle} now agree; remove it from exception {ident}")
+                errors.append(
+                    f"{query.id}: ours and {oracle} now agree; remove it from exception {ident}"
+                )
             continue
         differ += 1
         side = (
@@ -951,7 +1050,9 @@ def compare(
             unlisted_names.append(name)
     for name, ident in sorted(known.names.items()):
         if name not in names:
-            errors.append(f"name {name}: ours and {oracle} now agree; remove it from exception {ident}")
+            errors.append(
+                f"name {name}: ours and {oracle} now agree; remove it from exception {ident}"
+            )
 
     print(
         f"{oracle}: {len(queries)} {language} queries, {differ} verdicts differ; "
@@ -966,16 +1067,22 @@ def compare(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("language", choices=sorted(REFERENCE))
     parser.add_argument("--splunk-wait", type=int, default=600, help="seconds to wait for splunkd")
     args = parser.parse_args()
     language = args.language
 
     if language == "carbon_black" and not all(
-        os.environ.get(k) for k in ("OPENTIDE_CBC_URL", "OPENTIDE_CBC_ORG_KEY", "OPENTIDE_CBC_TOKEN")
+        os.environ.get(k)
+        for k in ("OPENTIDE_CBC_URL", "OPENTIDE_CBC_ORG_KEY", "OPENTIDE_CBC_TOKEN")
     ):
-        message = "Carbon Black Cloud oracle: OPENTIDE_CBC_URL, OPENTIDE_CBC_ORG_KEY and OPENTIDE_CBC_TOKEN are not all set"
+        message = (
+            "Carbon Black Cloud oracle: OPENTIDE_CBC_URL, OPENTIDE_CBC_ORG_KEY "
+            "and OPENTIDE_CBC_TOKEN are not all set"
+        )
         if os.environ.get("OPENTIDE_ORACLE_REQUIRED") == "1":
             print(f"error: {message}", file=sys.stderr)
             return 1

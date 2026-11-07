@@ -41,7 +41,9 @@ SUMMARIES = {
     "startsWith": "True when the source string starts with the substring.",
     "string": "The string form of a value.",
     "stringContains": "True when the source string contains the substring.",
-    "substring": "Characters from `start_pos` up to `end_pos`; negative offsets count from the end.",
+    "substring": (
+        "Characters from `start_pos` up to `end_pos`; negative offsets count from the end."
+    ),
     "subtract": "Difference of two numbers. Same as binary `-`.",
 }
 
@@ -52,9 +54,18 @@ PARAM_SUMMARIES = {
     ("between", "source"): "Text to search in.",
     ("between", "left"): "Marker that precedes the wanted text; it is not part of the result.",
     ("between", "right"): "Marker that follows the wanted text; it is not part of the result.",
-    ("between", "greedy_matching"): "`true` extends the match to the last `right`; `false` (the default) stops at the first.",
+    (
+        "between",
+        "greedy_matching",
+    ): "`true` extends the match to the last `right`; `false` (the default) stops at the first.",
     ("cidrMatch", "ip_address"): "An `ip`-typed field; a string literal is rejected.",
-    ("cidrMatch", "cidr_block"): "A CIDR range written as a string constant, for example `\"10.0.0.0/8\"`; list as many as needed.",
+    (
+        "cidrMatch",
+        "cidr_block",
+    ): (
+        'A CIDR range written as a string constant, for example `"10.0.0.0/8"`; list as '
+        "many as needed."
+    ),
     ("concat", "value"): "Any value, converted to text; list as many as needed.",
     ("divide", "dividend"): "The number being divided.",
     ("divide", "divisor"): "The number to divide by; must not be zero.",
@@ -68,15 +79,24 @@ PARAM_SUMMARIES = {
     ("modulo", "divisor"): "The number to divide by; the remainder is returned.",
     ("multiply", "factor"): "A number; `multiply` takes exactly two.",
     ("number", "string"): "Text that holds an integer or decimal number.",
-    ("number", "base_num"): "Integer radix to read the text in; 16 for a `0x` prefix, otherwise 10.",
+    (
+        "number",
+        "base_num",
+    ): "Integer radix to read the text in; 16 for a `0x` prefix, otherwise 10.",
     ("startsWith", "source"): "Text to test.",
     ("startsWith", "substring"): "Prefix to look for at the start of `source`.",
     ("string", "value"): "Any value to turn into text.",
     ("stringContains", "source"): "Text to search in.",
     ("stringContains", "substring"): "Text to look for anywhere in `source`.",
     ("substring", "source"): "Text to take a slice of.",
-    ("substring", "start_pos"): "Integer offset (from 0) of the first character kept; negative counts back from the end.",
-    ("substring", "end_pos"): "Integer offset where the slice stops, exclusive; the rest of the text when omitted.",
+    (
+        "substring",
+        "start_pos",
+    ): "Integer offset (from 0) of the first character kept; negative counts back from the end.",
+    (
+        "substring",
+        "end_pos",
+    ): "Integer offset where the slice stops, exclusive; the rest of the text when omitted.",
     ("subtract", "minuend"): "The number to subtract from.",
     ("subtract", "subtrahend"): "The number taken away; required, despite the docs.",
 }
@@ -88,18 +108,31 @@ PIPE_SUMMARIES = {
 
 # (min, max) argument counts from EqlFunctionRegistry; None is unbounded.
 ARITY = {
-    "add": (2, 2), "between": (3, 4), "cidrMatch": (2, None), "concat": (0, None),
-    "divide": (2, 2), "endsWith": (2, 2), "indexOf": (2, 3), "length": (1, 1),
-    "modulo": (2, 2), "multiply": (2, 2), "number": (1, 2), "startsWith": (2, 2),
-    "string": (1, 1), "stringContains": (2, 2), "substring": (2, 3), "subtract": (2, 2),
+    "add": (2, 2),
+    "between": (3, 4),
+    "cidrMatch": (2, None),
+    "concat": (0, None),
+    "divide": (2, 2),
+    "endsWith": (2, 2),
+    "indexOf": (2, 3),
+    "length": (1, 1),
+    "modulo": (2, 2),
+    "multiply": (2, 2),
+    "number": (1, 2),
+    "startsWith": (2, 2),
+    "string": (1, 1),
+    "stringContains": (2, 2),
+    "substring": (2, 3),
+    "subtract": (2, 2),
 }
 
 # Parameters the docs mark wrongly; the registry is the authority.
 REQUIRED_OVERRIDES = {("subtract", "subtrahend"): True}
 
-SECTION = re.compile(r"^## `([^`]+)` \[([^\]]+)\]\s*$", re.M)
+SECTION = re.compile(r"^## `([^`]+)` \[([^\]]+)\]\s*$", re.MULTILINE)
 PARAM = re.compile(
-    r"^[ \t]*`<([^>]+)>`\s*\n[ \t]*:\s+\((Required|Optional)(?:,\s*([^)]*))?\)\s*(.*)$", re.M
+    r"^[ \t]*`<([^>]+)>`\s*\n[ \t]*:\s+\((Required|Optional)(?:,\s*([^)]*))?\)\s*(.*)$",
+    re.MULTILINE,
 )
 
 
@@ -117,7 +150,7 @@ def sections(text: str) -> list[tuple[str, str, str]]:
 
 
 def syntax_line(body: str) -> str:
-    match = re.search(r"\*\*Syntax\*\*\s*```txt\n(.*?)```", body, re.S)
+    match = re.search(r"\*\*Syntax\*\*\s*```txt\n(.*?)```", body, re.DOTALL)
     return match.group(1).strip().strip("`") if match else ""
 
 
@@ -143,7 +176,10 @@ def write_functions(es: Path, out: Path, commit: str) -> int:
         lines += [
             "[[functions]]",
             f"name = {toml_str(name)}",
-            f"signature = {toml_str(syntax_line(body).replace('<factor, <factor>', '<factor>, <factor>'))}",
+            (
+                f"signature = "
+                f"{toml_str(syntax_line(body).replace('<factor, <factor>', '<factor>, <factor>'))}"
+            ),
             f"docs = {toml_str(SUMMARIES[name])}",
             f"returns = {json.dumps(returns(body))}",
             f"case_insensitive = {str(case_insensitive).lower()}",
@@ -156,7 +192,11 @@ def write_functions(es: Path, out: Path, commit: str) -> int:
             "",
         ]
         for param in PARAM.finditer(body):
-            types = [t.strip() for t in re.split(r",|\bor\b", (param.group(3) or "").replace("`", "")) if t.strip()]
+            types = [
+                t.strip()
+                for t in re.split(r",|\bor\b", (param.group(3) or "").replace("`", ""))
+                if t.strip()
+            ]
             required = REQUIRED_OVERRIDES.get((name, param.group(1)), param.group(2) == "Required")
             lines += [
                 "[[functions.parameters]]",
@@ -176,7 +216,10 @@ def write_pipes(es: Path, out: Path, commit: str) -> int:
     lines = [
         "# EQL pipes, generated by scripts/sync_eql_catalog.py. Do not edit.",
         f"# Source: elastic/elasticsearch@{commit} {DOCS}/eql-pipe-ref.md",
-        "# Elasticsearch supports only these pipes; Endgame pipes such as unique or count are rejected.",
+        (
+            "# Elasticsearch supports only these pipes; Endgame pipes such as unique or "
+            "count are rejected."
+        ),
         "",
     ]
     count = 0

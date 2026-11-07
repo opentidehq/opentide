@@ -31,11 +31,12 @@ import argparse
 import os
 import re
 import sys
-import tomllib
 from pathlib import Path
 
+import tomllib
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import run  # noqa: E402  (sibling module)
+import run
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -117,13 +118,15 @@ COMMANDS: dict[str, list[str]] = {
 
 
 def server_line(url: str) -> str:
-    status, body = run.request(url)
+    _status, body = run.request(url)
     number = body["version"]["number"]
     return ".".join(number.split(".")[:2])
 
 
 def ask(url: str, query: str, mapped: set[str]) -> tuple[int, dict]:
-    return run.request(f"{url}/_query", "POST", {"query": run.rewrite_sources(query, run.ECS_ALIAS)})
+    return run.request(
+        f"{url}/_query", "POST", {"query": run.rewrite_sources(query, run.ECS_ALIAS)}
+    )
 
 
 def error_text(body: dict) -> str:
@@ -156,8 +159,11 @@ def parse_error_at_or_before(status: int, body: dict, offset: int) -> bool:
     if not isinstance(error, dict) or error.get("type") != "parsing_exception":
         return False
     reason = error.get("reason", "")
-    m = re.match(r"line (\d+):(\d+): (.*)", reason, re.S)
-    syntax = r"mismatched input|extraneous input|no viable alternative|token recognition error|missing |.*snapshot"
+    m = re.match(r"line (\d+):(\d+): (.*)", reason, re.DOTALL)
+    syntax = (
+        r"mismatched input|extraneous input|no viable alternative|token "
+        r"recognition error|missing |.*snapshot"
+    )
     if not m or not re.match(syntax, m.group(3)):
         return False
     return int(m.group(1)) == 1 and int(m.group(2)) <= offset + 1
@@ -180,7 +186,9 @@ def lexer_refused(status: int, body: dict) -> bool:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--url", default=os.environ.get("ES_URL", "http://127.0.0.1:9200"))
     parser.add_argument("--all", action="store_true", help="print agreeing rows too")
     args = parser.parse_args()
@@ -195,21 +203,41 @@ def main() -> int:
             query = function_query(f, name)
             status, body = ask(url, query, mapped)
             text = error_text(body) if status != 200 else "OK"
-            absent = re.search(rf"Unknown function \[{re.escape(name)}\]", text, re.I) is not None
+            absent = (
+                re.search(rf"Unknown function \[{re.escape(name)}\]", text, re.IGNORECASE)
+                is not None
+            )
             # A name the lexer takes as a keyword (8.19's FIRST) cannot be called.
-            absent = absent or parse_error_at_or_before(status, body, query.index(name.upper() + "("))
-            rows.append(("function", name, line in f.get("versions", []), not absent, f"{query} => {text}"))
+            absent = absent or parse_error_at_or_before(
+                status, body, query.index(name.upper() + "(")
+            )
+            rows.append(
+                ("function", name, line in f.get("versions", []), not absent, f"{query} => {text}")
+            )
 
     for t in tomllib.loads((ROOT / "data/catalogs/esql/types.toml").read_text())["types"]:
         query = f"ROW x = null::{t['name']}"
         status, body = ask(url, query, mapped)
         text = error_text(body) if status != 200 else "OK"
-        absent = re.search(
-            rf"(Unknown data type named|Unsupported conversion to type) \[{re.escape(t['name'])}\]", text, re.I
-        ) is not None
-        rows.append(("cast", t["name"], line in t.get("versions", []), not absent, f"{query} => {text}"))
+        absent = (
+            re.search(
+                (
+                    rf"(Unknown data type named|Unsupported conversion to type) "
+                    rf"\[{re.escape(t['name'])}\]"
+                ),
+                text,
+                re.IGNORECASE,
+            )
+            is not None
+        )
+        rows.append(
+            ("cast", t["name"], line in t.get("versions", []), not absent, f"{query} => {text}")
+        )
 
-    commands = {c["name"]: c for c in tomllib.loads((ROOT / "data/catalogs/esql/commands.toml").read_text())["commands"]}
+    commands = {
+        c["name"]: c
+        for c in tomllib.loads((ROOT / "data/catalogs/esql/commands.toml").read_text())["commands"]
+    }
     for name, row in commands.items():
         queries = COMMANDS.get(name)
         if not queries:
@@ -233,7 +261,9 @@ def main() -> int:
             bad += 1
         if args.all or listed != seen:
             yn = lambda b: "yes" if b else "no"  # noqa: E731
-            print(f"{line}\t{kind}\t{name}\tcatalog:{yn(listed)}\tobserved:{yn(seen)}\t{run.one_line(detail)[:400]}")
+            print(
+                f"{line}\t{kind}\t{name}\tcatalog:{yn(listed)}\tobserved:{yn(seen)}\t{run.one_line(detail)[:400]}"
+            )
     print(f"# {line}: {len(rows)} names, {bad} disagree with the catalog", file=sys.stderr)
     return 1 if bad else 0
 

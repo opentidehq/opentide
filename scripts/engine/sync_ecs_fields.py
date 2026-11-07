@@ -84,6 +84,7 @@ def main() -> None:
         ["git", "-C", str(ecs), "describe", "--tags", "--exact-match"],
         capture_output=True,
         text=True,
+        check=False,
     ).stdout.strip()
     flat = yaml.safe_load((ecs / "generated/ecs/ecs_flat.yml").read_text())
     fields = rows(flat)

@@ -37,8 +37,18 @@ PARSER_TESTS = "userspace/libsinsp/test/filter_parser.ut.cpp"
 COMPILER_TESTS = "userspace/libsinsp/test/filter_compiler.ut.cpp"
 
 SIMPLE_ESCAPES = {
-    "n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "a": "\a",
-    "\\": "\\", '"': '"', "'": "'", "?": "?", "0": "\0",
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "b": "\b",
+    "f": "\f",
+    "v": "\v",
+    "a": "\a",
+    "\\": "\\",
+    '"': '"',
+    "'": "'",
+    "?": "?",
+    "0": "\0",
 }
 
 
@@ -66,7 +76,7 @@ def read_literal(src: str, i: int) -> tuple[str, int] | None:
                     out.append(chr(int(m.group(0), 16)))
                     k += 2 + len(m.group(0))
                     continue
-                if n in "01234567" and n != "0" or (n == "0" and src[k + 2] in "01234567"):
+                if (n in "01234567" and n != "0") or (n == "0" and src[k + 2] in "01234567"):
                     m = re.match(r"[0-7]{1,3}", src[k + 1 :])
                     out.append(chr(int(m.group(0), 8)))
                     k += 1 + len(m.group(0))
@@ -132,7 +142,7 @@ def matching_paren(src: str, i: int) -> int:
 def tests(src: str) -> list[tuple[str, int, int]]:
     """(name, body start, body end) of each TEST/TEST_F."""
     out = []
-    for m in re.finditer(r"^TEST(?:_F)?\(\s*(\w+),\s*(\w+)\)\s*\{", src, re.M):
+    for m in re.finditer(r"^TEST(?:_F)?\(\s*(\w+),\s*(\w+)\)\s*\{", src, re.MULTILINE):
         start = m.end()
         depth, k = 1, start
         while depth:
@@ -168,12 +178,16 @@ def parser_fixtures(src: str) -> tuple[list[dict], list[str]]:
             nxt = re.search(r"\bparser\s+\w+\(", rest)
             scope = rest[: nxt.start()] if nxt else rest
             throws = re.search(rf"(EXPECT|ASSERT)_(ANY_)?THROW\(\s*{var}\.parse\(\)", scope)
-            fx = {"test": name, "line": line_of(src, start + m.start()), "input": text,
-                  "verdict": "reject" if throws else "accept", "variants": False}
+            fx = {
+                "test": name,
+                "line": line_of(src, start + m.start()),
+                "input": text,
+                "verdict": "reject" if throws else "accept",
+                "variants": False,
+            }
             res = re.search(rf"auto\s+(\w+)\s*=\s*{var}\.parse\(\)", scope)
             if res:
-                asm = re.search(
-                    rf"as_string\(\s*{res.group(1)}\.get\(\)\)\s*,", scope)
+                asm = re.search(rf"as_string\(\s*{res.group(1)}\.get\(\)\)\s*,", scope)
                 if asm:
                     expected, _ = read_string_expr(scope, asm.end())
                     if expected is not None:
@@ -185,11 +199,17 @@ def parser_fixtures(src: str) -> tuple[list[dict], list[str]]:
             text, j = read_string_expr(body, m.end())
             if text is None:
                 call = body[m.start() : matching_paren(body, m.end() - 1) + 1]
-                skipped.append(f"{name}:{line_of(src, start + m.start())}: {' '.join(call.split())[:90]}")
+                skipped.append(
+                    f"{name}:{line_of(src, start + m.start())}: {' '.join(call.split())[:90]}"
+                )
                 continue
-            fx = {"test": name, "line": line_of(src, start + m.start()), "input": text,
-                  "verdict": "reject" if fn.startswith("test_reject") else "accept",
-                  "variants": fn == "test_accept" and body[j] == ")"}
+            fx = {
+                "test": name,
+                "line": line_of(src, start + m.start()),
+                "input": text,
+                "verdict": "reject" if fn.startswith("test_reject") else "accept",
+                "variants": fn == "test_accept" and body[j] == ")",
+            }
             if fn == "test_reject_msg":
                 msg, _ = read_string_expr(body, j + 1)
                 fx["message"] = msg
@@ -216,7 +236,6 @@ def compiler_fixtures(src: str) -> tuple[list[dict], list[str]]:
                 msg, _ = read_string_expr(body, j + 1)
                 fx.update(fail=True, warnings=0, message=msg)
             else:
-                args = body[j : matching_paren(body, m.end() - 1 - len(body[m.end() - 1 :]) + len(body[: m.end() - 1]))] if False else ""
                 close = matching_paren(body, body.index("(", m.start()))
                 rest = [a.strip() for a in body[j:close].strip(", ").split(",") if a.strip()]
                 fx["fail"] = bool(rest) and rest[0] == "true"
@@ -227,8 +246,9 @@ def compiler_fixtures(src: str) -> tuple[list[dict], list[str]]:
 
 
 def head(repo: Path) -> str:
-    return subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True,
-                          text=True, check=True).stdout.strip()
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 def main() -> int:
@@ -240,10 +260,20 @@ def main() -> int:
     parser, pskip = parser_fixtures((args.libs / PARSER_TESTS).read_text(encoding="utf-8"))
     compiler, cskip = compiler_fixtures((args.libs / COMPILER_TESTS).read_text(encoding="utf-8"))
     outputs = {
-        "parser.json": {"source": f"falcosecurity/libs@{sha}", "file": PARSER_TESTS,
-                        "license": "Apache-2.0", "skipped": pskip, "fixtures": parser},
-        "compiler.json": {"source": f"falcosecurity/libs@{sha}", "file": COMPILER_TESTS,
-                          "license": "Apache-2.0", "skipped": cskip, "fixtures": compiler},
+        "parser.json": {
+            "source": f"falcosecurity/libs@{sha}",
+            "file": PARSER_TESTS,
+            "license": "Apache-2.0",
+            "skipped": pskip,
+            "fixtures": parser,
+        },
+        "compiler.json": {
+            "source": f"falcosecurity/libs@{sha}",
+            "file": COMPILER_TESTS,
+            "license": "Apache-2.0",
+            "skipped": cskip,
+            "fixtures": compiler,
+        },
     }
     stale = []
     for name, data in outputs.items():
@@ -255,8 +285,10 @@ def main() -> int:
         else:
             OUT.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
-            print(f"wrote {path.relative_to(ROOT)}: {len(data['fixtures'])} fixtures, "
-                  f"{len(data['skipped'])} skipped")
+            print(
+                f"wrote {path.relative_to(ROOT)}: {len(data['fixtures'])} fixtures, "
+                f"{len(data['skipped'])} skipped"
+            )
     if stale:
         print("stale: " + ", ".join(stale), file=sys.stderr)
         return 1

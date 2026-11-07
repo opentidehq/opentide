@@ -18,7 +18,7 @@ It reads the models of this checkout, ``src/opentide``, never an installed
 release: run it with the repository's environment (``uv sync --group dev``)::
 
     uv run python scripts/engine/sync_opentide_schemas.py           # write
-    uv run python scripts/engine/sync_opentide_schemas.py --check   # exit 1 when anything would change
+    uv run python scripts/engine/sync_opentide_schemas.py --check   # exit 1 on a difference
 
 ``tests/test_generation/test_bundled_tide_catalog.py`` fails when the committed
 catalog is not what the models generate.
@@ -80,7 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     for stale in sorted(SCHEMA_DIR.glob("*.schema.json")):
         if stale not in outputs:
             stale.unlink()
-            print(f"removed {stale.relative_to(ROOT)} (not registered in opentide {opentide.__version__})")
+            print(
+                f"removed {stale.relative_to(ROOT)} (not registered in opentide "
+                f"{opentide.__version__})"
+            )
     return 0
 
 
@@ -109,7 +112,9 @@ def check(outputs: dict[Path, str]) -> int:
     """Whether the committed files match what opentide generates, labels aside."""
     problems: list[str] = []
     found = {
-        name: (GENERATED / name).read_text(encoding="utf-8") if (GENERATED / name).is_file() else None
+        name: (GENERATED / name).read_text(encoding="utf-8")
+        if (GENERATED / name).is_file()
+        else None
         for name in (lsp_catalog.FIELDS_FILE, lsp_catalog.DEPRECATIONS_FILE)
     }
     expected = {name: outputs[GENERATED / name] for name in found}
@@ -234,7 +239,7 @@ def highlights(fields: list[dict[str, Any]]) -> str:
 ; use this query. Every schema key uses tide.property so nesting does not
 ; recolor the key. Capture names must stay a subset of HighlightSpec.
 
-{''.join(queries)}
+{"".join(queries)}
 (comment) @comment
 """
 

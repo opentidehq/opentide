@@ -89,14 +89,18 @@ def request(url: str, method: str = "GET", body: object | None = None, timeout: 
         try:
             return e.code, json.loads(raw)
         except json.JSONDecodeError:
-            return e.code, {"error": {"type": f"http_{e.code}", "reason": raw.decode(errors="replace")}}
+            return e.code, {
+                "error": {"type": f"http_{e.code}", "reason": raw.decode(errors="replace")}
+            }
 
 
 def wait_for_yellow(url: str, deadline_s: float = 300) -> None:
     deadline = time.monotonic() + deadline_s
     while True:
         try:
-            status, body = request(f"{url}/_cluster/health?wait_for_status=yellow&timeout=30s", timeout=40)
+            status, body = request(
+                f"{url}/_cluster/health?wait_for_status=yellow&timeout=30s", timeout=40
+            )
             if status == 200 and body.get("status") in ("yellow", "green"):
                 return
         except (urllib.error.URLError, ConnectionError, TimeoutError, OSError):
@@ -111,7 +115,9 @@ def wait_for_yellow(url: str, deadline_s: float = 300) -> None:
 
 def _multi_field(name: str, t: str, types: dict[str, str]) -> bool:
     parent = name.rsplit(".", 1)[0]
-    return parent != name and t == "match_only_text" and types.get(parent) in ("keyword", "wildcard")
+    return (
+        parent != name and t == "match_only_text" and types.get(parent) in ("keyword", "wildcard")
+    )
 
 
 def ecs_mapping(extra: dict[str, str]) -> tuple[dict, set[str]]:
@@ -228,7 +234,7 @@ FIXTURE_PROBLEM = re.compile(
     r"|.*\bin lookup mode\b"
     r"|.*requires a lookup index"
     r"|.*\bTS\b.*time.series)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -306,9 +312,12 @@ def judge(status: int, body: dict, mapped: set[str], depends=None) -> Verdict:
     # ES|QL wraps an unknown index in index_not_found_exception whose cause
     # is the verification problem list.
     verification = error if error.get("type") == "verification_exception" else None
-    if verification is None and isinstance(error.get("caused_by"), dict):
-        if error["caused_by"].get("type") == "verification_exception":
-            verification = error["caused_by"]
+    if (
+        verification is None
+        and isinstance(error.get("caused_by"), dict)
+        and error["caused_by"].get("type") == "verification_exception"
+    ):
+        verification = error["caused_by"]
     if verification is not None:
         reason = verification.get("reason", "")
         # 9.4 and later report a lone unknown index without the
@@ -328,7 +337,9 @@ def judge(status: int, body: dict, mapped: set[str], depends=None) -> Verdict:
             [] if others else unmapped,
         )
     # Cross-cluster search needs a licence the fixture cluster does not have.
-    licence = error.get("type") == "status_exception" and "license is required" in error.get("reason", "")
+    licence = error.get("type") == "status_exception" and "license is required" in error.get(
+        "reason", ""
+    )
     if error.get("type") in FIXTURE_TYPES or licence or depends(describe(error)):
         return Verdict(True, "unverified: " + describe(error))
     return Verdict(False, describe(error))
@@ -342,7 +353,9 @@ def target(name: str, mapped: set[str]) -> tuple[str, set[str]]:
     return (UNMAPPED_ALIAS, set()) if ".unmapped." in name else (ECS_ALIAS, mapped)
 
 
-EQL_TOKEN = re.compile(r'"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"|`(?:``|[^`])*`|[A-Za-z_@][\w.@]*', re.S)
+EQL_TOKEN = re.compile(
+    r'"""(?:.|\n)*?"""|"(?:\\.|[^"\\\n])*"|`(?:``|[^`])*`|[A-Za-z_@][\w.@]*', re.DOTALL
+)
 
 
 def make_optional(text: str, names: set[str]) -> str:
@@ -378,9 +391,13 @@ def run_eql(url: str, name: str, text: str, mapped: set[str], assume: bool) -> s
         # A null optional field passes every type check, so only a problem
         # about the field's own value, or a script over it, rests on it.
         alt = "|".join(re.escape(n) for n in names)
-        rx = re.compile(rf"found value \[\??`?({alt})\b|Cannot evaluate script for expression \??`?({alt})\b")
+        rx = re.compile(
+            rf"found value \[\??`?({alt})\b|Cannot evaluate script for expression \??`?({alt})\b"
+        )
         retry = ask(query, lambda text: rx.search(text) is not None)
-        retry.detail = one_line(f"assumed: optional {', '.join(names)}" + (f"; {retry.detail}" if retry.detail else ""))
+        retry.detail = one_line(
+            f"assumed: optional {', '.join(names)}" + (f"; {retry.detail}" if retry.detail else "")
+        )
         v = retry
     ok, detail = v.cells
     return f"{name}\t{ok}\t{detail}"
@@ -405,7 +422,11 @@ def run_lucene(url: str, name: str, text: str, mapped: set[str], assume: bool) -
     if assume and alias == ECS_ALIAS:
         # Elasticsearch builds no query, so checks nothing, for a field it
         # does not map: map the query's unmapped fields as keyword first.
-        unmapped = {f for f in lucene_fields(text) if f not in mapped and "*" not in f and not f.startswith("_")}
+        unmapped = {
+            f
+            for f in lucene_fields(text)
+            if f not in mapped and "*" not in f and not f.startswith("_")
+        }
         if unmapped:
             assume_keywords(url, ASSUMED_LUCENE_INDEX, unmapped)
             alias = f"{ECS_INDEX},{ASSUMED_LUCENE_INDEX}"
@@ -435,12 +456,12 @@ def run_lucene(url: str, name: str, text: str, mapped: set[str], assume: bool) -
 # --- ES|QL ---------------------------------------------------------------------
 
 TOKEN = re.compile(
-    r'(?P<comment>//[^\n]*|/\*.*?(?:\*/|\Z))'
+    r"(?P<comment>//[^\n]*|/\*.*?(?:\*/|\Z))"
     r'|(?P<string>"""(?:.|\n)*?(?:"""|\Z)|"(?:\\.|[^"\\\n])*(?:"|$))'
     r"|(?P<punct>[|()\[\],])"
     r"|(?P<space>\s+)"
     r"|(?P<word>[^\s|()\[\],\"/]+|/)",
-    re.S | re.M,
+    re.DOTALL | re.MULTILINE,
 )
 
 
@@ -518,7 +539,9 @@ def assumed_properties(names: list[str]) -> dict:
     props: dict = {}
     for name in names:
         parts = name.split(".")
-        leaf = next((i for i in range(len(parts) - 1, 0, -1) if ".".join(parts[:i]) in _types), None)
+        leaf = next(
+            (i for i in range(len(parts) - 1, 0, -1) if ".".join(parts[:i]) in _types), None
+        )
         if leaf is None:
             props[name] = {"type": "keyword"}
         else:
@@ -534,13 +557,17 @@ def assume_keywords(url: str, index: str, names: set[str]) -> set[str]:
     with _assumed_lock:
         missing = sorted(names - _assumed)
         if missing:
-            status, _ = request(f"{url}/{index}/_mapping", "PUT", {"properties": assumed_properties(missing)})
+            status, _ = request(
+                f"{url}/{index}/_mapping", "PUT", {"properties": assumed_properties(missing)}
+            )
             if status == 200:
                 _assumed.update(missing)
         return set(_assumed)
 
 
-def run_esql(url: str, name: str, text: str, mapped: set[str], assume: bool, params: object = None) -> str:
+def run_esql(
+    url: str, name: str, text: str, mapped: set[str], assume: bool, params: object = None
+) -> str:
     alias, mapped = target(name, mapped)
     request_body: dict = {} if params is None else {"params": params}
 
@@ -561,7 +588,9 @@ def run_esql(url: str, name: str, text: str, mapped: set[str], assume: bool, par
             v = ask(ASSUMED_ALIAS, mapped | known, known)
             if not (v.ok and v.unmapped):
                 break
-        v.detail = one_line(f"assumed: keyword {', '.join(sorted(names))}" + (f"; {v.detail}" if v.detail else ""))
+        v.detail = one_line(
+            f"assumed: keyword {', '.join(sorted(names))}" + (f"; {v.detail}" if v.detail else "")
+        )
     ok, detail = v.cells
     return f"{name}\t{ok}\t{detail}"
 
@@ -570,30 +599,46 @@ RUNNERS = {"eql": run_eql, "esql": run_esql, "lucene": run_lucene}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--language", required=True, choices=sorted(RUNNERS))
     parser.add_argument("--url", default=os.environ.get("ES_URL", "http://127.0.0.1:9200"))
-    parser.add_argument("--extra-mapping", type=Path, help="JSON object {field: type} added to the ECS index")
-    parser.add_argument("--assume-unmapped", action="store_true", help="retry with unmapped fields assumed (see above)")
+    parser.add_argument(
+        "--extra-mapping", type=Path, help="JSON object {field: type} added to the ECS index"
+    )
+    parser.add_argument(
+        "--assume-unmapped",
+        action="store_true",
+        help="retry with unmapped fields assumed (see above)",
+    )
     parser.add_argument(
         "--lucene-verdict",
         choices=["both", "strict", "lenient"],
         default="both",
-        help="Lucene: `both` adds the lenient fourth column; `strict` or `lenient` print three columns",
+        help=(
+            "Lucene: `both` adds the lenient fourth column; `strict` or `lenient` "
+            "print three columns"
+        ),
     )
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument(
         "--skip-larger",
         type=int,
         metavar="BYTES",
-        help="do not send files larger than this (9.3 with a 1 GB heap dies on a 250 KB Lucene query)",
+        help=(
+            "do not send files larger than this (9.3 with a 1 GB heap dies on a 250 KB "
+            "Lucene query)"
+        ),
     )
     parser.add_argument("dir", type=Path)
     args = parser.parse_args()
     url = args.url.rstrip("/")
     extra = json.loads(args.extra_mapping.read_text()) if args.extra_mapping else {}
     mapped = setup(url, extra, args.language if args.assume_unmapped else None)
-    files = sorted(p for p in args.dir.iterdir() if p.name.endswith(EXT[args.language]) and p.is_file())
+    files = sorted(
+        p for p in args.dir.iterdir() if p.name.endswith(EXT[args.language]) and p.is_file()
+    )
     run = RUNNERS[args.language]
 
     def one(path: Path) -> str:
@@ -603,7 +648,9 @@ def main() -> int:
             return skipped + ("\tlenient:OK" if args.language == "lucene" else "")
         sidecar = path.with_name(path.name + ".params.json")
         if args.language == "esql" and sidecar.exists():
-            return run_esql(url, path.name, text, mapped, args.assume_unmapped, json.loads(sidecar.read_text()))
+            return run_esql(
+                url, path.name, text, mapped, args.assume_unmapped, json.loads(sidecar.read_text())
+            )
         return run(url, path.name, text, mapped, args.assume_unmapped)
 
     def shaped(path: Path) -> str:

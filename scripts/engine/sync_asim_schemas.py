@@ -38,12 +38,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import tomllib
 import re
 import subprocess
 import sys
 from pathlib import Path
 
+import tomllib
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -126,7 +126,10 @@ def read_parsers(sentinel: Path, schemas: dict[str, dict]) -> list[dict]:
         for param in doc.get("ParserParams") or []:
             if not isinstance(param, dict) or not NAME.fullmatch(str(param.get("Name", ""))):
                 continue
-            item = {"name": str(param["Name"]), "type": kusto_type(str(param.get("Type", "")), str(path))}
+            item = {
+                "name": str(param["Name"]),
+                "type": kusto_type(str(param.get("Type", "")), str(path)),
+            }
             if param.get("Default") is not None:
                 item["default"] = str(param["Default"])
             params.append(item)
@@ -151,7 +154,9 @@ def generate(sentinel: Path) -> dict:
     schemas = read_schemas(sentinel)
     parsers = read_parsers(sentinel, schemas)
     return {
-        "source": "Azure/Azure-Sentinel ASIM/dev/ASimTester/ASimTester.csv and Parsers/ASim*/Parsers",
+        "source": (
+            "Azure/Azure-Sentinel ASIM/dev/ASimTester/ASimTester.csv and Parsers/ASim*/Parsers"
+        ),
         "commit": commit,
         "license": "MIT",
         "generator": "scripts/sync_asim_schemas.py",

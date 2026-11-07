@@ -33,7 +33,10 @@ CATEGORIES = [
     "rules/windows/network_connection",
     "rules/windows/registry/registry_set",
 ]
-OUT = pathlib.Path(__file__).resolve().parents[2] / "crates/testdata/conformance/external/lucene-carbon-black"
+OUT = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "crates/testdata/conformance/external/lucene-carbon-black"
+)
 
 
 def main() -> None:
@@ -62,9 +65,13 @@ def main() -> None:
             (OUT / f"{stem}.broken.lucene").write_text("(" + query + "\n", encoding="utf-8")
             relative = path.relative_to(sigma).as_posix()
             author = str(rule.get("author", "")).replace("\t", " ")
-            rows.append(f"lucene-carbon-black/{stem}.lucene\t{relative}\t{rule.get('id', '')}\t{author}")
+            rows.append(
+                f"lucene-carbon-black/{stem}.lucene\t{relative}\t{rule.get('id', '')}\t{author}"
+            )
             sources.append(
-                f"- `{stem}.lucene` from [`{relative}`](https://github.com/SigmaHQ/sigma/blob/{COMMIT}/{relative}) ({rule.get('id', '')}), author: {author}"
+                f"- `{stem}.lucene` from "
+                f"[`{relative}`](https://github.com/SigmaHQ/sigma/blob/{COMMIT}/{relative}) "
+                f"({rule.get('id', '')}), author: {author}"
             )
             taken += 1
     print("\n".join(rows))

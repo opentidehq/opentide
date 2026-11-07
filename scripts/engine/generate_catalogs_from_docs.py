@@ -108,7 +108,10 @@ def write_kql_operators() -> None:
     rows = parse_md_tables(ROOT / "docs/engine/kql/operators.md")
     seen: set[str] = set()
     chunks = [
-        "# KQL tabular operators. Generated from docs/kql/operators.md — edit the inventory, then re-run",
+        (
+            "# KQL tabular operators. Generated from docs/kql/operators.md — edit the "
+            "inventory, then re-run"
+        ),
         "# scripts/generate_catalogs_from_docs.py",
         "",
     ]
@@ -131,12 +134,12 @@ def write_kql_operators() -> None:
         warning = None
         if "nrt-no" in detections and name in {"join", "union", "externaldata"}:
             warning = "nrt_unsupported"
-        if name == "render" or "**no**" in detections.replace(" ", ""):
-            if name == "render" or name == "consume":
-                warning = "not_valid_in_detections"
-        if "search *" in detections or name == "search":
-            if name == "search":
-                warning = "sentinel_star_restricted"
+        if (name == "render" or "**no**" in detections.replace(" ", "")) and (
+            name == "render" or name == "consume"
+        ):
+            warning = "not_valid_in_detections"
+        if ("search *" in detections or name == "search") and name == "search":
+            warning = "sentinel_star_restricted"
         chunks.append("[[operators]]")
         chunks.append(f'name = "{name}"')
         chunks.append('kind = "tabular"')
@@ -241,7 +244,9 @@ def write_kql_scalar_ops() -> None:
             if citation:
                 chunks.append(f'citation = "{toml_escape(citation)}"')
             chunks.append("")
-    (ROOT / "data/catalogs/kql/core/operators-scalar.toml").write_text("\n".join(chunks).rstrip() + "\n")
+    (ROOT / "data/catalogs/kql/core/operators-scalar.toml").write_text(
+        "\n".join(chunks).rstrip() + "\n"
+    )
     print(f"kql scalar operators: {len(seen)}")
 
 
@@ -251,14 +256,19 @@ def write_tables(src: Path, dest: Path, profile: str) -> None:
     for row in parse_md_tables(src):
         name_cell = row.get("name") or row.get("table") or ""
         names = extract_backtick_names(name_cell)
-        docs = re.sub(r"`+", "", (row.get("docs") or row.get("short docs") or next(
-            (v for k, v in row.items() if "description" in k or "purpose" in k), ""
-        )).strip())
+        docs = re.sub(
+            r"`+",
+            "",
+            (
+                row.get("docs")
+                or row.get("short docs")
+                or next((v for k, v in row.items() if "description" in k or "purpose" in k), "")
+            ).strip(),
+        )
         citation = ""
         m = re.search(r"\((https://[^)]+)\)", " ".join(row.values()))
         if m:
             citation = m.group(1)
-        category = None
         for n in names:
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", n):
                 continue
@@ -274,7 +284,7 @@ def write_tables(src: Path, dest: Path, profile: str) -> None:
                 chunks.append(f'citation = "{toml_escape(citation)}"')
             if n.startswith("Device"):
                 chunks.append('category = "endpoint"')
-            elif n.startswith("Email") or n.startswith("Identity") or n.startswith("CloudApp"):
+            elif n.startswith(("Email", "Identity", "CloudApp")):
                 chunks.append('category = "xdr"')
             chunks.append("")
     dest.write_text("\n".join(chunks).rstrip() + "\n")
@@ -286,7 +296,10 @@ def write_spl() -> None:
     eval_rows = parse_md_tables(ROOT / "docs/engine/spl/eval-functions.md")
     stats_rows = parse_md_tables(ROOT / "docs/engine/spl/stats-functions.md")
     chunks = [
-        "# Splunk search commands and functions. Generated from docs/spl/ — authored SPL is not rewritten.",
+        (
+            "# Splunk search commands and functions. Generated from docs/spl/ — authored "
+            "SPL is not rewritten."
+        ),
         "",
     ]
     seen: set[str] = set()

@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import run  # noqa: E402  (sibling module)
+import run
 
 ROOT = Path(__file__).resolve().parents[4]
 PROBES = ROOT / "crates/testdata/oracles/elasticsearch"
@@ -40,7 +40,7 @@ def read_expected() -> tuple[list[str], dict[str, dict[str, str]]]:
     rows = {}
     for line in lines[1:]:
         cells = line.split("\t")
-        rows[cells[0]] = {v: c for v, c in zip(header, cells[1:]) if c}
+        rows[cells[0]] = {v: c for v, c in zip(header, cells[1:], strict=False) if c}
     return header, rows
 
 
@@ -54,7 +54,9 @@ def write_expected(header: list[str], rows: dict[str, dict[str, str]]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--url", default=os.environ.get("ES_URL", "http://127.0.0.1:9200"))
     parser.add_argument("--update", action="store_true")
     parser.add_argument("--show", action="store_true")
@@ -66,7 +68,10 @@ def main() -> int:
 
     header, rows = read_expected()
     if not args.update and line not in header:
-        print(f"expected.tsv records no verdicts for {line}; run with --update to add them", file=sys.stderr)
+        print(
+            f"expected.tsv records no verdicts for {line}; run with --update to add them",
+            file=sys.stderr,
+        )
         return 1
     seen: set[str] = set()
     failures = 0
@@ -97,11 +102,14 @@ def main() -> int:
             print(f"{rel}: no verdict recorded for {line} | Elasticsearch says {verdict}")
         elif recorded != verdict:
             failures += 1
-            print(f"{rel}: Elasticsearch {line} says {verdict}, expected.tsv says {recorded} | {cells[2]}")
+            print(
+                f"{rel}: Elasticsearch {line} says {verdict}, expected.tsv says "
+                f"{recorded} | {cells[2]}"
+            )
     if args.update:
         for stale in set(rows) - seen:
             del rows[stale]
-        write_expected(header + [line], rows)
+        write_expected([*header, line], rows)
         print(f"recorded {len(seen)} verdicts for {line}", file=sys.stderr)
         return 0
     for stale in sorted(set(rows) - seen):
