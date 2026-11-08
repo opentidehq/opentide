@@ -25,6 +25,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+# cargo output of the crate placeholder (publishing/placeholders/): ignored
+# here, where hatchling also reads it, so an sdist built after a dry run
+# leaves it out.
+publishing/placeholders/crates/*/target/
 
 # Virtual environments
 .venv/

@@ -859,6 +859,13 @@ pub fn findings(document: &serde_json::Value, root: &str) -> Result<Vec<Finding>
     }
     // A run the workspace stops before validating (a retired or unreadable
     // configuration file) fails with its findings under `diagnostics`.
+    // `deploy migrate-state` lists the ids it could not migrate under `errors`.
+    if let Some(items) = document.get("errors").and_then(|v| v.as_array()) {
+        read = true;
+        for item in items.iter().filter(|i| i.get("code").is_some()) {
+            push(item, "error");
+        }
+    }
     if let Some(items) = document.get("diagnostics").and_then(|v| v.as_array()) {
         read = true;
         for item in items {
@@ -1271,5 +1278,13 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
                              "path": ".opentide/configurations/global.toml", "message": "m"}]});
         let found = super::findings(&failed, "/w").unwrap();
         assert_eq!(found[0].code, "retired_configuration_file");
+        let migrate = serde_json::json!({"errors": [{"code": "external_id_shape",
+            "file": "objects/rules/a.yaml", "message": "not a mapping"}], "failure": {"code": "command_failed"}});
+        let found = super::findings(&migrate, "/w").unwrap();
+        assert_eq!(
+            (found[0].code.as_str(), found[0].severity.as_str()),
+            ("external_id_shape", "error")
+        );
+        assert_eq!(found[0].path.as_deref(), Some("objects/rules/a.yaml"));
     }
 }

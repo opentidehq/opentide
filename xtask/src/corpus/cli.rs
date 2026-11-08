@@ -38,10 +38,11 @@ commands:
   codes --engine python [--oracle BIN] [--write]
                  list the diagnostic codes in scope from the oracle
                  (tests/corpora/codes.toml); --write records them
-  coverage [--check | --write]
+  coverage [--check | --write] [--dir DIR]
                  map every code in tests/corpora/codes.toml to the fault
                  kinds that produce it; --write records tests/corpora/COVERAGE.md,
-                 --check fails when a code has no kind or the file is stale
+                 --check fails when a code has no kind or the file is stale;
+                 --dir reads faults.toml, codes.toml and COVERAGE.md from DIR
 
 The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
 print the version faults.toml names. `--engine rust` comes with the Rust
@@ -784,14 +785,16 @@ fn codes_command(args: &[String]) -> Result<u8> {
 
 fn coverage_command(args: &[String]) -> Result<u8> {
     let mut mode = "print";
-    for arg in args {
-        mode = match arg.as_str() {
-            "--check" => "check",
-            "--write" => "write",
+    let mut dir = corpora_dir();
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--check" => mode = "check",
+            "--write" => mode = "write",
+            "--dir" => dir = PathBuf::from(value(&mut iter, arg)?),
             other => bail!("unknown option `{other}`\n\n{USAGE}"),
-        };
+        }
     }
-    let dir = corpora_dir();
     let catalogue = load_catalogue(&dir.join("faults.toml"))?;
     let codes_path = dir.join("codes.toml");
     let codes_text = std::fs::read_to_string(&codes_path)
