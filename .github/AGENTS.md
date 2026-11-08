@@ -16,7 +16,6 @@ whatever its base: a stacked PR targets the branch below it, not `development`.
 | `lint` | ruff, ty, `uv build` and `twine check`; the vocabulary drift gate and the model field descriptions (below) when their files change |
 | `engine` | The Cargo workspace: rustfmt, clippy `-D warnings`, `cargo xtask check-layers`, `cargo test --workspace` (doctests included), the engine's invariant scripts (`scripts/engine/check-io-free.sh`, `check-names.sh`, `validate-skills.sh`, `generate-highlights --check`), the bundled Tide catalog test and the engine release script's tests |
 | `engine-wasm` | `scripts/engine/build-wasm.sh` (both WebAssembly artifacts, and `clippy` for the code only wasm32 compiles), the npm packages and the TypeScript client against the native, worker and WASI servers |
-| `schema` | `opentide-schema` built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown` (feature `wasm`), clippy on the last two, and its tests with the Python class (UC-1.1) |
 | `test` | The Python matrix, **3.10–3.14** |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
 
@@ -55,6 +54,10 @@ when the committed one differs, until UC-1.8 generates it in Rust.
   against its vendored `parser.c`, the TextMate grammars, the Elastic detection-rules sweep, and
   two informational jobs (real LSP clients, benchmarks).
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes each engine nightly.
+- [`schema.yml`](workflows/schema.yml), on every pull request and push: `opentide-schema` (UC-1.1)
+  built for the native target, abi3-py310 (feature `python`) and `wasm32-unknown-unknown`
+  (feature `wasm`), clippy on the last two (the `engine` job builds no features), and its tests with
+  the Python class on CPython 3.10, the abi3 floor.
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language,
   Splunk, Elasticsearch, Lucene, Kibana and Falco on every push to `development`, on a pull
   request that changes `crates/`, `grammars/`, `Cargo.lock`, the query catalogs or the oracles,
