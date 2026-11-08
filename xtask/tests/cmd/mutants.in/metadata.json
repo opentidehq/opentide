@@ -1,0 +1,1 @@
+{"packages": [{"id": "core 0.1.0", "name": "core", "manifest_path": "/w/crates/core/Cargo.toml"}], "workspace_members": ["core 0.1.0"], "workspace_root": "/w"}

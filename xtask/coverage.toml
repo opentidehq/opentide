@@ -1,0 +1,39 @@
+# Line-coverage gates per workspace crate: plan §5.4 "Strength" (UC-X.2, #844),
+# as `cargo xtask coverage gate` enforces them in the `coverage` workflow
+# (.github/workflows/coverage.yml) on every pull request and push.
+#
+# cargo-llvm-cov runs the workspace's tests once, instrumented
+# (`cargo llvm-cov nextest --workspace --profile ci`), and exports one summary
+# per source file; the gate sums the lines of each member's directory and
+# compares the sum with that member's gate: the entry below, else
+# `default_lines`. Every member is gated; there is no exclude list, and a member
+# none of whose lines the run measured fails.
+#
+# The gate never loosens: an entry below `default_lines` is an error, and so is
+# an entry for a crate that is neither a member nor names the work item that
+# creates it. Python keeps its own gate (85%, `fail_under` in pyproject.toml).
+#
+# The four crates below do not exist yet. Each gate applies on its own as soon
+# as the work item that creates the crate adds it to the workspace: that change
+# must meet 90% (the `item` note can then go, in the same change or later).
+default_lines = 80
+
+[[gate]]
+crate = "opentide-schema"
+lines = 90
+item = "UC-1.1 (#807)"
+
+[[gate]]
+crate = "opentide-workspace"
+lines = 90
+item = "UC-2.1 (#816)"
+
+[[gate]]
+crate = "opentide-compile"
+lines = 90
+item = "UC-3.1 (#823)"
+
+[[gate]]
+crate = "opentide-cli"
+lines = 90
+item = "UC-3.3 (#825)"

@@ -1,0 +1,44 @@
+`coverage gate` on a two-crate workspace (coverage.in/): each crate against its
+gate from the policy, a pending crate listed, and a loosening refused.
+
+```console
+$ xtask coverage gate --metadata metadata.json --policy policy.toml --report passing.json
+## Rust line coverage per crate
+
+| Crate | Lines covered | Coverage | Gate | Result |
+|-------|--------------:|---------:|-----:|--------|
+| `cli` |  |  | 90% | pending: UC-3.3 (#825) creates it |
+| `core` | 81 / 100 | 81.00% | 80% | pass |
+| `schema` | 45 / 50 | 90.00% | 90% | pass |
+| **workspace** | 126 / 150 | 84.00% | | |
+
+Every crate meets its gate.
+
+$ xtask coverage gate --metadata metadata.json --policy policy.toml --report failing.json
+? 1
+## Rust line coverage per crate
+
+| Crate | Lines covered | Coverage | Gate | Result |
+|-------|--------------:|---------:|-----:|--------|
+| `cli` |  |  | 90% | pending: UC-3.3 (#825) creates it |
+| `core` | 81 / 100 | 81.00% | 80% | pass |
+| `schema` | 44 / 50 | 88.00% | 90% | **fail** |
+| **workspace** | 125 / 150 | 83.33% | | |
+
+error: `schema` is below its gate of 90% lines
+
+$ xtask coverage gate --metadata metadata.json --policy loose.toml --report passing.json
+? 1
+error: `core` has a gate of 70%, below the default of 80%: the policy never loosens a crate's gate
+coverage: 1 error(s) in the policy (loose.toml)
+
+$ xtask coverage gate --metadata metadata.json --policy policy.toml
+? 2
+xtask coverage: --report FILE is required
+
+$ xtask coverage report
+? 2
+xtask coverage: expected `coverage gate`
+...
+
+```

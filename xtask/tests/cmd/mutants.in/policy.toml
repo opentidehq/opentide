@@ -1,0 +1,7 @@
+[[crate]]
+name = "schema"
+item = "UC-1.1 (#807)"
+
+[[crate]]
+name = "core"
+issue_above = 0

@@ -1,0 +1,35 @@
+# The crates the weekly mutation run mutates: plan §5.4 "Strength" (UC-X.2,
+# #844), run by .github/workflows/mutants.yml with cargo-mutants and reported by
+# `cargo xtask mutants report` against xtask/mutants-baseline.toml.
+#
+# The plan tracks the mutation score of opentide-schema and opentide-workspace.
+# Neither exists yet; each is mutated as soon as the work item that creates it
+# adds it to the workspace (`cargo xtask mutants crates` lists the members
+# only). Until then the job mutates the two crates whose code becomes
+# opentide-workspace (plan §4, "Crates": opentide-analysis and the checks of
+# opentide-tide), so that the job runs and the baseline means something today.
+# When opentide-workspace has absorbed them, their entries go.
+#
+# issue_above: more surviving mutants than this open (or update) one issue per
+# crate that lists them. It is the crate's missed count in the recorded baseline:
+# a week that adds survivors files them. Leave it out to list every survivor
+# (a new crate, before its first baseline). Lowering it as tests kill
+# survivors is the ratchet; raising it needs the maintainer's word in review.
+
+[[crate]]
+name = "opentide-schema"
+item = "UC-1.1 (#807)"
+why = "plan §5.4: the Tide model"
+
+[[crate]]
+name = "opentide-workspace"
+item = "UC-2.1 (#816)"
+why = "plan §5.4: loading, validation, lint"
+
+[[crate]]
+name = "opentide-analysis"
+why = "becomes opentide-workspace (plan §4); until then its stand-in"
+
+[[crate]]
+name = "opentide-tide"
+why = "its checks become opentide-workspace (plan §4); until then its stand-in"
