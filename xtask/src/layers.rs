@@ -11,6 +11,7 @@
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::PathBuf;
 
 /// The layer table, as `xtask/layers.toml` writes it.
 #[derive(Debug, Deserialize)]
@@ -51,6 +52,10 @@ pub struct Metadata {
     pub packages: Vec<Package>,
     /// The ids of the packages that are workspace members.
     pub workspace_members: Vec<String>,
+    /// The workspace's root directory. cargo always prints it; a hand-written
+    /// document may leave it out.
+    #[serde(default)]
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl Metadata {
@@ -61,6 +66,17 @@ impl Metadata {
     /// The text is not that document.
     pub fn parse(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
+    }
+
+    /// The workspace's layer table, `xtask/layers.toml` under its root, or
+    /// `None` when the metadata does not name the root.
+    pub fn layer_table(&self) -> Option<PathBuf> {
+        Some(
+            self.workspace_root
+                .as_ref()?
+                .join("xtask")
+                .join("layers.toml"),
+        )
     }
 }
 
@@ -536,6 +552,25 @@ mod tests {
             .workspace_members
             .retain(|id| !id.contains("/fuzz#"));
         assert!(check(&table(SMALL), &metadata).passed());
+    }
+
+    #[test]
+    fn the_layer_table_is_the_one_of_the_workspace_the_metadata_describes() {
+        let mut metadata = metadata(&[("core", &[])]);
+        assert_eq!(metadata.layer_table(), None);
+        metadata.workspace_root = Some(PathBuf::from("/work/tree-b"));
+        assert_eq!(
+            metadata.layer_table(),
+            Some(PathBuf::from("/work/tree-b/xtask/layers.toml"))
+        );
+        let printed = Metadata::parse(
+            r#"{"packages": [], "workspace_members": [], "workspace_root": "/work/tree-c"}"#,
+        )
+        .expect("metadata");
+        assert_eq!(
+            printed.layer_table(),
+            Some(PathBuf::from("/work/tree-c/xtask/layers.toml"))
+        );
     }
 
     #[test]

@@ -28,11 +28,6 @@ exit status: 0 passed, 1 check failed or not implemented yet,
 2 usage error or the check could not run
 ";
 
-/// The root of the workspace this binary was built from.
-const WORKSPACE_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
-/// The layer table: one place, cited by the AGENTS.md files.
-const LAYER_TABLE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/layers.toml");
-
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some((command, rest)) = args.split_first() else {
@@ -75,24 +70,21 @@ fn not_yet(command: &str, item: &str, issue: u32) -> ExitCode {
 /// Runs the check and prints its report: whether the workspace passed.
 fn check_layers(args: &[String]) -> Result<bool> {
     let mut metadata_file: Option<PathBuf> = None;
-    let mut layers_file = PathBuf::from(LAYER_TABLE);
+    let mut layers_file: Option<PathBuf> = None;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         let slot = match arg.as_str() {
-            "--metadata" => metadata_file.insert(PathBuf::new()),
+            "--metadata" => &mut metadata_file,
             "--layers" => &mut layers_file,
             other => bail!("unknown option `{other}`\n\n{USAGE}"),
         };
-        *slot = args
-            .next()
-            .map(PathBuf::from)
-            .with_context(|| format!("{arg} needs a FILE"))?;
+        *slot = Some(
+            args.next()
+                .map(PathBuf::from)
+                .with_context(|| format!("{arg} needs a FILE"))?,
+        );
     }
 
-    let table_text = std::fs::read_to_string(&layers_file)
-        .with_context(|| format!("read {}", layers_file.display()))?;
-    let table = LayerTable::parse(&table_text)
-        .with_context(|| format!("parse {}", layers_file.display()))?;
     let metadata_text = match &metadata_file {
         Some(path) => {
             std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?
@@ -100,6 +92,19 @@ fn check_layers(args: &[String]) -> Result<bool> {
         None => cargo_metadata()?,
     };
     let metadata = Metadata::parse(&metadata_text).context("parse the cargo metadata")?;
+    // The table of the workspace being checked, never a path compiled in: with
+    // a CARGO_TARGET_DIR shared between worktrees, cargo may run a binary that
+    // another worktree built.
+    let layers_file = match layers_file {
+        Some(path) => path,
+        None => metadata
+            .layer_table()
+            .context("the metadata names no workspace_root: pass --layers FILE")?,
+    };
+    let table_text = std::fs::read_to_string(&layers_file)
+        .with_context(|| format!("read {}", layers_file.display()))?;
+    let table = LayerTable::parse(&table_text)
+        .with_context(|| format!("parse {}", layers_file.display()))?;
 
     let report = layers::check(&table, &metadata);
     for violation in &report.violations {
@@ -120,20 +125,20 @@ fn check_layers(args: &[String]) -> Result<bool> {
     Ok(report.passed())
 }
 
-/// `cargo metadata` for this workspace: its members and their declared
-/// dependencies, without resolving the dependency graph.
+/// `cargo metadata` for the workspace to check: its members and their
+/// declared dependencies, without resolving the dependency graph.
+///
+/// The workspace is found at run time: from `CARGO_MANIFEST_DIR`, which
+/// `cargo run` (the `cargo xtask` alias) sets to this package's directory in
+/// the workspace it ran, or else from the working directory.
 fn cargo_metadata() -> Result<String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
-    let manifest = PathBuf::from(WORKSPACE_ROOT).join("Cargo.toml");
-    let output = Command::new(&cargo)
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--manifest-path",
-        ])
-        .arg(&manifest)
+    let mut command = Command::new(&cargo);
+    command.args(["metadata", "--format-version", "1", "--no-deps"]);
+    if let Some(dir) = std::env::var_os("CARGO_MANIFEST_DIR") {
+        command.current_dir(dir);
+    }
+    let output = command
         .output()
         .with_context(|| format!("run {} metadata", cargo.to_string_lossy()))?;
     if !output.status.success() {
