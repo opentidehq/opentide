@@ -42,11 +42,14 @@ jobs:
         with:
           python-version: "3.10"
 
-      # The release rust-toolchain.toml pins, with the wasm32 target.
+      # The release rust-toolchain.toml pins. `rustup toolchain install` with no
+      # name installs the file's toolchain but drops `--target`, so the wasm32
+      # standard library and clippy are added to it explicitly.
       - name: Set up Rust
         run: |
-          rustup toolchain install --profile minimal --no-self-update \
-            --component clippy --target wasm32-unknown-unknown
+          rustup toolchain install --profile minimal --no-self-update
+          rustup component add clippy
+          rustup target add wasm32-unknown-unknown
 
       # Its own cache: no other job builds these features or this target.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
