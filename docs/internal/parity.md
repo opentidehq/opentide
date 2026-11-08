@@ -23,7 +23,10 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 | … compare not run | 0 (n/a) |
 | … flipped | 0 (n/a) |
 | Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 0 |
-| Diagnostic codes with a fault kind | no fault catalogue yet |
+| Diagnostic codes with a fault kind | 147 of 170 (86.4%) |
+| … declared unreachable through the CLI | 23 |
+| … with neither (missing) | 0 |
+| Codes outside the scope with a fault kind | 5 |
 
 ## By command
 

@@ -1,0 +1,1277 @@
+# The golden cases: what `cargo xtask golden record` runs through the oracle
+# (tests/golden/README.md). Reviewed like code; the recordings under cases/
+# are generated from it and never edited.
+#
+# Each [[case]] runs in every mode of `modes` against every fixture of
+# `fixtures` (the defaults below unless it sets its own). `args` follow
+# `opentide`; `{name}` is a variable of the fixture, and a fixture without it
+# is left out of that case. json mode puts --json right after `opentide`.
+
+[defaults]
+modes = ["human", "plain", "json", "agent"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "empty", "none"]
+timeout_secs = 180
+
+[fixtures.tide-corpus]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
+vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
+
+[fixtures.vscode]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "the VS Code extension's fixture workspace, vendored (fixtures/vscode-workspace.SOURCE.toml)"
+vars = { objective = "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f", rule = "ff8bf67e-64dc-460d-b5df-48db643f3560", rule_file = "objects/rules/suspicious-lsass-access.yaml" }
+
+[fixtures.heavy-small]
+kind = "generated"
+argv = ["cargo", "xtask", "corpus", "generate", "--seed", "1", "--threats", "30", "--objectives", "30", "--rules", "50", "--out", "{out}"]
+about = "UC-0.6's heavy workspace generator, seed 1: 30 threats, 30 objectives, 50 rules; generated at record and check time, never committed"
+
+[fixtures.fault]
+kind = "generated"
+argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
+about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules, every fault kind not marked isolated applied; generated at record and check time, never committed. Its outputs are recorded as they are, not asserted against the fault manifest"
+
+[fixtures.empty]
+kind = "skeleton"
+dirs = [".opentide"]
+about = "an empty workspace: .opentide/ and nothing else"
+
+[fixtures.none]
+kind = "skeleton"
+about = "no workspace at all: an empty directory"
+
+# ---- the root ----
+
+# No command: the root's help, or a hint, depending on the mode.
+[[case]]
+command = ""
+variant = "bare"
+args = []
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = ""
+variant = "version"
+args = ["--version"]
+fixtures = ["none"]
+
+[[case]]
+command = ""
+variant = "help"
+args = ["--help"]
+fixtures = ["none"]
+
+# cli-experience.md "Errors people and agents make": a typo in a command.
+[[case]]
+command = ""
+variant = "typo-command"
+args = ["valdiate"]
+fixtures = ["none"]
+
+# A typo in a root option.
+[[case]]
+command = ""
+variant = "typo-root-option"
+args = ["--jsn", "validate"]
+fixtures = ["none"]
+
+# A --repo that does not exist.
+[[case]]
+command = ""
+variant = "repo-missing"
+args = ["--repo", "does-not-exist", "validate"]
+fixtures = ["none"]
+
+# --debug: logs on stderr.
+[[case]]
+command = ""
+variant = "debug-flag"
+args = ["--debug", "info"]
+fixtures = ["tide-corpus"]
+
+# ---- every command path, --help: at least one case per path and mode ----
+
+[[case]]
+command = "validate"
+variant = "help"
+args = ["validate", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "validate query"
+variant = "help"
+args = ["validate", "query", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "query"
+variant = "help"
+args = ["query", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "lint"
+variant = "help"
+args = ["lint", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "info"
+variant = "help"
+args = ["info", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new"
+variant = "help"
+args = ["new", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new threat"
+variant = "help"
+args = ["new", "threat", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new objective"
+variant = "help"
+args = ["new", "objective", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new rule"
+variant = "help"
+args = ["new", "rule", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate"
+variant = "help"
+args = ["generate", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate explorer"
+variant = "help"
+args = ["generate", "explorer", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs"
+variant = "help"
+args = ["generate", "docs", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs rules"
+variant = "help"
+args = ["generate", "docs", "rules", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs objectives"
+variant = "help"
+args = ["generate", "docs", "objectives", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs threats"
+variant = "help"
+args = ["generate", "docs", "threats", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs index"
+variant = "help"
+args = ["generate", "docs", "index", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports"
+variant = "help"
+args = ["generate", "exports", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports navigator"
+variant = "help"
+args = ["generate", "exports", "navigator", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports objects"
+variant = "help"
+args = ["generate", "exports", "objects", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports revisions"
+variant = "help"
+args = ["generate", "exports", "revisions", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract"
+variant = "help"
+args = ["generate", "extract", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract sentinel"
+variant = "help"
+args = ["generate", "extract", "sentinel", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract defender"
+variant = "help"
+args = ["generate", "extract", "defender", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract elastic"
+variant = "help"
+args = ["generate", "extract", "elastic", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate inflight"
+variant = "help"
+args = ["generate", "inflight", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate inflight prune"
+variant = "help"
+args = ["generate", "inflight", "prune", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "rules"
+variant = "help"
+args = ["rules", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "help"
+args = ["rules", "unreviewed", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "deploy"
+variant = "help"
+args = ["deploy", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "deploy migrate-state"
+variant = "help"
+args = ["deploy", "migrate-state", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share"
+variant = "help"
+args = ["share", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share push"
+variant = "help"
+args = ["share", "push", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share preview"
+variant = "help"
+args = ["share", "preview", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share status"
+variant = "help"
+args = ["share", "status", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share retract"
+variant = "help"
+args = ["share", "retract", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share targets"
+variant = "help"
+args = ["share", "targets", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup"
+variant = "help"
+args = ["setup", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup repo"
+variant = "help"
+args = ["setup", "repo", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup platforms"
+variant = "help"
+args = ["setup", "platforms", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup ci"
+variant = "help"
+args = ["setup", "ci", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup env"
+variant = "help"
+args = ["setup", "env", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup hooks"
+variant = "help"
+args = ["setup", "hooks", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup mcp"
+variant = "help"
+args = ["setup", "mcp", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup vscode"
+variant = "help"
+args = ["setup", "vscode", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills"
+variant = "help"
+args = ["setup", "skills", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills discover"
+variant = "help"
+args = ["setup", "skills", "discover", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills show"
+variant = "help"
+args = ["setup", "skills", "show", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "doctor"
+variant = "help"
+args = ["doctor", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "migrate"
+variant = "help"
+args = ["migrate", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "help"
+args = ["migrate", "vocab-scope", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "tui"
+variant = "help"
+args = ["tui", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "help"
+args = ["explain", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "commands"
+variant = "help"
+args = ["commands", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "mcp"
+variant = "help"
+args = ["mcp", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "mcp start"
+variant = "help"
+args = ["mcp", "start", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "lsp"
+variant = "help"
+args = ["lsp", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "lsp start"
+variant = "help"
+args = ["lsp", "start", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "serve"
+variant = "help"
+args = ["serve", "--help"]
+fixtures = ["none"]
+
+# ---- groups that do nothing alone, run bare ----
+
+[[case]]
+command = "new"
+variant = "bare"
+args = ["new"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract"
+variant = "bare"
+args = ["generate", "extract"]
+fixtures = ["none"]
+
+[[case]]
+command = "rules"
+variant = "bare"
+args = ["rules"]
+fixtures = ["none"]
+
+[[case]]
+command = "migrate"
+variant = "bare"
+args = ["migrate"]
+fixtures = ["none"]
+
+[[case]]
+command = "mcp"
+variant = "bare"
+args = ["mcp"]
+fixtures = ["none"]
+
+[[case]]
+command = "lsp"
+variant = "bare"
+args = ["lsp"]
+fixtures = ["none"]
+
+# ---- validate ----
+
+[[case]]
+command = "validate"
+variant = "default"
+args = ["validate"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+
+[[case]]
+command = "validate"
+variant = "strict"
+args = ["validate", "--strict"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "validate"
+variant = "check-schema"
+args = ["validate", "--check", "schema"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "validate"
+variant = "check-queries-file"
+args = ["validate", "--check", "queries", "--file", "{rule_file}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "type-rule"
+args = ["validate", "--type", "rule"]
+fixtures = ["tide-corpus"]
+
+# A typo in a choice: did you mean.
+[[case]]
+command = "validate"
+variant = "typo-choice"
+args = ["validate", "--type", "rulez"]
+fixtures = ["tide-corpus"]
+
+# A choice that differs only in case wins outright.
+[[case]]
+command = "validate"
+variant = "choice-case"
+args = ["validate", "--type", "RULE"]
+fixtures = ["tide-corpus"]
+
+# A typo in an option.
+[[case]]
+command = "validate"
+variant = "typo-option"
+args = ["validate", "--strictt"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "file"
+args = ["validate", "--file", "{rule_file}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "file-missing"
+args = ["validate", "--file", "objects/rules/sentinel-kql-rul.yaml"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "uuid"
+args = ["validate", "--uuid", "{rule}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "queries-warn"
+args = ["validate", "--queries", "warn"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "queries-off"
+args = ["validate", "--queries", "off"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "fix-dry-run"
+args = ["validate", "--fix", "--dry-run"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "fix"
+args = ["validate", "--fix"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "sarif"
+args = ["validate", "--strict", "--format", "sarif", "--output", "opentide-reports/validate.sarif"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "codequality"
+args = ["validate", "--format", "codequality"]
+fixtures = ["tide-corpus"]
+
+# "--json after the subcommand": accepted.
+[[case]]
+command = "validate"
+variant = "json-after"
+args = ["validate", "--json"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+# DEBUG='*' in the environment: ignored.
+[[case]]
+command = "validate"
+variant = "debug-star"
+args = ["validate"]
+fixtures = ["tide-corpus"]
+env = { DEBUG = "*" }
+
+# DEBUG=1 is still honoured.
+[[case]]
+command = "validate"
+variant = "debug-true"
+args = ["validate"]
+fixtures = ["tide-corpus"]
+env = { DEBUG = "1" }
+
+# --watch never ends on its own; under --json it is refused.
+[[case]]
+command = "validate"
+variant = "watch-json"
+args = ["validate", "--watch"]
+modes = ["json"]
+fixtures = ["tide-corpus"]
+timeout_secs = 60
+
+# A CI sink: GitHub annotations on stdout.
+[[case]]
+command = "validate"
+variant = "ci-github"
+args = ["validate"]
+modes = ["plain", "agent"]
+fixtures = ["vscode"]
+env = { GITHUB_ACTIONS = "true" }
+
+# ---- validate query ----
+
+[[case]]
+command = "validate query"
+variant = "default"
+args = ["validate", "query"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "validate query"
+variant = "platform"
+args = ["validate", "query", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate query"
+variant = "file"
+args = ["validate", "query", "--file", "{rule_file}", "--queries", "warn"]
+fixtures = ["tide-corpus", "vscode"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "validate query"
+variant = "live-no-tenant"
+args = ["validate", "query", "--live", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "validate query"
+variant = "live-elastic"
+args = ["validate", "query", "--live", "--platform", "elastic"]
+fixtures = ["tide-corpus"]
+
+# ---- query ----
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "query"
+variant = "example"
+args = ["query", "--platform", "sentinel", "SecurityEvent | take 10"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "query"
+variant = "rule"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8003-000000000003"]
+fixtures = ["tide-corpus"]
+
+# A missing required option.
+[[case]]
+command = "query"
+variant = "missing-option"
+args = ["query", "SecurityEvent | take 10"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "query"
+variant = "typo-choice"
+args = ["query", "--platform", "sentinal", "x"]
+fixtures = ["tide-corpus"]
+
+# ---- lint ----
+
+[[case]]
+command = "lint"
+variant = "default"
+args = ["lint"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+
+[[case]]
+command = "lint"
+variant = "strict"
+args = ["lint", "--strict"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "lint"
+variant = "check-filenames"
+args = ["lint", "--check", "filenames"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "check-queries"
+args = ["lint", "--check", "queries"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "file"
+args = ["lint", "--file", "{rule_file}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "lint"
+variant = "fix"
+args = ["lint", "--fix"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "lint"
+variant = "sarif"
+args = ["lint", "--format", "sarif"]
+fixtures = ["tide-corpus"]
+
+# --changed outside a git repository.
+[[case]]
+command = "lint"
+variant = "changed"
+args = ["lint", "--strict", "--changed"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "typo-choice"
+args = ["lint", "--check", "filenamez"]
+fixtures = ["tide-corpus"]
+
+# ---- info ----
+
+[[case]]
+command = "info"
+variant = "default"
+args = ["info"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+
+[[case]]
+command = "info"
+variant = "catalog"
+args = ["info", "catalog"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "info"
+variant = "platform"
+args = ["info", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "coverage"
+args = ["info", "coverage", "--technique", "T1059"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "rules"
+args = ["info", "rules"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "info"
+variant = "vocab"
+args = ["info", "vocab"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "vocab-surface"
+args = ["info", "vocab", "surface"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "typo-section"
+args = ["info", "rulez"]
+fixtures = ["tide-corpus"]
+
+# ---- new ----
+
+[[case]]
+command = "new threat"
+variant = "example"
+args = ["new", "threat", "--name", "Credential Dumping"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new threat"
+variant = "path"
+args = ["new", "threat", "--name", "Credential Dumping", "--path", "objects/threats/credential-dumping.yaml"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+# A prompt with no TTY or under an agent exits 2 at once. Human mode is left out: the
+# interactive prompt (prompt_toolkit) works the terminal in raw mode and asks it for the cursor.
+[[case]]
+command = "new threat"
+variant = "prompt"
+args = ["new", "threat"]
+modes = ["plain", "json", "agent"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new objective"
+variant = "example"
+args = ["new", "objective", "--name", "Detect Credential Dumping", "--threat", "{threat}"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new objective"
+variant = "unknown-threat"
+args = ["new", "objective", "--name", "Detect Credential Dumping", "--threat", "00000000-0000-4000-8000-000000000000"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new rule"
+variant = "example"
+args = ["new", "rule", "--name", "Suspicious LSASS Access", "--platform", "sentinel", "--objective", "{objective}"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new rule"
+variant = "no-platform"
+args = ["new", "rule", "--name", "LSASS Access", "--objective", "{objective}"]
+modes = ["plain", "json", "agent"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+# ---- generate ----
+
+[[case]]
+command = "generate"
+variant = "default"
+args = ["generate"]
+fixtures = ["tide-corpus", "vscode"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "generate explorer"
+variant = "default"
+args = ["generate", "explorer"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate explorer"
+variant = "visibility"
+args = ["generate", "explorer", "--include-visibility", "--visibility-tlp", "red"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs"
+variant = "default"
+args = ["generate", "docs"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs"
+variant = "rules-only"
+args = ["generate", "docs", "--rules"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs"
+variant = "output-flavor"
+args = ["generate", "docs", "--output", "docs", "--flavor", "github"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs"
+variant = "changed"
+args = ["generate", "docs", "--changed"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs rules"
+variant = "default"
+args = ["generate", "docs", "rules"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs objectives"
+variant = "default"
+args = ["generate", "docs", "objectives"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs threats"
+variant = "default"
+args = ["generate", "docs", "threats"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs index"
+variant = "default"
+args = ["generate", "docs", "index"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports"
+variant = "default"
+args = ["generate", "exports"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports navigator"
+variant = "default"
+args = ["generate", "exports", "navigator"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports objects"
+variant = "default"
+args = ["generate", "exports", "objects"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports revisions"
+variant = "default"
+args = ["generate", "exports", "revisions"]
+fixtures = ["tide-corpus", "vscode"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "generate extract sentinel"
+variant = "default"
+args = ["generate", "extract", "sentinel"]
+fixtures = ["none", "tide-corpus"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "generate extract defender"
+variant = "default"
+args = ["generate", "extract", "defender"]
+fixtures = ["none", "tide-corpus"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "generate extract elastic"
+variant = "example"
+args = ["generate", "extract", "elastic", "--space", "default"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "generate inflight"
+variant = "default"
+args = ["generate", "inflight"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate inflight prune"
+variant = "default"
+args = ["generate", "inflight", "prune"]
+fixtures = ["tide-corpus", "vscode"]
+
+# ---- rules ----
+
+[[case]]
+command = "rules unreviewed"
+variant = "example"
+args = ["rules", "unreviewed", "--older-than", "90d"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "bad-duration"
+args = ["rules", "unreviewed", "--older-than", "90x"]
+fixtures = ["tide-corpus"]
+
+# ---- deploy ----
+
+[[case]]
+command = "deploy"
+variant = "dry-run"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "deploy"
+variant = "platform"
+args = ["deploy", "--platform", "sentinel", "--dry-run", "--strategy", "PREVIEW", "--all"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "deploy"
+variant = "uuid"
+args = ["deploy", "--dry-run", "--strategy", "PREVIEW", "--uuid", "{rule}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "deploy"
+variant = "both-strategies"
+args = ["deploy", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--dry-run"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "deploy"
+variant = "typo-choice"
+args = ["deploy", "--strategy", "PREVEW", "--dry-run"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "deploy"
+variant = "no-tenant"
+args = ["deploy", "--strategy", "PREVIEW", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "deploy"
+variant = "elastic-tenant"
+args = ["deploy", "--strategy", "PREVIEW", "--platform", "elastic", "--all"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "deploy migrate-state"
+variant = "default"
+args = ["deploy", "migrate-state"]
+fixtures = ["tide-corpus", "vscode"]
+
+# ---- share (MISP): tenant-contacting, recorded as failures without targets ----
+
+[[case]]
+command = "share"
+variant = "dry-run"
+args = ["share", "--dry-run"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "share push"
+variant = "example"
+args = ["share", "push", "--target", "misp-prod"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "share preview"
+variant = "default"
+args = ["share", "preview"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "share status"
+variant = "default"
+args = ["share", "status"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "share retract"
+variant = "example"
+args = ["share", "retract", "--uuid", "{rule}"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "share targets"
+variant = "default"
+args = ["share", "targets"]
+fixtures = ["tide-corpus", "vscode"]
+
+# ---- setup ----
+
+[[case]]
+command = "setup"
+variant = "plan"
+args = ["setup", "--plan", "--platform", "sentinel", "--ci", "github", "--mcp", "vscode", "--hooks", "--env"]
+fixtures = ["none", "empty"]
+
+[[case]]
+command = "setup"
+variant = "yes"
+args = ["setup", "--yes", "--name", "Detections", "--platform", "sentinel", "--ci", "github"]
+fixtures = ["none"]
+normalise = ["fresh-uuids"]
+
+# A prompt with no TTY or under an agent exits 2 at once. Human mode is left out: the
+# interactive prompt (prompt_toolkit) works the terminal in raw mode and asks it for the cursor.
+[[case]]
+command = "setup"
+variant = "prompt"
+args = ["setup"]
+modes = ["plain", "json", "agent"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup repo"
+variant = "example"
+args = ["setup", "repo", "--yes", "--name", "Detections", "--platform", "sentinel"]
+fixtures = ["none", "tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "setup platforms"
+variant = "example"
+args = ["setup", "platforms", "--sentinel", "--splunk", "--yes"]
+fixtures = ["empty", "tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "github"
+args = ["setup", "ci", "github", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "azure"
+args = ["setup", "ci", "azure", "--default-branch", "development", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "gitlab-plan"
+args = ["setup", "ci", "gitlab", "--plan"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "missing-argument"
+args = ["setup", "ci", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "typo-choice"
+args = ["setup", "ci", "githb", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup env"
+variant = "example"
+args = ["setup", "env", "--yes"]
+fixtures = ["empty", "tide-corpus"]
+
+[[case]]
+command = "setup hooks"
+variant = "example"
+args = ["setup", "hooks", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup mcp"
+variant = "example"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup mcp"
+variant = "cursor-vscode"
+args = ["setup", "mcp", "--cursor", "--vscode", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup vscode"
+variant = "settings"
+args = ["setup", "vscode", "--settings"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup vscode"
+variant = "snippets"
+args = ["setup", "vscode", "--snippets"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup skills"
+variant = "example"
+args = ["setup", "skills", "--claude-code", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup skills discover"
+variant = "example"
+args = ["setup", "skills", "discover", "--query", "sigma"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "setup skills show"
+variant = "example"
+args = ["setup", "skills", "show", "opentide-detection-rule"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup skills show"
+variant = "unknown"
+args = ["setup", "skills", "show", "no-such-skill"]
+fixtures = ["tide-corpus"]
+
+# ---- doctor, migrate, tui, explain, commands ----
+
+[[case]]
+command = "doctor"
+variant = "default"
+args = ["doctor"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+
+[[case]]
+command = "doctor"
+variant = "offline"
+args = ["doctor", "--offline"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "default"
+args = ["migrate", "vocab-scope"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "apply"
+args = ["migrate", "vocab-scope", "--apply"]
+fixtures = ["tide-corpus"]
+
+# Human mode starts the full-screen app, whose frames depend on timing: tui --help covers it.
+[[case]]
+command = "tui"
+variant = "default"
+args = ["tui"]
+modes = ["plain", "json", "agent"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "explain"
+variant = "example"
+args = ["explain", "vocab_unknown"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "list"
+args = ["explain"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "typo"
+args = ["explain", "vocab_unknwn"]
+fixtures = ["none"]
+
+[[case]]
+command = "commands"
+variant = "default"
+args = ["commands"]
+fixtures = ["none"]
+
+# ---- protocol commands (mcp mode in every mode): the MCP server is UC-3.7, the language server has its own tests ----
+
+# One JSON-RPC session: initialize, two runs, a refused run, protocol errors, shutdown, exit.
+[[case]]
+command = "serve"
+variant = "session"
+args = ["serve"]
+modes = ["plain"]
+fixtures = ["tide-corpus", "vscode"]
+input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"run\",\"params\":{\"argv\":[\"validate\"]}}\n{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"run\",\"params\":{\"argv\":[\"info\"]}}\n{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"run\",\"params\":{\"argv\":[\"tui\"]}}\nnot json\n{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"nope\"}\n{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}\n{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}\n"

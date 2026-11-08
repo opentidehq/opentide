@@ -208,18 +208,18 @@ pub fn compare(
     }
 }
 
-/// One CLI run of each side compared, each normalised with its own
-/// normaliser first (each ran in its own copy of the workspace), applying
-/// `ledger` without checking it for stale entries. `OPENTIDE_ENGINE=compare`
-/// calls it through `opentide._native.compare_runs`.
+/// One CLI run of each side compared, each normalised first with its own
+/// volatile values (each ran in its own copy of the workspace), as the goldens
+/// are, applying `ledger` without checking it for stale entries.
+/// `OPENTIDE_ENGINE=compare` calls it through `opentide._native.compare_runs`.
 pub fn compare_normalised(
     case: Case,
-    (mut oracle, oracle_normaliser): (Run, &Normaliser),
-    (mut candidate, candidate_normaliser): (Run, &Normaliser),
+    (mut oracle, oracle_volatile): (Run, &normalise::Volatile),
+    (mut candidate, candidate_volatile): (Run, &normalise::Volatile),
     ledger: &Ledger,
 ) -> CaseReport {
-    oracle_normaliser.run(&mut oracle);
-    candidate_normaliser.run(&mut candidate);
+    Normaliser::new(oracle_volatile, &[], []).run(&mut oracle);
+    Normaliser::new(candidate_volatile, &[], []).run(&mut candidate);
     compare(case, &oracle, &candidate, ledger, &mut Usage::default())
 }
 
@@ -385,9 +385,14 @@ impl Comparison<'_> {
             else {
                 continue;
             };
-            if contains(oracle, expected_oracle.as_bytes())
-                && contains(candidate, expected_candidate.as_bytes())
-            {
+            // Narrow: on one line the two sides share, the oracle has its
+            // text and the candidate has its own.
+            if same_line(
+                oracle,
+                candidate,
+                expected_oracle.as_bytes(),
+                expected_candidate.as_bytes(),
+            ) {
                 rewritten = replace(
                     &rewritten,
                     expected_oracle.as_bytes(),
@@ -548,11 +553,27 @@ fn excerpt(text: &str) -> String {
     out
 }
 
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    needle.is_empty()
-        || haystack
-            .windows(needle.len())
-            .any(|window| window == needle)
+/// Whether some line N holds `oracle_text` in `oracle` and `candidate_text`
+/// in `candidate`. A text spanning lines is matched at the line it starts on.
+fn same_line(oracle: &[u8], candidate: &[u8], oracle_text: &[u8], candidate_text: &[u8]) -> bool {
+    // The line each match starts on, counting newlines once, left to right.
+    let lines = |bytes: &[u8], text: &[u8]| -> std::collections::BTreeSet<usize> {
+        let mut found = std::collections::BTreeSet::new();
+        if text.is_empty() || bytes.len() < text.len() {
+            return found;
+        }
+        let mut line = 0;
+        for at in 0..=bytes.len() - text.len() {
+            if bytes[at..].starts_with(text) {
+                found.insert(line);
+            }
+            if bytes[at] == b'\n' {
+                line += 1;
+            }
+        }
+        found
+    };
+    !lines(oracle, oracle_text).is_disjoint(&lines(candidate, candidate_text))
 }
 
 /// `bytes` with every occurrence of `from` replaced by `to`, left to right.
@@ -604,6 +625,17 @@ pub struct StaleEntry {
 }
 
 impl RunReport {
+    /// The report of a partial run (a filter, or cases that failed to run):
+    /// no entry can be called stale from it.
+    pub fn partial(cases: Vec<CaseReport>) -> RunReport {
+        RunReport {
+            schema_version: 1,
+            equal: cases.iter().all(|case| case.equal),
+            cases,
+            stale: Vec::new(),
+        }
+    }
+
     /// The report of `cases`, compared with `ledger`, whose entries `usage`
     /// says applied: an entry that applied to none is stale.
     pub fn new(cases: Vec<CaseReport>, ledger: &Ledger, usage: &Usage) -> RunReport {

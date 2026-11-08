@@ -125,21 +125,24 @@ def engine_versions() -> dict[str, str]:
 
 #: One side of :func:`compare_runs`: exit code, stdout, stderr, the files the
 #: run left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None``
-#: for a deleted file) and the literal replacements that normalise it.
+#: for a deleted file), the literals that normalise it with their placeholders,
+#: and the dates (``YYYY-MM-DD``, UTC) it ran on.
 CompareRun = tuple[
     int,
     bytes,
     bytes,
     Sequence[tuple[str, int | None, bytes | None]],
-    Sequence[tuple[bytes, bytes]],
+    Sequence[tuple[str, str]],
+    Sequence[str],
 ]
 
 
 def compare_runs(command: str, oracle: CompareRun, candidate: CompareRun) -> str:
     """The comparator's report on two runs of *command*, as JSON (``OPENTIDE_ENGINE=compare``).
 
-    Each run is normalised with its own replacements first; the comparison is
-    the one ``cargo xtask compare`` makes (``crates/opentide-compare``).
+    Each run is normalised first, as the goldens are, with its own literals and
+    dates; the comparison is the one ``cargo xtask compare`` makes
+    (``crates/opentide-compare``).
     Raises :class:`EngineUnavailableError`.
     """
     return str(engine().compare_runs(command, oracle, candidate))

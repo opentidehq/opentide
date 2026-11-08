@@ -62,10 +62,26 @@ pub enum Engine {
 /// The fault catalogue's coverage of the diagnostic codes.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FaultCoverage {
-    /// Every diagnostic code.
+    /// Every diagnostic code in scope (UC-0.6's `codes.toml`).
     pub codes: BTreeSet<String>,
-    /// The codes at least one fault kind produces.
+    /// The codes in scope at least one fault kind produces.
     pub covered: BTreeSet<String>,
+    /// The codes in scope the catalogue declares unreachable through the CLI.
+    pub unreachable: BTreeSet<String>,
+    /// Codes outside the scope that fault kinds produce (listed, not wrong).
+    pub outside: usize,
+    /// The catalogue's own inconsistencies, as UC-0.6's report states them.
+    pub problems: Vec<String>,
+}
+
+impl FaultCoverage {
+    /// The codes in scope with neither a fault kind nor an unreachable entry.
+    pub fn missing(&self) -> Vec<&String> {
+        self.codes
+            .iter()
+            .filter(|c| !self.covered.contains(*c) && !self.unreachable.contains(*c))
+            .collect()
+    }
 }
 
 /// The state of one row.
@@ -127,8 +143,6 @@ pub fn state(inputs: &Inputs, cell: &Cell) -> State {
 pub enum InputError {
     /// A compare result for a recording that does not exist.
     UnknownRecording(Cell),
-    /// A fault kind's code that is not a diagnostic code.
-    UnknownCode(String),
 }
 
 impl fmt::Display for InputError {
@@ -139,12 +153,6 @@ impl fmt::Display for InputError {
                 "a compare result for `{}` in {} on {}, which has no recording",
                 cell.command, cell.mode, cell.corpus
             ),
-            Self::UnknownCode(code) => {
-                write!(
-                    f,
-                    "a fault kind produces `{code}`, which is not a diagnostic code"
-                )
-            }
         }
     }
 }
@@ -158,14 +166,6 @@ pub fn check(inputs: &Inputs) -> Vec<InputError> {
                 .keys()
                 .filter(|cell| !inputs.goldens.contains(cell))
                 .map(|cell| InputError::UnknownRecording(cell.clone())),
-        );
-    }
-    if let Some(faults) = &inputs.faults {
-        errors.extend(
-            faults
-                .covered
-                .difference(&faults.codes)
-                .map(|code| InputError::UnknownCode(code.clone())),
         );
     }
     errors
@@ -254,6 +254,23 @@ pub fn page(inputs: &Inputs) -> String {
                 faults.codes.len(),
                 ratio(faults.covered.len(), faults.codes.len())
             );
+            let _ = writeln!(
+                out,
+                "| … declared unreachable through the CLI | {} |",
+                faults.unreachable.len()
+            );
+            let _ = writeln!(
+                out,
+                "| … with neither (missing) | {} |",
+                faults.missing().len()
+            );
+            if faults.outside > 0 {
+                let _ = writeln!(
+                    out,
+                    "| Codes outside the scope with a fault kind | {} |",
+                    faults.outside
+                );
+            }
         }
         None => out.push_str("| Diagnostic codes with a fault kind | no fault catalogue yet |\n"),
     }
@@ -336,16 +353,22 @@ pub fn page(inputs: &Inputs) -> String {
     }
 
     if let Some(faults) = &inputs.faults {
-        let missing: Vec<&String> = faults.codes.difference(&faults.covered).collect();
+        let missing = faults.missing();
         if !missing.is_empty() {
             let _ = write!(
                 out,
-                "\n## Diagnostic codes without a fault kind\n\n{} code(s): ",
+                "\n## Diagnostic codes without a fault kind\n\n{} code(s), neither covered nor declared unreachable: ",
                 missing.len()
             );
             let list: Vec<String> = missing.iter().map(|c| format!("`{c}`")).collect();
             out.push_str(&list.join(", "));
             out.push_str(".\n");
+        }
+        if !faults.problems.is_empty() {
+            out.push_str("\n## Fault catalogue problems\n\n");
+            for problem in &faults.problems {
+                let _ = writeln!(out, "- {problem}");
+            }
         }
     }
     out
@@ -387,8 +410,11 @@ mod tests {
             stale_entries: Some(0),
             approved_diffs: Some([("validate".to_owned(), 2)].into()),
             faults: Some(FaultCoverage {
-                codes: ["a".into(), "b".into(), "c".into()].into(),
+                codes: ["a".into(), "b".into(), "c".into(), "d".into()].into(),
                 covered: ["a".into(), "b".into()].into(),
+                unreachable: ["d".into()].into(),
+                outside: 1,
+                problems: vec!["`d` is declared unreachable twice".into()],
             }),
         }
     }
@@ -427,7 +453,7 @@ mod tests {
             "{page}"
         );
         assert!(
-            page.contains("| Diagnostic codes with a fault kind | 2 of 3 (66.6%) |"),
+            page.contains("| Diagnostic codes with a fault kind | 2 of 4 (50.0%) |"),
             "{page}"
         );
         assert!(
@@ -435,7 +461,22 @@ mod tests {
             "{page}"
         );
         assert!(page.contains("| Corpus | json | plain |\n|--------|------|------|\n| tide_corpus | compare passing | compare failing |"), "{page}");
-        assert!(page.contains("1 code(s): `c`."), "{page}");
+        assert!(
+            page.contains("1 code(s), neither covered nor declared unreachable: `c`."),
+            "{page}"
+        );
+        assert!(
+            page.contains("| … declared unreachable through the CLI | 1 |"),
+            "{page}"
+        );
+        assert!(
+            page.contains("| Codes outside the scope with a fault kind | 1 |"),
+            "{page}"
+        );
+        assert!(
+            page.contains("## Fault catalogue problems\n\n- `d` is declared unreachable twice\n"),
+            "{page}"
+        );
         assert!(
             page.contains("| Stale ledger entries in the last compare run | 0 |"),
             "{page}"
@@ -501,13 +542,13 @@ mod tests {
             .as_mut()
             .unwrap()
             .insert(cell("validate", "agent", "tide_corpus"), true);
-        bad.faults.as_mut().unwrap().covered.insert("zzz".into());
         assert_eq!(
             check(&bad),
-            [
-                InputError::UnknownRecording(cell("validate", "agent", "tide_corpus")),
-                InputError::UnknownCode("zzz".into()),
-            ]
+            [InputError::UnknownRecording(cell(
+                "validate",
+                "agent",
+                "tide_corpus"
+            )),]
         );
         assert!(check(&inputs()).is_empty());
     }

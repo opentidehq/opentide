@@ -148,7 +148,10 @@ def main_callback(
             next_actions=steps,
         )
     # OPENTIDE_ENGINE (#805): returns to run the Python implementation, else
-    # runs the Rust one, or both, and exits.
-    from opentide.cli.engines import dispatch
+    # runs the Rust one, or both, and exits. Unset, nothing more is imported.
+    import os
 
-    dispatch(cli_ctx, ctx)
+    if os.environ.get("OPENTIDE_ENGINE", "").strip() not in ("", "python"):
+        from opentide.cli.engines import dispatch
+
+        dispatch(cli_ctx, ctx)

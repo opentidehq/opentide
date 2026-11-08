@@ -1539,9 +1539,14 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "glob",
  "opentide-compare",
+ "regex",
+ "rustix",
  "serde",
  "serde_json",
+ "similar 2.7.0",
+ "tempfile",
  "toml",
  "trycmd",
 ]

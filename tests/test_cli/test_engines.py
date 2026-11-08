@@ -131,6 +131,7 @@ def test_rust_runs_the_rust_implementation(
 def test_compare_replays_python_when_both_agree(
     workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.chdir(workspace)
     monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("same"))
     args = ["--json", "--repo", str(workspace), "explain", "internal"]
     code, stdout, _ = invoke(args, "compare")
@@ -187,6 +188,7 @@ def test_compare_catches_a_divergent_fake_rust_command(
 def test_compare_without_json_prints_one_error_line(
     workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.chdir(workspace)
     monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("stdout"))
     code, stdout, stderr = invoke(
         ["--no-color", "--repo", str(workspace), "explain", "internal"], "compare"
@@ -201,6 +203,7 @@ def test_compare_normalises_the_workspace_path(
     workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Each side prints its own copy's path; both read as ``<WS>`` before comparing."""
+    monkeypatch.chdir(workspace)
     monkeypatch.setitem(engines.RUST_COMMANDS, ("info",), fake("same"))
     code, stdout, _ = invoke(["--json", "--repo", str(workspace), "info", "rules"], "compare")
     python_code, python_stdout, _ = invoke(
@@ -281,3 +284,130 @@ def test_the_report_redacts_secret_arguments(
     text = Path(written).read_text(encoding="utf-8")
     assert "s3cr3t-value-1234567890" not in text
     assert json.loads(text)["argv"][:3] == ["share", "push", "--api-key"]
+
+
+def test_help_is_printed_whatever_the_engine(workspace: Path) -> None:
+    code, stdout, _ = invoke(["--repo", str(workspace), "validate", "--help"], "rust")
+    assert code == 0
+    assert "Usage" in stdout
+
+
+def test_compare_refuses_to_run_outside_the_workspace(
+    workspace: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Writes outside the workspace would escape both copies (review of #854)."""
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("file"))
+    monkeypatch.chdir(tmp_path)
+    code, stdout, _ = invoke(["--json", "--repo", "ws", "explain", "internal"], "compare")
+    assert code == 2
+    assert document(stdout)["failure"]["code"] == "usage_error"
+    assert not (tmp_path / "fake-rust.txt").exists()
+
+    monkeypatch.chdir(workspace)
+    outside = str(tmp_path / "elsewhere.md")
+    code, stdout, _ = invoke(
+        ["--json", "--repo", str(workspace), "explain", "internal", f"--output={outside}"],
+        "compare",
+    )
+    assert code == 2
+    assert outside in document(stdout)["failure"]["message"]
+
+
+def test_an_agreed_compare_is_the_python_run(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Its output names the workspace, not a deleted copy, and its writes land in the workspace."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.setattr(engines, "python_launch", lambda: (sys.executable, str(FAKE), "file"))
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("info",), fake("file"))
+    args = ["--json", "--repo", str(workspace), "info", "rules"]
+    code, stdout, _ = invoke(args, "compare")
+    python_code, python_stdout, _ = invoke(args, "python")
+    assert code == python_code
+    assert "opentide-compare-" not in stdout
+    assert {**document(stdout), "duration_ms": 0} == {**document(python_stdout), "duration_ms": 0}
+    assert (workspace / "fake-rust.txt").read_text(encoding="utf-8") == "written by the fake\n"
+    assert not state.exists()
+
+
+def test_compare_does_not_fail_on_wall_time(
+    workspace: Path, state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``validate`` prints ``duration_ms`` and ``report.stats.wall_ms``, different in every run."""
+    monkeypatch.chdir(workspace)
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("validate",), fake("same"))
+    code, stdout, _ = invoke(["--json", "--repo", str(workspace), "validate"], "compare")
+    assert code != 70, stdout
+    assert not state.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Unix sockets and symlinks")
+def test_copies_skip_sockets_and_relink_absolute_links(tmp_path: Path) -> None:
+    import socket
+
+    workspace = tmp_path / "ws"
+    (workspace / "site").mkdir(parents=True)
+    (workspace / "docs").symlink_to(workspace / "site")
+    (workspace / "out").symlink_to("/elsewhere")
+    server = socket.socket(socket.AF_UNIX)
+    server.bind(str(workspace / "daemon.ipc"))
+    try:
+        copy = engines._copy_workspace(workspace, tmp_path / "scratch" / "python" / "ws")
+    finally:
+        server.close()
+    assert not (copy.root / "daemon.ipc").exists()
+    assert os.readlink(copy.root / "docs") == str(copy.root / "site")
+    assert os.readlink(copy.root / "out") == "/elsewhere"
+
+
+def test_a_link_never_equals_a_file(tmp_path: Path) -> None:
+    root = tmp_path / "copy"
+    root.mkdir()
+    copy = engines._Copy(original=(tmp_path / "ws").resolve(), root=root)
+    (root / "link").symlink_to("x")
+    (root / "file").write_bytes(b"symlink:x")
+    (root / "file").chmod(0o777)
+    changes = {name: mode for name, mode, _ in engines._changes(copy, {})}
+    assert changes["link"] != changes["file"]
+
+
+def test_rust_mode_does_not_ignore_ctrl_c_for_the_child(
+    workspace: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SIG_IGN survives exec; the parent must wait with a handler instead (review of #854)."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import signal, sys\n"
+        "sys.exit(3 if signal.getsignal(signal.SIGINT) == signal.SIG_IGN else 0)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setitem(
+        engines.RUST_COMMANDS, ("explain",), RustCommand(launch=(sys.executable, str(probe)))
+    )
+    code, _, _ = invoke(["--repo", str(workspace), "explain", "internal"], "rust")
+    assert code == 0
+
+
+def test_the_copy_path_maps_back_in_every_form(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    (real / "ws").mkdir(parents=True)
+    linked = tmp_path / "linked"
+    linked.symlink_to(real)
+    copy = engines._Copy(original=(tmp_path / "w s").resolve(), root=linked / "ws")
+    back = engines._back_to(copy, (tmp_path / "w s").resolve())
+    workspace = str((tmp_path / "w s").resolve())
+    assert back(str(linked / "ws").encode()) == workspace.encode()
+    assert back(str(real / "ws").encode()) == workspace.encode()
+
+
+def test_compare_refuses_relative_paths_that_leave_the_workspace(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(engines.RUST_COMMANDS, ("explain",), fake("same"))
+    monkeypatch.chdir(workspace)
+    code, stdout, _ = invoke(
+        ["--json", "--repo", str(workspace), "explain", "internal", "--output=../site"], "compare"
+    )
+    assert code == 2
+    assert "../site" in document(stdout)["failure"]["message"]
+    assert engines._outside(["objects/a.yaml", "./b", "x/../y"], workspace) is None

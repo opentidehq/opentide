@@ -1,0 +1,7 @@
+# Golden recordings are bytes, compared exactly: no end-of-line conversion.
+# GitHub folds them in diffs (generated); tests/golden/README.md says how to review them.
+tests/golden/cases/** -text linguist-generated
+tests/golden/blobs/** -text linguist-generated
+tests/golden/COVERAGE.md linguist-generated
+tests/golden/oracle-requirements.txt linguist-generated
+tests/golden/fixtures/** -text

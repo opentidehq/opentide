@@ -187,35 +187,38 @@ pub fn compare(json: &str) -> Result<(BTreeMap<Cell, bool>, usize)> {
     Ok((cells, report.stale.len()))
 }
 
-#[derive(Deserialize)]
-struct CodesFile {
-    groups: BTreeMap<String, Vec<String>>,
-}
-
-#[derive(Deserialize)]
-struct FaultsFile {
-    #[serde(default)]
-    kind: Vec<FaultKind>,
-}
-
-#[derive(Deserialize)]
-struct FaultKind {
-    codes: Vec<String>,
-}
-
-/// The fault catalogue's coverage: every code of every group of `codes.toml`,
-/// and those a kind of `faults.toml` produces. Other fields of either file
-/// are UC-0.6's and are not read here.
+/// The fault catalogue's coverage, as UC-0.6's own report computes it
+/// (`cargo xtask corpus coverage`): the codes in scope from `codes.toml`, the
+/// kinds and unreachable entries of `faults.toml`.
 ///
 /// # Errors
 ///
-/// Either text is not TOML of that shape.
+/// Either file does not parse.
 pub fn faults(codes_toml: &str, faults_toml: &str) -> Result<FaultCoverage> {
-    let codes: CodesFile = toml::from_str(codes_toml).context("read codes.toml")?;
-    let kinds: FaultsFile = toml::from_str(faults_toml).context("read faults.toml")?;
+    let codes = crate::corpus::coverage::Codes::parse(codes_toml).context("parse codes.toml")?;
+    let catalogue =
+        crate::corpus::faults::Catalogue::parse(faults_toml).context("parse faults.toml")?;
+    let report = crate::corpus::coverage::report(&codes, &catalogue);
+    let in_scope: BTreeSet<String> = report
+        .groups
+        .iter()
+        .filter(|(_, groups)| !groups.is_empty())
+        .map(|(code, _)| code.clone())
+        .collect();
     Ok(FaultCoverage {
-        codes: codes.groups.into_values().flatten().collect(),
-        covered: kinds.kind.into_iter().flat_map(|kind| kind.codes).collect(),
+        covered: in_scope
+            .iter()
+            .filter(|code| report.kinds.contains_key(*code))
+            .cloned()
+            .collect(),
+        unreachable: in_scope
+            .iter()
+            .filter(|code| report.unreachable.contains_key(*code))
+            .cloned()
+            .collect(),
+        outside: report.groups.len() - in_scope.len(),
+        problems: report.problems,
+        codes: in_scope,
     })
 }
 
@@ -348,23 +351,31 @@ mod tests {
     }
 
     #[test]
-    fn reads_the_fault_catalogues_coverage() {
-        let coverage = faults(
-            "oracle = \"0.23.0\"\n[groups]\nvalidation = [\"invalid_uuid\", \"missing_field\"]\n\
-             lint = [\"missing_field\", \"long_name\"]\n",
-            "[[kind]]\nid = \"uuid-invalid-rule\"\ncodes = [\"invalid_uuid\"]\nseverity = \"error\"\n\
-             [[unreachable]]\ncode = \"long_name\"\nreason = \"r\"\n",
+    fn reads_the_fault_catalogue_as_uc_0_6_reports_it() {
+        // The repository's own catalogue: the same counts as
+        // `cargo xtask corpus coverage`.
+        let corpora = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/corpora");
+        let Some(coverage) = fault_coverage(&corpora).unwrap() else {
+            return; // a checkout without UC-0.6's catalogue
+        };
+        let codes = crate::corpus::coverage::Codes::parse(
+            &std::fs::read_to_string(corpora.join("codes.toml")).unwrap(),
         )
         .unwrap();
-        assert_eq!(
-            coverage.codes,
-            ["invalid_uuid", "long_name", "missing_field"]
-                .map(String::from)
-                .into()
+        let catalogue = crate::corpus::faults::Catalogue::parse(
+            &std::fs::read_to_string(corpora.join("faults.toml")).unwrap(),
+        )
+        .unwrap();
+        let summary = crate::corpus::coverage::report(&codes, &catalogue).summary();
+        let expected = format!(
+            "{} codes in scope, {} with a fault kind, {} unreachable through the CLI, {} missing",
+            coverage.codes.len(),
+            coverage.covered.len(),
+            coverage.unreachable.len(),
+            coverage.missing().len()
         );
-        assert_eq!(coverage.covered, ["invalid_uuid".to_owned()].into());
-        assert!(faults("[groups]\n", "").is_ok());
-        assert!(faults("groups = 1", "").is_err());
+        assert!(summary.contains(&expected), "{summary} / {expected}");
+        assert!(faults("not toml [", "").is_err());
     }
 
     #[test]

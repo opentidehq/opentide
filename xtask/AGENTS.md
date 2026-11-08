@@ -9,8 +9,11 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `coverage gate --report FILE [--policy FILE] [--metadata FILE]` | Line coverage per workspace crate (cargo-llvm-cov's JSON export) against the gates of [`coverage.toml`](coverage.toml): 90% for opentide-schema, -workspace, -compile and -cli once they exist, 80% for every other member; prints a Markdown table. UC-X.2 (#844) |
 | `mutants crates`, `mutants report --outcomes FILE ...` | The crates the weekly mutation run mutates ([`mutants.toml`](mutants.toml)); the shards' cargo-mutants outcomes merged, scored against [`mutants-baseline.toml`](mutants-baseline.toml), with an issue body per crate above its threshold and `--write-baseline` to record a run. UC-X.2 (#844) |
 | `parity dashboard [--root DIR] [--out FILE] [--check]` | Renders `docs/internal/parity.md` (each command × corpus × mode against the oracle, approved diffs, fault coverage) from the goldens, engine state, ledger and fault catalogue; `--check` fails on drift. UC-X.2 (#844) |
+| `corpus generate\|faults\|clean\|codes\|coverage` | The corpora of UC-0.6 (#804): the seeded heavy workspace, the fault catalogue run against the oracle, the code inventory and coverage report ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
-| `golden` | Not implemented: UC-0.5 (#803) records and checks the oracle's goldens with it |
+| `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
+| `golden check --engine compare [--report FILE]` | Runs every case whose command has a Rust implementation (`opentide.cli.engines.RUST_COMMANDS`) through this repository's CLI with `OPENTIDE_ENGINE=rust`, and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; CI job `Golden compare`) |
+| `compare --oracle DIR --candidate DIR --command PATH`, `compare --check-ledger` | Two runs on disk through the comparator; the ledger's schema and changelog references (`src/compare.rs`, `crates/opentide-compare/AGENTS.md`) |
 | `bench` | Not implemented: UC-0.8 (#806) runs the benchmarks against their budgets with it |
 | `help` | The usage |
 
@@ -33,7 +36,18 @@ moving a crate between layers is a design decision for the maintainer, not a fix
 ## Invariants
 
 - The library (`src/lib.rs`, `src/layers.rs`) computes; `src/main.rs` reads files, runs cargo and
-  prints. Tests drive the library with synthetic metadata, no workspace needed.
+  prints. `src/corpus/` follows the same split inside its module: `generate`, `yaml`, `rng`,
+  `workspace`, `faults` and `coverage` compute; `corpus/cli.rs` writes workspaces, runs the oracle
+  and prints (main.rs only dispatches to it).
+- The corpus generator's output is a function of its options alone (own PRNG and YAML emitter, no
+  clock, environment or file); `tests/corpus_generate.rs` records its digests. Tests drive the library with synthetic metadata, no workspace needed.
+- `golden` is its own module, `src/golden/`, a library the comparator (UC-0.7) reuses: the case
+  model (`case.rs`), fixtures (`fixture.rs`), the oracle's install (`oracle.rs`), the runner
+  (`run.rs`, `pty.rs`), the normaliser (in `crates/opentide-compare/src/normalise.rs`, re-exported
+  as `golden::normalise`, so the CLI's compare mode shares it), recordings and their differences
+  (`recording.rs`, `snapshot.rs`, `blob.rs`) and the coverage report (`coverage.rs`). `main.rs`
+  only dispatches to `golden::main`. A normalisation rule changes with its unit test and a
+  re-record in the same PR.
 - The workspace to check is found at run time (`CARGO_MANIFEST_DIR` as `cargo run` sets it, else
   the working directory), and the table is `xtask/layers.toml` under the root `cargo metadata`
   prints. Never compile a path in with `env!`: a target pool that last served another worktree can
@@ -57,6 +71,15 @@ cargo xtask check-layers
   measures are described in `docs/internal/test-strength.md`.
 - `tests/workspace.rs`: the binary in a two-crate workspace of its own with an upward edge, run as
   `cargo run` and as a plain binary: it must check that workspace, not the repository.
+- `src/golden/*.rs` unit tests: the case expansion, every normalisation rule (live regions, paths,
+  timestamps, durations, hyperlink ids, fresh UUIDs), snapshots, recordings and their round trip,
+  the blob store's SHA-256 against FIPS 180-4 vectors, the requirements pin, the coverage report.
+- `tests/cmd/golden.trycmd`: `xtask golden`'s usage errors. Running the cases needs uv and the
+  oracle: `cargo xtask golden check --engine python` (CI: `.github/workflows/golden.yml`).
+- `tests/corpus_generate.rs`: the generator's recorded digests, counts, coverage of platforms and
+  features, layouts, slug file names, no literal secret. `src/corpus/*` unit tests: the YAML
+  emitter, the PRNG's reference values, the catalogue's parser, selectors, operations and verdicts.
+  The oracle runs only in `cargo xtask corpus faults --check` (the `Corpus` workflow).
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
   `unsafe` (`UNSAFE_CRATES`), whose copies must equal the workspace table with
   `unsafe_code = "deny"`.
@@ -68,6 +91,7 @@ cargo xtask check-layers
 
 ## Work items that change this crate
 
-UC-0.4 (#802) check-layers; UC-X.2 (#844) coverage, mutants, parity; UC-1.8 (#814) codegen; UC-0.5 (#803) golden; UC-0.8 (#806) bench;
+UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
+UC-0.7 (#805) the comparator over `golden`; UC-X.2 (#844) coverage, mutants, parity; UC-0.8 (#806) bench;
 UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wires the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).

@@ -1,0 +1,11 @@
+name: Misspelled TLP
+metadata:
+  uuid: 6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d
+  schema: rule::1.1
+  tlp: ambr
+detection_model: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f
+configurations:
+  sentinel:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "procdump.exe"
