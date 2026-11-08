@@ -239,6 +239,10 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
         assert_eq!(coverage("--write"), 1, "yaml_parse has no kind");
         assert_eq!(coverage("--check"), 1);
         assert!(Path::new(&lab.path("COVERAGE.md")).exists());
+        // A problem fails it too: codes recorded from another oracle.
+        lab.write("codes.toml", &codes("").replace("0.23.0", "0.22.0"));
+        assert_eq!(coverage("--write"), 1, "codes.toml is from another oracle");
+        assert_eq!(coverage("--check"), 1);
     }
 
     #[test]

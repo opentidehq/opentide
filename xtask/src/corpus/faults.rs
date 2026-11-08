@@ -857,8 +857,6 @@ pub fn findings(document: &serde_json::Value, root: &str) -> Result<Vec<Finding>
             push(item, "warning");
         }
     }
-    // A run the workspace stops before validating (a retired or unreadable
-    // configuration file) fails with its findings under `diagnostics`.
     // `deploy migrate-state` lists the ids it could not migrate under `errors`.
     if let Some(items) = document.get("errors").and_then(|v| v.as_array()) {
         read = true;
@@ -866,6 +864,8 @@ pub fn findings(document: &serde_json::Value, root: &str) -> Result<Vec<Finding>
             push(item, "error");
         }
     }
+    // A run the workspace stops before validating (a retired or unreadable
+    // configuration file) fails with its findings under `diagnostics`.
     if let Some(items) = document.get("diagnostics").and_then(|v| v.as_array()) {
         read = true;
         for item in items {
