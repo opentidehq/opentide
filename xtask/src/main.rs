@@ -19,6 +19,10 @@ commands:
                  down the layer table (xtask/layers.toml, plan section 4).
                  --metadata reads `cargo metadata --format-version 1` output
                  from FILE instead of running cargo; --layers reads another table
+  corpus <command>
+                 generate the heavy workspace, run the fault catalogue
+                 against the oracle, report coverage (UC-0.6, #804);
+                 `cargo xtask corpus help` lists its commands
   codegen        generate schemas, stubs, types and references (UC-1.8, #814)
   golden         record and check the oracle's goldens (UC-0.5, #803)
   bench          run the benchmarks against their budgets (UC-0.8, #806)
@@ -40,6 +44,13 @@ fn main() -> ExitCode {
             Ok(false) => ExitCode::FAILURE,
             Err(error) => {
                 eprintln!("xtask check-layers: {error:#}");
+                ExitCode::from(2)
+            }
+        },
+        "corpus" => match xtask::corpus::cli::run(rest) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("xtask corpus: {error:#}");
                 ExitCode::from(2)
             }
         },
