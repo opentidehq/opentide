@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "opentide_esql",
+      "camelcase": "OpentideEsql",
+      "scope": "source.esql",
+      "file-types": ["esql"],
+      "highlights": "../../highlights/queries/esql/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "EUPL-1.2"
+  }
+}

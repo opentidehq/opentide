@@ -1,0 +1,3 @@
+// prod:stats_command invalid
+FROM logs-*
+| STATS c = BY host.name

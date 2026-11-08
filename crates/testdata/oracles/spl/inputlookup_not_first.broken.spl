@@ -1,0 +1,1 @@
+index=a | inputlookup | stats count by host

@@ -1,0 +1,61 @@
+# AGENTS.md — opentide language server
+
+Instructions for coding agents working on the engine of this repository (`opentidehq/opentide`): the crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), and the grammars, highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` covers the rest of the repository. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
+
+Before editing, read the one skill that matches the change. Skills follow the [Agent Skills specification](https://agentskills.io/specification).
+
+| Change | Read |
+| --- | --- |
+| Any `crates/**/*.rs`, `Cargo.toml`, `Cargo.lock` | `.agents/skills/rust-engine/SKILL.md` |
+| `grammars/`, `crates/opentide-syntax`, `highlights/queries/` | `.agents/skills/tree-sitter/SKILL.md` |
+| `crates/opentide-lsp`, `editors/`, stdio tests | `.agents/skills/lsp-host/SKILL.md` |
+| `crates/opentide-wasm`, `packages/`, packaging | `.agents/skills/wasm-hosts/SKILL.md` |
+| A `crates/CHANGELOG.md` entry, or an engine release's notes | `.agents/skills/engine-release-notes/SKILL.md` |
+| An engine release: `scripts/engine/release.py`, `.github/engine-workflows/release.yml` | `.agents/skills/engine-release/SKILL.md` |
+| `data/catalogs/`, `highlights/spec.toml`, `crates/testdata/conformance`, `crates/testdata/oracles`, `scripts/engine/oracles`, schema sync | `.agents/skills/catalogs/SKILL.md` |
+| A new query language (S1QL, Sigma, YARA) | `.agents/skills/add-language/SKILL.md` (then the rows above) |
+
+## Product
+
+Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, and **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
+
+Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript packages) own the filesystem and the editor protocol. The CLI (`analyze`, `highlight`, `generate-highlights`) prints plain JSON. Only `--stdio` and `--listen` speak JSON-RPC.
+
+## Hard rules
+
+- No `std::fs` in `crates/opentide-{core,highlight,syntax,kql,spl,esql,eql,kuery,lucene,falco,ecs,tide,analysis}/src`. Tests may read the repo.
+- Do not rename a HighlightSpec capture. Adding one is a minor (`highlights/spec.toml` `[meta].version`).
+- Do not validate CrowdStrike. `configurations.crowdstrike.*` stays unsupported.
+- Control commands (`.show`, `.create`) parse so the engine can emit `kql_control_command_unsupported`. They are not valid detections.
+- Highlight tokenizes **authored** SPL. An implicit leading `| search` is not a source rewrite.
+- opentide LSP owns Tide diagnostics. Editor samples keep yamlls off `objects/**`.
+- There is no `opentide-sql` crate, no `.sql` language id, and no stub SQL highlighter.
+- Do not hand-edit `grammars/**/src/parser.c`, `grammar.json`, or `node-types.json`. Regenerate with `tree-sitter-cli` **0.25.10**.
+- Do not commit a rewritten `Cargo.lock` with a change that is not about dependencies. The lock is what Cargo resolves and CI builds with `--locked`; restore the committed lock if Cargo rewrites it.
+- Configuration TOML (`opentide-config`, #158) is checked by the host, never by Rust. The engine places the host checker's `{code, field_path, severity}` findings and reads the host's schemas for hover and completion. No configuration check logic in Rust, no vendored or hand-written configuration schema, no TOML grammar, no HighlightSpec captures. Without a host checker there are no configuration diagnostics.
+- Pydantic in this repository's `opentide` package (`src/opentide`) remains CLI authority for Tide objects. The LSP matches `{code, field_path, severity}` and adds ranges.
+
+## Verify
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+bash scripts/engine/check-io-free.sh
+bash scripts/engine/check-names.sh
+bash scripts/engine/validate-skills.sh
+cargo test --workspace
+cargo run -p opentide-lsp -- generate-highlights --check
+```
+
+Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`'s `engine` and `engine-wasm`, and `engine-ci.yml`) set `RUSTFLAGS=-Dwarnings`.
+
+## Upstream docs, not downloaded skills
+
+The Rust project, tree-sitter, wasm-bindgen, and the LSP spec publish documentation, not Agent Skills. Use those docs when a skill points at them:
+
+- Edition 2024: <https://doc.rust-lang.org/stable/edition-guide/rust-2024/>
+- tree-sitter 0.25.10: <https://docs.rs/tree-sitter/0.25.10/tree_sitter/>
+- wasm-bindgen targets: <https://wasm-bindgen.github.io/wasm-bindgen/reference/rust-targets.html>
+- LSP framing: <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#headerPart>
+
+Do not `npx skills add` a generic Rust, tree-sitter, or WASM skill into this repo. The packs on skills.sh describe async services, snapshot tests, `wasm-pack`, or a multi-hundred-language parser cache. None of them match this engine. Apollo's `rust-best-practices` handbook is the closest maintained Rust skill and still disagrees with this repo on snapshots and async.

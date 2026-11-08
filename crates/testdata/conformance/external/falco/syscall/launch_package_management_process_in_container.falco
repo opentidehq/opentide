@@ -1,0 +1,1 @@
+spawned_process and container and user.name != "_apt" and package_mgmt_procs and not package_mgmt_ancestor_procs and not user_known_package_manager_in_container and not pkg_mgmt_in_kube_proxy

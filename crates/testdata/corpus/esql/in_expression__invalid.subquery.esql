@@ -1,0 +1,3 @@
+// prod:in_expression invalid (a subquery needs a source)
+FROM logs-* METADATA _id
+| WHERE user.name IN (FROM)

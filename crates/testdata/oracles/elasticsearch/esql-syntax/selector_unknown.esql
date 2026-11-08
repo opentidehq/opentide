@@ -1,0 +1,1 @@
+FROM logs-*::foo | LIMIT 1

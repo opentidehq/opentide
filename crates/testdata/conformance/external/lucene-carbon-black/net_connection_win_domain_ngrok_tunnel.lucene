@@ -1,0 +1,1 @@
+device_os:WINDOWS (netconn_domain:tunnel.us.ngrok.com* OR netconn_domain:tunnel.eu.ngrok.com* OR netconn_domain:tunnel.ap.ngrok.com* OR netconn_domain:tunnel.au.ngrok.com* OR netconn_domain:tunnel.sa.ngrok.com* OR netconn_domain:tunnel.jp.ngrok.com* OR netconn_domain:tunnel.in.ngrok.com*)

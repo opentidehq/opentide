@@ -1,0 +1,2 @@
+``` prod:join_command valid
+index=main | join host [ search index=other ]

@@ -1,0 +1,4 @@
+// prod:sequence invalid
+sequence by host.id with maxspan=1.5m
+  [process where true]
+  [network where true]

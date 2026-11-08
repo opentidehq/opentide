@@ -1,0 +1,7 @@
+spawned_process and (proc.exe startswith "/dev/shm/" or
+    (proc.cwd startswith "/dev/shm/" and proc.exe startswith "./" ) or
+    (shell_procs and proc.args startswith "-c /dev/shm") or
+    (shell_procs and proc.args startswith "-i /dev/shm") or
+    (shell_procs and proc.args startswith "/dev/shm") or
+    (proc.cwd startswith "/dev/shm/" and proc.args startswith "./" ))
+and not container.image.repository in (falco_privileged_images, trusted_images)

@@ -1,0 +1,14 @@
+name: Legacy Meta
+meta:
+  uuid: 11111111-1111-4111-8111-111111111111
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: legacy
+response:
+  alert_severity: High
+configurations:
+  splunk:
+    advanced: leftover

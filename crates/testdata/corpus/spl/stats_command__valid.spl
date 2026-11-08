@@ -1,0 +1,2 @@
+``` prod:stats_command valid
+index=main | stats count by host

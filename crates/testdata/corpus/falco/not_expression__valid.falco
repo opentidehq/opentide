@@ -1,0 +1,2 @@
+# prod:not_expression valid
+not proc.name in (sshd, sudo) and not container

@@ -1,0 +1,2 @@
+``` prod:mvexpand_command invalid
+index=main | mvexpand

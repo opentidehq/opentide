@@ -1,0 +1,3 @@
+// prod:qualified_interval valid
+FROM logs-* METADATA _id
+| WHERE @timestamp > NOW() - 1 day

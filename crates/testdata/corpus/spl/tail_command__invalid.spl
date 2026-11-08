@@ -1,0 +1,2 @@
+``` prod:tail_command invalid
+index=main | tail

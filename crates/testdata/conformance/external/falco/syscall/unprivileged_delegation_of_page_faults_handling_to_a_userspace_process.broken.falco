@@ -1,0 +1,1 @@
+evt.type = userfaultfd and proc.name in (oops and user.uid != 0 and (evt.rawres >= 0 or evt.res != -1) and not proc.name in (user_known_userfaultfd_processes)

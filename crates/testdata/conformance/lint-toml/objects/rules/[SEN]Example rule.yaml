@@ -1,0 +1,19 @@
+name: "[SEN]Example rule"
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000214
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Example Author
+
+description: |
+  A synthetic rule for the lint.toml conformance case (#214).
+status: STAGING
+severity: High
+detection_model: 00000000-0000-4000-8099-000000000214
+
+response:
+  alert_severity: High

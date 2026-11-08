@@ -1,0 +1,1 @@
+SecurityEvent | make-series count() on TimeGenerated step 1h by Computer

@@ -8,7 +8,17 @@ dynamic = ["version"]
 description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across nine security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
-license-files = ["LICENSE"]
+# NOTICE covers the third-party data the engine compiles in; the licence and notice
+# files it cites ship beside it.
+license-files = [
+    "LICENSE",
+    "NOTICE",
+    "data/catalogs/ecs/LICENSE.txt",
+    "data/catalogs/ecs/NOTICE",
+    "data/catalogs/falco/LICENSE.txt",
+    "data/catalogs/falco/LICENSE-MIT.txt",
+    "data/catalogs/falco/NOTICE",
+]
 authors = [
     { name = "opentide", email = "digit-ec-opentide@ec.europa.eu" },
 ]
@@ -100,10 +110,21 @@ dev = [
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "hatch_build.py" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
     { file = "analysis/Cargo.toml" },
-    { file = "analysis/Cargo.lock" },
     { file = "analysis/build.rs" },
     { file = "analysis/src/**/*.rs" },
+    { file = "crates/*/Cargo.toml" },
+    { file = "crates/*/build.rs" },
+    { file = "crates/*/src/**/*.rs" },
+    # What the engine crates compile in (include_str!, build.rs).
+    { file = "data/catalogs/**" },
+    { file = "grammars/*/src/**" },
+    { file = "grammars/*/queries/**" },
+    { file = "highlights/spec.toml" },
+    { file = "highlights/queries/**" },
+    { file = "highlights/generated/**" },
     { git = { commit = true, tags = true } },
 ]
 
@@ -135,15 +156,38 @@ source = "vcs"
 [tool.hatch.build.targets.sdist]
 # hatchling 1.32 defaults to Core Metadata 2.5; PyPI/twine still gate on 2.4.
 core-metadata-version = "2.4"
-# The sdist carries the engine's Rust sources (analysis/) and the hook that
-# compiles them, so it builds wherever a Rust toolchain is installed.
+# The sdist carries the engine's Rust sources and the hook that compiles them,
+# so it builds wherever a Rust toolchain is installed (crates.io dependencies are
+# fetched as usual): the Cargo workspace's manifests and lock, every member's
+# sources, build script and benches (cargo reads every member's targets), and the
+# data the crates compile in (data/catalogs, grammars/*/src and queries,
+# highlights/). The rest of the engine's tree stays out: test data and the
+# crates' integration tests, the fuzz targets, editor samples, npm packages, the
+# engine's docs, scripts and parked workflows, the grammar sources tree-sitter
+# generates parser.c from, and the reference Tide schemas. rust-toolchain.toml
+# stays out too, so a build from the sdist uses the toolchain it finds instead of
+# asking rustup for components.
 # An editable install's compiled module is left out; its stub (_native.pyi) ships.
 exclude = [
-    "/analysis/target",
+    "/target",
     "/src/opentide/_native.so",
     "/src/opentide/_native.*.so",
     "/src/opentide/_native.pyd",
     "/src/opentide/_native.*.pyd",
+    "/rust-toolchain.toml",
+    "/crates/testdata",
+    "/crates/*/tests",
+    "/fuzz",
+    "/editors",
+    "/packages",
+    "/highlights/test",
+    "/grammars/*/grammar.js",
+    "/grammars/*/package.json",
+    "/grammars/*/tree-sitter.json",
+    "/data/catalogs/tide/schemas",
+    "/docs/engine",
+    "/scripts/engine",
+    "/.github/engine-workflows",
 ]
 
 [tool.hatch.build.targets.wheel]

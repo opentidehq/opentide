@@ -1,0 +1,1 @@
+kevt and proc.name in (oops and non_system_user and not ka.user.name in (allowed_k8s_users) and not ka.user.name in (eks_allowed_k8s_users)

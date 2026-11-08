@@ -1,0 +1,2 @@
+// prod:event_query invalid
+process where

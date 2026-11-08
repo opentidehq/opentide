@@ -1,0 +1,4 @@
+// prod:subquery invalid
+sequence
+  [process where true]
+  ![file where true]

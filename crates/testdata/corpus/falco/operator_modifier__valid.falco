@@ -1,0 +1,2 @@
+# prod:operator_modifier valid
+proc.name = anyof (bash, sh) and fd.name startswith oneof (/etc, /usr) and proc.cmdline contains allof shell_args

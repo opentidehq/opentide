@@ -1,0 +1,7 @@
+open_read and sensitive_files and proc_name_exists and not proc.name in (user_mgmt_binaries, userexec_binaries, package_mgmt_binaries,
+ cron_binaries, read_sensitive_file_binaries, shell_binaries, hids_binaries,
+ vpn_binaries, mail_config_binaries, nomachine_binaries, sshkit_script_binaries,
+ in.proftpd, mandb, salt-call, salt-minion, postgres_mgmt_binaries,
+ google_oslogin_
+ )
+and not cmp_cp_by_passwd and not ansible_running_python and not run_by_qualys and not run_by_chef and not run_by_google_accounts_daemon and not user_read_sensitive_file_conditions and not mandb_postinst and not perl_running_plesk and not perl_running_updmap and not veritas_driver_script and not perl_running_centrifydc and not runuser_reading_pam and not linux_bench_reading_etc_shadow and not user_known_read_sensitive_files_activities and not user_read_sensitive_file_containers and not systemd_sensitive_file_readers

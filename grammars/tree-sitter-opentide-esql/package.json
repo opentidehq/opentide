@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-esql",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for Elasticsearch ES|QL (opentide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.esql",
+      "file-types": ["esql"]
+    }
+  ]
+}

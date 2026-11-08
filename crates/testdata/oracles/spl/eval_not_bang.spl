@@ -1,0 +1,1 @@
+index=main | eval x=if(!match(user, "-"), 1, 0)

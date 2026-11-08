@@ -1,0 +1,1 @@
+ScriptBlockText:*rundll32.exe* AND ScriptBlockText:*shell32.dll* AND ScriptBlockText:*shellexec_rundll* AND ScriptBlockText:*powershell*

@@ -1,0 +1,1 @@
+| inputlookup t.csv where status==200

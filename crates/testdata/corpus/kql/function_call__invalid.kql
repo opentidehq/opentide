@@ -1,0 +1,2 @@
+// prod:function_call invalid
+SecurityEvent | where ago(

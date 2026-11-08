@@ -1,0 +1,25 @@
+[package]
+name = "opentide-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "wasm32-unknown-unknown build: highlight(), legend() and the language server (no WASI mix-in)"
+# Ships as the opentide-wasm-web zip on each GitHub Release, not as a crate.
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+opentide-core.workspace = true
+opentide-analysis.workspace = true
+opentide-highlight.workspace = true
+opentide-lsp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true
+js-sys.workspace = true

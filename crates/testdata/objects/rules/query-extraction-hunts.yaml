@@ -1,0 +1,40 @@
+name: Query Extraction Hunts
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000119
+  schema: rule::1.0
+  version: 1
+  created: "2026-10-29"
+  modified: "2026-10-29"
+  tlp: clear
+description: |
+  Each hunt is analysed in the language its `system` names, at its own path,
+  whatever the order of its keys (#118).
+response:
+  alert_severity: Low
+  procedure:
+    analysis: |
+      Run both searches.
+    searches:
+      - purpose: a
+        system: sentinel
+        query: |
+          SigninLogs | where TimeGenerated > ago(1d)
+      - purpose: b
+        query: |
+          index=a | stats count
+        system: splunk
+      - purpose: not a platform identifier, so not analysed
+        system: Sentinel
+        query: SigninLogs | take 1
+configurations:
+  sentinel:
+    enabled: true
+    status: STAGING
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Query Extraction Hunts
+    query: |
+      SecurityEvent
+      | take 1

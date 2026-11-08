@@ -1,0 +1,2 @@
+# prod:comparison invalid
+fd.sport > and fd.name startswith

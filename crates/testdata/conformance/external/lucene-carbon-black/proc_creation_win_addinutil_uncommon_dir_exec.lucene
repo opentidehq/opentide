@@ -1,0 +1,1 @@
+device_os:WINDOWS ((process_name:\\addinutil.exe OR process_original_filename:AddInUtil.exe) (-(process_name:\:\\Windows\\Microsoft.NET\\Framework\\* OR process_name:\:\\Windows\\Microsoft.NET\\Framework64\\* OR process_name:\:\\Windows\\Microsoft.NET\\FrameworkArm\\* OR process_name:\:\\Windows\\Microsoft.NET\\FrameworkArm64\\* OR process_name:\:\\Windows\\WinSxS\\*)))

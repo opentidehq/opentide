@@ -1,0 +1,2 @@
+// prod:lookup_operator valid
+SecurityEvent | lookup Identity on EventID

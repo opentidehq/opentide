@@ -1,0 +1,3 @@
+// prod:function_call valid
+FROM logs-* METADATA _id
+| EVAL c = COALESCE(a, b), s = STARTS_WITH(process.name, "x")

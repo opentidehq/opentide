@@ -1,0 +1,2 @@
+``` prod:command_option valid, prod:comparison, prod:argument_list
+index=main | bin _time span=1h | regex _raw!="a"

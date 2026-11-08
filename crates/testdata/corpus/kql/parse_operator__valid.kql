@@ -1,0 +1,2 @@
+// prod:parse_operator valid
+SecurityEvent | parse CommandLine with "cmd "

@@ -1,0 +1,3 @@
+// prod:unknown_command valid
+FROM logs-* METADATA _id
+| FROBNICATE x = 1

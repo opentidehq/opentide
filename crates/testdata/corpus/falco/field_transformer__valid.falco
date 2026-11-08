@@ -1,0 +1,2 @@
+# prod:field_transformer valid
+tolower(proc.name) in (bash, sh) and len(proc.args) > 4096 and basename(tolower(proc.exepath)) = python

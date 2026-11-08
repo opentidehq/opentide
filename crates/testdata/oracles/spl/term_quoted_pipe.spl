@@ -1,0 +1,1 @@
+index=a TERM("x|y") | stats count by host

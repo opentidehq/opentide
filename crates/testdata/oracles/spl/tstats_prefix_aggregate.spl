@@ -1,0 +1,1 @@
+| tstats count values(PREFIX(dpt=)) as dpt where index=main by _time PREFIX(dst=) span=1s

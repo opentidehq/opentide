@@ -1,0 +1,12 @@
+{
+  "name": "tree-sitter-opentide-falco",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for Falco rule conditions (opentide)",
+  "license": "EUPL-1.2",
+  "tree-sitter": [
+    {
+      "scope": "source.falco",
+      "file-types": ["falco"]
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+# prod:operator_modifier invalid
+proc.name = anyof (bash, sh

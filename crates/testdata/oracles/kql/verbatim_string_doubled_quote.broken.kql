@@ -1,0 +1,1 @@
+AuditLogs | extend Target = replace_regex(tostring(TargetResources), @"\[|\]|"", "")

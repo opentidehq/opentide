@@ -1,0 +1,95 @@
+# Argument completion checked against the cited Search Reference syntax.
+# `source` is the text before the cursor. `expect` must appear; `absent` must not
+# (those names are eval functions, so a hit means the completion fell through
+# to the full function list).
+
+[[cases]]
+command = "tstats"
+source = "| tstats "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Tstats"
+expect = ["summariesonly", "prestats", "allow_old_summaries", "fillnull_value", "from", "datamodel", "where", "by"]
+absent = ["json_extract", "cidrmatch"]
+
+[[cases]]
+command = "stats"
+source = "| stats "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Stats"
+expect = ["by", "sum", "count"]
+absent = ["json_extract", "cidrmatch"]
+
+[[cases]]
+command = "rex"
+source = "| rex "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex"
+expect = ["field", "mode", "max_match", "offset_field"]
+absent = ["json_extract", "lower", "cidrmatch"]
+
+[[cases]]
+command = "rex"
+source = "| rex mode="
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Rex"
+expect = ["sed"]
+absent = ["field", "json_extract"]
+
+[[cases]]
+command = "lookup"
+source = "| lookup "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Lookup"
+expect = ["output", "outputnew", "local", "update"]
+absent = ["json_extract", "lower"]
+
+[[cases]]
+command = "join"
+source = "| join "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+expect = ["type", "usetime", "earlier", "overwrite", "max", "left", "right", "where"]
+absent = ["json_extract", "lower"]
+
+[[cases]]
+command = "join"
+source = "| join type="
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Join"
+expect = ["inner", "left", "outer"]
+absent = ["json_extract"]
+
+[[cases]]
+command = "timechart"
+source = "| timechart "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Timechart"
+expect = ["span", "bins", "cont", "limit", "sum"]
+absent = ["json_extract", "lower", "cidrmatch"]
+
+[[cases]]
+command = "from"
+source = "| from "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/From"
+expect = ["datamodel", "lookup", "savedsearch"]
+absent = ["json_extract", "lower"]
+
+[[cases]]
+command = "datamodel"
+source = "| datamodel "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Datamodel"
+expect = ["summariesonly", "allow_old_summaries", "strict_fields", "search", "flat"]
+absent = ["json_extract", "lower"]
+
+[[cases]]
+command = "fillnull"
+source = "| fillnull "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Fillnull"
+expect = ["value"]
+absent = ["json_extract", "lower"]
+
+[[cases]]
+command = "bin"
+source = "| bin "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+expect = ["bins", "minspan", "span", "start", "end", "aligntime"]
+absent = ["json_extract", "lower"]
+
+[[cases]]
+command = "bucket"
+source = "| bucket "
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Bin"
+expect = ["bins", "minspan", "span", "start", "end", "aligntime"]
+absent = ["json_extract", "lower"]

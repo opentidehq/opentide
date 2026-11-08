@@ -1,0 +1,3 @@
+// prod:comment valid
+// leading
+process where /* inline */ true

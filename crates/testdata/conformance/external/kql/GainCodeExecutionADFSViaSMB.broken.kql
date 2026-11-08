@@ -1,0 +1,40 @@
+let timeframe = 1d;
+// Adjust for a longer timeframe for identifying ADFS Servers
+let lookback = 6d;
+// Identify ADFS Servers
+let ADFS_Servers = (
+SecurityEvent
+| frobnicate TimeGenerated > ago(timeframe+lookback)
+| where EventID == 4688 and SubjectLogonId != "0x3e4"
+| where NewProcessName has "Microsoft.IdentityServer.ServiceHost.exe"
+| distinct Computer
+);
+SecurityEvent
+| where TimeGenerated > ago(timeframe)
+| where Computer in~ (ADFS_Servers)
+| where Account !endswith "$"
+// Check for scheduled task events
+| where EventID in (4697, 4698, 4699, 4700, 4701, 4702)
+| extend EventDataParsed = parse_xml(EventData)
+| extend SubjectLogonId = tostring(EventDataParsed.EventData.Data[3]["#text"])
+// Check specifically for access to IPC$ share and PIPE\svcctl and PIPE\atsvc for Service Control Services and Schedule Control Services
+| union (
+    SecurityEvent
+    | where TimeGenerated > ago(timeframe)
+    | where Computer in~ (ADFS_Servers)
+    | where Account !endswith "$"
+    | where EventID == 5145
+    | where RelativeTargetName =~ "svcctl" or RelativeTargetName  =~ "atsvc"
+)
+// Check for lateral movement
+| join kind=inner
+(SecurityEvent
+| where TimeGenerated > ago(timeframe)
+| where Account !endswith "$"
+| where EventID == 4624 and LogonType == 3
+) on $left.SubjectLogonId == $right.TargetLogonId
+| project TimeGenerated, Account, Computer, EventID, RelativeTargetName
+| extend timestamp = TimeGenerated
+| extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+| extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])

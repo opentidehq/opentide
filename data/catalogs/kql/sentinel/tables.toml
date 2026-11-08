@@ -1,0 +1,555 @@
+# sentinel tables. Generated from docs/kql/sentinel-tables.md
+
+[[tables]]
+name = "SigninLogs"
+profile = "sentinel"
+docs = "Interactive Entra sign-ins"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/signinlogs"
+
+[[tables]]
+name = "AADNonInteractiveUserSignInLogs"
+profile = "sentinel"
+docs = "Non-interactive user sign-ins"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadnoninteractiveusersigninlogs"
+
+[[tables]]
+name = "AADServicePrincipalSignInLogs"
+profile = "sentinel"
+docs = "Service principal sign-ins"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadserviceprincipalsigninlogs"
+
+[[tables]]
+name = "AADManagedIdentitySignInLogs"
+profile = "sentinel"
+docs = "Managed identity sign-ins"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadmanagedidentitysigninlogs"
+
+[[tables]]
+name = "ADFSSignInLogs"
+profile = "sentinel"
+docs = "AD FS sign-ins"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/adfssigninlogs"
+
+[[tables]]
+name = "AuditLogs"
+profile = "sentinel"
+docs = "Entra audit (directory changes)"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/auditlogs"
+
+[[tables]]
+name = "AADProvisioningLogs"
+profile = "sentinel"
+docs = "Provisioning"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadprovisioninglogs"
+
+[[tables]]
+name = "AADUserRiskEvents"
+profile = "sentinel"
+docs = "Identity Protection user risk"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aaduserriskevents"
+
+[[tables]]
+name = "AADRiskyUsers"
+profile = "sentinel"
+docs = "Risky user snapshot"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadriskyusers"
+
+[[tables]]
+name = "AADServicePrincipalRiskEvents"
+profile = "sentinel"
+docs = "SP risk events"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadserviceprincipalriskevents"
+
+[[tables]]
+name = "AADRiskyServicePrincipals"
+profile = "sentinel"
+docs = "Risky SP snapshot"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadriskyserviceprincipals"
+
+[[tables]]
+name = "MicrosoftGraphActivityLogs"
+profile = "sentinel"
+docs = "Graph API requests"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/microsoftgraphactivitylogs"
+
+[[tables]]
+name = "SecurityEvent"
+profile = "sentinel"
+docs = "Windows Security Auditing via AMA/legacy"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityevent"
+
+[[tables]]
+name = "WindowsEvent"
+profile = "sentinel"
+docs = "Windows events (AMA XML)"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/windowsevent"
+
+[[tables]]
+name = "Event"
+profile = "sentinel"
+docs = "Legacy Windows event table"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/event"
+
+[[tables]]
+name = "Syslog"
+profile = "sentinel"
+docs = "Linux syslog"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/syslog"
+
+[[tables]]
+name = "CommonSecurityLog"
+profile = "sentinel"
+docs = "CEF (firewalls, Zscaler, Infoblox, …)"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/commonsecuritylog"
+
+[[tables]]
+name = "DnsEvents"
+profile = "sentinel"
+docs = "DNS analytics / solutions"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/dnsevents"
+
+[[tables]]
+name = "DnsInventory"
+profile = "sentinel"
+docs = "DNS inventory"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/dnsinventory"
+
+[[tables]]
+name = "W3CIISLog"
+profile = "sentinel"
+docs = "IIS"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/w3ciislog"
+
+[[tables]]
+name = "SecurityAlert"
+profile = "sentinel"
+docs = "Alerts from Sentinel and connected products"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityalert"
+
+[[tables]]
+name = "SecurityIncident"
+profile = "sentinel"
+docs = "Sentinel incidents"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/securityincident"
+
+[[tables]]
+name = "BehaviorAnalytics"
+profile = "sentinel"
+docs = "UEBA"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/behavioranalytics"
+
+[[tables]]
+name = "IdentityInfo"
+profile = "sentinel"
+docs = "UEBA identity snapshot"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/identityinfo"
+category = "xdr"
+
+[[tables]]
+name = "Anomalies"
+profile = "sentinel"
+docs = "Sentinel ML anomalies"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/anomalies"
+
+[[tables]]
+name = "Watchlist"
+profile = "sentinel"
+docs = "Watchlist items (also _GetWatchlist())"
+citation = "https://learn.microsoft.com/azure/sentinel/watchlists"
+
+[[tables]]
+name = "ThreatIntelligenceIndicator"
+profile = "sentinel"
+docs = "Classic TI"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/threatintelligenceindicator"
+
+[[tables]]
+name = "ThreatIntelIndicators"
+profile = "sentinel"
+docs = "Newer TI schema"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/threatintelindicators"
+
+[[tables]]
+name = "LAQueryLogs"
+profile = "sentinel"
+docs = "Log Analytics query audit"
+citation = "https://learn.microsoft.com/azure/sentinel/audit-sentinel-data"
+
+[[tables]]
+name = "AzureActivity"
+profile = "sentinel"
+docs = "ARM control-plane activity"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azureactivity"
+
+[[tables]]
+name = "AzureDiagnostics"
+profile = "sentinel"
+docs = "Multi-resource diagnostics (Key Vault, NSG, Firewall legacy, WAF, …)"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azurediagnostics"
+
+[[tables]]
+name = "AzureMetrics"
+profile = "sentinel"
+docs = "Resource metrics"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azuremetrics"
+
+[[tables]]
+name = "AZFWNetworkRule"
+profile = "sentinel"
+docs = "Azure Firewall network rules"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwnetworkrule"
+
+[[tables]]
+name = "AZFWApplicationRule"
+profile = "sentinel"
+docs = "App rules"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwapplicationrule"
+
+[[tables]]
+name = "AZFWNatRule"
+profile = "sentinel"
+docs = "DNAT"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwnatrule"
+
+[[tables]]
+name = "AZFWDnsQuery"
+profile = "sentinel"
+docs = "Firewall DNS proxy"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwdnsquery"
+
+[[tables]]
+name = "AZFWIdpsSignature"
+profile = "sentinel"
+docs = "IDPS hits"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwidpssignature"
+
+[[tables]]
+name = "AZFWThreatIntel"
+profile = "sentinel"
+docs = "Firewall TI"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwthreatintel"
+
+[[tables]]
+name = "AZFWFatFlow"
+profile = "sentinel"
+docs = "Extra FW logs"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwfatflow"
+
+[[tables]]
+name = "AZFWFlowTrace"
+profile = "sentinel"
+docs = "Extra FW logs"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwfatflow"
+
+[[tables]]
+name = "AZFWInternalFqdnResolutionFailure"
+profile = "sentinel"
+docs = "Extra FW logs"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/azfwfatflow"
+
+[[tables]]
+name = "StorageBlobLogs"
+profile = "sentinel"
+docs = "Storage analytics"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/storagebloblogs"
+
+[[tables]]
+name = "StorageFileLogs"
+profile = "sentinel"
+docs = "Storage analytics"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/storagebloblogs"
+
+[[tables]]
+name = "StorageQueueLogs"
+profile = "sentinel"
+docs = "Storage analytics"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/storagebloblogs"
+
+[[tables]]
+name = "StorageTableLogs"
+profile = "sentinel"
+docs = "Storage analytics"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/storagebloblogs"
+
+[[tables]]
+name = "NetworkAccessTraffic"
+profile = "sentinel"
+docs = "Global Secure Access / Entra Private Access"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/networkaccesstraffic"
+
+[[tables]]
+name = "AWSCloudTrail"
+profile = "sentinel"
+docs = "CloudTrail management/data events"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awscloudtrail"
+
+[[tables]]
+name = "AWSGuardDuty"
+profile = "sentinel"
+docs = "GuardDuty findings"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awsguardduty"
+
+[[tables]]
+name = "AWSVPCFlow"
+profile = "sentinel"
+docs = "VPC flow logs"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awsvpcflow"
+
+[[tables]]
+name = "AWSCloudWatch"
+profile = "sentinel"
+docs = "CloudWatch"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awscloudwatch"
+
+[[tables]]
+name = "AWSWAF"
+profile = "sentinel"
+docs = "AWS WAF"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awswaf"
+
+[[tables]]
+name = "AWSNetworkFirewallFlow"
+profile = "sentinel"
+docs = "Network Firewall"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awsnetworkfirewallflow"
+
+[[tables]]
+name = "AWSRoute53Resolver"
+profile = "sentinel"
+docs = "Route 53 resolver"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awsroute53resolver"
+
+[[tables]]
+name = "AWSS3ServerAccess"
+profile = "sentinel"
+docs = "S3 access"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awss3serveraccess"
+
+[[tables]]
+name = "AWSSecurityHubFindings"
+profile = "sentinel"
+docs = "Security Hub"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/awssecurityhubfindings"
+
+[[tables]]
+name = "GCPAuditLogs"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/gcpauditlogs"
+
+[[tables]]
+name = "GCPVPCFlow"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/gcpvpcflow"
+
+[[tables]]
+name = "GCPDNS"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPIAM"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPIDS"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPCloudSQL"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPComputeEngine"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPCloudRun"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPLoadBalancer"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPCDN"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPNAT"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPMonitoring"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPResourceManager"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GCPApigee"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "GKEAudit"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "OfficeActivity"
+profile = "sentinel"
+docs = "Unified Audit Log (Exchange, SharePoint, Teams, Azure AD ops in UAL)"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/officeactivity"
+
+[[tables]]
+name = "CloudAppEvents"
+profile = "sentinel"
+docs = "Defender for Cloud Apps / XDR"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+category = "xdr"
+
+[[tables]]
+name = "EmailEvents"
+profile = "sentinel"
+docs = "Defender for Office 365"
+category = "xdr"
+
+[[tables]]
+name = "Dynamics365Activity"
+profile = "sentinel"
+docs = "D365 audit"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/dynamics365activity"
+
+[[tables]]
+name = "PowerBIActivity"
+profile = "sentinel"
+docs = "Power BI audit"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/powerbiactivity"
+
+[[tables]]
+name = "PowerAutomateActivity"
+profile = "sentinel"
+docs = "Power Platform"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/powerautomateactivity"
+
+[[tables]]
+name = "PowerPlatformAdminActivity"
+profile = "sentinel"
+docs = "Power Platform"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/powerautomateactivity"
+
+[[tables]]
+name = "ProjectActivity"
+profile = "sentinel"
+docs = "Power Platform"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/powerautomateactivity"
+
+[[tables]]
+name = "MicrosoftPurviewInformationProtection"
+profile = "sentinel"
+docs = "DLP / labeling"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/microsoftpurviewinformationprotection"
+
+[[tables]]
+name = "PurviewDataSensitivityLogs"
+profile = "sentinel"
+docs = "DLP / labeling"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/microsoftpurviewinformationprotection"
+
+[[tables]]
+name = "CopilotActivity"
+profile = "sentinel"
+docs = "Microsoft Copilot"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/copilotactivity"
+
+[[tables]]
+name = "OpenAIAuditLogs"
+profile = "sentinel"
+docs = "Azure OpenAI"
+citation = "https://learn.microsoft.com/azure/sentinel/sentinel-tables-connectors-reference"
+
+[[tables]]
+name = "Heartbeat"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/heartbeat"
+
+[[tables]]
+name = "Usage"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/usage"
+
+[[tables]]
+name = "Operation"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/operation"
+
+[[tables]]
+name = "Update"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/update"
+
+[[tables]]
+name = "UpdateSummary"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/update"
+
+[[tables]]
+name = "Perf"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/perf"
+
+[[tables]]
+name = "InsightsMetrics"
+profile = "sentinel"
+citation = "https://learn.microsoft.com/azure/azure-monitor/reference/tables/perf"
+
+[[tables]]
+name = "Okta_CL"
+profile = "sentinel"
+
+[[tables]]
+name = "OktaV2_CL"
+profile = "sentinel"
+
+[[tables]]
+name = "OktaSSO"
+profile = "sentinel"
+
+[[tables]]
+name = "ProofpointPOD"
+profile = "sentinel"
+
+[[tables]]
+name = "ProofPointTAPClicksPermitted_CL"
+profile = "sentinel"
+
+[[tables]]
+name = "ProofPointTAPMessagesDelivered_CL"
+profile = "sentinel"
+
+[[tables]]
+name = "ABAPAuditLog"
+profile = "sentinel"
+
+[[tables]]
+name = "ABAPAuditLog_C"
+profile = "sentinel"
+
+[[tables]]
+name = "CrowdStrikeAlerts"
+profile = "sentinel"
+
+[[tables]]
+name = "CrowdStrikeReplicatorV2"
+profile = "sentinel"

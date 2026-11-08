@@ -1,0 +1,1 @@
+is_gcs_service and gcp.methodName="storage.setIamPermissions"

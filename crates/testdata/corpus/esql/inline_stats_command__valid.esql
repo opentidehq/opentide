@@ -1,0 +1,4 @@
+// prod:inline_stats_command valid
+FROM logs-* METADATA _id
+| INLINE STATS c = COUNT(*) BY host.name
+| WHERE c > 10

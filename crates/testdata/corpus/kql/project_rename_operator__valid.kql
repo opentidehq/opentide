@@ -1,0 +1,2 @@
+// prod:project_rename_operator valid
+SecurityEvent | project-rename NewName = EventID

@@ -1,0 +1,65 @@
+name: 
+
+metadata:
+  uuid: 
+  schema: objective::1.0
+  version: 
+  created: YYYY-MM-DD
+  modified: YYYY-MM-DD
+  tlp: 
+  #author: 
+  #contributors:
+    #- 
+  #organisation:
+    #uuid: 
+    #name: 
+objective:
+  priority: 
+  type: 
+  description: |
+    ...
+  signals:
+    - name: 
+      uuid: 
+      description: |
+        ...
+      severity: 
+      data:
+        availability: 
+        requirements: 
+        #logsources:
+          #- 
+      methodology: 
+      entities:
+        - 
+      #effort: 3
+      #detectors:
+        #- name: 
+          #technology: 
+          #description: |
+            #...
+          #link: https://
+      #examples:
+        #- description: |
+            #...
+          #link: https://
+          #language: 
+          #query: |
+            #...
+      #parent: 
+  composition:
+    strategy: 
+    description: |
+      ...
+  #investment: 
+  #threats:
+    #- 
+  #mitre_attack:
+    #- 
+#references:
+  #public:
+    #1: 
+  #internal:
+    #key: 
+  #reports:
+    #- 

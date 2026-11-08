@@ -1,0 +1,3 @@
+// prod:enrich_command invalid
+FROM logs-* METADATA _id
+| ENRICH ON host.name

@@ -1,0 +1,1 @@
+process where process.name regex~ "(?i)cmd"

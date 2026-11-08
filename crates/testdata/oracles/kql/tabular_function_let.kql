@@ -1,0 +1,2 @@
+let Logs = (tableName: string) { table(tableName) | where ResultType == 0 };
+Logs("SigninLogs")

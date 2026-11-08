@@ -1,0 +1,2 @@
+// prod:comparison valid
+process where process.pid >= 4 and process.pid != 8

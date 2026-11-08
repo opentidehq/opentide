@@ -1,0 +1,2 @@
+// prod:row_command valid
+ROW a = 1, b = "two", c = [1, 2]

@@ -29,9 +29,11 @@ Usage: scripts/ci-local.sh [OPTIONS]
 Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
-  --quick       Lint + type-check + package build (ruff, ty, cargo clippy, uv build)
-  --test        Lint + unit pytest (excludes cli_e2e/cli_smoke) — default
-  --full        Lint + unit pytest + coverage gate + CLI E2E + GitLab CI lint — pre-push
+  --quick       Lint + type-check + package build (ruff, ty, cargo fmt and clippy,
+                engine checks, uv build)
+  --test        Lint + cargo test + unit pytest (excludes cli_e2e/cli_smoke) — default
+  --full        Lint + cargo test + unit pytest + coverage gate + CLI E2E +
+                GitLab CI lint — pre-push
   --coverage    Alias for --full
   --store-e2e-durations
                 Re-measure the E2E suite serially and rewrite
@@ -91,16 +93,18 @@ uv run ruff format --check src/opentide tests scripts
 echo "==> Ty type check"
 uv run ty check src/opentide
 
-echo "==> Engine bindings (rustfmt, clippy, cargo test)"
-cargo fmt --manifest-path analysis/Cargo.toml -- --check
-cargo clippy --manifest-path analysis/Cargo.toml --all-targets --quiet -- -D warnings
-cargo test --manifest-path analysis/Cargo.toml --quiet
+echo "==> Cargo workspace: rustfmt, clippy"
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked --quiet -- -D warnings
 
-echo "==> The engine crates come from one source"
-uv run python scripts/build/check_engine_pin.py
+echo "==> Engine invariants (I/O-free crates, names, skills, generated highlights)"
+bash scripts/engine/check-io-free.sh
+bash scripts/engine/check-names.sh
+bash scripts/engine/validate-skills.sh
+cargo run --quiet --locked -p opentide-lsp -- generate-highlights --check
 
-echo "==> The engine's bundled catalogs match the models"
-uv run python scripts/build/check_engine_catalog.py
+echo "==> The engine's bundled Tide catalog matches the models"
+uv run pytest tests/test_generation/test_bundled_tide_catalog.py --no-cov -q
 
 echo "==> uv build (sdist + wheel)"
 rm -rf dist
@@ -112,6 +116,12 @@ if [[ "$mode" == "quick" ]]; then
   echo "==> Quick checks passed"
   exit 0
 fi
+
+# The engine's tests compare it with this checkout's models (.venv, synced above).
+echo "==> Cargo workspace: tests"
+cargo test --workspace --locked --quiet
+echo "==> The engine release script's tests"
+uv run python -m unittest discover -s scripts/engine -p "test_*.py"
 
 echo "==> Pytest"
 unit_marker='not cli_e2e and not cli_smoke and not gitlab_ci_lint'
