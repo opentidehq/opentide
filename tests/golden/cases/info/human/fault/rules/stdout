@@ -284,6 +284,7 @@
 │ 7d0f8ee8-6494-4f56-a821-b1b7b65fe124 │ Hidden Harvest Rule 0469    │ sentinel, sentinel_one      │
 │ c0c5b041-84a1-4834-9a7a-9a4e33cb87df │ Hidden Implant Rule 0493    │ harfanglab, sentinel        │
 │ 13e9cb4e-cd54-4798-9389-69cbdb0f527d │ Hidden Implant Rule 0580    │ harfanglab, sentinel_one    │
+│ ccd721f9-1c88-4cb6-8015-28decbb25223 │ Hidden Injection Rule 0027  │ sysdig                      │
 │ bf162d96-74e9-4d9a-a5ee-cd7c436503d9 │ Hidden Injection Rule 0235  │ sentinel, sentinel_one      │
 │ b8d1f778-441a-430a-b856-4e754e4ba3aa │ Hidden Injection Rule 0354  │ splunk                      │
 │ 84dff501-2d13-40ec-9f8a-e5b1bef77a7b │ Hidden Injection Rule 0416  │ defender_for_endpoint,      │
@@ -563,7 +564,8 @@
 │ 598b304b-7ff9-43b5-a615-6dae418b48c7 │ Remote Spray Rule 0575      │ carbon_black_cloud, elastic │
 │ 03ef08b2-b94f-4eb5-9c46-d6a630ee5b24 │ Remote Tunnel Rule 0243     │ sysdig                      │
 │ be454a8b-e978-4367-8ee8-6c77ee8fc04a │ Remote Tunnel Rule 0429     │ crowdstrike                 │
-│ ccd721f9-1c88-4cb6-8015-28decbb25223 │ Hidden Injection Rule 0027  │ sysdig                      │
+│ e0f31b35-71b0-42e3-905b-c79c642f12ec │ Scheduled Injection Rule    │ defender_for_endpoint,      │
+│                                      │ 0029                        │ elastic                     │
 │ 9c4c4795-3c6b-4ed2-ac9e-32a88af069c8 │ Rogue Beacon Rule 0129      │ splunk                      │
 │ eb8f3d68-8fa4-4ab6-a195-e2ccc6b48fc2 │ Rogue Beacon Rule 0300      │ splunk                      │
 │ e1d130ee-842d-443e-b4d7-2213bb109125 │ Rogue Beacon Rule 0550      │ sentinel, sentinel_one      │
@@ -665,8 +667,6 @@
 │ 4e606eea-b34a-44c4-bbd8-d3653b85844d │ Scheduled Implant Rule 0406 │ sentinel, sentinel_one      │
 │ 7da5845f-36f3-46ba-b4a0-97886dd0e49a │ Scheduled Implant Rule 0433 │ sentinel, sentinel_one      │
 │ ff442ebb-9a0d-443f-ad07-be6612d5d69d │ Scheduled Implant Rule 0571 │ harfanglab, sentinel_one    │
-│ e0f31b35-71b0-42e3-905b-c79c642f12ec │ Scheduled Injection Rule    │ defender_for_endpoint,      │
-│                                      │ 0029                        │ elastic                     │
 │ 43ee5b6f-8b61-4d11-aae2-487347b5a660 │ Scheduled Injection Rule    │ harfanglab, sentinel        │
 │                                      │ 0061                        │                             │
 │ 36bae939-c024-46b6-9323-7a724fb72741 │ Scheduled Injection Rule    │ carbon_black_cloud, elastic │

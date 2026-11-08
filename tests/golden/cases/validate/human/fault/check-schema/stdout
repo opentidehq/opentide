@@ -42,12 +42,32 @@
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m opentide info threats lists the ones that exist
 
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_tuning_keys[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/covert-loader-rule-0261.yaml\objects/rules/covert-loader-rule-0261.yaml:32:3]8;;\
+[34m   [0m[34m│[0m
+[34m31 [0m[34m│[0m configurations:
+[34m32 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
 [1;31merror[vocab_unknown][0m[1m: [0m[1m'whitish' is not a TLP value[0m
   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/elevated-relay-rule-0034.yaml\objects/rules/elevated-relay-rule-0034.yaml:9:8]8;;\
 [34m  [0m[34m│[0m
 [34m8 [0m[34m│[0m   modified: 2025-03-16
 [34m9 [0m[34m│[0m   tlp: whitish
 [34m  [0m[34m│[0m        [1;31m━━━━━━━[0m[1;31m not in tlp::1.0[0m
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_definition_name[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-downgrade-rule-0063.yaml\objects/rules/encoded-downgrade-rule-0063.yaml:50:3]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m configurations:
+[34m50 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'name'[0m
   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/encoded-harvest-rule-0032.yaml\objects/rules/encoded-harvest-rule-0032.yaml:1:1]8;;\
@@ -99,6 +119,16 @@
 [34m  [0m[34m│[0m
   [34m╰─[0m [1;36mhelp:[0m did you mean 'clear'?
 
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_list_in_value[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-beacon-rule-0090.yaml\objects/rules/hidden-beacon-rule-0090.yaml:44:3]8;;\
+[34m   [0m[34m│[0m
+[34m43 [0m[34m│[0m configurations:
+[34m44 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
 [1;31merror[schema_validation][0m[1m: [0m[1mmissing required field 'description'[0m
   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-harvest-rule-0026.yaml\objects/rules/hidden-harvest-rule-0026.yaml:1:1]8;;\
 [34m  [0m[34m│[0m
@@ -106,6 +136,26 @@
 [34m  [0m[34m│[0m [1;31m━━━━[0m[1;31m add 'description' at the top level[0m
 [34m  [0m[34m│[0m
   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_source[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-injection-rule-0027.yaml\objects/rules/hidden-injection-rule-0027.yaml:32:3]8;;\
+[34m   [0m[34m│[0m
+[34m31 [0m[34m│[0m configurations:
+[34m32 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_exception_shape[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/hidden-relay-rule-0054.yaml\objects/rules/hidden-relay-rule-0054.yaml:33:3]8;;\
+[34m   [0m[34m│[0m
+[34m32 [0m[34m│[0m configurations:
+[34m33 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[yaml_parse][0m[1m: [0m[1mCould not parse object YAML: found character that cannot start any token[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/lateral-injection-rule-0024.yaml\objects/rules/lateral-injection-rule-0024.yaml:68:1]8;;\
@@ -160,6 +210,16 @@
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_definition_duplicate[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-dropper-rule-0072.yaml\objects/rules/remote-dropper-rule-0072.yaml:53:3]8;;\
+[34m   [0m[34m│[0m
+[34m52 [0m[34m│[0m configurations:
+[34m53 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
+
 [1;31merror[config_enum_unknown][0m[1m: [0m[1m'Night Shift' is not a configured responder[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/remote-relay-rule-0017.yaml\objects/rules/remote-relay-rule-0017.yaml:34:15]8;;\
 [34m   [0m[34m│[0m
@@ -174,6 +234,16 @@
   [34m├─[0m [1;34mnote:[0m while parsing a flow sequence that starts at line 58, column 9
   [34m╰─[0m [1;36mhelp:[0m look at the indentation, a missing ':' or an unclosed quote at or just before this
   [34m [0m        position
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_definition_order[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/scheduled-exfiltration-rule-0081.yaml\objects/rules/scheduled-exfiltration-rule-0081.yaml:50:3]8;;\
+[34m   [0m[34m│[0m
+[34m49 [0m[34m│[0m configurations:
+[34m50 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[invalid_ref][0m[1m: [0m[1mUnknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-dropper-rule-0015.yaml\objects/rules/silent-dropper-rule-0015.yaml:22:18]8;;\
@@ -205,10 +275,10 @@
 
 [1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
   [1mcode(s): sysdig_tuning_keys[0m
-   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/silent-injection-rule-0198.yaml\objects/rules/silent-injection-rule-0198.yaml:35:3]8;;\
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-dropper-rule-0045.yaml\objects/rules/staged-dropper-rule-0045.yaml:51:3]8;;\
 [34m   [0m[34m│[0m
-[34m34 [0m[34m│[0m configurations:
-[34m35 [0m[34m│[0m   sysdig:
+[34m50 [0m[34m│[0m configurations:
+[34m51 [0m[34m│[0m   sysdig:
 [34m   [0m[34m│[0m   [1;31m━━━━━━[0m
 [34m   [0m[34m│[0m
    [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
@@ -226,6 +296,16 @@
 [1;31merror[missing_uuid][0m[1m: [0m[1mObject YAML has no uuid: staged-implant-rule-0006.yaml[0m
   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-implant-rule-0006.yaml\objects/rules/staged-implant-rule-0006.yaml]8;;\
   [34m╰─[0m [1;36mhelp:[0m add metadata.uuid with a fresh UUID v4
+
+[1;31merror[schema_validation][0m[1m: [0m[1mconfigurations.sysdig: Value error, SysdigConfig validation failed with[0m
+  [1mcode(s): sysdig_rule_shape[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-implant-rule-0036.yaml\objects/rules/staged-implant-rule-0036.yaml:41:3]8;;\
+[34m   [0m[34m│[0m
+[34m40 [0m[34m│[0m configurations:
+[34m41 [0m[34m│[0m   sysdig:
+[34m   [0m[34m│[0m   [1;31m━━━━━━[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
 [1;31merror[config_enum_unknown][0m[1m: [0m[1m'NOPE' is not a configured status[0m
    [34m╭─▶[0m ]8;id=<ID>;file://<WS>/objects/rules/staged-injection-rule-0019.yaml\objects/rules/staged-injection-rule-0019.yaml:51:13]8;;\

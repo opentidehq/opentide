@@ -1,6 +1,6 @@
 warning: Vocabulary not found · vocab: reviewed
 warning: Vocabulary not found · vocab: rule_id
-✗ 90 errors in 81 files · 771 objects checked · 1530 queries · <SECONDS>
+✗ 101 errors in 89 files · 771 objects checked · 1531 queries · <SECONDS>
 → opentide explain unknown_key · how to fix it
 → opentide validate · check again
 tip: add --json for machine-readable output
