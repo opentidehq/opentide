@@ -30,9 +30,10 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 | Layer, tier | Crates (each with an `AGENTS.md`) |
 | --- | --- |
 | foundation 0 | [`opentide-core`](opentide-core/AGENTS.md) |
-| foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md), [`opentide-schema`](opentide-schema/AGENTS.md) |
+| foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
 | foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md) |
 | foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
+| foundation 4 | [`opentide-schema`](opentide-schema/AGENTS.md) |
 | domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md), then [`opentide-analysis`](opentide-analysis/AGENTS.md) |
 | application | [`opentide-lsp`](opentide-lsp/AGENTS.md) |
 | facade | none yet: the `opentide` crate (UC-5.1, #836) |

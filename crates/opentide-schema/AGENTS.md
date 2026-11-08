@@ -9,8 +9,9 @@ conventions, the `Pins` validation context, the typed errors, the 23 `tide.*` me
 
 ## Place
 
-foundation, tier 1 (`xtask/layers.toml`): it may depend on opentide-core; it depends on no
-workspace crate today. Not published yet (`publish = false` in `Cargo.toml`, with the reason).
+foundation, top tier (`xtask/layers.toml`), as the plan's table orders it: it may depend on
+opentide-core, -syntax, -highlight and the query crates, and none of them may depend on it. Today it
+depends on opentide-core (`codes`). Not published yet (`publish = false` in `Cargo.toml`, with the reason).
 
 ## Layout
 
@@ -38,8 +39,8 @@ workspace crate today. Not published yet (`publish = false` in `Cargo.toml`, wit
   `keys::ALL`. A new key is a new row in the ADR's table and in `keys.rs` (`tests/adr.rs` checks).
 - Identifiers stay `String`, checked where the oracle checks them (`invalid_uuid` is a workspace
   check, not a schema error).
-- Errors are `SchemaError`; codes are the CLI's (`yaml_parse`, `schema_validation`,
-  `missing_field`, `unknown_key`): never mint one here.
+- Errors are `SchemaError`; codes are the CLI's, as constants (`error::codes`, which re-exports
+  `opentide_core::codes::SCHEMA_VALIDATION`): never mint one, never a second string at a call site.
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`). The derives compile for wasm32.
 
 ## Test
