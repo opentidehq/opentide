@@ -91,10 +91,16 @@ jobs:
             elif gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
               echo "::error::${tag} is already released; bump the version first (scripts/engine/release.py bump)"
               exit 1
+            elif git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null; then
+              # The tag's own run failed before its release: this run would build
+              # this commit and attach it to the tag's, and publish its crates.
+              echo "::error::${tag} is tagged but has no release; re-run that tag's Engine release run, or bump the version"
+              exit 1
             fi
           fi
+          prerelease="$(python3 scripts/engine/release.py prerelease "${tag}")"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$(python3 scripts/engine/release.py prerelease "${tag}")" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
       - name: release.py check
         env:
           TAG: ${{ steps.tag.outputs.tag }}

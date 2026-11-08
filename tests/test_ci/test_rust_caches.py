@@ -138,7 +138,9 @@ def test_every_ci_cache_is_named() -> None:
     assert caches
     for cache in caches:
         assert cache.shared_key, f"ci.yml {cache.job}: name its cache with shared-key"
-        assert "${{" not in (cache.key or ""), f"ci.yml {cache.job}: key {cache.key} is unresolved"
+        # A matrix value must resolve; a step output (the nightly's version) names
+        # the toolchain at run time.
+        assert "${{ matrix." not in (cache.key or ""), f"ci.yml {cache.job}: key {cache.key}"
 
 
 def test_every_cache_name_has_one_producer_with_the_readers_key() -> None:
@@ -168,7 +170,9 @@ def test_no_two_cells_on_one_runner_share_a_cache_they_both_save() -> None:
         if cache.saves and cache.shared_key:
             saved[(cache.workflow, cache.shared_key, cache.key, cache.runs_on)] += 1
     # A matrix job whose cells build the same tree (fuzz-smoke) may share one.
-    shared_on_purpose = {("ci.yml", "fuzz", None, "ubuntu-latest")}
+    shared_on_purpose = {
+        ("ci.yml", "fuzz", "${{ steps.nightly.outputs.version }}", "ubuntu-latest")
+    }
     for name, count in saved.items():
         assert count == 1 or name in shared_on_purpose, f"{name} is saved by {count} cells"
 
@@ -202,3 +206,16 @@ def test_a_release_restores_no_cache() -> None:
     assert build, "the dry run of the asset build is cached"
     for cache in build:
         assert cache.condition == "inputs.dry-run", (cache.job, cache.condition)
+
+
+def test_a_release_restores_no_other_cache() -> None:
+    """Nor any cache of another kind: actions/cache, or a setup action's own."""
+    for name in ("engine-release.yml", "engine-release-build.yml"):
+        workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+        for job_id, job in workflow["jobs"].items():
+            for step in job.get("steps") or []:
+                uses = str(step.get("uses", ""))
+                inputs = step.get("with") or {}
+                assert not uses.startswith("actions/cache"), (name, job_id)
+                assert "cache" not in inputs, (name, job_id, uses)
+                assert "enable-cache" not in inputs, (name, job_id, uses)

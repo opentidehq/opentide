@@ -81,16 +81,15 @@ rust_jobs() {
   echo "==> rustdoc (RUSTDOCFLAGS=-D warnings)"
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --locked --quiet
   echo "==> Engine crates package and licence scan"
-  # vendor copies each crate's shared assets into it (untracked files);
-  # `vendor --clean` removes them again, whatever the outcome.
+  # vendor copies each crate's shared assets into it (untracked files, which
+  # a later `git add -A` would commit): `vendor --clean` removes them on any
+  # exit, an interrupted push included.
+  trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
   python3 scripts/engine/release.py vendor
-  local packaged=0
-  cargo package --locked --workspace --exclude opentide-native --allow-dirty --quiet \
-    && bash scripts/engine/license-scan.sh target/package/*.crate || packaged=$?
+  cargo package --locked --workspace --exclude opentide-native --allow-dirty --quiet
+  bash scripts/engine/license-scan.sh target/package/*.crate
   python3 scripts/engine/release.py vendor --clean
-  if [[ "$packaged" != 0 ]]; then
-    exit "$packaged"
-  fi
+  trap - EXIT
 
   # The rest need tools a contributor may not have: each says what to install.
   local installed

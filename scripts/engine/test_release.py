@@ -332,6 +332,10 @@ class TagTest(unittest.TestCase):
         assert notes is not None
         self.assertTrue(notes.startswith("Release candidate 2 of 1.2.3."))
         self.assertIn("- **A fix.**", notes)
+        # An empty section of its own is no notes either.
+        sections["1.2.3"] = ""
+        with mock.patch.object(release, "changelog_section", side_effect=sections.get):
+            self.assertIn("- **A fix.**", release.notes("engine-v1.2.3-rc.2") or "")
         with mock.patch.object(release, "changelog_section", return_value="body"):
             self.assertEqual(release.notes("engine-v1.2.3"), "body")
             self.assertEqual(release.notes("1.2.3"), "body")
@@ -496,6 +500,15 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(guard, attach.index("gh release upload"))
         self.assertNotIn("--clobber", attach)
         self.assertNotIn("delete-asset", attach)
+
+    def test_run_workflow_never_releases_a_version_already_tagged(self) -> None:
+        # A tag whose own run failed before its release: a dispatch would build
+        # another commit, attach it to the tag's and publish its crates.
+        verify = workflow_jobs()["verify"]
+        dispatch = verify[verify.index('if [ "${GITHUB_REF}" != "refs/heads/development" ]') :]
+        guard = 'git ls-remote --exit-code --tags origin "refs/tags/${tag}"'
+        self.assertIn(guard, dispatch)
+        self.assertLess(dispatch.index("PUBLISH_ONLY"), dispatch.index(guard))
 
     def test_verify_assets_may_read_the_attestations_and_write_nothing(self) -> None:
         verify_assets = workflow_jobs()["verify-assets"]
