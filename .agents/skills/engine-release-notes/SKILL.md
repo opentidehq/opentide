@@ -15,7 +15,7 @@ itself (version bump, crates.io) is `.agents/skills/engine-release/SKILL.md`.
 ## Where they are read
 
 - `crates/CHANGELOG.md` is the only source. Its version section is the GitHub Release body
-  (`scripts/engine/release.py notes X.Y.Z`, run by `release.yml`), and
+  (`scripts/engine/release.py notes X.Y.Z`, run by `engine-release.yml`), and
   [opentide.org/releases/language-server](https://opentide.org/releases/language-server/) renders
   it. The site still syncs language-server's own `CHANGELOG.md`, frozen at the import (#800),
   until it reads this file.

@@ -188,7 +188,6 @@ exclude = [
     "/data/catalogs/tide/schemas",
     "/docs/engine",
     "/scripts/engine",
-    "/.github/engine-workflows",
 ]
 
 [tool.hatch.build.targets.wheel]

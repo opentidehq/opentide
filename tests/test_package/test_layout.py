@@ -176,10 +176,15 @@ def test_the_wheel_ships_every_licence_notice_cites() -> None:
     assert all((ROOT / path).is_file() for path in shipped)
 
 
-def test_no_active_workflow_publishes_the_engine() -> None:
-    """language-server's Release workflow (parked in .github/engine-workflows/) runs on
-    `v*.*.*` tags, which are opentide's release tags here: it must not run as it is."""
-    for workflow in (ROOT / ".github" / "workflows").glob("*.yml"):
-        text = workflow.read_text(encoding="utf-8")
-        assert "cargo publish" not in text, workflow.name
-        assert "npm publish" not in text, workflow.name
+def test_only_the_engine_release_publishes_the_engine() -> None:
+    """The engine's crates and npm packages publish from engine-release.yml, which
+    runs on `engine-v*` tags (and Run workflow) only: `v*` tags are opentide's own
+    releases (tests/test_ci/test_one_ci.py checks every workflow's triggers)."""
+    publishing = sorted(
+        workflow.name
+        for workflow in (ROOT / ".github" / "workflows").glob("*.yml")
+        if re.search(r"cargo publish|release\.py publish|npm publish", workflow.read_text("utf-8"))
+    )
+    assert publishing == ["engine-release.yml"]
+    text = (ROOT / ".github" / "workflows" / "engine-release.yml").read_text(encoding="utf-8")
+    assert '  push:\n    tags:\n      - "engine-v*"\n  workflow_dispatch:' in text

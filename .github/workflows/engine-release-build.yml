@@ -1,0 +1,309 @@
+name: Engine release build
+
+# Builds every asset of an engine GitHub Release into one artifact,
+# `release-assets`: opentide-lsp per target, the WASI module, the browser build
+# (opentide-wasm-web-<v>.zip), the highlights zip, the licences and NOTICE, and
+# SHA256SUMS last. It publishes, attests and uploads to no release: the caller
+# does. Two callers:
+#
+# - engine-release.yml, for an `engine-v*` tag or Run workflow, with the tag;
+# - ci.yml on every pull request and push, with no tag (dry-run): the workspace
+#   version's tag, so every PR proves the asset set a release would publish
+#   (`release.py check-assets`: language-server's last release's names with the
+#   version substituted).
+#
+# Only the dry run restores a Rust cache: a release builds from nothing.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "engine-vX.Y.Z or engine-vX.Y.Z-rc.N; empty for the dry run (the workspace version)"
+        type: string
+        default: ""
+      dry-run:
+        description: "Built for a pull request or a push: a Rust cache may be restored"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # The tag and the version the asset names carry (`v0.11.0`, `v0.11.1-rc.1`).
+  meta:
+    name: Release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG}"
+          if [ -z "${tag}" ]; then
+            tag="$(python3 scripts/engine/release.py tag)"
+          fi
+          version="$(python3 scripts/engine/release.py asset-version "${tag}")"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Assets of ${tag}, named ${version}"
+
+  native:
+    name: opentide-lsp ${{ matrix.target }}
+    needs: meta
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # scripts/engine/release.py TARGETS lists the same targets
+        # (scripts/engine/test_release.py).
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          # GitHub retired the Intel macOS runners; cross-compile on Apple silicon.
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins, which cargo runs in this checkout
+      # (`rustup toolchain install` with no name), with the target the job builds.
+      # windows-11-arm's image may lack rustup (publish-pypi.yml installs it there).
+      # The other images carry rustup; this one may not (as in publish-pypi.yml).
+      - name: Rust on Windows on Arm
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
+            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
+            & $installer -y --profile minimal --default-toolchain none
+            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+      - name: Set up Rust
+        shell: bash
+        run: rustup toolchain install --profile minimal --no-self-update --target ${{ matrix.target }}
+      # The dry run only: one cache per target (rust-cache's key does not hold
+      # the matrix). A release never restores one.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: inputs.dry-run
+        with:
+          shared-key: engine-release
+          key: ${{ matrix.target }}
+      - name: musl linker
+        if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: build
+        shell: bash
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+        run: cargo build --locked --release -p opentide-lsp --target ${{ matrix.target }}
+      - name: size budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=$(find "target/${{ matrix.target }}/release" -maxdepth 1 -type f -name 'opentide-lsp*' ! -name '*.d' ! -name '*.pdb' | head -n 1)
+          test -n "$bin"
+          size=$(wc -c < "$bin")
+          echo "$bin is $size bytes"
+          test "$size" -lt 31457280
+      # Every target's binary is named opentide-lsp: name each by its target, or
+      # the assets job's merged download keeps only one.
+      - name: rename
+        shell: bash
+        run: |
+          set -euo pipefail
+          ext=""
+          case "${{ matrix.target }}" in *windows*) ext=".exe" ;; esac
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/opentide-lsp${ext}" "dist/opentide-lsp-${VERSION}-${{ matrix.target }}${ext}"
+      - name: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-opentide-lsp-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  wasm:
+    name: WebAssembly builds
+    needs: meta
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins, which cargo runs in this checkout
+      # (`rustup toolchain install` with no name), with the targets the job builds.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update --target wasm32-unknown-unknown,wasm32-wasip1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: inputs.dry-run
+        with:
+          shared-key: engine-release
+          key: wasm
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      # The prebuilt release, as ci.yml's engine-wasm job installs it; its
+      # version must match the wasm-bindgen crate in Cargo.lock.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: wasm-bindgen@0.2.128
+      - run: bash scripts/engine/build-wasm.sh
+      - name: package
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp target/wasm32-wasip1/release/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
+          wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/opentide_wasm.wasm
+          cp LICENSE NOTICE pkg/
+          cp -r licenses pkg/licenses
+          (cd pkg && zip -r "../dist/opentide-wasm-web-${VERSION}.zip" .)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-wasm
+          path: dist/*
+          if-no-files-found: error
+
+  highlights:
+    name: Highlights zip
+    needs: meta
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: inputs.dry-run
+        with:
+          shared-key: engine-release
+          key: highlights
+      - run: cargo run --locked -p opentide-lsp -- generate-highlights
+      - name: zip
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          (cd highlights && zip -r "../dist/highlights-${VERSION}.zip" spec.toml generated queries)
+          zip -j "dist/highlights-${VERSION}.zip" LICENSE NOTICE
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-highlights
+          path: dist/*
+          if-no-files-found: error
+
+  # The binaries embed third-party code and data: ship the notices with them.
+  # NOTICE covers ECS, Lucene, dk.brics, and the wasi-libc the WASM builds link
+  # (texts in licenses/wasi-libc, shipped as WASI-LIBC-LICENSES.txt);
+  # cargo-about lists every Rust crate in the workspace, the browser build's
+  # included, and fails on a licence about.toml does not accept. No OIDC token
+  # anywhere in this workflow: cargo-about builds third-party crates (their
+  # build.rs run).
+  licences:
+    name: Licences and notices
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: inputs.dry-run
+        with:
+          shared-key: engine-release
+          key: licences
+      - name: licences and notices
+        run: |
+          set -euo pipefail
+          cargo install --locked cargo-about --version 0.8.4
+          mkdir -p dist
+          cargo about generate --workspace about.hbs -o dist/THIRD-PARTY-LICENSES.html
+          cp LICENSE dist/LICENSE
+          cp NOTICE dist/NOTICE
+          for f in licenses/wasi-libc/*; do
+            printf '==> %s <==\n\n' "$f"; cat "$f"; printf '\n'
+          done > dist/WASI-LIBC-LICENSES.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-licences
+          path: dist/*
+          if-no-files-found: error
+
+  # Every asset, the licence scan over all of them, and SHA256SUMS last.
+  assets:
+    name: Release assets
+    needs: [meta, native, wasm, highlights, licences]
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          pattern: engine-asset-*
+          merge-multiple: true
+      - name: license scan (no oracle references)
+        run: bash scripts/engine/license-scan.sh dist
+      - name: every asset is there
+        run: |
+          set -euo pipefail
+          test -s dist/THIRD-PARTY-LICENSES.html && test -s dist/NOTICE && test -s dist/WASI-LIBC-LICENSES.txt
+      # Last, once dist holds every asset (language-server#196): a consumer runs
+      # `sha256sum -c SHA256SUMS` on what it downloads.
+      - name: SHA256SUMS
+        run: python3 scripts/engine/release.py sums dist
+      # The names language-server's releases carried, with this tag's version:
+      # editors pin them (opentidehq/vscode-extension pins.json).
+      - name: the asset set
+        run: |
+          set -euo pipefail
+          python3 scripts/engine/release.py check-assets dist "${TAG}"
+          python3 scripts/engine/release.py verify-sums dist
+          {
+            echo "### Release assets of ${TAG}"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error

@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -42,9 +43,11 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
+      # The binding `uv sync` builds: the `test` job's cache (3.14), read here.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: . -> target
+          shared-key: python-engine
+          save-if: false
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -68,12 +71,17 @@ jobs:
 
       - name: Detect vocabulary bundle, pin, lockfile or model changes
         id: vocab_changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            base_ref="${{ github.event.pull_request.base.sha }}"
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            base_ref="${PR_BASE_SHA}"
           else
-            base_ref="${{ github.event.before }}"
+            base_ref="${PUSH_BEFORE}"
           fi
 
           if [[ -z "$base_ref" || "$base_ref" == "0000000000000000000000000000000000000000" ]]; then
@@ -82,7 +90,7 @@ jobs:
             exit 0
           fi
 
-          changed_files="$(git diff --name-only "$base_ref" "${{ github.sha }}")"
+          changed_files="$(git diff --name-only "$base_ref" "${HEAD_SHA}")"
           # grep, not rg: ripgrep is not installed on GitHub-hosted runners, and a
           # missing command in an `if` reads as "no match" and skips the gate.
           if grep -qE "^(src/opentide/data/vocabulary/.*\\.vocab\\.toml|src/opentide/data/pins/.*\\.toml|data/specifications\\.lock\\.json|scripts/build/sync_vocabularies\\.py)$" <<<"$changed_files"; then
@@ -124,27 +132,39 @@ jobs:
           OPENTIDE_REQUIRE_SPECIFICATIONS: "1"
         run: uv run pytest tests/test_models/test_spec_field_descriptions.py --no-cov -q
 
+  # ---------------------------------------------------------------------------
   # The Cargo workspace: the engine crates (crates/, imported from
-  # opentidehq/language-server) and their PyO3 binding (analysis/). The
-  # engine's tests compare it with this checkout's Pydantic models, so they run
-  # after `uv sync`. The rest of language-server's CI runs in engine-ci.yml
-  # until UC-0.3 (#801) brings CI together.
+  # opentidehq/language-server) and their PyO3 binding (analysis/).
+  #
+  # Rust caches (Swatinem/rust-cache), one strategy for the whole file
+  # (tests/test_ci/test_rust_caches.py): every cache names a `shared-key`, and
+  # each shared-key/key pair has exactly one job that saves it, whose
+  # CARGO*/RUST* environment and runner its readers repeat (rust-cache hashes
+  # both into the key).
+  #
+  #   engine-check    `engine`: clippy, rustdoc and the invariants (check builds)
+  #   engine-dev      `engine-test` per OS (nextest's debug tree); `clients` and
+  #                   `elastic-sweep` read the Linux one
+  #   engine-package  `engine-package`
+  #   engine-bench    `bench`
+  #   engine-wasm     `engine-wasm`
+  #   fuzz            `fuzz-smoke` (nightly, fuzz/target)
+  #   python-engine   the Python jobs' `uv sync` build of the binding: `test`
+  #                   (3.14) saves it, the other Linux Python jobs read it
+  #   engine-release  the release dry run (engine-release-build.yml), per target
+  # ---------------------------------------------------------------------------
+
+  # rustfmt, clippy, rustdoc, the crate layers and the engine's invariants.
   engine:
-    name: Engine (Rust workspace)
+    name: Engine lint (fmt, clippy, doc, layers)
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
       # A compiler warning fails the build, as in language-server's CI.
       RUSTFLAGS: "-Dwarnings"
-      # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
-      # backtraces keep file:line, and target/ stays a few GB on the runner.
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      # As in engine-ci.yml, whose `clients` and `elastic-sweep` read this
-      # job's Rust cache: rust-cache hashes CARGO_* and RUST* into its key.
       CARGO_TERM_COLOR: always
-      # insta compares snapshots and never writes one here: a missing or
-      # changed snapshot fails the test (crates/AGENTS.md, Snapshots).
       INSTA_UPDATE: "no"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -164,18 +184,9 @@ jobs:
         run: |
           rustup toolchain install --profile minimal --no-self-update --component rustfmt,clippy
 
-      # Dependencies only: rust-cache drops the workspace crates before saving.
-      # engine-ci.yml's `clients` and `elastic-sweep` build a subset of this
-      # debug tree and read the same cache (`save-if: false`), so the repository
-      # keeps one copy of it, as language-server's CI did
-      # (tests/test_ci/test_rust_caches.py).
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: . -> target
-          shared-key: engine-dev
-
-      - name: Install dependencies
-        run: uv sync --group dev
+          shared-key: engine-check
 
       - name: rustfmt
         run: cargo fmt --all --check
@@ -188,10 +199,11 @@ jobs:
       - name: crate layers
         run: cargo xtask check-layers
 
-      # pydantic_object_issues_are_subset_of_lsp runs src/opentide's models
-      # with the interpreter `uv sync` installed (.venv).
-      - name: cargo test
-        run: cargo test --workspace --locked
+      # Broken intra-doc links and the like fail the build.
+      - name: rustdoc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --no-deps --workspace --locked
 
       - name: Engine invariants (I/O-free crates, names, skills, generated highlights)
         run: |
@@ -200,6 +212,9 @@ jobs:
           bash scripts/engine/validate-skills.sh
           cargo run --locked -p opentide-lsp -- generate-highlights --check
 
+      - name: Install dependencies
+        run: uv sync --group dev
+
       # The Tide catalog the engine compiles in is what the models generate
       # (scripts/engine/sync_opentide_schemas.py), until UC-1.8 generates it in Rust.
       - name: The engine's bundled Tide catalog matches the models
@@ -207,6 +222,73 @@ jobs:
 
       - name: The engine release script's tests
         run: uv run python -m unittest discover -s scripts/engine -p "test_*.py"
+
+  # Every test of the workspace with nextest (.config/nextest.toml, profile
+  # `ci`) on Linux, macOS and Windows; the doctests (which nextest does not
+  # run) on Linux. pydantic_object_issues_are_subset_of_lsp runs src/opentide's
+  # models with the interpreter `uv sync` installs (.venv), so every OS syncs.
+  engine-test:
+    name: Engine tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      # Line tables, not full debuginfo, for the workspace's ~90 test binaries:
+      # backtraces keep file:line, and target/ stays a few GB on the runner.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      # insta compares snapshots and never writes one here: a missing or
+      # changed snapshot fails the test (crates/AGENTS.md, Snapshots).
+      INSTA_UPDATE: "no"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      # Dependencies only: rust-cache drops the workspace crates before saving.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: engine-dev
+          key: ${{ matrix.os }}
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-nextest@0.9.148
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: cargo nextest (profile ci)
+        run: cargo nextest run --workspace --locked --profile ci
+
+      - name: doctests
+        if: runner.os == 'Linux'
+        run: cargo test --workspace --locked --doc
+
+      - name: Upload the JUnit report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nextest-junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
 
   # scripts/engine/build-wasm.sh builds both WebAssembly artifacts with the
   # wasi-sdk it pins and smoke-tests them; the npm packages build and pack only
@@ -232,7 +314,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: . -> target
+          shared-key: engine-wasm
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -270,6 +352,266 @@ jobs:
           node --no-turbo-fast-api-calls --experimental-strip-types
           --test packages/lsp-client/src/index.test.ts
 
+  # Every engine crate builds from its packaged sources, as it will from
+  # crates.io: a crate that reads a file outside OPENTIDE_ASSETS fails here, not
+  # at release. The binding (analysis/, opentide-native) is not a crate to
+  # publish. The packages carry the embedded catalogs, so the licence scan
+  # catches an oracle reference here rather than at release time.
+  engine-package:
+    name: Engine crates package and licence scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: engine-package
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/engine/release.py vendor
+      - run: cargo package --locked --workspace --exclude opentide-native --allow-dirty
+      - name: license scan (no oracle references)
+        run: bash scripts/engine/license-scan.sh target/package/*.crate
+
+  # The vendored parser.c of every grammar is what tree-sitter-cli generates
+  # from its grammar.js (crates/AGENTS.md: never hand-edited).
+  grammars:
+    name: Grammars regenerate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - run: npm install --prefix /tmp/ts-cli tree-sitter-cli@0.25.10
+      - run: bash scripts/engine/check-grammars.sh
+
+  # The generated grammars as VS Code reads them (language-server#171).
+  textmate:
+    name: TextMate grammars (vscode-textmate)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: TextMate grammars (vscode-textmate)
+        working-directory: highlights/test
+        run: npm ci && npm test
+
+  # Every public Elastic rule passes Elasticsearch's parser, so any engine
+  # error on them is an engine bug (language-server#82). The rules are ELv2:
+  # checked out here at a pinned commit (the one oracle.yml reads), never
+  # vendored.
+  elastic-sweep:
+    name: Elastic detection-rules sweep
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # engine-test's environment: the same rust-cache key, so this job reads
+      # the Linux cell's cache.
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: elastic/detection-rules
+          persist-credentials: false
+          ref: 2b30453d7dede69f980472cff51a2ae9a6917bae
+          path: detection-rules
+          sparse-checkout: |
+            rules
+            rules_building_block
+            hunting
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      # A subset of engine-test's Linux debug tree: read its cache, never save one.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: engine-dev
+          key: ubuntu-latest
+          save-if: false
+      - name: detection-rules sweep
+        env:
+          OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
+        run: cargo test --locked -p opentide-analysis --test elastic_detection_rules -- --nocapture
+
+  # Each fuzz target (fuzz/, cargo-fuzz on nightly) for 60 seconds from its
+  # seeds and saved regressions: a panic or a timeout on a pull request fails
+  # here. engine-fuzz.yml runs each for five minutes a night with the corpus
+  # it keeps.
+  fuzz-smoke:
+    name: Fuzz smoke (${{ matrix.targets }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every target of fuzz/fuzz_targets/ (tests/test_ci/test_one_ci.py),
+        # three to a runner: one build serves the three.
+        targets: ["kql spl esql", "eql kuery lucene", "falco tide protocol"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # scripts/engine/fuzz.sh runs `cargo +nightly fuzz`.
+      - name: Set up Rust (nightly)
+        run: rustup toolchain install nightly --profile minimal --no-self-update
+      # fuzz/ is a workspace of its own; cargo-fuzz builds into fuzz/target.
+      # rust-cache also keeps ~/.cargo/bin, so cargo-fuzz installs once.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: fuzz
+          workspaces: fuzz -> target
+      - run: cargo +nightly install cargo-fuzz --locked
+      - name: fuzz ${{ matrix.targets }} (60 s each)
+        env:
+          TARGETS: ${{ matrix.targets }}
+        run: |
+          set -euo pipefail
+          for target in ${TARGETS}; do
+            echo "::group::fuzz ${target}"
+            bash scripts/engine/fuzz.sh "${target}" 60
+            echo "::endgroup::"
+          done
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-smoke-artifacts-${{ strategy.job-index }}
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+
+  # Every asset an engine release publishes, built by the release's own jobs
+  # (engine-release-build.yml) for the workspace version, with no tag: no
+  # attestation, no GitHub Release, nothing published, a read-only token. Its
+  # last job fails unless the files are language-server's last release's
+  # (v0.11.0) with this version in their names.
+  engine-release-dry-run:
+    name: Engine release (dry run)
+    permissions:
+      contents: read
+    uses: ./.github/workflows/engine-release-build.yml
+    with:
+      dry-run: true
+
+  # opentidehq/vscode-extension pins the highlights zip, the browser build and
+  # THIRD-PARTY-LICENSES.html of an engine release (pins.json): its own grammar
+  # and engine scripts, at a pinned commit, must accept this run's assets as
+  # they would a release of this repository.
+  engine-release-consumers:
+    name: Engine release assets in vscode-extension
+    needs: engine-release-dry-run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opentidehq/vscode-extension
+          ref: 9888813d5484dffe663c9a57c07aad80a0897181
+          path: vscode-extension
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: release-assets
+      - name: vscode-extension's grammar and engine scripts accept the assets
+        run: >-
+          node scripts/engine/check-vscode-extension.mjs
+          vscode-extension release-assets "$(python3 scripts/engine/release.py tag)"
+
+  # Real clients against the server (language-server#185 P2.8): pytest-lsp
+  # replays the capabilities VS Code, Neovim and Emacs send and checks each
+  # response against them, and Neovim's own client must show each diagnostic
+  # once. Informational while the recorded capabilities and Ubuntu's Neovim move.
+  clients:
+    name: LSP clients (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    env:
+      # engine-test's environment: the same rust-cache key, so this job reads
+      # the Linux cell's cache.
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      # A subset of engine-test's Linux debug tree: read its cache, never save one.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: engine-dev
+          key: ubuntu-latest
+          save-if: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: cargo build --locked -p opentide-lsp
+      - name: pytest-lsp (VS Code, Neovim, Emacs capabilities)
+        env:
+          OPENTIDE_LSP_BIN: ${{ github.workspace }}/target/debug/opentide-lsp
+        run: |
+          pip install -r scripts/engine/clients/requirements.txt
+          cd scripts/engine/clients && python -m pytest -q
+      - name: Neovim headless
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q neovim
+          nvim --headless --clean -l scripts/engine/nvim-smoke.lua target/debug/opentide-lsp
+
+  # analyze() per language and hover in a 1,000-object workspace
+  # (language-server#181). The numbers go in the job summary for comparing
+  # runs; they gate nothing.
+  bench:
+    name: Benchmarks (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: engine-bench
+      - name: cargo bench (opentide-analysis)
+        run: |
+          cargo bench --locked -p opentide-analysis --bench analyze | tee bench.txt
+          { echo '### analyze() per language'; echo; echo '```'; cat bench.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
   test:
     name: Test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -288,11 +630,13 @@ jobs:
         if: matrix.python-version == env.COVERAGE_PYTHON
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: matrix.python-version != env.COVERAGE_PYTHON
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -309,9 +653,13 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
+      # The binding `uv sync` builds (abi3: one build serves every Python).
+      # This job saves it, from its coverage cell; the other Python jobs on
+      # Linux read it.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: . -> target
+          shared-key: python-engine
+          save-if: ${{ matrix.python-version == env.COVERAGE_PYTHON }}
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -400,6 +748,8 @@ jobs:
         shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -416,9 +766,11 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
+      # The `test` job's cache of the binding `uv sync` builds.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: . -> target
+          shared-key: python-engine
+          save-if: false
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -460,6 +812,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -476,9 +830,11 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
+      # The `test` job's cache of the binding `uv sync` builds.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: . -> target
+          shared-key: python-engine
+          save-if: false
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -501,6 +857,8 @@ jobs:
     # only add startup cost.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
@@ -519,7 +877,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: . -> target
+          shared-key: python-engine-windows
 
       - name: Install dependencies
         run: uv sync --group dev
