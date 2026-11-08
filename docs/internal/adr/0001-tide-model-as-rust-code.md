@@ -72,16 +72,16 @@ The 23 keys are every `tide.*` string literal in `src/opentide` that names metad
 
 | # | Key | Origin | Attribute | Example | At the oracle |
 |---|-----|--------|-----------|---------|---------------|
-| 1 | `tide.template.multiline` | Field | `#[schemars(extend("tide.template.multiline" = true))]` | `pub query: String` on `RuleResponse`: templates write `query: \|` | `models/response.py`, 22 fields |
-| 2 | `tide.template.spacer` | Field | `#[schemars(extend("tide.template.spacer" = true))]` | `pub metadata: ObjectMetadata` on rules and objectives: a blank line before `metadata:` | `models/rule.py`, 11 fields |
-| 3 | `tide.template.required` | Field | `#[schemars(extend("tide.template.required" = true))]` | `pub response: Option<RuleResponse>`: written in the template although optional | `models/rule.py`, 4 fields |
-| 4 | `tide.template.hide` | Field | `#[schemars(extend("tide.template.hide" = true))]` | `pub file: Option<String>` on `DetectionRule`: left out of templates and the field catalog | `models/rule.py`, 2 fields |
-| 5 | `tide.vocab` | Field | `#[schemars(extend("tide.vocab" = "alert_severity"))]`, or `= true` for the field's own name | `pub severity: String` on `DetectionSignal` | `models/base.py` `VocabField`, 14 fields |
-| 6 | `tide.vocab.scoped` | Field | `#[schemars(extend("tide.vocab" = true, "tide.vocab.scoped" = true))]` | `pub entities: Vec<String>`: values such as `Host::Process` | `models/base.py` `VocabField(scoped=True)`, 3 fields |
-| 7 | `tide.field.role` | Field | `#[schemars(extend("tide.field.role" = "techniques"))]` | `pub mitre_attack: …` on `ObjectiveBody` | `models/base.py` `FIELD_ROLE_KEY`, 6 fields |
+| 1 | `tide.template.multiline` | Field | `#[schemars(extend("tide.template.multiline" = true))]` | `pub query: String` on `ResponseSearch`: templates write `query: \|` | 22 fields: `objective.py` 6, `platform.py` 6, `platform_configs.py` 5, `response.py` 2, `threat.py` 2, `rule.py` 1 |
+| 2 | `tide.template.spacer` | Field | `#[schemars(extend("tide.template.spacer" = true))]` | `pub metadata: ObjectMetadata` on rules and objectives: a blank line before `metadata:` | 11 fields: `platform.py` 6, `rule.py` 3, `objective.py` 1, `threat.py` 1 |
+| 3 | `tide.template.required` | Field | `#[schemars(extend("tide.template.required" = true))]` | `pub response: Option<RuleResponse>` on `DetectionRule`: written in the template although optional | 4 fields: `rule.py` 2, `platform.py` 2 |
+| 4 | `tide.template.hide` | Field | `#[schemars(extend("tide.template.hide" = true))]` | `pub file: Option<String>` on `DetectionRule`: left out of templates and the field catalog | 2 fields, `rule.py` |
+| 5 | `tide.vocab` | Field | `#[schemars(extend("tide.vocab" = "alert_severity"))]`, or `= true` for the field's own name | `pub severity: String` on `DetectionSignal` | `models/base.py` `VocabField`; 14 fields: `threat.py` 9, `objective.py` 4, `metadata.py` 1 |
+| 6 | `tide.vocab.scoped` | Field | `#[schemars(extend("tide.vocab" = true, "tide.vocab.scoped" = true))]` | `pub entities: Vec<String>`: values such as `Host::Process` | `models/base.py` `VocabField(scoped=True)`; 3 fields: `threat.py` 2, `objective.py` 1 |
+| 7 | `tide.field.role` | Field | `#[schemars(extend("tide.field.role" = "techniques"))]` | `pub mitre_attack: …` on `ObjectiveBody` | `models/base.py` `FIELD_ROLE_KEY`; 6 fields: `rule.py` 3, `threat.py` 2, `objective.py` 1 |
 | 8 | `tide.config.responders` | Field | `#[schemars(extend("tide.config.responders" = true))]` | `pub responders: Option<String>` on `RuleResponse` | `models/response.py` |
 | 9 | `tide.config.visibility.logsource-names` | Field | `#[schemars(extend("tide.config.visibility.logsource-names" = true))]` | `pub logsources: Option<Vec<String>>` on `SignalData` | `models/objective.py` |
-| 10 | `tide.meta.definition` | Pipeline | `#[schemars(extend("tide.meta.definition" = true))]` on the root's `metadata` and `references` | `"metadata": {"tide.meta.definition": true}` | `generation/pydantic_metaschema.py` `_CORE_ROOT_EXTRAS_BASE` |
+| 10 | `tide.meta.definition` | Pipeline | `#[schemars(extend("tide.meta.definition" = true))]` on the root's `metadata` and `references` | `"metadata": {"tide.meta.definition": true}` | `generation/pydantic_metaschema.py` `_CORE_ROOT_EXTRAS_BASE`; the pipeline then replaces `true` with the definition's key (`definition_key`), a transform UC-1.8 ports |
 | 11 | `tide.vocab.pins` | Pipeline | none on a field: the pin transform sets it from `Pins` (UC-1.6, UC-1.8) | `"tide.vocab.pins": {"tlp": "tlp::1.0"}` under `metadata` | `generation/pydantic_metaschema.py` `apply_pin_map` |
 | 12 | `tide.config.statuses` | Pipeline | `#[schemars(extend("tide.config.statuses" = true))]` on a platform block's `status` | `status: PREVIEW`, from the platform's configured statuses | `models/platform_schema.py` `_PROPERTY_EXTRAS` |
 | 13 | `tide.config.system.tenants` | Pipeline | `#[schemars(extend("tide.config.system.tenants" = "sentinel"))]` on each platform block's `tenants` | `tenants: [prod]`, from `platforms/sentinel.toml` | `models/platform_schema.py` |
@@ -109,7 +109,7 @@ Pydantic's three cases, and their exact Rust equivalents (counts over the 785 fi
 | `x: T = value` | 161 | the default | error, unless `T` admits `None` | `#[serde(default = "path")] pub x: T` (schemars emits `"default"`) | always |
 
 - **No required-nullable field exists** (`x: T | None` without a default: 0 of 785). serde reads a missing `Option` as `None` even without `#[serde(default)]`, so such a field, if one is added, needs a deserializer that rejects a missing key.
-- **`None` is not written**: struct serialisation equals `model_dump(exclude_none=True)`, which round-trips object files. The four `model_dump(exclude_none=False)` sites (`deployment/planning.py`, `platforms/elastic/{deployer,validator}.py`) are compile and connector code; their ports (UC-3.1, UC-4.x) build the null-filled view they need.
+- **`None` is not written**: struct serialisation equals `model_dump(exclude_none=True)`, which round-trips object files. The five `model_dump(exclude_none=False)` calls, in three files (`deployment/planning.py`, `platforms/elastic/{deployer,validator}.py`), are compile and connector code; their ports (UC-3.1, UC-4.x) build the null-filled view they need.
 - **Field order** is declaration order, which is serde's order, the template order and the serialisation order. A field is declared where Pydantic declares it, inherited fields first as in Pydantic's MRO.
 - **Aliases.** A Pydantic `alias` with `populate_by_name=True` (12 fields: `schema_id`, `platform_schema`, serialised `schema`) is `#[serde(rename = "schema", alias = "schema_id")]`; the Rust and Python attribute keeps Pydantic's name.
 - **Lax scalars.** Pydantic reads object YAML in lax mode (a `bool` accepts `"yes"`, an `int` accepts `"3"`), except `StrictInt` fields (2) and the configuration models (`strict=True`). serde reads canonical forms only, so a lax field gets a deserializer with Pydantic's coercion table for its type, and the fault catalogue (UC-0.6) records each coercion.
@@ -153,6 +153,7 @@ The 21 validators and their Rust form. The plan counts 14 constraints or Tide ke
 - **One model, three hosts.** The same structs build for the native target, CPython (abi3-py310) and `wasm32-unknown-unknown`; CI's `schema` job builds all three and tests the Python class.
 - **Artifacts become build outputs.** JSON Schemas, the router, field hints, templates and snippets are generated from the structs (UC-1.8), with byte parity against `opentide generate` or approved diffs.
 - **What the derived schema does not do yet**, seen in the sample's snapshot (`crates/opentide-schema/tests/snapshots/json_schema__sample_schema.snap`), each a UC-1.8 transform: properties come out sorted, not in field order (schemars orders them through serde_json's map, and its `preserve_order` feature turns on `serde_json/preserve_order` for the whole workspace, which changes the key order of every JSON document the engine writes); fields have no `title` (Pydantic adds `"title": "Name"`); `Option<T>` is `"type": ["T", "null"]`, not Pydantic's `anyOf` with `"default": null`; integers carry `"format": "int64"`.
+- **The Python test embeds CPython.** `tests/python.rs` builds a module in the test process and imports the classes from it; a real extension module (`#[pymodule]`, the `.pyi`) is UC-1.9's.
 - **Two Pythons for a while.** Until UC-1.9 the Pydantic models stay the CLI's authority (`crates/AGENTS.md`); the Rust model is checked against them, never the other way round.
 - **Costs.** Three proc-macro dependencies (serde, garde, schemars) and PyO3 behind a feature; every model change is a Rust change, reviewed under the workspace lints.
 
@@ -165,16 +166,34 @@ The 21 validators and their Rust form. The plan counts 14 constraints or Tide ke
 
 ## Evidence
 
-- The counts above, on the oracle's models (opentide 0.23.0, `uv sync --group dev`):
+- Every count above, on the oracle (opentide 0.23.0; run from the repository root with `uv run python` after `uv sync --group dev`). The last line counts `tide.*` string literals, less module and logger names and the four highlight captures:
 
   ```python
-  import importlib, inspect, pkgutil
+  import importlib, inspect, pkgutil, re, types, typing
+  from pathlib import Path
   from pydantic import BaseModel
   root = importlib.import_module("opentide.models")
   modules = [root] + [importlib.import_module(m.name) for m in pkgutil.walk_packages(root.__path__, "opentide.models.")]
   classes = [c for m in modules for c in vars(m).values()
              if inspect.isclass(c) and issubclass(c, BaseModel) and c.__module__ == m.__name__]
-  print(len(classes), sum(len(c.model_fields) for c in classes))   # 176 785
+  fields = [f for c in classes for f in c.model_fields.values()]
+  print(len(classes), len(fields))                                          # 176 785
+  print(sum(c.model_config.get("extra") == "forbid" for c in classes),      # 168
+        sum(bool(c.model_config.get("frozen")) for c in classes))           # 174
+  print(sum(f.is_required() for f in fields),                               # 249
+        sum(not f.is_required() and f.default is None for f in fields),     # 375
+        sum(not f.is_required() and f.default is not None for f in fields), # 161
+        sum(f.is_required() and type(None) in typing.get_args(f.annotation) for f in fields),  # 0
+        sum(bool(f.alias) and f.alias != name for c in classes for name, f in c.model_fields.items()))  # 12
+  src = [p.read_text(encoding="utf-8") for p in Path("src/opentide").rglob("*.py")]
+  calls = lambda name: sum(len(re.findall(rf"\b{name}\(", text)) for text in src)
+  print(calls("field_validator") + calls("model_validator"),               # 15
+        calls("AfterValidator") + calls("BeforeValidator"))                 # 6
+  quote = "[\"']"
+  literals = {k for text in src for k in re.findall(rf"{quote}(tide\.[A-Za-z0-9_.:-]+){quote}", text)}
+  modules_or_loggers = {k for k in literals if re.fullmatch(r"tide\.(models|generation|core|vocabulary|registry|platforms|query|package|deployment|analysis|validation|sharing|loading|indexing|documentation|data|config|__version__)(\..*)?", k) and not k.startswith("tide.config.")}
+  captures = {"tide.keyword", "tide.property", "tide.schema", "tide.uuid"}
+  print(len(literals - modules_or_loggers - captures))                      # 23
   ```
 
 - The skeleton's verification, run in CI's `schema` job: `cargo build -p opentide-schema --features python`, `cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm`, `cargo nextest run -p opentide-schema --features python`, `cargo xtask check-layers`.

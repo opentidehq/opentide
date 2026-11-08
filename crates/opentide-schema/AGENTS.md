@@ -53,7 +53,9 @@ cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm
 `tests/python.rs` embeds CPython: it links the shared libpython of `PYO3_PYTHON` (or `python3`),
 which must be 3.10 or later; put its `LIBDIR` on `LD_LIBRARY_PATH` if the loader cannot find it.
 After an intended schema change, `cargo insta review`; after a compiler message change,
-`TRYBUILD=overwrite cargo test -p opentide-schema --features python --test ui`.
+`TRYBUILD=overwrite cargo test -p opentide-schema --features python --test ui`. The
+`.stderr` quotes PyO3's documentation URL with its exact version, so a PyO3 bump regenerates it in
+the same change.
 
 ## Do not
 
