@@ -1,0 +1,28 @@
+schema_version = 1
+
+[policy]
+regression = 0.10
+noise_floor_s = 0.03
+noise_floor_rss_mib = 2.0
+
+[baseline]
+engine = "python"
+oracle = "opentide 0.23.0"
+scale = 1
+seed = 20261107
+runner = "ubuntu-24.04, 4 vCPU"
+source = "bench.trycmd"
+
+[commands.validate_clean]
+label = "validate, clean"
+plan_s = 3.18
+baseline_s = 3.0
+baseline_rss_mib = 170.0
+target_s = 0.7
+target_rss_mib = 100.0
+
+[commands.explain]
+label = "explain vocab_unknown"
+baseline_s = 0.2
+baseline_rss_mib = 32.0
+target_s = 0.03

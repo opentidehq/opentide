@@ -1,0 +1,123 @@
+# The benchmark budgets: `cargo xtask bench --check tests/bench/budgets.toml bench.json`
+# (UC-0.8, #806; plan docs/internal/unified-core.md, sections 2 and 11).
+#
+# Per command (the ids `cargo xtask bench` reports):
+#
+#   plan_s, plan_rss_mib          plan section 2's measurement (opentide 0.22.0, 4 vCPU,
+#                                 medians of 3), for the record; never enforced
+#   baseline_s, baseline_rss_mib  the oracle (opentide 0.23.0) measured on CI's runner
+#                                 class, [baseline] below: the python engine fails when it
+#                                 is more than policy.regression above these
+#   target_s, target_rss_mib      plan section 11's target: the rust engine fails above it
+#                                 (an absolute budget, at scale 1). Only the commands
+#                                 section 11 names have one
+#
+# Every run is also held to the last development result (--previous): more than
+# policy.regression above it fails. A difference within the noise floor never does.
+# To re-record the baseline: run the Benchmarks workflow on development, check the run's
+# runner and numbers, and copy its medians here in a change of its own that says why.
+
+schema_version = 1
+
+[policy]
+# A median or peak RSS more than 10% above its reference fails (issue #806).
+regression = 0.10
+# ...and only when the difference is also above these: on CI's runners two runs of a
+# 0.2 s command differ by up to ~20 ms (process start, page cache, scheduling), and the
+# RSS of one Python process by about 1 MiB (allocator arenas).
+noise_floor_s = 0.03
+noise_floor_rss_mib = 2.0
+
+[baseline]
+engine = "python"
+oracle = "opentide 0.23.0"
+scale = 1
+seed = 20261107
+runner = "to be recorded"
+source = "to be recorded"
+
+[commands.validate_clean]
+label = "validate, clean"
+plan_s = 3.18
+plan_rss_mib = 171.0
+baseline_s = 3.18
+baseline_rss_mib = 171.0
+target_s = 0.7
+target_rss_mib = 100.0
+
+[commands.validate_warnings]
+label = "validate, 1,000 warnings (platforms disabled)"
+plan_s = 12.76
+baseline_s = 12.76
+baseline_rss_mib = 171.0
+target_s = 0.7
+
+[commands.validate_file]
+label = "validate --file"
+plan_s = 1.77
+baseline_s = 1.77
+baseline_rss_mib = 171.0
+target_s = 0.1
+
+[commands.lint]
+label = "lint"
+baseline_s = 1.0
+baseline_rss_mib = 100.0
+
+[commands.lint_file]
+label = "lint --file"
+plan_s = 0.73
+baseline_s = 0.73
+baseline_rss_mib = 100.0
+
+[commands.info]
+label = "info"
+baseline_s = 1.0
+baseline_rss_mib = 100.0
+
+[commands.info_catalog]
+label = "info catalog"
+plan_s = 1.36
+baseline_s = 1.36
+baseline_rss_mib = 100.0
+target_s = 0.15
+
+[commands.deploy_dry_run]
+label = "deploy --dry-run --all --strategy PREVIEW"
+plan_s = 2.20
+baseline_s = 2.20
+baseline_rss_mib = 100.0
+target_s = 0.3
+
+[commands.generate_docs]
+label = "generate docs"
+plan_s = 11.61
+baseline_s = 11.61
+baseline_rss_mib = 100.0
+target_s = 1.5
+
+[commands.generate_exports_navigator]
+label = "generate exports navigator"
+baseline_s = 1.0
+baseline_rss_mib = 100.0
+
+[commands.rules_unreviewed]
+label = "rules unreviewed"
+baseline_s = 1.0
+baseline_rss_mib = 100.0
+
+[commands.explain]
+label = "explain vocab_unknown"
+plan_s = 0.18
+baseline_s = 0.18
+baseline_rss_mib = 33.0
+target_s = 0.03
+
+[commands.lsp_first_diagnostics]
+label = "language server, first diagnostics"
+# Plan section 2: 0.7 to 3.0 s in the editor (vscode-extension, Python backend).
+baseline_s = 1.0
+baseline_rss_mib = 100.0
+target_s = 0.1
+# Plan section 11: editor memory per window (language server and backend) <= 150 MB.
+target_rss_mib = 150.0

@@ -1,0 +1,81 @@
+`bench --check` on two commands (bench.in/): a run within its budgets and the
+last development result passes; one 18% slower than the development result,
+with 23% more RSS on another command, fails; the rust engine, with no Rust yet,
+lists the commands and fails none. Usage errors exit 2.
+
+```console
+$ xtask bench --check budgets.toml pass.json --previous development.json
+### Benchmarks: python engine, scale 1: passed
+
+Median of 5 cold process runs (after 1 warm-up) and the median peak RSS (`wait4`), on ubuntu24 20261102.1 (4 CPUs, AMD EPYC 7763 64-Core Processor). Reference: oracle baseline (opentide 0.23.0, ubuntu-24.04, 4 vCPU; budget = baseline + 10%). Last `development` result: commit 111111111111.
+
+| Command | Median | Peak RSS | Budget (time) | Budget (RSS) | Δ reference | Δ last `development` | Result |
+|---|---:|---:|---:|---:|---:|---:|---|
+| validate, clean (`validate_clean`) | 3.100 s | 172.0 MiB | 3.300 s | 187.0 MiB | +3.3% | +1.6% | ✅ pass |
+| explain vocab_unknown (`explain`) | 0.210 s | 32.6 MiB | 0.230 s | 35.2 MiB | +5.0% | +5.0% | ✅ pass |
+
+~~~mermaid
+xychart-beta
+    title "Median seconds (bars) against the budget (line)"
+    x-axis ["validate_clean", "explain"]
+    y-axis "seconds"
+    bar [3.100, 0.210]
+    line [3.300, 0.230]
+~~~
+bench --check: every command is within its budget
+
+$ xtask bench --check budgets.toml slow.json --previous development.json
+? 1
+### Benchmarks: python engine, scale 1: FAILED
+
+Median of 5 cold process runs (after 1 warm-up) and the median peak RSS (`wait4`), on ubuntu24 20261102.1 (4 CPUs, AMD EPYC 7763 64-Core Processor). Reference: oracle baseline (opentide 0.23.0, ubuntu-24.04, 4 vCPU; budget = baseline + 10%). Last `development` result: commit 111111111111.
+
+| Command | Median | Peak RSS | Budget (time) | Budget (RSS) | Δ reference | Δ last `development` | Result |
+|---|---:|---:|---:|---:|---:|---:|---|
+| validate, clean (`validate_clean`) | 3.600 s | 172.0 MiB | 3.300 s | 187.0 MiB | +20.0% | +18.0% | ❌ median 3.600 s is +20.0% against the oracle baseline 3.000 s (more than 10%); median 3.600 s is +18.0% against the last development result 3.050 s (more than 10%) |
+| explain vocab_unknown (`explain`) | 0.210 s | 40.0 MiB | 0.230 s | 35.2 MiB | +5.0% | +5.0% | ❌ peak RSS 40.0 MiB is +25.0% against the oracle baseline 32.0 MiB (more than 10%); peak RSS 40.0 MiB is +23.1% against the last development result 32.5 MiB (more than 10%) |
+
+~~~mermaid
+xychart-beta
+    title "Median seconds (bars) against the budget (line)"
+    x-axis ["validate_clean", "explain"]
+    y-axis "seconds"
+    bar [3.600, 0.210]
+    line [3.300, 0.230]
+~~~
+error: validate_clean: median 3.600 s is +20.0% against the oracle baseline 3.000 s (more than 10%)
+error: validate_clean: median 3.600 s is +18.0% against the last development result 3.050 s (more than 10%)
+error: explain: peak RSS 40.0 MiB is +25.0% against the oracle baseline 32.0 MiB (more than 10%)
+error: explain: peak RSS 40.0 MiB is +23.1% against the last development result 32.5 MiB (more than 10%)
+bench --check: 4 failure(s) against budgets.toml
+
+$ xtask bench --check budgets.toml rust.json
+### Benchmarks: rust engine, scale 1: passed
+
+Median of 5 cold process runs (after 1 warm-up) and the median peak RSS (`wait4`), on ubuntu24 20261102.1 (4 CPUs, AMD EPYC 7763 64-Core Processor). Reference: plan section 11 target. Last `development` result: none found.
+
+| Command | Median | Peak RSS | Budget (time) | Budget (RSS) | Δ reference | Δ last `development` | Result |
+|---|---:|---:|---:|---:|---:|---:|---|
+| validate, clean (`validate_clean`) | – | – | – | – | – | – | ➖ no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python |
+| explain vocab_unknown (`explain`) | – | – | – | – | – | – | ➖ no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python |
+bench --check: every command is within its budget
+
+$ xtask bench --check budgets.toml
+? 2
+xtask bench: --check needs a value
+
+usage: cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
+...
+
+$ xtask bench --check budgets.toml missing.json
+? 2
+xtask bench --check: read missing.json: [..]
+
+$ xtask bench --engine go
+? 2
+xtask bench: --engine is python or rust, not `go`
+
+usage: cargo xtask bench [--engine python|rust] [--scale 1|10] [--json] [--out FILE]
+...
+
+```

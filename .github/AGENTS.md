@@ -54,6 +54,12 @@ when the committed one differs, until UC-1.8 generates it in Rust.
   against its vendored `parser.c`, the TextMate grammars, the Elastic detection-rules sweep, and
   two informational jobs (real LSP clients, benchmarks).
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes each engine nightly.
+- [`bench.yml`](workflows/bench.yml), nightly on `development`, on demand and on a pull request
+  labelled `perf`: `cargo xtask bench` for the `python` (the oracle, opentide 0.23.0 from PyPI)
+  and `rust` engines on `ubuntu-24.04`, then `cargo xtask bench --check` against
+  `tests/bench/budgets.toml` and the last successful `development` run's `bench-<engine>`
+  artifact; a median or peak RSS more than 10% over either fails. The table lands in the job
+  summary ([`xtask/AGENTS.md`](../xtask/AGENTS.md), "bench").
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language,
   Splunk, Elasticsearch, Lucene, Kibana and Falco on every push to `development`, on a pull
   request that changes `crates/`, `grammars/`, `Cargo.lock`, the query catalogs or the oracles,

@@ -8,7 +8,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | `check-layers [--metadata FILE] [--layers FILE]` | Checks that every dependency between workspace crates (normal, build and dev, on every target) points down the layer table, [`layers.toml`](layers.toml), against `cargo metadata --no-deps` |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
 | `golden` | Not implemented: UC-0.5 (#803) records and checks the oracle's goldens with it |
-| `bench` | Not implemented: UC-0.8 (#806) runs the benchmarks against their budgets with it |
+| `bench [--engine python\|rust] [--scale 1\|10] [--json]`, `bench --check BUDGETS BENCH.json [--previous FILE]` | Runs the plan section 11 benchmarks on the heavy workspace and holds the result to [`tests/bench/budgets.toml`](../tests/bench/budgets.toml) and the last `development` result (below) |
 | `help` | The usage |
 
 Exit status: 0 passed; 1 a check failed, or the command is not implemented yet (so no script
@@ -27,10 +27,38 @@ tier, a workspace member the table does not place, a placed crate that is not a 
 crate placed twice all fail. To add a crate, place it in the table in the same change and say why;
 moving a crate between layers is a design decision for the maintainer, not a fix for a red check.
 
+## bench
+
+`cargo xtask bench` (`src/bench/`) measures each command of `SCENARIOS` (`src/bench/mod.rs`) as
+fresh processes: one warm-up, then `--runs` (5) measured runs, each in a fresh copy of the
+workspace, with a home, environment and dead proxies of its own (`src/bench/measure.rs`). Time is
+wall time around spawn and `wait4(2)`; memory is the peak RSS `wait4` reports (the `wait4` crate,
+since the workspace forbids `unsafe`); a report holds the medians and every sample. A run counts
+only when the command ended as it should (exit code, one JSON document, what the scenario expects
+of it): a command that failed early would measure nothing, so the bench stops with status 2.
+
+- `--engine python` runs the oracle, opentide 0.23.0 from its PyPI wheel, installed with uv into
+  `<target>/xtask-bench/oracle` from [`tests/bench/oracle-requirements.txt`](../tests/bench/oracle-requirements.txt)
+  (every file's SHA-256 pinned) on a uv-managed CPython (`ORACLE_PYTHON`), bytecode compiled at
+  install. `--engine rust` builds `opentide-lsp --release` for the language server and reports
+  "no Rust yet" for every command without a Rust implementation.
+- The language server's number is spawn to the first `publishDiagnostics` for the opened rule
+  (`src/bench/lsp.rs`), with the workspace as its root.
+- `--check` (`src/bench/check.rs`) fails a median or peak RSS more than `policy.regression` (10%)
+  over the last `development` result (`--previous`), over the oracle baseline in the budgets
+  (`python`), or over the plan section 11 target (`rust`); differences within the noise floor
+  never fail. It prints, and with `--summary` appends, a Markdown table per command.
+- `XTASK_BENCH_INJECT_SLEEP_MS` is test-only: a sleep inside every measured run's timed window.
+  `tests/bench.rs` proves that it makes the check fail.
+- CI: [`bench.yml`](../.github/workflows/bench.yml). Re-record the baseline only from a CI run on
+  its runner class, in a change of its own.
+
 ## Invariants
 
 - The library (`src/lib.rs`, `src/layers.rs`) computes; `src/main.rs` reads files, runs cargo and
-  prints. Tests drive the library with synthetic metadata, no workspace needed.
+  prints. Tests drive the library with synthetic metadata, no workspace needed. `bench` keeps
+  the same split inside `src/bench/`: `report` and `check` compute, the other modules run
+  processes.
 - The workspace to check is found at run time (`CARGO_MANIFEST_DIR` as `cargo run` sets it, else
   the working directory), and the table is `xtask/layers.toml` under the root `cargo metadata`
   prints. Never compile a path in with `env!`: a target pool that last served another worktree can
@@ -51,6 +79,8 @@ cargo xtask check-layers
   `tests/cmd/check-layers.in/`).
 - `tests/workspace.rs`: the binary in a two-crate workspace of its own with an upward edge, run as
   `cargo run` and as a plain binary: it must check that workspace, not the repository.
+- `tests/bench.rs`: `bench` end to end on a stand-in `opentide`: a measured run, then an injected
+  slowdown that `--check` must fail; `tests/cmd/bench.trycmd` holds `--check` to fixed reports.
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
   `unsafe` (`UNSAFE_CRATES`), whose copies must equal the workspace table with
   `unsafe_code = "deny"`.
@@ -62,6 +92,6 @@ cargo xtask check-layers
 
 ## Work items that change this crate
 
-UC-0.4 (#802) check-layers; UC-1.8 (#814) codegen; UC-0.5 (#803) golden; UC-0.8 (#806) bench;
+UC-0.4 (#802) check-layers; UC-0.8 (#806) bench; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
 UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wires the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).
