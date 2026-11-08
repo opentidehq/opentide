@@ -1,10 +1,26 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across nine security platforms.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across nine security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
 
-**Entry point:** this file, then a domain skill from [`.agents/skills/`](.agents/skills/) when the task matches.
+**Entry point:** this file is the map. Read the guide of the area you change (below), then the skill that matches the task.
 
-**Repository:** [opentidehq/opentide](https://github.com/opentidehq/opentide). Trunk: `development`.
+**Repository:** [opentidehq/opentide](https://github.com/opentidehq/opentide). Trunk: `development`. The plan that is moving every implementation into one Rust workspace: [`docs/internal/unified-core.md`](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md) (epic [#790](https://github.com/opentidehq/opentide/issues/790)).
+
+## Map
+
+| Path | What it is | Read first |
+|------|------------|------------|
+| `src/opentide/` | The PyPI package: models, CLI, MCP, platforms, bundled data (`src/opentide/data/`) | [`src/AGENTS.md`](src/AGENTS.md) |
+| `tests/` | The Python suite: unit, CLI E2E (sharded), MCP, docs and CI contracts | the testing skills below |
+| `Cargo.toml`, `Cargo.lock` | One Cargo workspace: lints, shared dependencies, profiles | [`crates/AGENTS.md`](crates/AGENTS.md) |
+| `crates/opentide-*/` | The engine and language server crates, one guide each | `crates/<crate>/AGENTS.md` |
+| `analysis/` | The PyO3 binding compiled into the package as `opentide._native` | [`analysis/AGENTS.md`](analysis/AGENTS.md) |
+| `xtask/` | `cargo xtask`: the layer check (`xtask/layers.toml`), codegen, golden and bench to come | [`xtask/AGENTS.md`](xtask/AGENTS.md) |
+| `grammars/`, `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/`, `crates/testdata/`, `scripts/engine/` | What the engine compiles in, its hosts, fuzzing and tooling | [`crates/AGENTS.md`](crates/AGENTS.md) |
+| `docs/` | The site's four tabs (Usage, CLI, MCP, SDK); `docs/internal/` and `docs/engine/` for maintainers | [`docs/README.md`](docs/README.md) |
+| `.github/` | CI, CodeQL, release and Dependabot workflows | [`.github/AGENTS.md`](.github/AGENTS.md) |
+| `scripts/` | `ci-local.sh`, `codeql-local.sh`, `validate-docs.sh`, `ast_equivalence.py`, `build/` | this file, "Checks" |
+| `.agents/skills/` | The skills below; `.claude/skills` links to them | the table below |
 
 ## Skills — when to read which
 
@@ -33,12 +49,10 @@
 | `crates/CHANGELOG.md`, the engine crates' release notes | [`.agents/skills/engine-release-notes/SKILL.md`](.agents/skills/engine-release-notes/SKILL.md) |
 | Releasing the engine crates (parked until UC-0.3) | [`.agents/skills/engine-release/SKILL.md`](.agents/skills/engine-release/SKILL.md) |
 
-The engine's skills (the last eight rows) came from opentidehq/language-server; their own index,
-with the engine's hard rules, is [`crates/AGENTS.md`](crates/AGENTS.md): read it before changing
-`crates/`, `grammars/`, `highlights/`, `data/catalogs/`, `editors/`, `packages/`, `fuzz/` or
-`scripts/engine/`. Claude Code discovers these through `.claude/skills` (a symlink to
-`.agents/skills`); cloud sessions run `.claude/hooks/session-start.sh`, which syncs the dev
-environment.
+The engine's skills (the last eight rows) came from opentidehq/language-server; their own index, with
+the engine's hard rules, is [`crates/AGENTS.md`](crates/AGENTS.md). Claude Code discovers the skills
+through `.claude/skills` (a symlink to `.agents/skills`); cloud sessions run
+`.claude/hooks/session-start.sh`, which syncs the dev environment.
 
 ## Ground rules
 
@@ -77,88 +91,63 @@ gh pr create --base development --fill
 | Stacked PR | branch from the PR below, then `gh pr create --base <that-branch>` |
 | After merge | `git switch development && git pull` → `git branch -d feat/slug` |
 
-## CI, coverage, CodeQL, stack comments
+## Parallel agents: worktrees and a shared target directory
 
-**CI** (`.github/workflows/ci.yml`): lint (ruff + ty, `uv build` and `twine check`), `engine` (the Cargo workspace: rustfmt, clippy `-D warnings`, `cargo test`, the engine's invariant scripts and the bundled Tide catalog test), `engine-wasm` (`scripts/engine/build-wasm.sh`, the npm packages and the TypeScript client) and the test matrix Python **3.10–3.14**, in parallel; stale runs cancelled on new pushes. Every Python job builds the engine through `uv sync`, with a Rust cache. The engine's other gates, imported from language-server, run in [`engine-ci.yml`](.github/workflows/engine-ci.yml) on every pull request and push: the language server's tests on Windows, the crates packaged and licence-scanned as crates.io builds them, every grammar regenerated against its vendored `parser.c`, the TextMate grammars, the Elastic detection-rules sweep, and two informational jobs (real LSP clients, benchmarks). [`engine-fuzz.yml`](.github/workflows/engine-fuzz.yml) fuzzes each engine nightly. [`oracle.yml`](.github/workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk, Elasticsearch, Lucene, Kibana and Falco on every push to `development`, on a pull request that changes `crates/`, `grammars/`, `Cargo.lock`, the query catalogs or the oracles, weekly (with the Carbon Black Cloud tenant) and on demand. language-server's release workflow waits in `.github/engine-workflows/`, which GitHub does not run, for UC-0.3.
-
-**Local parity:**
+Agents that work at once each take a git worktree. Worktrees in one pool share one Cargo target
+directory, so the dependencies compile once per pool instead of once per worktree:
 
 ```bash
-scripts/ci-local.sh --quick    # ruff, ty, cargo fmt + clippy, engine checks, uv build
-scripts/ci-local.sh              # lint + pytest
-scripts/ci-local.sh --full       # + coverage gate (pyproject.toml) — use before push
+git fetch origin
+git worktree add -b feat/slug ../wt/slug origin/development
+cd ../wt/slug
+export CARGO_TARGET_DIR=../wt/.target/pool-a   # one per pool; every cargo and uv sync in it
+export CARGO_INCREMENTAL=0                      # one-shot runs: no incremental cache to grow
+uv sync --group dev                             # this worktree's .venv; _native builds in the pool
 ```
 
-**Coverage:** gate on Python **3.14** only (`COVERAGE_PYTHON` in ci.yml). Cobertura upload to GitHub Code Quality is best-effort (`fail-on-error: false` if Code Quality is disabled). HTML report uploaded as artifact.
+- Cargo locks the target directory: two builds in one pool wait for each other rather than collide.
+  Run one build at a time per pool, and size pools to the disk (a warm pool is several GB).
+- Keep each pool's environment the same (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the
+  workspace crates. CI's `engine` job sets `CARGO_PROFILE_DEV_DEBUG=line-tables-only`.
+- nextest keeps its JUnit report under the worktree's own `target/nextest/` (gitignored), whatever
+  `CARGO_TARGET_DIR` says.
+- Done with a worktree: `git worktree remove ../wt/slug`; delete a pool nothing uses any more.
 
-**Vocabulary drift gate:** when bundled vocab TOML files, schema pins (`src/opentide/data/pins/`), `data/specifications.lock.json` or the sync script change, CI also checks out `opentidehq/specifications` (`main`) and runs `uv run python scripts/build/sync_vocabularies.py --check` against it (`OPENTIDE_SPECIFICATIONS_ROOT`).
+## Checks
 
-**Bundled Tide catalog:** the engine compiles in a Tide catalog (`data/catalogs/tide/`, and the key lists of `highlights/queries/tide/highlights.scm`) for editors that run `opentide-lsp` on its own. `scripts/engine/sync_opentide_schemas.py` generates it from `src/opentide`, and `tests/test_generation/test_bundled_tide_catalog.py` (the `engine` job, `ci-local.sh`) fails when the committed one differs, until UC-1.8 generates it in Rust.
+| Loop | Command |
+|------|---------|
+| Rust, while editing | `cargo check -p <crate>`; `cargo nextest run --profile fast` (whole workspace, about 15 s warm; `-p <crate>` for one) |
+| Rust, before a commit | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo xtask check-layers` |
+| Rust, everything | `cargo nextest run --workspace --profile ci` and `cargo test --workspace --doc` (nextest runs no doctests), or `cargo test --workspace` |
+| Python, while editing | `uv run pytest tests/<area> -q --no-cov` |
+| Lint and types | `scripts/ci-local.sh --quick` (ruff, ty, cargo fmt, clippy, layers, engine checks, `uv build`) |
+| Before a push | `scripts/ci-local.sh --full` (adds cargo test, pytest with the coverage gate, the E2E suite, GitLab CI lint) |
 
-**CodeQL:** Python and Actions via [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) (`/language:python` + `/language:actions`); Code Quality may also run dynamic Python on push. Local Python: `scripts/codeql-local.sh`.
-
-**Release:** merge the notes PR, then Run workflow on [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) on `development` with no inputs: it tags the changelog's version, creates the GitHub Release and publishes, so a cloud session can release. Steps: [release-management](.agents/skills/release-management/SKILL.md).
-
-**Dependabot:** weekly PRs for `uv` (test toolchain grouped), `github-actions` (SHA pins) and `pre-commit`. Merge procedure: [uv skill](.agents/skills/uv/SKILL.md#dependency-upgrades-and-dependabot).
-
-**Stack comments:** [`.github/workflows/stack-comment.yml`](.github/workflows/stack-comment.yml) posts merge order **only** on stacked PRs (non-trunk base or child PR exists). Standalone PRs to `development` are skipped.
-
-## Platform capability matrix
-
-| Platform | Deploy | Query validate (`--live`) | Offline (engine) | `opentide query` |
-|----------|:------:|:--------------:|:----------------:|:----------------:|
-| Sentinel | ✅ | ✅ KQL | ✅ KQL | ✅ KQL |
-| Defender | ✅ | ✅ KQL | ✅ KQL | ✅ KQL |
-| Elastic | ✅ | ✅ Kuery, Lucene, EQL, ES\|QL | ✅ Kuery, Lucene, EQL, ES\|QL | ✅ ES\|QL, EQL, Lucene; Kuery via rule preview |
-| Splunk | ✅ | ✅ SPL | ✅ SPL | ✅ SPL |
-| SentinelOne | ✅ | ✅ S1QL | ❌ | ✅ PowerQuery |
-| Carbon Black | ✅ | ✅ Lucene | ✅ Lucene | ✅ Lucene |
-| CrowdStrike | ✅ | ❌ | ❌ | ✅ CQL (Next-Gen SIEM) |
-| HarfangLab | ✅ | ❌ | ❌ | ✅ telemetry filters (no `--rule`) |
-| Sysdig Secure (Falco) | ✅ | ❌ | ✅ Falco | ❌ |
-
-CrowdStrike, HarfangLab and Sysdig: `can_validate is False` — return `supported: False`, never fake validation.
-Sysdig (`src/opentide/platforms/sysdig/`) deploys through the Sysdig Secure runtime API only, with the rule
-id in deployment state; block macros and lists are expanded into the condition.
-`opentide query` runners live in `src/opentide/platforms/<pkg>/runner.py` (`opentide.query`): they save no
-search or rule, and stop an asynchronous search they stop waiting for where the API can (CrowdStrike). Elastic
-`kuery` is the one write: its rule preview's alerts, in the preview index.
-
-## Analysis engine (`crates/`, `analysis/`)
-
-The offline query checks (`validate`'s and `lint`'s `queries` checks, `validate query`),
-`opentide lsp start`, `opentide tui` and MCP `validate_query` run the Rust engine in
-[`crates/`](crates/): fifteen crates, imported from opentidehq/language-server with their
-history ([`docs/engine/IMPORT.md`](docs/engine/IMPORT.md)), with the grammars, catalogs and
-test data they read. [`analysis/`](analysis/) binds `opentide-analysis` and `opentide-lsp` with
-PyO3, by path, and [`hatch_build.py`](hatch_build.py) compiles it into the opentide package as
-`opentide._native`: there is no separate engine distribution and no engine pin. All of them are
-members of one Cargo workspace ([`Cargo.toml`](Cargo.toml), one `Cargo.lock`; `fuzz/` keeps its
-own). `uv sync` builds `_native` (develop profile) and needs a Rust toolchain (stable, 1.85+);
-release wheels are one `cp310-abi3` wheel per platform, and the sdist carries the workspace.
-Python reaches the engine only through `src/opentide/analysis.py`; a missing engine is
-`engine_unavailable`, never a skipped check.
-
-| Change | Do |
-|--------|----|
-| Engine crates, grammars, catalogs (`crates/`, `grammars/`, `highlights/`, `data/catalogs/`) | Follow [`crates/AGENTS.md`](crates/AGENTS.md) and its skills. `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` after `uv sync --group dev`: the engine's tests compare it with this checkout's models. A change opentide users see gets an entry in `CHANGELOG.md`, beside `crates/CHANGELOG.md` |
-| Rust binding (`analysis/src/lib.rs`) | Update `src/opentide/_native.pyi`, then the same three cargo commands |
-| Object models, vocabulary or pins | Regenerate the engine's bundled Tide catalog in the same change: `uv run python scripts/engine/sync_opentide_schemas.py`. `tests/test_generation/test_bundled_tide_catalog.py` fails otherwise |
-| Dependencies of the workspace | One `Cargo.lock` for the engine and the binding; never commit a lock cargo re-resolved for an unrelated change |
+The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
+[`.github/AGENTS.md`](.github/AGENTS.md).
 
 ## Code quality bar
 
 - **One bar for the whole package.** ruff covers every module under `src/opentide`, `tests`
   and `scripts` (the engine's `scripts/engine/` too), and ty covers all of `src/opentide`;
   neither has an exclude list. Never add one: fix the code or, where a tool is wrong, suppress
-  the single site with a reason (`# noqa: RULE -- why`, `# ty: ignore[rule]  # why`). The Cargo
-  workspace passes rustfmt and `clippy -D warnings`.
-- **Typed.** New and touched functions are fully annotated and ty-clean.
+  the single site with a reason (`# noqa: RULE -- why`, `# ty: ignore[rule]  # why`).
+- **The Rust workspace** passes rustfmt and `clippy -D warnings` under the lints in the root
+  [`Cargo.toml`](Cargo.toml) (`[workspace.lints]`: `unsafe_code` forbidden outside two crates,
+  `clippy::pedantic`, no `unwrap`/`expect`/`dbg!`/`todo!`/`unimplemented!` outside tests,
+  `missing_docs`). Fix what a lint reports, or put `#[expect(lint, reason = "...")]` on the
+  narrowest item where it fires; growing the workspace's allow-list is a decision of its own.
+  Crates depend only downward ([`xtask/layers.toml`](xtask/layers.toml)). Details:
+  [`crates/AGENTS.md`](crates/AGENTS.md).
+- **Typed.** New and touched Python functions are fully annotated and ty-clean.
 - **Correctness over style.** [`review-checklist`](.agents/skills/review-checklist/SKILL.md)
   lists the defect classes that have shipped here before; check every diff against it.
 
-Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`. Skills:
-[ruff](.agents/skills/ruff/SKILL.md), [python-typing](.agents/skills/python-typing/SKILL.md).
+Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`; `Cargo.toml`, `clippy.toml`,
+`rustfmt.toml`. Skills: [ruff](.agents/skills/ruff/SKILL.md),
+[python-typing](.agents/skills/python-typing/SKILL.md),
+[rust-engine](.agents/skills/rust-engine/SKILL.md).
 
 ## Definition of done
 
@@ -171,32 +160,9 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`. Skills:
 4. Mechanical refactors are proven behaviour-preserving with
    `uv run python scripts/ast_equivalence.py <base-rev>`.
 
-## Repository layout
-
-```
-src/opentide/     # PyPI package (models, CLI, MCP, platforms, bundled data)
-Cargo.toml        # the Cargo workspace: crates/*, analysis/ (one Cargo.lock)
-crates/           # the engine and language server crates, crates/testdata/, crates/AGENTS.md
-analysis/         # PyO3 binding of the engine, compiled into opentide as _native (hatch_build.py)
-grammars/         # tree-sitter grammars (vendored parser.c) the engine compiles
-highlights/       # HighlightSpec, highlight queries and generated editor grammars
-data/catalogs/    # catalogs the engine compiles in (KQL, SPL, ES|QL, EQL, ECS, Falco, Tide)
-editors/          # Helix, Neovim and Zed samples
-packages/         # npm: @opentide/lsp-client, @opentide/lsp-worker
-fuzz/             # cargo-fuzz targets (own workspace)
-tests/
-docs/             # the site's four tabs; docs/internal/, docs/engine/ for maintainers
-scripts/          # ci-local.sh, codeql-local.sh, validate-docs.sh; scripts/engine/ for the engine
-.agents/skills/
-```
-
-Bundled data: `src/opentide/data/`. Logging: `opentide.core.logging` (structlog + Rich) — no operational `print()`.
-
-Client repos: `opentide setup` or `opentide setup ci`.
-
 ## Docs
 
-Fumadocs-ready content under [`docs/`](docs/) — four tabs: Usage, CLI, MCP, SDK. Authoring guide: [`docs/README.md`](docs/README.md). Agent skill: [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md). The engine's design notes are in [`docs/engine/`](docs/engine/), outside the site.
+Fumadocs-ready content under [`docs/`](docs/), four tabs: Usage, CLI, MCP, SDK. Authoring guide: [`docs/README.md`](docs/README.md). Agent skill: [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md). The engine's design notes are in [`docs/engine/`](docs/engine/), outside the site.
 
 - [`docs/internal/test-plan.md`](docs/internal/test-plan.md)
 - [`docs/usage/migration/index.md`](docs/usage/migration/index.md)

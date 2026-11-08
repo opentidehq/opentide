@@ -51,5 +51,5 @@ Output: `codeql-results.sarif` at repo root.
 
 ## Related
 
-- `AGENTS.md` — CI overview
+- `.github/AGENTS.md` — CI overview
 - [`github-actions-templates`](../github-actions-templates/SKILL.md) — workflow authoring

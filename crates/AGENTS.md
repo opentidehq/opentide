@@ -1,6 +1,6 @@
-# AGENTS.md — opentide language server
+# AGENTS.md — the Rust workspace and the engine
 
-Instructions for coding agents working on the engine of this repository (`opentidehq/opentide`): the crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), and the grammars, highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` covers the rest of the repository. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
+Instructions for coding agents working on the Cargo workspace of this repository (`opentidehq/opentide`): the engine crates in `crates/`, imported from opentidehq/language-server with their history (`docs/engine/IMPORT.md`), the binding in `analysis/`, the tooling in `xtask/`, and the grammars, highlights, catalogs, editors, npm packages and fuzz targets they build on. The root `AGENTS.md` is the map of the rest. Each crate has its own `AGENTS.md`; read it before changing the crate. Detection-authoring skills live in `opentidehq/skills` and are not an engine.
 
 Before editing, read the one skill that matches the change. Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
@@ -19,7 +19,25 @@ Before editing, read the one skill that matches the change. Skills follow the [A
 
 Native language server for **KQL**, **SPL**, **Tide YAML**, the Elastic Security languages **ES|QL**, **EQL**, **Kibana KQL** (`kuery`, never confused with Microsoft KQL), and **Lucene**, and **Falco** rule conditions (Sysdig Secure, `configurations.sysdig`). SQL is out of scope. Names use `opentide`, never `otide`. The client factory is `createOpentideClient`.
 
+The offline query checks of the CLI (`validate`'s and `lint`'s `queries` checks, `validate query`), `opentide lsp start`, `opentide tui` and MCP `validate_query` run this engine: `analysis/` binds `opentide-analysis` and `opentide-lsp` with PyO3, by path, and `hatch_build.py` compiles it into the opentide package as `opentide._native`. There is no separate engine distribution and no engine pin. `uv sync` builds `_native` (develop profile) and needs a Rust toolchain (stable, 1.85+); release wheels are one `cp310-abi3` wheel per platform, and the sdist carries the workspace.
+
 Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript packages) own the filesystem and the editor protocol. The CLI (`analyze`, `highlight`, `generate-highlights`) prints plain JSON. Only `--stdio` and `--listen` speak JSON-RPC.
+
+## Crates and layers
+
+One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A crate depends only on crates of a lower layer, or of a lower tier of its own layer; `cargo xtask check-layers` enforces [`xtask/layers.toml`](../xtask/layers.toml), the one copy of the table (plan §4), and a new crate fails it until it is placed there.
+
+| Layer, tier | Crates (each with an `AGENTS.md`) |
+| --- | --- |
+| foundation 0 | [`opentide-core`](opentide-core/AGENTS.md) |
+| foundation 1 | [`opentide-syntax`](opentide-syntax/AGENTS.md), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
+| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-lucene`](opentide-lucene/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md) |
+| foundation 3 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
+| domain 0, 1 | [`opentide-tide`](opentide-tide/AGENTS.md), then [`opentide-analysis`](opentide-analysis/AGENTS.md) |
+| application | [`opentide-lsp`](opentide-lsp/AGENTS.md) |
+| facade | none yet: the `opentide` crate (UC-5.1, #836) |
+| bindings | [`opentide-native`](../analysis/AGENTS.md) (`analysis/`), [`opentide-wasm`](opentide-wasm/AGENTS.md) |
+| tooling | [`xtask`](../xtask/AGENTS.md) |
 
 ## Hard rules
 
@@ -34,12 +52,39 @@ Engines are I/O-free. Hosts (`opentide-lsp`, the WASM crate, the TypeScript pack
 - Do not commit a rewritten `Cargo.lock` with a change that is not about dependencies. The lock is what Cargo resolves and CI builds with `--locked`; restore the committed lock if Cargo rewrites it.
 - Configuration TOML (`opentide-config`, #158) is checked by the host, never by Rust. The engine places the host checker's `{code, field_path, severity}` findings and reads the host's schemas for hover and completion. No configuration check logic in Rust, no vendored or hand-written configuration schema, no TOML grammar, no HighlightSpec captures. Without a host checker there are no configuration diagnostics.
 - Pydantic in this repository's `opentide` package (`src/opentide`) remains CLI authority for Tide objects. The LSP matches `{code, field_path, severity}` and adds ranges.
+- A change opentide users see gets an entry in `CHANGELOG.md`, beside `crates/CHANGELOG.md`. After a change to `analysis/src/lib.rs`, update `src/opentide/_native.pyi`.
+- Object models, vocabulary or pins (`src/opentide`) change the bundled Tide catalog: regenerate it in the same change with `uv run python scripts/engine/sync_opentide_schemas.py`.
+
+## Lints
+
+The workspace's lints are in the root `Cargo.toml` (`[workspace.lints]`), each allowed pedantic lint with its reason; `clippy.toml` allows `unwrap`, `expect` and `dbg!` in `#[test]` functions and `#[cfg(test)]` modules; `rustfmt.toml` writes down rustfmt's defaults.
+
+- **`unsafe_code` is forbidden** except in `opentide-syntax` (tree-sitter FFI) and `opentide-wasm` (wasm32 libc shims). Those two copy the workspace table with `unsafe_code = "deny"`, allow it per item with a reason, and comment every `unsafe` block with `// SAFETY:`. `xtask/tests/lint_policy.rs` fails when a copy drifts or another crate leaves the workspace table.
+- **No `unwrap`, `expect`, `dbg!`, `todo!` or `unimplemented!` outside tests.** A panic on user input is a bug: return a diagnostic or an error. Where a value cannot fail (a catalog compiled in with `include_str!`, a regex literal, a structural invariant), the item says why: `#[expect(clippy::expect_used, reason = "...")]`. An integration test file's helpers outside `#[test]` take the same `#![expect]` at the file's top.
+- **`missing_docs`** holds for `opentide-syntax`, `opentide-kuery`, `opentide-lsp`, `opentide-wasm`, `opentide-native` and `xtask`, and for every new crate. The eleven other crates, imported undocumented, opt out at their crate root (`#![expect(missing_docs, ...)]`); remove the opt-out once a crate is documented. Inaccurate docs are worse than none.
+- Prefer `#[expect(..., reason)]` to `#[allow]`: a stale expectation fails. Use `allow` only where clippy cannot fulfil an expectation (glob imports), and say so.
+
+## Tests
+
+| Command | Runs |
+| --- | --- |
+| `cargo nextest run --profile fast` | Unit tests and the fast integration tests of the workspace, about 15 s warm on 4 cores; `-p <crate>` for one crate. It leaves out the stdio server tests, the Pydantic comparison, the deep-nesting test and the public corpora (`.config/nextest.toml`) |
+| `cargo nextest run --workspace --profile ci` | Everything, no retries, JUnit at `target/nextest/ci/junit.xml` |
+| `cargo test --workspace --doc` | Doctests, which nextest does not run (CI's `cargo test --workspace` does) |
+| `cargo test --workspace` | Everything, without nextest |
+
+The tests that compare the engine with the Pydantic models need `uv sync --group dev` first (they run `.venv`'s interpreter; `OPENTIDE_PYTHON` names another).
+
+**Snapshots (insta).** `insta::assert_snapshot!` keeps the expected text in `tests/snapshots/*.snap` next to the test, committed and reviewed like code (`crates/opentide-analysis/tests/snapshots.rs`). After an intended change run the test, then `cargo insta review` (`cargo install cargo-insta --locked`) or `INSTA_UPDATE=always cargo test -p <crate> --test <name>`, and read the diff before committing. CI sets `INSTA_UPDATE=no`: a changed or missing snapshot fails and nothing is written. Never commit a `.snap.new` (gitignored). Snapshot what a contract fixes (a diagnostic's code, range and message, a renderer's output), not whole structs.
+
+**Command-line cases (trycmd).** `tests/cmd/*.trycmd` hold a binary's commands with their output and exit status (`? 2`); `tests/cmd/<case>.in/` is the working directory; `[..]` elides a part that varies (a version). `TRYCMD=overwrite cargo test -p <crate> --test cli` rewrites the expected output after an intended change. Used by `opentide-lsp` and `xtask`.
 
 ## Verify
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
+cargo xtask check-layers
 bash scripts/engine/check-io-free.sh
 bash scripts/engine/check-names.sh
 bash scripts/engine/validate-skills.sh
@@ -47,7 +92,7 @@ cargo test --workspace
 cargo run -p opentide-lsp -- generate-highlights --check
 ```
 
-Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`'s `engine` and `engine-wasm`, and `engine-ci.yml`) set `RUSTFLAGS=-Dwarnings`.
+Grammar, catalog, and corpus edits can flip an oracle verdict. `bash scripts/engine/ci-oracle.sh` runs the Kusto.Language and Splunk oracles and skips a reference you do not have (`scripts/engine/oracles/README.md`). Grammar edits also need `bash scripts/engine/check-grammars.sh` from the repository root (CLI 0.25.10). The engine's CI jobs (`ci.yml`'s `engine` and `engine-wasm`, and `engine-ci.yml`) set `RUSTFLAGS=-Dwarnings`. Code under `cfg(target_arch = "wasm32")` or `cfg(target_os = "wasi")` is linted only for that target: `cargo clippy -p opentide-wasm --target wasm32-unknown-unknown` and `cargo clippy -p opentide-lsp --target wasm32-wasip1 --lib --bins` need a wasm C toolchain and libc headers for the grammars (`CC_<target>`, `CFLAGS_<target>`, as `scripts/engine/build-wasm.sh` sets them).
 
 ## Upstream docs, not downloaded skills
 

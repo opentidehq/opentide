@@ -82,7 +82,7 @@ pub enum HighlightError {
 }
 ```
 
-`#[error("...")]` is the display text. `anyhow` stays in the binary (`Context` on I/O). Do not return `anyhow::Error` from an engine crate. Do not `unwrap()` catalog parses on a request path that should surface a diagnostic. `expect` on `include_str!` data is acceptable because a bad catalog fails the build's tests, not a user document.
+`#[error("...")]` is the display text. `anyhow` stays in the binary (`Context` on I/O). Do not return `anyhow::Error` from an engine crate. Do not `unwrap()` catalog parses on a request path that should surface a diagnostic. `expect` on `include_str!` data is acceptable because a bad catalog fails the build's tests, not a user document; the workspace denies `unwrap_used` and `expect_used` outside tests, so the function says so: `#[expect(clippy::expect_used, reason = "parses a catalog compiled in with include_str!: ...")]`. The lints and their allow-list: `crates/AGENTS.md`, "Lints".
 
 `clap` 4: `#[derive(Parser)]` on `Cli`, `#[command(subcommand)]` for `analyze` / `highlight` / `generate-highlights`. `--stdio` and `--listen` are flags checked **before** the subcommand. A new subcommand must print plain JSON or text. It must not write `Content-Length` frames.
 
@@ -96,9 +96,9 @@ Catalogs and the highlight spec load through `std::sync::OnceLock` (`Catalog::ca
 
 - Engine unit tests sit next to the code (`#[cfg(test)]`) or in `crates/<crate>/tests/*.rs`.
 - Integration tests may use `PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")` to find `crates/testdata/`.
-- Assert diagnostic **codes** (and field paths when the contract says so). Do not snapshot an entire struct unless the user asked; there is no snapshot crate.
-- `cargo test --workspace` is the default. Name the test binary when iterating: `cargo test -p opentide-kql --lib`.
-- CI runs `cargo test --workspace` (`ci.yml`, job `engine`, doctests included) and, on Windows, `cargo nextest run -p opentide-lsp -p opentide-core --profile ci` (`engine-ci.yml`, `.config/nextest.toml`); nextest does not run doctests. Each test gets its own process, so a test cannot rely on a `OnceLock` or other static that another test filled. If you have nextest installed, `cargo nextest run --workspace` is the same check.
+- Assert diagnostic **codes** (and field paths when the contract says so). Snapshot (insta, `insta::assert_snapshot!`) what a contract fixes, such as a diagnostic's code, range and message or a renderer's output, rendered as text; never a whole struct. Conventions: `crates/AGENTS.md`, "Tests".
+- While iterating, `cargo nextest run --profile fast -p <crate>` (`.config/nextest.toml`); name the test binary with `cargo test -p opentide-kql --lib`. `cargo test --workspace` stays the plain full check.
+- CI runs `cargo test --workspace` (`ci.yml`, job `engine`, doctests included, `INSTA_UPDATE=no`) and, on Windows, `cargo nextest run -p opentide-lsp -p opentide-core --profile ci` (`engine-ci.yml`); nextest does not run doctests (`cargo test --workspace --doc` does). Each test gets its own process under nextest, so a test cannot rely on a `OnceLock` or other static that another test filled. `cargo nextest run --workspace --profile ci` is the same check as CI's.
 - The dev and test profiles build dependencies at `opt-level = 1` with line tables (`[profile.dev.package."*"]`); workspace crates stay at 0 with full debuginfo. The tests spend most of their time in `toml`, `serde`, `regex` and tree-sitter, which run about four times slower unoptimised. Do not drop it to speed up a cold build.
 - `crates/opentide-syntax/build.rs` watches each grammar's `src/` directory. Never print `rerun-if-changed` for a path that may not exist: cargo then treats the build script as stale on every run and rebuilds every crate.
 - `cargo fmt --all` before finishing. rustfmt is not optional.
