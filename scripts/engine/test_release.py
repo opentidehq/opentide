@@ -406,8 +406,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 if not arg.startswith("-") and before not in valued
             ]
             self.assertEqual(names, [], job)
+            # `rustup toolchain install` with no name installs the file's toolchain
+            # and ignores `--target` (the first dry run failed on it): the job
+            # adds its targets with `rustup target add`.
+            self.assertNotIn("--target", installs[0], job)
             installed = {
-                name for listed in re.findall(target, installs[0]) for name in listed.split(",")
+                name
+                for listed in re.findall(r"rustup target add ([^\n]+)", body)
+                for name in re.findall(r"\$\{\{[^}]*\}\}|\S+", listed)
             }
             built[job] = {
                 name

@@ -89,7 +89,7 @@ jobs:
         with:
           persist-credentials: false
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
-      # (`rustup toolchain install` with no name), with the target the job builds.
+      # (`rustup toolchain install` with no name), and the target the job builds.
       # windows-11-arm's image may lack rustup (publish-pypi.yml installs it there).
       # The other images carry rustup; this one may not (as in publish-pypi.yml).
       - name: Rust on Windows on Arm
@@ -104,9 +104,12 @@ jobs:
             & $installer -y --profile minimal --default-toolchain none
             Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           }
+      # Installing the file's toolchain (no name) ignores `--target`: add it after.
       - name: Set up Rust
         shell: bash
-        run: rustup toolchain install --profile minimal --no-self-update --target ${{ matrix.target }}
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add ${{ matrix.target }}
       # The dry run only: one cache per target (rust-cache's key does not hold
       # the matrix). A release never restores one.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -162,7 +165,9 @@ jobs:
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
       # (`rustup toolchain install` with no name), with the targets the job builds.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update --target wasm32-unknown-unknown,wasm32-wasip1
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add wasm32-unknown-unknown wasm32-wasip1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         if: inputs.dry-run
         with:

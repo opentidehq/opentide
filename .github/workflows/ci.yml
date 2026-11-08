@@ -309,8 +309,8 @@ jobs:
 
       - name: Set up Rust
         run: |
-          rustup toolchain install --profile minimal --no-self-update \
-            --component rustfmt,clippy --target wasm32-unknown-unknown,wasm32-wasip1
+          rustup toolchain install --profile minimal --no-self-update --component rustfmt,clippy
+          rustup target add wasm32-unknown-unknown wasm32-wasip1
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
