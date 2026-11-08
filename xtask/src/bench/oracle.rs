@@ -9,7 +9,7 @@ use std::process::Command;
 /// The Python the oracle runs on: a uv-managed CPython (python-build-standalone),
 /// the same build on a laptop and on CI, at one exact release so that a new
 /// patch release cannot move the numbers unannounced.
-pub const ORACLE_PYTHON: &str = "3.13.18";
+pub const ORACLE_PYTHON: &str = "3.14.6";
 
 /// The oracle's pinned requirements, relative to the workspace root: every
 /// package at one version with its SHA-256 (`uv pip compile --generate-hashes`).

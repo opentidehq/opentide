@@ -62,8 +62,11 @@ jobs:
           key: bench-${{ matrix.engine }}
           save-if: ${{ github.event_name != 'pull_request' }}
 
+      # One uv release: the oracle's Python (ORACLE_PYTHON in xtask/src/bench/oracle.rs) is
+      # a uv-managed download this release knows.
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
+          version: "0.11.32"
           enable-cache: false
 
       - name: Build xtask
