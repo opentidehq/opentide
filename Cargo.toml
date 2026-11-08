@@ -97,6 +97,9 @@ unsafe_code = "forbid"
 # opt out at their crate root with `#![expect(missing_docs, reason = ...)]`
 # until they are documented (crates/AGENTS.md, "Lints").
 missing_docs = "warn"
+# cargo-fuzz builds with `--cfg fuzzing` (opentide-lsp leaves its debug test
+# hooks out of fuzz builds).
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
