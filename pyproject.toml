@@ -163,7 +163,7 @@ core-metadata-version = "2.4"
 # data the crates compile in (data/catalogs, grammars/*/src and queries,
 # highlights/). The rest of the engine's tree stays out: test data and the
 # crates' and xtask's integration tests, the fuzz targets, editor samples, npm packages, the
-# engine's docs, scripts and parked workflows, the grammar sources tree-sitter
+# engine's docs and scripts, the grammar sources tree-sitter
 # generates parser.c from, and the reference Tide schemas. rust-toolchain.toml
 # stays out too, so a build from the sdist uses the toolchain it finds instead of
 # asking rustup for components.

@@ -1,5 +1,5 @@
 # cargo-about: the licences of the Rust crates compiled into opentide-lsp.
-# release.yml renders about.hbs to THIRD-PARTY-LICENSES.html for every
+# engine-release-build.yml renders about.hbs to THIRD-PARTY-LICENSES.html for every
 # release; a crate under a licence not listed here fails the release.
 accepted = [
   "Apache-2.0",

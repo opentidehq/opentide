@@ -149,7 +149,7 @@ jobs:
           persist-credentials: false
       # Elastic's public rules (ELv2), read at CI time and never vendored.
       # Elasticsearch accepts every one, so they are queries the engine must
-      # not reject. Same pin as the elastic-sweep job in engine-ci.yml.
+      # not reject. Same pin as ci.yml's elastic-sweep job.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: elastic/detection-rules

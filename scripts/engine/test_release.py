@@ -388,7 +388,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
 
     def test_only_attest_crates_and_npm_can_mint_an_oidc_token(self) -> None:
-        # crates.io and npm trust release.yml as a whole: a token from any job
+        # crates.io and npm trust engine-release.yml as a whole: a token from any job
         # of it publishes.
         jobs = workflow_jobs()
         minting = sorted(job for job, body in jobs.items() if "id-token: write" in body)

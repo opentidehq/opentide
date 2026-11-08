@@ -63,5 +63,5 @@ cargo xtask check-layers
 ## Work items that change this crate
 
 UC-0.4 (#802) check-layers; UC-1.8 (#814) codegen; UC-0.5 (#803) golden; UC-0.8 (#806) bench;
-UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wires the checks into one
+UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wired the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).
