@@ -22,7 +22,7 @@ The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https:
 | [0007](./0007-vscode-extension-stays-separate.md) | D-7 | The VS Code extension stays a separate repository | Proposed |
 | [0008](./0008-connectors-in-rust.md) | D-8 | Connectors are Rust, with a Python plugin hook | Proposed |
 
-Work items will add these ADRs, each taking the next free number when it is written:
+Work items will add these ADRs, each taking the number after the highest one in the index when it is written:
 
 | Work item | Issue | What its ADR decides |
 |-----------|-------|----------------------|
@@ -42,10 +42,10 @@ Only a maintainer changes a status to Accepted or Superseded.
 
 ## How to add an ADR
 
-1. Take the next free four-digit number. The file name is that number followed by a short kebab-case slug: `docs/internal/adr/NNNN-short-slug.md`.
+1. Take the number after the highest one in the index (0001 is reserved for D-2, UC-1.1). The file name is that number followed by a short kebab-case slug: `docs/internal/adr/NNNN-short-slug.md`.
 2. Copy the template below. Fill every section, and leave the status at Proposed.
 3. Add the slug to [`meta.json`](./meta.json) and a row to the index above, in the same pull request.
-4. If the ADR records a plan decision (`D-n`), the plan's Decisions table links it. If it comes from a work item, the work item's issue and pull request link it, and so does the "to come" table above, until the row moves into the index.
+4. If the ADR records a plan decision (`D-n`), link it from the plan's Decisions table, in the same pull request or the plan's next status update. If it comes from a work item, the work item's issue and pull request link it, and so does the "to come" table above, until the row moves into the index.
 5. To change an accepted decision, write a new ADR that names the one it supersedes. A maintainer then marks the old one "Superseded by NNNN". Do not rewrite the old one's Decision section.
 6. Run `scripts/validate-docs.sh` and `uv run pytest tests/test_docs -q`. Every relative link must resolve, so do not link a page that is not on the branch yet.
 

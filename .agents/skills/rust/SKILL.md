@@ -60,7 +60,8 @@ then no incremental cache to grow in the target directory.
 ## clippy and the workspace lints
 
 The lint levels are in the root `Cargo.toml`, `[workspace.lints]`. Every member sets
-`[lints] workspace = true`. `clippy.toml` only tunes lints, and `rustfmt.toml` writes down
+`[lints] workspace = true`, except `opentide-syntax` and `opentide-wasm`, which copy the table with
+`unsafe_code = "deny"` (below). `clippy.toml` only tunes lints, and `rustfmt.toml` writes down
 rustfmt's defaults.
 
 ```bash
@@ -110,8 +111,8 @@ cargo test --workspace --doc
 
 ## insta (snapshots)
 
-`insta::assert_snapshot!` keeps the expected text in `tests/snapshots/*.snap`, next to the test. It
-is committed and reviewed like code. Snapshot what a contract fixes (a diagnostic's code, range and
+`insta::assert_snapshot!` keeps the expected text in a `snapshots/` directory next to the test's
+source file (`tests/snapshots/*.snap` for an integration test). It is committed and reviewed like code. Snapshot what a contract fixes (a diagnostic's code, range and
 message, a renderer's output), never a whole struct.
 
 ```bash
@@ -178,6 +179,8 @@ worktrees and target pools", has the recipe and the reasons. The rules:
 
 - Lint with a toolchain other than the pinned one, or drop `-D warnings`.
 - Grow the workspace allow-list, add an exclude, or retry a test, to get green.
+- `#[ignore]`, delete or weaken a test (or skip or xfail a pytest) to get green. A failing test is
+  fixed at its cause.
 - Commit a rewritten `Cargo.lock` with a change that is not about dependencies.
 - Hand-edit a snapshot or a trycmd case: regenerate it and review the diff.
 - Point two worktrees at one target pool at the same time.

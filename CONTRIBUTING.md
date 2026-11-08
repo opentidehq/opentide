@@ -3,8 +3,8 @@
 opentide is a Python package with a Rust engine compiled in, and the unified core
 ([#790](https://github.com/opentidehq/opentide/issues/790)) is moving the rest of the logic into the
 same Cargo workspace. This page gets you from a fresh clone to a pull request.
-[`AGENTS.md`](AGENTS.md) is the map of the repository and holds the rules. This page points into it
-and does not repeat it, so when the two disagree, `AGENTS.md` is right.
+[`AGENTS.md`](AGENTS.md) is the map of the repository and holds the rules. This page summarises the
+ones you need first and links the rest; when the two disagree, `AGENTS.md` is right.
 
 ## Setup
 
@@ -34,7 +34,7 @@ scripts/ci-local.sh --full                        # adds cargo test, pytest with
 ```
 
 Run `scripts/ci-local.sh --full` before you push. The pre-push hook runs it too, when the push
-touches code or CI configuration. Its last step
+touches one of the paths its `ci-local-full` hook lists in `.pre-commit-config.yaml`. Its last step
 lints the generated GitLab CI pipelines with prebuilt binaries it downloads. If your network does
 not allow that, say so in the pull request, and CI's `gitlab-ci-lint` job runs it.
 
@@ -88,7 +88,7 @@ In short:
 
 - **One concern per change**, on a branch named `<type>/<short-slug>` (for example
   `feat/sentinel-query-cache`), cut from `origin/development`.
-- **Conventional Commits** with a scope: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `ci`.
+- **Conventional Commits**: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `ci`.
 - **Open the pull request against `development`.** A stacked pull request targets the branch below
   it. Fill in [the template](.github/pull_request_template.md): what and why, how you verified it,
   and the checklist.

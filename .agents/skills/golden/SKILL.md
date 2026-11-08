@@ -28,9 +28,8 @@ those docs do not name.
 ## The rules
 
 1. **The oracle is the Python CLI installed from a frozen tag**, recorded in `tests/golden/ORACLE`
-   (the tag and the wheel's SHA-256). UC-0.5 writes that file; the tag it is to freeze is v0.23.0
-   (`development` at `f41fe5e5`). Re-recording against a new tag is an explicit pull request of
-   its own.
+   (the tag and the wheel's SHA-256). UC-0.5 chooses the tag and writes that file. Re-recording
+   against a new tag is an explicit pull request of its own.
 2. **Goldens are generated, never hand-edited.** A change to a golden is a re-record plus a
    reviewed diff. A pull request that edits a file under `tests/golden/<command>/` by hand fails
    review.
@@ -119,7 +118,7 @@ To add an entry:
 
 - Every changed golden has a cause in the same pull request: a re-record against a new oracle tag
   (its own PR), a new case, or a new fixture.
-- A changed golden with no new case and no new oracle tag means the recording is not deterministic.
+- A changed golden with no new case, no new fixture and no new oracle tag means the recording is not deterministic.
   Fix the normalisation code, with a test, rather than accept the churn.
 - Read the diff of every file. A diff too big to read is a reason to split the pull request.
 
