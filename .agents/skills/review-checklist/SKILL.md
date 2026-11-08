@@ -130,8 +130,9 @@ and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../c
 - [ ] **No test was weakened to get green**: no new `#[ignore]`, no deleted test or loosened
       assertion, no `pytest.skip` / `xfail`, no retry.
 - [ ] **Errors keep their meaning.** A public error is a typed enum mapped to a stable code, or in
-      an engine crate an `opentide_core::Diagnostic` with its code; `anyhow` stays in binaries. A diagnostic code is a constant in `opentide_core::codes`, never a
-      second string at the call site.
+      an engine crate an `opentide_core::Diagnostic` with its code; `anyhow` stays in binaries. A
+      diagnostic code is a constant in `opentide_core::codes`, never a second string at the call
+      site.
 
 ## Goldens and compare (unified core)
 
@@ -157,7 +158,8 @@ The Python CLI at the frozen tag is the oracle; the rules: [`golden`](../golden/
 2. `scripts/ci-local.sh` green (`--full` before pushing anything that touches `src/` or tests).
    A Rust change also passes `cargo fmt --all --check`,
    `cargo clippy --workspace --all-targets -- -D warnings`, `cargo xtask check-layers`,
-   `cargo nextest run --workspace` and `cargo test --workspace --doc` with the pinned toolchain ([`rust`](../rust/SKILL.md)).
+   `cargo nextest run --workspace` and `cargo test --workspace --doc` with the pinned toolchain
+   ([`rust`](../rust/SKILL.md)).
 3. No new `# noqa` / `# ty: ignore` without a reason on the same line; new and touched
    functions fully annotated.
 4. User-visible behaviour change → an entry under `## [Unreleased]` in `CHANGELOG.md`, in

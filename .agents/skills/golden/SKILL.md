@@ -118,8 +118,8 @@ To add an entry:
 
 - Every changed golden has a cause in the same pull request: a re-record against a new oracle tag
   (its own PR), a new case, or a new fixture.
-- A changed golden with no new case, no new fixture and no new oracle tag means the recording is not deterministic.
-  Fix the normalisation code, with a test, rather than accept the churn.
+- A changed golden with no new case, no new fixture and no new oracle tag means the recording is not
+  deterministic. Fix the normalisation code, with a test, rather than accept the churn.
 - Read the diff of every file. A diff too big to read is a reason to split the pull request.
 
 ## Related

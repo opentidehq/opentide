@@ -7,7 +7,7 @@ description: The architecture decision records (ADRs) of the unified core, one p
 
 An architecture decision record (ADR) writes down one decision: why it was needed, what was decided, what follows from it and the evidence behind it. Agents and people read these pages before changing what a decision covers. To change a decision, write a new ADR that supersedes it.
 
-The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#1-decisions) (PR [#789](https://github.com/opentidehq/opentide/pull/789), epic [#790](https://github.com/opentidehq/opentide/issues/790)). Until #789 merges, the plan exists only on the branch `docs/unified-core-plan`, so the ADRs link to it there. Every ADR here is **Proposed**. A maintainer marks it **Accepted** when the plan is approved.
+The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#1-decisions) (PR [#789](https://github.com/opentidehq/opentide/pull/789), epic [#790](https://github.com/opentidehq/opentide/issues/790)). Until #789 merges, the plan exists only on the branch `docs/unified-core-plan`, so the ADRs link to it there. Every ADR written here is **Proposed**. A maintainer marks it **Accepted** when the plan is approved.
 
 ## Index
 

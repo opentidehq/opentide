@@ -112,8 +112,9 @@ cargo test --workspace --doc
 ## insta (snapshots)
 
 `insta::assert_snapshot!` keeps the expected text in a `snapshots/` directory next to the test's
-source file (`tests/snapshots/*.snap` for an integration test). It is committed and reviewed like code. Snapshot what a contract fixes (a diagnostic's code, range and
-message, a renderer's output), never a whole struct.
+source file (`tests/snapshots/*.snap` for an integration test). It is committed and reviewed like
+code. Snapshot what a contract fixes (a diagnostic's code, range and message, a renderer's output),
+never a whole struct.
 
 ```bash
 cargo nextest run -p opentide-analysis --test snapshots
