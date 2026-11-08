@@ -30,7 +30,7 @@ Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
   --quick       Lint + type-check + package build (ruff, ty, cargo fmt and clippy,
-                engine checks, uv build)
+                cargo xtask check-layers, engine checks, uv build)
   --test        Lint + cargo test + unit pytest (excludes cli_e2e/cli_smoke) — default
   --full        Lint + cargo test + unit pytest + coverage gate + CLI E2E +
                 GitLab CI lint — pre-push

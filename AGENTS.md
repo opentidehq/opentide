@@ -100,13 +100,21 @@ directory, so the dependencies compile once per pool instead of once per worktre
 git fetch origin
 git worktree add -b feat/slug ../wt/slug origin/development
 cd ../wt/slug
-export CARGO_TARGET_DIR=../wt/.target/pool-a   # one per pool; every cargo and uv sync in it
+export CARGO_TARGET_DIR="$(cd .. && pwd)/.target/pool-a"  # absolute; one per pool, for every cargo and uv sync
 export CARGO_INCREMENTAL=0                      # one-shot runs: no incremental cache to grow
+git ls-files -z | xargs -0 touch                # the pool served another worktree: rebuild this one's crates
 uv sync --group dev                             # this worktree's .venv; _native builds in the pool
 ```
 
+- `CARGO_TARGET_DIR` must be absolute: cargo resolves a relative one against each command's working
+  directory, so a run from a subdirectory would start a new multi-GB target there.
+- A pool serves one worktree at a time. Cargo judges a workspace crate fresh by modification times,
+  not content, and two worktrees' crates share their artifacts: after another worktree's build, an
+  older file here counts as built, so cargo would run the other worktree's code (and its
+  `env!("CARGO_MANIFEST_DIR")` paths). Touch the tracked files when a pool changes worktree, as
+  above. CI is not affected: every run starts from a fresh checkout.
 - Cargo locks the target directory: two builds in one pool wait for each other rather than collide.
-  Run one build at a time per pool, and size pools to the disk (a warm pool is several GB).
+  Size pools to the disk (a warm pool is several GB).
 - Keep each pool's environment the same (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the
   workspace crates. CI's `engine` job sets `CARGO_PROFILE_DEV_DEBUG=line-tables-only`.
 - nextest keeps its JUnit report under the worktree's own `target/nextest/` (gitignored), whatever
@@ -165,4 +173,4 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`; `Cargo.toml`, `c
 Fumadocs-ready content under [`docs/`](docs/), four tabs: Usage, CLI, MCP, SDK. Authoring guide: [`docs/README.md`](docs/README.md). Agent skill: [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md). The engine's design notes are in [`docs/engine/`](docs/engine/), outside the site.
 
 - [`docs/internal/test-plan.md`](docs/internal/test-plan.md)
-- [`docs/usage/migration/index.md`](docs/usage/migration/index.md)
+- [`docs/cli/migrate.md`](docs/cli/migrate.md): `opentide migrate`, objects from an earlier model
