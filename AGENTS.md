@@ -91,16 +91,17 @@ gh pr create --base development --fill
 | Stacked PR | branch from the PR below, then `gh pr create --base <that-branch>` |
 | After merge | `git switch development && git pull` → `git branch -d feat/slug` |
 
-## Parallel agents: worktrees and a shared target directory
+## Parallel agents: worktrees and target pools
 
-Agents that work at once each take a git worktree. Worktrees in one pool share one Cargo target
-directory, so the dependencies compile once per pool instead of once per worktree:
+Agents that work at once each take a git worktree and a target pool of their own: a Cargo target
+directory outside the worktree. Two worktrees never use one pool at the same time. A pool outlives
+its worktree, so the next worktree it serves, one after another, finds the dependencies compiled:
 
 ```bash
 git fetch origin
 git worktree add -b feat/slug ../wt/slug origin/development
 cd ../wt/slug
-export CARGO_TARGET_DIR="$(cd .. && pwd)/.target/pool-a"  # absolute; one per pool, for every cargo and uv sync
+export CARGO_TARGET_DIR="$(cd .. && pwd)/.target/pool-a"  # absolute; a pool no other worktree uses now
 export CARGO_INCREMENTAL=0                      # one-shot runs: no incremental cache to grow
 git ls-files -z | xargs -0 touch                # the pool served another worktree: rebuild this one's crates
 uv sync --group dev                             # this worktree's .venv; _native builds in the pool
@@ -108,15 +109,18 @@ uv sync --group dev                             # this worktree's .venv; _native
 
 - `CARGO_TARGET_DIR` must be absolute: cargo resolves a relative one against each command's working
   directory, so a run from a subdirectory would start a new multi-GB target there.
-- A pool serves one worktree at a time. Cargo judges a workspace crate fresh by modification times,
-  not content, and two worktrees' crates share their artifacts: after another worktree's build, an
-  older file here counts as built, so cargo would run the other worktree's code (and its
-  `env!("CARGO_MANIFEST_DIR")` paths). Touch the tracked files when a pool changes worktree, as
-  above. CI is not affected: every run starts from a fresh checkout.
-- Cargo locks the target directory: two builds in one pool wait for each other rather than collide.
-  Size pools to the disk (a warm pool is several GB).
-- Keep each pool's environment the same (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the
-  workspace crates. CI's `engine` job sets `CARGO_PROFILE_DEV_DEBUG=line-tables-only`.
+- One pool per worktree in use. Cargo judges a workspace crate fresh by modification times, not
+  content, and every worktree's crates build to the same artifacts in a pool: after another
+  worktree's build, an older file here counts as built, so cargo runs the other worktree's code
+  (and its `env!("CARGO_MANIFEST_DIR")` paths) without a word. Cargo's lock on the target
+  directory only makes two builds wait for each other. Touch the tracked files when a pool passes
+  to another worktree, as above; agents working at once cannot know when to, so they never share a
+  pool. CI is not affected: every run starts from a fresh checkout.
+- A compiler cache does not bridge pools as this recipe stands: sccache (0.19) keys each crate on
+  every `CARGO_*` variable, `CARGO_TARGET_DIR` included, so two pools never share an entry.
+- Size pools to the disk (a warm pool is several GB). Keep each pool's environment the same
+  (`RUSTFLAGS`, `CARGO_PROFILE_*`): a change rebuilds the workspace crates. CI's `engine` job sets
+  `CARGO_PROFILE_DEV_DEBUG=line-tables-only`.
 - nextest keeps its JUnit report under the worktree's own `target/nextest/` (gitignored), whatever
   `CARGO_TARGET_DIR` says.
 - Done with a worktree: `git worktree remove ../wt/slug`; delete a pool nothing uses any more.

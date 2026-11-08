@@ -33,8 +33,8 @@ moving a crate between layers is a design decision for the maintainer, not a fix
   prints. Tests drive the library with synthetic metadata, no workspace needed.
 - The workspace to check is found at run time (`CARGO_MANIFEST_DIR` as `cargo run` sets it, else
   the working directory), and the table is `xtask/layers.toml` under the root `cargo metadata`
-  prints. Never compile a path in with `env!`: with a shared `CARGO_TARGET_DIR`, cargo can run a
-  binary another worktree built.
+  prints. Never compile a path in with `env!`: a target pool that last served another worktree can
+  hold a binary built there (root `AGENTS.md`, "Parallel agents").
 - No panics: errors go through `anyhow` to exit status 2 (the workspace lints apply here too).
 - New commands follow the same shape: a stub that fails names the work item that implements it.
 
