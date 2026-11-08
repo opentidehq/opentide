@@ -34,12 +34,30 @@ error[invalid_ref]: Unknown threat reference '00000000-0000-4000-8000-00000000be
    │
    ╰─ help: opentide info threats lists the ones that exist
 
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys
+   ╭─▶ objects/rules/covert-loader-rule-0261.yaml:32:3
+   │
+31 │ configurations:
+32 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
 error[vocab_unknown]: 'whitish' is not a TLP value
   ╭─▶ objects/rules/elevated-relay-rule-0034.yaml:9:8
   │
 8 │   modified: 2025-03-16
 9 │   tlp: whitish
   │        ━━━━━━━ not in tlp::1.0
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_name
+   ╭─▶ objects/rules/encoded-downgrade-rule-0063.yaml:50:3
+   │
+49 │ configurations:
+50 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[schema_validation]: missing required field 'name'
   ╭─▶ objects/rules/encoded-harvest-rule-0032.yaml:1:1
@@ -89,6 +107,15 @@ error[vocab_unknown]: 'clearr' is not a TLP value
   │
   ╰─ help: did you mean 'clear'?
 
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value
+   ╭─▶ objects/rules/hidden-beacon-rule-0090.yaml:44:3
+   │
+43 │ configurations:
+44 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
 error[schema_validation]: missing required field 'description'
   ╭─▶ objects/rules/hidden-harvest-rule-0026.yaml:1:1
   │
@@ -96,6 +123,24 @@ error[schema_validation]: missing required field 'description'
   │ ━━━━ add 'description' at the top level
   │
   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_source
+   ╭─▶ objects/rules/hidden-injection-rule-0027.yaml:32:3
+   │
+31 │ configurations:
+32 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape
+   ╭─▶ objects/rules/hidden-relay-rule-0054.yaml:33:3
+   │
+32 │ configurations:
+33 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[yaml_parse]: Could not parse object YAML: found character that cannot start any token
    ╭─▶ objects/rules/lateral-injection-rule-0024.yaml:68:1
@@ -143,6 +188,15 @@ error[schema_validation]: configurations.sysdig: Value error, SysdigConfig valid
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
 
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate
+   ╭─▶ objects/rules/remote-dropper-rule-0072.yaml:53:3
+   │
+52 │ configurations:
+53 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
 error[config_enum_unknown]: 'Night Shift' is not a configured responder
    ╭─▶ objects/rules/remote-relay-rule-0017.yaml:34:15
    │
@@ -156,6 +210,15 @@ error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
   ╭─▶ objects/rules/rogue-relay-rule-0035.yaml:59:1
   ├─ note: while parsing a flow sequence that starts at line 58, column 9
   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_order
+   ╭─▶ objects/rules/scheduled-exfiltration-rule-0081.yaml:50:3
+   │
+49 │ configurations:
+50 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'
    ╭─▶ objects/rules/silent-dropper-rule-0015.yaml:22:18
@@ -185,10 +248,10 @@ error[config_enum_unknown]: 'LIVE' is not a configured status
    ╰─ expected: one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
 
 error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys
-   ╭─▶ objects/rules/silent-injection-rule-0198.yaml:35:3
+   ╭─▶ objects/rules/staged-dropper-rule-0045.yaml:51:3
    │
-34 │ configurations:
-35 │   sysdig:
+50 │ configurations:
+51 │   sysdig:
    │   ━━━━━━
    │
    ╰─ help: the template in .opentide/templates/ shows the field and its values
@@ -205,6 +268,15 @@ error[schema_validation]: metadata.reviewed: Value error, metadata.reviewed must
 error[missing_uuid]: Object YAML has no uuid: staged-implant-rule-0006.yaml
   ╭─▶ objects/rules/staged-implant-rule-0006.yaml
   ╰─ help: add metadata.uuid with a fresh UUID v4
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape
+   ╭─▶ objects/rules/staged-implant-rule-0036.yaml:41:3
+   │
+40 │ configurations:
+41 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
 error[config_enum_unknown]: 'NOPE' is not a configured status
    ╭─▶ objects/rules/staged-injection-rule-0019.yaml:51:13

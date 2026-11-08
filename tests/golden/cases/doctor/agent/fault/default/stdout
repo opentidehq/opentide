@@ -6,12 +6,12 @@
 ✓ git <GIT_VERSION> · git
 ! ./ is not in a git repository · git_repository
   → git init ./
-✓ 14 configuration files load · configuration
+✓ 13 configuration files load · configuration
 ! 4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml, rule.1.1.template.yaml, threat.1.0.template.yaml · templates_fresh
   → opentide generate templates schemas snippets
 ! 6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, opentide.schema.json, visibility.1.0.schema.json · schemas_fresh
   → opentide generate schemas
-! opentide cannot generate the language-server catalog (ConfigurationError: deployment.toml is invalid: colour: unknown key): objects are checked with the committed or bundled one · lsp_catalog
+! opentide cannot generate the language-server catalog (ConfigurationError: deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key): objects are checked with the committed or bundled one · lsp_catalog
   → opentide doctor --debug
 ✓ Enabled: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig · platforms_enabled
 ✓ sentinel: azure.identity, azure.monitor.query, requests import · platform_sdk

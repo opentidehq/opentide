@@ -1,4 +1,4 @@
 warning: 1 rule file(s) in subfolders of objects/rules are not deployed (deploy reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/312): objects/rules/nested/hidden-harvest-rule-0020.yaml
 warning: 6 object files could not be read: objects/threats/encoded-exfiltration-threat-0030.yaml, objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml, objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml, objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where
-error: deployment.toml is invalid: colour: unknown key
+error: deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key; colour5: unknown key
 tip: add --json for machine-readable output

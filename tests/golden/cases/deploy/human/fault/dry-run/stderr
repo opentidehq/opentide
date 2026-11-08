@@ -5,4 +5,5 @@
          objects/rules/encoded-relay-rule-0014.yaml, objects/rules/encoded-spray-rule-0023.yaml,
          objects/rules/lateral-injection-rule-0024.yaml, objects/rules/rogue-relay-rule-0035.yaml,
          objects/rules/staged-implant-rule-0006.yaml; opentide validate shows where
-[1;31merror:[0m deployment.toml is invalid: colour: unknown key
+[1;31merror:[0m deployment.toml is invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key;
+       colour4: unknown key; colour5: unknown key

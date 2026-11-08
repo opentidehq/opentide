@@ -6,7 +6,7 @@
 [1;32m✓[0m git <GIT_VERSION>[2m · git[0m
 [1;33m![0m ./ is not in a git repository[2m · git_repository[0m
   [1;36m→ [0mgit init ./
-[1;32m✓[0m 14 configuration files load[2m · configuration[0m
+[1;32m✓[0m 13 configuration files load[2m · configuration[0m
 [1;33m![0m 4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml,
   rule.1.1.template.yaml, threat.1.0.template.yaml[2m · templates_fresh[0m
   [1;36m→ [0mopentide generate templates schemas snippets
@@ -15,7 +15,8 @@
   [2mschemas_fresh[0m
   [1;36m→ [0mopentide generate schemas
 [1;33m![0m opentide cannot generate the language-server catalog (ConfigurationError: deployment.toml is
-  invalid: colour: unknown key): objects are checked with the committed or bundled one[2m · lsp_catalog[0m
+  invalid: colour1: unknown key; colour2: unknown key; colour3: unknown key; colour4: unknown key;
+  colour5: unknown key): objects are checked with the committed or bundled one[2m · lsp_catalog[0m
   [1;36m→ [0mopentide doctor --debug
 [1;32m✓[0m Enabled: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab,
   carbon_black_cloud, elastic, sysdig[2m · platforms_enabled[0m

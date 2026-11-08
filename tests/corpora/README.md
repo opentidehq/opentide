@@ -9,7 +9,7 @@ opentide 0.23.0.
 | File | What it is | Written by |
 |------|------------|------------|
 | [`faults.toml`](faults.toml) | The fault catalogue: kinds, their targets, mutations and expected codes; codes no workspace can produce, with the evidence | hand, reviewed; expectations adjusted to what the oracle reports |
-| [`codes.toml`](codes.toml) | The codes in scope: `VALIDATION_CODES`, `LINT_CODES`, the configuration check's codes, the analysis engine's codes | `cargo xtask corpus codes --engine python --write` |
+| [`codes.toml`](codes.toml) | The codes in scope: `VALIDATION_CODES`, `LINT_CODES`, the configuration check's codes, the analysis engine's codes, and the compile check's codes (its `compile_*` explain pages) | `cargo xtask corpus codes --engine python --write` |
 | [`COVERAGE.md`](COVERAGE.md) | Every code in scope mapped to its fault kinds | `cargo xtask corpus coverage --write` |
 | [`KNOWN_GAPS.md`](KNOWN_GAPS.md) | Faults the oracle misses or reports surprisingly; each has a fault kind; UC-2.2 decides each | hand |
 | [`INTAKE.md`](INTAKE.md) | How a shared real-world repository joins the corpora | hand |
@@ -53,8 +53,8 @@ cargo xtask corpus clean --engine python --repo /tmp/heavy           # validate 
   (Sentinel scheduled and NRT, Elastic KQL, EQL, Lucene, ES|QL and threshold, HarfangLab Sigma
   and YARA, SentinelOne single-event and correlation, Sysdig lists and macros, Splunk notables,
   Defender process and network queries); `visibility.toml` log sources for every queried table.
-- **Configuration.** All nine platforms enabled; Sentinel, Defender, Splunk and Elastic have
-  tenants (Sentinel and Elastic two, PREVIEW and RELEASE), which rules list in `tenants`. Every
+- **Configuration.** All nine platforms enabled; Sentinel, Defender, Splunk, Elastic and Sysdig
+  have tenants (Sentinel and Elastic two, PREVIEW and RELEASE), which rules list in `tenants`. Every
   credential is a `$VARIABLE` reference and every host is on a reserved example domain: the
   generator writes no secret, real or fake-looking.
 - **`paths.toml` variants** (`--layout`): `standard` (none, the default folders), `explicit` (the
@@ -80,7 +80,8 @@ cargo xtask corpus coverage --check
 
 `--check` generates the base workspace (`[base]`), checks it has no finding under every command
 the kinds use, then gives each kind its own copy: it selects the targets, applies the mutation,
-runs the oracle and requires **exactly** the expected codes (no other code, none missing), each
+runs the oracle (reading `report`, `findings`, and a failure's `diagnostics`) and requires
+**exactly** the expected codes (no other code, none missing), each
 finding with the expected severity, and (unless `per_target = false`) a finding on every target
 file. `--out` writes the combined fault workspace, a fixture for UC-0.5's goldens: the `[combined]`
 counts, every kind not marked `isolated` applied once (twice for a cross-file kind) to files no
@@ -90,8 +91,9 @@ check, KG-10, stays silent), so it is recorded, not checked against them. Sharin
 that change how the whole workspace loads are `isolated`.
 
 A configuration file is one file (`deployment.toml`, `visibility.toml`, `sharing.toml`): kinds
-aimed at one (`target.path`) put five faulty entries in it where the format allows, and count one
-file; every other kind takes at least five files.
+aimed at one (`target.path`) put five faulty entries in it (the oracle reports some, such as
+`unknown_connector`, once per file), and count one file; every other kind takes at least five
+files.
 
 A kind:
 
@@ -105,7 +107,9 @@ command = ["validate"]            # after `opentide --json --repo DIR`; ["lint"]
 target = { family = "rule", platform = "sentinel", tags = ["rule::1.1"], without = [], skip = 0 }
 count = 5                         # at least 5 files, unless the target is a single file
 ops = [{ op = "set", path = "metadata.uuid", value = "not-a-uuid-{n}" }]
-per_target = true                 # every target carries a finding
+per_target = true                 # every target carries a finding (both codes, for a combination)
+counts = { invalid_uuid = 5 }     # exact numbers of findings, when they matter
+covers = ["sysdig_source"]        # codes proven by an expected finding's message naming them
 baseline = true                   # the clean base is checked under this command too
 env = { HTTPS_PROXY = "http://127.0.0.1:9" }   # for the oracle (a dead proxy: lookups fail alike)
 isolated = false                  # left out of the combined workspace

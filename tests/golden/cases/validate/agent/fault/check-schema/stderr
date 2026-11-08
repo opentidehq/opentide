@@ -1,6 +1,6 @@
 warning: Vocabulary not found · vocab: reviewed
 warning: Vocabulary not found · vocab: rule_id
-✗ 32 errors in 31 files · 771 objects checked · <SECONDS>
+✗ 40 errors in 39 files · 771 objects checked · <SECONDS>
 → opentide explain deployment_state_uuid_mismatch · how to fix it
 → opentide validate · check again
 tip: add --json for machine-readable output

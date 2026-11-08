@@ -35,9 +35,10 @@ moving a crate between layers is a design decision for the maintainer, not a fix
 - The library (`src/lib.rs`, `src/layers.rs`) computes; `src/main.rs` reads files, runs cargo and
   prints. `src/corpus/` follows the same split inside its module: `generate`, `yaml`, `rng`,
   `workspace`, `faults` and `coverage` compute; `corpus/cli.rs` writes workspaces, runs the oracle
-  and prints (main.rs only dispatches to it).
+  and prints (main.rs only dispatches to it). Tests drive the library with synthetic metadata, no
+  workspace needed.
 - The corpus generator's output is a function of its options alone (own PRNG and YAML emitter, no
-  clock, environment or file); `tests/corpus_generate.rs` records its digests. Tests drive the library with synthetic metadata, no workspace needed.
+  clock, environment or file); `tests/corpus_generate.rs` records its digests.
 - `golden` is its own module, `src/golden/`, a library the comparator (UC-0.7) reuses: the case
   model (`case.rs`), fixtures (`fixture.rs`), the oracle's install (`oracle.rs`), the runner
   (`run.rs`, `pty.rs`), the normaliser (in `crates/opentide-compare/src/normalise.rs`, re-exported

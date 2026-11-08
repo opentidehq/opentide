@@ -119,8 +119,15 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | JSON `duration_ms`, `elapsed_ms`, `wall_ms`, `seconds` | `0`, or `0.0` for a float | wall times; the document keeps its types |
 | `1.3s`, `2m05s` in text, and the spaces around it | `<SECONDS>`, one space each side at most | wall times in outcome lines and padded table columns |
 | `id=` of a terminal hyperlink (`ESC]8;id=…`) | `id=<ID>` | Rich numbers hyperlinks at random |
-| `git <version>` | `git <GIT_VERSION>` | `opentide doctor` prints the host's git |
+| `git <version>`, in cases with `normalise = ["host-git"]` (`doctor`) | `git <GIT_VERSION>` | `opentide doctor` prints the host's git; help text quotes a literal example, which stays |
+| `lsp-catalogs/<32 hex>` | `lsp-catalogs/<CATALOG-FINGERPRINT>` | the catalog cache is keyed by the installation's paths and file times |
 | UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |
+
+Known limits, each a one-in-a-million chance or a case no fixture has today: a timestamp whose
+microseconds are exactly 0 loses its fraction in Python's `isoformat()`, so it records shorter; two
+files that differ only by fresh UUIDs (same masked path and bytes) are numbered in path order; the
+8-hex suffix `new` adds to a colliding file name is not normalised. Any of them shows as a
+determinism failure, never as a silent pass.
 
 ## Size
 

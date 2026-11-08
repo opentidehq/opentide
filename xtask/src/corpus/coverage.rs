@@ -20,6 +20,7 @@ from opentide.cli.services.validation import (
     VALIDATION_CODES, _CHECK_ISSUE_CODES, _CHECK_WARNING_CODES,
 )
 from opentide.cli.ui.diagnostics import LINT_CODES
+from opentide.cli.services.explain import pages_root
 configuration = set(_CHECK_ISSUE_CODES["configuration"]) | set(
     _CHECK_WARNING_CODES.get("configuration", ())
 )
@@ -28,10 +29,11 @@ print(json.dumps({
     "lint": sorted(set(LINT_CODES.values())),
     "configuration": sorted(configuration),
     "query": sorted(set(engine_codes())),
+    "compile": sorted(p.stem for p in pages_root().glob("compile_*.md")),
 }))
 "#;
 
-/// The four groups of codes, as the oracle lists them.
+/// The five groups of codes, as the oracle lists them.
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Inventory {
@@ -43,9 +45,13 @@ pub struct Inventory {
     pub configuration: Vec<String>,
     /// The analysis engine's codes (`opentide.analysis.engine_codes()`).
     pub query: Vec<String>,
+    /// The compile check's codes (`compile_*` explain pages): `validate`
+    /// reports them, though `VALIDATION_CODES` does not list them (KG-10).
+    #[serde(default)]
+    pub compile: Vec<String>,
 }
 
-const GROUPS: [&str; 4] = ["validation", "lint", "configuration", "query"];
+const GROUPS: [&str; 5] = ["validation", "lint", "configuration", "query", "compile"];
 
 impl Inventory {
     fn group(&self, name: &str) -> &[String] {
@@ -53,6 +59,7 @@ impl Inventory {
             "validation" => &self.validation,
             "lint" => &self.lint,
             "configuration" => &self.configuration,
+            "compile" => &self.compile,
             _ => &self.query,
         }
     }
@@ -165,14 +172,14 @@ pub fn report(codes: &Codes, catalogue: &Catalogue) -> Report {
         }
     }
     for kind in &catalogue.kinds {
-        for code in &kind.codes {
+        for code in kind.codes.iter().chain(&kind.covers) {
             report
                 .kinds
                 .entry(code.clone())
                 .or_default()
                 .push(kind.id.clone());
             if !report.groups.contains_key(code) {
-                // A code outside the four groups (a lint-only engine code is
+                // A code outside the five groups (a lint-only engine code is
                 // in `query`); listed, not a problem.
                 report.groups.entry(code.clone()).or_default();
             }
@@ -325,6 +332,7 @@ reason = "the engine is compiled in"
             lint: vec![],
             configuration: vec![],
             query: vec!["invalid_uuid".to_string()],
+            compile: vec![],
         };
         Codes::parse(&render_codes(&inventory, "0.23.0")).unwrap()
     }
