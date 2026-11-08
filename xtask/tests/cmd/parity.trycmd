@@ -1,5 +1,6 @@
 `parity dashboard` on a checkout with one recording (parity.in/): the
-committed page matches the rendering; a stale page fails the check.
+committed page matches the rendering; a stale page fails the check. With
+the engine state and a compare report, `validate` reads compare passing.
 
 ```console
 $ xtask parity dashboard --root . --check
@@ -8,6 +9,13 @@ parity: ./docs/internal/parity.md is up to date
 $ xtask parity dashboard --root . --out stale.md --check
 ? 1
 parity: stale.md differs from the rendering: run `cargo xtask parity dashboard`
+
+$ xtask parity dashboard --root . --engines engines.json --compare compare.json --out with-compare.md --check
+parity: with-compare.md is up to date
+
+$ xtask parity dashboard --root . --engines missing.json
+? 2
+xtask parity: read missing.json: [..]
 
 $ xtask parity summary
 ? 2

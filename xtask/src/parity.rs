@@ -28,6 +28,9 @@ pub struct Inputs {
     /// The `compare` results of the last run, per recording; `None` when no
     /// run's results were given.
     pub compare: Option<BTreeMap<Cell, bool>>,
+    /// The ledger entries the last compare run found stale (applied to no
+    /// case); `None` without a run's results.
+    pub stale_entries: Option<usize>,
     /// The entries of `tests/golden/APPROVED_DIFFS.toml`, per command
     /// (`None` when the ledger does not exist yet).
     pub approved_diffs: Option<BTreeMap<String, usize>>,
@@ -248,6 +251,12 @@ pub fn page(inputs: &Inputs) -> String {
         out,
         "| Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | {approved} |"
     );
+    if let Some(stale) = inputs.stale_entries {
+        let _ = writeln!(
+            out,
+            "| Stale ledger entries in the last compare run | {stale} |"
+        );
+    }
     match &inputs.faults {
         Some(faults) => {
             let _ = writeln!(
@@ -366,6 +375,7 @@ mod tests {
                 ]
                 .into(),
             ),
+            stale_entries: Some(0),
             approved_diffs: Some([("validate".to_owned(), 2)].into()),
             faults: Some(FaultCoverage {
                 codes: ["a".into(), "b".into(), "c".into()].into(),
@@ -417,6 +427,10 @@ mod tests {
         );
         assert!(page.contains("| Corpus | json | plain |\n|--------|------|------|\n| tide_corpus | compare passing | compare failing |"), "{page}");
         assert!(page.contains("1 code(s): `c`."), "{page}");
+        assert!(
+            page.contains("| Stale ledger entries in the last compare run | 0 |"),
+            "{page}"
+        );
     }
 
     #[test]

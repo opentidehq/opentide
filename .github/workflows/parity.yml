@@ -51,11 +51,16 @@ jobs:
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
 
+      # The engine state: RUST_COMMANDS in src/opentide/cli/engines.py, read
+      # with the standard library alone (no Python environment needed). The
+      # compare results come with UC-0.5's golden-compare job; until it
+      # publishes its RunReport, commands with Rust show "compare not run".
       - name: Render the dashboard
         run: |
           set -o pipefail
           mkdir -p parity
-          cargo xtask parity dashboard --out parity/parity.md
+          python3 scripts/parity_engines.py > parity/engines.json
+          cargo xtask parity dashboard --engines parity/engines.json --out parity/parity.md
           cat parity/parity.md >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -36,11 +36,14 @@ commands:
                  scores against the baseline; --issues writes DIR/<crate>.md for
                  each crate whose surviving mutants exceed its threshold;
                  --write-baseline records this run as the baseline
-  parity dashboard [--root DIR] [--out FILE] [--check]
+  parity dashboard [--root DIR] [--out FILE] [--check] [--engines FILE]
+                   [--compare FILE]
                  render the parity dashboard (each command x corpus x mode
                  against the oracle, approved diffs, fault coverage) into FILE,
                  by default docs/internal/parity.md; --check fails when FILE
-                 differs from the rendering instead of writing it
+                 differs from the rendering instead of writing it. --engines
+                 reads the engine state (scripts/parity_engines.py), --compare
+                 the RunReport JSON of a compare run
   compare --oracle DIR --candidate DIR --command PATH [--case ID]
           [--ledger FILE] [--report FILE]
                  compare a candidate's run with the oracle's, applying the
@@ -501,6 +504,8 @@ fn parity_command(args: &[String]) -> Result<bool> {
     };
     let mut root: Option<PathBuf> = None;
     let mut out: Option<PathBuf> = None;
+    let mut engines: Option<PathBuf> = None;
+    let mut compare_report: Option<PathBuf> = None;
     let mut check = false;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
@@ -511,6 +516,8 @@ fn parity_command(args: &[String]) -> Result<bool> {
             }
             "--root" => &mut root,
             "--out" => &mut out,
+            "--engines" => &mut engines,
+            "--compare" => &mut compare_report,
             other => bail!("unknown option `{other}`\n\n{USAGE}"),
         };
         *slot = Some(
@@ -528,7 +535,7 @@ fn parity_command(args: &[String]) -> Result<bool> {
     };
     let out = out.unwrap_or_else(|| root.join("docs").join("internal").join("parity.md"));
 
-    let inputs = parity_inputs::read(&root)?;
+    let inputs = parity_inputs::read(&root, engines.as_deref(), compare_report.as_deref())?;
     let errors = parity::check(&inputs);
     if !errors.is_empty() {
         for error in &errors {
