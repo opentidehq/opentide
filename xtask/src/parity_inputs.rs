@@ -8,7 +8,7 @@
 //! | Recordings | `tests/golden/cases/<command>/<mode>/<fixture>/<case>/` (a multi-word command joined with `.`) | UC-0.5 (#803) |
 //! | Approved diffs | `tests/golden/APPROVED_DIFFS.toml`, parsed and checked by `opentide-compare` | UC-0.7 (#805) |
 //! | Engine state | `--engines FILE`: `{"rust": [["validate"], ...], "flipped": [...]}`, which `scripts/parity_engines.py` writes from `RUST_COMMANDS` in `src/opentide/cli/engines.py` | UC-0.7 (#805) |
-//! | Compare results | `--compare FILE`: the `opentide_compare::RunReport` JSON of `golden check --engine compare`; a case id starts `<mode>/<fixture>/` | UC-0.5, UC-0.7 |
+//! | Compare results | `--compare FILE`: the `opentide_compare::RunReport` JSON of `golden check --engine compare`; case ids `<command>/<mode>/<fixture>/<variant>`; CI uploads it as `golden-compare` from `golden.yml` | UC-0.5, UC-0.7 |
 
 use crate::parity::{Cell, Engine, Inputs};
 use anyhow::{Context, Result, bail};
@@ -141,8 +141,8 @@ struct CaseReport {
 ///
 /// # Errors
 ///
-/// The text is not a `RunReport` of schema version 1, or a case id does not
-/// start with `<mode>/<fixture>/`.
+/// The text is not a `RunReport` of schema version 1, or a case id is not
+/// `<command>/<mode>/<fixture>/<variant>` for its command.
 pub fn compare(json: &str) -> Result<(BTreeMap<Cell, bool>, usize)> {
     let report: RunReport = serde_json::from_str(json).context("read the compare report")?;
     if report.schema_version != 1 {
@@ -153,14 +153,28 @@ pub fn compare(json: &str) -> Result<(BTreeMap<Cell, bool>, usize)> {
     }
     let mut cells: BTreeMap<Cell, bool> = BTreeMap::new();
     for case in report.cases {
-        let mut parts = case.case.splitn(3, '/');
-        let (Some(mode), Some(corpus), Some(_)) = (parts.next(), parts.next(), parts.next()) else {
+        // UC-0.5's case id: <command dir>/<mode>/<fixture>/<variant>, the
+        // command's words joined by `.` (`_root` for `opentide` itself).
+        let parts: Vec<&str> = case.case.splitn(4, '/').collect();
+        let [dir, mode, corpus, _variant] = parts[..] else {
             bail!(
-                "case `{}` of `{}` does not start with <mode>/<fixture>/",
+                "case `{}` of `{}` is not <command>/<mode>/<fixture>/<variant>",
                 case.case,
                 case.command
             );
         };
+        let expected = if case.command.is_empty() {
+            ROOT_COMMAND.to_owned()
+        } else {
+            case.command.replace(' ', ".")
+        };
+        if dir != expected {
+            bail!(
+                "case `{}` names command directory `{dir}`, but its command is `{}`",
+                case.case,
+                case.command
+            );
+        }
         let cell = Cell {
             command: case.command.clone(),
             mode: mode.to_owned(),
@@ -313,9 +327,9 @@ mod tests {
     fn a_recording_passes_compare_when_every_case_is_equal() {
         let (cells, stale) = compare(
             r#"{"schema_version": 1, "equal": false, "stale": [{"entry": 1}], "cases": [
-                {"command": "validate", "case": "json/tide_corpus/default", "equal": true, "differences": [], "omitted": 0, "approved": []},
-                {"command": "validate", "case": "json/tide_corpus/strict", "equal": false, "differences": [], "omitted": 0, "approved": []},
-                {"command": "validate", "case": "plain/tide_corpus/default", "equal": true, "differences": [], "omitted": 0, "approved": []}
+                {"command": "validate", "case": "validate/json/tide_corpus/default", "equal": true, "differences": [], "omitted": 0, "approved": []},
+                {"command": "validate", "case": "validate/json/tide_corpus/strict", "equal": false, "differences": [], "omitted": 0, "approved": []},
+                {"command": "validate", "case": "validate/plain/tide_corpus/default", "equal": true, "differences": [], "omitted": 0, "approved": []}
             ]}"#,
         )
         .unwrap();
