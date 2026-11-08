@@ -117,8 +117,8 @@ rust_jobs() {
   local seconds="${FUZZ_SMOKE_SECONDS:-60}"
   if [[ "$seconds" == "0" ]]; then
     skip "fuzz smoke: FUZZ_SMOKE_SECONDS=0"
-  elif ! rustup run nightly cargo fuzz --version >/dev/null 2>&1; then
-    skip "fuzz smoke: rustup toolchain install nightly && cargo +nightly install cargo-fuzz --locked"
+  elif ! rustup run "$(cat fuzz/NIGHTLY)" cargo fuzz --version >/dev/null 2>&1; then
+    skip "fuzz smoke: rustup toolchain install $(cat fuzz/NIGHTLY) && cargo +$(cat fuzz/NIGHTLY) install cargo-fuzz --locked"
   else
     local target
     for target in fuzz/fuzz_targets/*.rs; do

@@ -19,5 +19,7 @@ esac
 [[ -d "$root/fuzz/regressions/$target" ]] && seeds+=("$root/fuzz/regressions/$target")
 mkdir -p "$root/fuzz/corpus/$target"
 cd "$root"
-exec cargo +nightly fuzz run "$target" "fuzz/corpus/$target" "${seeds[@]}" -- \
+# The dated nightly fuzz/NIGHTLY pins (CI's fuzz jobs install it); FUZZ_TOOLCHAIN overrides.
+toolchain="${FUZZ_TOOLCHAIN:-$(cat "$root/fuzz/NIGHTLY")}"
+exec cargo "+${toolchain}" fuzz run "$target" "fuzz/corpus/$target" "${seeds[@]}" -- \
   -timeout=10 -rss_limit_mb=4096 -max_total_time="$seconds"

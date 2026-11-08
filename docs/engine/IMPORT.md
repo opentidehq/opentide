@@ -94,3 +94,22 @@ The commits after the merge make the imported tree build and test here:
 ## Repeating it at a later commit
 
 If language-server `main` moves after this import, run the invocation above with the new commit in `sha`. git-filter-repo rewrites a commit to the same hash when its content, parents and message are the same, so the filtered history up to `6f2ad70` is the history already merged here, ending at `86ac6b88`, and the new commits follow it. Merge the new filtered tip into a branch of this repository: only the new commits come in. Paths in their changes need the same follow-up as above.
+
+## Where the workflows went
+
+Since UC-0.3 ([#801](https://github.com/opentidehq/opentide/issues/801)), each job of language-server's workflows has this home here, or was dropped for the reason given.
+
+| language-server | Job | Here |
+| --- | --- | --- |
+| `ci.yml` | `test` | ci.yml `engine` (rustfmt, clippy, layers, rustdoc, invariants, schemas test), `engine-test` (tests, doctests), `engine-wasm` (npm packs, lsp-client stdio), `textmate` |
+| `ci.yml` | `windows` | ci.yml `engine-test` (windows-latest), now the whole workspace |
+| `ci.yml` | `clients`, `bench` | ci.yml `clients`, `bench`, still informational |
+| `ci.yml` | `package` | ci.yml `engine-package` (packaging and licence scan); its `release.py` tests run in `engine` |
+| `ci.yml` | `grammars` | ci.yml `grammars` |
+| `ci.yml` | `wasm` | ci.yml `engine-wasm` |
+| `ci.yml` | `elastic-sweep` | ci.yml `elastic-sweep` |
+| `fuzz.yml` | `fuzz` | `engine-fuzz.yml` (nightly, ten minutes per target), and ci.yml `fuzz-smoke` (60 s per target, every PR) |
+| `oracle.yml` | every job | `oracle.yml`, its tag trigger `engine-v*` instead of `v*.*.*` |
+| `release.yml` | every job | `engine-release.yml` (`git mv`); `native`, `wasm`, `highlights` and the licences of `assets` moved to `engine-release-build.yml`, which ci.yml also runs as a dry run |
+| `backfill-releases.yml` | `backfill` | dropped: a one-off for language-server's tags before 0.5 |
+| `opentide-canary.yml` | `canary` | dropped: `tests/test_generation/test_bundled_tide_catalog.py` checks the bundled Tide catalog against this checkout's models |

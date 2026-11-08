@@ -38,9 +38,9 @@ target:
 | `opentide serve`'s message reader (one JSON-RPC message per line) | UC-3.6 (#828) |
 
 ```bash
-rustup toolchain install nightly
-cargo +nightly install cargo-fuzz --locked --version 0.13.2
-cargo +nightly fuzz run kql fuzz/corpus/kql crates/testdata/corpus/kql -- -timeout=10 -max_total_time=300
+rustup toolchain install "$(cat fuzz/NIGHTLY)"   # the dated nightly CI fuzzes with
+cargo +"$(cat fuzz/NIGHTLY)" install cargo-fuzz --locked --version 0.13.2
+cargo +"$(cat fuzz/NIGHTLY)" fuzz run kql fuzz/corpus/kql crates/testdata/corpus/kql -- -timeout=10 -max_total_time=300
 ```
 
 The first corpus directory is where libFuzzer keeps what it learns
