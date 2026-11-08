@@ -1,0 +1,1 @@
+error: opentide share push --changed runs only in GitHub Actions, GitLab CI, or Azure Pipelines

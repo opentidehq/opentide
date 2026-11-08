@@ -431,6 +431,7 @@ mod tests {
         let volatile = Volatile {
             literals: vec![("/tmp/g/ws".into(), "<WS>".into())],
             dates: vec![],
+            recent_dates: vec![],
             git_version: None,
         };
         let mut normaliser = Normaliser::new(&volatile, &[], []);

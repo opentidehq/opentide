@@ -1,0 +1,2 @@
+error: no rule file at objects/rules/suspicious-lsass.yaml
+tip: add --json for machine-readable output

@@ -1,0 +1,9 @@
+[1;31merror[vocab_unknown][0m[1m: [0m[1m'high' is not a alert severity value[0m
+   [34m╭─▶[0m ]8;id=<ID>;file://<WS>/Objects/Detection%20Rules/rule-0001-sentinel-kql.yaml\Objects/Detection Rules/rule-0001-sentinel-kql.yaml:14:11]8;;\
+[34m   [0m[34m│[0m
+[34m13 [0m[34m│[0m status: STAGING
+[34m14 [0m[34m│[0m severity: high
+[34m   [0m[34m│[0m           [1;31m━━━━[0m[1;31m not in alert_severity::1.0[0m
+[34m   [0m[34m│[0m
+   [34m╰─[0m [1;36mhelp:[0m did you mean 'High'?
+

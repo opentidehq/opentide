@@ -114,6 +114,9 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
     let volatile = Volatile {
         literals,
         dates,
+        recent_dates: (1..=7)
+            .map(|days| utc_date(started - Duration::from_secs(days * 86_400)))
+            .collect(),
         git_version: ctx.git_version.clone(),
     };
     let mut normaliser = Normaliser::new(&volatile, &case.normalise, before.texts());

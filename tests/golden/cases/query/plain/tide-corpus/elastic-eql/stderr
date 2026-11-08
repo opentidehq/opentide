@@ -1,0 +1,2 @@
+error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.
+error: 1 of 1 queries failed on 1 elastic tenant: staging: Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables before a live check.

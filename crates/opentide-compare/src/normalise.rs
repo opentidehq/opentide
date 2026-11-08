@@ -15,7 +15,8 @@
 //!    handler gives its log; and the language-server catalog cache's
 //!    directory (`lsp-catalogs/<CATALOG-FINGERPRINT>`), a hash of the
 //!    installation's paths and file times.
-//! 4. **Timestamps**: ISO 8601 date-times on the dates the case ran, and the
+//! 4. **Timestamps**: ISO 8601 date-times on the dates the case ran or the
+//!    seven days before (a default window reaches back from now), and the
 //!    clock time that starts a log line (`18:22:33 debug: …`), get every digit
 //!    replaced by `0`, so the format (separators, fraction width, offset
 //!    style) is still compared.
@@ -65,6 +66,9 @@ pub struct Volatile {
     pub literals: Vec<(String, String)>,
     /// The dates (`YYYY-MM-DD`, UTC) the case ran on: one, or two across midnight.
     pub dates: Vec<String>,
+    /// Earlier dates whose date-times are the clock too: a command's default
+    /// window reaches back from now (`query` starts 24 hours ago).
+    pub recent_dates: Vec<String>,
     /// `git --version`'s number on this host, when git is installed.
     pub git_version: Option<String>,
 }
@@ -155,9 +159,15 @@ impl Normaliser {
             (None, None)
         } else {
             let any = dates.join("|");
+            let recent: Vec<String> = dates
+                .iter()
+                .cloned()
+                .chain(volatile.recent_dates.iter().map(|d| regex::escape(d)))
+                .collect();
+            let recent = recent.join("|");
             (
                 Some(compile(&format!(
-                    r"(?:{any})[T ]\d{{2}}:\d{{2}}(?::\d{{2}}(?:[.,]\d+)?)?(?:Z|[+-]\d{{2}}:?\d{{2}})?"
+                    r"(?:{recent})[T ]\d{{2}}:\d{{2}}(?::\d{{2}}(?:[.,]\d+)?)?(?:Z|[+-]\d{{2}}:?\d{{2}})?"
                 ))),
                 Some(compile(&format!(r"\b(?:{any})\b"))),
             )
@@ -409,6 +419,7 @@ mod tests {
                 ("/tmp/golden-abc123".into(), "<TMP>".into()),
             ],
             dates: vec!["2026-11-08".into()],
+            recent_dates: vec!["2026-11-07".into()],
             git_version: Some("2.43.0".into()),
         }
     }
@@ -491,6 +502,11 @@ mod tests {
             "created: <TODAY>\nmodified: 2024-01-01"
         );
         assert_eq!(norm("at 2024-01-01T00:00:00Z"), "at 2024-01-01T00:00:00Z");
+        // A window that starts a day back is the clock; a bare date of then is not today.
+        assert_eq!(
+            norm("from 2026-11-07T23:34:14.566Z on 2026-11-07"),
+            "from 0000-00-00T00:00:00.000Z on 2026-11-07"
+        );
         let none = Normaliser::new(&Volatile::default(), &[], []).text("2026-11-08");
         assert_eq!(none, "2026-11-08");
     }

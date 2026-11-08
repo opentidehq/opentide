@@ -1,0 +1,3 @@
+fixed: Objects/Detection Rules/rule-0001-sentinel-kql.yaml:14:11 'high' → 'High'
+
+✓ Fixed 1 value in 1 file · 12 objects valid · 7 queries · <SECONDS>

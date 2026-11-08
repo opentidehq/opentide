@@ -409,6 +409,7 @@ mod comparator {
         let volatile = |path: &str| Volatile {
             literals: vec![(path.to_owned(), "<WS>".to_owned())],
             dates: vec!["2026-11-08".to_owned()],
+            recent_dates: Vec::new(),
             git_version: None,
         };
         let report = opentide_compare::compare_normalised(

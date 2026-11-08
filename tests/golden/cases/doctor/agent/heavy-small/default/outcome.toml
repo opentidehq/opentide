@@ -20,20 +20,20 @@ kind = "dir"
 mode = "0755"
 
 [[files]]
-path = "home/.cache/opentide/lsp-catalogs/267424801ea68999e1577502fdafc06e"
+path = "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>"
 change = "created"
 kind = "dir"
 mode = "0755"
 
 [[files]]
-path = "home/.cache/opentide/lsp-catalogs/267424801ea68999e1577502fdafc06e/deprecations.json"
+path = "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/deprecations.json"
 change = "created"
 kind = "file"
 mode = "0644"
 size = 93
 
 [[files]]
-path = "home/.cache/opentide/lsp-catalogs/267424801ea68999e1577502fdafc06e/fields.json"
+path = "home/.cache/opentide/lsp-catalogs/<CATALOG-FINGERPRINT>/fields.json"
 change = "created"
 kind = "file"
 mode = "0644"

@@ -1,0 +1,11 @@
+objects/rules/rule-0001-sentinel-kql.yaml  schema  rule::1.0  -
+objects/rules/rule-0002-defender-kql.yaml  schema  rule::1.0  -
+objects/rules/rule-0003-splunk-spl.yaml  schema  rule::1.0  -
+objects/rules/rule-0004-sentinel-one-s1ql.yaml  schema  rule::1.0  -
+objects/rules/rule-0005-carbon-black-lucene.yaml  schema  rule::1.0  -
+objects/rules/rule-0006-crowdstrike-deploy-only.yaml  schema  rule::1.0  -
+objects/rules/rule-0007-harfanglab-deploy-only.yaml  schema  rule::1.0  -
+objects/rules/rule-0008-staging-promote.yaml  schema  rule::1.0  -
+objects/rules/rule-0009-elastic-kql.yaml  schema  rule::1.0  -
+objects/rules/rule-0013-sysdig-falco.yaml  schema  rule::1.0  -
+! 10 rules unreviewed for 12 hours
