@@ -219,3 +219,6 @@ def test_a_release_restores_no_other_cache() -> None:
                 assert not uses.startswith("actions/cache"), (name, job_id)
                 assert "cache" not in inputs, (name, job_id, uses)
                 assert "enable-cache" not in inputs, (name, job_id, uses)
+                if uses.startswith("actions/setup-node@"):
+                    # It may enable npm's cache by itself (a `packageManager` field).
+                    assert inputs.get("package-manager-cache") is False, (name, job_id)

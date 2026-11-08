@@ -176,6 +176,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
+          # A release restores no cache (setup-node may turn one on by itself).
+          package-manager-cache: false
       # The prebuilt release, as ci.yml's engine-wasm job installs it; its
       # version must match the wasm-bindgen crate in Cargo.lock.
       - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2

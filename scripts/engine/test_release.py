@@ -521,9 +521,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # another commit, attach it to the tag's and publish its crates.
         verify = workflow_jobs()["verify"]
         dispatch = verify[verify.index('if [ "${GITHUB_REF}" != "refs/heads/development" ]') :]
-        guard = 'git ls-remote --exit-code --tags origin "refs/tags/${tag}"'
+        guard = 'git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null || tagged=$?'
         self.assertIn(guard, dispatch)
         self.assertLess(dispatch.index("PUBLISH_ONLY"), dispatch.index(guard))
+        # Fail closed: only "no such ref" (2) lets the release go on.
+        self.assertIn('elif [ "${tagged}" != 2 ]; then', dispatch)
 
     def test_verify_assets_may_read_the_attestations_and_write_nothing(self) -> None:
         verify_assets = workflow_jobs()["verify-assets"]

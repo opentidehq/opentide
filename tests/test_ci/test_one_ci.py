@@ -143,6 +143,11 @@ def test_publish_pypi_does_nothing_for_an_engine_release() -> None:
         if job_id != "guard":
             needs = job.get("needs")
             assert "guard" in ([needs] if isinstance(needs, str) else needs or []), job_id
+        # A status function would run a job past a skipped guard unless the job
+        # still requires a needed job's success.
+        condition = str(job.get("if", ""))
+        if re.search(r"always\(\)|!cancelled\(\)|failure\(\)", condition):
+            assert re.search(r"needs\.[\w-]+\.result == 'success'", condition), job_id
 
 
 def test_ci_mints_no_token() -> None:
