@@ -15,6 +15,17 @@ pub const ORACLE_PYTHON: &str = "3.14.6";
 /// package at one version with its SHA-256 (`uv pip compile --generate-hashes`).
 pub const ORACLE_REQUIREMENTS: &str = "tests/bench/oracle-requirements.txt";
 
+/// Compiles the interpreter's standard library (`compileall`, every CPU),
+/// failing when a module does not compile.
+const COMPILE_STDLIB: &str = "import compileall, sys, sysconfig; \
+    sys.exit(0 if compileall.compile_dir(sysconfig.get_path('stdlib'), quiet=1, workers=0) else 1)";
+
+/// Exits 1 when a standard library module the CLI imports has no bytecode.
+const STDLIB_IS_COMPILED: &str = "import importlib.util, os, sys, sysconfig; \
+    stdlib = sysconfig.get_path('stdlib'); \
+    sources = [os.path.join(stdlib, m) for m in ('json/decoder.py', 'typing.py', 'pathlib/__init__.py', 'argparse.py')]; \
+    sys.exit(0 if all(os.path.exists(importlib.util.cache_from_source(s)) for s in sources if os.path.exists(s)) else 1)";
+
 /// The opentide version a requirements file pins: its `opentide==X` line.
 pub fn pinned_version(requirements: &str) -> Result<String> {
     requirements
@@ -63,7 +74,9 @@ pub fn ensure_oracle(root: &Path, dir: &Path) -> Result<(PathBuf, String)> {
         .with_context(|| format!("check {}", requirements_path.display()))?;
     let stamp = dir.join("xtask-bench-requirements.txt");
     let opentide = dir.join("bin").join("opentide");
-    let stamp_text = format!("python {ORACLE_PYTHON}\n{requirements}");
+    // The stamp names every install step, so that an install made before a
+    // step existed is redone.
+    let stamp_text = format!("python {ORACLE_PYTHON}\nstdlib bytecode\n{requirements}");
     let installed = std::fs::read_to_string(&stamp).is_ok_and(|text| text == stamp_text);
     if !installed || !opentide.exists() {
         eprintln!(
@@ -96,9 +109,20 @@ pub fn ensure_oracle(root: &Path, dir: &Path) -> Result<(PathBuf, String)> {
             .arg(dir.join("bin").join("python"))
             .arg("-r")
             .arg(&requirements_path))?;
+        // uv's managed CPython ships its standard library without bytecode
+        // (49 .pyc for 655 modules in 3.14.6): with PYTHONDONTWRITEBYTECODE
+        // (measure.rs) every run would compile what it imports again. Compile
+        // it once here, as the first run of an interpreter would.
+        run(Command::new(dir.join("bin").join("python"))
+            .args(["-c", COMPILE_STDLIB])
+            .env("PYTHONDONTWRITEBYTECODE", ""))?;
         std::fs::write(&stamp, &stamp_text)
             .with_context(|| format!("write {}", stamp.display()))?;
     }
+    // Every run must find the standard library compiled; one that does not
+    // measures the compiler (see COMPILE_STDLIB).
+    run(Command::new(dir.join("bin").join("python")).args(["-c", STDLIB_IS_COMPILED]))
+        .context("the oracle's standard library has no bytecode")?;
     let output = Command::new(&opentide)
         .arg("--version")
         .output()

@@ -128,6 +128,6 @@ target_s = 0.1
 # The language server of today (the engine imported from language-server) misses
 # the target; UC-2.6 rebuilds it on opentide-workspace.
 target_waiver = "UC-2.6 (#821) rebuilds the server on opentide-workspace"
-rust_baseline_s = 0.16
+rust_baseline_s = 0.147
 # Plan section 11: editor memory per window (language server and backend) <= 150 MB.
 target_rss_mib = 150.0
