@@ -1,0 +1,114 @@
+# The parity dashboard (plan §5.4 "Strength", UC-X.2 #844): `cargo xtask parity
+# dashboard` renders each command × corpus × mode against the Python oracle,
+# the approved diffs and the fault catalogue's coverage. Every run puts the page
+# in the job summary; a push to `development` also commits it as
+# docs/internal/parity.md when it changed.
+#
+# Why a bot commit, and how it is kept safe:
+# - The page is generated, never hand-edited, and changes only when the
+#   migration does, so a commit per change is small and reviewable in history.
+#   A pull request per change would need a human to merge a generated file, and
+#   a PR opened with GITHUB_TOKEN starts no workflow, so its required checks
+#   would never report.
+# - Only the `commit` job can write, and only on a push to `development`
+#   (never on a pull request; `pull_request` runs carry a read-only token).
+#   It runs no code from the repository: it checks out the pushed commit,
+#   copies in the page the read-only `dashboard` job rendered, and pushes one
+#   commit that changes that one file. A push made with GITHUB_TOKEN starts no
+#   workflow, so the commit cannot loop.
+# - It never forces: when `development` has moved on, the push is refused and
+#   the run on the newer commit writes the page.
+# - Branch protection on `development` must let github-actions[bot] push this
+#   commit (a maintainer's setting); otherwise the job fails and says so.
+name: Parity
+
+on:
+  push:
+    branches: [development]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parity-${{ github.ref }}
+  # Runs on development queue rather than cancel, so each push's page lands.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dashboard:
+    name: Parity dashboard
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      - name: Render the dashboard
+        run: |
+          set -o pipefail
+          mkdir -p parity
+          cargo xtask parity dashboard --out parity/parity.md
+          cat parity/parity.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parity-dashboard
+          path: parity/parity.md
+          if-no-files-found: error
+          retention-days: 14
+
+  commit:
+    name: Commit the dashboard
+    needs: dashboard
+    if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # The commit the dashboard was rendered from; the credentials stay for
+      # the one push below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: parity-dashboard
+          path: parity
+
+      - name: Commit docs/internal/parity.md when it changed
+        env:
+          PUSHED: ${{ github.sha }}
+        run: |
+          cp parity/parity.md docs/internal/parity.md
+          if git diff --quiet -- docs/internal/parity.md; then
+            echo "The dashboard is unchanged." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --only docs/internal/parity.md \
+            -m "docs(parity): regenerate the parity dashboard" \
+            -m "Rendered by the dashboard job of the parity workflow from $PUSHED (UC-X.2, #844)."
+          if git push origin "HEAD:refs/heads/development"; then
+            echo "Committed the dashboard on development." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Refused. development moved on: the run on the newer commit writes
+          # the page. Otherwise (branch protection, say) fail and say so.
+          remote=$(git ls-remote origin refs/heads/development | cut -f1)
+          if [ "$remote" != "$PUSHED" ]; then
+            echo "development moved on to $remote; the run on that commit writes the page." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::error::The push of docs/internal/parity.md to development was refused: branch protection must let github-actions[bot] push it (.github/workflows/parity.yml)."
+          exit 1

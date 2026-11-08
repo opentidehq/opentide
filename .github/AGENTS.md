@@ -63,6 +63,23 @@ when the committed one differs, until UC-1.8 generates it in Rust.
   checks each image of its `native` matrix when it restores the workflow (`publish-pypi.yml`
   installs Rust on `windows-11-arm`, whose image may lack it).
 
+## Test strength (UC-X.2, #844)
+
+[`docs/internal/test-strength.md`](../docs/internal/test-strength.md) explains the three measures;
+`tests/test_ci/test_test_strength_workflows.py` holds their permissions and triggers.
+
+- [`coverage.yml`](workflows/coverage.yml), on every pull request and push: job **Rust coverage
+  gates**. One cargo-llvm-cov build measured by the workspace's Rust tests and by the Python tests
+  that call `opentide._native`; `cargo xtask coverage gate` checks each crate against
+  `xtask/coverage.toml`. Read-only.
+- [`mutants.yml`](workflows/mutants.yml), weekly and on demand: cargo-mutants on the crates of
+  `xtask/mutants.toml` in eight shards, a report against `xtask/mutants-baseline.toml`, and on the
+  schedule only a job with `issues: write` (no checkout, no repository code) that opens or updates
+  one issue per crate above its threshold.
+- [`parity.yml`](workflows/parity.yml), on every pull request and push: `cargo xtask parity
+  dashboard` into the job summary; on a push to `development` only, a job with `contents: write`
+  (no repository code, never forces) commits `docs/internal/parity.md` when it changed.
+
 The nextest profiles CI and agents use are in [`.config/nextest.toml`](../.config/nextest.toml):
 `ci` (everything, no retries, no fail-fast, JUnit at `target/nextest/ci/junit.xml`) and `fast`
 (the agent loop).
