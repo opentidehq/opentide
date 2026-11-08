@@ -18,6 +18,13 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
 vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
 
+[fixtures.tide-corpus-typo]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with one typo `validate --fix` repairs in place (`severity: high`)"
+vars = { rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nseverity: High\n", replace = "\nseverity: high\n" }]
+
 [fixtures.vscode]
 kind = "copy"
 source = "tests/golden/fixtures/vscode-workspace"
@@ -1277,3 +1284,137 @@ args = ["serve"]
 modes = ["plain"]
 fixtures = ["tide-corpus", "vscode"]
 input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"run\",\"params\":{\"argv\":[\"validate\"]}}\n{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"run\",\"params\":{\"argv\":[\"info\"]}}\n{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"run\",\"params\":{\"argv\":[\"tui\"]}}\nnot json\n{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"nope\"}\n{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}\n{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}\n"
+
+# ---- a file changed in place: --fix repairs a typo ----
+
+# Changes a file in place (a recorded `modified`).
+[[case]]
+command = "validate"
+variant = "fix-typo"
+args = ["validate", "--fix"]
+fixtures = ["tide-corpus-typo"]
+
+[[case]]
+command = "validate"
+variant = "fix-typo-dry-run"
+args = ["validate", "--fix", "--dry-run"]
+fixtures = ["tide-corpus-typo"]
+
+# The typo found, with its safe fix offered.
+[[case]]
+command = "validate"
+variant = "typo"
+args = ["validate"]
+fixtures = ["tide-corpus-typo"]
+
+# ---- more examples from docs/cli ----
+
+[[case]]
+command = "deploy"
+variant = "strategy-dry-run"
+args = ["deploy", "--strategy", "PREVIEW", "--dry-run"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "deploy"
+variant = "release-splunk"
+args = ["deploy", "--strategy", "RELEASE", "--platform", "splunk"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate"
+variant = "no-color"
+args = ["--no-color", "generate"]
+normalise = ["fresh-uuids"]
+fixtures = ["tide-corpus"]
+
+# `generate schemas` is newer than 0.23.0: recorded as the unknown command it is there.
+[[case]]
+command = "generate"
+variant = "schemas"
+args = ["generate", "schemas"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs"
+variant = "output"
+args = ["generate", "docs", "--output", "docs"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "technique-before-section"
+args = ["info", "--technique", "T1059", "coverage"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "file-missing"
+args = ["lint", "--file", "objects/rules/example.yaml"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "file-example-missing"
+args = ["validate", "--file", "objects/rules/example.yaml"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "check-queries"
+args = ["validate", "--check", "queries"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "query"
+variant = "defender-file"
+args = ["query", "--platform", "defender_for_endpoint", "--file", "objects/rules/suspicious-lsass.yaml"]
+fixtures = ["vscode"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "query"
+variant = "elastic-eql"
+args = ["query", "--platform", "elastic", "--language", "eql", "--index", "logs-*", "process where process.name == \"cmd.exe\""]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "default"
+args = ["rules", "unreviewed"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "hours"
+args = ["rules", "unreviewed", "--older-than", "12h"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup"
+variant = "platform-ci"
+args = ["setup", "--yes", "--platform", "sentinel", "--ci", "github"]
+normalise = ["fresh-uuids"]
+fixtures = ["none"]
+
+[[case]]
+command = "share push"
+variant = "default"
+args = ["share", "push"]
+fixtures = ["tide-corpus"]
+
+# --changed outside a git repository.
+[[case]]
+command = "share push"
+variant = "changed"
+args = ["share", "push", "--changed"]
+fixtures = ["tide-corpus"]
+
+# Retract without --uuid may prompt: human mode is left out (interactive prompt).
+[[case]]
+command = "share retract"
+variant = "no-uuid"
+args = ["share", "retract"]
+modes = ["plain", "json", "agent"]
+fixtures = ["tide-corpus"]

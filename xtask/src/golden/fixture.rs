@@ -42,6 +42,22 @@ pub struct FixtureSpec {
     /// Where the fixture comes from, for the coverage report.
     #[serde(default)]
     pub about: String,
+    /// Text edits applied once the workspace is laid out, each to exactly one
+    /// place: a reviewed variation of a fixture (a typo `--fix` repairs).
+    #[serde(default)]
+    pub edits: Vec<Edit>,
+}
+
+/// One edit of a fixture file: `find` occurs exactly once and becomes `replace`.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Edit {
+    /// The file, relative to the workspace.
+    pub path: String,
+    /// The text to replace; it must occur once.
+    pub find: String,
+    /// What it becomes.
+    pub replace: String,
 }
 
 /// The kinds of fixture.
@@ -63,6 +79,19 @@ impl FixtureSpec {
     /// permissions are then set the same on every host (see [`fix_modes`]).
     pub fn materialise(&self, repo: &Path, dest: &Path) -> Result<()> {
         self.lay_out(repo, dest)?;
+        for edit in &self.edits {
+            let path = dest.join(&edit.path);
+            let text =
+                fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+            ensure!(
+                text.matches(edit.find.as_str()).count() == 1,
+                "fixture edit: `{}` must occur exactly once in {}",
+                edit.find,
+                edit.path
+            );
+            fs::write(&path, text.replacen(edit.find.as_str(), &edit.replace, 1))
+                .with_context(|| format!("write {}", path.display()))?;
+        }
         fix_modes(dest)
     }
 
@@ -242,6 +271,7 @@ mod tests {
             argv: Vec::new(),
             vars: BTreeMap::new(),
             about: String::new(),
+            edits: Vec::new(),
         }
     }
 
@@ -306,6 +336,46 @@ mod tests {
         assert_eq!(mode("sub/a.yaml"), 0o644);
         assert_eq!(mode("run.sh"), 0o755);
         assert_eq!(mode("sub"), 0o755);
+    }
+
+    #[test]
+    fn edits_apply_once_or_fail() {
+        let repo = tempfile::tempdir().unwrap();
+        fs::create_dir_all(repo.path().join("src")).unwrap();
+        fs::write(
+            repo.path().join("src/r.yaml"),
+            "severity: High\nalert: High\n",
+        )
+        .unwrap();
+        let edit = |find: &str| Edit {
+            path: "r.yaml".into(),
+            find: find.into(),
+            replace: "severity: high".into(),
+        };
+        let fixture = FixtureSpec {
+            source: Some("src".into()),
+            edits: vec![edit("severity: High")],
+            ..spec(FixtureKind::Copy)
+        };
+        let dest = tempfile::tempdir().unwrap();
+        fixture.materialise(repo.path(), dest.path()).unwrap();
+        assert_eq!(
+            fs::read_to_string(dest.path().join("r.yaml")).unwrap(),
+            "severity: high\nalert: High\n"
+        );
+        // Twice, or not at all: the edit is ambiguous or stale.
+        for find in ["High", "nowhere"] {
+            let fixture = FixtureSpec {
+                source: Some("src".into()),
+                edits: vec![edit(find)],
+                ..spec(FixtureKind::Copy)
+            };
+            let dest = tempfile::tempdir().unwrap();
+            assert!(
+                fixture.materialise(repo.path(), dest.path()).is_err(),
+                "{find}"
+            );
+        }
     }
 
     #[test]

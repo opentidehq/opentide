@@ -1,0 +1,2 @@
+error: No object file directly in objects/threats, objects/objectives, objects/rules matched: objects/rules/example.yaml
+tip: add --json for machine-readable output

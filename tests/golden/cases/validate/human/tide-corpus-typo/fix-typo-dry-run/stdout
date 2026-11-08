@@ -1,0 +1,12 @@
+[1m--- a/Objects/Detection Rules/rule-0001-sentinel-kql.yaml[0m
+[1m+++ b/Objects/Detection Rules/rule-0001-sentinel-kql.yaml[0m
+[36m@@ -11,7 +11,7 @@[0m
+ description: |
+   Simulated Sentinel rule for CLI E2E corpus.
+ status: STAGING
+[31m-severity: high[0m
+[32m+severity: High[0m
+ techniques:
+   - T1059
+ detection_model: 00000000-0000-4000-8002-000000000001
+

@@ -1,0 +1,1 @@
+[1;31merror:[0m opentide share push --changed runs only in GitHub Actions, GitLab CI, or Azure Pipelines
