@@ -31,7 +31,9 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -105,9 +107,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # The release rust-toolchain.toml pins, which cargo runs in this checkout
+      # (`rustup toolchain install` with no name), with the targets the job builds.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update --target ${{ matrix.target }}
       - name: musl linker
         if: contains(matrix.target, 'musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -149,9 +152,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown, wasm32-wasip1
+      # The release rust-toolchain.toml pins, which cargo runs in this checkout
+      # (`rustup toolchain install` with no name), with the targets the job builds.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update --target wasm32-unknown-unknown,wasm32-wasip1
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -180,7 +184,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - run: cargo run -p opentide-lsp -- generate-highlights
       - name: zip
         run: |
@@ -216,7 +222,9 @@ jobs:
       # builds link (texts in licenses/wasi-libc, shipped as WASI-LIBC-LICENSES.txt); cargo-about lists every Rust
       # crate in the workspace, the browser build's included, and fails on a
       # licence about.toml does not accept.
-      - uses: dtolnay/rust-toolchain@stable
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - name: licences and notices
         run: |
           set -euo pipefail
@@ -361,7 +369,9 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

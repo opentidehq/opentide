@@ -19,9 +19,11 @@ whatever its base: a stacked PR targets the branch below it, not `development`.
 | `test` | The Python matrix, **3.10–3.14** |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
 
-The Rust jobs of `ci.yml`, `engine-ci.yml` and `oracle.yml` install the one release
-`rust-toolchain.toml` pins (`rustup toolchain install` with no name), never floating `stable`; the
-file says how to move it (`engine-fuzz.yml` runs nightly, by name). Every Python job
+The Rust jobs of `ci.yml`, `engine-ci.yml`, `oracle.yml` and the parked `release.yml` (below)
+install the one release `rust-toolchain.toml` pins (`rustup toolchain install` with no name, plus
+the targets the job builds), never floating `stable`: cargo in a checkout runs that release
+whatever else is installed (`tests/test_ci/test_rust_toolchain.py`). The file says how to move it
+(`engine-fuzz.yml` runs nightly, by name). Every Python job
 builds the engine through `uv sync`, with a Rust cache. The `engine` job sets
 `RUSTFLAGS=-Dwarnings` (a warning fails the build), `CARGO_PROFILE_DEV_DEBUG=line-tables-only`
 and `INSTA_UPDATE=no` (a snapshot that differs fails; CI never writes one). Its Rust cache is
@@ -57,7 +59,9 @@ when the committed one differs, until UC-1.8 generates it in Rust.
   request that changes `crates/`, `grammars/`, `Cargo.lock`, the query catalogs or the oracles,
   weekly (with the Carbon Black Cloud tenant) and on demand.
 - language-server's release workflow waits in `engine-workflows/`, which GitHub does not run,
-  for UC-0.3.
+  for UC-0.3. Its jobs install the pinned release as above, which needs rustup on the runner: UC-0.3
+  checks each image of its `native` matrix when it restores the workflow (`publish-pypi.yml`
+  installs Rust on `windows-11-arm`, whose image may lack it).
 
 The nextest profiles CI and agents use are in [`.config/nextest.toml`](../.config/nextest.toml):
 `ci` (everything, no retries, no fail-fast, JUnit at `target/nextest/ci/junit.xml`) and `fast`

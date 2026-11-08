@@ -7,6 +7,7 @@ of .github/engine-workflows/release.yml (#196).
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import re
 import shutil
@@ -241,6 +242,51 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for job in minting:
             # Every job states its permissions, so none inherits a token.
             self.assertIn("permissions:", jobs[job], job)
+
+    def test_every_rust_job_installs_the_pinned_release_with_the_targets_it_builds(
+        self,
+    ) -> None:
+        # cargo in the checkout runs the release rust-toolchain.toml pins, whatever
+        # the runner's default is: a toolchain installed by name (`stable`, with the
+        # job's targets) would leave that release without them.
+        install = "rustup toolchain install --profile minimal --no-self-update"
+        target = r"--target (\$\{\{[^}]*\}\}|\S+)"
+        jobs = workflow_jobs()
+        built: dict[str, set[str]] = {}
+        rust = sorted(
+            job
+            for job, body in jobs.items()
+            if re.search(r"\bcargo\b|build-wasm\.sh|release\.py (?:vendor|publish)", body)
+        )
+        self.assertEqual(rust, ["assets", "crates", "highlights", "native", "verify", "wasm"])
+        for job, body in jobs.items():
+            self.assertNotIn("dtolnay/rust-toolchain", body, job)
+            self.assertNotRegex(body, r"rustup (?:default|override)|cargo \+", job)
+            installs = re.findall(rf"{re.escape(install)}(.*)", body)
+            self.assertEqual(len(installs), 1 if job in rust else 0, (job, installs))
+            if not installs:
+                continue
+            # No toolchain name: rustup installs the one rust-toolchain.toml pins.
+            args = re.sub(r"\$\{\{[^}]*\}\}", "EXPR", installs[0]).split()
+            valued = {"--target", "--component", "--profile", "-t", "-c"}
+            names = [
+                arg
+                for before, arg in itertools.pairwise(["--", *args])
+                if not arg.startswith("-") and before not in valued
+            ]
+            self.assertEqual(names, [], job)
+            installed = {
+                name for listed in re.findall(target, installs[0]) for name in listed.split(",")
+            }
+            built[job] = {
+                name
+                for line in body.splitlines()
+                if re.search(r"\bcargo (?:build|run|clippy|test|check|package)\b", line)
+                for name in re.findall(target, line)
+            }
+            self.assertLessEqual(built[job], installed, job)
+        # The matrix build cross-compiles for x86_64-apple-darwin, musl and the like.
+        self.assertEqual(built["native"], {"${{ matrix.target }}"})
 
     def test_the_attest_job_builds_and_runs_nothing(self) -> None:
         attest = workflow_jobs()["attest"]
