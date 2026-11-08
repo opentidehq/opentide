@@ -268,11 +268,14 @@ jobs:
           if-no-files-found: error
 
   # A CycloneDX SBOM for each artifact (#843): the opentide-lsp binaries and
-  # WASI build, the browser build with the wasi-libc it links, the npm
-  # packages, and the PyPI wheel built from the same commit (its Python
-  # dependencies and the crates in opentide._native). Each is checked against
-  # the CycloneDX 1.5 schema before it ships. SOURCE_DATE_EPOCH (the commit's
-  # time) fixes their timestamps.
+  # WASI build, the browser build with the wasi-libc it links, and the npm
+  # packages, each a release asset; and the PyPI wheel built from the same
+  # commit (its Python dependencies and the crates in opentide._native), which
+  # is not an engine asset: it ships as the `sbom-wheel` artifact. The wheel
+  # depends on splunk-sdk (the Splunk platform client), a name the oracle
+  # licence scan rightly refuses in engine assets. Each SBOM is checked
+  # against the CycloneDX 1.5 schema. SOURCE_DATE_EPOCH (the commit's time)
+  # fixes their timestamps.
   sbom:
     name: SBOMs
     runs-on: ubuntu-latest
@@ -304,10 +307,17 @@ jobs:
           export SOURCE_DATE_EPOCH
           python3 scripts/engine/sbom.py generate dist
           python3 scripts/engine/sbom.py validate dist/*.cdx.json
+          mkdir -p wheel
+          mv dist/opentide-wheel.cdx.json wheel/
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: engine-asset-sbom
           path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-wheel
+          path: wheel/opentide-wheel.cdx.json
           if-no-files-found: error
 
   # Every asset, the licence scan over all of them, and SHA256SUMS last.

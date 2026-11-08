@@ -75,6 +75,9 @@ checks each against the schema (cyclonedx-python-lib, pinned) and for references
 | `opentide-wasm.cdx.json` | the browser build | cargo-cyclonedx for wasm32-unknown-unknown, and the wasi-libc it links |
 | `opentide-lsp-client.cdx.json`, `opentide-lsp-worker.cdx.json` | the npm packages | `npm sbom`, no dev dependencies |
 
-Each is an asset of every engine release, listed in `SHA256SUMS` and covered by its provenance
-attestation. Rust SBOMs leave out build dependencies and name workspace crates by their path in
+The engine's four are assets of every engine release, listed in `SHA256SUMS` and covered by its
+provenance attestation. The wheel's is generated and validated on every pull request and engine
+release and uploaded as the `sbom-wheel` workflow artifact; it is not an engine asset (the wheel
+ships on PyPI, and its `splunk-sdk` dependency is a name the oracle licence scan refuses in engine
+assets). Attaching it to the PyPI GitHub Release is left to the release train (UC-5.5, #840). Rust SBOMs leave out build dependencies and name workspace crates by their path in
 the repository, never the build machine's.

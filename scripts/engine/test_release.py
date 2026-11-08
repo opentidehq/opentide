@@ -266,7 +266,6 @@ V0_11_0_ASSETS = [
 SBOM_ASSETS = [
     "opentide-lsp.cdx.json",
     "opentide-wasm.cdx.json",
-    "opentide-wheel.cdx.json",
     "opentide-lsp-client.cdx.json",
     "opentide-lsp-worker.cdx.json",
 ]

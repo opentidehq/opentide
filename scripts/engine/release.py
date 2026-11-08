@@ -109,12 +109,12 @@ FIXED_ASSETS = [
     "opentide-lsp-wasm32-wasip1.wasm",
     SUMS,
 ]
-# The CycloneDX SBOMs scripts/engine/sbom.py writes (#843): added to the set
-# language-server's releases carried, which editors pin by name.
+# The CycloneDX SBOMs scripts/engine/sbom.py writes for the engine's artifacts
+# (#843): added to the set language-server's releases carried, which editors
+# pin by name. The wheel's SBOM is not an engine asset (engine-release-build.yml).
 SBOM_ASSETS = [
     "opentide-lsp.cdx.json",
     "opentide-wasm.cdx.json",
-    "opentide-wheel.cdx.json",
     "opentide-lsp-client.cdx.json",
     "opentide-lsp-worker.cdx.json",
 ]
