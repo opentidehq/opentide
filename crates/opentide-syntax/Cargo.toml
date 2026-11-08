@@ -20,6 +20,7 @@ build = "build.rs"
 [lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
