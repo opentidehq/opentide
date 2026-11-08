@@ -132,6 +132,23 @@ def test_the_asset_build_publishes_nothing_and_writes_nothing() -> None:
     assert "id-token" not in path.read_text(encoding="utf-8")
 
 
+def test_publish_pypi_does_nothing_for_an_engine_release() -> None:
+    """An engine release published by hand starts `release: published`: the guard,
+    which every other job needs, is skipped for a tag that is not opentide's."""
+    jobs = _load(WORKFLOWS / "publish-pypi.yml")["jobs"]
+    assert jobs["guard"]["if"] == (
+        "github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')"
+    )
+    for job_id, job in jobs.items():
+        if job_id != "guard":
+            needs = job.get("needs")
+            assert "guard" in ([needs] if isinstance(needs, str) else needs or []), job_id
+
+
+def test_ci_mints_no_token() -> None:
+    assert "id-token" not in CI.read_text(encoding="utf-8")
+
+
 def test_the_pull_request_dry_run_is_read_only() -> None:
     job = _load(CI)["jobs"]["engine-release-dry-run"]
     assert job["uses"] == "./.github/workflows/engine-release-build.yml"

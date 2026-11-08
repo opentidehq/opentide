@@ -211,7 +211,7 @@ def notes(tag_or_version: str) -> str | None:
     else:
         version, rc = tag_or_version.removeprefix("v"), None
     section = changelog_section(version)
-    if section is None and rc is not None:
+    if not section and rc is not None:
         unreleased = changelog_section("Unreleased")
         section = f"Release candidate {rc} of {version}.\n\n{unreleased or ''}".strip()
     return section

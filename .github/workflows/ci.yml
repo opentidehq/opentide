@@ -506,12 +506,18 @@ jobs:
           persist-credentials: false
       # scripts/engine/fuzz.sh runs `cargo +nightly fuzz`.
       - name: Set up Rust (nightly)
-        run: rustup toolchain install nightly --profile minimal --no-self-update
+        id: nightly
+        run: |
+          rustup toolchain install nightly --profile minimal --no-self-update
+          echo "version=$(rustc +nightly -V | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
       # fuzz/ is a workspace of its own; cargo-fuzz builds into fuzz/target.
-      # rust-cache also keeps ~/.cargo/bin, so cargo-fuzz installs once.
+      # rust-cache also keeps ~/.cargo/bin, so cargo-fuzz installs once. Its key
+      # hashes the pinned stable (rust-toolchain.toml), not the nightly that
+      # builds here: `key` names the nightly, so a new one saves a new tree.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: fuzz
+          key: ${{ steps.nightly.outputs.version }}
           workspaces: fuzz -> target
       - run: cargo +nightly install cargo-fuzz --locked --version 0.13.2
       - name: fuzz ${{ matrix.targets }} (60 s each)
