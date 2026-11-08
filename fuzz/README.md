@@ -37,7 +37,7 @@ the code adds one:
 
 ```bash
 rustup toolchain install nightly
-cargo install cargo-fuzz
+cargo +nightly install cargo-fuzz --locked --version 0.13.2
 cargo +nightly fuzz run kql fuzz/corpus/kql crates/testdata/corpus/kql -- -timeout=10 -max_total_time=300
 ```
 
@@ -56,5 +56,9 @@ fix (`crates/opentide-lsp/src/protocol.rs`,
 `a_length_longer_than_the_input_ends_it_without_allocating_the_length`, came
 from `framing`).
 
-`.github/workflows/engine-fuzz.yml` runs each target for five minutes every night
-and uploads what crashed. It does not gate pull requests.
+`.github/workflows/engine-fuzz.yml` runs every target for ten minutes every night,
+keeps each target's corpus in the Actions cache, and uploads what crashed.
+ci.yml's `fuzz-smoke` runs every target for 60 s on each pull request: a panic
+or a timeout there fails the PR. `tests/test_ci/test_one_ci.py` and
+`tests/test_ci/test_supply_chain.py` fail when a target is missing from either
+matrix.

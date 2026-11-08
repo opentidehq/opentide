@@ -2,8 +2,8 @@ name: Engine release build
 
 # Builds every asset of an engine GitHub Release into one artifact,
 # `release-assets`: opentide-lsp per target, the WASI module, the browser build
-# (opentide-wasm-web-<v>.zip), the highlights zip, the licences and NOTICE, and
-# SHA256SUMS last. It publishes, attests and uploads to no release: the caller
+# (opentide-wasm-web-<v>.zip), the highlights zip, the licences and NOTICE, the
+# CycloneDX SBOMs (scripts/engine/sbom.py), and SHA256SUMS last. It publishes, attests and uploads to no release: the caller
 # does. Two callers:
 #
 # - engine-release.yml, for an `engine-v*` tag or Run workflow, with the tag;
@@ -267,10 +267,53 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # A CycloneDX SBOM for each artifact (#843): the opentide-lsp binaries and
+  # WASI build, the browser build with the wasi-libc it links, the npm
+  # packages, and the PyPI wheel built from the same commit (its Python
+  # dependencies and the crates in opentide._native). Each is checked against
+  # the CycloneDX 1.5 schema before it ships. SOURCE_DATE_EPOCH (the commit's
+  # time) fixes their timestamps.
+  sbom:
+    name: SBOMs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no
+      # name), with the browser build's target cargo-cyclonedx resolves for.
+      - name: Set up Rust
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: inputs.dry-run
+        with:
+          shared-key: engine-release
+          key: sbom
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: cargo-cyclonedx
+        run: cargo install --locked cargo-cyclonedx --version 0.5.10
+      - name: generate and validate
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          python3 scripts/engine/sbom.py generate dist
+          python3 scripts/engine/sbom.py validate dist/*.cdx.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-sbom
+          path: dist/*
+          if-no-files-found: error
+
   # Every asset, the licence scan over all of them, and SHA256SUMS last.
   assets:
     name: Release assets
-    needs: [meta, native, wasm, highlights, licences]
+    needs: [meta, native, wasm, highlights, licences, sbom]
     runs-on: ubuntu-latest
     env:
       TAG: ${{ needs.meta.outputs.tag }}

@@ -109,6 +109,15 @@ FIXED_ASSETS = [
     "opentide-lsp-wasm32-wasip1.wasm",
     SUMS,
 ]
+# The CycloneDX SBOMs scripts/engine/sbom.py writes (#843): added to the set
+# language-server's releases carried, which editors pin by name.
+SBOM_ASSETS = [
+    "opentide-lsp.cdx.json",
+    "opentide-wasm.cdx.json",
+    "opentide-wheel.cdx.json",
+    "opentide-lsp-client.cdx.json",
+    "opentide-lsp-worker.cdx.json",
+]
 
 
 def workspace_version() -> str:
@@ -153,9 +162,10 @@ def asset_version(tag: str) -> str:
 
 def expected_assets(tag: str) -> list[str]:
     """Every asset of the tag's GitHub Release, sorted: what language-server's
-    releases carried, with this tag's version in the versioned names."""
+    releases carried, with this tag's version in the versioned names, and the
+    SBOMs."""
     v = asset_version(tag)
-    names = [*FIXED_ASSETS, f"highlights-{v}.zip", f"opentide-wasm-web-{v}.zip"]
+    names = [*FIXED_ASSETS, *SBOM_ASSETS, f"highlights-{v}.zip", f"opentide-wasm-web-{v}.zip"]
     for target in TARGETS:
         ext = ".exe" if "windows" in target else ""
         names.append(f"opentide-lsp-{v}-{target}{ext}")

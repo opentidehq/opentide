@@ -19,8 +19,9 @@ does every push to `development`. Jobs run in parallel; a new push cancels the s
 | `engine-package` | Every engine crate packaged as crates.io builds it, and `license-scan.sh` over the packages (no oracle reference ships) |
 | `grammars`, `textmate` | Every vendored `parser.c` is what tree-sitter-cli 0.25.10 generates (`check-grammars.sh`); the TextMate grammars as VS Code reads them |
 | `elastic-sweep` | Every public Elastic detection rule (a pinned commit) passes the engine |
-| `fuzz-smoke` | Each fuzz target of `fuzz/` for 60 s from its seeds and saved regressions (nightly, three targets per runner) |
-| `engine-release-dry-run` | The engine release's own asset jobs ([`engine-release-build.yml`](workflows/engine-release-build.yml)) for the workspace version: every asset, SHA256SUMS, and `release.py check-assets` (language-server v0.11.0's names with the version substituted). No tag, attestation, release or publish; `contents: read` |
+| `fuzz-smoke` | Each fuzz target of `fuzz/` for 60 s from its seeds and saved regressions (nightly, up to three targets per runner; cargo-fuzz pinned) |
+| `deny` | `cargo deny check` against [`deny.toml`](../deny.toml) (licences, RustSec advisories, duplicate versions, OpenSSL, sources) for the workspace, and advisories, bans and sources for `fuzz/`; cargo-deny 0.20.2, prebuilt and checksum-checked ([`docs/internal/supply-chain.md`](../docs/internal/supply-chain.md)) |
+| `engine-release-dry-run` | The engine release's own asset jobs ([`engine-release-build.yml`](workflows/engine-release-build.yml)) for the workspace version: every asset, the CycloneDX SBOMs (`scripts/engine/sbom.py`, schema-checked), SHA256SUMS, and `release.py check-assets` (language-server v0.11.0's names with the version substituted, plus the SBOMs). No tag, attestation, release or publish; `contents: read` |
 | `engine-release-consumers` | opentidehq/vscode-extension's own grammar and engine scripts (a pinned commit) accept the dry run's assets as this repository's release (`scripts/engine/check-vscode-extension.mjs`) |
 | `test` | The Python matrix, **3.10–3.14**, coverage gate on 3.14 |
 | `cli-e2e`, `cli-windows-smoke`, `gitlab-ci-lint` | The sharded E2E suite, a Windows smoke run, the generated GitLab pipelines; none waits for `test` |
@@ -88,6 +89,8 @@ Elastic detection-rules sweep
 Fuzz smoke (kql spl esql)
 Fuzz smoke (eql kuery lucene)
 Fuzz smoke (falco tide protocol)
+Fuzz smoke (config framing)
+Supply chain (cargo deny)
 Engine release (dry run) / Release tag
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-gnu
 Engine release (dry run) / opentide-lsp x86_64-unknown-linux-musl
@@ -100,6 +103,7 @@ Engine release (dry run) / opentide-lsp aarch64-pc-windows-msvc
 Engine release (dry run) / WebAssembly builds
 Engine release (dry run) / Highlights zip
 Engine release (dry run) / Licences and notices
+Engine release (dry run) / SBOMs
 Engine release (dry run) / Release assets
 Engine release assets in vscode-extension
 Test (3.10)
@@ -131,8 +135,12 @@ together.
 ## The other workflows
 
 - [`engine-release.yml`](workflows/engine-release.yml): the engine's release (below).
-- [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes each target for five minutes a night with
-  the corpus it keeps; a schedule of its own, so not part of ci.yml.
+- [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target for ten minutes a night with
+  the corpus it keeps, and uploads what crashed; a schedule of its own, so not part of ci.yml.
+- [`rust-audit.yml`](workflows/rust-audit.yml) runs `cargo audit` on both Rust lock files every
+  day, with deny.toml's exceptions, and opens or comments on one issue when it finds an advisory.
+  Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull
+  request (`tests/test_ci/test_supply_chain.py`).
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
   Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`) on every push to
   `development`, on an `engine-v*` tag, on a pull request that changes `crates/`, `grammars/`,
@@ -153,7 +161,7 @@ together.
 | `ci.yml` | `grammars` | ci.yml `grammars` |
 | `ci.yml` | `wasm` | ci.yml `engine-wasm` |
 | `ci.yml` | `elastic-sweep` | ci.yml `elastic-sweep` |
-| `fuzz.yml` | `fuzz` | `engine-fuzz.yml` (nightly, five minutes), and ci.yml `fuzz-smoke` (60 s per target, every PR) |
+| `fuzz.yml` | `fuzz` | `engine-fuzz.yml` (nightly, ten minutes), and ci.yml `fuzz-smoke` (60 s per target, every PR) |
 | `oracle.yml` | every job | `oracle.yml`, its tag trigger `engine-v*` instead of `v*.*.*` |
 | `release.yml` | every job | `engine-release.yml` (`git mv`); `native`, `wasm`, `highlights` and the licences of `assets` moved to `engine-release-build.yml`, which ci.yml also runs as a dry run |
 | `backfill-releases.yml` | `backfill` | dropped: a one-off for language-server's tags before 0.5 |

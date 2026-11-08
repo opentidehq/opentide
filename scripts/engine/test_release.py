@@ -262,6 +262,15 @@ V0_11_0_ASSETS = [
     "opentide-wasm-web-v0.11.0.zip",
 ]
 
+# The SBOMs scripts/engine/sbom.py writes, each a release asset.
+SBOM_ASSETS = [
+    "opentide-lsp.cdx.json",
+    "opentide-wasm.cdx.json",
+    "opentide-wheel.cdx.json",
+    "opentide-lsp-client.cdx.json",
+    "opentide-lsp-worker.cdx.json",
+]
+
 
 class TagTest(unittest.TestCase):
     def test_engine_tags_and_release_candidates(self) -> None:
@@ -285,10 +294,16 @@ class TagTest(unittest.TestCase):
                 release.parse_tag(tag)
 
     def test_the_asset_set_is_language_servers_last_with_the_version_substituted(self) -> None:
-        self.assertEqual(sorted(release.expected_assets("engine-v0.11.0")), sorted(V0_11_0_ASSETS))
+        # language-server's assets keep their names (editors pin them); the
+        # SBOMs (#843) are the only additions.
+        self.assertEqual(
+            sorted(release.expected_assets("engine-v0.11.0")),
+            sorted(V0_11_0_ASSETS + SBOM_ASSETS),
+        )
         rc = release.expected_assets("engine-v0.11.1-rc.1")
         self.assertEqual(
-            sorted(rc), sorted(a.replace("v0.11.0", "v0.11.1-rc.1") for a in V0_11_0_ASSETS)
+            sorted(rc),
+            sorted([a.replace("v0.11.0", "v0.11.1-rc.1") for a in V0_11_0_ASSETS] + SBOM_ASSETS),
         )
 
     def test_check_assets_names_what_is_missing_or_extra(self) -> None:
@@ -389,7 +404,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
             for job, body in jobs.items()
             if re.search(r"\bcargo\b|build-wasm\.sh|release\.py (?:vendor|publish)", body)
         )
-        self.assertEqual(rust, ["crates", "highlights", "licences", "native", "verify", "wasm"])
+        self.assertEqual(
+            rust, ["crates", "highlights", "licences", "native", "sbom", "verify", "wasm"]
+        )
         for job, body in jobs.items():
             self.assertNotIn("dtolnay/rust-toolchain", body, job)
             self.assertNotRegex(body, r"rustup (?:default|override)|cargo \+", job)
