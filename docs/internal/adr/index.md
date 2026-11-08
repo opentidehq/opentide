@@ -13,7 +13,7 @@ The decisions D-1 to D-8 come from the unified-core plan, [§1 Decisions](https:
 
 | ADR | Decision | Title | Status |
 |-----|----------|-------|--------|
-| 0001 | D-2 | The Tide model is Rust code. UC-1.1 ([#807](https://github.com/opentidehq/opentide/issues/807)) writes it, together with the schema conventions | Not written yet |
+| [0001](./0001-tide-model-as-rust-code.md) | D-2 | The Tide model is Rust code, with the schema conventions of UC-1.1 ([#807](https://github.com/opentidehq/opentide/issues/807)) | Proposed |
 | [0002](./0002-all-logic-in-rust.md) | D-1 | All opentide logic is Rust | Proposed |
 | [0003](./0003-cli-is-opentide-cli.md) | D-3 | The CLI is `opentide-cli`, called in-process from Python and npm | Proposed |
 | [0004](./0004-merge-language-server.md) | D-4 | language-server merges into this repository with its history | Proposed |

@@ -1,11 +1,19 @@
 ---
-title: "ADR 0001: The Tide model is Rust code"
+title: "0001: The Tide model is Rust code"
 description: How the Tide model is written in Rust (serde, garde, schemars, PyO3, one struct per revision) and the conventions every model in opentide-schema follows.
 ---
 
-# ADR 0001: The Tide model is Rust code
+# 0001: The Tide model is Rust code
 
-**Status:** Proposed, 2026-11-08. It records decision D-2 of the [Unified core plan](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md) (PR [#789](https://github.com/opentidehq/opentide/pull/789), not merged) and becomes Accepted when that plan does. **Work item:** UC-1.1, [#807](https://github.com/opentidehq/opentide/issues/807) (epic [#790](https://github.com/opentidehq/opentide/issues/790), phase [#792](https://github.com/opentidehq/opentide/issues/792)). **Code:** [`crates/opentide-schema`](https://github.com/opentidehq/opentide/tree/development/crates/opentide-schema).
+| | |
+|---|---|
+| Status | Proposed |
+| Date | 2026-11-07 (the plan's decision), recorded 2026-11-08 |
+| Decision | D-2, with the schema conventions of UC-1.1 |
+| Issues | [#807](https://github.com/opentidehq/opentide/issues/807) (UC-1.1), phase [#792](https://github.com/opentidehq/opentide/issues/792), epic [#790](https://github.com/opentidehq/opentide/issues/790); plan PR [#789](https://github.com/opentidehq/opentide/pull/789) |
+| Code | [`crates/opentide-schema`](https://github.com/opentidehq/opentide/tree/development/crates/opentide-schema) |
+
+It records decision D-2 of the [Unified core plan](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md), which is not merged yet: the ADR stays Proposed until a maintainer approves the plan ([index](./index.md)).
 
 ## Context
 
