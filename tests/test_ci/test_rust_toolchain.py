@@ -77,6 +77,50 @@ def _ignored_options(command: str) -> list[str]:
     return [arg for arg in command.split() if IGNORED_UNNAMED.fullmatch(arg)]
 
 
+# A target: a name, or an expression such as ``${{ matrix.target }}``.
+TARGET = r"\$\{\{[^}]*\}\}|\w[\w.-]*"
+# The script that builds the WebAssembly engine; a job that runs it builds its targets.
+BUILD_WASM = "scripts/engine/build-wasm.sh"
+
+
+def _lines(script: str) -> list[str]:
+    """A shell script's commands, continuation lines joined and comments left out."""
+    joined = re.sub(r"\\\n", " ", script)
+    return [line for line in joined.splitlines() if not line.lstrip().startswith("#")]
+
+
+def _targets_added(script: str) -> set[str]:
+    """The targets a script's ``rustup target add`` lines add."""
+    return {
+        name
+        for line in _lines(script)
+        for listed in re.findall(rf"rustup target add((?: +(?:{TARGET}))+)", line)
+        for name in re.findall(TARGET, listed)
+    }
+
+
+def _targets_built(script: str) -> set[str]:
+    """The targets a script's cargo commands build for (``--target X``)."""
+    built = set()
+    for line in _lines(script):
+        if re.search(r"\bcargo (?:build|run|clippy|test|check|nextest|package)\b", line):
+            built |= set(re.findall(rf"--target[= ]+({TARGET})", line))
+        if BUILD_WASM in line:
+            built |= _targets_built((ROOT / BUILD_WASM).read_text(encoding="utf-8"))
+    return built
+
+
+def _job_targets(path: Path) -> dict[str, tuple[set[str], set[str]]]:
+    """Each job's (built, added) targets."""
+    jobs: dict[str, tuple[set[str], set[str]]] = {}
+    for job_id, step in _steps(path):
+        run = str(step.get("run", ""))
+        built, added = jobs.setdefault(job_id, (set(), set()))
+        built |= _targets_built(run)
+        added |= _targets_added(run)
+    return jobs
+
+
 def test_the_pin_is_one_release() -> None:
     toolchain = tomllib.loads((ROOT / "rust-toolchain.toml").read_text(encoding="utf-8"))
     assert re.fullmatch(r"\d+\.\d+\.\d+", toolchain["toolchain"]["channel"])
@@ -171,3 +215,45 @@ def test_no_install_passes_an_option_rustup_ignores(path: Path) -> None:
 def test_an_ignored_option_is_seen(run: str, ignored: list[str]) -> None:
     """The check above reads the flags on an unnamed install, and only there."""
     assert [arg for command in _installs(run) for arg in _ignored_options(command)] == ignored
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
+def test_every_target_a_job_builds_is_added(path: Path) -> None:
+    """A job adds each target it builds with ``rustup target add`` in its own steps.
+
+    The unnamed install adds no target, and the runner's default toolchain is not
+    the one cargo runs in the checkout. ``build-wasm.sh`` adds its own targets as
+    well; the job still states them, so the step that installs Rust is complete.
+    """
+    for job_id, (built, added) in _job_targets(path).items():
+        assert built <= added, (path.name, job_id, sorted(built - added))
+
+
+def test_the_jobs_that_build_for_a_target_are_seen() -> None:
+    """The check above is not empty: it reads the cross builds and build-wasm.sh."""
+    wasm = {"wasm32-unknown-unknown", "wasm32-wasip1"}
+    found = {
+        (path.name, job_id): built
+        for path in WORKFLOWS
+        for job_id, (built, _) in _job_targets(path).items()
+        if built
+    }
+    assert found[("engine-release-build.yml", "native")] == {"${{ matrix.target }}"}
+    assert found[("engine-release-build.yml", "wasm")] == wasm
+    assert found[("ci.yml", "engine-wasm")] == wasm
+
+
+@pytest.mark.parametrize(
+    ("script", "added"),
+    [
+        ("rustup target add ${{ matrix.target }}", {"${{ matrix.target }}"}),
+        (
+            "rustup target add wasm32-unknown-unknown \\\n  wasm32-wasip1 >/dev/null",
+            {"wasm32-unknown-unknown", "wasm32-wasip1"},
+        ),
+        ("# rustup target add thumbv6m-none-eabi", set()),
+        ("rustup toolchain install --target thumbv6m-none-eabi", set()),
+    ],
+)
+def test_an_added_target_is_seen(script: str, added: set[str]) -> None:
+    assert _targets_added(script) == added
