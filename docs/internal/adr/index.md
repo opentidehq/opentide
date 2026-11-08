@@ -37,13 +37,12 @@ Work items will add these ADRs, each taking the number after the highest one in 
 | Proposed | Written and under review. Work may follow it, but the decision can still change |
 | Accepted | A maintainer approved it. To change it, write a new ADR |
 | Superseded by NNNN | A later ADR replaced it. The page stays, with a link to its successor |
-| Not written yet | The number is reserved for a decision whose work item writes the ADR (0001) |
 
 Only a maintainer changes a status to Accepted or Superseded.
 
 ## How to add an ADR
 
-1. Take the number after the highest one in the index (0001 is reserved for D-2, UC-1.1). The file name is that number followed by a short kebab-case slug: `docs/internal/adr/NNNN-short-slug.md`.
+1. Take the number after the highest one in the index. The file name is that number followed by a short kebab-case slug: `docs/internal/adr/NNNN-short-slug.md`.
 2. Copy the template below. Fill every section, and leave the status at Proposed.
 3. Add the slug to [`meta.json`](./meta.json) and a row to the index above, in the same pull request.
 4. If the ADR records a plan decision (`D-n`), link it from the plan's Decisions table, in the same pull request or the plan's next status update. If it comes from a work item, the work item's issue and pull request link it, and so does the "to come" table above, until the row moves into the index.
