@@ -1,12 +1,13 @@
 //! `cargo xtask check-layers` checks the workspace it runs in, not the one its
 //! binary was built from.
 //!
-//! Worktrees that share a `CARGO_TARGET_DIR` can run a binary another worktree
-//! built (cargo judges freshness by modification times), so a path compiled in
+//! A target pool that last served another worktree can hold a binary built
+//! there (cargo judges freshness by modification times), so a path compiled in
 //! with `env!("CARGO_MANIFEST_DIR")` would name that other worktree and check
-//! the wrong tree. Each case below runs the real binary in a small workspace of
+//! the wrong tree. Each case below runs the real binary on a small workspace of
 //! its own whose table is broken; a binary that read the repository it was
-//! built from would pass it.
+//! built from, or that ignored the `CARGO_MANIFEST_DIR` cargo sets at run time,
+//! would pass it.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -100,7 +101,13 @@ fn assert_fails_on_the_upward_edge(output: &Output, table: &Path) {
 fn run_by_cargo_it_checks_the_workspace_cargo_ran_it_for() -> TestResult {
     let workspace = Workspace::new("cargo-run")?;
     let xtask = workspace.root.join("xtask");
-    let output = workspace.check_layers(&workspace.root.join("low"), Some(&xtask))?;
+    // Started outside the small workspace, as `cargo xtask` is from anywhere
+    // in a checkout: only `CARGO_MANIFEST_DIR` points at it. The repository
+    // this test was built from passes its own table, so a binary that ignored
+    // `CARGO_MANIFEST_DIR` and checked its working directory would exit 0.
+    let outside = Path::new(env!("CARGO_MANIFEST_DIR"));
+    assert!(!outside.starts_with(&workspace.root));
+    let output = workspace.check_layers(outside, Some(&xtask))?;
     assert_fails_on_the_upward_edge(&output, &xtask.join("layers.toml"));
     Ok(())
 }
