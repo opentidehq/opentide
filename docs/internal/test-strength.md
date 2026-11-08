@@ -16,7 +16,7 @@ changing; the parity dashboard says how far each command has come against the Py
 
 | | |
 |---|---|
-| Workflow | [`.github/workflows/coverage.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/coverage.yml), job **Rust coverage gates**, on every pull request and push to `development` |
+| Workflow | [`.github/workflows/coverage.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/coverage.yml), job **Rust coverage gates**, on every pull request and push to `development` and `integration/unified-core` |
 | Policy | [`xtask/coverage.toml`](https://github.com/opentidehq/opentide/blob/development/xtask/coverage.toml) |
 | Check | `cargo xtask coverage gate --report target/coverage.json` |
 | Python | unchanged: 85% (`fail_under` in `pyproject.toml`), ci.yml's `test` job on Python 3.14 |
@@ -119,7 +119,7 @@ cargo mutants -p opentide-analysis --in-diff /tmp/change.diff
 
 The [`parity`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/parity.yml)
 workflow renders it on every pull request and push (job summary) and, on a push to
-`development`, commits it when it changed. The page carries no date or commit, so it changes only
+`development` or `integration/unified-core`, commits it on that branch when it changed. The page carries no date or commit, so it changes only
 when the migration does.
 
 Two things stop the dashboard job, on purpose: a ledger that fails `opentide-compare`'s checks, and

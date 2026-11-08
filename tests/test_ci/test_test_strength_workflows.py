@@ -61,8 +61,11 @@ def test_no_writer_runs_on_a_pull_request() -> None:
 
     parity = _load("parity.yml")
     condition = parity["jobs"]["commit"]["if"]
-    assert condition == "github.event_name == 'push' && github.ref == 'refs/heads/development'"
-    assert _triggers(parity)["push"] == {"branches": ["development"]}
+    assert condition == (
+        "github.event_name == 'push' && (github.ref == 'refs/heads/development' || "
+        "github.ref == 'refs/heads/integration/unified-core')"
+    )
+    assert _triggers(parity)["push"] == {"branches": ["development", "integration/unified-core"]}
 
 
 @pytest.mark.parametrize(("name", "job_id"), sorted(WRITERS))
@@ -81,7 +84,10 @@ def test_the_parity_commit_never_forces_and_changes_one_file() -> None:
     run = "\n".join(str(s.get("run", "")) for s in _load("parity.yml")["jobs"]["commit"]["steps"])
     assert "--force" not in run and " -f " not in run
     assert "git commit --only docs/internal/parity.md" in run
-    assert 'git push origin "HEAD:refs/heads/development"' in run
+    # Back to the branch that was pushed, which the job condition limits to two.
+    assert 'git push origin "HEAD:$BRANCH"' in run
+    env = _load("parity.yml")["jobs"]["commit"]["steps"][-1]["env"]
+    assert env["BRANCH"] == "${{ github.ref }}"
 
 
 @pytest.mark.parametrize("name", NAMES)

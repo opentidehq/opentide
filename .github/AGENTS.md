@@ -79,7 +79,7 @@ when the committed one differs, until UC-1.8 generates it in Rust.
   schedule only a job with `issues: write` (no checkout, no repository code) that opens or updates
   one issue per crate above its threshold.
 - [`parity.yml`](workflows/parity.yml), on every pull request and push: `cargo xtask parity
-  dashboard` into the job summary; on a push to `development` only, a job with `contents: write`
+  dashboard` into the job summary; on a push to `development` or `integration/unified-core` only, a job with `contents: write`
   (no repository code, never forces) commits `docs/internal/parity.md` when it changed.
 
 The nextest profiles CI and agents use are in [`.config/nextest.toml`](../.config/nextest.toml):
