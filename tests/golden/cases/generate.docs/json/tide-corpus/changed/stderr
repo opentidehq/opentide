@@ -1,0 +1,1 @@
+{"detail":"changed-object discovery requires a git repository with at least one commit","event":"docs_changed_requires_git","logger":"opentide.documentation.cli","level":"warning","timestamp":"0000-00-00 00:00:00"}

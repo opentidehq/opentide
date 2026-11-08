@@ -1,0 +1,4 @@
+[?25l<LIVE>[1;31merror: [0mSentinel tenants not configured · detail: You must first have Sentinel tenants configured to 
+initiate the import · advice: run 'opentide setup platforms --sentinel'
+[?25h[1A[2K  [1;31m✗[0m  [1mimport from sentinel[0m [2m<SECONDS>[0m
+[1;31merror:[0m No Sentinel tenants are configured

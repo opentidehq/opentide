@@ -1,0 +1,4 @@
+error: Missing command: choose from start.
+  usage: opentide lsp [OPTIONS] COMMAND [ARGS]...
+  help: run 'opentide lsp --help'
+tip: add --json for machine-readable output

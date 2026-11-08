@@ -1,0 +1,17 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide mcp [OPTIONS] COMMAND [ARGS]...[0m[1m                                                   [0m[1m [0m
+[1m                                                                                                    [0m
+ Run the opentide MCP server for editors and agents                                                 
+                                                                                                    
+ [2mThe server speaks on stdio. The editor owns the process: stop is the host closing stdin, and [0m      
+ [2mreload is the host spawning this command again. There is no reload or stop subcommand.[0m             
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mstart[0m[1;36m [0m Serve MCP on stdio until the host closes stdin                                            [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide mcp start[0m

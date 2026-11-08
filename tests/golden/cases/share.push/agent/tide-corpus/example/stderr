@@ -1,0 +1,2 @@
+error: Unknown sharing target 'misp-prod'. Configured targets: none configured.
+tip: add --json for machine-readable output

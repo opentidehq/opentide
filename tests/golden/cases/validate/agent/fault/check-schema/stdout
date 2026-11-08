@@ -1,0 +1,248 @@
+error[deployment_state_uuid_mismatch]: <WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc'
+  ╰─▶ .opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json
+
+error[deployment_state_shape]: <WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object
+  ╰─▶ .opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json
+
+error[deployment_state_platform]: <WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only crowdstrike, defender_for_endpoint, sentinel_one, sysdig store external ids
+  ╰─▶ .opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json
+
+error[invalid_ref]: Unknown threat reference '00000000-0000-4000-8000-00000000beef'
+   ╭─▶ objects/objectives/elevated-exfiltration-objective-0002.yaml:54:7
+   │
+53 │   threats:
+54 │     - 00000000-0000-4000-8000-00000000beef
+   │       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info threats lists the ones that exist
+
+error[vocab_unknown]: 'Host::Gizmo' is not a signal entities value
+   ╭─▶ objects/objectives/lateral-beacon-objective-0001.yaml:34:11
+   │
+33 │       entities:
+34 │         - Host::Gizmo
+   │           ━━━━━━━━━━━ not in signal.entities::1.0
+   │
+   ╰─ help: did you mean 'Host::File'?
+
+error[invalid_ref]: Unknown threat reference '00000000-0000-4000-8000-00000000beef'
+   ╭─▶ objects/objectives/rapid-tunnel-objective-0003.yaml:77:7
+   │
+76 │   threats:
+77 │     - 00000000-0000-4000-8000-00000000beef
+   │       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info threats lists the ones that exist
+
+error[vocab_unknown]: 'whitish' is not a TLP value
+  ╭─▶ objects/rules/elevated-relay-rule-0034.yaml:9:8
+  │
+8 │   modified: 2025-03-16
+9 │   tlp: whitish
+  │        ━━━━━━━ not in tlp::1.0
+
+error[schema_validation]: missing required field 'name'
+  ╭─▶ objects/rules/encoded-harvest-rule-0032.yaml:1:1
+  │
+1 │ metadata:
+  │ ━━━━━━━━ add 'name' at the top level
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: missing required field 'description'
+  ╭─▶ objects/rules/encoded-pivot-rule-0008.yaml:1:1
+  │
+1 │ name: Encoded Pivot Rule 0008
+  │ ━━━━ add 'description' at the top level
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: metadata.reviewed: Extra inputs are not permitted
+   ╭─▶ objects/rules/encoded-pivot-rule-0009.yaml:14:3
+   │
+13 │     name: Example Detection Team
+14 │   reviewed: 2026-03-01
+   │   ━━━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[yaml_parse]: Could not parse object YAML: '2026-02-30' is not a valid date (day is out of range for month)
+  ╭─▶ objects/rules/encoded-relay-rule-0014.yaml:9:13
+  │
+8 │   modified: 2025-10-17
+9 │   reviewed: 2026-02-30
+  │             ━━━━━━━━━━
+  │
+  ╰─ help: write the date as YYYY-MM-DD, with a month from 01 to 12
+
+error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
+  ╭─▶ objects/rules/encoded-spray-rule-0023.yaml:53:1
+  ├─ note: while parsing a flow sequence that starts at line 52, column 9
+  ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
+
+error[vocab_unknown]: 'clearr' is not a TLP value
+  ╭─▶ objects/rules/encoded-tunnel-rule-0011.yaml:9:8
+  │
+8 │   modified: 2026-02-15
+9 │   tlp: clearr
+  │        ━━━━━━ not in tlp::1.0
+  │
+  ╰─ help: did you mean 'clear'?
+
+error[schema_validation]: missing required field 'description'
+  ╭─▶ objects/rules/hidden-harvest-rule-0026.yaml:1:1
+  │
+1 │ name: Hidden Harvest Rule 0026
+  │ ━━━━ add 'description' at the top level
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[yaml_parse]: Could not parse object YAML: found character that cannot start any token
+   ╭─▶ objects/rules/lateral-injection-rule-0024.yaml:68:1
+   │
+67 │       lookback: "2h"
+68 │    indent: tab
+   │ ━
+   │
+   ├─ note: while scanning for the next token
+   ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
+
+warning[nested_object_file]: objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)
+  ╰─▶ objects/rules/nested/hidden-harvest-rule-0020.yaml
+
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'
+   ╭─▶ objects/rules/persistent-relay-rule-0013.yaml:29:18
+   │
+28 │     2: https://example.org/research/persistent-relay-rule-0013
+29 │ detection_model: 00000000-0000-4000-8000-0000deadbeef
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info objectives lists the ones that exist
+
+error[schema_missing]: missing metadata.schema on object
+  ╭─▶ objects/rules/rapid-downgrade-rule-0007.yaml:3:1
+  │
+3 │ metadata:
+  │ ━━━━━━━━
+
+error[external_id_in_rule]: Vendor rule id key 'rule_id' is not allowed on the sentinel block; external ids live in .opentide/states/deployment/<uuid>.json
+   ╭─▶ objects/rules/rapid-injection-rule-0028.yaml:75:14
+   │
+74 │             column: Computer
+75 │     rule_id: abc-1
+   │              ━━━━━
+   │
+   ╰─ help: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_priority
+   ╭─▶ objects/rules/remote-beacon-rule-0018.yaml:52:3
+   │
+51 │ configurations:
+52 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[config_enum_unknown]: 'Night Shift' is not a configured responder
+   ╭─▶ objects/rules/remote-relay-rule-0017.yaml:34:15
+   │
+33 │   alert_severity: Informational
+34 │   responders: Night Shift
+   │               ━━━━━━━━━━━ not in [[responders]]
+   │
+   ╰─ expected: one of SOC Tier 1, SOC Tier 2, Incident Response
+
+error[yaml_parse]: Could not parse object YAML: did not find expected ',' or ']'
+  ╭─▶ objects/rules/rogue-relay-rule-0035.yaml:59:1
+  ├─ note: while parsing a flow sequence that starts at line 58, column 9
+  ╰─ help: look at the indentation, a missing ':' or an unclosed quote at or just before this position
+
+error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'
+   ╭─▶ objects/rules/silent-dropper-rule-0015.yaml:22:18
+   │
+21 │   - T1547.001
+22 │ detection_model: 00000000-0000-4000-8000-0000deadbeef
+   │                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ no object has this id
+   │
+   ╰─ help: opentide info objectives lists the ones that exist
+
+error[vocab_unknown]: 'ambr' is not a TLP value
+  ╭─▶ objects/rules/silent-dropper-rule-0039.yaml:9:8
+  │
+8 │   modified: 2026-04-03
+9 │   tlp: ambr
+  │        ━━━━ not in tlp::1.0
+  │
+  ╰─ help: did you mean 'amber'?
+
+error[config_enum_unknown]: 'LIVE' is not a configured status
+   ╭─▶ objects/rules/silent-dropper-rule-0039.yaml:40:13
+   │
+39 │     schema: platform::splunk::1.0
+40 │     status: LIVE
+   │             ━━━━ not in [[statuses]]
+   │
+   ╰─ expected: one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
+
+error[schema_validation]: configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys
+   ╭─▶ objects/rules/silent-injection-rule-0198.yaml:35:3
+   │
+34 │ configurations:
+35 │   sysdig:
+   │   ━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[schema_validation]: metadata.reviewed: Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime
+  ╭─▶ objects/rules/staged-harvest-rule-0010.yaml:9:13
+  │
+8 │   modified: 2025-09-08
+9 │   reviewed: yesterday
+  │             ━━━━━━━━━
+  │
+  ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[missing_uuid]: Object YAML has no uuid: staged-implant-rule-0006.yaml
+  ╭─▶ objects/rules/staged-implant-rule-0006.yaml
+  ╰─ help: add metadata.uuid with a fresh UUID v4
+
+error[config_enum_unknown]: 'NOPE' is not a configured status
+   ╭─▶ objects/rules/staged-injection-rule-0019.yaml:51:13
+   │
+50 │     schema: platform::sentinel::1.0
+51 │     status: NOPE
+   │             ━━━━ not in [[statuses]]
+   │
+   ╰─ expected: one of DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED
+
+error[chaining_relation_unknown]: Unknown chaining relation 'sequence::succeds'
+   ╭─▶ objects/threats/elevated-tunnel-threat-0003.yaml:44:17
+   │
+43 │     - vector: 7b8864a9-890e-4e58-8a56-ae78cd82796b
+44 │       relation: sequence::succeds
+   │                 ━━━━━━━━━━━━━━━━━ not a chaining relation
+   │
+   ╰─ help: did you mean 'sequence::succeeds'?
+
+error[yaml_parse]: Could not parse object YAML: expected a mapping at the top of the file, found an empty file
+  ╭─▶ objects/threats/encoded-exfiltration-threat-0030.yaml
+  ╰─ help: fill it in from a template with opentide new, or delete it
+
+error[schema_validation]: threat.impact: must be a YAML list of impact vocabulary names, not a single string
+   ╭─▶ objects/threats/remote-dropper-threat-0001.yaml:21:11
+   │
+20 │   severity: Highly significant incident
+21 │   impact: Data Breach
+   │           ━━━━━━━━━━━
+   │
+   ╰─ help: the template in .opentide/templates/ shows the field and its values
+
+error[vocab_unknown]: 'Big incident' is not a severity value
+   ╭─▶ objects/threats/rogue-downgrade-threat-0002.yaml:22:13
+   │
+21 │     An adversary uses certutil.exe to reach its objective.
+22 │   severity: Big incident
+   │             ━━━━━━━━━━━━ not in severity::1.0
+   │
+   ╰─ help: did you mean 'Substantial incident'?
+

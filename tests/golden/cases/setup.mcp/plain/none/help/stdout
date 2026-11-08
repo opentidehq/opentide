@@ -1,0 +1,19 @@
+                                                                                
+ Usage: opentide setup mcp [OPTIONS] [path]                                     
+                                                                                
+ Write opentide MCP configuration for editors and agents.                       
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path         -C      <str>  Repository path [default: .]                   │
+│ --vscode                      Configure VS Code (.vscode/mcp.json)           │
+│ --cursor                      Configure Cursor (.cursor/mcp.json)            │
+│ --claude-code                 Configure Claude Code (.mcp.json)              │
+│ --generic                     Configure any MCP host (opentide.mcp.json)     │
+│ --plan                        List the files each step would write, and      │
+│                               write nothing                                  │
+│ --yes          -y             Write without asking for confirmation          │
+│ --help                        Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup mcp --vscode --yes

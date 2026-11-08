@@ -1,0 +1,11 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide share targets [OPTIONS][0m[1m                                                           [0m[1m [0m
+[1m                                                                                                    [0m
+ List sharing destinations. The API key is never printed.                                           
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide share targets[0m

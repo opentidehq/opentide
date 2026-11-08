@@ -1,0 +1,18 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide tui [OPTIONS][0m[1m                                                                     [0m[1m [0m
+[1m                                                                                                    [0m
+ Browse the catalogue and its diagnostics in a terminal UI                                          
+                                                                                                    
+ [2mA tree of threats, objectives and rules, each object's YAML and the[0m                                
+ [2mdiagnostics from the last validate run, and coverage by ATT&CK technique.[0m                          
+ [2mRun validate, generate and deploy [0m[1;2;36m-[0m[1;2;36m-dry[0m[1;2;36m-run[0m[2m from the command palette[0m                               
+ [2m(ctrl+p) or their keys. Needs an interactive terminal: it exits 2 under[0m                            
+ [1;2;36m-[0m[1;2;36m-json[0m[2m, in a pipe, in CI or under a coding agent.[0m                                                  
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide tui[0m
+   [1m$ opentide --repo path/to/detections tui[0m

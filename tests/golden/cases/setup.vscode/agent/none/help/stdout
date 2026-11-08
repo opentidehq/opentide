@@ -1,0 +1,25 @@
+                                                                                
+ Usage: opentide setup vscode [OPTIONS] [path]                                  
+                                                                                
+ Recommend the opentide extension and write snippets (deprecated). Default:     
+ both.                                                                          
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --path         -C      <str>  Repository path [default: .]                   │
+│ --settings                    Recommend the opentide extension in            │
+│                               .vscode/extensions.json, and remove opentide's │
+│                               yaml.schemas from .vscode/settings.json        │
+│ --snippets                    Write object template snippets                 │
+│ --no-merge                    Replace extensions.json instead of merging     │
+│ --no-generate                 Do not run opentide generate first             │
+│ --mcp                         Also write .vscode/mcp.json (same as setup mcp │
+│                               --vscode)                                      │
+│ --yes          -y             Accepted for symmetry with other setup         │
+│                               subcommands; this command never prompts        │
+│ --plan                        List the files each step would write, and      │
+│                               write nothing                                  │
+│ --help                        Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide setup vscode --settings

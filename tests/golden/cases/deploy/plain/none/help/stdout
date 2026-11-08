@@ -1,0 +1,96 @@
+                                                                                
+ Usage: opentide deploy [OPTIONS] COMMAND [ARGS]...                             
+                                                                                
+ Deploy rules to platform tenants                                               
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --platform                                   PLATFORM  Detection platform:   │
+│                                                        sentinel, splunk,     │
+│                                                        crowdstrike,          │
+│                                                        defender_for_endpoin… │
+│                                                        sentinel_one,         │
+│                                                        carbon_black_cloud,   │
+│                                                        harfanglab, elastic,  │
+│                                                        sysdig                │
+│ --strategy                                   <str>     Status strategy this  │
+│                                                        run deploys           │
+│                                                        (repeatable).         │
+│                                                        PREVIEW: rules whose  │
+│                                                        status maps to        │
+│                                                        PREVIEW or UNIVERSAL. │
+│                                                        RELEASE: rules whose  │
+│                                                        status maps to        │
+│                                                        RELEASE or UNIVERSAL, │
+│                                                        and disables or       │
+│                                                        deletes those mapping │
+│                                                        to DISABLEMENT or     │
+│                                                        DELETION. Each rule   │
+│                                                        goes to the tenants   │
+│                                                        whose 'strategies'    │
+│                                                        accept the run's      │
+│                                                        strategy. Status      │
+│                                                        names such as STAGING │
+│                                                        or PRODUCTION are not │
+│                                                        strategies            │
+│ --all                                                  Read every rule file, │
+│                                                        not only those the    │
+│                                                        run changed (the pull │
+│                                                        or merge request, the │
+│                                                        push, or outside CI   │
+│                                                        the last commit)      │
+│ --uuid                                       <str>     Read this rule        │
+│                                                        (metadata.uuid)       │
+│                                                        instead of the        │
+│                                                        changed ones          │
+│                                                        (repeatable). Cannot  │
+│                                                        be combined with      │
+│                                                        --all                 │
+│ --file                                       <str>     Read this rule file,  │
+│                                                        matched as by         │
+│                                                        'opentide validate    │
+│                                                        --file', instead of   │
+│                                                        the changed ones      │
+│                                                        (repeatable). Cannot  │
+│                                                        be combined with      │
+│                                                        --all                 │
+│ --wide                                                 Deploy the rule files │
+│                                                        read whatever their   │
+│                                                        status strategy,      │
+│                                                        INERT included        │
+│ --dry-run                                              Print the plan and    │
+│                                                        compile each rule;    │
+│                                                        send nothing          │
+│ --keep-deprecated       --drop-deprecated              Include rules whose   │
+│                                                        status maps to        │
+│                                                        DISABLEMENT or        │
+│                                                        DELETION, so a        │
+│                                                        RELEASE run disables  │
+│                                                        or deletes them.      │
+│                                                        Default: on, off with │
+│                                                        --all                 │
+│ --skip-promotion                                       Skip the status       │
+│                                                        promotion of a        │
+│                                                        RELEASE run on a push │
+│ --skip-unconfigured                                    Exit 0 when every     │
+│                                                        platform with rules   │
+│                                                        to deploy has no      │
+│                                                        [[tenants]] block     │
+│ --persist-state-ext…                                   Allow Defender,       │
+│                                                        SentinelOne and       │
+│                                                        CrowdStrike creates   │
+│                                                        in a CI run other     │
+│                                                        than a RELEASE run on │
+│                                                        a push; this pipeline │
+│                                                        must commit           │
+│                                                        .opentide/states/dep… │
+│                                                        itself                │
+│ --help                                                 Show this message and │
+│                                                        exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ migrate-state  Move vendor ids from rules into deployment state              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide deploy --strategy PREVIEW --all --dry-run
+   $ opentide deploy --strategy RELEASE

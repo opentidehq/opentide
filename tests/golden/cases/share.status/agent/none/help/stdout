@@ -1,0 +1,16 @@
+                                                                                
+ Usage: opentide share status [OPTIONS]                                         
+                                                                                
+ Compare the local ledger with object versions. Does not contact the            
+ destination.                                                                   
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --target        <str>  Destination block name. Repeatable.                   │
+│ --uuid          <str>  Limit to these object UUIDs.                          │
+│ --type          <str>  Limit to threat, objective, or rule.                  │
+│ --file          <str>  Limit to these object files.                          │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide share status

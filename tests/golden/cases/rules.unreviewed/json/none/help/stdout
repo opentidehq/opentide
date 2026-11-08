@@ -1,0 +1,18 @@
+                                                                                
+ Usage: opentide rules unreviewed [OPTIONS]                                     
+                                                                                
+ List rules with no review date, or a review older than the window.             
+                                                                                
+ `rule::1.0` is always listed. `rule::1.1` is listed when `metadata.reviewed`   
+ is absent or strictly earlier than now minus the window. This command does not 
+ modify rules.                                                                  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --older-than        <str>  Positive review window (90d, 12h, 30m). A review  │
+│                            equal to T-W is fresh.                            │
+│                            [default: 90d]                                    │
+│ --help                     Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide rules unreviewed --older-than 90d

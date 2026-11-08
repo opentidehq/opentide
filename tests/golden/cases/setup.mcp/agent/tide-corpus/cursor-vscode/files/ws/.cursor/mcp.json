@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "opentide": {
+      "command": "opentide",
+      "args": [
+        "mcp",
+        "start"
+      ],
+      "env": {
+        "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}

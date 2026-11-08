@@ -1,0 +1,3 @@
+✗ 858 findings in 780 files · 6 errors, 842 warnings, 10 notes
+→ opentide lint --fix · rename 2 files to match their names
+tip: add --json for machine-readable output

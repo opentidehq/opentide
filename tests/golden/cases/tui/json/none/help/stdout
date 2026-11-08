@@ -1,0 +1,18 @@
+                                                                                
+ Usage: opentide tui [OPTIONS]                                                  
+                                                                                
+ Browse the catalogue and its diagnostics in a terminal UI                      
+                                                                                
+ A tree of threats, objectives and rules, each object's YAML and the            
+ diagnostics from the last validate run, and coverage by ATT&CK technique.      
+ Run validate, generate and deploy --dry-run from the command palette           
+ (ctrl+p) or their keys. Needs an interactive terminal: it exits 2 under        
+ --json, in a pipe, in CI or under a coding agent.                              
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide tui
+   $ opentide --repo path/to/detections tui

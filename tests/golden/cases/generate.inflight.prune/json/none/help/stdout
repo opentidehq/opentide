@@ -1,0 +1,11 @@
+                                                                                
+ Usage: opentide generate inflight prune [OPTIONS]                              
+                                                                                
+ Remove inflight shards superseded by committed objects on the default branch.  
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate inflight prune

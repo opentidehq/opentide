@@ -1,0 +1,18 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide doctor [OPTIONS][0m[1m                                                                  [0m[1m [0m
+[1m                                                                                                    [0m
+ Check the installation, the workspace and its integrations                                         
+                                                                                                    
+ [2mEach check prints a status, what it found and, when something needs doing,[0m                         
+ [2mthe command that fixes it. Credentials are reported as set or unset, never[0m                         
+ [2mprinted. Exits 1 when any check fails; warnings alone exit 0.[0m                                      
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-offline[0m          Skip the network checks (PyPI release, proxy reachability)                    [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m             Show this message and exit.                                                   [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide doctor[0m
+   [1m$ opentide doctor --offline[0m
+   [1m$ opentide --json doctor[0m

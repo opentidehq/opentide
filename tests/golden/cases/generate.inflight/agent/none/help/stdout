@@ -1,0 +1,14 @@
+                                                                                
+ Usage: opentide generate inflight [OPTIONS] COMMAND [ARGS]...                  
+                                                                                
+ Inflight preview shard generation and prune                                    
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ prune  Remove inflight shards already on the default branch                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate inflight

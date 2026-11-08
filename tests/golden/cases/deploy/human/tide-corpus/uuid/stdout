@@ -1,0 +1,8 @@
+[1mDeploy plan[0m[1;2m · strategy [0m[1mPREVIEW[0m[1;2m · 1 platform, 0 tenants[0m[1;2m · dry run, nothing is sent[0m
+
+[1msentinel[0m[2m · 0 tenants[0m
+  [1;32m+ create or update[0m  [1mSentinel KQL Rule[0m  [2m…000000000001[0m  [2mstatus STAGING[0m
+
+[1mPlan:[0m 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
+  [1;36mhelp:[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+[2mdry run, nothing sent[0m

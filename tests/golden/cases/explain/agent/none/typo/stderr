@@ -1,0 +1,3 @@
+error: No diagnostic code 'vocab_unknwn'. Run 'opentide explain' to list them.
+  help: did you mean 'vocab_unknown'?
+tip: add --json for machine-readable output

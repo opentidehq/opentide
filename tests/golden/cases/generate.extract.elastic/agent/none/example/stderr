@@ -1,0 +1,3 @@
+✗ import from elastic · <SECONDS>
+error: No tenants configured for Elastic in .opentide/configurations/platforms/elastic.toml
+tip: add --json for machine-readable output

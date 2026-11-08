@@ -1,0 +1,4 @@
+error: opentide tui needs an interactive terminal; this run is in agent mode
+→ opentide info · catalogue counts and platforms
+→ opentide validate · diagnostics for every object
+tip: add --json for machine-readable output

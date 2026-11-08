@@ -1,0 +1,10 @@
+  objects/{threats,objectives,rules}/                your detection catalogue
+  README.md                                          quick start
+  .gitignore                                         files git leaves out
+  .opentide/configurations/platforms/sentinel.toml   platform configuration
+
+✓ Created Detections here
+
+Next steps
+  1  opentide generate · schemas, templates and editor snippets
+  2  opentide validate · check every object before you commit

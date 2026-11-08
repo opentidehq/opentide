@@ -1,0 +1,394 @@
+[1manalysis_engine                    The analysis engine loads: the Rust module compiled into opentide[0m
+                                   [1m(`opentide._native`) behind the `queries` checks of `opentide[0m
+                                   [1mvalidate` and `opentide lint`, `opentide validate query` and[0m
+                                   [1m`opentide lsp`.[0m
+[1mapi_key_literal                    A `sharing.toml` block holds its API key as a literal.[0m
+[1mapi_key_unset                      An enabled sharing target has no API key.[0m
+[1masset_unknown                      A `visibility.toml` log source or detector names an asset that[0m
+                                   [1m`[[assets]]` does not declare.[0m
+[1mcbc_unknown_field                  A field in a Carbon Black Cloud query is one or two letters away[0m
+                                   [1mfrom a Carbon Black process search field, and is not that field.[0m
+[1mchaining_relation_unknown          A threat's chaining relation is not a known relation.[0m
+[1mchanged_diff                       `share push --changed` could not calculate which objects changed.[0m
+[1mchanged_on_pull_request            `share push --changed` does not run on a pull request.[0m
+[1mchanged_outside_ci                 `share push --changed` runs only in CI, where the diff it shares[0m
+                                   [1mis known.[0m
+[1mcommand_failed                     The command failed for a reason no more specific code covers.[0m
+[1mcompile_empty_block                A block the rule needs is present but empty, so the platform[0m
+                                   [1mcannot read a value from it.[0m
+[1mcompile_failed                     The platform's compiler rejected the rule for a reason opentide[0m
+                                   [1mcannot name more precisely.[0m
+[1mcompile_invalid_rule               The rule does not load as a detection rule the platform can[0m
+                                   [1mcompile.[0m
+[1mcompile_invalid_value              A setting in the rule's platform block holds a value the platform[0m
+                                   [1mcannot use.[0m
+[1mcompile_missing_field              A rule's Sentinel block lacks a setting Sentinel needs to build[0m
+                                   [1mthe alert rule.[0m
+[1mconfig_check_failed                opentide could not check this configuration file in the editor;[0m
+                                   [1mthe message says why. Its other findings are missing.[0m
+[1mconfig_enum_unknown                A value is not one of those your deployment configuration[0m
+                                   [1mdeclares.[0m
+[1mconfig_parse                       A configuration file could not be read as TOML.[0m
+[1mconfiguration                      The workspace configuration files under[0m
+                                   [1m`.opentide/configurations/` load.[0m
+[1mcredentials                        Per configured tenant, whether every `$VARIABLE` its setup names[0m
+                                   [1mis set.[0m
+[1mcrowdstrike_unsupported            CrowdStrike queries are not validated; the engine never fakes it.[0m
+[1mcve_lookup_unavailable             A threat lists CVE identifiers, but Vulnerability-Lookup could[0m
+                                   [1mnot be reached to check them.[0m
+[1mdefender_output_columns            A Defender custom detection must return the columns Defender[0m
+                                   [1mrequires.[0m
+[1mdeployment_state_platform          A deployment state shard names a platform that stores no external[0m
+                                   [1mids.[0m
+[1mdeployment_state_shape             A deployment state shard is not the JSON shape opentide writes.[0m
+[1mdeployment_state_uuid_mismatch     A deployment state shard's file name and contents name different[0m
+                                   [1mrules.[0m
+[1mdeprecated_field                   An object uses a field its schema marks as deprecated.[0m
+[1mdoctor_checks_failed               At least one `opentide doctor` check failed.[0m
+[1mduplicate_id                       Two object files carry the same UUID.[0m
+[1mduplicate_name                     Two `sharing.toml` blocks share a name.[0m
+[1mecs_type_mismatch                  The operation cannot apply to the field's type, from ECS or from[0m
+                                   [1mthe columns visibility.toml declares for the index.[0m
+[1mecs_unknown_field                  The field is not in the Elastic Common Schema, on indices that[0m
+                                   [1muse it, nor declared for the index in visibility.toml; ECS allows[0m
+                                   [1mcustom fields.[0m
+[1melastic_dataset_not_declared       The index pattern is not one the workspace declares in[0m
+                                   [1mvisibility.toml.[0m
+[1mengine_unavailable                 The analysis engine (the Rust module compiled into opentide) does[0m
+                                   [1mnot load, so the command cannot check queries or serve the[0m
+                                   [1mlanguage server.[0m
+[1meql_argument_type                  A literal has a type the EQL verifier rejects in this position.[0m
+[1meql_case_sensitive                 The comparison is case-sensitive; the case-insensitive form may[0m
+                                   [1mbe meant.[0m
+[1meql_expression_depth               The expression nests deeper than Elasticsearch accepts.[0m
+[1meql_field_comparison               Both sides of a comparison read fields, which EQL does not[0m
+                                   [1msupport.[0m
+[1meql_function_arity                 An EQL function is called with the wrong number of arguments.[0m
+[1meql_literal_wildcard               A wildcard character is compared literally; use : or like for a[0m
+                                   [1mpattern.[0m
+[1meql_maxspan_lookback               A sequence maxspan is longer than the rule's lookback.[0m
+[1meql_maxspan_missing                A sequence has no maxspan, so partial sequences are held until[0m
+                                   [1mthey expire.[0m
+[1meql_maxspan_unit                   A sequence maxspan uses a unit Elasticsearch does not accept.[0m
+[1meql_maxspan_window                 A sequence maxspan is longer than the rule's interval plus[0m
+                                   [1mlookback, so the rule cannot see whole sequences.[0m
+[1meql_nested_comment                 Elasticsearch nests /* */ comments; the comment ends later than[0m
+                                   [1mit looks.[0m
+[1meql_not_boolean                    A string or number literal is used as a condition.[0m
+[1meql_parse_error                    The EQL query does not parse.[0m
+[1meql_regex                          The regular expression trips a Lucene RegExp pitfall.[0m
+[1meql_runs_ignored                   A decimal runs count is truncated by Elasticsearch.[0m
+[1meql_unknown_function               The EQL function is not in the Elasticsearch function catalog.[0m
+[1meql_unsupported                    Elasticsearch EQL does not support this construct (pipes,[0m
+                                   [1mrelationships, ...).[0m
+[1meql_until_term                     runs or a missing-event term ![ ] is not allowed on until.[0m
+[1mesql_expression_depth              The expression nests deeper than Elasticsearch accepts.[0m
+[1mesql_group_by_column               A suppression group_by field is not a column the ES|QL query[0m
+                                   [1mreturns.[0m
+[1mesql_metadata_id                   A non-aggregating ES|QL rule query has no METADATA _id, so alerts[0m
+                                   [1mcannot be deduplicated.[0m
+[1mesql_parse_error                   The ES|QL query does not parse.[0m
+[1mesql_pattern                       A LIKE or RLIKE pattern escapes or matches differently than it[0m
+                                   [1mreads.[0m
+[1mesql_unavailable                   The command, function or form is missing or in preview on a[0m
+                                   [1mtargeted stack version.[0m
+[1mesql_unknown_command               The ES|QL command is not one Elasticsearch knows.[0m
+[1mesql_unknown_function              The ES|QL function is not in the Elasticsearch function catalog.[0m
+[1mesql_unknown_type                  The ::type cast names a type no Elasticsearch release can cast[0m
+                                   [1mto.[0m
+[1mexternal_id_in_rule                A rule still carries a vendor rule id key, which belongs in[0m
+                                   [1mdeployment state.[0m
+[1mexternal_id_shape                  A vendor rule id in deployment state has the wrong form.[0m
+[1mfalco_append_condition             A tuning's condition is appended to the tuned rule's condition[0m
+                                   [1mand must start with `and` or `or`; a new rule's condition must[0m
+                                   [1mnot.[0m
+[1mfalco_deprecated_field             A field Falco deprecates (`evt.dir`, `evt.latency`): it no longer[0m
+                                   [1mcarries the value it used to.[0m
+[1mfalco_exception                    A rule exception Falco refuses: comparison operators, field and[0m
+                                   [1mvalue counts, or a value the field's type cannot hold.[0m
+[1mfalco_field_argument               A known Falco field is used with an argument it refuses, or[0m
+                                   [1mwithout one it requires (libsinsp's field rules: `proc.aname[N]`[0m
+                                   [1mtakes an index, `evt.arg.NAME` an event argument).[0m
+[1mfalco_field_as_value               A constant value that is a field name: compare with `val(field)`[0m
+                                   [1mto read the field.[0m
+[1mfalco_invalid_regex                The `regex` pattern does not compile.[0m
+[1mfalco_misplaced_list               A list is used where its expansion breaks the condition: as a[0m
+                                   [1mmacro, or as a single value; a list belongs inside a value list,[0m
+                                   [1m`in (name)`.[0m
+[1mfalco_newer_syntax                 Syntax that only recent libsinsp releases parse (operator[0m
+                                   [1mmodifiers, `join`, `concat`, `getopt`, transformer arguments); an[0m
+                                   [1molder Falco or Sysdig agent refuses the rule.[0m
+[1mfalco_no_evttype                   The rule cannot be narrowed to a few event types (`evt.type`), so[0m
+                                   [1mit runs on every event; Falco and Sysdig warn about the[0m
+                                   [1mperformance penalty.[0m
+[1mfalco_operator_type                The operator does not apply to the field's type (libsinsp[0m
+                                   [1m`flt_is_comparable`); Falco refuses to load the rule.[0m
+[1mfalco_output_syntax                The output template does not format: a `%` at the end, a length[0m
+                                   [1mwith no field, or a token that is no field or transformer.[0m
+[1mfalco_parse_error                  The Falco condition does not parse.[0m
+[1mfalco_regex_simple                 A `regex` check a plain operator (`=`, `contains`, `startswith`,[0m
+                                   [1m`endswith`) could make, which libsinsp warns about: regex is the[0m
+                                   [1mslowest check.[0m
+[1mfalco_rhs_field                    A field cannot be compared with another field here (`val(...)` or[0m
+                                   [1ma transformer on the right): not with `pmatch` or `regex`, not on[0m
+                                   [1mnetworks, not on fields that refuse it, and only between fields[0m
+                                   [1mof the same type.[0m
+[1mfalco_transformer                  A field transformer cannot apply here: the field's type, a field[0m
+                                   [1mthat refuses transformers, or the arguments of `join`, `concat`,[0m
+                                   [1mor `getopt`.[0m
+[1mfalco_transformer_as_value         A constant value that looks like a transformer call, compared as[0m
+                                   [1mtext.[0m
+[1mfalco_unknown_event                The event type is not in the driver's event table nor a syscall[0m
+                                   [1mname; libsinsp refuses it.[0m
+[1mfalco_unknown_field                The field is not one Falco or its plugins define for the rule's[0m
+                                   [1mevent source; a plugin the engine does not know may add it.[0m
+[1mfalco_unknown_list                 The name after a list operator, without parentheses, is not a[0m
+                                   [1mlist of the block or of the Falco default rules, so it is[0m
+                                   [1mcompared as a single value.[0m
+[1mfalco_unknown_macro                The name is not a macro of the block or of the Falco default[0m
+                                   [1mrules; the tenant may define it, as Sysdig does for its managed[0m
+                                   [1mmacros.[0m
+[1mfalco_unknown_rule                 A tuning (`append_to_rule`) names a rule the Falco default rules[0m
+                                   [1mdo not define: Falco refuses the append, and on Sysdig the tenant[0m
+                                   [1mmust have that rule.[0m
+[1mfalco_unknown_source               The event source is not one Falco or its published plugins[0m
+                                   [1mdefine, so its fields are not checked.[0m
+[1mfalco_unsafe_na_check              A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns[0m
+                                   [1mabout: the field may hold that text.[0m
+[1mfalco_value_type                   The value cannot be parsed as the field's type (a number, `true`[0m
+                                   [1mor `false`, an IP address or network, a hex string for[0m
+                                   [1m`bcontains`); Falco refuses to load the rule.[0m
+[1mfilename_mismatch                  An object file's name is not the stem `lint.toml`[0m
+                                   [1m`[filenames].style` (or its kind's `[filenames.<kind>].style`)[0m
+                                   [1masks for: `slugify(name)` by default.[0m
+[1mfilename_pattern                   An object file's name does not match the regular expression[0m
+                                   [1m`lint.toml` sets for it.[0m
+[1mfilename_slug                      The file name is not the one lint.toml's [filenames] style[0m
+                                   [1mderives from the object's name.[0m
+[1mgit                                git is on `PATH`.[0m
+[1mgit_repository                     The workspace is in a git repository, and its default branch[0m
+                                   [1m(`origin/HEAD`).[0m
+[1minternal                           opentide stopped on an exception it did not handle: a bug in[0m
+                                   [1mopentide, not in your input.[0m
+[1minterrupted                        The command was stopped before it finished: an `opentide serve`[0m
+                                   [1mclient cancelled the run.[0m
+[1minvalid_cve                        A threat lists CVE identifiers Vulnerability-Lookup does not[0m
+                                   [1mknow.[0m
+[1minvalid_ref                        A reference names an object that does not exist.[0m
+[1minvalid_uuid                       An object's `metadata.uuid` is not a UUID v4.[0m
+[1minvalid_value                      A `sharing.toml` value has the wrong type.[0m
+[1missues_found                       The command ran and failed on what it found.[0m
+[1mkql_control_command_unsupported    A KQL control command (.show, .create, ...) is not a detection[0m
+                                   [1mquery; rules cannot run it.[0m
+[1mkql_deprecated_function            The KQL function is a deprecated alias; Microsoft Learn names its[0m
+                                   [1mreplacement.[0m
+[1mkql_deprecated_operator            The KQL scalar operator is a legacy spelling (containscs); use[0m
+                                   [1mthe current name (contains_cs).[0m
+[1mkql_join_summarize_before_project  join or summarize runs before project, so it carries every[0m
+                                   [1mcolumn.[0m
+[1mkql_parse_error                    The KQL query does not parse.[0m
+[1mkql_render_not_valid               render draws a chart; it has no effect in a detection rule.[0m
+[1mkql_table_not_declared             The table is one the engine knows for the platform, but no log[0m
+                                   [1msource of the workspace declares it in visibility.toml.[0m
+[1mkql_type_mismatch                  The operator cannot apply to the column's documented or declared[0m
+                                   [1mtype.[0m
+[1mkql_unknown_column                 The column is not in the documented schema of the table or ASIM[0m
+                                   [1mparser it comes from, or in the columns visibility.toml declares[0m
+                                   [1mfor the table.[0m
+[1mkql_unknown_function               The KQL function is not in the Kusto function catalog.[0m
+[1mkql_unknown_operator               The KQL tabular operator is not one Kusto knows.[0m
+[1mkql_unknown_table                  The table is neither one the engine knows for the platform nor[0m
+                                   [1mone the workspace declares in visibility.toml: a warning under[0m
+                                   [1mSentinel, whose workspaces hold tables no catalog lists; an error[0m
+                                   [1munder Defender's advanced hunting schema. Declaring it in[0m
+                                   [1mvisibility.toml makes it known.[0m
+[1mkql_unscoped_search                search without a table scans every table in the workspace.[0m
+[1mkql_unscoped_union                 union * or an unscoped union reads every table.[0m
+[1mkql_where_not_first                A filter comes after a more expensive operator; filtering first[0m
+                                   [1mscans fewer rows.[0m
+[1mkql_wildcard_table                 A wildcard table name reads every matching table.[0m
+[1mkuery_escape                       A character needs escaping in Kibana KQL (kuery).[0m
+[1mkuery_free_text                    A value with no field searches every field.[0m
+[1mkuery_looks_like_lucene            The query reads like Lucene; language: lucene may be meant.[0m
+[1mkuery_lucene_syntax                Lucene syntax inside a Kibana KQL (kuery) query.[0m
+[1mkuery_parse_error                  The Kibana KQL (kuery) query does not parse.[0m
+[1mkuery_question_mark                ? is a literal in Kibana KQL (kuery), not a single-character[0m
+                                   [1mwildcard.[0m
+[1mkuery_quoted_wildcard              A wildcard inside quotes is a literal * in Kibana KQL (kuery).[0m
+[1mkuery_range_type                   A range compares a value of the wrong type.[0m
+[1mlookback_long                      The Elastic rule's lookback exceeds an hour; it is added to the[0m
+                                   [1minterval, not the whole window.[0m
+[1mlookback_zero                      The Elastic rule's lookback is zero, so events that arrive late[0m
+                                   [1mare missed.[0m
+[1mlsp_catalog                        opentide can generate the language server's catalog for this[0m
+                                   [1mworkspace, and a committed copy is current.[0m
+[1mlucene_bare_term                   A term with no field searches every field.[0m
+[1mlucene_elasticsearch_only          The syntax works in Elasticsearch but not in Carbon Black Cloud.[0m
+[1mlucene_escape                      A character needs escaping in Lucene.[0m
+[1mlucene_fuzzy                       Elasticsearch accepts only 0, 1, 2 or AUTO as a fuzziness.[0m
+[1mlucene_kuery_syntax                Kibana KQL (kuery) syntax inside a Lucene query.[0m
+[1mlucene_looks_like_kuery            The query reads like Kibana KQL (kuery); language: kuery may be[0m
+                                   [1mmeant.[0m
+[1mlucene_lowercase_operator          Lucene operators are upper case; lowercase and/or/not are search[0m
+                                   [1mterms.[0m
+[1mlucene_mixed_operators             AND and OR mixed without parentheses do not bind as they read.[0m
+[1mlucene_parse_error                 The Lucene query does not parse.[0m
+[1mlucene_range_operator              f:> 10 searches f for the text >; the value must follow the[0m
+                                   [1moperator.[0m
+[1mlucene_regexp                      The /regexp/ body is rejected by, or too costly for, Lucene's[0m
+                                   [1mRegExp.[0m
+[1mlucene_unescaped_slash             An unescaped / starts a regular expression.[0m
+[1mmax_tlp_unknown                    A `sharing.toml` block's `max_tlp` is not a TLP value.[0m
+[1mmcp_config                         An MCP configuration from `opentide setup mcp` runs `opentide mcp[0m
+                                   [1mstart`.[0m
+[1mmetadata_recommended               An object has no `metadata.author` or `metadata.organisation`.[0m
+[1mmissing_author                     The recommended metadata.author field is missing.[0m
+[1mmissing_field                      A configuration file is missing a required key, once it is merged[0m
+                                   [1mwith the bundled file and the parent instance.[0m
+[1mmissing_organisation               The recommended metadata.organisation field is missing.[0m
+[1mmissing_uuid                       An object file has no UUID, so it cannot be indexed.[0m
+[1mname_invalid                       A `sharing.toml` block name is not 1-64 lowercase letters,[0m
+                                   [1mdigits, `-` or `_`.[0m
+[1mname_missing                       An object has no `name`, so lint cannot derive its file name.[0m
+[1mneeds_human_decision               `migrate vocab-scope` left values that only a person can place.[0m
+[1mnested_object_file                 A YAML file sits in a subfolder of an object folder, so it is not[0m
+                                   [1man object and no command reads it.[0m
+[1mno_tenant_reached                  `validate query --live` sent no query, because no configured[0m
+                                   [1mtenant takes the rules.[0m
+[1mnot_a_configuration_file           The file is not one opentide reads as configuration, or it has no[0m
+                                   [1mconfiguration model to check it against.[0m
+[1mnot_implemented                    The command is reserved and does nothing yet.[0m
+[1mnot_run                            The command was skipped, and says why in its message.[0m
+[1mobject_type_unknown                A `sharing.toml` block lists an object type opentide cannot[0m
+                                   [1mshare.[0m
+[1mopentide_latest                    Whether PyPI has a newer opentide release than the one installed.[0m
+[1mopentide_version                   The installed opentide version.[0m
+[1morganisation_uuid_invalid          A `sharing.toml` block's `organisation_uuid` is not a UUID.[0m
+[1morganisation_uuid_mismatch         The organisation configured for a sharing target is not the one[0m
+                                   [1mits API key belongs to.[0m
+[1mpath_exists                        `opentide new` would write a file that already exists, and it[0m
+                                   [1mnever overwrites one.[0m
+[1mpath_not_writable                  `opentide new` could not create the folder or the file it[0m
+                                   [1mscaffolds, because the operating system refused the write: a[0m
+                                   [1mread-only checkout, a folder another user owns, or a full disk.[0m
+[1mplaceholder                        A value still holds the stand-in `opentide new` wrote for a[0m
+                                   [1mrequired field nobody chose yet.[0m
+[1mplatform_not_enabled               A rule has a block for a platform this workspace has not enabled,[0m
+                                   [1mso it will not deploy there.[0m
+[1mplatform_sdk                       Each enabled platform's SDK imports.[0m
+[1mplatforms_enabled                  Which platforms the workspace enables.[0m
+[1mpromotion_target_unknown           `deployment.toml` `[promotion] promotion_target` is not the name[0m
+                                   [1mof a `[[statuses]]` entry.[0m
+[1mproxy                              The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts[0m
+                                   [1ma connection.[0m
+[1mpython_version                     The Python interpreter running opentide.[0m
+[1mquery_check_timeout                `validate query --live` failed because a tenant did not answer a[0m
+                                   [1mquery's check within the check timeout.[0m
+[1mrecommended_field_missing          A field the templates ask for is missing; opentide validate[0m
+                                   [1maccepts the object without it.[0m
+[1mreference_not_found                `--objective` or `--threat` names a UUID that no object in the[0m
+                                   [1mcatalogue carries.[0m
+[1mretired_configuration_file         A file or folder under `.opentide/configurations/` that opentide[0m
+                                   [1mdoes not read.[0m
+[1mretract_unconfirmed                `share retract` would delete a remote event, and was not[0m
+                                   [1mconfirmed.[0m
+[1mrisk_band                          The risk score is outside the band of the rule's severity.[0m
+[1mrule_status_unknown                A `sharing.toml` block lists a rule status your configuration[0m
+                                   [1mdoes not declare.[0m
+[1mschema_missing                     An object has no `metadata.schema`, so no schema can check it.[0m
+[1mschema_validation                  An object does not match the schema its `metadata.schema` names.[0m
+[1mschemas_fresh                      Every JSON schema this opentide version generates exists.[0m
+[1mscope_no_match                     A `--file`, `--uuid` or `--type` selection matched no object, so[0m
+                                   [1mnothing was validated.[0m
+[1mshare_failed                       `share` reached the destination, and every object failed.[0m
+[1mshare_partial                      `share` shared some objects, and others failed.[0m
+[1mshare_unreachable                  `share` could not authenticate to, or reach, any destination.[0m
+[1msharing_config                     `sharing.toml` failed validation, so `share` did not run.[0m
+[1msharing_directory                  A `sharing/` configuration directory exists; sharing is[0m
+                                   [1mconfigured in one `sharing.toml` file.[0m
+[1mspl_command_without_pipe           The query starts with a command name but no |, so Splunk searches[0m
+                                   [1mfor the word instead of running the command.[0m
+[1mspl_dataset_not_declared           The sourcetype is not one the workspace declares in[0m
+                                   [1mvisibility.toml.[0m
+[1mspl_empty_command                  A command with no arguments: Splunk runs it, but it does nothing,[0m
+                                   [1mreturns no results, or fails at run time.[0m
+[1mspl_empty_stage                    A trailing | with no command; Splunk ignores it.[0m
+[1mspl_leading_not                    A base search that starts with NOT scans every event before[0m
+                                   [1mexcluding any.[0m
+[1mspl_parse_error                    The SPL search does not parse.[0m
+[1mspl_search_operator                A search clause compares with an operator search does not have[0m
+                                   [1m(`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the[0m
+                                   [1mcomparison never matches, or `=~`, which compares with a value[0m
+                                   [1mthat starts with `~`.[0m
+[1mspl_subsearch_truncation           A subsearch is silently truncated at its result or time limit.[0m
+[1mspl_unknown_command                The SPL command is not in the Splunk Search Reference or a[0m
+                                   [1mcatalogued app such as MLTK: a warning, since an app on the[0m
+                                   [1msearch head can add commands, or an error when the name is one[0m
+                                   [1medit from a known command.[0m
+[1mspl_unknown_datamodel              The CIM data model or dataset is not one Splunk CIM defines.[0m
+[1mspl_unknown_datamodel_field        The field is not in the CIM data model the search reads.[0m
+[1mspl_wildcard                       A leading or mid-token wildcard in a base search that nothing[0m
+                                   [1melse narrows (no index, sourcetype, source, host, TERM() or[0m
+                                   [1mmacro) cannot use the index and scans every event.[0m
+[1msysdig_definition_duplicate        A name is defined more than once across the block's macros and[0m
+                                   [1mlists.[0m
+[1msysdig_definition_name             A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is[0m
+                                   [1ma Falco operator or keyword.[0m
+[1msysdig_definition_order            A block macro uses itself or a macro defined after it: Falco[0m
+                                   [1mgives a macro no view of itself or later macros, and refuses it[0m
+                                   [1mas an undefined macro.[0m
+[1msysdig_exception_shape             An exception's fields, comps, and values do not have a shape[0m
+                                   [1mFalco's rule loader accepts (`validate_exception_info`).[0m
+[1msysdig_list_in_value               A block list name appears in an exception value where Falco's[0m
+                                   [1mexpansion would not produce a value list.[0m
+[1msysdig_list_self_reference         A block list names itself as one of its items, so its own name[0m
+                                   [1mstays in the expanded condition.[0m
+[1msysdig_priority                    `priority` is not one of Falco's eight priorities (or `INFO`),[0m
+                                   [1mcompared case-insensitively.[0m
+[1msysdig_rule_shape                  A Sysdig block is a new rule with a non-blank `condition`, or a[0m
+                                   [1mtuning (`append_to_rule`) that appends a condition, exceptions,[0m
+                                   [1mor both.[0m
+[1msysdig_source                      `source` is not an event source name (`[a-z][a-z0-9_]*`).[0m
+[1msysdig_tuning_keys                 A tuning (`append_to_rule`) inherits `output`, `priority`,[0m
+                                   [1m`policies`, `source`, and `name` from the rule it tunes, so it[0m
+                                   [1mmust not set them.[0m
+[1mtechnique_not_enterprise           The ATT&CK technique is not in the Enterprise matrix that Elastic[0m
+                                   [1mmaps.[0m
+[1mtemplate_missing                   `opentide new` found no generated template or schema for the[0m
+                                   [1mobject type it was asked for.[0m
+[1mtemplates_fresh                    Every template this opentide version generates exists and matches[0m
+                                   [1mwhat it would write.[0m
+[1mthreshold_lookback                 A threshold rule's lookback exceeds its interval, so windows[0m
+                                   [1moverlap and alerts repeat.[0m
+[1munknown_connector                  `sharing.toml` has a top-level array that names a sharing[0m
+                                   [1mconnector opentide does not have; it was skipped.[0m
+[1munknown_key                        A configuration file has a key opentide does not read, usually a[0m
+                                   [1mmisspelling.[0m
+[1murl_invalid                        A `sharing.toml` block's `url` is not an http(s) URL.[0m
+[1musage_error                        The command line cannot be used as written, for a reason no other[0m
+                                   [1musage code covers.[0m
+[1musage_invalid_choice               An option or argument has a value outside the ones it accepts.[0m
+[1musage_invalid_value                An option has a value that cannot be used, although it is spelled[0m
+                                   [1mcorrectly.[0m
+[1musage_missing_option               A required option or argument is missing.[0m
+[1musage_needs_input                  The command would ask a question, but nobody can answer it.[0m
+[1musage_tui_needs_tty                `opentide tui` ran where it cannot draw: it needs a person at a[0m
+                                   [1mterminal.[0m
+[1musage_unknown_command              The command line names a command that does not exist.[0m
+[1musage_unknown_option               The command line passes an option the command does not take.[0m
+[1musage_watch_needs_tty              `validate --watch` ran where nobody can watch it.[0m
+[1mvocab_unknown                      A value is not in the vocabulary its field uses.[0m
+[1mvscode_settings                    The workspace recommends the opentide VS Code extension[0m
+                                   [1m(`opentidehq.opentide`) in `.vscode/extensions.json`, and[0m
+                                   [1m`.vscode/settings.json` maps no object files to opentide's JSON[0m
+                                   [1mschemas in `yaml.schemas`.[0m
+[1mvscode_snippets                    The editor snippet file `opentide generate snippets` writes[0m
+                                   [1mexists.[0m
+[1mworkspace                          Where the workspace is, and how it was found.[0m
+[1mworkspace_not_found                `opentide new` ran outside a workspace: neither `.opentide/` nor[0m
+                                   [1m`objects/` is there. Or the MCP server was started in an Agent[0m
+                                   [1mPlugin's directory, which is not a workspace, and nothing named[0m
+                                   [1mone.[0m
+[1myaml_parse                         An object file is not valid YAML, or not one mapping, so it could[0m
+                                   [1mnot be loaded.[0m
+[1;32m✓[0m 227 diagnostic codes

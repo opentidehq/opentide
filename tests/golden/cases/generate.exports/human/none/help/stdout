@@ -1,0 +1,16 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide generate exports [OPTIONS] COMMAND [ARGS]...[0m[1m                                      [0m[1m [0m
+[1m                                                                                                    [0m
+ Export catalogue artefacts                                                                         
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m          Show this message and exit.                                                      [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+[2m╭─[0m[2m Commands [0m[2m──────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36mnavigator[0m[1;36m [0m Export the ATT&CK Navigator layer                                                     [2m│[0m
+[2m│[0m [1;36mobjects  [0m[1;36m [0m Export every object as one JSON file                                                  [2m│[0m
+[2m│[0m [1;36mrevisions[0m[1;36m [0m Export the revisions snapshot                                                         [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide generate exports[0m

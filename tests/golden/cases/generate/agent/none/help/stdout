@@ -1,0 +1,25 @@
+                                                                                
+ Usage: opentide generate [OPTIONS] COMMAND [ARGS]...                           
+                                                                                
+ Generate schemas, templates, docs and exports                                  
+                                                                                
+ Run with no argument for the full pipeline, or name one or more phases to run  
+ only those, in the order given: schemas, templates, vocabs, snippets.          
+                                                                                
+ Regenerate editor schemas without paying for documentation: `opentide generate 
+ schemas templates vocabs snippets`.                                            
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ explorer  Write the explorer bundle and search index                         │
+│ docs      Generate markdown documentation for detection objects              │
+│ exports   Export catalogue artefacts                                         │
+│ extract   Import rules from external platforms                               │
+│ inflight  Inflight preview shard generation and prune                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide generate
+   $ opentide generate schemas templates

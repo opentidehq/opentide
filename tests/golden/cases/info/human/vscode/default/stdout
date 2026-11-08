@@ -1,0 +1,11 @@
+  [1;2mversion[0m  0.23.0
+[1;2mplatforms[0m  [2mCarbon Black Cloud[0m               [2mdisabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [2mCrowdStrike Falcon[0m               [2mdisabled[0m[2m · [0m[2mdeploy, query[0m
+           [2mMicrosoft Defender for Endpoint[0m  [2mdisabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [2mElastic Security[0m                 [2mdisabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [2mHarfangLab[0m                       [2mdisabled[0m[2m · [0m[2mdeploy, query[0m
+           [2mMicrosoft Sentinel[0m               [2mdisabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [2mSentinelOne[0m                      [2mdisabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [2mSplunk Enterprise Security[0m       [2mdisabled[0m[2m · [0m[2mdeploy, validate, query[0m
+           [2mSysdig Secure[0m                    [2mdisabled[0m[2m · [0m[2mdeploy[0m
+[1;32m✓[0m 2 rules · 0 threats · 1 objective · 0 load errors

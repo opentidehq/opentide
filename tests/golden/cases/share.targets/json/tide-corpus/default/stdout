@@ -1,0 +1,1 @@
+{"targets":[],"advice":"add a [[misp]] block to .opentide/configurations/sharing.toml (see docs/cli/share.md)","ok":true,"status":"skipped","message":"0 sharing targets","schema_version":1,"command":"share targets","duration_ms":0,"exit_code":0,"summary":{},"next_actions":[],"failure":null}

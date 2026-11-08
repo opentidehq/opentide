@@ -1,0 +1,16 @@
+                                                                                
+ Usage: opentide commands [OPTIONS]                                             
+                                                                                
+ List every command and option, for agents                                      
+                                                                                
+ Each command comes with its arguments, options (types, choices, defaults,      
+ environment variables) and an example. Add --json for the whole tree in one    
+ document.                                                                      
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide commands
+   $ opentide --json commands

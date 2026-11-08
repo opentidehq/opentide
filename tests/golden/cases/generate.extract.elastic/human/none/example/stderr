@@ -1,0 +1,2 @@
+[?25l<LIVE>[?25h[1A[2K  [1;31m✗[0m  [1mimport from elastic[0m [2m<SECONDS>[0m
+[1;31merror:[0m No tenants configured for Elastic in .opentide/configurations/platforms/elastic.toml

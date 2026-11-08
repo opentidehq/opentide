@@ -1,0 +1,5 @@
+{
+  "opentide": "0.23.0",
+  "generator": "opentide.generation.lsp_catalog",
+  "fields": []
+}

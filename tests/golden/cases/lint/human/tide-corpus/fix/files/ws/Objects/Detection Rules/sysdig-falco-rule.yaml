@@ -1,0 +1,34 @@
+name: Sysdig Falco Rule
+
+metadata:
+  uuid: 00000000-0000-4000-8003-0000005d1a90
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: |
+  Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in
+  a container.
+status: STAGING
+severity: Medium
+techniques:
+  - T1059.004
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: Medium
+
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: STAGING
+    condition: >
+      spawned_process and container
+      and proc.name in (corpus_shells)
+    lists:
+      - name: corpus_shells
+        items: [bash, sh, zsh]
+    tags: [container, shell]

@@ -1,0 +1,23 @@
+[1m                                                                                                    [0m
+[1m [0m[1;33mUsage: [0m[1mopentide setup platforms [OPTIONS] [path][0m[1m                                                  [0m[1m [0m
+[1m                                                                                                    [0m
+ Create and enable platform configuration files in `.opentide/configurations/platforms/`.           
+                                                                                                    
+[2m╭─[0m[2m Options [0m[2m───────────────────────────────────────────────────────────────────────────────────────[0m[2m─╮[0m
+[2m│[0m [1;36m-[0m[1;36m-path[0m                   [1;32m-C[0m      [1;2;33m<[0m[1;33mstr[0m[1;2;33m>[0m  Repository path [2m[default: .][0m                             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-sentinel[0m                       [1;33m     [0m  Enable Microsoft Sentinel                                [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-splunk[0m                         [1;33m     [0m  Enable Splunk Enterprise Security                        [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-crowdstrike[0m                    [1;33m     [0m  Enable CrowdStrike Falcon                                [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-defender[0m[1;36m-for-endpoint[0m          [1;33m     [0m  Enable Microsoft Defender for Endpoint                   [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-sentinel[0m[1;36m-one[0m                   [1;33m     [0m  Enable SentinelOne                                       [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-carbon[0m[1;36m-black-cloud[0m             [1;33m     [0m  Enable Carbon Black Cloud                                [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-harfanglab[0m                     [1;33m     [0m  Enable HarfangLab                                        [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-elastic[0m                        [1;33m     [0m  Enable Elastic Security                                  [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-sysdig[0m                         [1;33m     [0m  Enable Sysdig Secure (Falco)                             [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-plan[0m                           [1;33m     [0m  List the files each step would write, and write nothing  [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-yes[0m                    [1;32m-y[0m      [1;33m     [0m  Write without asking for confirmation                    [2m│[0m
+[2m│[0m [1;36m-[0m[1;36m-help[0m                           [1;33m     [0m  Show this message and exit.                              [2m│[0m
+[2m╰──────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+[2m Examples[0m
+   [1m$ opentide setup platforms --sentinel --splunk --yes[0m

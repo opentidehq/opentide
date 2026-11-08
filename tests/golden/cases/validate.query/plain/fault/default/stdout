@@ -1,0 +1,432 @@
+error[ecs_type_mismatch]: `process.pid` is a `long` field in ECS v9.5.0: Elasticsearch rejects the value `abc`, which is not a number, on it
+   ╭─▶ objects/rules/covert-exfiltration-rule-0083.yaml:71:20
+   │
+70 │     query: |
+71 │       process.pid: abc
+   │                    ━━━
+   │
+   ╰─ help: the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference
+
+error[kql_parse_error]: KQL syntax error
+   ╭─▶ objects/rules/covert-tunnel-rule-0088.yaml:62:7
+   │
+61 │     query: |
+62 │       union * | take 1
+   │       ━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[eql_unsupported]: Elasticsearch EQL does not support the `unique` pipe; only `head` and `tail`
+   ╭─▶ objects/rules/elevated-downgrade-rule-0197.yaml:53:28
+   │
+52 │     query: |
+53 │       process where true | unique process.name
+   │                            ━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[spl_unknown_datamodel]: `Endpointz` is not a CIM data model; did you mean `Endpoint`?
+   ╭─▶ objects/rules/elevated-dropper-rule-0066.yaml:54:37
+   │
+53 │     query: |
+54 │       | tstats count from datamodel=Endpointz
+   │                                     ━━━━━━━━━
+   │
+   ╰─ help: try: Endpoint
+
+error[spl_unknown_datamodel_field]: `process_nam` is not a field of the CIM Endpoint.Processes dataset; did you mean `Processes.process_name`?
+   ╭─▶ objects/rules/elevated-injection-rule-0075.yaml:40:59
+   │
+39 │     query: |
+40 │       | tstats count from datamodel=Endpoint.Processes by Processes.process_nam
+   │                                                           ━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: try: Processes.process_name
+
+error[kql_unknown_table]: unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml
+   ╭─▶ objects/rules/elevated-pivot-rule-0038.yaml:59:7
+   │
+58 │     query: |
+59 │       DeviceProcessEvnts
+   │       ━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: did you mean 'DeviceProcessEvents'?
+
+error[kql_parse_error]: KQL syntax error
+   ╭─▶ objects/rules/elevated-relay-rule-0034.yaml:64:21
+   │
+63 │     query: |
+64 │       SecurityEvent | where (
+   │                     ━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[kql_unknown_function]: unknown function 'tolowr'
+   ╭─▶ objects/rules/elevated-relay-rule-0055.yaml:60:20
+   │
+59 │       SecurityEvent
+60 │       | extend x = tolowr(Computer)
+   │                    ━━━━━━
+   │
+   ╰─ help: did you mean 'tolower'?
+
+error[eql_maxspan_unit]: unrecognized time unit [w] in `maxspan`; use one of ms, s, m, h, d
+   ╭─▶ objects/rules/elevated-relay-rule-0107.yaml:54:29
+   │
+53 │     query: |
+54 │       sequence with maxspan=5w [process where true] [file where true]
+   │                             ━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[kuery_parse_error]: Kibana ends an unquoted value at `not ` and rejects the query; quote the value
+   ╭─▶ objects/rules/elevated-tunnel-rule-0053.yaml:40:19
+   │
+39 │     query: |
+40 │       message: cannot run
+   │                   ━━━
+   │
+   ╰─ help: try: "cannot run"
+
+error[falco_misplaced_list]: `corpus_shells_712` is a list, not a macro: use it in a value list, `in (corpus_shells_712)`
+   ╭─▶ objects/rules/encoded-beacon-rule-0124.yaml:67:16
+   │
+66 │     status: IMPROVING
+67 │     condition: corpus_shells_712
+   │                ━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[falco_operator_type]: 'contains' operator not supported for numeric filters (`proc.pid` is a number (INT64))
+   ╭─▶ objects/rules/encoded-downgrade-rule-0063.yaml:57:36
+   │
+56 │     condition: |
+57 │       spawned_process and proc.pid contains 5
+   │                                    ━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[esql_unknown_type]: `foo` is not an ES|QL type Elasticsearch can cast to; use a type such as `keyword`, `long`, `double`, `ip`, or `datetime`
+   ╭─▶ objects/rules/encoded-downgrade-rule-0170.yaml:53:56
+   │
+52 │     query: |
+53 │       FROM logs-* METADATA _id | EVAL x = process.pid::foo
+   │                                                        ━━━
+   │
+   ╰─ help: try: bool
+
+error[spl_parse_error]: SPL syntax error: unexpected 'index'
+   ╭─▶ objects/rules/encoded-dropper-rule-0057.yaml:55:7
+   │
+54 │     query: |
+55 │       index=main | eval x=(
+   │       ━━━━━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+error[kql_parse_error]: KQL syntax error
+   ╭─▶ objects/rules/encoded-loader-rule-0037.yaml:50:7
+   │
+49 │       SecurityEvent
+50 │       | where (
+   │       ━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[kql_unknown_column]: 'EventIDD' is not a column of SecurityEvent
+   ╭─▶ objects/rules/encoded-relay-rule-0052.yaml:50:15
+   │
+49 │       SecurityEvent
+50 │       | where EventIDD == 4688
+   │               ━━━━━━━━
+   │
+   ╰─ help: try: EventID
+
+error[falco_transformer]: can't add field transformer: type 'INT64' is not supported by 'tolower' transformer applied on field 'proc.pid'
+   ╭─▶ objects/rules/hidden-beacon-rule-0090.yaml:51:27
+   │
+50 │     condition: |
+51 │       spawned_process and tolower(proc.pid) = 1
+   │                           ━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[falco_invalid_regex]: invalid regex pattern: error: unclosed group
+   ╭─▶ objects/rules/hidden-relay-rule-0054.yaml:40:43
+   │
+39 │     condition: |
+40 │       spawned_process and proc.name regex '('
+   │                                           ━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[kql_type_mismatch]: `>` is not defined for `ResultType`, a string column; Kusto rejects the query
+   ╭─▶ objects/rules/lateral-dropper-rule-0046.yaml:60:26
+   │
+59 │       SigninLogs
+60 │       | where ResultType > 5
+   │                          ━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[falco_unknown_field]: `proc.nmae` is not a Falco field of the `syscall` source
+   ╭─▶ objects/rules/lateral-dropper-rule-0108.yaml:55:27
+   │
+54 │     condition: |
+55 │       spawned_process and proc.nmae = bash
+   │                           ━━━━━━━━━
+   │
+   ╰─ help: try: proc.name
+
+error[kql_control_command_unsupported]: KQL control command '.show' is not valid in detections
+   ╭─▶ objects/rules/lateral-harvest-rule-0043.yaml:55:7
+   │
+54 │     query: |
+55 │       .show tables
+   │       ━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[eql_unknown_function]: unknown EQL function `startsWth`
+   ╭─▶ objects/rules/lateral-loader-rule-0182.yaml:78:21
+   │
+77 │     query: |
+78 │       process where startsWth(process.name, "a")
+   │                     ━━━━━━━━━
+   │
+   ╰─ help: did you mean 'startsWith'?
+
+error[esql_unknown_function]: unknown ES|QL function `STARTSWITH`
+   ╭─▶ objects/rules/persistent-injection-rule-0155.yaml:60:43
+   │
+59 │     query: |
+60 │       FROM logs-* METADATA _id | EVAL x = STARTSWITH(process.name, "b")
+   │                                           ━━━━━━━━━━
+   │
+   ╰─ help: did you mean 'STARTS_WITH'?
+
+error[eql_function_arity]: `length` takes 1 arguments, found 2
+   ╭─▶ objects/rules/persistent-pivot-rule-0092.yaml:69:21
+   │
+68 │     query: |
+69 │       process where length(process.name, process.pid) > 1
+   │                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[eql_not_boolean]: integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)
+   ╭─▶ objects/rules/rapid-dropper-rule-0137.yaml:82:21
+   │
+81 │     query: |
+82 │       process where 1
+   │                     ━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[falco_unknown_field]: `proc.name` is a field of the `syscall` source, not of `k8s_audit`
+   ╭─▶ objects/rules/rapid-dropper-rule-0216.yaml:56:54
+   │
+55 │           - ksh
+56 │     output: Shell spawned in a container (proc.name=%proc.name)
+   │                                                      ━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[falco_unknown_field]: `container.id` is a field of the `syscall` source, not of `k8s_audit`
+   ╭─▶ objects/rules/rapid-dropper-rule-0216.yaml:64:11
+   │
+63 │         condition: |
+64 │           container.id != host
+   │           ━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[esql_parse_error]: ES|QL syntax error near `|`
+   ╭─▶ objects/rules/rapid-implant-rule-0080.yaml:37:32
+   │
+36 │     query: |
+37 │       FROM logs-* METADATA _id | WHERE (
+   │                                ━━━━━━━━━
+   │
+   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+error[lucene_fuzzy]: Elasticsearch allows an edit distance of 0, 1, or 2, and rejects `~3`; use `~2` or `~AUTO`
+   ╭─▶ objects/rules/rapid-injection-rule-0056.yaml:68:23
+   │
+67 │     query: |
+68 │       process.name:foo~3
+   │                       ━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+error[kql_parse_error]: KQL syntax error
+   ╭─▶ objects/rules/rapid-injection-rule-0097.yaml:75:31
+   │
+74 │     query: |
+75 │       search in (SecurityEvent, *) "error"
+   │                               ━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[falco_unknown_event]: unknown event type opne
+   ╭─▶ objects/rules/remote-beacon-rule-0099.yaml:37:18
+   │
+36 │     condition: |
+37 │       evt.type = opne and proc.name = bash
+   │                  ━━━━
+   │
+   ╰─ help: did you mean 'open'?
+
+error[falco_parse_error]: expected a string value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)
+   ╭─▶ objects/rules/remote-dropper-rule-0072.yaml:58:37
+   │
+57 │     condition: |
+58 │       spawned_process and proc.name =
+   │                                     ━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[falco_value_type]: abc is not a valid number: `proc.pid` is a number (INT64)
+   ╭─▶ objects/rules/remote-spray-rule-0117.yaml:42:38
+   │
+41 │     condition: |
+42 │       spawned_process and proc.pid = abc
+   │                                      ━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[eql_parse_error]: use double quotes ["] for string literals, not single quotes [']
+   ╭─▶ objects/rules/rogue-dropper-rule-0152.yaml:36:37
+   │
+35 │     query: |
+36 │       process where process.name == 'cmd.exe'
+   │                                     ━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[spl_empty_command]: `stats` with no arguments returns no results
+   ╭─▶ objects/rules/rogue-harvest-rule-0048.yaml:50:17
+   │
+49 │     query: |
+50 │       index=a | stats
+   │                 ━━━━━
+   │
+   ╰─ help: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference
+
+error[esql_pattern]: LIKE escapes only `*`, `?`, and `\`; a backslash before `b` fails. Write `\\` for a literal backslash
+   ╭─▶ objects/rules/rogue-implant-rule-0110.yaml:54:58
+   │
+53 │     query: |
+54 │       FROM logs-* METADATA _id | WHERE process.name LIKE "a\\b"
+   │                                                          ━━━━━━
+   │
+   ╰─ help: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql
+
+error[eql_field_comparison]: Elasticsearch EQL cannot compare a field with another field (`==`); one side must be a constant
+   ╭─▶ objects/rules/rogue-injection-rule-0062.yaml:43:21
+   │
+42 │     query: |
+43 │       process where process.pid == process.parent.pid
+   │                     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[spl_command_without_pipe]: the search starts with the command name `stats` but no `|`; Splunk searches for the word `stats` instead of running the command
+   ╭─▶ objects/rules/rogue-loader-rule-0040.yaml:95:7
+   │
+94 │     query: |
+95 │       stats count by host
+   │       ━━━━━
+   │
+   ╰─ help: try: | stats
+
+error[falco_output_syntax]: invalid formatting syntax: formatting cannot end with a % (libsinsp)
+   ╭─▶ objects/rules/rogue-loader-rule-0126.yaml:65:30
+   │
+64 │           - ksh
+65 │     output: Shell %proc.name %
+   │                              ━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[eql_argument_type]: the first argument of `length` must be a string, found integer `1`
+   ╭─▶ objects/rules/scheduled-beacon-rule-0047.yaml:76:28
+   │
+75 │     query: |
+76 │       process where length(1) > 0
+   │                            ━
+   │
+   ╰─ help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql
+
+error[falco_rhs_field]: field 'proc.name' has type 'a string (CHARBUF)' while the right-hand side field 'proc.pid' has incompatible type 'a number (INT64)'
+   ╭─▶ objects/rules/scheduled-exfiltration-rule-0081.yaml:56:39
+   │
+55 │     condition: |
+56 │       spawned_process and proc.name = val(proc.pid)
+   │                                       ━━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[spl_search_operator]: '==' is not a search operator: Splunk accepts it but the comparison never matches; use '='
+   ╭─▶ objects/rules/scheduled-implant-rule-0065.yaml:85:22
+   │
+84 │     query: |
+85 │       index=main host==x
+   │                      ━━
+   │
+   ╰─ help: try: =
+
+error[kql_unknown_operator]: unknown tabular operator 'frobnicate'
+   ╭─▶ objects/rules/scheduled-injection-rule-0061.yaml:58:9
+   │
+57 │       SecurityEvent
+58 │       | frobnicate
+   │         ━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+
+error[esql_unknown_command]: unknown ES|QL command `WEHRE`; Elasticsearch rejects it, and Kibana 9.4 and 9.5 run a non-aggregating rule without it
+   ╭─▶ objects/rules/scheduled-injection-rule-0125.yaml:52:34
+   │
+51 │     query: |
+52 │       FROM logs-* METADATA _id | WEHRE process.name == "x"
+   │                                  ━━━━━
+   │
+   ╰─ help: did you mean 'WHERE'?
+
+error[lucene_parse_error]: Lucene syntax error: missing `)`
+   ╭─▶ objects/rules/scheduled-tunnel-rule-0071.yaml:48:7
+   │
+47 │     query: |
+48 │       name:(a OR b
+   │       ━━━━━━━━━━━━
+   │
+   ╰─ help: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query
+
+error[falco_field_argument]: `proc.name` takes no argument, but `[1]` is given
+   ╭─▶ objects/rules/staged-dropper-rule-0045.yaml:58:27
+   │
+57 │     condition: |
+58 │       spawned_process and proc.name[1] = x
+   │                           ━━━━━━━━━━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[falco_append_condition]: a condition that starts with `and` or `or` only extends another rule's: set `append_to_rule`, or remove the leading operator
+   ╭─▶ objects/rules/staged-implant-rule-0036.yaml:49:7
+   │
+48 │     condition: |
+49 │       and proc.name = x
+   │       ━━━
+   │
+   ╰─ help: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/
+
+error[kql_parse_error]: KQL syntax error
+   ╭─▶ objects/rules/staged-injection-rule-0106.yaml:58:7
+   │
+57 │     query: |
+58 │       union * | take 1
+   │       ━━━━━━━━━━━━━━━━
+   │
+   ╰─ help: the KQL reference: https://learn.microsoft.com/kusto/query/
+

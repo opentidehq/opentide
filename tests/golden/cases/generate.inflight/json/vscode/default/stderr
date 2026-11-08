@@ -1,0 +1,2 @@
+{"detail":"changed-object discovery requires a git repository with at least one commit","event":"inflight_no_git_baseline","logger":"opentide.indexing.inflight","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"event":"inflight_no_local_git_diff_found","logger":"opentide.indexing.inflight","level":"warning","timestamp":"0000-00-00 00:00:00"}

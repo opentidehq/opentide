@@ -1,0 +1,15 @@
+                                                                                
+ Usage: opentide migrate [OPTIONS] COMMAND [ARGS]...                            
+                                                                                
+ Rewrite objects for a newer opentide model                                     
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ vocab-scope  Re-prefix stage-scoped vocabulary values                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide migrate vocab-scope
+   $ opentide migrate vocab-scope --apply

@@ -1,0 +1,3 @@
+error: Environment variable missing · detail: Unset configuration variables: $ELASTIC_API_KEY · advice: Set those environment variables before a live check.
+✗ Elastic Security queries · 1 rule · <SECONDS>
+error: Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables before a live check.

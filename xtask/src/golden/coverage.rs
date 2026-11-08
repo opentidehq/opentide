@@ -10,7 +10,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 /// The proposed budget for everything under `tests/golden/cases/` and `tests/golden/blobs/`.
-pub const BUDGET_BYTES: u64 = 40 * 1024 * 1024;
+pub const BUDGET_BYTES: u64 = 128 * 1024 * 1024;
 
 /// The command paths in the oracle's `opentide --json commands` document.
 pub fn command_paths(commands_json: &[u8]) -> Result<Vec<String>> {

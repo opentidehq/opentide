@@ -1,0 +1,112 @@
+name: Suspicious LSASS Access
+
+metadata:
+  uuid: <UUID-1108>
+  schema: rule::1.1
+  version: 1
+  created: <TODAY>
+  modified: <TODAY>
+  tlp: amber
+  #author: 
+  #contributors:
+    #- 
+  #organisation:
+    #uuid: 
+    #name: 
+  #reviewed: YYYY-MM-DD
+
+description: |  # opentide:placeholder
+  ...
+#status: 
+#severity: 
+#techniques:
+  #- 
+#references:
+  #public:
+    #1: 
+  #internal:
+    #key: 
+  #reports:
+    #- 
+detection_model: 00000000-0000-4000-8002-000000000001
+response:
+  alert_severity: Informational
+  #playbook: 
+  #responders: 
+  #procedure:
+    #analysis: |
+      #...
+    #searches:
+      #- purpose: 
+        #system: 
+        #query: |
+          #...
+    #containment: 
+configurations:
+  # Other platforms: copy a block from .opentide/templates/rule.1.1.template.yaml
+  sentinel:
+    enabled: true
+    #name: 
+    #schema: platform::sentinel::1.0
+    status: DESIGN
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+
+    query: |  # opentide:placeholder
+      ...
+    scheduling:
+      #nrt: false
+      frequency: 1h  # opentide:placeholder
+      lookback: 1h  # opentide:placeholder
+    alert:
+      #title: 
+      #description: |
+        #...
+      #severity: 
+      suppression: false
+      create_incident: true
+      #tactics:
+        #- 
+      #techniques:
+        #- 
+      #custom_details:
+        #- key: 
+          #column: 
+      #dynamic_properties:
+        #- property: 
+          #column: 
+    #exclusions:
+      #- query: |
+          #...
+        #reason: 
+        #tenant: 
+        #let:
+          #key: 
+    #template:
+      #uuid: 
+      #version: 
+    #trigger:
+      #operator: 
+      #threshold: 3
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false
+        #reopen_closed_incidents: false
+        #grouping_lookback: 
+        #matching: 
+        #group_by_entities:
+          #- 
+        #group_by_alert_details:
+          #- 
+        #group_by_custom_details:
+          #- 
+    #entities:
+      #- entity: 
+        #mappings:
+          #- identifier: 
+            #column: 

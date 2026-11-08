@@ -1,0 +1,1 @@
+{"path":"<WS>","files":[".pre-commit-config.yaml",".opentide/hooks/pre-commit"],"skipped":[],"installed":false,"ok":true,"status":"completed","message":"Wrote 2 files","warnings":["Not a Git repository; wrote hook files without installing .git/hooks."],"schema_version":1,"command":"setup hooks","duration_ms":0,"exit_code":0,"summary":{},"next_actions":[],"failure":null}

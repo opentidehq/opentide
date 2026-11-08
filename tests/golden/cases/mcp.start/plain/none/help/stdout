@@ -1,0 +1,11 @@
+                                                                                
+ Usage: opentide mcp start [OPTIONS]                                            
+                                                                                
+ Block on stdio until the host closes stdin. stdout is JSON-RPC only.           
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Examples
+   $ opentide mcp start
