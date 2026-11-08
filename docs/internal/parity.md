@@ -13,21 +13,470 @@ The Python CLI at the frozen tag is the oracle ([plan §5](https://github.com/op
 
 | | |
 |---|---:|
-| Commands | 0 |
+| Commands | 59 |
 | Commands with a Rust implementation | 0 |
 | Commands flipped to Rust | 0 |
-| Recordings (command × corpus × mode) | 0 |
-| … no Rust yet | 0 (n/a) |
-| … compare passing | 0 (n/a) |
-| … compare failing | 0 (n/a) |
-| … compare not run | 0 (n/a) |
-| … flipped | 0 (n/a) |
+| Recordings (command × corpus × mode) | 621 |
+| … no Rust yet | 621 (100.0%) |
+| … compare passing | 0 (0.0%) |
+| … compare failing | 0 (0.0%) |
+| … compare not run | 0 (0.0%) |
+| … flipped | 0 (0.0%) |
 | Approved diffs (`tests/golden/APPROVED_DIFFS.toml`) | 0 |
-| Diagnostic codes with a fault kind | 147 of 170 (86.4%) |
-| … declared unreachable through the CLI | 23 |
+| Diagnostic codes with a fault kind | 163 of 175 (93.1%) |
+| … with no fault kind, evidence recorded | 12 |
 | … with neither (missing) | 0 |
-| Codes outside the scope with a fault kind | 5 |
 
 ## By command
 
-No recordings yet (`tests/golden/`, UC-0.5).
+### `opentide`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide commands`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide deploy`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide deploy migrate-state`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide doctor`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide explain`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate docs`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate docs index`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate docs objectives`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate docs rules`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate docs threats`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate explorer`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate exports`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate exports navigator`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate exports objects`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate exports revisions`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate extract`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate extract defender`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate extract elastic`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate extract sentinel`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate inflight`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide generate inflight prune`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide info`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide lint`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide lsp`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide lsp start`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide mcp`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide mcp start`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide migrate`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide migrate vocab-scope`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide new`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide new objective`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide new rule`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide new threat`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide query`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide rules`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide rules unreviewed`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide serve`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | not recorded | not recorded | not recorded | no Rust yet |
+| vscode | not recorded | not recorded | not recorded | no Rust yet |
+
+### `opentide setup`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup ci`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup env`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup hooks`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup mcp`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup platforms`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup repo`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup skills`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup skills discover`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup skills show`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide setup vscode`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide share`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide share preview`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide share push`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide share retract`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide share status`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide share targets`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide tui`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | not recorded | no Rust yet | no Rust yet |
+
+### `opentide validate`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| empty | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| heavy-small | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+
+### `opentide validate query`
+
+| Corpus | agent | human | json | plain |
+|--------|------|------|------|------|
+| fault | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| none | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| tide-corpus | no Rust yet | no Rust yet | no Rust yet | no Rust yet |
+| vscode | no Rust yet | no Rust yet | no Rust yet | no Rust yet |

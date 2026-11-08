@@ -366,15 +366,27 @@ mod tests {
             &std::fs::read_to_string(corpora.join("faults.toml")).unwrap(),
         )
         .unwrap();
-        let summary = crate::corpus::coverage::report(&codes, &catalogue).summary();
-        let expected = format!(
-            "{} codes in scope, {} with a fault kind, {} unreachable through the CLI, {} missing",
-            coverage.codes.len(),
-            coverage.covered.len(),
-            coverage.unreachable.len(),
-            coverage.missing().len()
+        // Compared field by field with UC-0.6's report, not with its summary
+        // line, whose wording is UC-0.6's to change.
+        let report = crate::corpus::coverage::report(&codes, &catalogue);
+        let in_scope: BTreeSet<&String> = report
+            .groups
+            .iter()
+            .filter(|(_, groups)| !groups.is_empty())
+            .map(|(code, _)| code)
+            .collect();
+        assert_eq!(coverage.codes.iter().collect::<BTreeSet<_>>(), in_scope);
+        let covered: BTreeSet<&String> = in_scope
+            .iter()
+            .copied()
+            .filter(|c| report.kinds.contains_key(*c))
+            .collect();
+        assert_eq!(coverage.covered.iter().collect::<BTreeSet<_>>(), covered);
+        assert_eq!(
+            coverage.missing().into_iter().cloned().collect::<Vec<_>>(),
+            report.missing
         );
-        assert!(summary.contains(&expected), "{summary} / {expected}");
+        assert_eq!(coverage.problems, report.problems);
         assert!(faults("not toml [", "").is_err());
     }
 

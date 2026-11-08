@@ -66,7 +66,8 @@ pub struct FaultCoverage {
     pub codes: BTreeSet<String>,
     /// The codes in scope at least one fault kind produces.
     pub covered: BTreeSet<String>,
-    /// The codes in scope the catalogue declares unreachable through the CLI.
+    /// The codes in scope the catalogue records as having no fault kind, with
+    /// the evidence why (UC-0.6's `[[unreachable]]` entries).
     pub unreachable: BTreeSet<String>,
     /// Codes outside the scope that fault kinds produce (listed, not wrong).
     pub outside: usize,
@@ -256,7 +257,7 @@ pub fn page(inputs: &Inputs) -> String {
             );
             let _ = writeln!(
                 out,
-                "| … declared unreachable through the CLI | {} |",
+                "| … with no fault kind, evidence recorded | {} |",
                 faults.unreachable.len()
             );
             let _ = writeln!(
@@ -357,7 +358,7 @@ pub fn page(inputs: &Inputs) -> String {
         if !missing.is_empty() {
             let _ = write!(
                 out,
-                "\n## Diagnostic codes without a fault kind\n\n{} code(s), neither covered nor declared unreachable: ",
+                "\n## Diagnostic codes without a fault kind\n\n{} code(s), neither covered nor with evidence recorded: ",
                 missing.len()
             );
             let list: Vec<String> = missing.iter().map(|c| format!("`{c}`")).collect();
@@ -462,11 +463,11 @@ mod tests {
         );
         assert!(page.contains("| Corpus | json | plain |\n|--------|------|------|\n| tide_corpus | compare passing | compare failing |"), "{page}");
         assert!(
-            page.contains("1 code(s), neither covered nor declared unreachable: `c`."),
+            page.contains("1 code(s), neither covered nor with evidence recorded: `c`."),
             "{page}"
         );
         assert!(
-            page.contains("| … declared unreachable through the CLI | 1 |"),
+            page.contains("| … with no fault kind, evidence recorded | 1 |"),
             "{page}"
         );
         assert!(
