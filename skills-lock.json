@@ -49,6 +49,12 @@
       "skillPath": "plugins/cicd-automation/skills/github-actions-templates/SKILL.md",
       "computedHash": "93e92fd674dea084628e95f9c48af806f9672ac08f815c84f85adedb55742c59"
     },
+    "golden": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/golden/SKILL.md",
+      "computedHash": "project-local"
+    },
     "lsp-host": {
       "source": "opentidehq/opentide",
       "sourceType": "project",
@@ -101,6 +107,12 @@
       "source": "opentidehq/opentide",
       "sourceType": "project",
       "skillPath": ".agents/skills/ruff/SKILL.md",
+      "computedHash": "project-local"
+    },
+    "rust": {
+      "source": "opentidehq/opentide",
+      "sourceType": "project",
+      "skillPath": ".agents/skills/rust/SKILL.md",
       "computedHash": "project-local"
     },
     "rust-engine": {

@@ -1,6 +1,6 @@
 ---
 name: review-checklist
-description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching platforms/, cli/, sharing/, extraction/ or deployment/.
+description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; behaviour changes without an approved-diffs ledger entry and the other golden and compare rules) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching platforms/, cli/, sharing/, extraction/, deployment/ or the Rust workspace.
 ---
 
 # Review checklist — opentide
@@ -101,11 +101,61 @@ triggers it; drop anything you cannot tie to a trigger.
 - [ ] **Caches have an invalidation story.** The MCP server lives for hours: tools that answer
       "is this valid now?" must not serve the index from start-up.
 
+## Rust (crates/, analysis/, xtask/)
+
+The workspace's lints catch most of these at compile time; review what they cannot see. The loop
+and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../crates/AGENTS.md).
+
+- [ ] **No panic on user input.** `unwrap`, `expect`, indexing (`v[i]`, `&s[a..b]`), `as` casts
+      that narrow, and arithmetic that overflows on a file, an argument, an environment variable or
+      a network answer. Return a diagnostic or a typed error. An `#[expect(clippy::expect_used)]`
+      is right only where the value cannot fail (a catalog compiled in, a regex literal), and its
+      `reason` says why.
+- [ ] **Byte offsets land on char boundaries.** Slicing a `&str` at a byte offset taken from an
+      LSP position, a column or a search panics inside a multi-byte character. Convert through
+      `opentide_core` ([`rust-engine`](../rust-engine/SKILL.md)), and test with `é`, a CJK and a
+      non-BMP character.
+- [ ] **`unsafe` only where allowed**, in `opentide-syntax` or `opentide-wasm`, each block with a
+      `// SAFETY:` comment that states the invariant. Anywhere else, `unsafe` fails review even if
+      the crate's lints were changed to accept it.
+- [ ] **Every suppression names its reason**: `#[expect(lint, reason = "...")]` on the narrowest
+      item, rather than `#[allow]`, and never a crate-wide allow to quiet one site. Growing the
+      workspace allow-list in `Cargo.toml` is a decision of its own, never part of a fix.
+- [ ] **Dependencies point down the layer table.** `cargo xtask check-layers` passes. A new crate
+      is placed in `xtask/layers.toml` in the same change, with its reason. Moving a crate between
+      layers to get green is a design change, not a fix.
+- [ ] **Engines stay I/O-free.** No `std::fs`, environment or network in the engine crates'
+      `src/`; the host passes text in (`scripts/engine/check-io-free.sh`).
+- [ ] **`Cargo.lock` changes only with a dependency change.** CI builds with `--locked`.
+- [ ] **Errors keep their meaning.** A public error is a typed enum mapped to a stable code;
+      `anyhow` stays in binaries. A diagnostic code is a constant in `opentide_core::codes`, never a
+      second string at the call site.
+
+## Goldens and compare (unified core)
+
+The Python CLI at the frozen tag is the oracle; the rules: [`golden`](../golden/SKILL.md).
+
+- [ ] **A behaviour change has a ledger entry.** A Rust port that prints, writes or exits
+      differently from the oracle needs an entry in `tests/golden/APPROVED_DIFFS.toml` with its
+      reason, its issue and its `CHANGELOG.md` entry. Without one, the difference is a bug.
+- [ ] **Goldens are re-recorded, never hand-edited.** Each changed golden has a cause in the same
+      pull request (a new case, a new fixture, a new oracle tag in a PR of its own).
+- [ ] **The comparison is not loosened.** No new normalisation rule without a unit test and a
+      non-deterministic value to justify it; no ledger entry broader than the difference; no stale
+      entry; no skipped, deleted or `#[ignore]`d case.
+- [ ] **No plan §3 invariant moves** in a port: the CLI contract, the command tree, diagnostic
+      codes, cross-repository contracts, MCP, workspace formats, SDK import paths, platforms, the
+      security posture. A change to one is a separate decision with its own changelog entry.
+- [ ] **Secrets never reach a recording**: goldens, cassettes, compare reports and fixtures.
+
 ## Definition of done
 
 1. A regression test that **fails without the fix** (prove it: stash the fix, run the test)
    and passes with it, next to the existing tests for that module.
 2. `scripts/ci-local.sh` green (`--full` before pushing anything that touches `src/` or tests).
+   A Rust change also passes `cargo fmt --all --check`,
+   `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run --workspace`
+   with the pinned toolchain ([`rust`](../rust/SKILL.md)).
 3. No new `# noqa` / `# ty: ignore` without a reason on the same line; new and touched
    functions fully annotated.
 4. User-visible behaviour change → an entry under `## [Unreleased]` in `CHANGELOG.md`, in
