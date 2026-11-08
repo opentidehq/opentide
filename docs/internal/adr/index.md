@@ -48,7 +48,7 @@ Only a maintainer changes a status to Accepted or Superseded.
 3. Add the slug to [`meta.json`](./meta.json) and a row to the index above, in the same pull request.
 4. If the ADR records a plan decision (`D-n`), link it from the plan's Decisions table, in the same pull request or the plan's next status update. If it comes from a work item, the work item's issue and pull request link it, and so does the "to come" table above, until the row moves into the index.
 5. To change an accepted decision, write a new ADR that names the one it supersedes. A maintainer then marks the old one "Superseded by NNNN". Do not rewrite the old one's Decision section.
-6. Run `scripts/validate-docs.sh` and `uv run pytest tests/test_docs -q`. Every relative link must resolve, so do not link a page that is not on the branch yet.
+6. Run `scripts/validate-docs.sh` and `uv run pytest tests/test_docs -q --no-cov`. Every relative link must resolve, so do not link a page that is not on the branch yet.
 
 ### Template
 

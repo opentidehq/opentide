@@ -117,7 +117,7 @@ skill that describes it in the same pull request.
 
 User and reference docs are under [`docs/`](docs/), in four tabs (Usage, CLI, MCP, SDK); the
 authoring guide is [`docs/README.md`](docs/README.md). Run `scripts/validate-docs.sh` and
-`uv run pytest tests/test_docs -q` after changing a page.
+`uv run pytest tests/test_docs -q --no-cov` after changing a page.
 
 ## Licence
 
