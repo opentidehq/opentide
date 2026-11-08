@@ -8,6 +8,11 @@ checked with. The jobs install the file's toolchain, ``rustup toolchain
 install`` with no name; only the fuzz workflow names one, nightly, which
 cargo-fuzz needs and selects with ``cargo +nightly``. The engine's parked
 Release workflow (``.github/engine-workflows/``) is held to the same rule.
+
+An install with no name takes the file's components and targets, and rustup
+silently ignores ``--target`` and ``--component`` on it: a job adds a target
+with ``rustup target add``, which with no toolchain named adds it to the
+pinned release.
 """
 
 from __future__ import annotations
@@ -38,6 +43,8 @@ TOOLCHAIN_ACTIONS = (
 NAMED = {("engine-fuzz.yml", "nightly")}
 # The rustup options that take a value.
 VALUED = {"--target", "--component", "--profile", "-t", "-c"}
+# The options rustup ignores on a `rustup toolchain install` that names no toolchain.
+IGNORED_UNNAMED = re.compile(r"(?:--target|--component)(?:=\S*)?|-[tc]\S*")
 
 
 def _steps(path: Path) -> list[tuple[str, dict[str, Any]]]:
@@ -59,6 +66,21 @@ def _toolchain_names(command: str) -> list[str]:
     ]
 
 
+def _installs(run: str) -> list[str]:
+    """The arguments of each ``rustup toolchain install`` in a step's script."""
+    return [
+        match.group(1).replace("\\\n", " ")
+        for match in re.finditer(r"rustup toolchain install((?:[^\n\\]|\\\n)*)", run)
+    ]
+
+
+def _ignored_options(command: str) -> list[str]:
+    """The options rustup drops from an install with no toolchain name."""
+    if _toolchain_names(command):
+        return []
+    return [arg for arg in command.split() if IGNORED_UNNAMED.fullmatch(arg)]
+
+
 def test_the_pin_is_one_release() -> None:
     toolchain = tomllib.loads((ROOT / "rust-toolchain.toml").read_text(encoding="utf-8"))
     assert re.fullmatch(r"\d+\.\d+\.\d+", toolchain["toolchain"]["channel"])
@@ -76,8 +98,8 @@ def test_every_job_installs_the_pinned_release(path: Path) -> None:
         assert not uses.startswith(TOOLCHAIN_ACTIONS), (path.name, job_id, uses)
         run = str(step.get("run", ""))
         assert not re.search(r"rustup (?:default|override)", run), (path.name, job_id)
-        for match in re.finditer(r"rustup toolchain install((?:[^\n\\]|\\\n)*)", run):
-            for name in _toolchain_names(match.group(1).replace("\\\n", " ")):
+        for command in _installs(run):
+            for name in _toolchain_names(command):
                 assert (path.name, name) in NAMED, (path.name, job_id, name)
         for name in re.findall(r"cargo \+(\S+)", run):
             assert (path.name, name) in NAMED, (path.name, job_id, name)
@@ -93,3 +115,42 @@ def test_a_named_toolchain_is_seen() -> None:
         for name in _toolchain_names(match.group(1))
     ]
     assert found == ["nightly"]
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
+def test_no_install_passes_an_option_rustup_ignores(path: Path) -> None:
+    """``--target`` and ``--component`` on an install with no name install nothing.
+
+    rustup takes the toolchain file's components and targets for it and drops
+    these flags without an error, so a job that relies on them builds with no
+    std for its target; ``rustup target add`` adds one to the pinned release.
+    """
+    for job_id, step in _steps(path):
+        for command in _installs(str(step.get("run", ""))):
+            assert _ignored_options(command) == [], (path.name, job_id, command)
+
+
+@pytest.mark.parametrize(
+    ("run", "ignored"),
+    [
+        (
+            "rustup toolchain install --profile minimal --no-self-update"
+            " --target ${{ matrix.target }}",
+            ["--target"],
+        ),
+        (
+            "rustup toolchain install --no-self-update \\\n"
+            "  --component rustfmt,clippy -t wasm32-wasip1",
+            ["--component", "-t"],
+        ),
+        (
+            "rustup toolchain install --target=wasm32-wasip1 -cclippy",
+            ["--target=wasm32-wasip1", "-cclippy"],
+        ),
+        ("rustup toolchain install --profile minimal --no-self-update", []),
+        ("rustup toolchain install nightly --profile minimal --component rust-src", []),
+    ],
+)
+def test_an_ignored_option_is_seen(run: str, ignored: list[str]) -> None:
+    """The check above reads the flags on an unnamed install, and only there."""
+    assert [arg for command in _installs(run) for arg in _ignored_options(command)] == ignored

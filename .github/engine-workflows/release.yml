@@ -108,9 +108,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
-      # (`rustup toolchain install` with no name), with the targets the job builds.
+      # (`rustup toolchain install` with no name), then the target the job builds:
+      # rustup ignores `--target` on an install with no name, and `rustup target
+      # add` with none adds to the pinned release.
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update --target ${{ matrix.target }}
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add ${{ matrix.target }}
       - name: musl linker
         if: contains(matrix.target, 'musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -153,9 +157,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # The release rust-toolchain.toml pins, which cargo runs in this checkout
-      # (`rustup toolchain install` with no name), with the targets the job builds.
+      # (`rustup toolchain install` with no name), then the targets the job builds
+      # (`rustup target add`, which adds to the pinned release).
       - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update --target wasm32-unknown-unknown,wasm32-wasip1
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add wasm32-unknown-unknown wasm32-wasip1
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
