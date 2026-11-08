@@ -160,8 +160,13 @@ jobs:
           set -o pipefail
           outcomes=()
           for file in shards/*/outcomes.json; do outcomes+=(--outcomes "$file"); done
-          cargo xtask mutants report "${outcomes[@]}" \
-            --baseline xtask/mutants-baseline.toml \
+          # Until the first full run's baseline is committed, there is none
+          # to compare with (docs/internal/test-strength.md).
+          baseline=()
+          if [ -f xtask/mutants-baseline.toml ]; then
+            baseline=(--baseline xtask/mutants-baseline.toml)
+          fi
+          cargo xtask mutants report "${outcomes[@]}" "${baseline[@]}" \
             --issues report/issues \
             --run-url "$RUN_URL" \
             --write-baseline report/mutants-baseline.toml --commit "$COMMIT" \

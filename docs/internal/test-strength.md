@@ -67,7 +67,7 @@ and `opentide-lsp` measured 66.8% instead of 91.8%.
 | Workflow | [`.github/workflows/mutants.yml`](https://github.com/opentidehq/opentide/blob/development/.github/workflows/mutants.yml), Mondays 02:41 UTC and on demand |
 | Policy | [`xtask/mutants.toml`](https://github.com/opentidehq/opentide/blob/development/xtask/mutants.toml) (crates, thresholds) |
 | Settings | [`.cargo/mutants.toml`](https://github.com/opentidehq/opentide/blob/development/.cargo/mutants.toml) |
-| Baseline | [`xtask/mutants-baseline.toml`](https://github.com/opentidehq/opentide/blob/development/xtask/mutants-baseline.toml), generated |
+| Baseline | `xtask/mutants-baseline.toml`, generated from the first full weekly run (not recorded yet, below) |
 | Report | `cargo xtask mutants report --outcomes mutants.out/outcomes.json …` |
 
 [cargo-mutants](https://mutants.rs) replaces a function body or an operator, one mutant at a time,
@@ -82,7 +82,14 @@ crate's score against the baseline in the job summary, and writes a candidate ba
 artifact. On the schedule only, the `issues` job (the one job with a write permission, `issues:
 write`) opens or updates one issue per crate whose survivors exceed `issue_above`, listing them.
 
-To record a new baseline, take `mutants-baseline.toml` from a full run's `mutants-report` artifact
+**No baseline is recorded yet.** A full run of both crates is about 1,900 mutants at roughly 30 s
+each, more than a local session holds; the weekly job's eight shards fit it. A partial local run
+(UC-X.2, cargo-mutants 27.1.0) measured, as an indication only: `opentide-analysis` 138 of 387
+mutants, 80 caught, 24 missed, 34 unviable (76.9%); `opentide-tide` 764 of 1,546, 411 caught,
+292 missed, 61 unviable (58.5%). Until the baseline exists the report shows "none" and every
+survivor is listed.
+
+To record the first or a new baseline, take `mutants-baseline.toml` from a full run's `mutants-report` artifact
 (or run the report locally with `--write-baseline`) and commit it in a reviewed change, lowering
 `issue_above` to the new missed count. Never edit the baseline by hand.
 
