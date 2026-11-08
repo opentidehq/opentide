@@ -35,9 +35,9 @@ those docs do not name.
    review.
 3. **Anything that differs from the oracle is a bug**, unless the difference is recorded in
    `tests/golden/APPROVED_DIFFS.toml` with its reason, its issue and its changelog entry.
-4. **Never loosen the comparison** to get green: no new normalisation rule, no broader ledger
-   entry, no skipped case, no deleted golden. A normalisation rule is reviewed code with unit tests,
-   and covers only what is non-deterministic.
+4. **Never loosen the comparison** to get green: no normalisation rule that hides a deterministic
+   difference, no broader ledger entry, no skipped case, no deleted golden. A normalisation rule
+   covers only a value that is non-deterministic, and is reviewed code with unit tests.
 5. **The plan's invariants (§3) do not move.** If a port seems to need a change to the CLI
    contract, the command tree, a diagnostic code, a cross-repository contract, MCP, a workspace
    format, an SDK import path, the supported platforms or the security posture, stop and raise it

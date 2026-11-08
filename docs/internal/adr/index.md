@@ -37,6 +37,7 @@ Work items will add these ADRs, each taking the number after the highest one in 
 | Proposed | Written and under review. Work may follow it, but the decision can still change |
 | Accepted | A maintainer approved it. To change it, write a new ADR |
 | Superseded by NNNN | A later ADR replaced it. The page stays, with a link to its successor |
+| Not written yet | The number is reserved for a decision whose work item writes the ADR (0001) |
 
 Only a maintainer changes a status to Accepted or Superseded.
 
