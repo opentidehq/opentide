@@ -178,3 +178,31 @@ source = "https://github.com/opentidehq/opentide/actions/runs/42511597394"
 
 [cpu_baseline.median_s]
 lsp_first_diagnostics = 0.178
+
+[[cpu_baseline]]
+engine = "python"
+cpu_model = "AMD EPYC 9V74 80-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42514414249"
+
+[cpu_baseline.median_s]
+validate_clean = 3.266
+validate_warnings = 12.909
+validate_file = 1.724
+lint = 3.769
+lint_file = 0.780
+info = 1.169
+info_catalog = 1.398
+deploy_dry_run = 2.514
+generate_docs = 15.804
+generate_exports_navigator = 1.114
+rules_unreviewed = 0.456
+explain = 0.160
+lsp_first_diagnostics = 1.998
+
+[[cpu_baseline]]
+engine = "rust"
+cpu_model = "AMD EPYC 7763 64-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/42514414249"
+
+[cpu_baseline.median_s]
+lsp_first_diagnostics = 0.165
