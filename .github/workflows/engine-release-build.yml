@@ -311,7 +311,10 @@ jobs:
           set -euo pipefail
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
           export SOURCE_DATE_EPOCH
-          # The version the wheel built from this commit carries.
+          # The version the wheel built from this commit carries. hatch-vcs
+          # reads any tag ending in a version, `engine-v*` too: drop those from
+          # this job's own clone so only opentide's `v*` tags count.
+          git tag --list 'engine-v*' | xargs -r git tag -d >/dev/null
           wheel_version="$(uvx --quiet --from hatch==1.18.2 --with hatch-vcs==0.5.0 hatch version)"
           python3 scripts/engine/sbom.py generate dist --wheel-version "${wheel_version}"
           python3 scripts/engine/sbom.py validate dist/*.cdx.json

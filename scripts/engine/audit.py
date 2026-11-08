@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -81,7 +82,7 @@ def _cell(text: str) -> str:
 
 def _link(advisory: str, url: str) -> str:
     """The advisory id, linked to its page when the URL is a plain https one."""
-    if url.startswith("https://") and not any(c in url for c in " ()[]<>\"'`"):
+    if re.fullmatch(r"https://[A-Za-z0-9._~:/?#%=&+-]+", url):
         return f"[{_cell(advisory)}]({url})"
     return _cell(advisory)
 
@@ -110,14 +111,14 @@ def render(reports: dict[str, dict[str, Any]], run_url: str = "") -> str:
                 f"{_cell(row['version'])} | {_cell(row['fix'])} | {_cell(row['title'])} |"
             )
         lines.append("")
-    if run_url:
-        lines += [f"Run: {run_url}", ""]
     lines.insert(0, f"**{total} advisories.**\n")
     body = "\n".join(lines)
-    if len(body) > BODY_LIMIT:
-        cut = body.rfind("\n", 0, BODY_LIMIT)
+    footer = f"\nRun: {run_url}\n" if run_url else ""
+    limit = BODY_LIMIT - len(footer)
+    if len(body) > limit:
+        cut = body.rfind("\n", 0, limit)
         body = body[:cut] + "\n\n(Cut to fit an issue: the run's summary has every row.)\n"
-    return body
+    return body + footer
 
 
 def main(argv: list[str]) -> int:

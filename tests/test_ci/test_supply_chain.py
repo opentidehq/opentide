@@ -192,8 +192,20 @@ def test_the_audit_reads_deny_tomls_exceptions_and_renders_findings() -> None:
     assert "@octocat" not in body
     assert "![i](" not in body and "[l](" not in body and "`c`" not in body
     assert "javascript:" not in body
+    piped = dict(report)
+    piped["vulnerabilities"] = {
+        "list": [
+            {
+                "advisory": {"id": "Y", "title": "t", "url": "https://x|y\nz"},
+                "package": {"name": "a", "version": "1"},
+            }
+        ]
+    }
+    assert "](https://x|y" not in audit.render({"Cargo.lock": piped})
     long = dict(report)
     long["vulnerabilities"] = {"list": report["vulnerabilities"]["list"] * 2000}
-    assert len(audit.render({"Cargo.lock": long})) <= audit.BODY_LIMIT + 200
+    cut = audit.render({"Cargo.lock": long}, "https://github.com/o/r/actions/runs/1")
+    assert len(cut) <= audit.BODY_LIMIT + 200
+    assert cut.rstrip().endswith("Run: https://github.com/o/r/actions/runs/1")
     with pytest.raises(ValueError):
         audit.findings({"database": {}})
