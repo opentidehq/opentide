@@ -16,6 +16,9 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+/// The directory of the recordings of `opentide` itself (UC-0.5).
+const ROOT_COMMAND: &str = "_root";
+
 /// The recordings under `cases` (`tests/golden/cases`): one [`Cell`] per
 /// command × mode × fixture that holds at least one case directory. Missing
 /// directory: none.
@@ -33,8 +36,15 @@ pub fn goldens(cases: &Path) -> Result<BTreeSet<Cell>> {
             for fixture in dirs(&cases.join(&command).join(&mode))? {
                 let fixture_dir = cases.join(&command).join(&mode).join(&fixture);
                 if !dirs(&fixture_dir)?.is_empty() {
+                    // `_root` holds the recordings of `opentide` with no
+                    // subcommand; its command path is empty.
+                    let path = if command == ROOT_COMMAND {
+                        String::new()
+                    } else {
+                        command.replace('.', " ")
+                    };
                     cells.insert(Cell {
-                        command: command.replace('.', " "),
+                        command: path,
                         mode: mode.clone(),
                         corpus: fixture,
                     });
@@ -224,6 +234,7 @@ mod tests {
             "info.catalog/json/tide_corpus/other",
             "validate/plain/heavy/default",
             "validate/json/empty", // no case: not a recording
+            "_root/plain/none/help",
         ] {
             std::fs::create_dir_all(cases.join(dir)).unwrap();
         }
@@ -237,6 +248,7 @@ mod tests {
         assert_eq!(
             cells,
             [
+                (String::new(), "plain".into(), "none".into()),
                 ("info catalog".into(), "json".into(), "tide_corpus".into()),
                 ("validate".into(), "plain".into(), "heavy".into()),
             ]

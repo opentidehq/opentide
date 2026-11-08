@@ -295,7 +295,11 @@ pub fn page(inputs: &Inputs) -> String {
             .and_then(|d| d.get(*command))
             .copied()
             .unwrap_or(0);
-        let _ = write!(out, "\n### `opentide {command}`\n\n");
+        let _ = write!(
+            out,
+            "\n### `{}`\n\n",
+            format!("opentide {command}").trim_end()
+        );
         if diffs > 0 {
             let _ = writeln!(out, "{diffs} approved diff(s).\n");
         }
@@ -456,6 +460,16 @@ mod tests {
         );
         assert!(page.contains("no fault catalogue yet"), "{page}");
         assert!(page.contains("| … no Rust yet | 0 (n/a) |"), "{page}");
+    }
+
+    #[test]
+    fn the_root_command_is_headed_opentide() {
+        let inputs = Inputs {
+            goldens: [cell("", "plain", "none")].into(),
+            ..Inputs::default()
+        };
+        let page = page(&inputs);
+        assert!(page.contains("\n### `opentide`\n"), "{page}");
     }
 
     #[test]
