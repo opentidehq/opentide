@@ -152,11 +152,15 @@ impl Oracle {
             printed == expected,
             "the oracle prints `{printed}`, not `{expected}`"
         );
+        let host_paths = python_home(&dir)
+            .map(|home| vec![(home, "<PYTHON>".to_owned())])
+            .unwrap_or_default();
         Ok(Engine {
             name: "python".into(),
             bin_dir,
             install_dir: dir,
             env: std::collections::BTreeMap::new(),
+            host_paths,
         })
     }
 
@@ -238,6 +242,19 @@ fn narrow(text: &str, pin: &str, sha: &str) -> Result<String> {
     Ok(out)
 }
 
+/// The installation the virtual environment `venv` links to: the parent of
+/// `home` in its `pyvenv.cfg` (`…/cpython-3.13.14-linux-x86_64-gnu`).
+fn python_home(venv: &Path) -> Option<PathBuf> {
+    let cfg = fs::read_to_string(venv.join("pyvenv.cfg")).ok()?;
+    let home = cfg
+        .lines()
+        .find_map(|line| line.strip_prefix("home").map(str::trim))?
+        .strip_prefix('=')?
+        .trim();
+    let home = Path::new(home);
+    Some(home.parent().unwrap_or(home).to_path_buf())
+}
+
 fn uv(args: &[&str]) -> Result<()> {
     let status = Command::new("uv")
         .args(args)
@@ -304,6 +321,21 @@ requirements = "oracle-requirements.txt"
         assert!(o.check_requirements("other==1\n").is_err());
         let one = format!("opentide==0.23.0 \\\n    --hash=sha256:{SHA}\n");
         o.check_requirements(&one).unwrap();
+    }
+
+    #[test]
+    fn finds_the_python_a_venv_links_to() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("pyvenv.cfg"),
+            "home = /root/.local/share/uv/python/cpython-3.13.14-linux-x86_64-gnu/bin\nversion_info = 3.13.14\n",
+        )
+        .unwrap();
+        assert_eq!(
+            python_home(dir.path()).unwrap(),
+            Path::new("/root/.local/share/uv/python/cpython-3.13.14-linux-x86_64-gnu")
+        );
+        assert!(python_home(&dir.path().join("none")).is_none());
     }
 
     #[test]

@@ -34,6 +34,10 @@ pub struct Engine {
     /// Variables it runs with on top of the case's (`OPENTIDE_ENGINE=rust`
     /// for the candidate of `--engine compare`, UC-0.7).
     pub env: BTreeMap<String, String>,
+    /// Other directories of the host it reads from, with their placeholders:
+    /// the Python a virtual environment links to (`<PYTHON>`), whose standard
+    /// library shows in a traceback.
+    pub host_paths: Vec<(PathBuf, String)>,
 }
 
 /// What every case of a run shares.
@@ -47,6 +51,8 @@ pub struct RunContext {
     pub engine: Engine,
     /// `git --version`'s number on this host.
     pub git_version: Option<String>,
+    /// The kernel release (`uname -r`) on this host.
+    pub kernel_release: Option<String>,
     /// Where case roots are created.
     pub temp_parent: PathBuf,
 }
@@ -88,14 +94,27 @@ pub fn run_case(case: &Case, ctx: &RunContext) -> Result<Recording> {
 
     let mut dates = vec![utc_date(started), utc_date(finished)];
     dates.dedup();
+    let mut paths = vec![
+        (&ws, case::WS),
+        (&home, case::HOME),
+        (&root_path, case::TMP),
+        (&ctx.engine.bin_dir, case::ENGINE_BIN),
+        (&ctx.engine.install_dir, "<ENGINE>"),
+    ];
+    paths.extend(
+        ctx.engine
+            .host_paths
+            .iter()
+            .map(|(p, name)| (p, name.as_str())),
+    );
+    let mut literals = path_literals(&paths);
+    if let Some(release) = &ctx.kernel_release {
+        // The crash handler's `os` fact and its issue link (URL-encoded around
+        // it): `Linux <release> (x86_64)`.
+        literals.push((release.clone(), "<KERNEL>".to_owned()));
+    }
     let volatile = Volatile {
-        literals: path_literals(&[
-            (&ws, case::WS),
-            (&home, case::HOME),
-            (&root_path, case::TMP),
-            (&ctx.engine.bin_dir, case::ENGINE_BIN),
-            (&ctx.engine.install_dir, "<ENGINE>"),
-        ]),
+        literals,
         dates,
         git_version: ctx.git_version.clone(),
     };
@@ -183,9 +202,14 @@ fn execute(case: &Case, ctx: &RunContext, root: &Path) -> Result<(Vec<u8>, Vec<u
     // readers see the end of their streams.
     kill_session(&child);
     let status = status?;
-    let mut outputs = readers
-        .into_iter()
-        .map(|reader| reader.join().unwrap_or_default());
+    let mut outputs = Vec::new();
+    for reader in readers {
+        match reader.join() {
+            Ok(bytes) => outputs.push(bytes),
+            Err(_) => bail!("a stream reader panicked"),
+        }
+    }
+    let mut outputs = outputs.into_iter();
     let stdout = outputs.next().unwrap_or_default();
     let stderr = outputs.next().unwrap_or_default();
     drop(keep_open);
@@ -256,11 +280,14 @@ fn spawn_on_terminals(
     }
     // The input, then the end-of-file character. The input master stays open
     // until the case is over: closing it hangs the terminal up.
-    let mut writer = stdin.master;
-    writer
-        .write_all(input.as_bytes())
-        .context("write the input")?;
-    writer.write_all(b"\x04").context("write end of file")?;
+    // Written on a thread of its own: a program that never reads would block
+    // a long input before the timeout starts.
+    let writer = stdin.master;
+    let mut input_side = writer.try_clone().context("clone the input terminal")?;
+    let bytes: Vec<u8> = input.bytes().chain([0x04]).collect();
+    std::thread::spawn(move || {
+        let _ = input_side.write_all(&bytes);
+    });
     let drain = writer.try_clone().context("clone the input terminal")?;
     std::thread::spawn(move || read_terminal(drain));
     keep_open.push(writer);
@@ -319,6 +346,24 @@ fn kill_session(child: &Child) {
 
 #[cfg(not(unix))]
 fn kill_session(_child: &Child) {}
+
+/// The kernel release of this host (`uname -r`), on Linux.
+pub fn kernel_release() -> Option<String> {
+    let text = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok()?;
+    let release = text.trim();
+    (!release.is_empty()).then(|| release.to_owned())
+}
+
+/// Where case directories go: `/tmp` on Unix whatever `TMPDIR` says, so an
+/// absolute path in an output has the same length on every host (Rich wraps
+/// lines by length); the system's temporary directory elsewhere.
+pub fn temp_parent() -> PathBuf {
+    if cfg!(unix) && Path::new("/tmp").is_dir() {
+        PathBuf::from("/tmp")
+    } else {
+        std::env::temp_dir()
+    }
+}
 
 /// The number in `git --version` (`2.43.0`), when git is on `PATH`.
 pub fn git_version() -> Option<String> {

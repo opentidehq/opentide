@@ -6,6 +6,7 @@ xtask --`): the repository's Rust tooling, as a workspace member that is never p
 | Command | Status |
 |---------|--------|
 | `check-layers [--metadata FILE] [--layers FILE]` | Checks that every dependency between workspace crates (normal, build and dev, on every target) points down the layer table, [`layers.toml`](layers.toml), against `cargo metadata --no-deps` |
+| `corpus generate\|faults\|clean\|codes\|coverage` | The corpora of UC-0.6 (#804): the seeded heavy workspace, the fault catalogue run against the oracle, the code inventory and coverage report ([`tests/corpora/README.md`](../tests/corpora/README.md)) |
 | `codegen` | Not implemented: UC-1.8 (#814) generates schemas, stubs, types and references with it |
 | `golden record [--check-determinism]`, `check`, `diff`, `lock`, `coverage` | Records what the frozen Python CLI (the oracle, `tests/golden/ORACLE`) does for every case of `tests/golden/cases.toml`, and checks an engine against the recordings: [`tests/golden/README.md`](../tests/golden/README.md) |
 | `golden check --engine compare [--report FILE]` | Runs every case whose command has a Rust implementation (`opentide.cli.engines.RUST_COMMANDS`) through this repository's CLI with `OPENTIDE_ENGINE=rust`, and compares it with the recording through `opentide-compare` and `tests/golden/APPROVED_DIFFS.toml`; a stale ledger entry fails it (UC-0.7, #805; CI job `Golden compare`) |
@@ -32,7 +33,11 @@ moving a crate between layers is a design decision for the maintainer, not a fix
 ## Invariants
 
 - The library (`src/lib.rs`, `src/layers.rs`) computes; `src/main.rs` reads files, runs cargo and
-  prints. Tests drive the library with synthetic metadata, no workspace needed.
+  prints. `src/corpus/` follows the same split inside its module: `generate`, `yaml`, `rng`,
+  `workspace`, `faults` and `coverage` compute; `corpus/cli.rs` writes workspaces, runs the oracle
+  and prints (main.rs only dispatches to it).
+- The corpus generator's output is a function of its options alone (own PRNG and YAML emitter, no
+  clock, environment or file); `tests/corpus_generate.rs` records its digests. Tests drive the library with synthetic metadata, no workspace needed.
 - `golden` is its own module, `src/golden/`, a library the comparator (UC-0.7) reuses: the case
   model (`case.rs`), fixtures (`fixture.rs`), the oracle's install (`oracle.rs`), the runner
   (`run.rs`, `pty.rs`), the normaliser (in `crates/opentide-compare/src/normalise.rs`, re-exported
@@ -65,6 +70,10 @@ cargo xtask check-layers
   the blob store's SHA-256 against FIPS 180-4 vectors, the requirements pin, the coverage report.
 - `tests/cmd/golden.trycmd`: `xtask golden`'s usage errors. Running the cases needs uv and the
   oracle: `cargo xtask golden check --engine python` (CI: `.github/workflows/golden.yml`).
+- `tests/corpus_generate.rs`: the generator's recorded digests, counts, coverage of platforms and
+  features, layouts, slug file names, no literal secret. `src/corpus/*` unit tests: the YAML
+  emitter, the PRNG's reference values, the catalogue's parser, selectors, operations and verdicts.
+  The oracle runs only in `cargo xtask corpus faults --check` (the `Corpus` workflow).
 - `tests/lint_policy.rs`: every member inherits `[workspace.lints]`, except the crates allowed
   `unsafe` (`UNSAFE_CRATES`), whose copies must equal the workspace table with
   `unsafe_code = "deny"`.
@@ -76,7 +85,7 @@ cargo xtask check-layers
 
 ## Work items that change this crate
 
-UC-0.4 (#802) check-layers; UC-1.8 (#814) codegen; UC-0.5 (#803) golden; UC-0.7 (#805) the
-comparator over `golden`; UC-0.8 (#806) bench;
+UC-0.4 (#802) check-layers; UC-0.6 (#804) corpus; UC-1.8 (#814) codegen; UC-0.5 (#803) golden;
+UC-0.7 (#805) the comparator over `golden`; UC-0.8 (#806) bench;
 UC-1.6 (#812) the `sync_vocabularies --check` equivalent; UC-0.3 (#801) wires the checks into one
 CI. Lints and tests: [`crates/AGENTS.md`](../crates/AGENTS.md).

@@ -142,7 +142,8 @@ fn walk(dir: &Path, prefix: &str, map: &mut BTreeMap<String, Entry>) -> Result<(
                 },
             );
             walk(&path, &rel, map)?;
-        } else {
+        } else if meta.is_file() {
+            // Sockets and FIFOs are not listed: reading one could block.
             let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
             map.insert(
                 rel,

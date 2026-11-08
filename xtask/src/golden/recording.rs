@@ -96,8 +96,19 @@ impl Recording {
     ) -> Recording {
         let stdout = normaliser.bytes(stdout);
         let stderr = normaliser.bytes(stderr);
-        let mut files: Vec<FileRecord> = changes
-            .iter()
+        // Fresh UUIDs are numbered by first appearance, so the changes are
+        // visited in an order that does not depend on them: by path, then
+        // bytes, with every fresh UUID masked (an inflight shard is named by
+        // its object's UUID).
+        let mut ordered: Vec<&Change> = changes.iter().collect();
+        ordered.sort_by_cached_key(|change| {
+            (
+                normaliser.mask_fresh(&change.path),
+                normaliser.mask_fresh(&String::from_utf8_lossy(&change.entry.bytes)),
+            )
+        });
+        let mut files: Vec<FileRecord> = ordered
+            .into_iter()
             .map(|change| {
                 let entry = &change.entry;
                 let path = normaliser.text(&change.path);
@@ -295,18 +306,44 @@ pub fn unified(expected: &str, got: &str) -> String {
         .to_string()
 }
 
-/// The stored path of a recorded file path: each component that starts with
-/// `.git` or `~` gets a `~` before it.
+/// The stored path of a recorded file path, safe to commit and to check out
+/// on every platform:
+///
+/// - `%` and the characters Windows forbids in a name (`<>:"|?*\\` and
+///   control characters) become `%XX`: a normalised name such as
+///   `crash-<TIMESTAMP>-<PID>.log` holds `<` and `>`;
+/// - a component that starts with `.git` or `~`, or is a name Windows
+///   reserves (`CON`, `NUL`, `COM1`, … with any extension), or ends in `.` or
+///   a space, gets a `~` before it, so a recorded `.gitignore` or `.git/`
+///   cannot change what git does with the recordings themselves.
 pub fn escape(path: &str) -> PathBuf {
-    path.split('/')
-        .map(|part| {
-            if part.starts_with(".git") || part.starts_with('~') {
-                format!("~{part}")
-            } else {
-                part.to_owned()
-            }
-        })
-        .collect()
+    path.split('/').map(escape_part).collect()
+}
+
+fn escape_part(part: &str) -> String {
+    let mut out = String::with_capacity(part.len());
+    for c in part.chars() {
+        if matches!(c, '%' | '<' | '>' | ':' | '"' | '|' | '?' | '*' | '\\') || c.is_ascii_control()
+        {
+            out.push_str(&format!("%{:02X}", u32::from(c)));
+        } else {
+            out.push(c);
+        }
+    }
+    let stem = out.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.len() == 4
+            && stem.as_bytes()[3].is_ascii_digit());
+    if out.starts_with(".git")
+        || out.starts_with('~')
+        || reserved
+        || out.ends_with('.')
+        || out.ends_with(' ')
+    {
+        out.insert(0, '~');
+    }
+    out
 }
 
 fn write(path: &Path, bytes: &[u8]) -> Result<()> {
@@ -504,6 +541,70 @@ mod tests {
             diff.contains("-ok <WS>") && diff.contains("+ok elsewhere"),
             "{diff}"
         );
+    }
+
+    #[test]
+    fn fresh_uuid_numbers_do_not_depend_on_the_minted_values() {
+        use crate::golden::case::Rule;
+        // Two shards named by fresh UUIDs, one per object; which UUID sorts
+        // first is chance. The recording must not depend on it.
+        let shard = |uuid: &str, name: &str| Change {
+            path: format!("ws/.opentide/inflight/{uuid}.json"),
+            change: ChangeKind::Created,
+            entry: Entry {
+                kind: Kind::File,
+                mode: 0o644,
+                bytes: format!("{{\"uuid\": \"{uuid}\", \"name\": \"{name}\"}}\n").into_bytes(),
+            },
+        };
+        let record = |a: &str, b: &str| {
+            let mut n = Normaliser::new(&Volatile::default(), &[Rule::FreshUuids], []);
+            Recording::new(
+                case(),
+                b"",
+                b"",
+                0,
+                &[shard(a, "alpha"), shard(b, "beta")],
+                &mut n,
+            )
+        };
+        let low = "11111111-1111-4111-8111-111111111111";
+        let high = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+        let first = record(low, high);
+        let second = record(high, low);
+        assert_eq!(first, second);
+        assert_eq!(
+            first.files[0].contents.as_deref(),
+            Some(&b"{\"uuid\": \"<UUID-1>\", \"name\": \"alpha\"}\n"[..])
+        );
+    }
+
+    #[test]
+    fn stored_paths_are_portable() {
+        assert_eq!(
+            escape("home/.local/state/opentide/crash-<TIMESTAMP>-<PID>.log"),
+            PathBuf::from("home/.local/state/opentide/crash-%3CTIMESTAMP%3E-%3CPID%3E.log")
+        );
+        assert_eq!(
+            escape("ws/.opentide/inflight/<UUID-1>.json"),
+            PathBuf::from("ws/.opentide/inflight/%3CUUID-1%3E.json")
+        );
+        assert_eq!(escape("ws/a%3C"), PathBuf::from("ws/a%253C"));
+        assert_eq!(
+            escape("ws/nul.txt/COM1/con"),
+            PathBuf::from("ws/~nul.txt/~COM1/~con")
+        );
+        assert_eq!(
+            escape("ws/COM10/console/x."),
+            PathBuf::from("ws/COM10/console/~x.")
+        );
+        for path in ["a/b:c", "x|y?z*", "q\"r\\s"] {
+            let stored = escape(path).to_string_lossy().into_owned();
+            assert!(
+                !stored.contains(['<', '>', ':', '"', '|', '?', '*', '\\']),
+                "{stored}"
+            );
+        }
     }
 
     #[test]

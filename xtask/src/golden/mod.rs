@@ -63,6 +63,7 @@ commands:
                OPENTIDE_ENGINE=rust against the recordings, through the comparator
                and tests/golden/APPROVED_DIFFS.toml, for every case whose command
                has a Rust implementation (UC-0.7); rust comes with UC-3
+               and cannot start until then (exit status 2)
 --report FILE  with --engine compare: write the JSON report (opentide-compare's RunReport)
 
 exit status: 0 passed, 1 a difference or a failed case, 2 usage error or the run could not start
@@ -221,12 +222,8 @@ impl Command {
         }
         let engine = match self.engine.as_str() {
             "python" => oracle.provision(&layout.golden, &oracle::cache_dir(&layout.target))?,
-            "rust" => {
-                eprintln!(
-                    "xtask golden: --engine rust is not implemented yet; the Rust CLI arrives with UC-3"
-                );
-                return Ok(false);
-            }
+            // The run cannot start: exit status 2, as the usage says.
+            "rust" => bail!("--engine rust is not implemented yet; the Rust CLI arrives with UC-3"),
             "compare" if self.verb == Verb::Record => {
                 bail!("golden record records the oracle: --engine compare is for check and diff")
             }
@@ -241,7 +238,8 @@ impl Command {
             fixtures,
             engine,
             git_version: run::git_version(),
-            temp_parent: std::env::temp_dir(),
+            kernel_release: run::kernel_release(),
+            temp_parent: run::temp_parent(),
         };
         // Files the cases create get the same permissions on every host.
         #[cfg(unix)]
@@ -308,7 +306,20 @@ impl Command {
         }
         let cases_dir = layout.cases();
         for recording in first.iter().flatten() {
-            recording.write(&cases_dir.join(&recording.case.id), &layout.blobs())?;
+            let dir = cases_dir.join(&recording.case.id);
+            // Case ids are checked parts (case.rs), so this never leaves cases/.
+            anyhow::ensure!(
+                dir.starts_with(&cases_dir)
+                    && !recording
+                        .case
+                        .id
+                        .split('/')
+                        .any(|p| p == ".." || p.is_empty()),
+                "case id `{}` would write outside {}",
+                recording.case.id,
+                cases_dir.display()
+            );
+            recording.write(&dir, &layout.blobs())?;
         }
         if self.filter.is_none() {
             let wanted: BTreeSet<&str> = all.iter().map(|c| c.id.as_str()).collect();
@@ -367,7 +378,17 @@ impl Command {
                 );
                 continue;
             }
-            let recorded = Recording::read(&dir, &layout.blobs())?;
+            let recorded = match Recording::read(&dir, &layout.blobs()) {
+                Ok(recorded) => recorded,
+                Err(error) => {
+                    failed += 1;
+                    eprintln!(
+                        "{}: the recording cannot be read: {error:#}",
+                        actual.case.id
+                    );
+                    continue;
+                }
+            };
             let differences = recorded.differences(actual);
             if !differences.is_empty() {
                 failed += 1;
@@ -468,7 +489,16 @@ fn select(all: &[Case], filter: Option<&str>) -> Result<Vec<Case>> {
     let pattern = glob::Pattern::new(filter).with_context(|| format!("--filter `{filter}`"))?;
     let selected: Vec<Case> = all
         .iter()
-        .filter(|c| pattern.matches(&c.id))
+        // `*` stays within one part of the id: `*/json/*/*` is every json case.
+        .filter(|c| {
+            pattern.matches_with(
+                &c.id,
+                glob::MatchOptions {
+                    require_literal_separator: true,
+                    ..glob::MatchOptions::new()
+                },
+            )
+        })
         .cloned()
         .collect();
     if selected.is_empty() {
@@ -496,9 +526,9 @@ pub fn run_all(
                     let i = next.fetch_add(1, Ordering::SeqCst);
                     let Some(case) = cases.get(i) else { break };
                     let result = run::run_case(case, ctx);
-                    if let Ok(mut slots) = results.lock() {
-                        slots[i] = Some(result);
-                    }
+                    results
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)[i] = Some(result);
                     let n = done.fetch_add(1, Ordering::SeqCst) + 1;
                     if n % 100 == 0 || n == cases.len() {
                         eprintln!(
@@ -513,7 +543,7 @@ pub fn run_all(
     });
     results
         .into_inner()
-        .unwrap_or_default()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .into_iter()
         .map(|slot| slot.unwrap_or_else(|| Err(anyhow::anyhow!("the case did not run"))))
         .collect()
@@ -671,7 +701,10 @@ mod tests {
         )
         .unwrap();
         let all = spec.expand().unwrap();
-        assert_eq!(select(&all, Some("*/json/*")).unwrap().len(), 1);
+        assert_eq!(select(&all, Some("*/json/*/*")).unwrap().len(), 1);
+        // `*` does not cross a `/`.
+        assert!(select(&all, Some("*/json/*")).is_err());
+        assert_eq!(select(&all, Some("validate/*/none/a")).unwrap().len(), 2);
         assert_eq!(select(&all, None).unwrap().len(), 2);
         assert!(select(&all, Some("lint/*")).is_err());
     }

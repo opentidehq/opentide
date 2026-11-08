@@ -26,9 +26,12 @@ on:
     paths:
       - "tests/golden/**"
       - "tests/fixtures/tide_corpus/**"
+      - "tests/corpora/**"
       - "xtask/**"
       - "crates/opentide-compare/**"
       - "src/opentide/cli/engines.py"
+      - ".cargo/**"
+      - ".gitattributes"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"

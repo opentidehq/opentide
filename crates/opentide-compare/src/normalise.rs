@@ -13,13 +13,16 @@
 //!    case's directories and the engine's installation, longest first.
 //! 3. **Crash logs** (`crash-<TIMESTAMP>-<PID>.log`): the name the crash
 //!    handler gives its log.
-//! 4. **Timestamps** (`<TIMESTAMP>`): ISO 8601 date-times on the dates the
-//!    case ran.
+//! 4. **Timestamps**: ISO 8601 date-times on the dates the case ran, and the
+//!    clock time that starts a log line (`18:22:33 debug: …`), get every digit
+//!    replaced by `0`, so the format (separators, fraction width, offset
+//!    style) is still compared.
 //! 5. **Today** (`<TODAY>`): the dates the case ran, `YYYY-MM-DD`.
 //! 6. **Durations**: the values of the JSON keys `duration_ms`, `elapsed_ms`,
 //!    `wall_ms` and `seconds` (every one a wall time in opentide's output)
-//!    become `0`, so a JSON document stays JSON; `1.3s` and `2m05s` in text
-//!    become `<SECONDS>`.
+//!    become `0`, or `0.0` for a float, so the document keeps its types;
+//!    `1.3s` and `2m05s` in text become `<SECONDS>`, with any run of spaces
+//!    on either side made one (a table column pads to its widest value).
 //! 7. **Hyperlink ids** (`id=<ID>`): Rich numbers terminal hyperlinks
 //!    (`ESC]8;id=…;url`) at random.
 //! 8. **Host tool versions** (`git <GIT_VERSION>`): `opentide doctor` prints
@@ -76,26 +79,47 @@ struct FreshUuids {
     seen: HashMap<String, usize>,
 }
 
+/// Compiles a pattern once. Every pattern is a literal of this module (or
+/// built from escaped dates), compiled by the unit tests: it cannot fail.
+#[expect(
+    clippy::expect_used,
+    reason = "literal patterns, compiled by every unit test"
+)]
+fn compiled(cell: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
+    cell.get_or_init(|| Regex::new(pattern).expect("a valid pattern"))
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "escaped dates in a fixed pattern, compiled by the unit tests"
+)]
+fn compile(pattern: &str) -> Regex {
+    Regex::new(pattern).expect("a valid pattern")
+}
+
 macro_rules! regex {
     ($name:ident, $pattern:expr) => {
-        // A literal pattern, compiled by every unit test below: it cannot fail.
         fn $name() -> &'static Regex {
             static CELL: OnceLock<Regex> = OnceLock::new();
-            CELL.get_or_init(|| Regex::new($pattern).expect("valid regex"))
+            compiled(&CELL, $pattern)
         }
     };
 }
 
 regex!(position_cursor, r"\r\x1b\[2K((?:\x1b\[1A\x1b\[2K)*)");
 regex!(transient_erase, r"^\r((?:\x1b\[1A\x1b\[2K)+)");
+regex!(
+    log_clock,
+    r"(?m)^((?:\x1b\[[0-9;]*m)*)(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)((?:\x1b\[[0-9;]*m)* (?:\x1b\[[0-9;]*m)*(?:debug|info|warning|error|critical)\b)"
+);
 regex!(crash_log, r"crash-\d{8}T\d{6}\d*Z-\d+\.log");
 regex!(
     duration_ms,
-    r#"("(?:duration_ms|elapsed_ms|wall_ms|seconds)"\s*:\s*)\d+(?:\.\d+)?"#
+    r#"("(?:duration_ms|elapsed_ms|wall_ms|seconds)"\s*:\s*)\d+(\.\d+)?"#
 );
 regex!(
     seconds,
-    r"(^|[^\w.]|\x1b\[[0-9;]*m)(?:\d+\.\ds|\d+m\d\ds)\b"
+    r"(^|[^ \w.]|[\w.] )( *)((?:\x1b\[[0-9;]*m)*)( *)(?:\d+\.\ds|\d+m\d\ds)\b((?:\x1b\[[0-9;]*m)*)( *)"
 );
 regex!(osc8_id, r"(\x1b\]8;[^;\x07\x1b]*?)id=[^;:\x07\x1b]*");
 regex!(
@@ -124,11 +148,10 @@ impl Normaliser {
         } else {
             let any = dates.join("|");
             (
-                Regex::new(&format!(
+                Some(compile(&format!(
                     r"(?:{any})[T ]\d{{2}}:\d{{2}}(?::\d{{2}}(?:[.,]\d+)?)?(?:Z|[+-]\d{{2}}:?\d{{2}})?"
-                ))
-                .ok(),
-                Regex::new(&format!(r"\b(?:{any})\b")).ok(),
+                ))),
+                Some(compile(&format!(r"\b(?:{any})\b"))),
             )
         };
         let fresh_uuids = rules.contains(&Rule::FreshUuids).then(|| FreshUuids {
@@ -163,6 +186,24 @@ impl Normaliser {
         }
     }
 
+    /// `text` with every fresh UUID as `<UUID>`, numbering nothing: a sort key
+    /// that does not depend on the UUIDs a run minted. Without the
+    /// fresh-UUIDs rule, `text` unchanged.
+    pub fn mask_fresh(&self, text: &str) -> String {
+        let Some(fresh) = &self.fresh_uuids else {
+            return text.to_owned();
+        };
+        uuid()
+            .replace_all(text, |caps: &Captures<'_>| {
+                if fresh.known.contains(&caps[0].to_ascii_lowercase()) {
+                    caps[0].to_owned()
+                } else {
+                    "<UUID>".to_owned()
+                }
+            })
+            .into_owned()
+    }
+
     /// Normalises bytes: UTF-8 text goes through [`Normaliser::text`]; other
     /// bytes are returned unchanged.
     pub fn bytes(&mut self, bytes: &[u8]) -> Vec<u8> {
@@ -183,14 +224,43 @@ impl Normaliser {
         out = crash_log()
             .replace_all(&out, "crash-<TIMESTAMP>-<PID>.log")
             .into_owned();
+        out = log_clock()
+            .replace_all(&out, |caps: &Captures<'_>| {
+                format!("{}{}{}", &caps[1], zero_digits(&caps[2]), &caps[3])
+            })
+            .into_owned();
         if let Some(timestamp) = &self.timestamp {
-            out = timestamp.replace_all(&out, "<TIMESTAMP>").into_owned();
+            out = timestamp
+                .replace_all(&out, |caps: &Captures<'_>| zero_digits(&caps[0]))
+                .into_owned();
         }
         if let Some(today) = &self.today {
             out = today.replace_all(&out, "<TODAY>").into_owned();
         }
-        out = duration_ms().replace_all(&out, "${1}0").into_owned();
-        out = seconds().replace_all(&out, "${1}<SECONDS>").into_owned();
+        out = duration_ms()
+            .replace_all(&out, |caps: &Captures<'_>| {
+                let zero = if caps.get(2).is_some() { "0.0" } else { "0" };
+                format!("{}{zero}", &caps[1])
+            })
+            .into_owned();
+        out = seconds()
+            .replace_all(&out, |caps: &Captures<'_>| {
+                // A table pads the column to its widest value: the padding on
+                // either side of the token is timing too, so any run of spaces
+                // becomes one.
+                let space = |i: usize| if caps[i].is_empty() { "" } else { " " };
+                let lead = if caps[1].ends_with(' ') { "" } else { space(2) };
+                format!(
+                    "{}{}{}{}<SECONDS>{}{}",
+                    &caps[1],
+                    lead,
+                    &caps[3],
+                    space(4),
+                    &caps[5],
+                    space(6)
+                )
+            })
+            .into_owned();
         out = osc8_id().replace_all(&out, "${1}id=<ID>").into_owned();
         if let Some(version) = &self.git {
             out = out.replace(&format!("git {version}"), "git <GIT_VERSION>");
@@ -210,6 +280,14 @@ impl Normaliser {
         }
         out
     }
+}
+
+/// Every ASCII digit of `text` as `0`: a clock value keeps its format
+/// (separators, fraction width, offset style), which is part of the contract.
+fn zero_digits(text: &str) -> String {
+    text.chars()
+        .map(|c| if c.is_ascii_digit() { '0' } else { c })
+        .collect()
 }
 
 const HIDE_CURSOR: &str = "\x1b[?25l";
@@ -337,7 +415,7 @@ mod tests {
         let out = norm(doc);
         assert_eq!(
             out,
-            "{\n  \"ok\": true,\n  \"duration_ms\": 0,\n  \"x\": {\"elapsed_ms\":0, \"wall_ms\": 0, \"seconds\": 0}\n}"
+            "{\n  \"ok\": true,\n  \"duration_ms\": 0,\n  \"x\": {\"elapsed_ms\":0, \"wall_ms\": 0.0, \"seconds\": 0.0}\n}"
         );
         serde_json::from_str::<serde_json::Value>(&out).unwrap();
         // A count is not a duration.
@@ -356,6 +434,17 @@ mod tests {
         );
         assert_eq!(norm("took 2m05s\n"), "took <SECONDS>\n");
         assert_eq!(norm("\x1b[2m0.3s\x1b[0m"), "\x1b[2m<SECONDS>\x1b[0m");
+        // A table column padded to its widest value: the padding is timing too.
+        let fast =
+            "templates  4 files \x1b[2m 1.6s\x1b[0m\nschemas    8 files \x1b[2m 2.4s\x1b[0m\n";
+        let slow =
+            "templates  4 files \x1b[2m  1.6s\x1b[0m\nschemas    8 files \x1b[2m 12.4s\x1b[0m\n";
+        assert_eq!(norm(fast), norm(slow));
+        assert_eq!(
+            norm(fast),
+            "templates  4 files \x1b[2m <SECONDS>\x1b[0m\nschemas    8 files \x1b[2m <SECONDS>\x1b[0m\n"
+        );
+        assert_eq!(norm("| 0.3s   | x |"), norm("| 12.3s  | x |"));
         // Versions, decimals with two places and words are left alone.
         assert_eq!(
             norm("python 3.13s1 v1.2.3s 0.25s rule::1.0"),
@@ -367,7 +456,7 @@ mod tests {
     fn timestamps_and_today_only_on_the_run_dates() {
         assert_eq!(
             norm("at 2026-11-08T10:11:12.123456+00:00 and 2026-11-08 10:11:12Z"),
-            "at <TIMESTAMP> and <TIMESTAMP>"
+            "at 0000-00-00T00:00:00.000000+00:00 and 0000-00-00 00:00:00Z"
         );
         assert_eq!(
             norm("created: 2026-11-08\nmodified: 2024-01-01"),
@@ -376,6 +465,17 @@ mod tests {
         assert_eq!(norm("at 2024-01-01T00:00:00Z"), "at 2024-01-01T00:00:00Z");
         let none = Normaliser::new(&Volatile::default(), &[], []).text("2026-11-08");
         assert_eq!(none, "2026-11-08");
+    }
+
+    #[test]
+    fn log_line_clock_times() {
+        assert_eq!(
+            norm("18:22:33 debug: Resolving · vocab: tlp::1.0\n\x1b[2m09:01:02.5\x1b[0m info: x\n"),
+            "00:00:00 debug: Resolving · vocab: tlp::1.0\n\x1b[2m00:00:00.0\x1b[0m info: x\n"
+        );
+        // Only at the start of a line, and only before a log level.
+        assert_eq!(norm("at 18:22:33 today"), "at 18:22:33 today");
+        assert_eq!(norm("12:30:00 lunch\n"), "12:30:00 lunch\n");
     }
 
     #[test]

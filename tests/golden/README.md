@@ -62,7 +62,7 @@ mode against every fixture it lists:
 
 `mcp` mode (`opentide mcp start`) is UC-3.7's. The environment is exactly the one in each case's
 `case.toml`: no CI or agent variable unless the case sets one, `HOME` and `TMPDIR` inside the case's
-directory, `TZ=UTC`, `LANG=C.UTF-8`, `PYTHONHASHSEED=0`, git without system or user configuration.
+directory (cases live under `/tmp`, whatever `TMPDIR` says, so absolute paths have one length), `TZ=UTC`, `LANG=C.UTF-8`, `PYTHONHASHSEED=0`, git without system or user configuration.
 Network traffic goes to a proxy on `127.0.0.1:9`, which refuses it: tenant-contacting paths
 (`deploy`, `query`, `share`, `validate query --live`, `generate extract`) are recorded as their
 failure without tenants; their success paths are UC-4.1's recorded HTTP cassettes. On Linux each
@@ -99,7 +99,7 @@ for the root):
 | `case.toml` | argv, the full environment, stdin, mode, fixture, timeout |
 | `stdout`, `stderr` | the streams, normalised; ANSI codes are kept in human mode |
 | `outcome.toml` | the exit code, and each file created, modified or deleted under the case's root (`ws/`, `home/`, `tmp/`): path, kind, mode, size |
-| `files/<path>` | the bytes of each created or modified file under 16 KiB, normalised; a name that starts with `.git` or `~` is stored with a `~` before it |
+| `files/<path>` | the bytes of each created or modified file under 16 KiB, normalised. Stored paths are portable: `%` and the characters Windows forbids (`<>:"\|?*\`) become `%XX`, and a name that starts with `.git` or `~`, a reserved Windows name (`CON`, `NUL`, …) or one ending in `.` or a space gets a `~` before it |
 
 A file of 16 KiB or more is stored once in `blobs/<sha256>` and named in `outcome.toml`: the
 generated schemas and catalogs, which many cases write.
@@ -111,12 +111,13 @@ Applied to stdout, stderr, file paths and file contents (UTF-8 only), in this or
 | Rule | Becomes | Why |
 |------|---------|-----|
 | A Rich live region (spinner, progress) between hiding and showing the cursor | `<LIVE>`, keeping what was printed above it | its frames are redrawn on a timer |
-| The case's workspace, home, root, and the engine's directories | `<WS>`, `<HOME>`, `<TMP>`, `<ENGINE_BIN>`, `<ENGINE>` | temporary directories |
+| The case's workspace, home, root, the engine's directories and the Python its environment links to | `<WS>`, `<HOME>`, `<TMP>`, `<ENGINE_BIN>`, `<ENGINE>`, `<PYTHON>` | temporary directories, the recorder's home |
+| The host's kernel release (the crash handler's `os` fact and issue link) | `<KERNEL>` | the host |
 | `crash-<time>-<pid>.log` | `crash-<TIMESTAMP>-<PID>.log` | the crash handler's log name |
-| ISO 8601 date-times on the dates the case ran | `<TIMESTAMP>` | the clock |
+| ISO 8601 date-times on the dates the case ran, and the clock time that starts a log line (`18:22:33 debug: …`) | every digit `0` (`0000-00-00T00:00:00.000000+00:00`), so the format is still compared | the clock |
 | The dates the case ran (`YYYY-MM-DD`) | `<TODAY>` | the clock |
-| JSON `duration_ms`, `elapsed_ms`, `wall_ms`, `seconds` | `0` | wall times; the document stays JSON |
-| `1.3s`, `2m05s` in text | `<SECONDS>` | wall times in outcome lines |
+| JSON `duration_ms`, `elapsed_ms`, `wall_ms`, `seconds` | `0`, or `0.0` for a float | wall times; the document keeps its types |
+| `1.3s`, `2m05s` in text, and the spaces around it | `<SECONDS>`, one space each side at most | wall times in outcome lines and padded table columns |
 | `id=` of a terminal hyperlink (`ESC]8;id=…`) | `id=<ID>` | Rich numbers hyperlinks at random |
 | `git <version>` | `git <GIT_VERSION>` | `opentide doctor` prints the host's git |
 | UUIDs the fixture does not hold, in cases with `normalise = ["fresh-uuids"]` | `<UUID-1>`, `<UUID-2>`, … by first appearance | `new`, `setup` and `generate` mint them |

@@ -1,0 +1,37 @@
+The generator's digest for a tiny workspace (xtask/tests/corpus_generate.rs records the large ones):
+
+```
+$ xtask corpus generate --seed 1 --threats 2 --objectives 2 --rules 3 --digest
+6e328e1677a0aac9
+
+```
+
+Usage errors exit 2:
+
+```
+$ xtask corpus generate --threats 2
+? 2
+xtask corpus: --seed is required
+
+$ xtask corpus generate --seed 1 --scale 2 --rules 3 --digest
+? 2
+xtask corpus: --scale and --threats/--objectives/--rules exclude each other
+
+$ xtask corpus generate --seed 1 --layout flat --digest
+? 2
+xtask corpus: --layout: `flat` is not standard, explicit or custom
+
+$ xtask corpus faults --check
+? 2
+xtask corpus: --engine python is required (the oracle the expectations name)
+
+```
+
+The Rust engine's run is not implemented yet: it fails, never passes:
+
+```
+$ xtask corpus faults --check --engine rust
+? 1
+xtask corpus: --engine rust is not implemented yet; the Rust engine's validate (UC-2.x, https://github.com/opentidehq/opentide/issues/790) runs it
+
+```

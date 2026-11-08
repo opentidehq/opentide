@@ -143,6 +143,7 @@ pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
         bin_dir,
         install_dir,
         env: BTreeMap::from([("OPENTIDE_ENGINE".to_owned(), "rust".to_owned())]),
+        host_paths: Vec::new(),
     })
 }
 
