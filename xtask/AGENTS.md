@@ -69,9 +69,10 @@ of it): a command that failed early would measure nothing, so the bench stops wi
   prints. `src/corpus/` follows the same split inside its module: `generate`, `yaml`, `rng`,
   `workspace`, `faults` and `coverage` compute; `corpus/cli.rs` writes workspaces, runs the oracle
   and prints (main.rs only dispatches to it). `bench` keeps the same split inside `src/bench/`:
-  `report` and `check` compute, the other modules run processes.
+  `report` and `check` compute, the other modules run processes. Tests drive the library with
+  synthetic metadata, no workspace needed.
 - The corpus generator's output is a function of its options alone (own PRNG and YAML emitter, no
-  clock, environment or file); `tests/corpus_generate.rs` records its digests. Tests drive the library with synthetic metadata, no workspace needed.
+  clock, environment or file); `tests/corpus_generate.rs` records its digests.
 - The workspace to check is found at run time (`CARGO_MANIFEST_DIR` as `cargo run` sets it, else
   the working directory), and the table is `xtask/layers.toml` under the root `cargo metadata`
   prints. Never compile a path in with `env!`: a target pool that last served another worktree can
