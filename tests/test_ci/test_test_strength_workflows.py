@@ -125,7 +125,7 @@ def test_coverage_measures_every_python_test_of_the_binding() -> None:
 def test_coverage_gates_the_crates_with_the_policy() -> None:
     runs = "\n".join(str(s.get("run", "")) for s in _load("coverage.yml")["jobs"]["rust"]["steps"])
     assert "cargo xtask coverage gate --report target/coverage.json" in runs
-    assert "--component llvm-tools-preview" in runs
+    assert "rustup component add llvm-tools-preview" in runs
     policy = (ROOT / "xtask" / "coverage.toml").read_text(encoding="utf-8")
     assert "default_lines = 80" in policy
     for crate in ("opentide-schema", "opentide-workspace", "opentide-compile", "opentide-cli"):

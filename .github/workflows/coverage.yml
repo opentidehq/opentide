@@ -49,11 +49,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The release rust-toolchain.toml pins, with the LLVM tools that
-      # cargo-llvm-cov merges the profiles with.
+      # The release rust-toolchain.toml pins, then the LLVM tools that
+      # cargo-llvm-cov merges the profiles with: an install that names no
+      # toolchain ignores --component (tests/test_ci/test_rust_toolchain.py).
       - name: Set up Rust
         run: |
-          rustup toolchain install --profile minimal --no-self-update --component llvm-tools-preview
+          rustup toolchain install --profile minimal --no-self-update
+          rustup component add llvm-tools-preview
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
