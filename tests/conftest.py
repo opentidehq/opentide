@@ -7,6 +7,7 @@ import sys
 from collections.abc import Iterator
 from functools import partial
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 from unittest.mock import patch
 
@@ -272,6 +273,98 @@ def _restore_logging() -> Iterator[None]:
         if handler not in root.handlers:
             root.addHandler(handler)
     root.setLevel(saved_level)
+
+
+#: Every global setting structlog keeps. Read from its private ``_CONFIG``: the
+#: public ``configure()`` cannot mark structlog unconfigured again, and
+#: ``reset_defaults()`` installs a new processor list rather than the one loggers
+#: hold.
+_STRUCTLOG_SETTINGS = (
+    "is_configured",
+    "default_processors",
+    "default_context_class",
+    "default_wrapper_class",
+    "logger_factory",
+    "cache_logger_on_first_use",
+)
+
+#: The settings, and the contents of the processor list.
+_StructlogConfiguration = tuple[dict[str, Any], list[Any]]
+
+
+def _structlog_configuration() -> _StructlogConfiguration:
+    from structlog._config import _CONFIG
+
+    settings = {name: getattr(_CONFIG, name) for name in _STRUCTLOG_SETTINGS}
+    return settings, list(settings["default_processors"])
+
+
+def _restore_structlog(saved: _StructlogConfiguration) -> bool:
+    """Put structlog's global configuration back; whether anything had changed.
+
+    The saved processor list object is reinstated, not an equal copy: loggers
+    cached before the change hold that object, and ``capture_logs()`` edits it
+    in place.
+    """
+    from structlog._config import _CONFIG
+
+    settings, chain = saved
+    if (
+        all(getattr(_CONFIG, name) is value for name, value in settings.items())
+        and list(_CONFIG.default_processors) == chain
+    ):
+        return False
+    processors = settings["default_processors"]
+    if isinstance(processors, list):
+        processors[:] = chain
+    for name, value in settings.items():
+        setattr(_CONFIG, name, value)
+    return True
+
+
+def _forget_cached_loggers() -> None:
+    """Make every module-level structlog logger assemble itself again on next use.
+
+    Under ``cache_logger_on_first_use`` a ``BoundLoggerLazyProxy`` replaces its
+    own ``bind`` with the logger it assembled on first use, and that logger keeps
+    the processor list configured at that moment. Dropping the instance
+    attribute restores the proxy to its never-used state.
+    """
+    from structlog._config import BoundLoggerLazyProxy
+
+    for module in list(sys.modules.values()):
+        # The type itself, not isinstance(): that falls back to the entry's
+        # ``__class__``, which cffi's ``Lib`` objects answer with ModuleType.
+        if not issubclass(type(module), ModuleType):
+            continue
+        # Not vars(module): a lazily loaded module would import itself on access.
+        namespace = object.__getattribute__(module, "__dict__")
+        for value in list(namespace.values()):
+            if type(value) is BoundLoggerLazyProxy:
+                vars(value).pop("bind", None)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_protocol(item: pytest.Item, nextitem: pytest.Item | None) -> Iterator[object]:
+    """Hand every test, its fixtures included, the structlog configuration it found.
+
+    Each in-process CLI call runs ``init_logging``, which configures structlog
+    with a new processor list and ``cache_logger_on_first_use``. A module-level
+    logger first used after one call keeps that call's list; ``capture_logs()``
+    edits the list a later call configured, so it never sees that logger's
+    events. Seven Defender client tests captured nothing once two CLI tests had
+    run before them in the same worker.
+
+    This wraps the whole protocol rather than living in ``_restore_logging``:
+    the fixtures above request ``monkeypatch`` first, so it is torn down last,
+    and a logger a test replaced through it is only back in its module then.
+    """
+    saved = _structlog_configuration()
+    try:
+        return (yield)
+    finally:
+        if _restore_structlog(saved):
+            _forget_cached_loggers()
 
 
 @pytest.fixture(autouse=True)
