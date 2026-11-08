@@ -9,7 +9,7 @@ CQL is closed source. There is no reference parser to port (Falco has libsinsp) 
 | Syntax | CrowdStrike's "CQL Grammar Subset" (library.humio.com, `lql-grammar/syntax-grammar-guide-subset`) and its appendices (quirks, character table), the operator, filter, expression, conditional, comment, regular-expression and array pages, and the release notes 1.90–1.265 | `grammars/tree-sitter-opentide-cql` (tree-sitter, with an external scanner for context-dependent tokens) |
 | Functions | the CQL function reference (one page per function: parameters, types, required, default, the omittable parameter, allowed values, bounds, availability, deprecation) | `catalogs/cql/functions.toml` (`scripts/sync_cql_catalog.py`) |
 | Data | LogScale built-in fields and tags; Falcon sensor events and fields from redistributable sources only; CrowdStrike Parsing Standard (CPS, ECS-based) fields | `catalogs/cql/events.toml`, `catalogs/cql/fields.toml` |
-| Correlation rules | the Next-Gen SIEM correlation-rule API (FalconPy, gofalcon, the CrowdStrike Terraform provider) and the `correlate()` reference | `crates/opentide-cql/src/correlation.rs` |
+| Correlation rules | the Next-Gen SIEM correlation-rule API (FalconPy, gofalcon, the CrowdStrike Terraform provider) and the `correlate()` reference | `crates/opentide-cql/src/check.rs` (`correlation_rule`) |
 
 CrowdStrike's grammar text is cited, not copied: the grammar is re-derived in `grammar.js`, and catalog summaries are written for this repository. Facts (names, parameter names, types, defaults, enums) are generated.
 

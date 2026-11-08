@@ -89,13 +89,15 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | --- | --- |
 | `opentide-core` | Shared types, diagnostic codes |
 | `opentide-highlight` | Frozen HighlightSpec, semantic tokens, tm/monaco/helix maps |
-| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene |
+| `opentide-syntax` | Vendored tree-sitter KQL/SPL/ES\|QL/EQL/kuery/Lucene/Falco/CQL |
 | `opentide-kql` | Catalog, HIR, Sentinel/Defender profiles, `compile_kql_query` |
 | `opentide-spl` | searchbnf-informed catalog, `spl_unknown_command` |
 | `opentide-esql` | ES\|QL catalog with stack-version lifecycle, `esql_*` diagnostics |
 | `opentide-eql` | EQL catalog, sequence/sample/pipe rules, `eql_*` diagnostics |
 | `opentide-kuery` | Kibana KQL checks, Lucene-syntax-in-kuery warnings |
 | `opentide-lucene` | Lucene `query_string` checks, kuery-syntax-in-Lucene warnings |
+| `opentide-falco` | Falco rule conditions (Sysdig Secure): a port of libsinsp's filter parser and compiler checks, field and event catalogs, `falco_*` diagnostics |
+| `opentide-cql` | CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM): function, event and field catalogs, Next-Gen SIEM correlation-rule checks, `cql_*` diagnostics |
 | `opentide-ecs` | Elastic Common Schema field catalog (completion, hover) and the ECS checks for queries on ECS indices (`ecs_type_mismatch`, near-miss `ecs_unknown_field`; never a closed list) |
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |
