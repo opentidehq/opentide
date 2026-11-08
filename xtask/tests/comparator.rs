@@ -354,6 +354,18 @@ mod comparator {
     }
 
     #[test]
+    fn a_text_rule_applies_only_on_the_line_it_explains() {
+        let ledger =
+            Ledger::parse(&entry("*", "stdout", "text", "help: a", "help: b")).expect("valid");
+        // Both texts are present, but on different lines: not this difference.
+        let oracle = run(0, "help: a\nx\n", "");
+        let candidate = run(0, "help: a\ny\nhelp: b\n", "");
+        let (report, usage) = check(&oracle, &candidate, &ledger);
+        assert!(!report.equal);
+        assert!(!usage.is_used(0));
+    }
+
+    #[test]
     fn a_stale_ledger_entry_fails_the_run() {
         let ledger = Ledger::parse(&format!(
             "{}{}",

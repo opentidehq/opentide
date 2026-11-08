@@ -1,5 +1,5 @@
 //! What differs between two runs of the same command for reasons that are not
-//! the implementation's: the workspace each ran in, wall time and the clock.
+//! the implementation's: the workspace each ran in, and wall time.
 //! The normaliser rewrites both runs the same way before they are compared,
 //! in place and without re-serialising anything, so the byte comparison still
 //! sees the layout each implementation printed.
@@ -7,11 +7,13 @@
 //! | Rule | Becomes |
 //! |------|---------|
 //! | a literal the caller names (a workspace copy's path) | what the caller says (`<WS>`) |
-//! | the number after `"duration_ms"`, `"wall_ms"` or `"elapsed_ms"` | `0` |
-//! | an ISO 8601 time of day with its date (`2026-11-08T10:15:00.123Z`) | `<TIME>` |
+//! | the non-negative number after the JSON key `"duration_ms"`, `"wall_ms"` or `"elapsed_ms"` | `0` |
 //! | a crash log's name (`crash-20261108T101500123456Z-648.log`) | `crash-<TIME>-<PID>.log` |
 //!
-//! A date alone (`2026-11-08`) is data an object holds, and stays.
+//! Nothing else: a timestamp in output or a file may be data (an object's
+//! `modified`, deployment state), so no pattern rewrites dates or times. A
+//! value the oracle fills from the clock is normalised by its key or pointer
+//! once one is known (UC-0.5's golden normaliser), never by its shape.
 //!
 //! `cargo xtask golden` (UC-0.5) normalises its recordings the same way;
 //! the two are to share one implementation (`crates/opentide-compare/AGENTS.md`).
@@ -23,13 +25,12 @@ use std::sync::OnceLock;
 /// The JSON keys whose number is wall time, which [`Normaliser`] sets to `0`.
 pub const WALL_TIME_KEYS: [&str; 3] = ["duration_ms", "wall_ms", "elapsed_ms"];
 
-/// What a time of day reads as after normalisation.
+/// What a crash log's timestamp reads as after normalisation.
 pub const TIME_PLACEHOLDER: &str = "<TIME>";
 
 struct Patterns {
     wall_time: Regex,
     crash_log: Regex,
-    time: Regex,
 }
 
 #[expect(
@@ -40,20 +41,16 @@ fn patterns() -> &'static Patterns {
     static PATTERNS: OnceLock<Patterns> = OnceLock::new();
     PATTERNS.get_or_init(|| Patterns {
         wall_time: Regex::new(&format!(
-            r#"("(?:{})"\s*:\s*)-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"#,
+            r#"("(?:{})"\s*:\s*)[0-9]+(?:\.[0-9]+)?([,}}\]\s]|$)"#,
             WALL_TIME_KEYS.join("|")
         ))
         .expect("a valid pattern"),
         crash_log: Regex::new(r"crash-[0-9]{8}T[0-9]{6,12}Z-[0-9]+\.log").expect("a valid pattern"),
-        time: Regex::new(
-            r"[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:?[0-9]{2})?",
-        )
-        .expect("a valid pattern"),
     })
 }
 
 /// Rewrites runs: literal replacements first (an absolute path to `<WS>`),
-/// then wall time, crash-log names and times of day.
+/// then wall time and crash-log names.
 #[derive(Debug, Clone, Default)]
 pub struct Normaliser {
     replacements: Vec<(Vec<u8>, Vec<u8>)>,
@@ -84,12 +81,11 @@ impl Normaliser {
             out = replace(&out, from, to);
         }
         let patterns = patterns();
-        let out = patterns.wall_time.replace_all(&out, &b"${1}0"[..]);
+        let out = patterns.wall_time.replace_all(&out, &b"${1}0${2}"[..]);
         let crash = format!("crash-{TIME_PLACEHOLDER}-<PID>.log");
-        let out = patterns.crash_log.replace_all(&out, crash.as_bytes());
         patterns
-            .time
-            .replace_all(&out, TIME_PLACEHOLDER.as_bytes())
+            .crash_log
+            .replace_all(&out, crash.as_bytes())
             .into_owned()
     }
 
@@ -124,7 +120,7 @@ mod tests {
             "{\n  \"duration_ms\": 0\n}\n"
         );
         assert_eq!(
-            normalised(r#"{"stats":{"wall_ms":1288.93},"elapsed_ms":1.5e3}"#),
+            normalised(r#"{"stats":{"wall_ms":1288.93},"elapsed_ms":15}"#),
             r#"{"stats":{"wall_ms":0},"elapsed_ms":0}"#
         );
         assert_eq!(
@@ -135,14 +131,23 @@ mod tests {
     }
 
     #[test]
-    fn times_of_day_and_crash_logs_are_placeholders_and_dates_stay() {
+    fn values_no_clock_gives_stay() {
+        // A negative or exponent "time" is not wall time: it stays, and differs.
         assert_eq!(
-            normalised(
-                r#"{"generated_at":"2026-11-08T10:15:00.123456+00:00","reviewed":"2026-11-01"}"#
-            ),
-            r#"{"generated_at":"<TIME>","reviewed":"2026-11-01"}"#
+            normalised(r#"{"elapsed_ms":-1.5e9}"#),
+            r#"{"elapsed_ms":-1.5e9}"#
         );
-        assert_eq!(normalised("at 2026-11-08 10:15:00Z"), "at <TIME>");
+        assert_eq!(
+            normalised(r#"{"elapsed_ms":1.5e3}"#),
+            r#"{"elapsed_ms":1.5e3}"#
+        );
+        // Timestamps may be data: they are never rewritten by shape.
+        let data = r#"{"modified":"2026-11-08T10:15:00Z","reviewed":"2026-11-01"}"#;
+        assert_eq!(normalised(data), data);
+    }
+
+    #[test]
+    fn crash_logs_are_placeholders() {
         assert_eq!(
             normalised("/s/opentide/crash-20261108T101500123456Z-648.log"),
             "/s/opentide/crash-<TIME>-<PID>.log"

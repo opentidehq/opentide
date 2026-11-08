@@ -385,9 +385,14 @@ impl Comparison<'_> {
             else {
                 continue;
             };
-            if contains(oracle, expected_oracle.as_bytes())
-                && contains(candidate, expected_candidate.as_bytes())
-            {
+            // Narrow: on one line the two sides share, the oracle has its
+            // text and the candidate has its own.
+            if same_line(
+                oracle,
+                candidate,
+                expected_oracle.as_bytes(),
+                expected_candidate.as_bytes(),
+            ) {
                 rewritten = replace(
                     &rewritten,
                     expected_oracle.as_bytes(),
@@ -548,11 +553,22 @@ fn excerpt(text: &str) -> String {
     out
 }
 
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    needle.is_empty()
-        || haystack
-            .windows(needle.len())
-            .any(|window| window == needle)
+/// Whether some line N holds `oracle_text` in `oracle` and `candidate_text`
+/// in `candidate`. A text spanning lines is matched at the line it starts on.
+fn same_line(oracle: &[u8], candidate: &[u8], oracle_text: &[u8], candidate_text: &[u8]) -> bool {
+    let starts = |bytes: &[u8], text: &[u8]| -> Vec<usize> {
+        if text.is_empty() || bytes.len() < text.len() {
+            return Vec::new();
+        }
+        (0..=bytes.len() - text.len())
+            .filter(|at| bytes[*at..].starts_with(text))
+            .map(|at| bytes[..at].split(|b| *b == b'\n').count())
+            .collect()
+    };
+    let candidate_lines = starts(candidate, candidate_text);
+    starts(oracle, oracle_text)
+        .iter()
+        .any(|line| candidate_lines.contains(line))
 }
 
 /// `bytes` with every occurrence of `from` replaced by `to`, left to right.
