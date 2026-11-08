@@ -16,7 +16,8 @@ name: Oracle
 # already checked.
 on:
   push:
-    branches: [main, development]
+    # integration/unified-core: the Unified Core PRs merge there before development.
+    branches: [main, development, integration/unified-core]
     tags: ["engine-v*"]
   pull_request:
     paths:

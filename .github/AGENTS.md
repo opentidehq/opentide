@@ -8,7 +8,8 @@ covers editing workflows.
 ## CI (`workflows/ci.yml`): one workflow for the repository
 
 Every pull request runs it, whatever its base (a stacked PR targets the branch below it), and so
-does every push to `development`. Jobs run in parallel; a new push cancels the stale run.
+does every push to `development` and to `integration/unified-core` (where the Unified Core PRs
+merge first; CodeQL and the oracles run there too). Jobs run in parallel; a new push cancels the stale run.
 
 | Job | What it checks |
 |-----|----------------|

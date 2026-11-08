@@ -5,7 +5,8 @@ name: CodeQL
 
 on:
   push:
-    branches: [main, development]
+    # integration/unified-core: the Unified Core PRs merge there before development.
+    branches: [main, development, integration/unified-core]
   pull_request:
   schedule:
     - cron: "30 5 * * 1"
