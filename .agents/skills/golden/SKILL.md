@@ -12,32 +12,31 @@ compares the Rust result with the oracle's. The source of this skill is the plan
 §5.1 and §5.2 ([`unified-core.md`](https://github.com/opentidehq/opentide/blob/docs/unified-core-plan/docs/internal/unified-core.md#5-correctness-strategy)),
 and the issues of the two items that build the tools.
 
-**Status.** These tools are being built. Until they land, the commands below do not exist yet, or
-exit 1:
+**Status.** These tools are being built:
 
-| Tool | Work item | Today |
+| Tool | Work item | State |
 |------|-----------|-------|
-| `cargo xtask golden`, `tests/golden/`, `tests/golden/ORACLE` | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | `cargo xtask golden` prints "not implemented yet" and exits 1 |
-| `OPENTIDE_ENGINE`, the comparator, `tests/golden/APPROVED_DIFFS.toml` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805) | not present |
+| `cargo xtask golden`, `tests/golden/` (`ORACLE`, `cases.toml`, `cases/`, `blobs/`, `COVERAGE.md`, `README.md`) | UC-0.5, [#803](https://github.com/opentidehq/opentide/issues/803) | On its branch (`test/uc-0-5-golden-capture`). Until it merges, `cargo xtask golden` here prints "not implemented yet" and exits 1 |
+| `OPENTIDE_ENGINE`, the comparator, `tests/golden/APPROVED_DIFFS.toml` | UC-0.7, [#805](https://github.com/opentidehq/opentide/issues/805) | Not present |
 
-The rules below hold already: they are the plan's. When the tools land, their own docs
-(`tests/golden/README.md`, [`xtask/AGENTS.md`](../../../xtask/AGENTS.md)) are the reference for
-flags and file formats. Update this skill to match them, and never use a flag that this skill or
-those docs do not name.
+**`tests/golden/README.md` is the reference** for the commands, the case and recording layout,
+the fixtures and the normalisation rules. Where this skill and the README disagree, the README is
+right: fix this skill. Never use a flag that neither names (`cargo xtask golden help` prints the
+usage).
 
 ## The rules
 
 1. **The oracle is the Python CLI installed from a frozen tag**, recorded in `tests/golden/ORACLE`
-   (the tag and the wheel's SHA-256). UC-0.5 chooses the tag and writes that file. Re-recording
-   against a new tag is an explicit pull request of its own.
-2. **Goldens are generated, never hand-edited.** A change to a golden is a re-record plus a
-   reviewed diff. A pull request that edits a file under `tests/golden/<command>/` by hand fails
-   review.
+   (the tag, the wheel and its SHA-256). UC-0.5 chooses the tag and writes that file. Changing the
+   oracle is a pull request of its own: edit `ORACLE`, `cargo xtask golden lock`,
+   `cargo xtask golden record`, and review every difference.
+2. **Recordings are generated, never hand-edited**: not `cases/`, not `blobs/`, not
+   `COVERAGE.md`. A change is a re-record plus a reviewed diff.
 3. **Anything that differs from the oracle is a bug**, unless the difference is recorded in
    `tests/golden/APPROVED_DIFFS.toml` with its reason, its issue and its changelog entry.
-4. **Never loosen the comparison** to get green: no normalisation rule that hides a deterministic
-   difference, no broader ledger entry, no skipped case, no deleted golden. A normalisation rule
-   covers only a value that is non-deterministic, and is reviewed code with unit tests.
+4. **Never loosen the comparison** to get green: no widened normalisation rule, no broader ledger
+   entry, no skipped case, no deleted recording. Normalisation hides only what differs between two
+   runs of the same case; each rule is code in `xtask/src/golden/normalise.rs` with a unit test.
 5. **The plan's invariants (§3) do not move.** If a port seems to need a change to the CLI
    contract, the command tree, a diagnostic code, a cross-repository contract, MCP, a workspace
    format, an SDK import path, the supported platforms or the security posture, stop and raise it
@@ -45,28 +44,30 @@ those docs do not name.
 
 ## Golden capture (UC-0.5)
 
-`cargo xtask golden record | check | diff`, with `--engine python|rust|compare` and
-`--filter <glob>` (#803).
-
 | Command | What it does |
 |---------|--------------|
-| `cargo xtask golden record` | Runs the oracle on every case and writes the goldens |
-| `cargo xtask golden record --check-determinism` | Records twice and fails unless both are byte-identical |
-| `cargo xtask golden check --engine python` | Checks the oracle against the committed goldens |
-| `cargo xtask golden diff` | Shows how a run differs from the committed goldens |
+| `cargo xtask golden record` | Runs every case of `cases.toml` through the oracle and writes `cases/`, `blobs/` and `COVERAGE.md`. Only the oracle records: `record` takes no `--engine` |
+| `cargo xtask golden record --check-determinism` | Runs every case twice and fails, writing nothing, unless both runs agree byte for byte |
+| `cargo xtask golden check --engine python` | A fresh run against the recordings; also checks `COVERAGE.md` and that no recording is missing or orphaned |
+| `cargo xtask golden diff` | `check`, printing every difference in full |
+| `cargo xtask golden lock` | Rewrites `oracle-requirements.txt` from `ORACLE` |
+| `cargo xtask golden coverage` | Rewrites `COVERAGE.md` |
 
-What a golden holds (plan §5.1, #803):
+`record`, `check` and `diff` take `--filter GLOB` (over case ids,
+`<command>/<mode>/<fixture>/<variant>`) and `--jobs N`; `check` and `diff` take
+`--engine python|rust|compare`, where `rust` and `compare` cannot start until UC-3 and UC-0.7.
 
-- **Coverage:** every command path in `opentide --json commands`, subcommands included. Every
-  output mode: `human` (through a pseudo-terminal at 100 columns with a fixed `TERM`, and no agent
-  or CI variables), `plain`, `json` and `agent`; `mcp` comes with UC-3.7. Every fixture:
-  `tide_corpus`, the VS Code extension's fixture workspace, a small heavy workspace, the fault
-  workspace (UC-0.6), an empty workspace, and no workspace.
-- **Per case:** `case.toml` (argv, environment, mode, fixture), stdout, stderr, the exit code, and
-  every file created, changed or deleted (path, mode, bytes), under
-  `tests/golden/<command>/<mode>/<fixture>/`.
-- **Normalised, and nothing else:** `duration_ms`, timestamps, the absolute workspace path
-  (`<WS>`), temporary directory names, crash-log paths. ANSI codes are kept in `human` mode.
+What is recorded (the README has the detail):
+
+- **Coverage:** every command path in `opentide --json commands`, in every mode (`human` through a
+  pseudo-terminal, `plain`, `json`, `agent`; `mcp` comes with UC-3.7), against the fixtures each
+  case lists. `record` and `check` fail when a path or mode has no case.
+- **A recording:** `tests/golden/cases/<command>/<mode>/<fixture>/<variant>/` holds `case.toml`,
+  `stdout`, `stderr`, `outcome.toml` (exit code and every file created, modified or deleted) and
+  `files/`. A file of 16 KiB or more is stored once in `tests/golden/blobs/<sha256>`.
+- **Normalisation:** only values that differ between two runs of the same case (temporary paths,
+  clock times, wall times, random ids; the README's table lists every rule). ANSI codes are kept in
+  `human` mode.
 - **Tenants:** paths that contact a tenant are recorded only as their failure without tenants.
   Their success paths are UC-4.1's recorded HTTP cassettes.
 
@@ -77,7 +78,7 @@ What a golden holds (plan §5.1, #803):
 | Value | Effect |
 |-------|--------|
 | `python` | The Python implementation, the default until the command's default flips |
-| `rust` | The Rust implementation. A command without one is a usage error: exit 2, `failure.code: engine_unavailable` |
+| `rust` | The Rust implementation. A command without one is a usage error, exit 2, with a new failure code whose name is to be confirmed on #805 (not `engine_unavailable`, which already exists with another meaning) |
 | `compare` | Runs both on the same input, each on its own copy of the workspace when the command writes files, and compares them |
 
 `compare` compares stdout, stderr, the exit code, the files and the JSON document (structurally,
@@ -116,10 +117,11 @@ To add an entry:
 
 ## Reviewing a golden diff
 
-- Every changed golden has a cause in the same pull request: a re-record against a new oracle tag
-  (its own PR), a new case, or a new fixture.
-- A changed golden with no new case, no new fixture and no new oracle tag means the recording is not
-  deterministic. Fix the normalisation code, with a test, rather than accept the churn.
+- Every changed recording has a cause in the same pull request: a new or changed case in
+  `cases.toml`, a fixture change, a normalisation rule with its unit test, or a new oracle (in a PR
+  of its own). Each changed line follows from that cause.
+- A changed recording with none of those causes means the recording is not deterministic. Fix the
+  normalisation code, with a test, rather than accept the churn.
 - Read the diff of every file. A diff too big to read is a reason to split the pull request.
 
 ## Related

@@ -141,10 +141,13 @@ The Python CLI at the frozen tag is the oracle; the rules: [`golden`](../golden/
 - [ ] **A behaviour change has a ledger entry.** A Rust port that prints, writes or exits
       differently from the oracle needs an entry in `tests/golden/APPROVED_DIFFS.toml` with its
       reason, its issue and its `CHANGELOG.md` entry. Without one, the difference is a bug.
-- [ ] **Goldens are re-recorded, never hand-edited.** Each changed golden has a cause in the same
-      pull request (a new case, a new fixture, a new oracle tag in a PR of its own).
-- [ ] **The comparison is not loosened.** No new normalisation rule without a unit test and a
-      non-deterministic value to justify it; no ledger entry broader than the difference; no stale
+- [ ] **Recordings are re-recorded, never hand-edited**: `tests/golden/cases/`, `blobs/` and
+      `COVERAGE.md`. Each changed recording has a cause in the same pull request: a new or changed
+      case in `cases.toml`, a fixture change, a normalisation rule with its unit test, or a new
+      oracle in a PR of its own.
+- [ ] **The comparison is not loosened.** A normalisation rule hides only a value that differs
+      between two runs of the same case, and is code in `xtask/src/golden/normalise.rs` with a unit
+      test; no widened rule; no ledger entry broader than the difference; no stale
       entry; no skipped, deleted or `#[ignore]`d case.
 - [ ] **No plan §3 invariant moves** in a port: the CLI contract, the command tree, diagnostic
       codes, cross-repository contracts, MCP, workspace formats, SDK import paths, platforms, the
