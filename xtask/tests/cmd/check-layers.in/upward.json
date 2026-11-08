@@ -1,0 +1,8 @@
+{
+  "workspace_members": ["core 0.1.0", "syntax 0.1.0", "lsp 0.1.0"],
+  "packages": [
+    {"id": "core 0.1.0", "name": "core", "dependencies": [{"name": "lsp", "kind": null}]},
+    {"id": "syntax 0.1.0", "name": "syntax", "dependencies": [{"name": "core", "kind": null}]},
+    {"id": "lsp 0.1.0", "name": "lsp", "dependencies": []}
+  ]
+}

@@ -1,0 +1,21 @@
+`check-layers` on a three-crate table (check-layers.in/): the workspace that
+follows it passes; the one where `core` depends on `lsp` fails.
+
+```console
+$ xtask check-layers --layers layers.toml --metadata downward.json
+check-layers: 3 crates in 2 layers; all 3 dependencies between them point down
+
+$ xtask check-layers --layers layers.toml --metadata upward.json
+? 1
+error: `core` (foundation tier 0) has a normal dependency on `lsp` (application tier 0), a higher place: a crate may depend only on crates of a lower layer, or of a lower tier of its own layer
+check-layers: 1 violation(s) of the layer table (layers.toml)
+
+$ xtask check-layers --layers layers.toml --metadata
+? 2
+xtask check-layers: --metadata needs a FILE
+
+$ xtask check-layers --layers missing.toml
+? 2
+xtask check-layers: read missing.toml: [..]
+
+```

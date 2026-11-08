@@ -1,7 +1,9 @@
 # One workspace: the engine crates (crates/, imported from opentidehq/language-server
-# with their history, docs/engine/IMPORT.md) and the PyO3 binding the opentide
-# package compiles in (analysis/, built by hatch_build.py). Members are listed, not
-# globbed. cargo-fuzz builds fuzz/ on nightly with its own workspace and lock file.
+# with their history, docs/engine/IMPORT.md), the PyO3 binding the opentide
+# package compiles in (analysis/, built by hatch_build.py) and the repository's
+# Rust tooling (xtask/, `cargo xtask`). Members are listed, not globbed; each one
+# has a place in the layer table, xtask/layers.toml (`cargo xtask check-layers`).
+# cargo-fuzz builds fuzz/ on nightly with its own workspace and lock file.
 [workspace]
 resolver = "2"
 exclude = ["fuzz"]
@@ -22,6 +24,7 @@ members = [
     "crates/opentide-lsp",
     "crates/opentide-wasm",
     "analysis",
+    "xtask",
 ]
 
 [workspace.package]
@@ -68,6 +71,10 @@ cc = "1"
 uuid = "1"
 wasm-bindgen = "0.2"
 js-sys = "0.3"
+# Test tools, for dev-dependencies only. trycmd: command-line cases
+# (tests/cmd/*.trycmd). Conventions: crates/AGENTS.md.
+trycmd = "1.2"
+
 # Lints for every member: each one sets `[lints] workspace = true`, except the
 # two that contain `unsafe` (crates/opentide-syntax: tree-sitter FFI;
 # crates/opentide-wasm: the wasm32 libc shims). `forbid` cannot be relaxed

@@ -181,6 +181,11 @@ jobs:
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      # Every dependency between workspace crates points down the layer table
+      # (xtask/layers.toml, plan §4).
+      - name: crate layers
+        run: cargo xtask check-layers
+
       # pydantic_object_issues_are_subset_of_lsp runs src/opentide's models
       # with the interpreter `uv sync` installed (.venv).
       - name: cargo test
