@@ -27,9 +27,10 @@ does every push to `development`. Jobs run in parallel; a new push cancels the s
 | `clients`, `bench` | Informational (`continue-on-error`): real LSP clients (pytest-lsp, Neovim) and `cargo bench`; never required |
 
 Every Rust job installs the one release `rust-toolchain.toml` pins (`rustup toolchain install`
-with no name, then `rustup target add` for the targets it builds: the install ignores
-`--target`), never floating `stable`: cargo in a checkout runs that
-release whatever else is installed (`tests/test_ci/test_rust_toolchain.py`). Only the fuzz jobs
+with no name), never floating `stable`: cargo in a checkout runs that release whatever else is
+installed (`tests/test_ci/test_rust_toolchain.py`). That install takes the file's components and
+drops `--target` and `--component` without an error, so a job adds the targets it builds with
+`rustup target add`, which with no toolchain named adds them to the pinned release. Only the fuzz jobs
 name a toolchain, nightly, which cargo-fuzz needs. The Rust jobs set `RUSTFLAGS=-Dwarnings`,
 `CARGO_PROFILE_DEV_DEBUG=line-tables-only` and `INSTA_UPDATE=no` (a snapshot that differs fails;
 CI never writes one). Every Python job builds the engine through `uv sync`.
