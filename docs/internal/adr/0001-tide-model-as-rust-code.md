@@ -44,7 +44,7 @@ The Tide model is Rust code in the `opentide-schema` crate (plan §4, "The model
 | Shape, field order, closure | `serde::{Deserialize, Serialize}` | `#[serde(deny_unknown_fields)]`, `rename`, `alias`, `default` |
 | Constraints, custom validators | `garde::Validate` with `#[garde(context(Pins))]` | [`Pins`](https://github.com/opentidehq/opentide/tree/development/crates/opentide-schema/src/pins.rs) carries the vocabulary versions the revision pins (RFC 0003); every field has a rule or `#[garde(skip)]`, sub-structs `#[garde(dive)]` |
 | JSON Schema | `schemars::JsonSchema` (schemars 1.x, draft 2020-12) | reads serde's and garde's attributes; the `tide.*` keys are `#[schemars(extend(...))]` |
-| Python class | `#[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all))]` | PyO3 0.30, `abi3-py310`, as `analysis/` is built |
+| Python class | `#[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, hash))]` | PyO3 0.30, `abi3-py310`, as `analysis/` is built. `eq` and `hash` (with `#[derive(PartialEq, Eq, Hash)]`) because a frozen Pydantic model compares and hashes by its field values; without `hash` a frozen pyclass is unhashable |
 | TypeScript types | behind the `wasm` feature (and `node`, with the napi-rs binding) | UC-5.3 ([#838](https://github.com/opentidehq/opentide/issues/838)); the skeleton's `wasm` feature adds no code, CI builds it for `wasm32-unknown-unknown` |
 | Structural errors | `opentide-schema-derive` (UC-1.2, [#808](https://github.com/opentidehq/opentide/issues/808)) | serde stops at the first error; the derive converts the saphyr node tree and collects every structural error with its span, as Pydantic reports every error. serde keeps the happy path and serialisation |
 
@@ -54,7 +54,8 @@ The Tide model is Rust code in the `opentide-schema` crate (plan §4, "The model
 
 - **One concrete struct per revision:** `RuleV1_0`, `RuleV1_1`, and an alias for the newest, `pub type Rule = RuleV1_1`. `metadata.schema` selects the struct (UC-1.7, [#813](https://github.com/opentidehq/opentide/issues/813)).
 - **No generic model.** `#[pyclass]` accepts no generic parameters, so `Rule<V>` cannot be a Python class. `crates/opentide-schema/tests/ui/pyclass_generic.rs` is a compile-fail case (trybuild) that records PyO3's error: "`#[pyclass] cannot have generic parameters`".
-- **Shared fields are written once.** The `revisions!` macro (`src/revision.rs`) repeats a family's shared fields into each revision struct where its body says `@shared,`. A sub-struct that does not change between revisions is one struct, used by every revision.
+- **Shared fields are written once.** The `revisions!` macro (`src/revision.rs`) repeats a family's shared fields into each revision struct, in up to four groups placed with `@0,` … `@3,`. A sub-struct that does not change between revisions is one struct, used by every revision.
+- **An overridden field keeps its position.** Pydantic orders a subclass's fields as its parent's, with a field the subclass overrides at the parent's position and new fields after: `DetectionRule_v1_1` overrides `metadata` (`RuleMetadata`), which stays second, after `name`, as in `DetectionRule`. So the shared fields split around each overridden field (`RuleV1_0 { @0, metadata: ObjectMetadata, @1, }` and `RuleV1_1 { @0, metadata: RuleMetadata, @1, }`), and a revision's new fields come last. The sample does this with `effort` (`tests/roundtrip.rs`, `an_overridden_field_keeps_its_position_in_every_revision`).
 - **Naming.** A revision struct is the family's Rust name plus `V<major>_<minor>`: `RuleV1_1`, and for the platform blocks and sharing the platform's or integration's name, `SentinelConfigV1_0` for `platform::sentinel::1.0` and `MispIntegrationV1_0` for `sharing::misp::1.0` (UC-1.4, UC-1.5). The Python class keeps today's name (`DetectionRule`, `DetectionRule_v1_1`) with `#[pyclass(name = "...")]` (UC-1.9).
 - **Migrations** are `From` impls along a forward one-step chain, applied in memory. Files change only through `opentide migrate`.
 
@@ -109,8 +110,8 @@ Pydantic's three cases, and their exact Rust equivalents (counts over the 785 fi
 | `x: T = value` | 161 | the default | error, unless `T` admits `None` | `#[serde(default = "path")] pub x: T` (schemars emits `"default"`) | always |
 
 - **No required-nullable field exists** (`x: T | None` without a default: 0 of 785). serde reads a missing `Option` as `None` even without `#[serde(default)]`, so such a field, if one is added, needs a deserializer that rejects a missing key.
-- **`None` is not written**: struct serialisation equals `model_dump(exclude_none=True)`, which round-trips object files. The five `model_dump(exclude_none=False)` calls, in three files (`deployment/planning.py`, `platforms/elastic/{deployer,validator}.py`), are compile and connector code; their ports (UC-3.1, UC-4.x) build the null-filled view they need.
-- **Field order** is declaration order, which is serde's order, the template order and the serialisation order. A field is declared where Pydantic declares it, inherited fields first as in Pydantic's MRO.
+- **`None` is not written** by the struct's serde serialisation: it equals `model_dump(exclude_none=True)`, which round-trips object files. Pydantic's default writes every field, `None` as `null`, and 12 `model_dump` calls in `src/opentide` rely on that (5 with an explicit `exclude_none=False` in `deployment/planning.py` and `platforms/elastic/{deployer,validator}.py`; 7 by default, among them CLI and MCP output in `deployment/preview.py`, `mcp_server/resources.py`, `mcp_server/tools.py` and `validation/issues.py`); 4 pass `exclude_none=True`. The general rule: a caller that writes a model chooses one of the two views, and the port of each call site (UC-3.x, UC-4.x) keeps the one it has today: the full view is a second serialisation that writes every field, which the model provides when its first such caller is ported.
+- **Field order** is declaration order, which is serde's order, the template order and the serialisation order. A field is declared where Pydantic's `model_fields` puts it: inherited fields first, an overridden field at its parent's position, new fields after ([Revisions](#revisions)).
 - **Aliases.** A Pydantic `alias` with `populate_by_name=True` (12 fields: `schema_id`, `platform_schema`, serialised `schema`) is `#[serde(rename = "schema", alias = "schema_id")]`; the Rust and Python attribute keeps Pydantic's name.
 - **Lax scalars.** Pydantic reads object YAML in lax mode (a `bool` accepts `"yes"`, an `int` accepts `"3"`), except `StrictInt` fields (2) and the configuration models (`strict=True`). serde reads canonical forms only, so a lax field gets a deserializer with Pydantic's coercion table for its type, and the fault catalogue (UC-0.6) records each coercion.
 
@@ -137,16 +138,30 @@ Identifiers (`metadata.uuid`, `metadata.schema`, references, external ids) stay 
 
 ### Validators
 
-The 21 validators and their Rust form. The plan counts 14 constraints or Tide keywords, 2 that disappear, 3 named checks and 2 internal; the item that ports each model decides the exact rule.
+The 21 validators and their Rust form: 16 stay in the model (constraints, custom validators and lax deserializers), none disappears, 3 become named checks, and 2 are outside the object models but still reproduced. Plan §4 counts 14, 2 that disappear, 3 and 2: the two date validators do not disappear, because they turn any scalar into a string, not only a date (below). Each validator's observable behaviour is the oracle's; the item that ports it reproduces it exactly or records an approved diff.
 
 | Validator | Where | Rust |
 |-----------|-------|------|
 | `_validate_schema_identifier`, `_validate_reviewed`, `_require_vocab_list`, `_registered_platform_schema`, `_name_not_empty`, `_unique_per_system`, `_no_legacy_keys`, `_only_connector_arrays` | `metadata.py`, `threat.py`, `platform.py`, `visibility.py`, `configuration/sharing.py` | garde constraints or `custom` validators with `Pins` (8) |
 | `_query_not_blank` (`QueryText`), `_single_vocab_name` (`VocabName`), `check_sentinel_technique` (`SentinelTechnique`) | `platform.py`, `threat.py`, `sentinel_attack.py` | garde `custom` on the field type (3) |
 | `_status_strategy` (`StatusStrategyName`), `_run_strategy` (`RunStrategyName`), the `FlavorName` lambda | `configuration/base.py`, `configuration/documentation.py` | serde `deserialize_with` on the enum (3) |
-| `_coerce_dates`, `_coerce_reviewed` | `metadata.py` | none: YAML 1.2 (saphyr) reads a date as a string (2) |
+| `_coerce_dates` (`created`, `modified`) | `metadata.py` | serde `deserialize_with` reproducing `str(value)` of the value PyYAML (YAML 1.1) loads (UC-1.3) |
+| `_coerce_reviewed` (`reviewed`) | `metadata.py` | serde `deserialize_with`: a YAML 1.1 date or timestamp becomes its `isoformat()`, anything else `str(value).strip()`, and an empty result `None` (UC-1.3) |
 | `_validate_raw_elastic_block`, `_validate_raw_sysdig_block`, `_columns_fit_system` | `platform.py`, `visibility.py` | named checks `elastic_rule_shape`, `sysdig_rule_shape`, `columns_fit_system` (3) |
-| `SchemaVersion._normalise_family`, `VocabularyEntry._coerce_stages` | `version.py`, `generation/vocabulary.py` | internal code (2) |
+| `SchemaVersion._normalise_family` | `version.py` | the schema-identifier parser (UC-1.7): the family is stripped and lower-cased, and an empty one is an error |
+| `VocabularyEntry._coerce_stages` | `generation/vocabulary.py` | the vocabulary entry's `deserialize_with` (UC-1.6): `tide.vocab.stages` absent or `null` is `[]`, a string is a one-item list |
+
+The two date validators turn any scalar into a string, so values that are not dates pass too. On the oracle (PyYAML's loader, `core/io.py`, then Pydantic 2.14):
+
+| In the file | `created` / `modified` | `reviewed` |
+|---|---|---|
+| `2026-01-01` (a YAML 1.1 date) | `'2026-01-01'` | `'2026-01-01'` |
+| `2026-01-01T10:00:00Z` (a timestamp) | `'2026-01-01 10:00:00+00:00'` | `'2026-01-01T10:00:00+00:00'` |
+| `20260101`, `true`, `1.5` | `'20260101'`, `'True'`, `'1.5'` | the same text, then `_validate_reviewed` rejects it |
+| `null` or empty | `'None'` | `None` |
+| `''`, `'  2026-01-01  '` | `''`, `'  2026-01-01  '` | `None`, `'2026-01-01'` |
+
+A plain `String` field would reject `created: 20260101` and keep `2026-01-01T10:00:00Z` as written, which changes what `validate` accepts and what the object reads as (plan §3, invariant 6). UC-1.3 reproduces each row, which needs the YAML 1.1 date and timestamp forms and Python's `str()` of them, or records an approved diff.
 
 ## Consequences
 
@@ -177,7 +192,8 @@ The 21 validators and their Rust form. The plan counts 14 constraints or Tide ke
   classes = [c for m in modules for c in vars(m).values()
              if inspect.isclass(c) and issubclass(c, BaseModel) and c.__module__ == m.__name__]
   fields = [f for c in classes for f in c.model_fields.values()]
-  print(len(classes), len(fields))                                          # 176 785
+  print(len(classes), len(fields),                                          # 176 785
+        sum(len(c.__dict__.get("__annotations__", {}).keys() & c.model_fields.keys()) for c in classes))  # 632
   print(sum(c.model_config.get("extra") == "forbid" for c in classes),      # 168
         sum(bool(c.model_config.get("frozen")) for c in classes))           # 174
   print(sum(f.is_required() for f in fields),                               # 249
@@ -194,6 +210,7 @@ The 21 validators and their Rust form. The plan counts 14 constraints or Tide ke
   modules_or_loggers = {k for k in literals if re.fullmatch(r"tide\.(models|generation|core|vocabulary|registry|platforms|query|package|deployment|analysis|validation|sharing|loading|indexing|documentation|data|config|__version__)(\..*)?", k) and not k.startswith("tide.config.")}
   captures = {"tide.keyword", "tide.property", "tide.schema", "tide.uuid"}
   print(len(literals - modules_or_loggers - captures))                      # 23
+  print(sum(len(re.findall(r"__schema_identifier__: ClassVar\[str\] = ", text)) for text in src))  # 15
   ```
 
 - The skeleton's verification: `cargo build -p opentide-schema --features python`, `cargo build -p opentide-schema --target wasm32-unknown-unknown --features wasm` and `cargo nextest run -p opentide-schema --features python` run in the `schema` workflow (`.github/workflows/schema.yml`); `cargo xtask check-layers` and `scripts/engine/check-io-free.sh` run in `ci.yml`'s `engine` job.
