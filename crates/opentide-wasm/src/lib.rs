@@ -15,35 +15,44 @@ mod libc_syscalls;
 use opentide_core::LanguageId;
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-#[expect(
-    clippy::expect_used,
-    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
-)]
 /// The semantic token legend: the HighlightSpec capture names, in the order
 /// the token types' indices refer to.
+#[wasm_bindgen]
 pub fn legend() -> js_sys::Array {
-    let spec = opentide_highlight::HighlightSpec::load().expect("spec");
     let arr = js_sys::Array::new();
-    for name in spec.legend {
+    for name in legend_names() {
         arr.push(&JsValue::from_str(&name));
     }
     arr
 }
 
+/// [`legend`]'s names, without the JavaScript array: js-sys runs only on
+/// wasm32, so the logic stays here, where native tests reach it.
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
+fn legend_names() -> Vec<String> {
+    opentide_highlight::HighlightSpec::load()
+        .expect("spec")
+        .legend
+}
+
 /// Highlight `language_id` source bytes. Usable without a full language client.
 #[wasm_bindgen]
 pub fn highlight(language_id: &str, bytes: &[u8]) -> Result<JsValue, JsValue> {
-    let language = LanguageId::parse(language_id)
-        .ok_or_else(|| JsValue::from_str(&format!("unknown language {language_id}")))?;
-    let text = std::str::from_utf8(bytes).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let result = opentide_analysis::highlight(language, text);
-    serde_wasm_bindgen_compat(&result).map_err(|e| JsValue::from_str(&e))
+    let json = highlight_json(language_id, bytes).map_err(|e| JsValue::from_str(&e))?;
+    js_sys::JSON::parse(&json).map_err(|e| JsValue::from_str(&format!("{e:?}")))
 }
 
-fn serde_wasm_bindgen_compat<T: serde::Serialize>(value: &T) -> Result<JsValue, String> {
-    let json = serde_json::to_string(value).map_err(|e| e.to_string())?;
-    js_sys::JSON::parse(&json).map_err(|e| format!("{e:?}"))
+/// [`highlight`]'s result as JSON text, or its error message: the part
+/// native tests reach (js-sys runs only on wasm32).
+fn highlight_json(language_id: &str, bytes: &[u8]) -> Result<String, String> {
+    let language =
+        LanguageId::parse(language_id).ok_or_else(|| format!("unknown language {language_id}"))?;
+    let text = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+    let result = opentide_analysis::highlight(language, text);
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 /// The engine's version: the crate version every `opentide-*` crate shares.
@@ -97,6 +106,36 @@ mod tests {
     use opentide_analysis::highlight;
     use opentide_core::LanguageId;
     use serde_json::{Value, json};
+
+    #[test]
+    fn the_legend_is_the_highlight_spec_legend() {
+        let names = super::legend_names();
+        assert!(names.iter().any(|name| name == "keyword"), "{names:?}");
+        assert_eq!(
+            names,
+            opentide_highlight::HighlightSpec::load().unwrap().legend
+        );
+    }
+
+    #[test]
+    fn highlight_json_is_the_analysis_result_or_an_error_message() {
+        let json: Value =
+            serde_json::from_str(&super::highlight_json("kql", b"SecurityEvent | take 1").unwrap())
+                .unwrap();
+        assert_eq!(
+            json,
+            serde_json::to_value(highlight(LanguageId::Kql, "SecurityEvent | take 1")).unwrap()
+        );
+        assert_eq!(
+            super::highlight_json("cobol", b"x").unwrap_err(),
+            "unknown language cobol"
+        );
+        assert!(
+            super::highlight_json("kql", &[0xff])
+                .unwrap_err()
+                .contains("utf-8"),
+        );
+    }
 
     #[test]
     fn highlight_kql_and_spl() {
