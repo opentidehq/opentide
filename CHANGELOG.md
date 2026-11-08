@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## [Unreleased]
 
+### Added
+
+- **`OPENTIDE_ENGINE` chooses which implementation runs a command** ([#805](https://github.com/opentidehq/opentide/issues/805)). opentide is moving its commands from Python to Rust one at a time ([#790](https://github.com/opentidehq/opentide/issues/790)); until a command's default changes, Python runs it. `OPENTIDE_ENGINE=rust` runs the Rust implementation, and on a command without one exits `2` with `failure.code` `engine_unavailable`. `OPENTIDE_ENGINE=compare` runs both, each on its own copy of the workspace, compares exit code, stdout, stderr (JSON by data, key order, then bytes) and every file written, and either prints the Python result or exits `70` with the new `failure.code` `engine_mismatch`, naming a diff report in `$XDG_STATE_HOME/opentide/compare/`. `python`, empty or unset changes nothing. No command has a Rust implementation yet, so today `rust` refuses every command and `compare` runs Python alone. `opentide --json commands` lists the variable. See [Choosing the implementation](docs/cli/json-output.md#choosing-the-implementation).
+
 ### Changed
 
 - **The analysis engine builds from this repository** ([#800](https://github.com/opentidehq/opentide/issues/800)). Its crates moved here from opentidehq/language-server with their history, and opentide compiles them by path instead of from crates.io; the engine is still language-server 0.11.0, so no finding changes. The sdist carries them, and the wheel and sdist ship `NOTICE`, the notices of the data the engine embeds, with the licence and notice files it cites (Elastic Common Schema, Falco).

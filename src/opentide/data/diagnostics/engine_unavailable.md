@@ -4,6 +4,8 @@ The analysis engine (the Rust module compiled into opentide) does not load, so t
 
 Exit 1, as `failure.code`, from `opentide validate query` (offline), `opentide lint` (its `queries` check) and `opentide lsp start`; an error issue of the `queries` check in `opentide validate`, whatever `--queries` says but `off`; and the `analysis_engine` check of `opentide doctor`. The check is never skipped: a missing engine fails the command.
 
+Exit 2, with `failure.argument` `OPENTIDE_ENGINE`, when `OPENTIDE_ENGINE=rust` asks for the Rust implementation of a command that has none yet: unset the variable, or set it to `python` or `compare`.
+
 ## Example
 
 ```text

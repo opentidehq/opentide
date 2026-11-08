@@ -123,6 +123,28 @@ def engine_versions() -> dict[str, str]:
     return {"engine": str(engine().ENGINE_VERSION)}
 
 
+#: One side of :func:`compare_runs`: exit code, stdout, stderr, the files the
+#: run left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None``
+#: for a deleted file) and the literal replacements that normalise it.
+CompareRun = tuple[
+    int,
+    bytes,
+    bytes,
+    Sequence[tuple[str, int | None, bytes | None]],
+    Sequence[tuple[bytes, bytes]],
+]
+
+
+def compare_runs(command: str, oracle: CompareRun, candidate: CompareRun) -> str:
+    """The comparator's report on two runs of *command*, as JSON (``OPENTIDE_ENGINE=compare``).
+
+    Each run is normalised with its own replacements first; the comparison is
+    the one ``cargo xtask compare`` makes (``crates/opentide-compare``).
+    Raises :class:`EngineUnavailableError`.
+    """
+    return str(engine().compare_runs(command, oracle, candidate))
+
+
 #: Engine sentences that promise a step opentide does not offer, and what opentide
 #: says instead: ``(code, engine text, replacement)``. language-server 0.8.0 asks to
 #: "declare" an SPL command an app provides, and no configuration declares one.
