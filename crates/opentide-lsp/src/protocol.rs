@@ -40,8 +40,9 @@ pub(crate) enum Frame {
 /// message is a [`Frame::Invalid`], and the next frame can still be read; a
 /// broken header ends the session, since nothing after it can be framed.
 pub(crate) fn read_frame(reader: &mut dyn BufRead) -> io::Result<Option<Frame>> {
+    let mut replay = io::Cursor::new(read_raw_frame(reader)?);
     let mut recording = Recording {
-        inner: reader,
+        inner: &mut replay,
         seen: Vec::new(),
     };
     match Message::read(&mut recording) {
@@ -63,6 +64,64 @@ pub(crate) fn read_frame(reader: &mut dyn BufRead) -> io::Result<Option<Frame>> 
         },
         Err(err) => Err(err),
     }
+}
+
+/// The bytes of the next frame, header and body, read as `lsp-server`'s
+/// `Message::read` reads them, for it to parse from memory.
+///
+/// `lsp-server` sizes its buffer from `Content-Length` before it reads the
+/// body, so a header alone made the server allocate and zero whatever length
+/// it named (#843, found by the `framing` fuzz target). Here the body grows
+/// only as its bytes arrive: a length longer than the input ends the session
+/// with the error `lsp-server` gives a short body (`UnexpectedEof`) before
+/// anything is allocated for it. A header `lsp-server` would refuse (no line
+/// end, no `: `, a length that is not a number, no length at all, the end of
+/// input) is returned as read so far, and `lsp-server` refuses it from
+/// memory with its own error, as it did from the stream.
+fn read_raw_frame(reader: &mut dyn BufRead) -> io::Result<Vec<u8>> {
+    let mut raw = Vec::new();
+    let mut size = None;
+    loop {
+        let start = raw.len();
+        if reader.read_until(b'\n', &mut raw)? == 0 {
+            return Ok(raw);
+        }
+        let Some(line) = std::str::from_utf8(&raw[start..])
+            .ok()
+            .and_then(|line| line.strip_suffix("\r\n"))
+        else {
+            return Ok(raw);
+        };
+        if line.is_empty() {
+            break;
+        }
+        let mut parts = line.splitn(2, ": ");
+        let name = parts.next().unwrap_or_default();
+        let Some(value) = parts.next() else {
+            return Ok(raw);
+        };
+        if name.eq_ignore_ascii_case("Content-Length") {
+            match value.parse::<usize>() {
+                Ok(length) => size = Some(length),
+                Err(_) => return Ok(raw),
+            }
+        }
+    }
+    let Some(size) = size else {
+        return Ok(raw);
+    };
+    let header = raw.len();
+    reader
+        .take(u64::try_from(size).unwrap_or(u64::MAX))
+        .read_to_end(&mut raw)?;
+    if raw.len() - header < size {
+        // What `read_exact` reports, which `lsp-server` returned here.
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "failed to fill whole buffer",
+        ));
+    }
+    Ok(raw)
 }
 
 /// Why a framed body is not a message: not JSON (-32700), or JSON that is
@@ -629,6 +688,34 @@ mod tests {
         assert!(read_frame(&mut reader).is_err());
         let mut reader: &[u8] = b"X-Other: 1\r\n\r\n";
         assert!(read_frame(&mut reader).is_err());
+    }
+
+    #[test]
+    fn a_length_longer_than_the_input_ends_it_without_allocating_the_length() {
+        // The fuzzer's `framing` target (#843): lsp-server sizes its buffer
+        // from the header before reading, so one header made the server
+        // allocate (and zero) whatever it named, or abort.
+        for header in [
+            format!("Content-Length: {}\r\n\r\n{{}}", usize::MAX),
+            "Content-Length: 1099511627776\r\n\r\n{}".to_string(),
+        ] {
+            let mut reader = header.as_bytes();
+            let err = read_frame(&mut reader).err().expect("an error");
+            assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof, "{header}");
+        }
+        // A body that arrives whole is read as before, however its length
+        // compares with the reader's buffer.
+        let body = format!(
+            r#"{{"jsonrpc":"2.0","method":"x","params":"{}"}}"#,
+            "a".repeat(100_000)
+        );
+        let input = framed(&body);
+        let mut reader = io::BufReader::with_capacity(16, &input[..]);
+        match read_frame(&mut reader).unwrap().unwrap() {
+            Frame::Message(Message::Notification(n)) => assert_eq!(n.method, "x"),
+            _ => panic!("the notification"),
+        }
+        assert!(read_frame(&mut reader).unwrap().is_none());
     }
 
     #[test]

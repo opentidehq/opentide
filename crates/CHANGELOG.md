@@ -6,6 +6,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A huge `Content-Length` no longer crashes the server.** `serve`, `--stdio` and `--listen` allocated the length a header named before the body arrived (`lsp-server` sizes its buffer first), so one header could exhaust memory and abort; the body is read as it arrives, and a length longer than the input ends the session with the short-body error it always gave ([#843](https://github.com/opentidehq/opentide/issues/843), found by the new `framing` fuzz target).
+
 ## [0.11.0] - 2026-11-06
 
 Filename and metadata warnings now follow the workspace's `lint.toml` as `opentide lint` does, a `detection_model` naming a signal is no longer an `invalid_ref`, and hover and findings point at the exact value they are about.
