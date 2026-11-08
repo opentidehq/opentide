@@ -128,7 +128,7 @@ pub fn read_ledger(path: &Path, changelog: &str) -> Result<Ledger> {
 
 /// The candidate of `golden check --engine compare`: this repository's CLI
 /// (`.venv`, from `uv sync --group dev`) with `OPENTIDE_ENGINE=rust`, which
-/// runs a command's Rust implementation or refuses with `engine_unavailable`.
+/// runs a command's Rust implementation or refuses with `engine_not_ported`.
 pub fn candidate(repo: &Path) -> Result<crate::golden::run::Engine> {
     let install_dir = repo.join(".venv");
     let bin_dir = install_dir.join("bin");
