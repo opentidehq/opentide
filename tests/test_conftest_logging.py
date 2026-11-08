@@ -17,11 +17,18 @@ import structlog
 from tests.conftest import pytest_runtest_protocol  # noqa: F401
 
 _FOUND = (structlog.is_configured(), structlog.get_config())
+# get_config() hands out the processor list itself, which an in-place edit changes.
+_FOUND_CHAIN = list(_FOUND[1]["processors"])
 
 
 @pytest.fixture
 def structlog_as_found():
     return _FOUND
+
+
+@pytest.fixture
+def processors_as_found():
+    return _FOUND_CHAIN
 """
 
 _MODULE_LOGGER = """
@@ -92,6 +99,25 @@ def test_structlog_is_as_the_session_found_it(structlog_as_found):
     assert all(current[key] is value for key, value in settings.items())
 """
 
+_EDITS_IN_PLACE = """
+import structlog
+
+
+def test_adds_a_processor_to_the_list_in_place():
+    structlog.get_config()["processors"].append(lambda logger, method, event: event)
+"""
+
+_PROCESSORS_LATER = """
+import structlog
+
+
+def test_the_processor_list_is_as_the_session_found_it(structlog_as_found, processors_as_found):
+    _, settings = structlog_as_found
+    processors = structlog.get_config()["processors"]
+    assert processors is settings["processors"]
+    assert list(processors) == processors_as_found
+"""
+
 
 def _run(pytester: pytest.Pytester, **modules: str) -> pytest.RunResult:
     pytester.makeconftest(_CONFTEST)
@@ -129,6 +155,18 @@ def test_a_test_cannot_leave_structlog_reconfigured_for_the_next(
     result.assert_outcomes(passed=3)
 
 
+def test_a_test_cannot_leave_the_processor_list_edited_in_place(
+    pytester: pytest.Pytester,
+) -> None:
+    """An edit to the list itself leaves every setting the object it was.
+
+    Loggers hold that list, and ``capture_logs()`` edits it in place: the hook
+    puts its contents back, not only the objects.
+    """
+    result = _run(pytester, test_a_edits=_EDITS_IN_PLACE, test_b_later=_PROCESSORS_LATER)
+    result.assert_outcomes(passed=2)
+
+
 class _ClaimsToBeAModule:
     """Like cffi's ``Lib`` in ``sys.modules``: its ``__class__`` is ModuleType, no ``__dict__``."""
 
@@ -148,13 +186,14 @@ def test_forgetting_cached_loggers_passes_over_what_only_claims_to_be_a_module(
     """
     from tests.conftest import _forget_cached_loggers
 
+    logger = structlog.wrap_logger(None, cache_logger_on_first_use=True)
+    logger.bind()
+    assert "bind" in vars(logger)
     holder = ModuleType("holds_a_cached_logger")
-    holder.logger = structlog.wrap_logger(None, cache_logger_on_first_use=True)
-    holder.logger.bind()
-    assert "bind" in vars(holder.logger)
+    vars(holder)["logger"] = logger
     monkeypatch.setitem(sys.modules, holder.__name__, holder)
     monkeypatch.setitem(sys.modules, "cffi_like.lib", _ClaimsToBeAModule())
 
     _forget_cached_loggers()
 
-    assert "bind" not in vars(holder.logger)
+    assert "bind" not in vars(logger)
