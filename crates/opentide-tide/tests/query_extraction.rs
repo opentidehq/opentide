@@ -56,6 +56,7 @@ fn expected(doc: &Value) -> BTreeSet<Query> {
         ("defender_for_endpoint", &["query"][..], LanguageId::Kql),
         ("splunk", &["query", "search"][..], LanguageId::Spl),
         ("carbon_black_cloud", &["query"][..], LanguageId::Lucene),
+        ("crowdstrike", &["query"][..], LanguageId::Cql),
     ] {
         let block = configurations.and_then(|c| c.get(platform));
         for field in fields {

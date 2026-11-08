@@ -211,6 +211,14 @@ pub fn analyze_with_index(
                 symbols: Vec::new(),
             }
         }
+        LanguageId::Cql => {
+            let r = opentide_cql::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
         LanguageId::TideYaml => {
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
@@ -252,8 +260,9 @@ pub struct QueryReport {
 /// Carbon Black Lucene, the ES|QL stack of the block's Elastic tenants). A
 /// query with no finding is reported too, so a host can count what it
 /// checked. Only the queries are checked: for the object's own fields, use
-/// [`analyze`] with [`LanguageId::TideYaml`]. CrowdStrike and HarfangLab
-/// queries are not injected, so they never appear.
+/// [`analyze`] with [`LanguageId::TideYaml`]. CrowdStrike queries are CQL,
+/// checked as correlation rules; HarfangLab queries are not injected, so they
+/// never appear.
 pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport> {
     // Ranges are those of the text after a byte-order mark, as an editor shows them.
     let text = opentide_core::strip_bom(text);
@@ -290,6 +299,13 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
         LanguageId::Kql => opentide_kql::analyze(&request.text, kql_profile(platform)).diagnostics,
+        // `platform: crowdstrike` is the query of a CrowdStrike rule block,
+        // which deploys as a Next-Gen SIEM correlation rule. A hunt search is
+        // not one: [`analyze_queries`] checks it without the correlation rules.
+        LanguageId::Cql if platform == "crowdstrike" => {
+            opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
+                .diagnostics
+        }
         LanguageId::Lucene => {
             let dialect = if platform == "carbon_black_cloud" {
                 opentide_lucene::Dialect::CarbonBlack
@@ -555,6 +571,7 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
             opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
         }
         LanguageId::Falco => opentide_falco::hover(text, offset, &Default::default()),
+        LanguageId::Cql => opentide_cql::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
@@ -627,6 +644,7 @@ fn query_completions(
             items
         }
         LanguageId::Falco => opentide_falco::completions(text, offset, &Default::default()),
+        LanguageId::Cql => opentide_cql::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
     }
@@ -675,6 +693,7 @@ fn query_signature_help(
         LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::Esql => opentide_esql::signature_help(text, offset),
         LanguageId::Eql => opentide_eql::signature_help(text, offset),
+        LanguageId::Cql => opentide_cql::signature_help(text, offset),
         LanguageId::Kuery
         | LanguageId::Lucene
         | LanguageId::Falco

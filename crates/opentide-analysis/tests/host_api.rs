@@ -19,7 +19,7 @@ configurations:
       index=main sourcetype=foo | statz count
   crowdstrike:
     query: |
-      anything at all
+      #event_simpleName=ProcessRollup2 | groupBi(aid)
 "#;
 
 #[test]
@@ -34,8 +34,8 @@ fn every_injected_query_is_reported_with_its_language_and_place() {
         vec![
             vec!["configurations", "sentinel", "query"],
             vec!["configurations", "splunk", "query"],
-        ],
-        "CrowdStrike is never validated, so it is not a query here"
+            vec!["configurations", "crowdstrike", "query"],
+        ]
     );
     assert_eq!(reports[0].language, LanguageId::Kql);
     assert_eq!(reports[0].platform, "sentinel");
@@ -65,6 +65,16 @@ fn every_injected_query_is_reported_with_its_language_and_place() {
             .as_slice()
         )
     );
+    // CrowdStrike is CQL, checked as a Next-Gen SIEM correlation rule.
+    assert_eq!(reports[2].language, LanguageId::Cql);
+    assert_eq!(reports[2].platform, "crowdstrike");
+    let unknown = reports[2]
+        .diagnostics
+        .iter()
+        .find(|d| d.code == codes::CQL_UNKNOWN_FUNCTION)
+        .expect("groupBi");
+    assert_eq!(unknown.range.start.line, 14);
+    assert_eq!(unknown.suggestion.as_deref(), Some("groupBy"));
 }
 
 #[test]

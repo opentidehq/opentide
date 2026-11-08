@@ -431,6 +431,7 @@ name = "opentide-analysis"
 version = "0.11.0"
 dependencies = [
  "opentide-core",
+ "opentide-cql",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -455,6 +456,19 @@ dependencies = [
  "serde",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "opentide-cql"
+version = "0.11.0"
+dependencies = [
+ "opentide-core",
+ "opentide-highlight",
+ "opentide-syntax",
+ "serde",
+ "serde_json",
+ "toml",
+ "tree-sitter",
 ]
 
 [[package]]
@@ -606,6 +620,7 @@ name = "opentide-tide"
 version = "0.11.0"
 dependencies = [
  "opentide-core",
+ "opentide-cql",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",

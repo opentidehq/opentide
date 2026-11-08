@@ -6,6 +6,21 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Breaking
+
+- **CrowdStrike queries are checked as CQL, and `crowdstrike_unsupported` is gone.** `configurations.crowdstrike.query` and hunts with `system: crowdstrike` used to get one `crowdstrike_unsupported` warning; they now get the `cql_*` diagnostics below, so a query LogScale would refuse is an error where it was not before. `docs/CQL.md` has the language and every code.
+
+### Added
+
+- **The CrowdStrike Query Language (CQL), Falcon LogScale's and Next-Gen SIEM's, is a language: id `cql`, files `*.cql`.** It follows CrowdStrike's published grammar and function reference (`docs/CQL.md`): 2,786 of the 2,812 blocks labelled CQL in CrowdStrike's public content parse, and 475 of the 490 queries on its function pages are clean (the rest are templates and documentation typos).
+  - Errors: `cql_parse_error`, `cql_unknown_function`, `cql_removed_function`, `cql_unknown_parameter`, `cql_duplicate_parameter`, `cql_unnamed_argument`, `cql_missing_parameter`, `cql_parameter_value`, `cql_regex_flag`, `cql_free_text_after_aggregate`, `cql_event_function_after_aggregate`, `cql_assignment_as`, `cql_link_outside_correlate`, `cql_correlate_placement` (`correlate()` where its reference forbids it), `cql_match_guard`
+  - In a correlation rule (`configurations.crowdstrike.query`, or `analyze_query` with `platform: crowdstrike`), `cql_correlate_aggregate`: `correlate()` with another aggregate
+  - Warnings: `cql_deprecated_function`, `cql_string_escape`, `cql_unknown_event` (a `#event_simpleName` no Falcon event has, with a near match), `cql_regex_group_under_or`
+  - A field, saved search, lookup file or repository is never reported unknown: they live in the tenant
+  - Hover, completion and signature help for the 196 functions, their parameters and allowed values, LogScale, Falcon and CPS fields and tags, and 395 Falcon events (`catalogs/cql/`, `scripts/sync_cql_catalog.py`)
+  - Highlighting: `highlights/generated/cql.tmLanguage.json`, scope `source.opentide.cql` (Cassandra's CQL extensions own `source.cql`), and the CrowdStrike block's query as an embedded region of Tide YAML
+  - Editors: the Helix, Neovim and Zed samples and `@opentide/lsp-client` map `*.cql` to `cql`
+
 ## [0.11.0] - 2026-11-06
 
 Filename and metadata warnings now follow the workspace's `lint.toml` as `opentide lint` does, a `detection_model` naming a signal is no longer an `invalid_ref`, and hover and findings point at the exact value they are about.

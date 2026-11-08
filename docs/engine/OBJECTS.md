@@ -82,7 +82,6 @@ Query extras (the engines add these inside an injected query, and on a raw query
 - `spl_empty_command`
 - `spl_empty_stage`
 - `spl_command_without_pipe`
-- `crowdstrike_unsupported` (never faked)
 - `config_check_failed` (warning, `opentide-config` only: the host's configuration checker failed; [ARCHITECTURE.md](ARCHITECTURE.md#configuration-toml))
 - `defender_output_columns`
 

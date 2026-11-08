@@ -10,7 +10,7 @@ through `opentide_lsp::serve`. A panic, or an input that runs past
 
 | Target | Seeds |
 | --- | --- |
-| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco` | `testdata/corpus/<lang>/`, `testdata/conformance/external/<lang>/` |
+| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql` | `testdata/corpus/<lang>/`, `testdata/conformance/external/<lang>/` |
 | `tide` | `testdata/objects/`, `testdata/workspaces/tide_corpus/objects/` |
 | `protocol` | `fuzz/seeds/protocol/` |
 

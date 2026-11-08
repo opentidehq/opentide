@@ -11,6 +11,7 @@ unsafe extern "C" {
     fn tree_sitter_opentide_kuery() -> *const ();
     fn tree_sitter_opentide_lucene() -> *const ();
     fn tree_sitter_opentide_falco() -> *const ();
+    fn tree_sitter_opentide_cql() -> *const ();
 }
 
 fn from_raw(ptr: *const ()) -> Language {
@@ -27,6 +28,7 @@ pub fn language(id: LanguageId) -> Option<Language> {
         LanguageId::Kuery => Some(unsafe { from_raw(tree_sitter_opentide_kuery()) }),
         LanguageId::Lucene => Some(unsafe { from_raw(tree_sitter_opentide_lucene()) }),
         LanguageId::Falco => Some(unsafe { from_raw(tree_sitter_opentide_falco()) }),
+        LanguageId::Cql => Some(unsafe { from_raw(tree_sitter_opentide_cql()) }),
         // Tide YAML has its own parser; configuration TOML is the host's.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
@@ -174,12 +176,23 @@ pub fn query_captures(
     scm: &str,
 ) -> Result<Vec<(ByteSpan, String)>, String> {
     let language = language(id).ok_or_else(|| format!("no tree-sitter grammar for {id}"))?;
-    let query = compiled_query(id, &language, scm)?;
     let mut parser = Parser::new();
     parser.set_language(&language).map_err(|e| e.to_string())?;
     let tree = parser
         .parse(source, None)
         .ok_or_else(|| "parse failed".to_string())?;
+    query_captures_in(id, &tree, source, scm)
+}
+
+/// [`query_captures`] on a tree the caller already parsed from `source`.
+pub fn query_captures_in(
+    id: LanguageId,
+    tree: &Tree,
+    source: &str,
+    scm: &str,
+) -> Result<Vec<(ByteSpan, String)>, String> {
+    let language = language(id).ok_or_else(|| format!("no tree-sitter grammar for {id}"))?;
+    let query = compiled_query(id, &language, scm)?;
     let mut cursor = QueryCursor::new();
     // `captures` is the highlighting iterator: earliest start wins, then
     // earliest pattern in the .scm file. Nested overlapping spans are
