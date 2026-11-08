@@ -29,7 +29,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -392,7 +392,18 @@ def _run_side(
     finished = datetime.now(timezone.utc)
     literals = [(form, WORKSPACE_PLACEHOLDER) for form in _path_forms(copy.root)]
     dates = sorted({f"{started:%Y-%m-%d}", f"{finished:%Y-%m-%d}"})
-    run = (child.returncode, child.stdout, child.stderr, _changes(copy, before), literals, dates)
+    # As the goldens: date-times of the week before the run are the clock too
+    # (``query`` starts its default window 24 hours ago).
+    recent = [f"{started - timedelta(days=days):%Y-%m-%d}" for days in range(1, 8)]
+    run = (
+        child.returncode,
+        child.stdout,
+        child.stderr,
+        _changes(copy, before),
+        literals,
+        dates,
+        recent,
+    )
     return _Side(run=run, copy=copy)
 
 

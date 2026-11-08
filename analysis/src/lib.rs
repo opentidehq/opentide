@@ -440,7 +440,8 @@ fn serve_stdio(py: Python<'_>) -> PyResult<bool> {
 /// stdout, stderr, the files the run left different (`(path, mode, bytes)`,
 /// `mode` and `bytes` `None` for a deleted file), the literal texts that
 /// normalise it with their placeholders (its workspace copy's path to `<WS>`),
-/// and the dates (`YYYY-MM-DD`, UTC) it ran on.
+/// the dates (`YYYY-MM-DD`, UTC) it ran on, and the week before them, whose
+/// date-times a command's default window reaches back to.
 type RunArgs = (
     i32,
     Py<PyBytes>,
@@ -448,13 +449,14 @@ type RunArgs = (
     Vec<(String, Option<u32>, Option<Py<PyBytes>>)>,
     Vec<(String, String)>,
     Vec<String>,
+    Vec<String>,
 );
 
 fn run_of(
     py: Python<'_>,
     args: RunArgs,
 ) -> (opentide_compare::Run, opentide_compare::normalise::Volatile) {
-    let (exit_code, stdout, stderr, files, literals, dates) = args;
+    let (exit_code, stdout, stderr, files, literals, dates, recent_dates) = args;
     let bytes = |value: &Py<PyBytes>| value.as_bytes(py).to_vec();
     let files = files
         .iter()
@@ -478,6 +480,7 @@ fn run_of(
     let volatile = opentide_compare::normalise::Volatile {
         literals,
         dates,
+        recent_dates,
         git_version: None,
     };
     (run, volatile)

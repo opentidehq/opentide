@@ -96,13 +96,15 @@ def serve_stdio() -> bool: ...
 #: One side of ``compare_runs``: exit code, stdout, stderr, the files the run
 #: left different (``(path, mode, bytes)``, ``mode`` and ``bytes`` ``None`` for
 #: a deleted file), the literals that normalise it with their placeholders, and
-#: the dates (``YYYY-MM-DD``, UTC) it ran on.
+#: the dates (``YYYY-MM-DD``, UTC) it ran on, and the week
+#: before them (a command's default window reaches back into it).
 CompareRun = tuple[
     int,
     bytes,
     bytes,
     Sequence[tuple[str, int | None, bytes | None]],
     Sequence[tuple[str, str]],
+    Sequence[str],
     Sequence[str],
 ]
 
