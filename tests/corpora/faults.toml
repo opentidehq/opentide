@@ -33,6 +33,7 @@ ops = [
     { op = "set", path = "metadata.uuid", value = "not-a-uuid-{n}" },
 ]
 gap = "KG-04"
+counts = { invalid_uuid = 5 }
 
 [[kind]]
 id = "uuid-invalid-threat"
@@ -57,6 +58,7 @@ ops = [
 ]
 per_target = false
 gap = "KG-04"
+counts = { duplicate_id = 3 }
 note = "three pairs: one finding per pair, on the file indexed later"
 
 [[kind]]
@@ -70,7 +72,8 @@ ops = [
 ]
 per_target = false
 gap = "KG-04"
-note = "five files share one invalid UUID: one invalid_uuid, four duplicate_id"
+counts = { invalid_uuid = 1, duplicate_id = 4 }
+note = "five files share one invalid UUID: one invalid_uuid, four duplicate_id, and one of the five files has no finding"
 
 [[kind]]
 id = "uuid-missing"
@@ -153,14 +156,108 @@ gap = "KG-02"
 note = "PyYAML refuses the date before the model sees it"
 
 [[kind]]
-id = "schema-validation-sysdig-constraint"
+id = "sysdig-constraint-priority"
 codes = ["schema_validation"]
 severity = "error"
 target = { family = "rule", platform = "sysdig" }
 ops = [
     { op = "set", path = "configurations.sysdig.priority", value = "LOUD" },
 ]
-note = "the engine's sysdig_priority surfaces as schema_validation (unreachable as its own code)"
+covers = ["sysdig_priority"]
+note = "sysdig_priority, reported as schema_validation naming it"
+
+[[kind]]
+id = "sysdig-constraint-source"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.source", value = "not a source!" },
+]
+covers = ["sysdig_source"]
+note = "sysdig_source, reported as schema_validation naming it"
+
+[[kind]]
+id = "sysdig-constraint-rule-shape"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "delete", path = "configurations.sysdig.condition" },
+]
+covers = ["sysdig_rule_shape"]
+note = "sysdig_rule_shape, reported as schema_validation naming it"
+
+[[kind]]
+id = "sysdig-constraint-tuning-keys"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.condition", value = "and not proc.pname in (sshd)\n" },
+    { op = "set", path = "configurations.sysdig.append_to_rule", value = "Terminal shell in container" },
+]
+covers = ["sysdig_tuning_keys"]
+note = "a tuning (append_to_rule) that keeps output and priority, which it inherits"
+
+[[kind]]
+id = "sysdig-constraint-exception-shape"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.exceptions", value = [{ name = "e", fields = ["proc.pname", "proc.name"], comps = ["="], values = [["a", "b"]] }] },
+]
+covers = ["sysdig_exception_shape"]
+note = "sysdig_exception_shape, reported as schema_validation naming it"
+
+[[kind]]
+id = "sysdig-constraint-definition-name"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.lists.0.name", value = "9bad name" },
+]
+covers = ["sysdig_definition_name"]
+note = "sysdig_definition_name, reported as schema_validation naming it"
+
+[[kind]]
+id = "sysdig-constraint-definition-duplicate"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "append", path = "configurations.sysdig.lists", value = { name = "placeholder", items = ["sh"] } },
+    { op = "copy_path", path = "configurations.sysdig.lists.1.name", from_path = "configurations.sysdig.lists.0.name" },
+]
+covers = ["sysdig_definition_duplicate"]
+note = "sysdig_definition_duplicate, reported as schema_validation naming it"
+
+[[kind]]
+id = "sysdig-constraint-definition-order"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.macros", value = [{ name = "corpus_first", condition = "corpus_second\n" }, { name = "corpus_second", condition = "container.id != host\n" }] },
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and corpus_first\n" },
+]
+covers = ["sysdig_definition_order"]
+note = "a macro that uses one defined after it"
+
+[[kind]]
+id = "sysdig-constraint-list-in-value"
+codes = ["schema_validation"]
+severity = "error"
+target = { family = "rule", platform = "sysdig" }
+ops = [
+    { op = "set", path = "configurations.sysdig.lists", value = [{ name = "corpus_parents", items = ["sshd"] }] },
+    { op = "set", path = "configurations.sysdig.condition", value = "spawned_process and proc.pname in (corpus_parents)\n" },
+    { op = "set", path = "configurations.sysdig.exceptions", value = [{ name = "e", fields = ["proc.name"], comps = ["="], values = [["x corpus_parents"]] }] },
+]
+covers = ["sysdig_list_in_value"]
+note = "a block list's name inside an exception value"
 
 [[kind]]
 id = "vocab-unknown-tlp"
@@ -518,10 +615,43 @@ severity = "error"
 target = { family = "config", path = ".opentide/configurations/deployment.toml" }
 count = 1
 ops = [
-    { op = "set", path = "colour", value = "blue" },
+    { op = "set", path = "colour1", value = "blue" },
+    { op = "set", path = "colour2", value = "blue" },
+    { op = "set", path = "colour3", value = "blue" },
+    { op = "set", path = "colour4", value = "blue" },
+    { op = "set", path = "colour5", value = "blue" },
 ]
+counts = { unknown_key = 5 }
 per_target = false
 gap = "KG-12"
+
+[[kind]]
+id = "config-retired-file"
+codes = ["retired_configuration_file"]
+severity = "error"
+target = { family = "config", path = ".opentide/configurations/deployment.toml" }
+count = 1
+ops = [
+    { op = "add_file", path = ".opentide/configurations/global.toml", text = "[global]\nname = \"retired\"\n" },
+]
+per_target = false
+isolated = true
+gap = "KG-06"
+note = "every command stops before validating; the finding is in the failure's diagnostics"
+
+[[kind]]
+id = "config-parse-visibility"
+codes = ["config_parse"]
+severity = "error"
+target = { family = "config", path = ".opentide/configurations/visibility.toml" }
+count = 1
+ops = [
+    { op = "append_text", text = "x = = 1\n" },
+]
+per_target = false
+isolated = true
+gap = "KG-06"
+note = "the run stops; the finding is in the failure's diagnostics"
 
 [[kind]]
 id = "gap-extra-configuration-file"
@@ -777,7 +907,8 @@ target = { family = "rule" }
 ops = [
     { op = "add_file", path = ".opentide/configurations/lint.toml", text = "[filenames]\npattern = '^rule-[a-z0-9-]+$'\n" },
 ]
-note = "the slug names do not start with rule-"
+isolated = true
+note = "the slug names do not start with rule-; the pattern applies to every file"
 
 [[kind]]
 id = "lint-metadata-recommended"
@@ -1987,43 +2118,3 @@ reason = "emitted only by validation.configuration.configuration_file_issues, wh
 [[unreachable]]
 code = "recommended_field_missing"
 reason = "an engine warning lint's query filter drops; language server only (KG-05)"
-
-[[unreachable]]
-code = "retired_configuration_file"
-reason = "every command refuses the workspace before validating (failure.code retired_configuration_file, no finding); only the editor's per-file check reports it as a finding (KG-06)"
-
-[[unreachable]]
-code = "sysdig_definition_duplicate"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_definition_name"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_definition_order"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_exception_shape"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_list_in_value"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_priority"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_rule_shape"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_source"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"
-
-[[unreachable]]
-code = "sysdig_tuning_keys"
-reason = "the engine emits it from the Sysdig block constraint check, which validate's queries check does not run; validate reports schema_validation naming the code instead (kind schema-validation-sysdig-constraint)"

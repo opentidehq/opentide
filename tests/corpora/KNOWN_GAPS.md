@@ -16,7 +16,7 @@ A kind with `codes = []` pins a silence: the oracle reports nothing for that fau
 | KG-03 | `filename_mismatch` (lint) and `filename_slug` (engine) disagree | `lint-filename-mismatch`, `lint-filename-mismatch-prefix` |
 | KG-04 | Invalid and duplicate UUIDs: how many findings, on which file | `uuid-invalid-rule`, `uuid-invalid-threat`, `uuid-duplicate-rule`, `uuid-duplicate-invalid` |
 | KG-05 | Metadata recommendation codes | `lint-metadata-recommended`, `lint-metadata-recommended-organisation` |
-| KG-06 | Configuration files that fail or vanish without a finding | `gap-extra-configuration-file` |
+| KG-06 | Configuration files that stop the run, or vanish without a finding | `gap-extra-configuration-file`, `config-retired-file`, `config-parse-visibility` |
 | KG-07 | `opentide lint` ignores `paths.toml` | none: reproduced by the `custom` layout (below) |
 | KG-08 | KQL `*` in `union` and `search in`: lint and validate disagree | `kql-unscoped-union`, `kql-wildcard-table`, `kql-wildcard-union-validate` |
 | KG-09 | Elastic `severity.default` without `mapping` crashes the compile check | `compile-failed-elastic-severity` |
@@ -62,9 +62,11 @@ Options: one rule and one code for both; or document the editor's looser rule.
 - A UUID shared by several files gives one `duplicate_id` per extra file (two files: one; three:
   two), on the file indexed later, naming the first: `uuid-duplicate-rule` sets `per_target =
   false` for that reason.
-- Files sharing one invalid UUID: one `invalid_uuid` (for the first) and `duplicate_id` for the
-  others; the others' `invalid_uuid` is hidden because the index keys objects by UUID
-  (`uuid-duplicate-invalid`: five files, one `invalid_uuid`, four `duplicate_id`).
+- Five files sharing one invalid UUID (`uuid-duplicate-invalid`): four `duplicate_id` (on the
+  files indexed after the first, each naming it as "already used by") and one `invalid_uuid`,
+  which lands on one of those four; the first file, the one the others name, gets no finding at
+  all, and the other files' `invalid_uuid` is hidden because the index keys objects by UUID.
+The kinds pin these numbers with `counts`.
 Options: report `invalid_uuid` on every file that carries one; report a duplicate on every file of
 the group, or once per group.
 
@@ -77,17 +79,19 @@ lint keeps no engine finding without a query prefix. `organisation: ACME` (a str
 lint but fails `validate` with `schema_validation`; the `{name, uuid}` form satisfies both.
 Options: one set of codes for the CLI and the editor.
 
-## KG-06: Configuration files that fail or vanish without a finding
+## KG-06: Configuration files that stop the run, or vanish without a finding
 
 - A `.toml` under `.opentide/configurations/` that opentide does not know (`colours.toml`) is
   ignored without a word; `not_a_configuration_file` exists but no CLI path emits it.
-- A retired file (`global.toml`) makes every command fail first (`failure.code:
-  retired_configuration_file`, exit 1) with no finding; only the editor reports it as one.
-- Invalid TOML in `deployment.toml`, `visibility.toml` or `resources.toml` makes `validate` and
-  `lint` fail outright (`failure.code: config_parse`) with no finding; in `sharing.toml` it is a
-  `config_parse` finding of `validate --check sharing-config`.
-Options: report unknown files (warning); make every unreadable configuration file a finding with
-its path.
+- A retired file (`global.toml`) makes every command stop before validating (`failure.code:
+  retired_configuration_file`, exit 1): the finding, with its path, is in the failure document's
+  `diagnostics`, not in `report`, and no other check runs (`config-retired-file`).
+- Invalid TOML in `deployment.toml`, `visibility.toml` or `resources.toml` stops `validate` and
+  `lint` the same way (`failure.code: config_parse`, the finding under `diagnostics`;
+  `config-parse-visibility`); in `sharing.toml` it is an ordinary `config_parse` finding of
+  `validate --check sharing-config`.
+Options: report unknown files (warning); keep validating the rest of the workspace when one
+configuration file cannot be read, as an unreadable object file does.
 
 ## KG-07: `opentide lint` ignores `paths.toml`
 
@@ -122,8 +126,10 @@ that reason. Options: treat a missing mapping as none (the documented shape allo
 appear only when the workspace has no other finding (and the platform is enabled, and the block's
 status compiles). One unrelated error hides every compile finding, so fixing one problem can reveal
 others. Their kinds are `isolated` (left out of the combined fault workspace). These codes are not
-in `VALIDATION_CODES` either. Options: run the compile check independently of other findings, and
-list its codes. (`compile-empty-block-response`: see the kind's note for what 0.23.0 reports.)
+in `VALIDATION_CODES` either (`codes.toml` takes them from their explain pages, group `compile`).
+`compile_empty_block` needs both an empty `response` and no `alert.severity` in the Sentinel block
+("`response` is empty, so Sentinel cannot read `alert_severity`"). Options: run the compile check
+independently of other findings, and list its codes.
 
 ## KG-11: A rule block naming an undeclared tenant
 
