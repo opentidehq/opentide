@@ -526,7 +526,17 @@ fn yaml_float(n: f64) -> String {
     } else if n.fract() == 0.0 && n.abs() < 1e15 {
         format!("{n:.1}")
     } else {
-        format!("{n:?}")
+        // YAML 1.1 needs a dot in the mantissa and a signed exponent:
+        // `1.0e+16`, not `1e16` (which reads back as a string).
+        let shortest = format!("{n:?}");
+        match shortest.split_once('e') {
+            Some((mantissa, exponent)) => {
+                let dot = if mantissa.contains('.') { "" } else { ".0" };
+                let sign = if exponent.starts_with('-') { "" } else { "+" };
+                format!("{mantissa}{dot}e{sign}{exponent}")
+            }
+            None => shortest,
+        }
     }
 }
 
@@ -877,6 +887,14 @@ fn relative(path: &str, root: &str) -> String {
         .to_string()
 }
 
+/// Whether `message` names `code` as a whole token (not as part of a
+/// longer code).
+fn names(message: &str, code: &str) -> bool {
+    message
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .any(|token| token == code)
+}
+
 /// How one kind's run compares with its expectation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
@@ -925,7 +943,7 @@ pub fn judge(kind: &Kind, target_paths: &[String], found: &[Finding]) -> Verdict
     for covered in &kind.covers {
         if !found
             .iter()
-            .any(|f| expected.contains(f.code.as_str()) && f.message.contains(covered.as_str()))
+            .any(|f| expected.contains(f.code.as_str()) && names(&f.message, covered))
         {
             problems.push(format!("no expected finding's message names `{covered}`"));
         }
@@ -1107,6 +1125,20 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
         assert_eq!(super::yaml_float(2.5), "2.5");
         assert_eq!(super::yaml_float(f64::NAN), ".nan");
         assert_eq!(super::yaml_float(f64::NEG_INFINITY), "-.inf");
+        assert_eq!(super::yaml_float(1e16), "1.0e+16");
+        assert_eq!(super::yaml_float(1e-7), "1.0e-7");
+        assert_eq!(
+            super::yaml_float(1.234_567_890_123_456_8e17),
+            "1.2345678901234568e+17"
+        );
+        assert!(super::names(
+            "failed with code(s): sysdig_rule_shape, sysdig_source",
+            "sysdig_source"
+        ));
+        assert!(!super::names(
+            "failed with code(s): sysdig_source_extra",
+            "sysdig_source"
+        ));
         assert_eq!(
             super::yaml_to_toml(&crate::corpus::yaml::Yaml::raw("2.5")),
             toml::Value::Float(2.5)

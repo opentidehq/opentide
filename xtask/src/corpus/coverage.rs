@@ -33,7 +33,7 @@ print(json.dumps({
 }))
 "#;
 
-/// The four groups of codes, as the oracle lists them.
+/// The five groups of codes, as the oracle lists them.
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 pub struct Inventory {
@@ -179,7 +179,7 @@ pub fn report(codes: &Codes, catalogue: &Catalogue) -> Report {
                 .or_default()
                 .push(kind.id.clone());
             if !report.groups.contains_key(code) {
-                // A code outside the four groups (a lint-only engine code is
+                // A code outside the five groups (a lint-only engine code is
                 // in `query`); listed, not a problem.
                 report.groups.entry(code.clone()).or_default();
             }

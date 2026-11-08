@@ -66,6 +66,7 @@ Options: one rule and one code for both; or document the editor's looser rule.
   files indexed after the first, each naming it as "already used by") and one `invalid_uuid`,
   which lands on one of those four; the first file, the one the others name, gets no finding at
   all, and the other files' `invalid_uuid` is hidden because the index keys objects by UUID.
+
 The kinds pin these numbers with `counts`.
 Options: report `invalid_uuid` on every file that carries one; report a duplicate on every file of
 the group, or once per group.

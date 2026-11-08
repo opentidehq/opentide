@@ -457,6 +457,9 @@ fn faults_command(args: &[String]) -> Result<u8> {
         Some(dir) => dir.clone(),
         None => std::env::temp_dir().join(format!("opentide-corpus-faults-{}", std::process::id())),
     };
+    // Absolute, so that XDG_STATE_HOME below is one the oracle honours.
+    let scratch = std::path::absolute(&scratch)
+        .with_context(|| format!("cannot resolve {}", scratch.display()))?;
     if scratch.exists() {
         bail!(
             "{} exists; remove it or name another --keep",
@@ -477,7 +480,10 @@ fn faults_command(args: &[String]) -> Result<u8> {
     let base_dir = scratch.join("_base");
     write_workspace(&base, &base_dir)?;
     for (command, env) in &commands {
-        let document = run_oracle(&bin, &base_dir, command, env)?;
+        let mut env = env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &base_dir, command, &env)?;
         require_run(
             &document,
             command,
@@ -681,9 +687,14 @@ fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
         "digest": workspace.digest(),
         "kinds": manifest,
     });
-    std::fs::write(
-        &manifest_path,
-        serde_json::to_string_pretty(&document)? + "\n",
+    let mut manifest_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&manifest_path)
+        .with_context(|| format!("cannot create {}", manifest_path.display()))?;
+    std::io::Write::write_all(
+        &mut manifest_file,
+        (serde_json::to_string_pretty(&document)? + "\n").as_bytes(),
     )
     .with_context(|| format!("cannot write {}", manifest_path.display()))?;
     eprintln!(
