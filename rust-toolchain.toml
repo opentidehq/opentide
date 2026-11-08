@@ -2,8 +2,11 @@
 # release, so that a new stable's lints (clippy::pedantic gains some with most
 # releases, and CI denies warnings) arrive in a change of their own instead of
 # failing every open PR on the day it ships. CI installs this file's toolchain
-# (`rustup toolchain install` with no name). The crates' floor is a separate
-# promise: `rust-version` in Cargo.toml (MSRV), which this pin never lowers.
+# (`rustup toolchain install` with no name). The crates also declare a floor,
+# `rust-version` in Cargo.toml (1.85), which this pin never goes below. That
+# floor is declared, not checked: no job builds with it, the code uses let
+# chains (stable since Rust 1.88), and Cargo.lock's tree-sitter-language 0.1.8
+# requires Rust 1.90.
 #
 # To move to a newer release, in one PR: change `channel`, then run
 # `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`
