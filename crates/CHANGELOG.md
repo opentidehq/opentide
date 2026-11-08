@@ -6,9 +6,17 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-08
+
+CrowdStrike queries are checked: the CrowdStrike Query Language (CQL) of Falcon LogScale and Next-Gen SIEM is a language, with diagnostics, hover, completion and highlighting for correlation rules, hunts and `.cql` files.
+
+### Upgrade
+
+- If you match or suppress `crowdstrike_unsupported`, match the `cql_*` codes instead (`docs/CQL.md`).
+
 ### Breaking
 
-- **CrowdStrike queries are checked as CQL, and `crowdstrike_unsupported` is gone.** `configurations.crowdstrike.query` and hunts with `system: crowdstrike` used to get one `crowdstrike_unsupported` warning; they now get the `cql_*` diagnostics below, so a query LogScale would refuse is an error where it was not before. `docs/CQL.md` has the language and every code.
+- **CrowdStrike queries are checked as CQL, and `crowdstrike_unsupported` is gone.** `configurations.crowdstrike.query` and hunts with `system: crowdstrike` used to get one `crowdstrike_unsupported` warning; they now get the `cql_*` diagnostics below, so a query LogScale would refuse is an error where it was not before. `docs/CQL.md` has the language and every code ([#221](https://github.com/opentidehq/language-server/pull/221)).
 
 ### Added
 
@@ -647,6 +655,7 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[0.12.0]: https://github.com/opentidehq/language-server/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/opentidehq/language-server/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/opentidehq/language-server/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/opentidehq/language-server/compare/v0.9.0...v0.9.1
